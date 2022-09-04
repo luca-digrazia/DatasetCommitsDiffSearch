@@ -22,7 +22,6 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.rules.java.proto.JplCcLinkParams.createCcLinkParamsStore;
 import static com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils.createNonStrictCompilationArgsProvider;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
@@ -61,8 +60,7 @@ import javax.annotation.Nullable;
 /** An Aspect which JavaProtoLibrary injects to build Java SPEED protos. */
 public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
 
-  private final LabelLateBoundDefault<JavaConfiguration> hostJdkAttribute;
-  private final LabelLateBoundDefault<JavaConfiguration> javaToolchainAttribute;
+  private final LabelLateBoundDefault<?> hostJdkAttribute;
 
   private static LabelLateBoundDefault<?> getSpeedProtoToolchainLabel(String defaultValue) {
     return LabelLateBoundDefault.fromTargetConfiguration(
@@ -82,15 +80,12 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       @Nullable String jacocoLabel,
       RpcSupport rpcSupport,
       String defaultSpeedProtoToolchainLabel,
-      LabelLateBoundDefault<JavaConfiguration> hostJdkAttribute,
-      LabelLateBoundDefault<JavaConfiguration> javaToolchainAttribute) {
-    this.javaSemantics = Preconditions.checkNotNull(javaSemantics);
+      LabelLateBoundDefault<?> hostJdkAttribute) {
+    this.javaSemantics = javaSemantics;
     this.jacocoLabel = jacocoLabel;
-    this.rpcSupport = Preconditions.checkNotNull(rpcSupport);
-    this.defaultSpeedProtoToolchainLabel =
-        Preconditions.checkNotNull(defaultSpeedProtoToolchainLabel);
-    this.hostJdkAttribute = Preconditions.checkNotNull(hostJdkAttribute);
-    this.javaToolchainAttribute = Preconditions.checkNotNull(javaToolchainAttribute);
+    this.rpcSupport = rpcSupport;
+    this.defaultSpeedProtoToolchainLabel = defaultSpeedProtoToolchainLabel;
+    this.hostJdkAttribute = hostJdkAttribute;
   }
 
   @Override
@@ -111,6 +106,10 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
     JavaProtoAspectCommon aspectCommon =
         JavaProtoAspectCommon.getSpeedInstance(ruleContext, javaSemantics, rpcSupport);
     Impl impl = new Impl(ruleContext, supportData, aspectCommon, rpcSupport);
+    if (impl.shouldGenerateCode()
+        && ActionReuser.reuseExistingActions(ctadBase.getConfiguredTarget(), ruleContext, aspect)) {
+      return aspect.build();
+    }
     impl.addProviders(aspect);
     return aspect.build();
   }
@@ -135,7 +134,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
                 attr(":java_toolchain", LABEL)
                     .useOutputLicenses()
                     .allowedRuleClasses("java_toolchain")
-                    .value(javaToolchainAttribute));
+                    .value(JavaSemantics.JAVA_TOOLCHAIN));
 
     rpcSupport.mutateAspectDefinition(result, aspectParameters);
 

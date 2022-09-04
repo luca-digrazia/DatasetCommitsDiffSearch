@@ -62,7 +62,6 @@ import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
-import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.java.JavaUtil;
 import com.google.devtools.build.lib.rules.java.proto.GeneratedExtensionRegistryProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -554,9 +553,8 @@ public class BazelJavaSemantics implements JavaSemantics {
   }
 
   @Override
-  public ImmutableList<String> getCompatibleJavacOptions(
-      RuleContext ruleContext, JavaToolchainProvider toolchain) {
-    return ImmutableList.of();
+  public Iterable<String> getExtraJavacOpts(RuleContext ruleContext) {
+    return ImmutableList.<String>of();
   }
 
   @Override

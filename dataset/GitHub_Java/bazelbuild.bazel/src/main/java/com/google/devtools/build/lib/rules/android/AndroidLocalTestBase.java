@@ -102,7 +102,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     } else {
       // Create the final merged manifest
       ResourceDependencies resourceDependencies =
-          ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink= */ false);
+          ResourceDependencies.fromRuleDeps(ruleContext, false /* neverlink */);
 
       ApplicationManifest applicationManifest =
           getApplicationManifest(ruleContext, androidSemantics, resourceDependencies);
@@ -119,8 +119,8 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
               ImmutableList.of(), /* list of uncompressed extensions */
               false, /* crunch png */
               ProguardHelper.getProguardConfigArtifact(ruleContext, ""),
-              /* mainDexProguardCfg= */ null,
-              /* conditionalKeepRules= */ false,
+              null, /* mainDexProguardCfg */
+              false, /* conditionalKeepRules */
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP),
               DataBinding.isEnabled(ruleContext)
@@ -168,7 +168,7 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
             propertiesFile,
             template,
             substitutions,
-            /* makeExecutable= */ false));
+            false /* makeExecutable */));
     // Add the properties file to the test jar as a java resource
     attributesBuilder.addResource(
         PathFragment.create("com/android/tools/test_config.properties"), propertiesFile);

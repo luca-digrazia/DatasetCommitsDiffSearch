@@ -555,6 +555,8 @@ public class AndroidCommon {
     helper.addLibrariesToAttributes(javaCommon.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     attributes.setTargetLabel(ruleContext.getLabel());
 
+    JavaCommon.validateConstraint(
+        ruleContext, "android", javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH));
     ruleContext.checkSrcsSamePackage(true);
     return helper;
   }
@@ -702,7 +704,6 @@ public class AndroidCommon {
             .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
             .addProvider(JavaPluginInfoProvider.class, JavaCommon.getTransitivePlugins(ruleContext))
             .setRuntimeJars(javaCommon.getJavaCompilationArtifacts().getRuntimeJars())
-            .setJavaConstraints(ImmutableList.of("android"))
             .setNeverlink(isNeverlink)
             .build();
 

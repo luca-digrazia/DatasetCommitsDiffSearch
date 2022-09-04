@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.rules.java.proto.JplCcLinkParams.createCcLinkingInfo;
+import static com.google.devtools.build.lib.rules.java.proto.JplCcLinkParams.createCcLinkParamsStore;
 import static com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils.constructJcapFromAspectDeps;
 
 import com.google.common.collect.ImmutableList;
@@ -38,7 +38,7 @@ import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRunfilesProvider;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaStrictCompilationArgsProvider;
+import com.google.devtools.build.lib.rules.java.ProtoJavaApiInfoAspectProvider;
 
 /** Implementation of the java_proto_library rule. */
 public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
@@ -52,10 +52,6 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
 
     JavaCompilationArgsProvider dependencyArgsProviders =
         constructJcapFromAspectDeps(ruleContext, javaProtoLibraryAspectProviders);
-    JavaStrictCompilationArgsProvider strictDependencyArgsProviders =
-        new JavaStrictCompilationArgsProvider(
-            constructJcapFromAspectDeps(
-                ruleContext, javaProtoLibraryAspectProviders, /* alwaysStrict= */ true));
 
     // We assume that the runtime jars will not have conflicting artifacts
     // with the same root relative path
@@ -82,8 +78,13 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
     JavaInfo javaInfo =
         JavaInfo.Builder.create()
             .addProvider(JavaCompilationArgsProvider.class, dependencyArgsProviders)
-            .addProvider(JavaStrictCompilationArgsProvider.class, strictDependencyArgsProviders)
             .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
+            .addProvider(
+                ProtoJavaApiInfoAspectProvider.class,
+                ProtoJavaApiInfoAspectProvider.merge(
+                    JavaInfo.getProvidersFromListOfTargets(
+                        ProtoJavaApiInfoAspectProvider.class,
+                        ruleContext.getPrerequisites("deps", TARGET))))
             .addProvider(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.EMPTY)
             .addProvider(JavaRunfilesProvider.class, javaRunfilesProvider)
             .build();
@@ -99,7 +100,7 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
             .addNativeDeclaredProvider(javaInfo);
 
     if (ruleContext.getFragment(JavaConfiguration.class).jplPropagateCcLinkParamsStore()) {
-      result.addProvider(createCcLinkingInfo(ruleContext, ImmutableList.of()));
+      result.addProvider(createCcLinkParamsStore(ruleContext, ImmutableList.of()));
     }
 
     return result.build();

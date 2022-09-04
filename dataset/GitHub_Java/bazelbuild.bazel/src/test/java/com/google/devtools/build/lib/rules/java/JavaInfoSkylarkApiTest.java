@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -25,36 +23,18 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.testutil.TestConstants;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
-import org.junit.runners.Parameterized.Parameters;
+import org.junit.runners.JUnit4;
 
-/** Tests JavaInfo API for Skylark. */
-@RunWith(Parameterized.class)
+/**
+ * Tests JavaInfo API for Skylark.
+ */
+@RunWith(JUnit4.class)
 public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
 
   private static final String HOST_JAVA_RUNTIME_LABEL =
       TestConstants.TOOLS_REPOSITORY + "//tools/jdk:current_host_java_runtime";
-
-  @Parameters(name = "Use legacy JavaInfo constructor: {0}")
-  public static Iterable<Object[]> legacyJavaInfoConstructor() {
-    return ImmutableList.of(new Object[] {false}, new Object[] {true});
-  }
-
-  private final boolean legacyJavaInfoConstructor;
-
-  public JavaInfoSkylarkApiTest(boolean legacyJavaInfoConstructor) {
-    this.legacyJavaInfoConstructor = legacyJavaInfoConstructor;
-  }
-
-  @Before
-  public void setIncompatibleFlag() throws Exception {
-    if (legacyJavaInfoConstructor) {
-      setSkylarkSemanticsOptions("--noincompatible_disallow_legacy_javainfo");
-    }
-  }
 
   @Test
   public void buildHelperCreateJavaInfoWithOutputJarOnly() throws Exception {
@@ -84,7 +64,7 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
 
   @Test
   public void buildHelperCreateJavaInfoWithOutputJarAndUseIJar() throws Exception {
-
+   
     ruleBuilder()
         .withIJar()
         .build();
@@ -114,7 +94,7 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
   }
 
   @Test
-  public void buildHelperCreateJavaInfoJavaRuleOutputJarsProviderSourceJarOutputJarAndUseIJar()
+  public void buildHelperCreateJavaInfoJavaRuleOutputJarsProviderSourseJarOutputJarAndUseIJar()
       throws Exception {
     ruleBuilder()
         .withIJar()
@@ -206,7 +186,7 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
     ruleBuilder()
         .withNeverLink()
         .build();
-
+    
     scratch.file(
         "foo/BUILD",
         "load(':extension.bzl', 'my_rule')",
@@ -611,162 +591,18 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
             "foo/libmy_java_lib_d-hjar.jar");
   }
 
-  @Test
-  public void buildHelperCreateJavaInfoWithOutputJarAndStampJar() throws Exception {
-    if (legacyJavaInfoConstructor) {
-      // Unsupported mode, don't test this
-      return;
-    }
 
-    ruleBuilder().withStampJar().build();
-
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
-        "  source_jars = ['my_skylark_rule_src.jar']",
-        ")");
-    assertNoEvents();
-
-    JavaCompilationArgsProvider javaCompilationArgsProvider =
-        fetchJavaInfo().getProvider(JavaCompilationArgsProvider.class);
-    assertThat(
-            prettyArtifactNames(
-                javaCompilationArgsProvider.getJavaCompilationArgs().getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
-    assertThat(
-            prettyArtifactNames(
-                javaCompilationArgsProvider.getJavaCompilationArgs().getFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
-    assertThat(
-            prettyArtifactNames(
-                javaCompilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib-stamped.jar");
-    assertThat(
-            prettyArtifactNames(
-                javaCompilationArgsProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
-    assertThat(
-            prettyArtifactNames(
-                javaCompilationArgsProvider
-                    .getRecursiveJavaCompilationArgs()
-                    .getFullCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
-    assertThat(
-            prettyArtifactNames(
-                javaCompilationArgsProvider.getRecursiveJavaCompilationArgs().getCompileTimeJars()))
-        .containsExactly("foo/my_skylark_rule_lib-stamped.jar");
-  }
-
-  @Test
-  public void buildHelperCreateJavaInfoWithJdeps_javaRuleOutputJarsProvider() throws Exception {
-    ruleBuilder().build();
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "java_library(name = 'my_java_lib_direct', srcs = ['java/A.java'])",
-        "my_rule(",
-        "  name = 'my_skylark_rule',",
-        "  output_jar = 'my_skylark_rule_lib.jar',",
-        "  source_jars = ['my_skylark_rule_src.jar'],",
-        "  dep = [':my_java_lib_direct'],",
-        "  jdeps = 'my_jdeps.pb',",
-        ")");
-    assertNoEvents();
-
-    JavaRuleOutputJarsProvider ruleOutputs =
-        fetchJavaInfo().getProvider(JavaRuleOutputJarsProvider.class);
-
-    assertThat(
-            prettyArtifactNames(
-                ruleOutputs
-                    .getOutputJars()
-                    .stream()
-                    .map(o -> o.getClassJar())
-                    .collect(ImmutableList.toImmutableList())))
-        .containsExactly("foo/my_skylark_rule_lib.jar");
-    assertThat(
-            prettyArtifactNames(
-                ruleOutputs
-                    .getOutputJars()
-                    .stream()
-                    .flatMap(o -> Streams.stream(o.getSrcJars()))
-                    .collect(ImmutableList.toImmutableList())))
-        .containsExactly("foo/my_skylark_rule_src.jar");
-    assertThat(ruleOutputs.getJdeps().prettyPrint()).isEqualTo("foo/my_jdeps.pb");
-  }
-
-  @Test
-  public void testMixMatchNewAndLegacyArgsIsError() throws Exception {
-    ImmutableList.Builder<String> lines = ImmutableList.builder();
-    lines.add(
-        "result = provider()",
-        "def _impl(ctx):",
-        "  output_jar = ctx.actions.declare_file('output_jar')",
-        "  source_jar = ctx.actions.declare_file('source_jar')",
-        "  javaInfo = JavaInfo(",
-        "    output_jar = output_jar, ",
-        "    source_jar = source_jar,",
-        "    source_jars = [source_jar],",
-        "  )",
-        "  return [result(property = javaInfo)]",
-        "my_rule = rule(",
-        "  implementation = _impl,",
-        ")");
-    scratch.file("foo/extension.bzl", lines.build().toArray(new String[] {}));
-    checkError(
-        "foo",
-        "my_skylark_rule",
-        "Cannot use deprecated arguments at the same time",
-        "load(':extension.bzl', 'my_rule')",
-        "my_rule(name = 'my_skylark_rule')");
-  }
-
-  @Test
-  public void testIncompatibleDisallowLegacyJavaInfo() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_disallow_legacy_javainfo");
-    ImmutableList.Builder<String> lines = ImmutableList.builder();
-    lines.add(
-        "result = provider()",
-        "def _impl(ctx):",
-        "  output_jar = ctx.actions.declare_file('output_jar')",
-        "  source_jar = ctx.actions.declare_file('source_jar')",
-        "  javaInfo = JavaInfo(",
-        "    output_jar = output_jar,",
-        "    source_jars = [source_jar],", // No longer allowed
-        "  )",
-        "  return [result(property = javaInfo)]",
-        "my_rule = rule(",
-        "  implementation = _impl,",
-        ")");
-    scratch.file("foo/extension.bzl", lines.build().toArray(new String[] {}));
-    checkError(
-        "foo",
-        "my_skylark_rule",
-        "Cannot use deprecated argument when --incompatible_disallow_legacy_javainfo is set. ",
-        "load(':extension.bzl', 'my_rule')",
-        "my_rule(name = 'my_skylark_rule')");
-  }
-
-  private RuleBuilder ruleBuilder() {
+  private RuleBuilder ruleBuilder(){
     return new RuleBuilder();
   }
 
-  private class RuleBuilder {
+  private class RuleBuilder{
     private boolean useIJar = false;
-    private boolean stampJar;
     private boolean neverLink = false;
     private boolean sourceFiles = false;
 
     private RuleBuilder withIJar() {
       useIJar = true;
-      return this;
-    }
-
-    private RuleBuilder withStampJar() {
-      stampJar = true;
       return this;
     }
 
@@ -780,9 +616,18 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
       return this;
     }
 
-    private String[] legacyJavaInfo() {
-      assertThat(stampJar).isFalse();
-      return new String[] {
+    private void build() throws Exception {
+      if (useIJar || sourceFiles) {
+        writeBuildFileForJavaToolchain();
+      }
+
+      String[] lines = {
+        "result = provider()",
+        "def _impl(ctx):",
+        "  ctx.actions.write(ctx.outputs.output_jar, 'JavaInfo API Test', is_executable=False) ",
+        "  dp = [dep[java_common.provider] for dep in ctx.attr.dep]",
+        "  dp_runtime = [dep[java_common.provider] for dep in ctx.attr.dep_runtime]",
+        "  dp_exports = [dep[java_common.provider] for dep in ctx.attr.dep_exports]",
         "  javaInfo = JavaInfo(",
         "    output_jar = ctx.outputs.output_jar, ",
         useIJar ? "    use_ijar = True," : "    use_ijar = False,",
@@ -792,105 +637,33 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
         "    deps = dp,",
         "    runtime_deps = dp_runtime,",
         "    exports = dp_exports,",
-        "    jdeps = ctx.file.jdeps,",
         useIJar || sourceFiles ? "    actions = ctx.actions," : "",
         useIJar || sourceFiles ? "    java_toolchain = ctx.attr._toolchain," : "",
         sourceFiles ? "    host_javabase = ctx.attr._host_javabase," : "",
         "  )",
-        "  return [result(property = javaInfo)]"
+        "  return [result(property = javaInfo)]",
+        "my_rule = rule(",
+        "  implementation = _impl,",
+        "  attrs = {",
+        "    'dep' : attr.label_list(),",
+        "    'dep_runtime' : attr.label_list(),",
+        "    'dep_exports' : attr.label_list(),",
+        "    'output_jar' : attr.output(default=None, mandatory=True),",
+        "    'source_jars' : attr.label_list(allow_files=['.jar']),",
+        "    'sources' : attr.label_list(allow_files=['.java']),",
+        useIJar || sourceFiles
+            ? "    '_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),"
+            : "",
+        sourceFiles
+            ? "    '_host_javabase': attr.label(default = Label('"
+                + HOST_JAVA_RUNTIME_LABEL
+                + "')),"
+            : "",
+        "  }",
+        ")"
       };
-    }
 
-    private String[] newJavaInfo() {
-      assertThat(useIJar && stampJar).isFalse();
-      ImmutableList.Builder<String> lines = ImmutableList.builder();
-      if (useIJar) {
-        lines.add(
-            "  compile_jar = java_common.run_ijar(",
-            "    ctx.actions,",
-            "    jar = ctx.outputs.output_jar,",
-            "    java_toolchain = ctx.attr._toolchain,",
-            "  )");
-      } else if (stampJar) {
-        lines.add(
-            "  compile_jar = java_common.stamp_jar(",
-            "    ctx.actions,",
-            "    jar = ctx.outputs.output_jar,",
-            "    target_label = ctx.label,",
-            "    java_toolchain = ctx.attr._toolchain,",
-            "  )");
-      } else {
-        lines.add("  compile_jar = ctx.outputs.output_jar");
-      }
-      if (sourceFiles) {
-        lines.add(
-            "  source_jar = java_common.pack_sources(",
-            "    ctx.actions,",
-            "    output_jar = ctx.outputs.output_jar,",
-            "    sources = ctx.files.sources,",
-            "    source_jars = ctx.files.source_jars,",
-            "    java_toolchain = ctx.attr._toolchain,",
-            "    host_javabase = ctx.attr._host_javabase,",
-            ")");
-      } else {
-        lines.add(
-            "  if ctx.files.source_jars:",
-            "    source_jar = list(ctx.files.source_jars)[0]",
-            "  else:",
-            "    source_jar = None");
-      }
-      lines.add(
-          "  javaInfo = JavaInfo(",
-          "    output_jar = ctx.outputs.output_jar,",
-          "    compile_jar = compile_jar,",
-          "    source_jar = source_jar,",
-          neverLink ? "    neverlink = True," : "",
-          "    deps = dp,",
-          "    runtime_deps = dp_runtime,",
-          "    exports = dp_exports,",
-          "    jdeps = ctx.file.jdeps,",
-          "  )",
-          "  return [result(property = javaInfo)]");
-      return lines.build().toArray(new String[] {});
-    }
-
-    private void build() throws Exception {
-      if (useIJar || stampJar || sourceFiles) {
-        writeBuildFileForJavaToolchain();
-      }
-
-      ImmutableList.Builder<String> lines = ImmutableList.builder();
-      lines.add(
-          "result = provider()",
-          "def _impl(ctx):",
-          "  ctx.actions.write(ctx.outputs.output_jar, 'JavaInfo API Test', is_executable=False) ",
-          "  dp = [dep[java_common.provider] for dep in ctx.attr.dep]",
-          "  dp_runtime = [dep[java_common.provider] for dep in ctx.attr.dep_runtime]",
-          "  dp_exports = [dep[java_common.provider] for dep in ctx.attr.dep_exports]");
-      lines.add(legacyJavaInfoConstructor ? legacyJavaInfo() : newJavaInfo());
-      lines.add(
-          "my_rule = rule(",
-          "  implementation = _impl,",
-          "  attrs = {",
-          "    'dep' : attr.label_list(),",
-          "    'dep_runtime' : attr.label_list(),",
-          "    'dep_exports' : attr.label_list(),",
-          "    'output_jar' : attr.output(default=None, mandatory=True),",
-          "    'source_jars' : attr.label_list(allow_files=['.jar']),",
-          "    'sources' : attr.label_list(allow_files=['.java']),",
-          "    'jdeps' : attr.label(allow_single_file=True),",
-          useIJar || stampJar || sourceFiles
-              ? "    '_toolchain': attr.label(default = Label('//java/com/google/test:toolchain')),"
-              : "",
-          sourceFiles
-              ? "    '_host_javabase': attr.label(default = Label('"
-                  + HOST_JAVA_RUNTIME_LABEL
-                  + "')),"
-              : "",
-          "  }",
-          ")");
-
-      scratch.file("foo/extension.bzl", lines.build().toArray(new String[] {}));
+      scratch.file("foo/extension.bzl", lines);
     }
   }
 
