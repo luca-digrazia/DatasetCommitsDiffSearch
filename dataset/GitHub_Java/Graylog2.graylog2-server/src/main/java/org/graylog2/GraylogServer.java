@@ -1,5 +1,6 @@
 package org.graylog2;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -18,8 +19,6 @@ import org.graylog2.inputs.gelf.GELFChunkManager;
 import org.graylog2.outputs.MessageOutput;
 import org.graylog2.streams.StreamCache;
 
-import com.google.common.collect.Lists;
-
 public class GraylogServer implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(GraylogServer.class);
@@ -36,16 +35,14 @@ public class GraylogServer implements Runnable {
 
     public static final String GRAYLOG2_VERSION = "0.9.7-dev";
 
-    public static final String MASTER_COUNTER_NAME = "master";
-
     private EmbeddedElasticSearchClient indexer;
 
-    private MessageCounterManager messageCounterManager;
+    private MessageCounter messageCounter;
 
-    private List<Initializer> initializers = Lists.newArrayList();
-    private List<MessageInput> inputs = Lists.newArrayList();
-    private List<Class<? extends MessageFilter>> filters = Lists.newArrayList();
-    private List<Class<? extends MessageOutput>> outputs = Lists.newArrayList();
+    private List<Initializer> initializers = new ArrayList<Initializer>();
+    private List<MessageInput> inputs = new ArrayList<MessageInput>();
+    private List<Class<? extends MessageFilter>> filters = new ArrayList<Class<? extends MessageFilter>>();
+    private List<Class<? extends MessageOutput>> outputs = new ArrayList<Class<? extends MessageOutput>>();
 
     private ProcessBuffer processBuffer;
     private OutputBuffer outputBuffer;
@@ -65,8 +62,7 @@ public class GraylogServer implements Runnable {
         mongoConnection.setReplicaSet(configuration.getMongoReplicaSet());
         mongoConnection.setMessagesCollectionSize(configuration.getMessagesCollectionSize());
 
-        messageCounterManager = new MessageCounterManager();
-        messageCounterManager.register(MASTER_COUNTER_NAME);
+        messageCounter = new MessageCounter();
 
         processBuffer = new ProcessBuffer(this);
         processBuffer.initialize();
@@ -198,8 +194,8 @@ public class GraylogServer implements Runnable {
         return this.outputs;
     }
 
-    public MessageCounterManager getMessageCounterManager() {
-        return this.messageCounterManager;
+    public MessageCounter getMessageCounter() {
+        return this.messageCounter;
     }
 
 }
