@@ -195,8 +195,7 @@ public final class JavaLibraryHelper {
         outputJarsBuilder,
         createOutputSourceJar,
         outputSourceJar,
-        /* javaInfoBuilder= */ null,
-        ImmutableList.of()); // ignored when javaInfoBuilder is null
+        /* javaInfoBuilder= */ null);
   }
 
   public JavaCompilationArtifacts build(
@@ -207,8 +206,7 @@ public final class JavaLibraryHelper {
       JavaRuleOutputJarsProvider.Builder outputJarsBuilder,
       boolean createOutputSourceJar,
       @Nullable Artifact outputSourceJar,
-      @Nullable JavaInfo.Builder javaInfoBuilder,
-      Iterable<JavaGenJarsProvider> transitiveJavaGenJars) {
+      @Nullable JavaInfo.Builder javaInfoBuilder) {
     Preconditions.checkState(output != null, "must have an output file; use setOutput()");
     Preconditions.checkState(
         !createOutputSourceJar || outputSourceJar != null,
@@ -274,12 +272,12 @@ public final class JavaLibraryHelper {
 
     JavaCompilationArtifacts javaArtifacts = artifactsBuilder.build();
     if (javaInfoBuilder != null) {
-      ClasspathConfiguredFragment classpathFragment =
-          new ClasspathConfiguredFragment(
-              javaArtifacts,
-              attributes.build(),
-              neverlink,
-              JavaCompilationHelper.getBootClasspath(javaToolchainProvider));
+      ClasspathConfiguredFragment classpathFragment = new ClasspathConfiguredFragment(
+        javaArtifacts,
+        attributes.build(),
+        neverlink,
+        JavaCompilationHelper.getBootClasspath(javaToolchainProvider)
+      );
 
       javaInfoBuilder.addProvider(
           JavaCompilationInfoProvider.class,
@@ -289,26 +287,9 @@ public final class JavaLibraryHelper {
               .setCompilationClasspath(classpathFragment.getCompileTimeClasspath())
               .setRuntimeClasspath(classpathFragment.getRuntimeClasspath())
               .build());
-
-      javaInfoBuilder.addProvider(
-          JavaGenJarsProvider.class,
-          createJavaGenJarsProvider(helper, genClassJar, genSourceJar, transitiveJavaGenJars));
     }
 
     return javaArtifacts;
-  }
-
-  private JavaGenJarsProvider createJavaGenJarsProvider(
-      JavaCompilationHelper helper,
-      @Nullable Artifact genClassJar,
-      @Nullable Artifact genSourceJar,
-      Iterable<JavaGenJarsProvider> transitiveJavaGenJars) {
-    return JavaGenJarsProvider.create(
-        helper.usesAnnotationProcessing(),
-        genClassJar,
-        genSourceJar,
-        plugins,
-        transitiveJavaGenJars);
   }
 
   /**
