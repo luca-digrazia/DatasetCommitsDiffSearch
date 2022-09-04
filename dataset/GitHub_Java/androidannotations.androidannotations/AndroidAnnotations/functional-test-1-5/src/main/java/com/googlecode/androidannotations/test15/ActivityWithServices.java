@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -14,6 +14,7 @@
  * the License.
  */
 package com.googlecode.androidannotations.test15;
+
 
 import android.app.Activity;
 import android.app.ActivityManager;
@@ -40,97 +41,96 @@ import com.googlecode.androidannotations.annotations.SystemService;
 @EActivity
 public class ActivityWithServices extends Activity {
 
-	@SystemService
-	WindowManager windowManager;
+    @SystemService
+    WindowManager windowManager;
 
-	@SystemService
-	LayoutInflater layoutInflater;
+    @SystemService
+    LayoutInflater layoutInflater;
 
-	@SystemService
-	ActivityManager activityManager;
+    @SystemService
+    ActivityManager activityManager;
+    
+    @SystemService
+    PowerManager powerManager;
+    
+    @SystemService
+    AlarmManager alarmManager;
+    
+    @SystemService
+    NotificationManager notificationManager;
+    
+    @SystemService
+    KeyguardManager keyguardManager;
+    
+    @SystemService
+    LocationManager locationManager;
+    
+    @SystemService
+    SearchManager searchManager;
+    
+    @SystemService
+    Vibrator vibrator;
+    
+    @SystemService
+    ConnectivityManager connectivityManager;
+    
+    @SystemService
+    WifiManager wifiManager;
+    
+    @SystemService
+    InputMethodManager inputMethodManager;
+    
+    @SystemService
+    SensorManager sensorManager;
+    
+    @SystemService
+    ClipboardManager clipboardManager;
+    
+    @SystemService
+    TelephonyManager telephonyManager;
+    
+    @SystemService
+    AudioManager audioManager;
 
-	@SystemService
-	PowerManager powerManager;
-
-	@SystemService
-	AlarmManager alarmManager;
-
-	@SystemService
-	NotificationManager notificationManager;
-
-	@SystemService
-	KeyguardManager keyguardManager;
-
-	@SystemService
-	LocationManager locationManager;
-
-	@SystemService
-	SearchManager searchManager;
-
-	@SystemService
-	Vibrator vibrator;
-
-	@SystemService
-	ConnectivityManager connectivityManager;
-
-	@SystemService
-	WifiManager wifiManager;
-
-	
-	@SystemService
-	InputMethodManager inputMethodManager;
-
-	@SystemService
-	SensorManager sensorManager;
-
-	@SystemService
-	ClipboardManager clipboardManager;
-
-	@SystemService
-	TelephonyManager telephonyManager;
-
-	@SystemService
-	AudioManager audioManager;
-
-	// API level 4
-	// @SystemService
-	// AccessibilityManager accessibilityManager;
-
-	// API Level 5
-	// @SystemService
-	// AccountManager accountManager;
-
-	// @SystemService
-	// WallpaperManager wallpaperManager;
-
-	// API level 8
-	// @SystemService
-	// DropBoxManager dropBoxManager;
-
-	// @SystemService
-	// DevicePolicyManager devicePolicyManager;
-
-	// API level 9
-	// @SystemService
-	// StorageManager storageManager;
-
-	// API level 10
-	// @SystemService
-	// NfcManager nfcManager;
-
-	// API level 12
-	// @SystemService
-	// UsbManager usbManager;
-
-	// API level 14
-	// @SystemService
-	// TextServicesManager textServicesManager;
-
-	// @SystemService
-	// WifiP2pManager wifiP2pManager;
-
-	// TODO Test those for > 1.5 Android versions
-	// UiModeManager uiModeManager;
-	// DownloadManager downloadManager;
+    // API level 4
+    //@SystemService
+    //AccessibilityManager accessibilityManager;
+    
+    // API Level 5
+    //@SystemService
+    //AccountManager accountManager;
+    
+    //@SystemService
+    //WallpaperManager wallpaperManager;
+    
+    // API level 8
+    //@SystemService
+    //DropBoxManager dropBoxManager;
+    
+    //@SystemService
+    //DevicePolicyManager devicePolicyManager;
+    
+    // API level 9
+    //@SystemService
+    //StorageManager storageManager;
+    
+    // API level 10
+    //@SystemService
+    //NfcManager nfcManager;    
+    
+    // API level 12
+    //@SystemService
+    //UsbManager usbManager;
+    
+    // API level 14
+    //@SystemService
+    //TextServicesManager textServicesManager;
+    
+    //@SystemService
+    //WifiP2pManager wifiP2pManager;
+    
+    // TODO Test those for > 1.5 Android versions
+    // UiModeManager uiModeManager;
+    // DownloadManager downloadManager;
 
 }
