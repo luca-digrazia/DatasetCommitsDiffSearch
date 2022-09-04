@@ -63,8 +63,8 @@ public class ExecutionOptions extends OptionsBase {
       name = "spawn_strategy",
       defaultValue = "",
       converter = CommaSeparatedNonEmptyOptionListConverter.class,
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Specify how spawn actions are executed by default. Accepts a comma-separated list of"
               + " strategies from highest to lowest priority. For each action Bazel picks the"
@@ -77,8 +77,8 @@ public class ExecutionOptions extends OptionsBase {
       name = "genrule_strategy",
       defaultValue = "",
       converter = CommaSeparatedNonEmptyOptionListConverter.class,
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Specify how to execute genrules. This flag will be phased out. Instead, use "
               + "--spawn_strategy=<value> to control all actions or --strategy=Genrule=<value> "
@@ -90,8 +90,8 @@ public class ExecutionOptions extends OptionsBase {
       allowMultiple = true,
       converter = Converters.StringToStringListConverter.class,
       defaultValue = "null",
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Specify how to distribute compilation of other spawn actions. Accepts a comma-separated"
               + " list of strategies from highest to lowest priority. For each action Bazel picks"
@@ -104,8 +104,8 @@ public class ExecutionOptions extends OptionsBase {
       name = "strategy_regexp",
       allowMultiple = true,
       converter = RegexFilterAssignmentConverter.class,
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       defaultValue = "null",
       help =
           "Override which spawn strategy should be used to execute spawn actions that have "
@@ -123,8 +123,8 @@ public class ExecutionOptions extends OptionsBase {
   @Option(
       name = "materialize_param_files",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Writes intermediate parameter files to output tree even when using "
               + "remote action execution. Useful when debugging actions. "
@@ -134,8 +134,8 @@ public class ExecutionOptions extends OptionsBase {
   @Option(
       name = "experimental_materialize_param_files_directly",
       defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help = "If materializing param files, do so with direct writes to disk.")
   public boolean materializeParamFilesDirectly;
 
@@ -147,63 +147,69 @@ public class ExecutionOptions extends OptionsBase {
   }
 
   @Option(
-      name = "verbose_failures",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-      help = "If a command fails, print out the full command line.")
+    name = "verbose_failures",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "If a command fails, print out the full command line."
+  )
   public boolean verboseFailures;
 
   @Option(
-      name = "subcommands",
-      abbrev = 's',
-      defaultValue = "false",
-      converter = ShowSubcommandsConverter.class,
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-      help = "Display the subcommands executed during a build.")
+    name = "subcommands",
+    abbrev = 's',
+    defaultValue = "false",
+    converter = ShowSubcommandsConverter.class,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "Display the subcommands executed during a build."
+  )
   public ShowSubcommands showSubcommands;
 
   @Option(
-      name = "check_up_to_date",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-      effectTags = {OptionEffectTag.EXECUTION},
-      help =
-          "Don't perform the build, just check if it is up-to-date.  If all targets are "
-              + "up-to-date, the build completes successfully.  If any step needs to be executed "
-              + "an error is reported and the build fails.")
+    name = "check_up_to_date",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help =
+        "Don't perform the build, just check if it is up-to-date.  If all targets are "
+            + "up-to-date, the build completes successfully.  If any step needs to be executed "
+            + "an error is reported and the build fails."
+  )
   public boolean checkUpToDate;
 
   @Option(
-      name = "check_tests_up_to_date",
-      defaultValue = "false",
-      implicitRequirements = {"--check_up_to_date"},
-      documentationCategory = OptionDocumentationCategory.TESTING,
-      effectTags = {OptionEffectTag.EXECUTION},
-      help =
-          "Don't run tests, just check if they are up-to-date.  If all tests results are "
-              + "up-to-date, the testing completes successfully.  If any test needs to be built or "
-              + "executed, an error is reported and the testing fails.  This option implies "
-              + "--check_up_to_date behavior.")
+    name = "check_tests_up_to_date",
+    defaultValue = "false",
+    implicitRequirements = {"--check_up_to_date"},
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help =
+        "Don't run tests, just check if they are up-to-date.  If all tests results are "
+            + "up-to-date, the testing completes successfully.  If any test needs to be built or "
+            + "executed, an error is reported and the testing fails.  This option implies "
+            + "--check_up_to_date behavior."
+  )
   public boolean testCheckUpToDate;
 
   @Option(
-      name = "test_strategy",
-      defaultValue = "",
-      documentationCategory = OptionDocumentationCategory.TESTING,
-      effectTags = {OptionEffectTag.EXECUTION},
-      help = "Specifies which strategy to use when running tests.")
+    name = "test_strategy",
+    defaultValue = "",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "Specifies which strategy to use when running tests."
+  )
   public String testStrategy;
 
   @Option(
-      name = "test_keep_going",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.TESTING,
-      effectTags = {OptionEffectTag.EXECUTION},
-      help =
-          "When disabled, any non-passing test will cause the entire build to stop. By default "
-              + "all tests are run, even if some do not pass.")
+    name = "test_keep_going",
+    defaultValue = "true",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help =
+        "When disabled, any non-passing test will cause the entire build to stop. By default "
+            + "all tests are run, even if some do not pass."
+  )
   public boolean testKeepGoing;
 
   @Option(
@@ -211,8 +217,8 @@ public class ExecutionOptions extends OptionsBase {
       allowMultiple = true,
       defaultValue = "default",
       converter = TestAttemptsConverter.class,
-      documentationCategory = OptionDocumentationCategory.TESTING,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Each test will be retried up to the specified number of times in case of any test"
               + " failure. Tests that required more than one attempt to pass are marked as 'FLAKY'"
@@ -233,7 +239,7 @@ public class ExecutionOptions extends OptionsBase {
       name = "test_tmpdir",
       defaultValue = "null",
       converter = OptionsUtils.PathFragmentConverter.class,
-      documentationCategory = OptionDocumentationCategory.TESTING,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help = "Specifies the base temporary directory for 'bazel test' to use.")
   public PathFragment testTmpDir;
@@ -242,12 +248,8 @@ public class ExecutionOptions extends OptionsBase {
       name = "test_output",
       defaultValue = "summary",
       converter = TestOutputFormat.Converter.class,
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {
-        OptionEffectTag.TEST_RUNNER,
-        OptionEffectTag.TERMINAL_OUTPUT,
-        OptionEffectTag.EXECUTION
-      },
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Specifies desired output mode. Valid values are 'summary' to output only test status "
               + "summary, 'errors' to also print test logs for failed tests, 'all' to print logs "
@@ -260,8 +262,8 @@ public class ExecutionOptions extends OptionsBase {
       name = "test_summary",
       defaultValue = "short",
       converter = TestSummaryFormat.Converter.class,
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Specifies the desired format ot the test summary. Valid values are 'short' to print "
               + "information only about tests executed, 'terse', to print information only about "
@@ -270,11 +272,12 @@ public class ExecutionOptions extends OptionsBase {
   public TestSummaryFormat testSummary;
 
   @Option(
-      name = "resource_autosense",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "This flag has no effect, and is deprecated")
+    name = "resource_autosense",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help = "This flag has no effect, and is deprecated"
+  )
   public boolean useResourceAutoSense;
 
   @Option(
@@ -354,8 +357,8 @@ public class ExecutionOptions extends OptionsBase {
   @Option(
       name = "local_test_jobs",
       defaultValue = "auto",
-      documentationCategory = OptionDocumentationCategory.TESTING,
-      effectTags = {OptionEffectTag.EXECUTION},
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "The max number of local test jobs to run concurrently. "
               + "Takes "
