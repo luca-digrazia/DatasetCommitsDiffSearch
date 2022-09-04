@@ -17,7 +17,6 @@ import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.enterprise.inject.Stereotype;
 import javax.enterprise.inject.Typed;
-import javax.enterprise.inject.Vetoed;
 import javax.enterprise.inject.spi.Bean;
 import javax.enterprise.inject.spi.BeanManager;
 import javax.enterprise.inject.spi.EventMetadata;
@@ -62,9 +61,7 @@ final class DotNames {
     static final DotName ALTERNATIVE = create(Alternative.class);
     static final DotName STEREOTYPE = create(Stereotype.class);
     static final DotName TYPED = create(Typed.class);
-    static final DotName VETOED = create(Vetoed.class);
     static final DotName CLASS = create(Class.class);
-    static final DotName ENUM = create(Enum.class);
 
     private DotNames() {
     }

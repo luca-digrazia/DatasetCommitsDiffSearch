@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import javax.enterprise.inject.Model;
@@ -26,7 +27,6 @@ import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 import org.jboss.logging.Logger.Level;
-import org.jboss.protean.arc.processor.BeanRegistrar.RegistrationContext;
 
 /**
  *
@@ -54,21 +54,21 @@ public class BeanDeployment {
 
     private final InterceptorResolver interceptorResolver;
 
-    private final AnnotationStore annotationStore;
+    private final List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers;
 
     private final Set<DotName> resourceAnnotations;
 
-    BeanDeployment(IndexView index, Collection<DotName> additionalBeanDefiningAnnotations, List<AnnotationsTransformer> annotationTransformers) {
-        this(index, additionalBeanDefiningAnnotations, annotationTransformers, Collections.emptyList(), Collections.emptyList());
+    BeanDeployment(IndexView index, Collection<DotName> additionalBeanDefiningAnnotations,
+            List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers) {
+        this(index, additionalBeanDefiningAnnotations, annotationTransformers, Collections.emptyList());
     }
 
-    BeanDeployment(IndexView index, Collection<DotName> additionalBeanDefiningAnnotations, List<AnnotationsTransformer> annotationTransformers,
-            Collection<DotName> resourceAnnotations, List<BeanRegistrar> beanRegistrars) {
+    BeanDeployment(IndexView index, Collection<DotName> additionalBeanDefiningAnnotations,
+            List<BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>>> annotationTransformers,
+            Collection<DotName> resourceAnnotations) {
         long start = System.currentTimeMillis();
         this.resourceAnnotations = new HashSet<>(resourceAnnotations);
         this.index = index;
-        this.annotationStore = new AnnotationStore(annotationTransformers);
-
         this.qualifiers = findQualifiers(index);
         // TODO interceptor bindings are transitive!!!
         this.interceptorBindings = findInterceptorBindings(index);
@@ -77,23 +77,9 @@ public class BeanDeployment {
         this.beanResolver = new BeanResolver(this);
         List<ObserverInfo> observers = new ArrayList<>();
         this.beans = findBeans(initBeanDefiningAnnotations(additionalBeanDefiningAnnotations, stereotypes), observers);
-
-        // Register synthetic beans
-        if (!beanRegistrars.isEmpty()) {
-            RegistrationContext registrationContext = new RegistrationContext() {
-                @Override
-                public <T> BeanConfigurator<T> configure(Class<T> implementationClass) {
-                    return new BeanConfigurator<T>(implementationClass, BeanDeployment.this, beans::add);
-                }
-            };
-            for (BeanRegistrar registrar : beanRegistrars) {
-                registrar.register(registrationContext);
-            }
-        }
-
         this.observers = observers;
         this.interceptorResolver = new InterceptorResolver(this);
-
+        this.annotationTransformers = annotationTransformers;
         LOGGER.infof("Build deployment created in %s ms", System.currentTimeMillis() - start);
     }
 
@@ -137,20 +123,26 @@ public class BeanDeployment {
         return resourceAnnotations;
     }
 
-    AnnotationStore getAnnotationStore() {
-        return annotationStore;
-    }
-
     Collection<AnnotationInstance> getAnnotations(AnnotationTarget target) {
-        return annotationStore.getAnnotations(target);
-    }
-
-    AnnotationInstance getAnnotation(AnnotationTarget target, DotName name) {
-        return annotationStore.getAnnotation(target, name);
-    }
-
-    boolean hasAnnotation(AnnotationTarget target, DotName name) {
-        return annotationStore.hasAnnotation(target, name);
+        Collection<AnnotationInstance> annotations = null;
+        switch (target.kind()) {
+            case CLASS:
+                annotations = target.asClass().classAnnotations();
+                break;
+            case METHOD:
+                annotations = target.asMethod().annotations();
+            case FIELD:
+                annotations = target.asField().annotations();
+            default:
+                throw new UnsupportedOperationException();
+        }
+        if (annotationTransformers == null || annotationTransformers.isEmpty()) {
+            return annotations;
+        }
+        for (BiFunction<AnnotationTarget, Collection<AnnotationInstance>, Collection<AnnotationInstance>> transformer : annotationTransformers) {
+            annotations = transformer.apply(target, annotations);
+        }
+        return annotations;
     }
 
     void init() {
@@ -207,6 +199,7 @@ public class BeanDeployment {
 
     private List<BeanInfo> findBeans(List<DotName> beanDefiningAnnotations, List<ObserverInfo> observers) {
 
+        Set<DotName> processed = new HashSet<>();
         Set<ClassInfo> beanClasses = new HashSet<>();
         Set<MethodInfo> producerMethods = new HashSet<>();
         Set<MethodInfo> disposerMethods = new HashSet<>();
@@ -214,65 +207,50 @@ public class BeanDeployment {
         Set<MethodInfo> syncObserverMethods = new HashSet<>();
         Set<MethodInfo> asyncObserverMethods = new HashSet<>();
 
-        for (ClassInfo beanClass : index.getKnownClasses()) {
+        for (DotName beanDefiningAnnotation : beanDefiningAnnotations) {
+            for (AnnotationInstance annotation : index.getAnnotations(beanDefiningAnnotation)) {
+                if (Kind.CLASS.equals(annotation.target().kind())) {
 
-            if (Modifier.isInterface(beanClass.flags()) || DotNames.ENUM.equals(beanClass.superName())) {
-                // Skip interfaces, annotations and enums
-                continue;
-            }
-
-            if (beanClass.nestingType().equals(NestingType.ANONYMOUS) || beanClass.nestingType().equals(NestingType.LOCAL)
-                    || (beanClass.nestingType().equals(NestingType.INNER) && !Modifier.isStatic(beanClass.flags()))) {
-                // Skip annonymous, local and inner classes
-                continue;
-            }
-
-            if (!beanClass.hasNoArgsConstructor()
-                    && beanClass.methods().stream().noneMatch(m -> m.name().equals("<init>") && m.hasAnnotation(DotNames.INJECT))) {
-                // Must have a constructor with no parameters or declare a constructor annotated with @Inject
-                continue;
-            }
-
-            if (annotationStore.hasAnnotation(beanClass, DotNames.VETOED)) {
-                // Skip vetoed bean classes
-                continue;
-            }
-
-            if (annotationStore.hasAnnotation(beanClass, DotNames.INTERCEPTOR)) {
-                // Skip interceptors
-                continue;
-            }
-
-            if (annotationStore.hasAnyAnnotation(beanClass, beanDefiningAnnotations)) {
-
-                beanClasses.add(beanClass);
-
-                for (MethodInfo method : beanClass.methods()) {
-                    if (annotationStore.getAnnotations(method).isEmpty()) {
+                    ClassInfo beanClass = annotation.target().asClass();
+                    if (!processed.add(beanClass.name())) {
                         continue;
                     }
-                    if (annotationStore.hasAnnotation(method, DotNames.PRODUCES)) {
-                        // Producers are not inherited
-                        producerMethods.add(method);
-                    } else if (annotationStore.hasAnnotation(method, DotNames.DISPOSES)) {
-                        // Disposers are not inherited
-                        disposerMethods.add(method);
-                    } else if (annotationStore.hasAnnotation(method, DotNames.OBSERVES)) {
-                        // TODO observers are inherited
-                        syncObserverMethods.add(method);
-                    } else if (annotationStore.hasAnnotation(method, DotNames.OBSERVES_ASYNC)) {
-                        // TODO observers are inherited
-                        asyncObserverMethods.add(method);
+
+                    if (beanClass.annotations().containsKey(DotNames.INTERCEPTOR)) {
+                        // Skip interceptors
+                        continue;
                     }
-                }
-                for (FieldInfo field : beanClass.fields()) {
-                    if (annotationStore.hasAnnotation(field, DotNames.PRODUCES)) {
-                        // Producer fields are not inherited
-                        producerFields.add(field);
+                    if (beanClass.nestingType().equals(NestingType.ANONYMOUS) || beanClass.nestingType().equals(NestingType.LOCAL)
+                            || (beanClass.nestingType().equals(NestingType.INNER) && !Modifier.isStatic(beanClass.flags()))
+                            || Modifier.isInterface(beanClass.flags())) {
+                        // Skip interfaces, annonymous, local and inner classes
+                        continue;
+                    }
+                    beanClasses.add(beanClass);
+
+                    for (MethodInfo method : beanClass.methods()) {
+                        if (method.hasAnnotation(DotNames.PRODUCES)) {
+                            // Producers are not inherited
+                            producerMethods.add(method);
+                        } else if (method.hasAnnotation(DotNames.DISPOSES)) {
+                            // Disposers are not inherited
+                            disposerMethods.add(method);
+                        } else if (method.hasAnnotation(DotNames.OBSERVES)) {
+                            // TODO observers are inherited
+                            syncObserverMethods.add(method);
+                        } else if (method.hasAnnotation(DotNames.OBSERVES_ASYNC)) {
+                            // TODO observers are inherited
+                            asyncObserverMethods.add(method);
+                        }
+                    }
+                    for (FieldInfo field : beanClass.fields()) {
+                        if (field.annotations().stream().anyMatch(a -> a.name().equals(DotNames.PRODUCES))) {
+                            // Producer fields are not inherited
+                            producerFields.add(field);
+                        }
                     }
                 }
             }
-
         }
 
         // Build metadata for typesafe resolution
