@@ -36,9 +36,7 @@ import org.graylog2.filters.CounterUpdateFilter;
 import org.graylog2.filters.RewriteFilter;
 import org.graylog2.filters.StreamMatcherFilter;
 import org.graylog2.filters.TokenizerFilter;
-import org.graylog2.healthchecks.MessageFlowHealthCheck;
 import org.graylog2.initializers.*;
-import org.graylog2.inputs.gelf.GELFTCPInput;
 import org.graylog2.inputs.gelf.GELFUDPInput;
 import org.graylog2.inputs.syslog.SyslogUDPInput;
 import org.graylog2.outputs.ElasticSearchOutput;
@@ -124,14 +122,9 @@ public final class Main {
         server.registerInitializer(new MessageRetentionInitializer(server));
         if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer(server)); }
         if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer(server)); }
-        server.registerInitializer(new HealthCheckHTTPServerInitializer(8001));
 
         // Register inputs.
-        if (configuration.isUseGELF()) {
-            server.registerInput(new GELFUDPInput());
-            server.registerInput(new GELFTCPInput());
-        }
-        
+        if (configuration.isUseGELF()) { server.registerInput(new GELFUDPInput()); }
         if (configuration.getSyslogProtocol().equals("udp")) {
             server.registerInput(new SyslogUDPInput());
         }
@@ -145,9 +138,6 @@ public final class Main {
 
         // Register outputs.
         server.registerOutput(ElasticSearchOutput.class);
-
-        // Register health checks.
-        server.registerHealthCheck(new MessageFlowHealthCheck());
 
         // Blocks until we shut down.
         server.run();
