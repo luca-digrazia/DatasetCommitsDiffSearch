@@ -51,7 +51,6 @@ public class ShiroAuthenticationFilter implements ContainerRequestFilter {
             try {
                 log.trace("Logging in {}", context.getSubject());
                 context.loginSubject();
-
             } catch (LockedAccountException e) {
                 log.debug("Unable to authenticate user, account is locked.", e);
                 throw new NotAuthorizedException(e, "Basic", "Graylog2 Server");

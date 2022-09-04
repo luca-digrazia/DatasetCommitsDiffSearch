@@ -62,18 +62,19 @@ public class MongoDbRealm extends AuthorizingRealm {
             throw new IllegalArgumentException("Only implemented for UsernamePasswordToken currently.");
         }
         UsernamePasswordToken token = (UsernamePasswordToken) authToken;
-        log.info("Retrieving authc info for user {}", token.getUsername());
+        log.debug("Retrieving authc info for user {}", token.getUsername());
 
-        final SimpleAccount simpleAccount;
-        if (User.exists(token.getUsername(), new String(token.getPassword()), core)) {
+        SimpleAccount simpleAccount = null;
+        final User user = User.load(token.getUsername(), core);
+        if (user != null) {
             simpleAccount = new SimpleAccount(token.getPrincipal(),
-                    token.getCredentials(),
+                    user.getHashedPassword(),
                     ByteSource.Util.bytes(core.getConfiguration().getPasswordSecret()),
                     "graylog2MongoDbRealm");
-            log.info("User {} authenticated by hashed password", token.getUsername());
-        } else {
-            log.warn("User {} could not be authenticated", token.getUsername());
-            throw new AuthenticationException("Unknown user or wrong credentials.");
+            // if ldap is disabled, and this user was created via LDAP, it is locked and cannot be used to authenticate.
+            if (user.isExternalUser() && !core.getLdapRealm().isEnabled()) {
+                throw new LockedAccountException("LDAP authentication is currently disabled.");
+            }
         }
 
         return simpleAccount;
