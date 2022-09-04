@@ -9,13 +9,15 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Optional;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 import io.quarkus.cli.QuarkusCli;
 import io.quarkus.devtools.project.BuildTool;
-import io.quarkus.registry.config.RegistriesConfigLocator;
 import io.quarkus.utilities.OS;
 import picocli.CommandLine;
 
@@ -75,10 +77,11 @@ public class ExecuteUtil {
     }
 
     private static String findExecutable(String exec) {
-        return Stream.of(System.getenv("PATH").split(Pattern.quote(File.pathSeparator)))
-                .map(Paths::get).map(path -> path.resolve(exec).toFile())
-                .filter(File::exists).findFirst()
-                .map(File::getParent).orElse(null);
+        Optional<Path> mvnPath = Stream.of(System.getenv("PATH").split(Pattern.quote(File.pathSeparator)))
+                .map(Paths::get)
+                .filter(path -> Files.exists(path.resolve(exec))).findFirst();
+
+        return mvnPath.map(value -> value.getParent().toString()).orElse(null);
     }
 
     private static int executeWrapper(File wrapper, QuarkusCli cli, String... args) throws Exception {
@@ -170,9 +173,9 @@ public class ExecuteUtil {
             return SOFTWARE;
         }
         String[] newArgs = args;
-        newArgs = propagatePropertyIfSet("maven.repo.local", newArgs);
-        newArgs = propagatePropertyIfSet(RegistriesConfigLocator.CONFIG_FILE_PATH_PROPERTY, newArgs);
-        newArgs = propagatePropertyIfSet("io.quarkus.maven.secondary-local-repo", newArgs);
+        if (System.getProperties().containsKey("maven.repo.local")) {
+            newArgs = prependArray("-Dmaven.repo.local=" + System.getProperty("maven.repo.local"), newArgs);
+        }
         if (cli.isShowErrors()) {
             newArgs = prependArray("--full-stacktrace", newArgs);
         }
@@ -184,11 +187,6 @@ public class ExecuteUtil {
         } else {
             return executeGradle(projectPath, cli, args);
         }
-    }
-
-    private static String[] propagatePropertyIfSet(String name, String[] newArgs) {
-        final String value = System.getProperty(name);
-        return value == null ? newArgs : prependArray("-D" + name + "=" + value, newArgs);
     }
 
     public static int executeMavenTarget(File projectPath, QuarkusCli cli, String... args) throws Exception {

@@ -34,35 +34,29 @@ final class CodestartProjectGeneration {
 
         log.debug("processed shared-data: %s" + data);
 
-        final Codestart projectCodestart = projectDefinition.getRequiredCodestart(CodestartType.PROJECT);
+        projectDefinition.getRequiredCodestart(CodestartType.PROJECT);
 
         final List<CodestartFileStrategy> strategies = buildStrategies(mergeStrategies(projectDefinition));
 
         log.debug("file strategies: %s", strategies);
 
-        CodestartProcessor processor = new CodestartProcessor(log, projectDefinition.getResourceLoader(),
+        CodestartProcessor processor = new CodestartProcessor(log,
                 languageName, targetDirectory, strategies, data);
         processor.checkTargetDir();
-        for (Codestart codestart : projectDefinition.getImplementedCodestarts()) {
+        for (Codestart codestart : projectDefinition.getCodestarts()) {
             processor.process(codestart);
         }
         processor.writeFiles();
         log.info("\napplying codestarts...");
-        log.info(projectDefinition.getImplementedCodestarts().stream()
+        log.info(projectDefinition.getCodestarts().stream()
                 .map(c -> c.getType().getIcon() + " "
                         + c.getName())
                 .collect(Collectors.joining("\n")));
-        if (!projectDefinition.getUnimplementedCodestarts().isEmpty()) {
-            log.warn(projectDefinition.getUnimplementedCodestarts().stream()
-                    .map(c -> c.getName() + " codestart has not been applied (doesn't implement language '" + languageName
-                            + "' yet)")
-                    .collect(Collectors.joining("\n")));
-        }
     }
 
     private static Map<String, String> mergeStrategies(CodestartProjectDefinition projectDefinition) {
         return NestedMaps.deepMerge(
-                projectDefinition.getImplementedCodestarts().stream().map(Codestart::getSpec)
+                projectDefinition.getCodestarts().stream().map(Codestart::getSpec)
                         .map(CodestartSpec::getOutputStrategy));
     }
 
