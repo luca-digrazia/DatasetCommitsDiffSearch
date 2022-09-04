@@ -7,7 +7,6 @@ import java.util.Map;
 
 import org.hibernate.boot.registry.BootstrapServiceRegistry;
 import org.hibernate.boot.registry.StandardServiceInitiator;
-import org.hibernate.boot.registry.StandardServiceRegistry;
 import org.hibernate.boot.registry.internal.BootstrapServiceRegistryImpl;
 import org.hibernate.boot.registry.internal.StandardServiceRegistryImpl;
 import org.hibernate.boot.registry.selector.internal.StrategySelectorImpl;
@@ -19,8 +18,10 @@ import org.hibernate.engine.jdbc.connections.internal.MultiTenantConnectionProvi
 import org.hibernate.engine.jdbc.cursor.internal.RefCursorSupportInitiator;
 import org.hibernate.engine.jdbc.internal.JdbcServicesInitiator;
 import org.hibernate.engine.jndi.internal.JndiServiceInitiator;
+import org.hibernate.engine.transaction.jta.platform.internal.JBossStandAloneJtaPlatform;
 import org.hibernate.engine.transaction.jta.platform.internal.JtaPlatformInitiator;
-import org.hibernate.engine.transaction.jta.platform.internal.JtaPlatformResolverInitiator;
+import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
+import org.hibernate.event.internal.EntityCopyObserverFactoryInitiator;
 import org.hibernate.hql.internal.QueryTranslatorFactoryInitiator;
 import org.hibernate.id.factory.internal.MutableIdentifierGeneratorFactoryInitiator;
 import org.hibernate.integrator.spi.Integrator;
@@ -33,12 +34,14 @@ import org.hibernate.property.access.internal.PropertyAccessStrategyResolverInit
 import org.hibernate.protean.impl.FlatClassLoaderService;
 import org.hibernate.protean.recording.RecordedState;
 import org.hibernate.protean.recording.customservices.CfgXmlAccessServiceInitiatorProtean;
+import org.hibernate.protean.recording.customservices.DisabledJMXInitiator;
 import org.hibernate.protean.recording.customservices.ProteanJtaPlatformResolver;
 import org.hibernate.resource.beans.spi.ManagedBeanRegistryInitiator;
 import org.hibernate.resource.transaction.internal.TransactionCoordinatorBuilderInitiator;
 import org.hibernate.service.Service;
 import org.hibernate.service.internal.ProvidedService;
 import org.hibernate.service.internal.SessionFactoryServiceRegistryFactoryInitiator;
+import org.hibernate.service.spi.ServiceRegistryImplementor;
 import org.hibernate.tool.hbm2ddl.ImportSqlCommandExtractorInitiator;
 import org.hibernate.tool.schema.internal.SchemaManagementToolInitiator;
 
@@ -159,7 +162,9 @@ public class PreconfiguredServiceRegistryBuilder {
 		serviceInitiators.add( new ProteanJdbcEnvironmentInitiator( rs.getDialect() ) );
 
 		serviceInitiators.add( JndiServiceInitiator.INSTANCE );
-		serviceInitiators.add( JmxServiceInitiator.INSTANCE );
+
+		//Custom one!
+		serviceInitiators.add( DisabledJMXInitiator.INSTANCE );
 
 		serviceInitiators.add( PersisterClassResolverInitiator.INSTANCE );
 		serviceInitiators.add( PersisterFactoryInitiator.INSTANCE );
@@ -182,6 +187,12 @@ public class PreconfiguredServiceRegistryBuilder {
 
 		//Replaces JtaPlatformResolverInitiator.INSTANCE );
 		serviceInitiators.add( new ProteanJtaPlatformResolver( rs.getJtaPlatform() ) );
+		serviceInitiators.add(new JtaPlatformInitiator() {
+			@Override
+			protected JtaPlatform getFallbackProvider(Map configurationValues, ServiceRegistryImplementor registry) {
+				return new JBossStandAloneJtaPlatform();
+			}
+		});
 		//Disabled:
 		//serviceInitiators.add( JtaPlatformInitiator.INSTANCE );
 
@@ -192,6 +203,8 @@ public class PreconfiguredServiceRegistryBuilder {
 		serviceInitiators.add( TransactionCoordinatorBuilderInitiator.INSTANCE );
 
 		serviceInitiators.add( ManagedBeanRegistryInitiator.INSTANCE );
+
+		serviceInitiators.add( EntityCopyObserverFactoryInitiator.INSTANCE );
 
 		serviceInitiators.trimToSize();
 		return serviceInitiators;
