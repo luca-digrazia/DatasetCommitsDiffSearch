@@ -13,11 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
 import java.util.Iterator;
-
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.spi.BeanManager;
 import javax.enterprise.inject.spi.CDI;
@@ -38,6 +37,9 @@ public class ArcCDIProvider implements CDIProvider {
 
     @Override
     public CDI<Object> getCDI() {
+        if (Arc.container() == null) {
+            throw new IllegalStateException("No CDI container is available");
+        }
         return arcCDI;
     }
 
