@@ -21,12 +21,12 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /** Module providing functions to create actions. */
 @SkylarkModule(
@@ -349,7 +349,7 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
       },
       useLocation = true)
   public void run(
-      SkylarkList<?> outputs,
+      SkylarkList outputs,
       Object inputs,
       Object unusedInputsList,
       Object executableUnchecked,
@@ -585,8 +585,9 @@ public interface SkylarkActionFactoryApi extends SkylarkValue {
       throws EvalException;
 
   @SkylarkCallable(
-      name = "args",
-      doc = "Returns an Args object that can be used to build memory-efficient command lines.",
-      useStarlarkThread = true)
-  public CommandLineArgsApi args(StarlarkThread thread);
+    name = "args",
+    doc = "Returns an Args object that can be used to build memory-efficient command lines.",
+    useEnvironment = true
+  )
+  public CommandLineArgsApi args(Environment env);
 }
