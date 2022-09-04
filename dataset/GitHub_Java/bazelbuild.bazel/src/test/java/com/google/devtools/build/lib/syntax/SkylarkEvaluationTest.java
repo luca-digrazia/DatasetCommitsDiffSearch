@@ -304,9 +304,15 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         name = "with_extra",
         documented = false,
         useLocation = true,
-        useStarlarkThread = true)
-    public String withExtraInterpreterParams(Location location, StarlarkThread thread) {
-      return "with_extra(" + location.getStartLine() + ")";
+        useStarlarkThread = true,
+        useStarlarkSemantics = true)
+    public String withExtraInterpreterParams(
+        Location location, StarlarkThread thread, StarlarkSemantics sem) {
+      return "with_extra("
+          + location.getStartLine()
+          + ", "
+          + (sem != null)
+          + ")";
     }
 
     @SkylarkCallable(
@@ -354,7 +360,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
               named = true)
         },
         useLocation = true,
-        useStarlarkThread = true)
+        useStarlarkThread = true,
+        useStarlarkSemantics = true)
     public String withParamsAndExtraInterpreterParams(
         Integer pos1,
         boolean pos2,
@@ -365,7 +372,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         Object noneable,
         Object multi,
         Location location,
-        StarlarkThread thread) {
+        StarlarkThread thread,
+        StarlarkSemantics sem) {
       return "with_params_and_extra("
           + pos1
           + ", "
@@ -382,6 +390,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           + (multi != Starlark.NONE ? ", " + multi : "")
           + ", "
           + location.getStartLine()
+          + ", "
+          + (sem != null)
           + ")";
     }
 
@@ -426,10 +436,11 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           @Param(name = "named", type = Boolean.class, positional = false, named = true),
         },
         extraKeywords = @Param(name = "kwargs"))
-    public String withKwargs(boolean pos, boolean named, Dict<String, Object> kwargs) {
+    public String withKwargs(boolean pos, boolean named, Dict<?, ?> kwargs) throws EvalException {
       String kwargsString =
           "kwargs("
               + kwargs
+                  .getContents(String.class, Object.class, "kwargs")
                   .entrySet()
                   .stream()
                   .map(entry -> entry.getKey() + "=" + entry.getValue())
@@ -446,11 +457,13 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         },
         extraPositionals = @Param(name = "args"),
         extraKeywords = @Param(name = "kwargs"))
-    public String withArgsAndKwargs(String foo, Tuple<Object> args, Dict<String, Object> kwargs) {
+    public String withArgsAndKwargs(String foo, Sequence<?> args, Dict<?, ?> kwargs)
+        throws EvalException {
       String argsString = debugPrintArgs(args);
       String kwargsString =
           "kwargs("
               + kwargs
+                  .getContents(String.class, Object.class, "kwargs")
                   .entrySet()
                   .stream()
                   .map(entry -> entry.getKey() + "=" + entry.getValue())
@@ -1302,7 +1315,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("v = mock.with_extra()")
-        .testLookup("v", "with_extra(1)");
+        .testLookup("v", "with_extra(1, true)");
   }
 
   @Test
@@ -1318,7 +1331,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     new SkylarkTest()
         .update("mock", new Mock())
         .setUp("b = mock.with_params_and_extra(1, True, named=True)")
-        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1)");
+        .testLookup("b", "with_params_and_extra(1, true, false, true, false, a, 1, true)");
   }
 
   @Test

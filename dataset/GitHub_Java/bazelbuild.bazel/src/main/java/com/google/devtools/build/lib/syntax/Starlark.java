@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.Pair;
@@ -222,6 +224,7 @@ public final class Starlark {
   public static Object call(
       StarlarkThread thread,
       Object fn,
+      Location loc, // TODO(adonovan): eliminate
       List<Object> args,
       Map<String, Object> kwargs)
       throws EvalException, InterruptedException {
@@ -231,7 +234,7 @@ public final class Starlark {
       named[i++] = e.getKey();
       named[i++] = e.getValue();
     }
-    return fastcall(thread, fn, args.toArray(), named);
+    return fastcall(thread, fn, loc, args.toArray(), named);
   }
 
   /**
@@ -239,8 +242,10 @@ public final class Starlark {
    * positional and named arguments in the "fastcall" array representation.
    */
   public static Object fastcall(
-      StarlarkThread thread, Object fn, Object[] positional, Object[] named)
+      StarlarkThread thread, Object fn, Location loc, Object[] positional, Object[] named)
       throws EvalException, InterruptedException {
+    Preconditions.checkNotNull(loc);
+
     StarlarkCallable callable;
     if (fn instanceof StarlarkCallable) {
       callable = (StarlarkCallable) fn;
@@ -249,14 +254,17 @@ public final class Starlark {
       MethodDescriptor desc =
           CallUtils.getSelfCallMethodDescriptor(thread.getSemantics(), fn.getClass());
       if (desc == null) {
-        throw Starlark.errorf("'%s' object is not callable", EvalUtils.getDataTypeName(fn));
+        throw new EvalException(
+            loc, "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
       }
       callable = new BuiltinCallable(fn, desc.getName(), desc);
     }
 
-    thread.push(callable);
+    thread.push(callable, loc);
     try {
-      return callable.fastcall(thread, thread.getCallerLocation(), positional, named);
+      return callable.fastcall(thread, loc, positional, named);
+    } catch (EvalException ex) {
+      throw ex.ensureLocation(loc);
     } finally {
       thread.pop();
     }

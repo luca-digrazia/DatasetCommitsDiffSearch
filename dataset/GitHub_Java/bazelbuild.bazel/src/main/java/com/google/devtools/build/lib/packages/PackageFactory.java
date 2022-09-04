@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.RuleFactory.BuildLangTypedAttributeValuesMap;
 import com.google.devtools.build.lib.syntax.Argument;
 import com.google.devtools.build.lib.syntax.BaseFunction;
-import com.google.devtools.build.lib.syntax.CallExpression;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.DefStatement;
 import com.google.devtools.build.lib.syntax.Dict;
@@ -45,6 +44,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.ForStatement;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
 import com.google.devtools.build.lib.syntax.IfStatement;
@@ -52,6 +52,7 @@ import com.google.devtools.build.lib.syntax.IntegerLiteral;
 import com.google.devtools.build.lib.syntax.ListExpression;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.Node;
 import com.google.devtools.build.lib.syntax.NodeVisitor;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.ParserInput;
@@ -748,7 +749,7 @@ public final class PackageFactory {
             buildFile.asPath().getParentDirectory(), packageId, ImmutableSet.of(), locator);
     ParserInput input =
         ParserInput.create(
-            FileSystemUtils.convertFromLatin1(buildFileBytes), buildFile.asPath().toString());
+            FileSystemUtils.convertFromLatin1(buildFileBytes), buildFile.asPath().asFragment());
     StarlarkFile file =
         parseBuildFile(packageId, input, /*preludeStatements=*/ ImmutableList.<Statement>of());
     Package result =
@@ -798,7 +799,7 @@ public final class PackageFactory {
     try {
       return FileSystemUtils.readWithKnownFileSize(buildFile, buildFile.getFileSize());
     } catch (IOException e) {
-      eventHandler.handle(Event.error(Location.fromFile(buildFile.toString()), e.getMessage()));
+      eventHandler.handle(Event.error(Location.fromFile(buildFile), e.getMessage()));
       return null;
     }
   }
@@ -972,7 +973,7 @@ public final class PackageFactory {
     // after we've parsed the BUILD file and created the Package.
     String error = LabelValidator.validatePackageName(packageId.getPackageFragment().toString());
     if (error != null) {
-      pkgContext.eventHandler.handle(Event.error(file.getStartLocation(), error));
+      pkgContext.eventHandler.handle(Event.error(file.getLocation(), error));
       return false;
     }
 
@@ -987,9 +988,9 @@ public final class PackageFactory {
           StarlarkThread.builder(mutability)
               .setGlobals(Module.createForBuiltins(env.build()))
               .setSemantics(semantics)
+              .setEventHandler(pkgContext.eventHandler) // for print statements
               .setImportedExtensions(imports)
               .build();
-      thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(pkgContext.eventHandler));
 
       // Validate.
       ValidationEnvironment.validateFile(
@@ -1084,8 +1085,8 @@ public final class PackageFactory {
     final boolean[] success = {true};
     NodeVisitor checker =
         new NodeVisitor() {
-          void error(Location loc, String message) {
-            eventHandler.handle(Event.error(loc, message));
+          void error(Node node, String message) {
+            eventHandler.handle(Event.error(node.getLocation(), message));
             success[0] = false;
           }
 
@@ -1094,7 +1095,7 @@ public final class PackageFactory {
           //   glob(["pattern"])
           // This may spuriously match user-defined functions named glob;
           // that's ok, it's only a heuristic.
-          void extractGlobPatterns(CallExpression call) {
+          void extractGlobPatterns(FuncallExpression call) {
             if (call.getFunction() instanceof Identifier
                 && ((Identifier) call.getFunction()).getName().equals("glob")) {
               Expression excludeDirectories = null, include = null;
@@ -1130,16 +1131,16 @@ public final class PackageFactory {
           }
 
           // Reject f(*args) and f(**kwargs) calls in BUILD files.
-          void rejectStarArgs(CallExpression call) {
+          void rejectStarArgs(FuncallExpression call) {
             for (Argument arg : call.getArguments()) {
               if (arg instanceof Argument.StarStar) {
                 error(
-                    arg.getStartLocation(),
+                    call,
                     "**kwargs arguments are not allowed in BUILD files. Pass the arguments in "
                         + "explicitly.");
               } else if (arg instanceof Argument.Star) {
                 error(
-                    arg.getStartLocation(),
+                    call,
                     "*args arguments are not allowed in BUILD files. Pass the arguments in "
                         + "explicitly.");
               }
@@ -1149,14 +1150,13 @@ public final class PackageFactory {
           // Record calls of the form f(name="foo", ...)
           // so that we can later ascribe "foo" as the "generator name"
           // of any rules instantiated during the call of f.
-          void recordGeneratorName(CallExpression call) {
+          void recordGeneratorName(FuncallExpression call) {
             for (Argument arg : call.getArguments()) {
               if (arg instanceof Argument.Keyword
                   && arg.getName().equals("name")
                   && arg.getValue() instanceof StringLiteral) {
                 generatorNameByLocation.put(
-                    // TODO(adonovan): use lparen location
-                    call.getStartLocation(), ((StringLiteral) arg.getValue()).getValue());
+                    call.getLocation(), ((StringLiteral) arg.getValue()).getValue());
               }
             }
           }
@@ -1168,7 +1168,7 @@ public final class PackageFactory {
           @Override
           public void visit(DefStatement node) {
             error(
-                node.getStartLocation(),
+                node,
                 "function definitions are not allowed in BUILD files. You may move the function to "
                     + "a .bzl file and load it.");
           }
@@ -1176,7 +1176,7 @@ public final class PackageFactory {
           @Override
           public void visit(ForStatement node) {
             error(
-                node.getStartLocation(),
+                node,
                 "for statements are not allowed in BUILD files. You may inline the loop, move it "
                     + "to a function definition (in a .bzl file), or as a last resort use a list "
                     + "comprehension.");
@@ -1185,14 +1185,14 @@ public final class PackageFactory {
           @Override
           public void visit(IfStatement node) {
             error(
-                node.getStartLocation(),
+                node,
                 "if statements are not allowed in BUILD files. You may move conditional logic to a "
                     + "function definition (in a .bzl file), or for simple cases use an if "
                     + "expression.");
           }
 
           @Override
-          public void visit(CallExpression node) {
+          public void visit(FuncallExpression node) {
             extractGlobPatterns(node);
             rejectStarArgs(node);
             recordGeneratorName(node);

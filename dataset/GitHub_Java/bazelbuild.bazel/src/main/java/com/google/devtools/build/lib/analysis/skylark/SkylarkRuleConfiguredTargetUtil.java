@@ -134,6 +134,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
           Starlark.call(
               thread,
               ruleImplementation,
+              Location.BUILTIN,
               /*args=*/ ImmutableList.of(skylarkRuleContext),
               /*kwargs=*/ ImmutableMap.of());
 
@@ -196,7 +197,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
   private static void addRuleToStackTrace(EvalException ex, Rule rule, BaseFunction ruleImpl) {
     if (ex instanceof EvalExceptionWithStackTrace) {
       ((EvalExceptionWithStackTrace) ex)
-          .registerPhantomCall(
+          .registerPhantomFuncall(
               String.format("%s(name = '%s')", rule.getRuleClass(), rule.getName()),
               rule.getLocation(),
               ruleImpl);

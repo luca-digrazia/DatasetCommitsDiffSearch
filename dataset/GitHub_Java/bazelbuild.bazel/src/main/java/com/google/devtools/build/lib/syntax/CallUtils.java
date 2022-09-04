@@ -342,12 +342,9 @@ public final class CallUtils {
       throw unexpectedKeywordArgumentException(loc, kwargs.keySet(), method, objClass, thread);
     }
 
-    if (method.isUseLocation()) {
-      builder.add(loc);
-    }
-    if (method.isUseStarlarkThread()) {
-      builder.add(thread);
-    }
+    // Add Location, FuncallExpression, and/or StarlarkThread.
+    appendExtraInterpreterArgs(builder, method, loc, thread);
+
     return builder.toArray();
   }
 
@@ -429,6 +426,22 @@ public final class CallUtils {
               errorDescription,
               formatMethod(objClass, methodDescriptor),
               EvalUtils.getDataTypeNameFromClass(objClass)));
+    }
+  }
+
+  private static void appendExtraInterpreterArgs(
+      List<Object> builder,
+      MethodDescriptor method,
+      Location loc,
+      StarlarkThread thread) {
+    if (method.isUseLocation()) {
+      builder.add(loc);
+    }
+    if (method.isUseStarlarkThread()) {
+      builder.add(thread);
+    }
+    if (method.isUseStarlarkSemantics()) {
+      builder.add(thread.getSemantics());
     }
   }
 

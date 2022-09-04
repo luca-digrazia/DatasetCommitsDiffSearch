@@ -147,6 +147,11 @@ final class Eval {
       defaults = Tuple.wrap(array);
     }
 
+    // TODO(laurentlb): move to Parser or ValidationEnvironment.
+    if (sig.numMandatoryNamedOnly() > 0) {
+      throw new EvalException(node.getLocation(), "Keyword-only argument is forbidden.");
+    }
+
     thread.updateAndExport(
         node.getIdentifier().getName(),
         new StarlarkFunction(
@@ -502,11 +507,11 @@ final class Eval {
           return result;
         }
 
-      case CALL:
+      case FUNCALL:
         {
           checkInterrupt();
 
-          CallExpression call = (CallExpression) expr;
+          FuncallExpression call = (FuncallExpression) expr;
           Object fn = eval(thread, call.getFunction());
 
           // StarStar and Star args are guaranteed to be last, if they occur.
@@ -792,10 +797,10 @@ final class Eval {
   /** Returns an exception which should be thrown instead of the original one. */
   private static EvalException maybeTransformException(Node node, EvalException original) {
     // If there is already a non-empty stack trace, we only add this node iff it describes a
-    // new scope (e.g. CallExpression).
+    // new scope (e.g. FuncallExpression).
     if (original instanceof EvalExceptionWithStackTrace) {
       EvalExceptionWithStackTrace real = (EvalExceptionWithStackTrace) original;
-      if (node instanceof CallExpression) {
+      if (node instanceof FuncallExpression) {
         real.registerNode(node);
       }
       return real;

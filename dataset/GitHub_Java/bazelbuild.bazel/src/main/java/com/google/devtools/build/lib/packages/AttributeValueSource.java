@@ -24,48 +24,49 @@ public enum AttributeValueSource {
   LATE_BOUND(":", true),
   DIRECT("$", false);
 
-  private static final String STARLARK_PREFIX = "_";
+  private static final String SKYLARK_PREFIX = "_";
 
   private final String nativePrefix;
-  private final boolean mustHaveStarlarkPrefix;
+  private final boolean mustHaveSkylarkPrefix;
 
   /**
-   * Creates a new instance and defines the prefixes for both Starlark and native.
+   * Creates a new instance and defines the prefixes for both Skylark and native.
    *
    * @param nativePrefix The prefix when converted to a native attribute name.
-   * @param mustHaveStarlarkPrefix Whether the Starlark name must start with {@link
-   *     AttributeValueSource#STARLARK_PREFIX}.
+   * @param mustHaveSkylarkPrefix Whether the Skylark name must start with {@link
+   *     AttributeValueSource#SKYLARK_PREFIX}.
    */
-  AttributeValueSource(String nativePrefix, boolean mustHaveStarlarkPrefix) {
+  AttributeValueSource(String nativePrefix, boolean mustHaveSkylarkPrefix) {
     this.nativePrefix = nativePrefix;
-    this.mustHaveStarlarkPrefix = mustHaveStarlarkPrefix;
+    this.mustHaveSkylarkPrefix = mustHaveSkylarkPrefix;
   }
 
-  /** Throws an {@link EvalException} if the given Starlark name is not valid for this type. */
-  public void validateStarlarkName(String attrStarlarkName) throws EvalException {
-    if (attrStarlarkName.isEmpty()) {
-      throw new EvalException("Attribute name must not be empty.");
+  /** Throws an {@link EvalException} if the given Skylark name is not valid for this type. */
+  public void validateSkylarkName(String attrSkylarkName) throws EvalException {
+    if (attrSkylarkName.isEmpty()) {
+      throw new EvalException(null, "Attribute name must not be empty.");
     }
 
-    if (mustHaveStarlarkPrefix && !attrStarlarkName.startsWith(STARLARK_PREFIX)) {
+    if (mustHaveSkylarkPrefix && !attrSkylarkName.startsWith(SKYLARK_PREFIX)) {
       throw new EvalException(
+          null,
           String.format(
               "When an attribute value is a function, the attribute must be private "
                   + "(i.e. start with '%s'). Found '%s'",
-              STARLARK_PREFIX, attrStarlarkName));
+              SKYLARK_PREFIX, attrSkylarkName));
     }
   }
 
   /**
-   * Converts the given Starlark attribute name to a native attribute name for this type, or throws
-   * an {@link EvalException} if the given Starlark name is not valid for this type.
+   * Converts the given Skylark attribute name to a native attribute name for this type, or throws
+   * an {@link EvalException} if the given Skylark name is not valid for this type.
    */
-  public String convertToNativeName(String attrStarlarkName) throws EvalException {
-    validateStarlarkName(attrStarlarkName);
-    // No need to check for mustHaveStarlarkPrefix since this was already done in
-    // validateStarlarkName().
-    return attrStarlarkName.startsWith(STARLARK_PREFIX)
-        ? nativePrefix + attrStarlarkName.substring(STARLARK_PREFIX.length())
-        : attrStarlarkName;
+  public String convertToNativeName(String attrSkylarkName) throws EvalException {
+    validateSkylarkName(attrSkylarkName);
+    // No need to check for mustHaveSkylarkPrefix since this was already done in
+    // validateSkylarkName().
+    return attrSkylarkName.startsWith(SKYLARK_PREFIX)
+        ? nativePrefix + attrSkylarkName.substring(SKYLARK_PREFIX.length())
+        : attrSkylarkName;
   }
 }

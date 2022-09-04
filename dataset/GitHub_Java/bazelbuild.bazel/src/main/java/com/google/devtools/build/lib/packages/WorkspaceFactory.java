@@ -120,7 +120,7 @@ public class WorkspaceFactory {
     if (!file.ok()) {
       Event.replayEventsOn(localReporter, file.errors());
       throw new BuildFileContainsErrorsException(
-          LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, "Failed to parse " + source.getFile());
+          LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, "Failed to parse " + source.getPath());
     }
     execute(
         file,
@@ -128,8 +128,7 @@ public class WorkspaceFactory {
         starlarkSemantics,
         localReporter,
         WorkspaceFileValue.key(
-            RootedPath.toRootedPath(
-                Root.fromPath(workspaceDir), PathFragment.create(source.getFile()))));
+            RootedPath.toRootedPath(Root.fromPath(workspaceDir), source.getPath())));
   }
 
   /**
@@ -166,9 +165,9 @@ public class WorkspaceFactory {
         StarlarkThread.builder(mutability)
             .setSemantics(starlarkSemantics)
             .setGlobals(Module.createForBuiltins(env))
+            .setEventHandler(localReporter)
             .setImportedExtensions(importMap)
             .build();
-    thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(localReporter));
     thread.setThreadLocal(
         PackageFactory.PackageContext.class,
         new PackageFactory.PackageContext(builder, null, localReporter));

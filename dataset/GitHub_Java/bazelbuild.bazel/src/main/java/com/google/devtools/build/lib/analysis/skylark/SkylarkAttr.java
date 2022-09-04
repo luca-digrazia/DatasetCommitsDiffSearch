@@ -81,10 +81,8 @@ public final class SkylarkAttr implements SkylarkAttrApi {
     } else if (fileTypesObj == Boolean.FALSE) {
       builder.allowedFileTypes(FileTypeSet.NO_FILE);
     } else if (fileTypesObj instanceof Sequence) {
-      ImmutableList<String> arg =
-          ImmutableList.copyOf(
-              Sequence.castSkylarkListOrNoneToList(
-                  fileTypesObj, String.class, "allow_files argument"));
+      List<String> arg =
+          Sequence.castSkylarkListOrNoneToList(fileTypesObj, String.class, "allow_files argument");
       builder.allowedFileTypes(FileType.of(arg));
     } else {
       throw new EvalException(null, attr + " should be a boolean or a string list");
