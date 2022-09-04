@@ -4,7 +4,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletionException;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -19,8 +18,6 @@ import io.quarkus.oidc.OidcTenantConfig.Credentials;
 import io.quarkus.oidc.OidcTenantConfig.Credentials.Secret;
 import io.quarkus.oidc.OidcTenantConfig.Roles.Source;
 import io.quarkus.oidc.OidcTenantConfig.Tls.Verification;
-import io.quarkus.runtime.BlockingOperationControl;
-import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.ConfigurationException;
 import io.smallrye.mutiny.Uni;
@@ -42,11 +39,9 @@ public class OidcRecorder {
 
     private static final Logger LOG = Logger.getLogger(OidcRecorder.class);
 
-    private static final Map<String, TenantConfigContext> dynamicTenantsConfig = new ConcurrentHashMap<>();
-
     public Supplier<TenantConfigBean> setup(OidcConfig config, Supplier<Vertx> vertx) {
         final Vertx vertxValue = vertx.get();
-        Map<String, TenantConfigContext> staticTenantsConfig = new HashMap<>();
+        Map<String, TenantConfigContext> tenantsConfig = new HashMap<>();
 
         for (Map.Entry<String, OidcTenantConfig> tenant : config.namedTenants.entrySet()) {
             if (config.defaultTenant.getTenantId().isPresent()
@@ -57,53 +52,23 @@ public class OidcRecorder {
                 throw new OIDCException("Configuration has 2 different tenant-id values: '"
                         + tenant.getKey() + "' and '" + tenant.getValue().getTenantId().get() + "'");
             }
-            staticTenantsConfig.put(tenant.getKey(), createTenantContext(vertxValue, tenant.getValue(), tenant.getKey()));
+            tenantsConfig.put(tenant.getKey(), createTenantContext(vertxValue, tenant.getValue(), tenant.getKey()));
         }
-
         TenantConfigContext tenantContext = createTenantContext(vertxValue, config.defaultTenant, "Default");
         return new Supplier<TenantConfigBean>() {
             @Override
             public TenantConfigBean get() {
-                return new TenantConfigBean(staticTenantsConfig, dynamicTenantsConfig, tenantContext,
-                        new Function<OidcTenantConfig, Uni<TenantConfigContext>>() {
+                return new TenantConfigBean(tenantsConfig, tenantContext,
+                        new Function<OidcTenantConfig, TenantConfigContext>() {
                             @Override
-                            public Uni<TenantConfigContext> apply(OidcTenantConfig config) {
-                                if (BlockingOperationControl.isBlockingAllowed()) {
-                                    try {
-                                        return Uni.createFrom().item(createDynamicTenantContext(vertxValue, config,
-                                                config.getTenantId().get()));
-                                    } catch (Throwable t) {
-                                        return Uni.createFrom().failure(t);
-                                    }
-                                } else {
-                                    return Uni.createFrom().emitter(new Consumer<UniEmitter<? super TenantConfigContext>>() {
-                                        @Override
-                                        public void accept(UniEmitter<? super TenantConfigContext> uniEmitter) {
-                                            ExecutorRecorder.getCurrent().execute(new Runnable() {
-                                                @Override
-                                                public void run() {
-                                                    try {
-                                                        uniEmitter.complete(createDynamicTenantContext(vertxValue, config,
-                                                                config.getTenantId().get()));
-                                                    } catch (Throwable t) {
-                                                        uniEmitter.fail(t);
-                                                    }
-                                                }
-                                            });
-                                        }
-                                    });
-                                }
+                            public TenantConfigContext apply(OidcTenantConfig config) {
+                                // OidcTenantConfig resolved by TenantConfigResolver must have its optional tenantId
+                                // initialized which is also enforced by DefaultTenantConfigResolver
+                                return createTenantContext(vertxValue, config, config.getTenantId().get());
                             }
                         });
             }
         };
-    }
-
-    private TenantConfigContext createDynamicTenantContext(Vertx vertx, OidcTenantConfig oidcConfig, String tenantId) {
-        if (!dynamicTenantsConfig.containsKey(tenantId)) {
-            dynamicTenantsConfig.putIfAbsent(tenantId, createTenantContext(vertx, oidcConfig, tenantId));
-        }
-        return dynamicTenantsConfig.get(tenantId);
     }
 
     private TenantConfigContext createTenantContext(Vertx vertx, OidcTenantConfig oidcConfig, String tenantId) {

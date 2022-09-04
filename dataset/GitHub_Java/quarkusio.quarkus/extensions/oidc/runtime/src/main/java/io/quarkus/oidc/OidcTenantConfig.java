@@ -257,7 +257,7 @@ public class OidcTenantConfig {
          * Default TokenStateManager strategy.
          */
         @ConfigItem(defaultValue = "keep_all_tokens")
-        public Strategy strategy = Strategy.KEEP_ALL_TOKENS;
+        public Strategy strategy;
 
         /**
          * Default TokenStateManager keeps all tokens (ID, access and refresh)
@@ -1085,13 +1085,5 @@ public class OidcTenantConfig {
          * and Authorization Code Flow - if not.
          */
         HYBRID
-    }
-
-    public ApplicationType getApplicationType() {
-        return applicationType;
-    }
-
-    public void setApplicationType(ApplicationType type) {
-        this.applicationType = type;
     }
 }

@@ -4,7 +4,6 @@ import static io.quarkus.oidc.runtime.OidcUtils.validateAndCreateIdentity;
 
 import java.security.Principal;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.enterprise.context.ApplicationScoped;
@@ -49,35 +48,28 @@ public class OidcIdentityProvider implements IdentityProvider<TokenAuthenticatio
         OidcTokenCredential credential = (OidcTokenCredential) request.getToken();
         RoutingContext vertxContext = credential.getRoutingContext();
         vertxContext.put(AuthenticationRequestContext.class.getName(), context);
+        return Uni.createFrom().deferred(new Supplier<Uni<? extends SecurityIdentity>>() {
+            @Override
+            public Uni<SecurityIdentity> get() {
+                if (tenantResolver.isBlocking(vertxContext)) {
+                    return context.runBlocking(new Supplier<SecurityIdentity>() {
+                        @Override
+                        public SecurityIdentity get() {
+                            return authenticate(request, vertxContext).await().indefinitely();
+                        }
+                    });
+                }
 
-        Uni<TenantConfigContext> tenantConfigContext = tenantResolver.resolveContext(vertxContext);
+                return authenticate(request, vertxContext);
+            }
+        });
 
-        return tenantConfigContext.onItem()
-                .transformToUni(new Function<TenantConfigContext, Uni<? extends SecurityIdentity>>() {
-                    @Override
-                    public Uni<SecurityIdentity> apply(TenantConfigContext tenantConfigContext) {
-                        return Uni.createFrom().deferred(new Supplier<Uni<? extends SecurityIdentity>>() {
-                            @Override
-                            public Uni<SecurityIdentity> get() {
-                                if (isTenantBlocking(tenantConfigContext)) {
-                                    return context.runBlocking(new Supplier<SecurityIdentity>() {
-                                        @Override
-                                        public SecurityIdentity get() {
-                                            return authenticate(request, vertxContext, tenantConfigContext).await()
-                                                    .indefinitely();
-                                        }
-                                    });
-                                }
-                                return authenticate(request, vertxContext, tenantConfigContext);
-                            }
-                        });
-                    }
-                });
     }
 
     private Uni<SecurityIdentity> authenticate(TokenAuthenticationRequest request,
-            RoutingContext vertxContext,
-            TenantConfigContext resolvedContext) {
+            RoutingContext vertxContext) {
+        TenantConfigContext resolvedContext = tenantResolver.resolve(vertxContext, true);
+
         if (resolvedContext.oidcConfig.publicKey.isPresent()) {
             return validateTokenWithoutOidcServer(request, resolvedContext);
         } else {
@@ -290,9 +282,5 @@ public class OidcIdentityProvider implements IdentityProvider<TokenAuthenticatio
                         });
                     }
                 }).await().indefinitely();
-    }
-
-    private static boolean isTenantBlocking(TenantConfigContext resolvedContext) {
-        return resolvedContext.oidcConfig.token.refreshExpired || resolvedContext.oidcConfig.authentication.userInfoRequired;
     }
 }
