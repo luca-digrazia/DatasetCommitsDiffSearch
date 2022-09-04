@@ -27,14 +27,12 @@ import org.apache.shiro.realm.AuthenticatingRealm;
 import org.graylog.security.authservice.AuthServiceAuthenticator;
 import org.graylog.security.authservice.AuthServiceCredentials;
 import org.graylog.security.authservice.AuthServiceResult;
-import org.graylog2.security.encryption.EncryptedValue;
-import org.graylog2.security.encryption.EncryptedValueService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 
-import static org.apache.commons.lang3.StringUtils.isBlank;
+import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class AuthServiceRealm extends AuthenticatingRealm {
     private static final Logger LOG = LoggerFactory.getLogger(AuthServiceRealm.class);
@@ -42,12 +40,10 @@ public class AuthServiceRealm extends AuthenticatingRealm {
     public static final String NAME = "auth-service";
 
     private final AuthServiceAuthenticator authenticator;
-    private final EncryptedValueService encryptedValueService;
 
     @Inject
-    public AuthServiceRealm(AuthServiceAuthenticator authenticator, EncryptedValueService encryptedValueService) {
+    public AuthServiceRealm(AuthServiceAuthenticator authenticator) {
         this.authenticator = authenticator;
-        this.encryptedValueService = encryptedValueService;
         setAuthenticationTokenClass(UsernamePasswordToken.class);
         setCachingEnabled(false);
         // Credentials will be matched via the authentication service itself so we don't need Shiro to do it
@@ -64,18 +60,16 @@ public class AuthServiceRealm extends AuthenticatingRealm {
 
     private AuthenticationInfo doGetAuthenticationInfo(UsernamePasswordToken token) throws AuthenticationException {
         final String username = token.getUsername();
-        final String plainPassword = String.valueOf(token.getPassword());
+        final String password = String.valueOf(token.getPassword());
 
-        if (isBlank(username) || isBlank(plainPassword)) {
+        if (isNullOrEmpty(username) || isNullOrEmpty(password)) {
             LOG.error("Username or password were empty. Not attempting authentication service authentication");
             return null;
         }
 
         LOG.info("Attempting authentication for username <{}>", username);
         try {
-            // We encrypt the password before passing it on to reduce the chance of exposing it somewhere by accident.
-            final EncryptedValue encryptedPassword = encryptedValueService.encrypt(plainPassword);
-            final AuthServiceResult result = authenticator.authenticate(AuthServiceCredentials.create(username, encryptedPassword));
+            final AuthServiceResult result = authenticator.authenticate(AuthServiceCredentials.create(username, password));
 
             if (result.isSuccess()) {
                 LOG.info("Successfully authenticated username <{}> for user profile <{}> with backend <{}/{}/{}>",
