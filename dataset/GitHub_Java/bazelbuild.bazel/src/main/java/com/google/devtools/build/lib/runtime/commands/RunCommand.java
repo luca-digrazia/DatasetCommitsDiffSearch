@@ -89,7 +89,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import javax.annotation.Nullable;
 
 /**
@@ -462,16 +461,13 @@ public class RunCommand implements BlazeCommand  {
         // It's unfortunate that this method requires the path to the coverage collection script.
         // Fortunately, this is "blaze run" and not "blaze coverage", so it's okay unless someone
         // calls "blaze run --collect_code_coverage".
-        cmdLine = TestStrategy.getArgs(testAction);
+        cmdLine = TestStrategy.getArgs("dummy-coverage-script", testAction);
       } catch (ExecException e) {
         env.getReporter().handle(Event.error(e.getMessage()));
         return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
       }
     } else {
-      runEnvironment = new TreeMap<>();
-      runEnvironment.putAll(env.getClientEnv());
-      runEnvironment.put("BUILD_WORKSPACE_DIRECTORY", env.getWorkspace().getPathString());
-      runEnvironment.put("BUILD_WORKING_DIRECTORY", env.getWorkingDirectory().getPathString());
+      runEnvironment = env.getClientEnv();
       workingDir = runfilesDir;
       cmdLine = new ArrayList<>();
       List<String> prettyCmdLine = new ArrayList<>();
