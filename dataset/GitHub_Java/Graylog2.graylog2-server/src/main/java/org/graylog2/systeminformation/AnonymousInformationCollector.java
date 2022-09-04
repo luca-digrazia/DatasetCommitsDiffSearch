@@ -19,20 +19,22 @@
  */
 package org.graylog2.systeminformation;
 
-import com.beust.jcommander.internal.Maps;
-import java.util.Map;
-import org.apache.log4j.Logger;
+import com.google.common.collect.Maps;
 import org.graylog2.Core;
 import org.graylog2.blacklists.Blacklist;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamImpl;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 /**
  *  @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class AnonymousInformationCollector {
     
-    private static final Logger LOG = Logger.getLogger(AnonymousInformationCollector.class);
+    private static final Logger LOG = LoggerFactory.getLogger(AnonymousInformationCollector.class);
     
     Core server;
     
@@ -44,12 +46,12 @@ public class AnonymousInformationCollector {
         Map<String, Object> info = Maps.newHashMap();
         
         info.put("version", Core.GRAYLOG2_VERSION);
-        info.put("number_of_loaded_plugins", numberOfLoadedPlugins());
+        info.put("number_of_loaded_modules", numberOfLoadedModules());
         info.put("number_of_elasticsearch_nodes", server.getIndexer().getNumberOfNodesInCluster());
         info.put("number_of_graylog2_server_nodes", server.cluster().getActiveNodeCount());
         info.put("number_of_total_messages", server.getIndexer().getTotalNumberOfMessagesInIndices());
         info.put("number_of_indices", server.getDeflector().getAllDeflectorIndices().size());
-        info.put("number_of_streams", StreamImpl.fetchAllEnabled().size());
+        info.put("number_of_streams", StreamImpl.fetchAllEnabled(server).size());
         info.put("number_of_stream_rules", numberOfStreamRules());
         info.put("number_of_blacklist_rules", Blacklist.fetchAll().size());
         info.put("total_index_size", server.getIndexer().getTotalIndexSize());
@@ -59,21 +61,26 @@ public class AnonymousInformationCollector {
         return info;
     }
 
-    private Map<String, Integer> numberOfLoadedPlugins() {
+    private Map<String, Integer> numberOfLoadedModules() {
         try {
             Map<String, Integer> plugins = Maps.newHashMap();
-            plugins.put("filters", server.getLoadedFilterPlugins());
+            plugins.put("initializers", server.getInitializers().size());
+            plugins.put("inputs", server.getInputs().size());
+            plugins.put("filters", server.getFilters().size());
+            plugins.put("outputs", server.getOutputs().size());
+            plugins.put("transports", server.getTransports().size());
+            plugins.put("alarm_callbacks", server.getAlarmCallbacks().size());
 
             return plugins;
         } catch (Exception e) {
-            LOG.warn(e);
+            LOG.warn("Couldn't fetch data for loaded modules", e);
             return Maps.newHashMap();
         }
     }
     
     private int numberOfStreamRules() {
         int rules = 0;
-        for (Stream stream : StreamImpl.fetchAllEnabled()) {
+        for (Stream stream : StreamImpl.fetchAllEnabled(server)) {
             rules =+ stream.getStreamRules().size();
         }
             
@@ -84,7 +91,7 @@ public class AnonymousInformationCollector {
         try {
             return server.getIndexer().getRecentIndex().total().store().size().getMb();
         } catch (Exception e) {
-            LOG.warn(e);
+            LOG.warn("Couldn't retrieve recent index size", e);
             return -1;
         }
     }
