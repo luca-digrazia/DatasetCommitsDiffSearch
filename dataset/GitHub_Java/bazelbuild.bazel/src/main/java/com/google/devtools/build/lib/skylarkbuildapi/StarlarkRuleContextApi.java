@@ -23,21 +23,20 @@ import com.google.devtools.build.lib.skylarkbuildapi.core.TransitiveInfoCollecti
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ExecGroupCollectionApi;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ToolchainContextApi;
-import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.ParamType;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.syntax.Tuple;
 import javax.annotation.Nullable;
+import net.starlark.java.annot.Param;
+import net.starlark.java.annot.ParamType;
+import net.starlark.java.annot.StarlarkBuiltin;
+import net.starlark.java.annot.StarlarkDocumentationCategory;
+import net.starlark.java.annot.StarlarkMethod;
 
 /** Interface for a context object given to rule implementation functions. */
 @StarlarkBuiltin(
@@ -145,19 +144,19 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
           + "<a href='DefaultInfo.html'><code>DefaultInfo</code></a>."
           + "</ul>";
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "default_provider",
       structField = true,
       doc = "Deprecated. Use <a href=\"DefaultInfo.html\">DefaultInfo</a> instead.")
   ProviderApi getDefaultProvider();
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "actions",
       structField = true,
       doc = "Contains methods for declaring output files and the actions that produce them.")
   StarlarkActionFactoryApi actions();
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "created_actions",
       doc =
           "For rules with <a href=\"globals.html#rule._skylark_testable\">_skylark_testable</a>"
@@ -171,46 +170,46 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + " on it.")
   StarlarkValue createdActions() throws EvalException;
 
-  @SkylarkCallable(name = "attr", structField = true, doc = ATTR_DOC)
+  @StarlarkMethod(name = "attr", structField = true, doc = ATTR_DOC)
   StructApi getAttr() throws EvalException;
 
-  @SkylarkCallable(name = "split_attr", structField = true, doc = SPLIT_ATTR_DOC)
+  @StarlarkMethod(name = "split_attr", structField = true, doc = SPLIT_ATTR_DOC)
   StructApi getSplitAttr() throws EvalException;
 
-  @SkylarkCallable(name = "executable", structField = true, doc = EXECUTABLE_DOC)
+  @StarlarkMethod(name = "executable", structField = true, doc = EXECUTABLE_DOC)
   StructApi getExecutable() throws EvalException;
 
-  @SkylarkCallable(name = "file", structField = true, doc = FILE_DOC)
+  @StarlarkMethod(name = "file", structField = true, doc = FILE_DOC)
   StructApi getFile() throws EvalException;
 
-  @SkylarkCallable(name = "files", structField = true, doc = FILES_DOC)
+  @StarlarkMethod(name = "files", structField = true, doc = FILES_DOC)
   StructApi getFiles() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "workspace_name",
       structField = true,
       doc = "Returns the workspace name as defined in the WORKSPACE file.")
   String getWorkspaceName() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "label",
       structField = true,
       doc = "The label of the target currently being analyzed.")
   Label getLabel() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "fragments",
       structField = true,
       doc = "Allows access to configuration fragments in target configuration.")
   FragmentCollectionApi getFragments() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "host_fragments",
       structField = true,
       doc = "Allows access to configuration fragments in host configuration.")
   FragmentCollectionApi getHostFragments() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "configuration",
       structField = true,
       doc =
@@ -218,7 +217,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + "configuration</a> type for more details.")
   BuildConfigurationApi getConfiguration() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "host_configuration",
       structField = true,
       doc =
@@ -226,10 +225,9 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + "configuration</a> type for more details.")
   BuildConfigurationApi getHostConfiguration() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "build_setting_value",
       structField = true,
-      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_BUILD_SETTING_API,
       doc =
           "<b>Experimental. This field is experimental and subject to change at any time. Do not "
               + "depend on it.</b> <p>Returns the value of the build setting that is represented "
@@ -237,7 +235,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + "set the <code>build_setting</code> attribute in their rule definition.")
   Object getBuildSettingValue() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "coverage_instrumented",
       doc =
           "Returns whether code coverage instrumentation should be generated when performing "
@@ -262,7 +260,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       })
   boolean instrumentCoverage(Object targetUnchecked) throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "features",
       structField = true,
       doc =
@@ -271,28 +269,28 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + "features/rule.bzl\">See example of use</a>.")
   ImmutableList<String> getFeatures() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "disabled_features",
       structField = true,
       doc = "Returns the set of features that are explicitly disabled by the user for this rule.")
   ImmutableList<String> getDisabledFeatures() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "bin_dir",
       structField = true,
       doc = "The root corresponding to bin directory.")
   FileRootApi getBinDirectory() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "genfiles_dir",
       structField = true,
       doc = "The root corresponding to genfiles directory.")
   FileRootApi getGenfilesDirectory() throws EvalException;
 
-  @SkylarkCallable(name = "outputs", structField = true, doc = OUTPUTS_DOC)
+  @StarlarkMethod(name = "outputs", structField = true, doc = OUTPUTS_DOC)
   ClassObject outputs() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "rule",
       structField = true,
       doc =
@@ -300,7 +298,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + " Only available in aspect implementation functions.")
   StarlarkAttributesCollectionApi rule() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "aspect_ids",
       structField = true,
       doc =
@@ -308,19 +306,19 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + " Only available in aspect implementation functions.")
   ImmutableList<String> aspectIds() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "var",
       structField = true,
       doc = "Dictionary (String to String) of configuration variables.")
   Dict<String, String> var() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "toolchains",
       structField = true,
       doc = "Toolchains for the default exec group of this rule.")
   ToolchainContextApi toolchains() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "target_platform_has_constraint",
       doc = "Returns true if the given constraint value is part of the current target platform.",
       parameters = {
@@ -333,7 +331,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       })
   boolean targetPlatformHasConstraint(ConstraintValueT constraintValue);
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "exec_groups",
       structField = true,
       enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_EXEC_GROUPS,
@@ -343,7 +341,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + " indexed by their name. Access with <code>ctx.exec_groups[name_of_group]</code>.")
   ExecGroupCollectionApi execGroups() throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "tokenize",
       doc = "Splits a shell command into a list of tokens.",
       // TODO(cparsons): Look into flipping this to true.
@@ -358,7 +356,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       })
   Sequence<String> tokenize(String optionString) throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "expand",
       doc =
           "Expands all references to labels embedded within a string for all files using a mapping "
@@ -392,7 +390,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       Label labelResolver)
       throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "new_file",
       doc =
           "DEPRECATED. Use <a href=\"actions.html#declare_file\">ctx.actions.declare_file</a>. <br>"
@@ -438,21 +436,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       })
   FileApi newFile(Object var1, Object var2, Object var3) throws EvalException;
 
-  @SkylarkCallable(
-      name = "experimental_new_directory",
-      documented = false,
-      parameters = {
-        @Param(name = "name", type = String.class),
-        @Param(
-            name = "sibling",
-            type = FileApi.class,
-            defaultValue = "None",
-            noneable = true,
-            named = true)
-      })
-  FileApi newDirectory(String name, Object siblingArtifactUnchecked) throws EvalException;
-
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "check_placeholders",
       documented = false,
       parameters = {
@@ -472,7 +456,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
   boolean checkPlaceholders(String template, Sequence<?> allowedPlaceholders) // <String>
       throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "expand_make_variables",
       doc =
           "<b>Deprecated.</b> Use <a href=\"ctx.html#var\">ctx.var</a> to access the variables "
@@ -515,7 +499,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       final Dict<?, ?> additionalSubstitutions) // <String, String>
       throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "info_file",
       structField = true,
       documented = false,
@@ -524,7 +508,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + "current build request.")
   FileApi getStableWorkspaceStatus() throws InterruptedException, EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "version_file",
       structField = true,
       documented = false,
@@ -533,172 +517,14 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
               + "current build request.")
   FileApi getVolatileWorkspaceStatus() throws InterruptedException, EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "build_file_path",
       structField = true,
       documented = true,
       doc = "Returns path to the BUILD file for this rule, relative to the source root.")
   String getBuildFileRelativePath() throws EvalException;
 
-  @SkylarkCallable(
-      name = "action",
-      doc =
-          "DEPRECATED. Use <a href=\"actions.html#run\">ctx.actions.run()</a> or"
-              + " <a href=\"actions.html#run_shell\">ctx.actions.run_shell()</a>. <br>"
-              + "Creates an action that runs an executable or a shell command."
-              + " You must specify either <code>command</code> or <code>executable</code>.\n"
-              + "Actions and genrules are very similar, but have different use cases. Actions are "
-              + "used inside rules, and genrules are used inside macros. Genrules also have make "
-              + "variable expansion.",
-      parameters = {
-        @Param(
-            name = "outputs",
-            type = Sequence.class,
-            generic1 = FileApi.class,
-            named = true,
-            positional = false,
-            doc = "List of the output files of the action."),
-        @Param(
-            name = "inputs",
-            allowedTypes = {
-              @ParamType(type = Sequence.class),
-              @ParamType(type = Depset.class),
-            },
-            generic1 = FileApi.class,
-            defaultValue = "[]",
-            named = true,
-            positional = false,
-            doc = "List of the input files of the action."),
-        @Param(
-            name = "executable",
-            type = Object.class,
-            allowedTypes = {
-              @ParamType(type = FileApi.class),
-              @ParamType(type = String.class),
-              @ParamType(type = NoneType.class),
-            },
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            doc = "The executable file to be called by the action."),
-        @Param(
-            name = "tools",
-            allowedTypes = {
-              @ParamType(type = Sequence.class),
-              @ParamType(type = Depset.class),
-            },
-            generic1 = FileApi.class,
-            defaultValue = "unbound",
-            named = true,
-            positional = false,
-            doc =
-                "List of the any tools needed by the action. Tools are inputs with additional "
-                    + "runfiles that are automatically made available to the action."),
-        @Param(
-            name = "arguments",
-            allowedTypes = {
-              @ParamType(type = Sequence.class),
-            },
-            defaultValue = "[]",
-            named = true,
-            positional = false,
-            doc =
-                "Command line arguments of the action. Must be a list of strings or actions.args() "
-                    + "objects."),
-        @Param(
-            name = "mnemonic",
-            type = String.class,
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            doc = "A one-word description of the action, e.g. CppCompile or GoLink."),
-        @Param(
-            name = "command",
-            type = Object.class,
-            allowedTypes = {
-              @ParamType(type = String.class),
-              @ParamType(type = Sequence.class, generic1 = String.class),
-              @ParamType(type = NoneType.class),
-            },
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            doc =
-                "Shell command to execute. It is usually preferable to "
-                    + "use <code>executable</code> instead. "
-                    + "Arguments are available with <code>$1</code>, <code>$2</code>, etc."),
-        @Param(
-            name = "progress_message",
-            type = String.class,
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            doc =
-                "Progress message to show to the user during the build, "
-                    + "e.g. \"Compiling foo.cc to create foo.o\"."),
-        @Param(
-            name = "use_default_shell_env",
-            type = Boolean.class,
-            defaultValue = "False",
-            named = true,
-            positional = false,
-            doc = "Whether the action should use the built in shell environment or not."),
-        @Param(
-            name = "env",
-            type = Dict.class,
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            doc = "Sets the dictionary of environment variables."),
-        @Param(
-            name = "execution_requirements",
-            type = Dict.class,
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            doc =
-                "Information for scheduling the action. See "
-                    + "<a href=\"$BE_ROOT/common-definitions.html#common.tags\">tags</a> "
-                    + "for useful keys."),
-        @Param(
-            // TODO(bazel-team): The name here isn't accurate anymore. This is technically
-            // experimental,
-            // so folks shouldn't be too attached, but consider renaming to be more accurate/opaque.
-            name = "input_manifests",
-            type = Sequence.class,
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            doc =
-                "(Experimental) sets the input runfiles metadata; "
-                    + "they are typically generated by resolve_command.")
-      },
-      allowReturnNones = true,
-      useStarlarkThread = true)
-  NoneType action(
-      Sequence<?> outputs,
-      Object inputs,
-      Object executableUnchecked,
-      Object toolsUnchecked,
-      Object arguments,
-      Object mnemonicUnchecked,
-      Object commandUnchecked,
-      Object progressMessage,
-      Boolean useDefaultShellEnv,
-      Object envUnchecked,
-      Object executionRequirementsUnchecked,
-      Object inputManifestsUnchecked,
-      StarlarkThread thread)
-      throws EvalException;
-
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "expand_location",
       doc =
           "Expands all <code>$(location ...)</code> templates in the given string by replacing "
@@ -731,104 +557,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
   String expandLocation(String input, Sequence<?> targets, StarlarkThread thread)
       throws EvalException;
 
-  @SkylarkCallable(
-      name = "file_action",
-      doc =
-          "DEPRECATED. Use <a href =\"actions.html#write\">ctx.actions.write</a> instead. <br>"
-              + "Creates a file write action.",
-      parameters = {
-        @Param(name = "output", type = FileApi.class, named = true, doc = "The output file."),
-        @Param(
-            name = "content",
-            type = String.class,
-            named = true,
-            doc = "The contents of the file."),
-        @Param(
-            name = "executable",
-            type = Boolean.class,
-            defaultValue = "False",
-            named = true,
-            doc = "Whether the output file should be executable (default is False).")
-      },
-      allowReturnNones = true,
-      useStarlarkThread = true)
-  NoneType fileAction(FileApi output, String content, Boolean executable, StarlarkThread thread)
-      throws EvalException;
-
-  @SkylarkCallable(
-      name = "empty_action",
-      doc =
-          "DEPRECATED. Use <a href=\"actions.html#do_nothing\">ctx.actions.do_nothing</a> instead."
-              + " <br>"
-              + "Creates an empty action that neither executes a command nor produces any "
-              + "output, but that is useful for inserting 'extra actions'.",
-      parameters = {
-        @Param(
-            name = "mnemonic",
-            type = String.class,
-            named = true,
-            positional = false,
-            doc = "A one-word description of the action, e.g. CppCompile or GoLink."),
-        @Param(
-            name = "inputs",
-            allowedTypes = {
-              @ParamType(type = Sequence.class),
-              @ParamType(type = Depset.class),
-            },
-            generic1 = FileApi.class,
-            named = true,
-            positional = false,
-            defaultValue = "[]",
-            doc = "List of the input files of the action."),
-      },
-      allowReturnNones = true,
-      useStarlarkThread = true)
-  NoneType emptyAction(String mnemonic, Object inputs, StarlarkThread thread) throws EvalException;
-
-  @SkylarkCallable(
-      name = "template_action",
-      doc =
-          "DEPRECATED. "
-              + "Use <a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a> "
-              + "instead. <br>Creates a template expansion action.",
-      parameters = {
-        @Param(
-            name = "template",
-            type = FileApi.class,
-            named = true,
-            positional = false,
-            doc = "The template file, which is a UTF-8 encoded text file."),
-        @Param(
-            name = "output",
-            type = FileApi.class,
-            named = true,
-            positional = false,
-            doc = "The output file, which is a UTF-8 encoded text file."),
-        @Param(
-            name = "substitutions",
-            type = Dict.class,
-            named = true,
-            positional = false,
-            doc = "Substitutions to make when expanding the template."),
-        @Param(
-            name = "executable",
-            type = Boolean.class,
-            defaultValue = "False",
-            named = true,
-            positional = false,
-            doc = "Whether the output file should be executable (default is False).")
-      },
-      allowReturnNones = true,
-      useStarlarkThread = true)
-  NoneType templateAction(
-      FileApi template,
-      FileApi output,
-      Dict<?, ?> substitutionsUnchecked,
-      Boolean executable,
-      StarlarkThread thread)
-      throws EvalException;
-
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "runfiles",
       doc = "Creates a runfiles object.",
       parameters = {
@@ -860,7 +589,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
             named = true,
             doc =
                 "<b>Use of this parameter is not recommended. See "
-                    + "<a href=\"../rules.html#runfiles\">runfiles guide</a></b>. "
+                    + "<a href=\"../rules.$DOC_EXT#runfiles\">runfiles guide</a></b>. "
                     + "<p>Whether to collect the data "
                     + "runfiles from the dependencies in srcs, data and deps attributes."),
         @Param(
@@ -870,7 +599,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
             named = true,
             doc =
                 "<b>Use of this parameter is not recommended. See "
-                    + "<a href=\"../rules.html#runfiles\">runfiles guide</a></b>. "
+                    + "<a href=\"../rules.$DOC_EXT#runfiles\">runfiles guide</a></b>. "
                     + "<p>Whether to collect the default "
                     + "runfiles from the dependencies in srcs, data and deps attributes."),
         @Param(
@@ -878,13 +607,19 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
             type = Dict.class,
             defaultValue = "{}",
             named = true,
-            doc = "The map of symlinks to be added to the runfiles, prefixed by workspace name."),
+            doc =
+                "The map of symlinks to be added to the runfiles, prefixed by workspace name. See "
+                    + "<a href=\"../rules.$DOC_EXT#runfiles-symlinks\">Runfiles symlinks</a> in "
+                    + "the rules guide."),
         @Param(
             name = "root_symlinks",
             type = Dict.class,
             defaultValue = "{}",
             named = true,
-            doc = "The map of symlinks to be added to the runfiles.")
+            doc =
+                "The map of symlinks to be added to the runfiles. See "
+                    + "<a href=\"../rules.$DOC_EXT#runfiles-symlinks\">Runfiles symlinks</a> in "
+                    + "the rules guide.")
       })
   RunfilesApi runfiles(
       Sequence<?> files,
@@ -895,7 +630,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       Dict<?, ?> rootSymlinks)
       throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "resolve_command",
       // TODO(bazel-team): The naming here isn't entirely accurate (input_manifests is no longer
       // manifests), but this is experimental/should be opaque to the end user.
@@ -979,7 +714,7 @@ public interface StarlarkRuleContextApi<ConstraintValueT extends ConstraintValue
       StarlarkThread thread)
       throws EvalException;
 
-  @SkylarkCallable(
+  @StarlarkMethod(
       name = "resolve_tools",
       doc =
           "Returns a tuple <code>(inputs, input_manifests)</code> of the depset of resolved inputs"
