@@ -22,8 +22,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import java.util.Collections;
 import java.util.List;
 
@@ -143,10 +141,7 @@ public class ResourceShrinkerActionBuilder {
     return this;
   }
 
-  public Artifact build() throws RuleErrorException {
-    if (AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2) {
-      ruleContext.throwWithRuleError("aapt2 enabled builds do not yet support resource shrinking.");
-    }
+  public Artifact build() {
     ImmutableList.Builder<Artifact> inputs = ImmutableList.builder();
     ImmutableList.Builder<Artifact> outputs = ImmutableList.builder();
 
@@ -206,10 +201,11 @@ public class ResourceShrinkerActionBuilder {
     inputs.add(primaryResources.getManifest());
 
     List<Artifact> dependencyManifests = getManifests(dependencyResources);
-    if (!dependencyManifests.isEmpty()) {
-      commandLine.addExecPaths("--dependencyManifest", dependencyManifests);
-      inputs.addAll(dependencyManifests);
-    }
+    commandLine.addJoinExecPaths(
+        "--dependencyManifests",
+        ruleContext.getConfiguration().getHostPathSeparator(),
+        dependencyManifests);
+    inputs.addAll(dependencyManifests);
 
     List<String> resourcePackages = getResourcePackages(primaryResources, dependencyResources);
     commandLine.addJoinStrings("--resourcePackages", ",", resourcePackages);

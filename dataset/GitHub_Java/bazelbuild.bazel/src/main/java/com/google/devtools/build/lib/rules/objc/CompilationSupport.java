@@ -69,7 +69,6 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.apple.XcodeConfig;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
@@ -265,19 +264,18 @@ public abstract class CompilationSupport {
 
   /** Returns a list of framework search path flags for clang actions. */
   static Iterable<String> commonFrameworkFlags(
-      ObjcProvider provider, RuleContext ruleContext) {
-    return Interspersing.beforeEach("-F", commonFrameworkNames(provider, ruleContext));
+      ObjcProvider provider, AppleConfiguration appleConfiguration) {
+    return Interspersing.beforeEach("-F", commonFrameworkNames(provider, appleConfiguration));
   }
 
   /** Returns a list of frameworks for clang actions. */
   static Iterable<String> commonFrameworkNames(
-      ObjcProvider provider, RuleContext ruleContext) {
-    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
+      ObjcProvider provider, AppleConfiguration appleConfiguration) {
     ApplePlatform platform = appleConfiguration.getSingleArchPlatform();
 
     ImmutableList.Builder<String> frameworkNames =
         new ImmutableList.Builder<String>()
-            .add(AppleToolchain.sdkFrameworkDir(platform, ruleContext));
+            .add(AppleToolchain.sdkFrameworkDir(platform, appleConfiguration));
     if (platform.getType() == PlatformType.IOS) {
       // As of sdk8.1, XCTest is in a base Framework dir
       frameworkNames.add(AppleToolchain.platformDeveloperFrameworkDir(appleConfiguration));
@@ -1415,11 +1413,12 @@ public abstract class CompilationSupport {
             .add("--platform")
             .add(appleConfiguration.getSingleArchPlatform().getLowerCaseNameInPlist())
             .add("--sdk_version")
-            .add(XcodeConfig.getSdkVersionForPlatform(
-                ruleContext, appleConfiguration.getSingleArchPlatform())
+            .add(
+                appleConfiguration
+                    .getSdkVersionForPlatform(appleConfiguration.getSingleArchPlatform())
                     .toStringWithMinimumComponents(2))
             .add("--xcode_version")
-            .add(XcodeConfig.getXcodeVersion(ruleContext).toStringWithMinimumComponents(2))
+            .add(appleConfiguration.getXcodeVersion().toStringWithMinimumComponents(2))
             .add("--");
     for (ObjcHeaderThinningInfo info : infos) {
       cmdLine.addJoinPaths(
