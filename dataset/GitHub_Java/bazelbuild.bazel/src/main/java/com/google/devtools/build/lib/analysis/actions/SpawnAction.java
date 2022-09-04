@@ -22,7 +22,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
@@ -65,16 +64,13 @@ import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.skylark.Args;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.util.Pair;
@@ -245,23 +241,9 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   @Override
-  public Sequence<CommandLineArgsApi> getStarlarkArgs() throws EvalException {
-    ImmutableList.Builder<CommandLineArgsApi> result = ImmutableList.builder();
-    ImmutableSet<Artifact> directoryInputs =
-        Streams.stream(getInputs())
-            .filter(artifact -> artifact.isDirectory())
-            .collect(ImmutableSet.toImmutableSet());
-
-    for (CommandLineAndParamFileInfo commandLine : commandLines.getCommandLines()) {
-      result.add(Args.forRegisteredAction(commandLine, directoryInputs));
-    }
-    return StarlarkList.immutableCopyOf(result.build());
-  }
-
-  @Override
-  public Sequence<String> getSkylarkArgv() throws EvalException {
+  public SkylarkList<String> getSkylarkArgv() throws EvalException {
     try {
-      return StarlarkList.immutableCopyOf(getArguments());
+      return SkylarkList.createImmutable(getArguments());
     } catch (CommandLineExpansionException exception) {
       throw new EvalException(Location.BUILTIN, exception);
     }
@@ -310,7 +292,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    */
   protected void afterExecute(
       ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws IOException, ExecException {}
+      throws IOException {}
 
   @Override
   public final ActionContinuationOrResult beginExecution(
@@ -598,6 +580,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public Iterable<? extends ActionInput> getInputFiles() {
       return inputs;
     }

@@ -26,19 +26,14 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CommandLines;
 import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -52,7 +47,7 @@ import javax.annotation.Nullable;
 public final class StarlarkAction extends SpawnAction {
 
   private final Optional<Artifact> unusedInputsList;
-  private final NestedSet<Artifact> allInputs;
+  private final Iterable<Artifact> allInputs;
 
   /**
    * Constructs a StarlarkAction using direct initialization arguments.
@@ -81,8 +76,8 @@ public final class StarlarkAction extends SpawnAction {
    */
   public StarlarkAction(
       ActionOwner owner,
-      NestedSet<Artifact> tools,
-      NestedSet<Artifact> inputs,
+      Iterable<Artifact> tools,
+      Iterable<Artifact> inputs,
       Iterable<Artifact> outputs,
       Artifact primaryOutput,
       ResourceSet resourceSet,
@@ -148,34 +143,23 @@ public final class StarlarkAction extends SpawnAction {
 
   private InputStream getUnusedInputListInputStream(
       ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws IOException, ExecException {
+      throws IOException {
 
     // Check if the file is in-memory.
     // Note: SpawnActionContext guarantees that the first list entry exists and corresponds to the
     // executed spawn.
-    Artifact unusedInputsListArtifact = unusedInputsList.get();
-    InputStream inputStream = spawnResults.get(0).getInMemoryOutput(unusedInputsListArtifact);
+    InputStream inputStream = spawnResults.get(0).getInMemoryOutput(unusedInputsList.get());
     if (inputStream != null) {
       return inputStream;
     }
     // Fallback to reading from disk.
-    try {
-      return actionExecutionContext
-          .getPathResolver()
-          .toPath(unusedInputsListArtifact)
-          .getInputStream();
-    } catch (FileNotFoundException e) {
-      throw new UserExecException(
-          "Action did not create expected output file listing unused inputs: "
-              + unusedInputsListArtifact.getExecPathString(),
-          e);
-    }
+    return actionExecutionContext.getPathResolver().toPath(unusedInputsList.get()).getInputStream();
   }
 
   @Override
   protected void afterExecute(
       ActionExecutionContext actionExecutionContext, List<SpawnResult> spawnResults)
-      throws IOException, ExecException {
+      throws IOException {
     if (!unusedInputsList.isPresent()) {
       return;
     }
@@ -196,7 +180,7 @@ public final class StarlarkAction extends SpawnAction {
         usedInputs.remove(line);
       }
     }
-    updateInputs(NestedSetBuilder.wrap(Order.STABLE_ORDER, usedInputs.values()));
+    updateInputs(usedInputs.values());
   }
 
   @Override
