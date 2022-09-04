@@ -14,15 +14,22 @@
 
 package com.google.devtools.build.java.turbine;
 
-import com.google.common.collect.ImmutableSet;
+import static com.google.common.collect.Iterables.getOnlyElement;
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import com.google.common.base.CharMatcher;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.java.turbine.javac.JavacTurbine;
 import com.google.devtools.build.java.turbine.javac.JavacTurbine.Result;
 import com.google.turbine.diag.TurbineError;
 import com.google.turbine.main.Main;
 import com.google.turbine.options.TurbineOptions;
 import com.google.turbine.options.TurbineOptionsParser;
+import java.io.BufferedWriter;
 import java.io.IOException;
-import java.util.Arrays;
+import java.io.OutputStreamWriter;
+import java.io.PrintWriter;
+import javax.annotation.Nullable;
 
 /**
  * A turbine entry point that falls back to javac-turbine for failures, and for compilations that
@@ -32,31 +39,49 @@ public class Turbine {
 
   public static void main(String[] args) throws Exception {
     System.exit(
-        new Turbine(ImmutableSet.<String>of(), "An exception has occurred in turbine.")
-            .compile(args));
+        new Turbine(
+                /* bugMessage= */ "An exception has occurred in turbine.",
+                /* unhelpfulMessage= */ "",
+                /* fixImportCommand= */ null)
+            .compile(TurbineOptionsParser.parse(ImmutableList.copyOf(args))));
   }
 
-  private final ImmutableSet<String> processorBlacklist;
+  /** Formats a suggested fix for missing import errors. */
+  @FunctionalInterface
+  public interface FixImportCommand {
+    String formatCommand(String type, String target);
+  }
+
   private final String bugMessage;
+  private final String unhelpfulMessage;
+  private final @Nullable FixImportCommand fixImportCommand;
 
-  public Turbine(ImmutableSet<String> processorBlacklist, String bugMessage) {
-    this.processorBlacklist = processorBlacklist;
+  public Turbine(
+      String bugMessage, String unhelpfulMessage, @Nullable FixImportCommand fixImportCommand) {
     this.bugMessage = bugMessage;
+    this.unhelpfulMessage = unhelpfulMessage;
+    this.fixImportCommand = fixImportCommand;
   }
 
-  public int compile(String[] args) throws IOException {
+  public int compile(TurbineOptions options) throws IOException {
+    try (PrintWriter writer =
+        new PrintWriter(new BufferedWriter(new OutputStreamWriter(System.err, UTF_8)), true)) {
+      return compile(options, writer);
+    }
+  }
+
+  public int compile(TurbineOptions options, PrintWriter out) throws IOException {
     Throwable turbineCrash = null;
     try {
-      if (Main.compile(args)) {
+      if (options.processors().isEmpty() && Main.compile(options)) {
         return 0;
       }
       // fall back to javac for API-generating processors
     } catch (TurbineError e) {
       switch (e.kind()) {
         case TYPE_PARAMETER_QUALIFIER:
-          System.err.println(e.getMessage());
-          System.exit(1);
-          break;
+          out.println(e.getMessage());
+          return 1;
         default:
           turbineCrash = e;
           break;
@@ -64,19 +89,39 @@ public class Turbine {
     } catch (Throwable t) {
       turbineCrash = t;
     }
-    Result result = javacTurbineCompile(args);
+    if (!options.javacFallback()) {
+      if (turbineCrash instanceof TurbineError) {
+        TurbineError turbineError = (TurbineError) turbineCrash;
+        out.println();
+        out.println(turbineError.getMessage());
+        switch (turbineError.kind()) {
+          case SYMBOL_NOT_FOUND:
+            if (fixImportCommand != null && options.targetLabel().isPresent()) {
+              out.println();
+              Object arg = getOnlyElement(turbineError.args());
+              out.println("\033[35m\033[1m** Command to add missing dependencies:\033[0m\n");
+              out.println(
+                  fixImportCommand.formatCommand(
+                      CharMatcher.anyOf("$/").replaceFrom(arg.toString(), '.'),
+                      options.targetLabel().get()));
+              out.println();
+            }
+            break;
+          default: // fall out
+        }
+        out.println(unhelpfulMessage);
+      } else if (turbineCrash != null) {
+        out.println(bugMessage);
+        turbineCrash.printStackTrace(out);
+      }
+      return 1;
+    }
+    Result result = JavacTurbine.compile(options);
     if (result == Result.OK_WITH_REDUCED_CLASSPATH && turbineCrash != null) {
-      System.err.println(bugMessage);
-      turbineCrash.printStackTrace();
+      out.println(bugMessage);
+      turbineCrash.printStackTrace(out);
       result = Result.ERROR;
     }
     return result.exitCode();
-  }
-
-  Result javacTurbineCompile(String[] args) throws IOException {
-    TurbineOptions.Builder options = TurbineOptions.builder();
-    TurbineOptionsParser.parse(options, Arrays.asList(args));
-    options.addBlacklistedProcessors(processorBlacklist);
-    return JavacTurbine.compile(options.build());
   }
 }
