@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import javax.annotation.Nullable;
 
 /**
