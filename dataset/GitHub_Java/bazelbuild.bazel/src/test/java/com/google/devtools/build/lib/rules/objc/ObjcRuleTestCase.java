@@ -52,8 +52,6 @@ import com.google.devtools.build.lib.rules.apple.AppleConfiguration.Configuratio
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.objc.CompilationSupport.ExtraLinkArgs;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -541,18 +539,16 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       throws Exception {
     scratch.file("x/a.h");
     ruleType.scratchTarget(scratch, "hdrs", "['a.h']", "includes", "['incdir']");
-    CcCompilationContext ccCompilationContext =
+    ObjcProvider provider =
         getConfiguredTarget("//x:x", getAppleCrosstoolConfiguration())
-            .get(CcInfo.PROVIDER)
-            .getCcCompilationContext();
+            .get(ObjcProvider.STARLARK_CONSTRUCTOR);
     if (privateHdr.isPresent()) {
-      assertThat(ccCompilationContext.getDeclaredIncludeSrcs().toList())
+      assertThat(provider.header().toList())
           .containsExactly(getSourceArtifact("x/a.h"), getSourceArtifact(privateHdr.get()));
     } else {
-      assertThat(ccCompilationContext.getDeclaredIncludeSrcs().toList())
-          .containsExactly(getSourceArtifact("x/a.h"));
+      assertThat(provider.header().toList()).containsExactly(getSourceArtifact("x/a.h"));
     }
-    assertThat(ccCompilationContext.getIncludeDirs())
+    assertThat(provider.include())
         .containsExactly(
             PathFragment.create("x/incdir"),
             getAppleCrosstoolConfiguration()
