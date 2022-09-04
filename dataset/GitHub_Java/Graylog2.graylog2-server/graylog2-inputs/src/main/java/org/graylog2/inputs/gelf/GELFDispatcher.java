@@ -27,7 +27,6 @@ import org.graylog2.inputs.gelf.gelf.GELFMessage;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.jboss.netty.channel.socket.DatagramChannel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.jboss.netty.buffer.ChannelBuffer;
@@ -93,7 +92,7 @@ public class GELFDispatcher extends SimpleChannelHandler {
     public void exceptionCaught(ChannelHandlerContext ctx, ExceptionEvent e) throws Exception {
         LOG.debug("Could not handle GELF message.", e.getCause());
 
-        if (ctx.getChannel() != null && !(ctx.getChannel() instanceof DatagramChannel)) {
+        if (ctx.getChannel() != null) {
             ctx.getChannel().close();
         }
     }
