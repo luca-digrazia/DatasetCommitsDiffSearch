@@ -45,7 +45,6 @@ public final class SymlinkTreeAction extends AbstractAction {
   private final Artifact outputManifest;
   private final boolean filesetTree;
   private final boolean enableRunfiles;
-  private final boolean inprocessSymlinkCreation;
 
   /**
    * Creates SymlinkTreeAction instance.
@@ -72,8 +71,7 @@ public final class SymlinkTreeAction extends AbstractAction {
         outputManifest,
         filesetTree,
         config.getActionEnvironment(),
-        config.runfilesEnabled(),
-        config.inprocessSymlinkCreation());
+        config.runfilesEnabled());
   }
 
   /**
@@ -96,8 +94,7 @@ public final class SymlinkTreeAction extends AbstractAction {
       Artifact outputManifest,
       boolean filesetTree,
       ActionEnvironment env,
-      boolean enableRunfiles,
-      boolean inprocessSymlinkCreation) {
+      boolean enableRunfiles) {
     super(owner, ImmutableList.of(inputManifest), ImmutableList.of(outputManifest), env);
     Preconditions.checkArgument(outputManifest.getPath().getBaseName().equals("MANIFEST"));
     Preconditions.checkArgument(
@@ -107,7 +104,6 @@ public final class SymlinkTreeAction extends AbstractAction {
     this.outputManifest = outputManifest;
     this.filesetTree = filesetTree;
     this.enableRunfiles = enableRunfiles;
-    this.inprocessSymlinkCreation = inprocessSymlinkCreation;
   }
 
   public Artifact getInputManifest() {
@@ -131,10 +127,6 @@ public final class SymlinkTreeAction extends AbstractAction {
     return enableRunfiles;
   }
 
-  public boolean inprocessSymlinkCreation() {
-    return inprocessSymlinkCreation;
-  }
-
   @Override
   public String getMnemonic() {
     return "SymlinkTree";
@@ -151,7 +143,6 @@ public final class SymlinkTreeAction extends AbstractAction {
     fp.addString(GUID);
     fp.addBoolean(filesetTree);
     fp.addBoolean(enableRunfiles);
-    fp.addBoolean(inprocessSymlinkCreation);
     env.addTo(fp);
     // We need to ensure that the fingerprints for two different instances of this action are
     // different. Consider the hypothetical scenario where we add a second runfiles object to this
