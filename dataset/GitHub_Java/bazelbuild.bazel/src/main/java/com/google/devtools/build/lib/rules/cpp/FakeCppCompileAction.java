@@ -102,7 +102,6 @@ public class FakeCppCompileAction extends CppCompileAction {
         null,
         null,
         null,
-        null,
         localShellEnvironment,
         cppConfiguration,
         // We only allow inclusion of header files explicitly declared in
