@@ -16,32 +16,100 @@ package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ToolchainInfoApi;
+import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
+import javax.annotation.Nullable;
 
-/**
- * Information about the C++ toolchain.
- */
-@SkylarkModule(name = "CcToolchainInfo", doc = "Information about the C++ compiler being used.")
-public interface CcToolchainProviderApi<PathFragmentT> extends ToolchainInfoApi {
+/** Information about the C++ toolchain. */
+@SkylarkModule(
+    name = "CcToolchainInfo",
+    category = SkylarkModuleCategory.PROVIDER,
+    doc = "Information about the C++ compiler being used.")
+public interface CcToolchainProviderApi<FeatureConfigurationT extends FeatureConfigurationApi>
+    extends ToolchainInfoApi {
+
+  @SkylarkCallable(
+      name = "needs_pic_for_dynamic_libraries",
+      doc =
+          "Returns true if this rule's compilations should apply -fPIC, false otherwise. "
+              + "Determines if we should apply -fPIC for this rule's C++ compilations depending "
+              + "on the C++ toolchain and presence of `--force_pic` Bazel option.",
+      parameters = {
+        @Param(
+            name = "feature_configuration",
+            doc = "Feature configuration to be queried.",
+            positional = false,
+            named = true,
+            type = FeatureConfigurationApi.class)
+      })
+  boolean usePicForDynamicLibrariesFromStarlark(FeatureConfigurationT featureConfigurationApi);
 
   @SkylarkCallable(
       name = "built_in_include_directories",
       doc = "Returns the list of built-in directories of the compiler.",
-      structField = true
-  )
-  public ImmutableList<PathFragmentT> getBuiltInIncludeDirectories();
+      structField = true)
+  public ImmutableList<String> getBuiltInIncludeDirectoriesAsStrings();
 
   @SkylarkCallable(
-    name = "sysroot",
-    structField = true,
-    doc =
-        "Returns the sysroot to be used. If the toolchain compiler does not support "
-            + "different sysroots, or the sysroot is the same as the default sysroot, then "
-            + "this method returns <code>None</code>."
-  )
-  public PathFragmentT getSysroot();
+      name = "all_files",
+      doc =
+          "Returns all toolchain files (so they can be passed to actions using this "
+              + "toolchain as inputs).",
+      structField = true)
+  public Depset getAllFilesForStarlark();
+
+  @SkylarkCallable(
+      name = "static_runtime_lib",
+      doc =
+          "Returns the files from `static_runtime_lib` attribute (so they can be passed to actions "
+              + "using this toolchain as inputs). The caller should check whether the "
+              + "feature_configuration enables `static_link_cpp_runtimes` feature (if not, "
+              + "neither `static_runtime_lib` nor `dynamic_runtime_lib` should be used), and "
+              + "use `dynamic_runtime_lib` if dynamic linking mode is active.",
+      parameters = {
+        @Param(
+            name = "feature_configuration",
+            doc = "Feature configuration to be queried.",
+            positional = false,
+            named = true,
+            type = FeatureConfigurationApi.class)
+      })
+  public Depset getStaticRuntimeLibForStarlark(FeatureConfigurationT featureConfiguration)
+      throws EvalException;
+
+  @SkylarkCallable(
+      name = "dynamic_runtime_lib",
+      doc =
+          "Returns the files from `dynamic_runtime_lib` attribute (so they can be passed to"
+              + " actions using this toolchain as inputs). The caller can check whether the "
+              + "feature_configuration enables `static_link_cpp_runtimes` feature (if not, neither"
+              + " `static_runtime_lib` nor `dynamic_runtime_lib` have to be used), and use"
+              + " `static_runtime_lib` if static linking mode is active.",
+      parameters = {
+        @Param(
+            name = "feature_configuration",
+            doc = "Feature configuration to be queried.",
+            positional = false,
+            named = true,
+            type = FeatureConfigurationApi.class)
+      })
+  public Depset getDynamicRuntimeLibForStarlark(FeatureConfigurationT featureConfiguration)
+      throws EvalException;
+
+  @SkylarkCallable(
+      name = "sysroot",
+      structField = true,
+      allowReturnNones = true,
+      doc =
+          "Returns the sysroot to be used. If the toolchain compiler does not support "
+              + "different sysroots, or the sysroot is the same as the default sysroot, then "
+              + "this method returns <code>None</code>.")
+  @Nullable
+  public String getSysroot();
 
   @SkylarkCallable(name = "compiler", structField = true, doc = "C++ compiler.",
       allowReturnNones = true)
@@ -56,83 +124,10 @@ public interface CcToolchainProviderApi<PathFragmentT> extends ToolchainInfoApi 
   public String getTargetCpu();
 
   @SkylarkCallable(
-      name = "unfiltered_compiler_options",
-      doc =
-          "Returns the default list of options which cannot be filtered by BUILD "
-              + "rules. These should be appended to the command line after filtering.")
-  // TODO(b/24373706): Remove this method once new C++ toolchain API is available
-  public ImmutableList<String> getUnfilteredCompilerOptionsWithSysroot(
-      Iterable<String> featuresNotUsedAnymore);
-
-  @SkylarkCallable(
-    name = "link_options_do_not_use",
-    structField = true,
-    doc =
-        "Returns the set of command-line linker options, including any flags "
-            + "inferred from the command-line options."
-  )
-  public ImmutableList<String> getLinkOptionsWithSysroot();
-
-  @SkylarkCallable(
     name = "target_gnu_system_name",
     structField = true,
     doc = "The GNU System Name.",
     allowReturnNones = true
   )
   public String getTargetGnuSystemName();
-
-  @SkylarkCallable(
-      name = "compiler_options",
-      doc =
-          "Returns the default options to use for compiling C, C++, and assembler. "
-              + "This is just the options that should be used for all three languages. "
-              + "There may be additional C-specific or C++-specific options that should be used, "
-              + "in addition to the ones returned by this method"
-  )
-  public ImmutableList<String> getCompilerOptions();
-
-  @SkylarkCallable(
-      name = "c_options",
-      doc =
-          "Returns the list of additional C-specific options to use for compiling C. "
-              + "These should be go on the command line after the common options returned by "
-              + "<code>compiler_options</code>")
-  public ImmutableList<String> getCOptions();
-
-  @SkylarkCallable(
-      name = "cxx_options",
-      doc =
-          "Returns the list of additional C++-specific options to use for compiling C++. "
-              + "These should be go on the command line after the common options returned by "
-              + "<code>compiler_options</code>")
-  @Deprecated
-  public ImmutableList<String> getCxxOptionsWithCopts();
-
-  @SkylarkCallable(
-      name = "fully_static_link_options",
-      doc =
-          "Returns the immutable list of linker options for fully statically linked "
-              + "outputs. Does not include command-line options passed via --linkopt or "
-              + "--linkopts.")
-  @Deprecated
-  public ImmutableList<String> getFullyStaticLinkOptions(Boolean sharedLib) throws EvalException;
-
-  @SkylarkCallable(
-      name = "mostly_static_link_options",
-      doc =
-          "Returns the immutable list of linker options for mostly statically linked "
-              + "outputs. Does not include command-line options passed via --linkopt or "
-              + "--linkopts.")
-  @Deprecated
-  public ImmutableList<String> getMostlyStaticLinkOptions(Boolean sharedLib);
-
-  @SkylarkCallable(
-      name = "dynamic_link_options",
-      doc =
-          "Returns the immutable list of linker options for artifacts that are not "
-              + "fully or mostly statically linked. Does not include command-line options "
-              + "passed via --linkopt or --linkopts."
-  )
-  @Deprecated
-  public ImmutableList<String> getDynamicLinkOptions(Boolean sharedLib);
 }

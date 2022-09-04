@@ -19,16 +19,15 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.LicensesProvider;
-import com.google.devtools.build.lib.analysis.PackageSpecificationProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain.AdditionalBuildVariablesComputer;
@@ -36,8 +35,8 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
@@ -102,8 +101,7 @@ public final class CcToolchainProvider extends ToolchainInfo
           /* abi= */ "",
           /* targetSystemName= */ "",
           /* additionalMakeVariables= */ ImmutableMap.of(),
-          /* legacyCcFlagsMakeVariable= */ "",
-          /* allowlistForLayeringCheck= */ null);
+          /* legacyCcFlagsMakeVariable= */ "");
 
   @Nullable private final CppConfiguration cppConfiguration;
   private final PathFragment crosstoolTopPathFragment;
@@ -165,7 +163,6 @@ public final class CcToolchainProvider extends ToolchainInfo
   private final FdoContext fdoContext;
 
   private final LicensesProvider licensesProvider;
-  private final PackageSpecificationProvider allowlistForLayeringCheck;
 
   public CcToolchainProvider(
       ImmutableMap<String, Object> values,
@@ -220,8 +217,7 @@ public final class CcToolchainProvider extends ToolchainInfo
       String abi,
       String targetSystemName,
       ImmutableMap<String, String> additionalMakeVariables,
-      String legacyCcFlagsMakeVariable,
-      PackageSpecificationProvider allowlistForLayeringCheck) {
+      String legacyCcFlagsMakeVariable) {
     super(values, Location.BUILTIN);
     this.cppConfiguration = cppConfiguration;
     this.crosstoolTopPathFragment = crosstoolTopPathFragment;
@@ -278,7 +274,6 @@ public final class CcToolchainProvider extends ToolchainInfo
     this.targetSystemName = targetSystemName;
     this.additionalMakeVariables = additionalMakeVariables;
     this.legacyCcFlagsMakeVariable = legacyCcFlagsMakeVariable;
-    this.allowlistForLayeringCheck = allowlistForLayeringCheck;
   }
 
   /**
@@ -376,7 +371,7 @@ public final class CcToolchainProvider extends ToolchainInfo
     // TODO(bazel-team): delete all of these.
     result.put("CROSSTOOLTOP", crosstoolTopPathFragment.getPathString());
 
-    // TODO(kmensah): Remove when Starlark dependencies can be updated to rely on
+    // TODO(kmensah): Remove when skylark dependencies can be updated to rely on
     // CcToolchainProvider.
     result.putAll(getAdditionalMakeVariables());
 
@@ -646,7 +641,6 @@ public final class CcToolchainProvider extends ToolchainInfo
     return toolchainFeatures;
   }
 
-  @Override
   public Label getCcToolchainLabel() {
     return ccToolchainLabel;
   }
@@ -871,8 +865,8 @@ public final class CcToolchainProvider extends ToolchainInfo
     return toolchainIdentifier.contains("llvm");
   }
 
-  // Not all of CcToolchainProvider is exposed to Starlark, which makes implementing deep equality
-  // impossible: if Java-only parts are considered, the behavior is surprising in Starlark, if they
+  // Not all of CcToolchainProvider is exposed to Skylark, which makes implementing deep equality
+  // impossible: if Java-only parts are considered, the behavior is surprising in Skylark, if they
   // are not, the behavior is surprising in Java. Thus, object identity it is.
   @Override
   public boolean equals(Object other) {
@@ -909,10 +903,6 @@ public final class CcToolchainProvider extends ToolchainInfo
   @VisibleForTesting
   NestedSet<Artifact> getDynamicRuntimeLibForTesting() {
     return dynamicRuntimeLinkInputs;
-  }
-
-  public PackageSpecificationProvider getAllowlistForLayeringCheck() {
-    return allowlistForLayeringCheck;
   }
 }
 
