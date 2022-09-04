@@ -34,15 +34,15 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
-import com.google.devtools.build.lib.remote.util.Utils;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.vfs.Path;
 import io.grpc.Context;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
@@ -94,9 +94,12 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
       Map<Path, ListenableFuture<Void>> downloadsToWaitFor = new HashMap<>();
       for (ActionInput input : inputs) {
         if (input instanceof VirtualActionInput) {
-          VirtualActionInput virtualActionInput = (VirtualActionInput) input;
-          Path outputPath = execRoot.getRelative(virtualActionInput.getExecPath());
-          SandboxHelpers.atomicallyWriteVirtualInput(virtualActionInput, outputPath, ".remote");
+          VirtualActionInput paramFileActionInput = (VirtualActionInput) input;
+          Path outputPath = execRoot.getRelative(paramFileActionInput.getExecPath());
+          outputPath.getParentDirectory().createDirectoryAndParents();
+          try (OutputStream out = outputPath.getOutputStream()) {
+            paramFileActionInput.writeTo(out);
+          }
         } else {
           FileArtifactValue metadata = metadataProvider.getMetadata(input);
           if (metadata == null || !metadata.isRemote()) {
@@ -145,7 +148,14 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
 
   void downloadFile(Path path, FileArtifactValue metadata)
       throws IOException, InterruptedException {
-    Utils.getFromFuture(downloadFileAsync(path, metadata));
+    try {
+      downloadFileAsync(path, metadata).get();
+    } catch (ExecutionException e) {
+      if (e.getCause() instanceof IOException) {
+        throw (IOException) e.getCause();
+      }
+      throw new IOException(e.getCause());
+    }
   }
 
   private ListenableFuture<Void> downloadFileAsync(Path path, FileArtifactValue metadata)
