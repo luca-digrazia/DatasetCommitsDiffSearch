@@ -20,12 +20,16 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.models.api.requests.CreateExtractorRequest;
 import org.graylog2.restclient.models.api.responses.system.ExtractorSummaryResponse;
+import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import play.mvc.Http;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -160,7 +164,7 @@ public class Extractor {
         this.order = 0;
     }
 
-    public CreateExtractorRequest toCreateExtractorRequest() {
+    public Extractor create(Node node, Input input) throws IOException, APIException {
         CreateExtractorRequest request = new CreateExtractorRequest();
 
         Map<String, Map<String, Object>> converterList = Maps.newHashMap();
@@ -179,7 +183,13 @@ public class Extractor {
         request.conditionValue = conditionValue;
         request.order = order;
 
-        return request;
+        final Map response = api.path(routes.ExtractorsResource().create(input.getId()), Map.class)
+                .node(node)
+                .expect(Http.Status.CREATED)
+                .body(request)
+                .execute();
+        this.id = response.get("extractor_id").toString();
+        return this;
     }
 
     public void loadConfigFromForm(Type extractorType, Map<String,String[]> form) {
