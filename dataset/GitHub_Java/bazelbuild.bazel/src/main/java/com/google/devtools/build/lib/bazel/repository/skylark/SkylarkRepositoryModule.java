@@ -46,9 +46,9 @@ import com.google.devtools.build.lib.syntax.Expression;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Identifier;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
 
@@ -63,7 +63,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
       BaseFunction implementation,
       Object attrs,
       Boolean local,
-      Sequence<?> environ, // <String> expected
+      SkylarkList<?> environ, // <String> expected
       Boolean configure,
       String doc,
       FuncallExpression ast,
@@ -80,7 +80,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     BaseRuleClasses.nameAttribute(builder);
     BaseRuleClasses.commonCoreAndSkylarkAttributes(builder);
     builder.add(attr("expect_failure", STRING));
-    if (attrs != Starlark.NONE) {
+    if (attrs != Runtime.NONE) {
       for (Map.Entry<String, Descriptor> attr :
           castMap(attrs, String.class, Descriptor.class, "attrs").entrySet()) {
         Descriptor attrDescriptor = attr.getValue();
@@ -105,14 +105,9 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     private final Location ruleClassDefinitionLocation;
 
     public RepositoryRuleFunction(RuleClass.Builder builder, Location ruleClassDefinitionLocation) {
-      super(FunctionSignature.KWARGS);
+      super("repository_rule", FunctionSignature.KWARGS);
       this.builder = builder;
       this.ruleClassDefinitionLocation = ruleClassDefinitionLocation;
-    }
-
-    @Override
-    public String getName() {
-      return "repository_rule";
     }
 
     @Override
@@ -199,11 +194,5 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
         throw new EvalException(ast.getLocation(), e.getMessage());
       }
     }
-  }
-
-  @Override
-  public void failWithIncompatibleUseCcConfigureFromRulesCc(
-      Location location, StarlarkThread thread) throws EvalException {
-    // Noop until --incompatible_use_cc_configure_from_rules_cc is implemented.
   }
 }

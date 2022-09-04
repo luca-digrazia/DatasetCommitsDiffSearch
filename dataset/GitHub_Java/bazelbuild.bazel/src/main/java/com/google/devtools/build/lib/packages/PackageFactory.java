@@ -1428,15 +1428,13 @@ public final class PackageFactory {
 
   @VisibleForTesting
   public Package.Builder newExternalPackageBuilder(
-      RootedPath workspacePath, String runfilesPrefix, StarlarkSemantics starlarkSemantics) {
-    return Package.newExternalPackageBuilder(
-        packageBuilderHelper, workspacePath, runfilesPrefix, starlarkSemantics);
+      RootedPath workspacePath, String runfilesPrefix) {
+    return Package.newExternalPackageBuilder(packageBuilderHelper, workspacePath, runfilesPrefix);
   }
 
   @VisibleForTesting
-  public Package.Builder newPackageBuilder(
-      PackageIdentifier packageId, String runfilesPrefix, StarlarkSemantics starlarkSemantics) {
-    return new Package.Builder(packageBuilderHelper, packageId, runfilesPrefix, starlarkSemantics);
+  public Package.Builder newPackageBuilder(PackageIdentifier packageId, String runfilesPrefix) {
+    return new Package.Builder(packageBuilderHelper, packageId, runfilesPrefix);
   }
 
   @VisibleForTesting
@@ -1453,8 +1451,7 @@ public final class PackageFactory {
                     buildFile
                         .getRootRelativePath()
                         .getRelative(LabelConstants.WORKSPACE_FILE_NAME)),
-                "TESTING",
-                StarlarkSemantics.DEFAULT_SEMANTICS)
+                "TESTING")
             .build();
     return createPackageForTesting(
         packageId,
@@ -1696,11 +1693,8 @@ public final class PackageFactory {
       ImmutableList<Label> skylarkFileDependencies,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws InterruptedException {
-    Package.Builder pkgBuilder =
-        new Package.Builder(
-            packageBuilderHelper.createFreshPackage(
-                packageId, ruleClassProvider.getRunfilesPrefix()),
-            starlarkSemantics);
+    Package.Builder pkgBuilder = new Package.Builder(packageBuilderHelper.createFreshPackage(
+        packageId, ruleClassProvider.getRunfilesPrefix()));
     StoredEventHandler eventHandler = new StoredEventHandler();
 
     pkgBuilder

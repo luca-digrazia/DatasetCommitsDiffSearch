@@ -21,10 +21,12 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkSignature;
 import com.google.devtools.build.lib.syntax.SkylarkType.SkylarkFunctionType;
 import com.google.devtools.build.lib.syntax.StarlarkThread.LexicalFrame;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.NoSuchElementException;
@@ -53,10 +55,15 @@ public class BuiltinFunction extends BaseFunction {
   // The returnType of the method.
   private Class<?> returnType;
 
+  /** Create unconfigured (signature-less) function from its name. */
+  protected BuiltinFunction(String name) {
+    super(name);
+  }
+
   /** Creates a BuiltinFunction with the given name and signature. */
   protected BuiltinFunction(String name, FunctionSignature signature) {
     super(name, signature);
-    initialize();
+    configure();
   }
 
   @Override
@@ -115,14 +122,15 @@ public class BuiltinFunction extends BaseFunction {
       for (int i = 0; i < args.length; i++) {
         if (args[i] != null && !types[i].isAssignableFrom(args[i].getClass())) {
           String paramName =
-              i < len ? getSignature().getParameterNames().get(i) : extraParams[i - len].getName();
+              i < len ? signature.getParameterNames().get(i) : extraParams[i - len].getName();
           throw new EvalException(
               loc,
               String.format(
-                  "argument '%s' has type '%s', but should be '%s'\nin call to %s",
+                  "argument '%s' has type '%s', but should be '%s'\nin call to builtin %s %s",
                   paramName,
                   EvalUtils.getDataTypeName(args[i]),
                   EvalUtils.getDataTypeNameFromClass(types[i]),
+                  hasSelfArgument() ? "method" : "function",
                   getShortSignature()));
         }
       }
@@ -160,11 +168,37 @@ public class BuiltinFunction extends BaseFunction {
         e);
   }
 
-  // Configures the reflection mechanism.
-  private final void initialize() {
+  /**
+   * Configure the reflection mechanism. Called by signature processor for BuiltinFunctions already
+   * created.
+   */
+  final void configureFromAnnotation(SkylarkSignature annotation) {
+    Preconditions.checkState(!isConfigured()); // must not be configured yet
+    this.enforcedArgumentTypes = new ArrayList<>();
+
+    this.returnType = annotation.returnType();
+
+    // Appends to getEnforcedArgumentTypes() and paramDoc as a side effect.
+    SkylarkSignatureProcessor.SignatureInfo info =
+        SkylarkSignatureProcessor.getSignatureForCallable(
+            getName(), annotation, /*paramDoc=*/ new ArrayList<>(), this.enforcedArgumentTypes);
+    this.signature = info.signature;
+    this.paramTypes = info.types;
+    this.defaultValues = info.defaultValues;
+
+    this.objectType = annotation.objectType() == Object.class ? null : annotation.objectType();
+    configure();
+  }
+
+  /**
+   * Configure the reflection mechanism. Called directly by constructor for BuiltinFunctions created
+   * with a signature, and called after annotation processing for other BuiltinFunctions.
+   */
+  @Override
+  final void configure() {
     this.invokeMethod = findMethod(this.getClass(), "invoke");
     Class<?>[] parameterTypes = invokeMethod.getParameterTypes();
-    int numParameters = getSignature().numParameters();
+    int numParameters = signature.numParameters();
     this.extraParams = extraParams(numParameters, parameterTypes);
 
     if (enforcedArgumentTypes != null) {
@@ -176,8 +210,8 @@ public class BuiltinFunction extends BaseFunction {
               String.format(
                   "fun %s(%s), param %s, enforcedType: %s (%s); parameterType: %s",
                   getName(),
-                  getSignature(),
-                  getSignature().getParameterNames().get(i),
+                  signature,
+                  signature.getParameterNames().get(i),
                   enforcedType,
                   enforcedType.getType(),
                   parameterType);
@@ -210,22 +244,6 @@ public class BuiltinFunction extends BaseFunction {
           returnType,
           methodReturnType);
     }
-  }
-
-  /**
-   * Returns the signature as "[className.]methodName(name1: paramType1, name2: paramType2, ...)"
-   */
-  private String getShortSignature() {
-    StringBuilder builder = new StringBuilder();
-    builder.append(getFullName()).append("(");
-    getSignature()
-        .toStringBuilder(
-            builder,
-            /*defaultValuePrinter=*/ null,
-            /*typePrinter=*/ null,
-            /* skipFirstMandatory= */ false);
-    builder.append(")");
-    return builder.toString();
   }
 
   // Returns the list of extra parameters beyond those in the signature.

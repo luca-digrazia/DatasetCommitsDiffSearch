@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.packages.Package.NameConflictException;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.BuiltinFunction;
+import com.google.devtools.build.lib.syntax.CallUtils;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -38,9 +39,9 @@ import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -310,25 +311,25 @@ public class WorkspaceFactory {
 
   private static ImmutableMap<String, Object> createWorkspaceFunctions(
       boolean allowOverride, RuleFactory ruleFactory, WorkspaceGlobals workspaceGlobals) {
-    ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
-    Starlark.addMethods(env, workspaceGlobals);
+    ImmutableMap.Builder<String, Object> map = ImmutableMap.builder();
+    Runtime.setupSkylarkLibrary(map, workspaceGlobals);
 
+    Map<String, BaseFunction> ruleFunctions = new HashMap<>();
     for (String ruleClass : ruleFactory.getRuleClassNames()) {
       // There is both a "bind" WORKSPACE function and a "bind" rule. In workspace files,
       // the non-rule function takes precedence.
       // TODO(cparsons): Rule functions should not be added to WORKSPACE files.
-      if (!ruleClass.equals("bind")) {
+      if (!"bind".equals(ruleClass)) {
         BaseFunction ruleFunction = newRuleFunction(ruleFactory, ruleClass, allowOverride);
-        env.put(ruleClass, ruleFunction);
+        ruleFunctions.put(ruleClass, ruleFunction);
       }
     }
-
-    return env.build();
+    return map.putAll(ruleFunctions).build();
   }
 
   private ImmutableMap<String, Object> getDefaultEnvironment() {
     ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
-    env.putAll(Starlark.UNIVERSE);
+    env.putAll(BazelLibrary.GLOBALS.getBindings());
     env.putAll(workspaceFunctions);
     if (installDir != null) {
       env.put("__embedded_dir__", installDir.getPathString());
@@ -350,19 +351,23 @@ public class WorkspaceFactory {
 
   private static ClassObject newNativeModule(
       ImmutableMap<String, Object> workspaceFunctions, String version) {
-    ImmutableMap.Builder<String, Object> env = new ImmutableMap.Builder<>();
-    Starlark.addMethods(env, new SkylarkNativeModule());
+    ImmutableMap.Builder<String, Object> builder = new ImmutableMap.Builder<>();
+    SkylarkNativeModule nativeModuleInstance = new SkylarkNativeModule();
+    for (String nativeFunction : CallUtils.getMethodNames(SkylarkNativeModule.class)) {
+      builder.put(
+          nativeFunction, CallUtils.getBuiltinCallable(nativeModuleInstance, nativeFunction));
+    }
     for (Map.Entry<String, Object> function : workspaceFunctions.entrySet()) {
       // "workspace" is explicitly omitted from the native module, as it must only occur at the
       // top of a WORKSPACE file.
       // TODO(cparsons): Clean up separation between environments.
-      if (!function.getKey().equals("workspace")) {
-        env.put(function);
+      if (!"workspace".equals(function.getKey())) {
+        builder.put(function.getKey(), function.getValue());
       }
     }
 
-    env.put("bazel_version", version);
-    return StructProvider.STRUCT.create(env.build(), "no native function or rule '%s'");
+    builder.put("bazel_version", version);
+    return StructProvider.STRUCT.create(builder.build(), "no native function or rule '%s'");
   }
 
   static ClassObject newNativeModule(RuleClassProvider ruleClassProvider, String version) {

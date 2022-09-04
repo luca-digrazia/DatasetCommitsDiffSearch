@@ -126,7 +126,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "Mock", doc = "")
-  static class Mock implements SkylarkValue {
+  static class Mock {
     @SkylarkCallable(
         name = "MockFn",
         selfCall = true,
@@ -513,7 +513,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "MockInterface", doc = "")
-  static interface MockInterface extends SkylarkValue {
+  static interface MockInterface {
     @SkylarkCallable(name = "is_empty_interface",
         parameters = { @Param(name = "str", type = String.class) },
         documented = false)
@@ -533,7 +533,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "MockClassObject", documented = false, doc = "")
-  static final class MockClassObject implements ClassObject, SkylarkValue {
+  static final class MockClassObject implements ClassObject {
     @Override
     public Object getValue(String name) {
       switch (name) {
@@ -555,7 +555,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "ParamterizedMock", doc = "")
-  static interface ParameterizedApi<ObjectT> extends SkylarkValue {
+  static interface ParameterizedApi<ObjectT> {
     @SkylarkCallable(
         name = "method",
         documented = false,
@@ -1699,13 +1699,23 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @Test
+  public void testPlusEqualsOnDict() throws Exception {
+    new SkylarkTest("--incompatible_disallow_dict_plus=false").setUp("def func():",
+        "  d = {'a' : 1}",
+        "  d += {'b' : 2}",
+        "  return d",
+        "d = func()")
+        .testLookup("d", ImmutableMap.of("a", 1, "b", 2));
+  }
+
+  @Test
   public void testPlusOnDictDeprecated() throws Exception {
-    new SkylarkTest()
+    new SkylarkTest("--incompatible_disallow_dict_plus=true")
         .testIfErrorContains(
-            "unsupported operand type(s) for +: 'dict' and 'dict'", "{1: 2} + {3: 4}");
-    new SkylarkTest()
+            "The `+` operator for dicts is deprecated and no longer supported.", "{1: 2} + {3: 4}");
+    new SkylarkTest("--incompatible_disallow_dict_plus=true")
         .testIfErrorContains(
-            "unsupported operand type(s) for +: 'dict' and 'dict'",
+            "The `+` operator for dicts is deprecated and no longer supported.",
             "def func():",
             "  d = {1: 2}",
             "  d += {3: 4}",

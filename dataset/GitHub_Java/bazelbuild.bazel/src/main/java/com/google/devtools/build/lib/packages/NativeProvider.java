@@ -66,7 +66,7 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
   }
 
   protected NativeProvider(Class<V> valueClass, String name) {
-    super(name, FunctionSignature.KWARGS);
+    super(name, FunctionSignature.KWARGS, Location.BUILTIN);
     this.key = new NativeKey(name, getClass());
     this.valueClass = valueClass;
     this.errorMessageFormatForUnknownField =
@@ -103,11 +103,6 @@ public abstract class NativeProvider<V extends InfoInterface> extends ProviderFr
   @Override
   public String getErrorMessageFormatForUnknownField() {
     return errorMessageFormatForUnknownField;
-  }
-
-  @Override
-  public Location getLocation() {
-    return Location.BUILTIN;
   }
 
   @Override
