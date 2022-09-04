@@ -79,7 +79,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected int mEnlargeImageRes = -1; //全屏显示的案件图片
 
-    protected float mSeekRatio = 1; //触摸滑动进度的比例系数
+    private int mSystemUiVisibility;
 
     protected float mSpeed = 1;//播放速度，只支持6.0以上
 
@@ -140,8 +140,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     protected OrientationUtils mOrientationUtils; //旋转工具类
 
     private Handler mHandler = new Handler();
-
-    private int mSystemUiVisibility;
 
     /**
      * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
@@ -368,7 +366,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mEnlargeImageRes = mEnlargeImageRes;
             gsyVideoPlayer.mRotate = mRotate;
             gsyVideoPlayer.mShowPauseCover = mShowPauseCover;
-            gsyVideoPlayer.mSeekRatio = mSeekRatio;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
@@ -735,7 +732,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         this.mSpeed = speed;
         if (GSYVideoManager.instance().getMediaPlayer() != null
                 && GSYVideoManager.instance().getMediaPlayer() instanceof IjkMediaPlayer) {
-            if (speed > 0) {
+            if (speed != 1 && speed > 0) {
                 ((IjkMediaPlayer) GSYVideoManager.instance().getMediaPlayer()).setSpeed(speed);
             }
         }
@@ -836,20 +833,4 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     public void setShowPauseCover(boolean showPauseCover) {
         this.mShowPauseCover = showPauseCover;
     }
-
-    /**
-     * 调整触摸滑动快进的比例
-     * @param seekRatio 滑动快进的比例，默认1。数值越大，滑动的产生的seek越小
-     */
-    public void setSeekRatio(float seekRatio) {
-        if(seekRatio < 0) {
-            return;
-        }
-        this.mSeekRatio = seekRatio;
-    }
-
-    public float getSeekRatio() {
-        return mSeekRatio;
-    }
-
 }
