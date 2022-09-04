@@ -27,7 +27,7 @@ import static com.google.devtools.build.lib.rules.objc.ObjcProvider.SDK_FRAMEWOR
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.WEAK_SDK_FRAMEWORK;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.NON_ARC_SRCS_TYPE;
 import static com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SRCS_TYPE;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
@@ -49,8 +49,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMapAction;
@@ -1024,11 +1022,11 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   private static Iterable<String> getArifactPaths(
       ConfiguredTarget target, ObjcProvider.Key<Artifact> artifactKey) {
     return Artifact.toRootRelativePaths(
-        target.get(ObjcProvider.STARLARK_CONSTRUCTOR).get(artifactKey));
+        target.get(ObjcProvider.SKYLARK_CONSTRUCTOR).get(artifactKey));
   }
 
   private static Iterable<String> getArifactPathsOfHeaders(ConfiguredTarget target) {
-    return Artifact.toRootRelativePaths(target.get(ObjcProvider.STARLARK_CONSTRUCTOR).header());
+    return Artifact.toRootRelativePaths(target.get(ObjcProvider.SKYLARK_CONSTRUCTOR).header());
   }
 
   @Test
@@ -1903,37 +1901,27 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
   @Test
   public void testDirectFields() throws Exception {
     useConfiguration("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
-
     scratch.file(
         "x/BUILD",
         "objc_library(",
-        "    name = 'foo',",
-        "    srcs = ['foo.m', 'foo_impl.h'],",
-        "    hdrs = ['foo.h'],",
-        "    textual_hdrs = ['foo.inc'],",
+        "   name = 'foo',",
+        "   srcs = ['foo.m'],",
+        "   hdrs = ['foo.h'],",
         ")",
         "objc_library(",
         "    name = 'bar',",
-        "    srcs = ['bar.m', 'bar_impl.h'],",
+        "    srcs = ['bar.m'],",
         "    hdrs = ['bar.h'],",
-        "    textual_hdrs = ['bar.inc'],",
         "    deps = [':foo'],",
         ")");
 
     ObjcProvider dependerProvider = providerForTarget("//x:bar");
     assertThat(baseArtifactNames(dependerProvider.getDirect(ObjcProvider.HEADER)))
-        .containsExactly("bar.h", "bar.inc");
+        .containsExactly("bar.h");
     assertThat(baseArtifactNames(dependerProvider.getDirect(ObjcProvider.SOURCE)))
         .containsExactly("bar.m");
     assertThat(Artifact.toRootRelativePaths(dependerProvider.getDirect(ObjcProvider.MODULE_MAP)))
         .containsExactly("x/bar.modulemaps/module.modulemap");
-
-    ConfiguredTarget target = getConfiguredTarget("//x:bar");
-    CcCompilationContext ccCompilationContext =
-        target.get(CcInfo.PROVIDER).getCcCompilationContext();
-    assertThat(baseArtifactNames(ccCompilationContext.getDirectHdrs()))
-        .containsExactly("bar.h", "bar_impl.h");
-    assertThat(baseArtifactNames(ccCompilationContext.getTextualHdrs())).containsExactly("bar.inc");
   }
 
   @Test
@@ -1968,23 +1956,5 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "a/BUILD",
         getAnalysisMock().ccSupport().getMacroLoadStatement(loadMacro, "objc_library"),
         "objc_library(name='a', srcs=['a.cc'])");
-  }
-
-  @Test
-  public void testGenerateDsymFlagPropagatesToObjcLibraryFeature() throws Exception {
-    useConfiguration("--apple_generate_dsym");
-    createLibraryTargetWriter("//objc/lib").setList("srcs", "a.m").write();
-    CommandAction compileAction = compileAction("//objc/lib", "a.o");
-    assertThat(compileAction.getArguments()).contains("-DDUMMY_GENERATE_DSYM_FILE");
-  }
-
-  @Test
-  public void testGenerateDsymFlagPropagatesToCcLibraryFeature() throws Exception {
-    useConfiguration("--apple_generate_dsym");
-    ScratchAttributeWriter.fromLabelString(this, "cc_library", "//cc/lib")
-        .setList("srcs", "a.cc")
-        .write();
-    CommandAction compileAction = compileAction("//cc/lib", "a.o");
-    assertThat(compileAction.getArguments()).contains("-DDUMMY_GENERATE_DSYM_FILE");
   }
 }

@@ -237,6 +237,20 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     throw new AssertionError();
   }
 
+  private static List<String> compilationModeCopts(CompilationMode mode) {
+    switch (mode) {
+      case DBG:
+        return ImmutableList.<String>builder()
+            .addAll(ObjcConfiguration.DBG_COPTS)
+            .build();
+      case OPT:
+        return ObjcConfiguration.OPT_COPTS;
+      case FASTBUILD:
+        return FASTBUILD_COPTS;
+    }
+    throw new AssertionError();
+  }
+
   @Override
   protected void useConfiguration(String... args) throws Exception {
     ImmutableList<String> extraArgs = MockObjcSupport.requiredObjcCrosstoolFlags();
@@ -300,8 +314,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       throws InterruptedException, OptionsParsingException, InvalidConfigurationException {
     ImmutableList.Builder<BuildConfiguration> splitConfigs = ImmutableList.builder();
 
-    for (BuildOptions splitOptions :
-        splitTransition.split(configuration.getOptions(), eventCollector).values()) {
+    for (BuildOptions splitOptions : splitTransition.split(configuration.getOptions()).values()) {
       splitConfigs.add(getSkyframeExecutor().getConfigurationForTesting(
           reporter, configuration.fragmentClasses(), splitOptions));
     }
@@ -958,8 +971,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   protected void checkClangCoptsForCompilationMode(RuleType ruleType, CompilationMode mode,
       CodeCoverageMode codeCoverageMode) throws Exception {
-    ImmutableList.Builder<String> allExpectedCoptsBuilder =
-        ImmutableList.<String>builder().addAll(CompilationSupport.DEFAULT_COMPILER_FLAGS);
+    ImmutableList.Builder<String> allExpectedCoptsBuilder = ImmutableList.<String>builder()
+        .addAll(CompilationSupport.DEFAULT_COMPILER_FLAGS)
+        .addAll(compilationModeCopts(mode));
 
     switch (codeCoverageMode) {
       case NONE:
@@ -993,8 +1007,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected void checkClangCoptsForDebugModeWithoutGlib(RuleType ruleType) throws Exception {
-    ImmutableList.Builder<String> allExpectedCoptsBuilder =
-        ImmutableList.<String>builder().addAll(CompilationSupport.DEFAULT_COMPILER_FLAGS);
+     ImmutableList.Builder<String> allExpectedCoptsBuilder = ImmutableList.<String>builder()
+        .addAll(CompilationSupport.DEFAULT_COMPILER_FLAGS)
+        .addAll(ObjcConfiguration.DBG_COPTS);
 
     useConfiguration(
         "--apple_platform_type=ios", "--compilation_mode=dbg", "--objc_debug_with_GLIBCXX=false");

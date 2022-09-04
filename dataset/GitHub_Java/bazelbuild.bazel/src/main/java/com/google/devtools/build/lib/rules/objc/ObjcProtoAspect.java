@@ -20,14 +20,14 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitionMode;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.StarlarkNativeAspect;
+import com.google.devtools.build.lib.packages.SkylarkNativeAspect;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
@@ -39,7 +39,7 @@ import java.util.List;
  * Aspect that gathers the proto dependencies of the attached rule target, and propagates the proto
  * values of its dependencies through the ObjcProtoProvider.
  */
-public class ObjcProtoAspect extends StarlarkNativeAspect implements ConfiguredAspectFactory {
+public class ObjcProtoAspect extends SkylarkNativeAspect implements ConfiguredAspectFactory {
   public static final String NAME = "ObjcProtoAspect";
 
   @Override
@@ -56,14 +56,14 @@ public class ObjcProtoAspect extends StarlarkNativeAspect implements ConfiguredA
       AspectParameters parameters,
       String toolsRepository)
       throws InterruptedException, ActionConflictException {
-    ConfiguredAspect.Builder aspectBuilder = new ConfiguredAspect.Builder(ruleContext);
+    ConfiguredAspect.Builder aspectBuilder = new ConfiguredAspect.Builder(
+        this, parameters, ruleContext);
 
     ObjcProtoProvider.Builder aspectObjcProtoProvider = new ObjcProtoProvider.Builder();
 
     if (ruleContext.attributes().has("deps", BuildType.LABEL_LIST)) {
       Iterable<ObjcProtoProvider> depObjcProtoProviders =
-          ruleContext.getPrerequisites(
-              "deps", TransitionMode.TARGET, ObjcProtoProvider.STARLARK_CONSTRUCTOR);
+          ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProtoProvider.SKYLARK_CONSTRUCTOR);
       aspectObjcProtoProvider.addTransitive(depObjcProtoProviders);
     }
 
@@ -76,7 +76,7 @@ public class ObjcProtoAspect extends StarlarkNativeAspect implements ConfiguredA
 
       // Gather up all the dependency protos depended by this target.
       List<ProtoInfo> protoInfos =
-          ruleContext.getPrerequisites("deps", TransitionMode.TARGET, ProtoInfo.PROVIDER);
+          ruleContext.getPrerequisites("deps", Mode.TARGET, ProtoInfo.PROVIDER);
 
       for (ProtoInfo protoInfo : protoInfos) {
         aspectObjcProtoProvider.addProtoFiles(protoInfo.getTransitiveProtoSources());
@@ -84,7 +84,7 @@ public class ObjcProtoAspect extends StarlarkNativeAspect implements ConfiguredA
 
       NestedSet<Artifact> portableProtoFilters =
           PrerequisiteArtifacts.nestedSet(
-              ruleContext, ProtoAttributes.PORTABLE_PROTO_FILTERS_ATTR, TransitionMode.HOST);
+              ruleContext, ProtoAttributes.PORTABLE_PROTO_FILTERS_ATTR, Mode.HOST);
 
       // If this target does not provide filters but specifies direct proto_library dependencies,
       // generate a filter file only for those proto files.
@@ -106,14 +106,12 @@ public class ObjcProtoAspect extends StarlarkNativeAspect implements ConfiguredA
       if (objcConfiguration.compileInfoMigration()) {
         CcInfo protobufCcInfo =
             ruleContext.getPrerequisite(
-                ObjcRuleClasses.PROTO_LIB_ATTR, TransitionMode.TARGET, CcInfo.PROVIDER);
+                ObjcRuleClasses.PROTO_LIB_ATTR, Mode.TARGET, CcInfo.PROVIDER);
         protobufCcCompilationContext = protobufCcInfo.getCcCompilationContext();
       } else {
         ObjcProvider protobufObjcProvider =
             ruleContext.getPrerequisite(
-                ObjcRuleClasses.PROTO_LIB_ATTR,
-                TransitionMode.TARGET,
-                ObjcProvider.STARLARK_CONSTRUCTOR);
+                ObjcRuleClasses.PROTO_LIB_ATTR, Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR);
         protobufCcCompilationContext = protobufObjcProvider.getCcCompilationContext();
       }
       aspectObjcProtoProvider.addProtobufHeaders(
