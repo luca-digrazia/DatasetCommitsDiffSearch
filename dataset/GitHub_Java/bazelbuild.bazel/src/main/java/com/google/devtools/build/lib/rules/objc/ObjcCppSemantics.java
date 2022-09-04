@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
-import static com.google.devtools.build.lib.rules.objc.CompilationSupport.IncludeProcessingType.HEADER_THINNING;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.DYNAMIC_FRAMEWORK_FILE;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.HEADER;
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.STATIC_FRAMEWORK_FILE;
@@ -32,7 +31,6 @@ import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery.DotdPruningMode;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
-import com.google.devtools.build.lib.rules.objc.CompilationSupport.IncludeProcessingType;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
@@ -41,10 +39,10 @@ import com.google.devtools.build.lib.util.FileTypeSet;
  */
 public class ObjcCppSemantics implements CppSemantics {
 
-  private final IncludeProcessingType includeProcessingType;
   private final IncludeProcessing includeProcessing;
   private final ObjcProvider objcProvider;
   private final ObjcConfiguration config;
+  private final boolean isHeaderThinningEnabled;
   private final IntermediateArtifacts intermediateArtifacts;
   private final BuildConfiguration buildConfiguration;
   private final StarlarkSemantics starlarkSemantics;
@@ -65,25 +63,26 @@ public class ObjcCppSemantics implements CppSemantics {
    *
    * @param objcProvider the provider that should be used in determining objc-specific inputs to
    *     actions
-   * @param includeProcessingType The type of include processing to be run.
    * @param includeProcessing the closure providing the strategy for processing of includes for
    *     actions
    * @param config the ObjcConfiguration for this build
+   * @param isHeaderThinningEnabled true if headers_list artifacts should be generated and added as
+   *     input to compiling actions
    * @param intermediateArtifacts used to create headers_list artifacts
    * @param buildConfiguration the build configuration for this build
    */
   public ObjcCppSemantics(
       ObjcProvider objcProvider,
-      IncludeProcessingType includeProcessingType,
       IncludeProcessing includeProcessing,
       ObjcConfiguration config,
+      boolean isHeaderThinningEnabled,
       IntermediateArtifacts intermediateArtifacts,
       BuildConfiguration buildConfiguration,
       StarlarkSemantics starlarkSemantics) {
     this.objcProvider = objcProvider;
-    this.includeProcessingType = includeProcessingType;
     this.includeProcessing = includeProcessing;
     this.config = config;
+    this.isHeaderThinningEnabled = isHeaderThinningEnabled;
     this.intermediateArtifacts = intermediateArtifacts;
     this.buildConfiguration = buildConfiguration;
     this.starlarkSemantics = starlarkSemantics;
@@ -97,7 +96,7 @@ public class ObjcCppSemantics implements CppSemantics {
     actionBuilder
         // Because Bazel does not support include scanning, we need the entire crosstool filegroup,
         // including header files, as opposed to just the "compile" filegroup.
-        .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getAllFilesMiddleman())
+        .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getAllFiles())
         .setShouldScanIncludes(false);
 
     if (!starlarkSemantics.incompatibleObjcFrameworkCleanup()) {
@@ -106,7 +105,7 @@ public class ObjcCppSemantics implements CppSemantics {
           .addTransitiveMandatoryInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE));
     }
 
-    if (includeProcessingType == HEADER_THINNING) {
+    if (isHeaderThinningEnabled) {
       Artifact sourceFile = actionBuilder.getSourceFile();
       if (!sourceFile.isTreeArtifact()
           && SOURCES_FOR_HEADER_THINNING.matches(sourceFile.getFilename())) {
