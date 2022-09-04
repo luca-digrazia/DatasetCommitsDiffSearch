@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,18 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
-
-import smile.math.MathEx;
 
 /**
  * The hyperbolic tangent kernel.
  * <p>
- * <pre>
  *     k(u, v) = tanh(&gamma; u<sup>T</sup>v - &lambda;)
- * </pre>
+ * <p>
  * where &gamma; is the scale of the used inner product and &lambda; is
  * the offset of the used inner product. If the offset is negative the
  * likelihood of obtaining a kernel matrix that is not positive definite
@@ -43,41 +40,63 @@ import smile.math.MathEx;
 public class HyperbolicTangent implements DotProductKernel {
     private static final long serialVersionUID = 2L;
 
-    private final double scale;
-    private final double offset;
+    /** The scale parameter. */
+    final double scale;
+    /** The offset parameter. */
+    final double offset;
+    /** The lower bound of scale and offset for hyperparameter tuning. */
+    final double[] lo;
+    /** The upper bound of scale and offset for hyperparameter tuning. */
+    final double[] hi;
 
     /**
      * Constructor.
+     * @param scale The scale parameter.
+     * @param offset The offset parameter.
+     * @param lo The lower bound of scale and offset for hyperparameter tuning.
+     * @param hi The upper bound of scale and offset for hyperparameter tuning.
      */
-    public HyperbolicTangent() {
-        this(1, 0);
-    }
-
-    /**
-     * Constructor.
-     */
-    public HyperbolicTangent(double scale, double offset) {
+    public HyperbolicTangent(double scale, double offset, double[] lo, double[] hi) {
         this.scale = scale;
         this.offset = offset;
+        this.lo = lo;
+        this.hi = hi;
     }
 
-    /** Returns the scale of kernel. */
+    /**
+     * Returns the scale of kernel.
+     * @return the scale of kernel.
+     */
     public double scale() {
         return scale;
     }
 
-    /** Returns the offset of kernel. */
+    /**
+     * Returns the offset of kernel.
+     * @return the offset of kernel.
+     */
     public double offset() {
         return offset;
     }
 
     @Override
     public String toString() {
-        return String.format("HyperbolicTangent(%.4f, %.4f)", scale, offset);
+        return String.format("TanhKernel(%.4f, %.4f)", scale, offset);
     }
 
     @Override
     public double k(double dot) {
         return Math.tanh(scale * dot + offset);
+    }
+
+    @Override
+    public double[] kg(double dot) {
+        double[] g = new double[3];
+        double cosh = Math.cosh(scale * dot + offset);
+        double sech = 1.0 / (cosh * cosh);
+        g[0] = Math.tanh(scale * dot + offset);
+        g[1] = dot * sech;
+        g[2] = sech;
+        return g;
     }
 }

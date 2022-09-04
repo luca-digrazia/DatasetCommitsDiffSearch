@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,17 +13,16 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
 /**
- * The Thin Plate Spline Kernel.
+ * The Thin Plate Spline kernel.
  * <p>
- * <pre>
  *     k(u, v) = (||u-v|| / &sigma;)<sup>2</sup> log (||u-v|| / &sigma;)
- * </pre>
- * where <code>&sigma; &gt; 0</code> is the scale parameter of the kernel.
+ * <p>
+ * where &sigma; {@code > 0} is the scale parameter of the kernel.
  *
  * @author Haifeng Li
  */
@@ -33,33 +32,54 @@ public class ThinPlateSpline implements IsotropicKernel {
     /**
      * The length scale of the kernel.
      */
-    private final double sigma;
+    final double sigma;
+    /** The lower bound of length scale for hyperparameter tuning. */
+    final double lo;
+    /** The upper bound of length scale for hyperparameter tuning. */
+    final double hi;
 
     /**
      * Constructor.
      * @param sigma The length scale of kernel.
+     * @param lo The lower bound of length scale for hyperparameter tuning.
+     * @param hi The upper bound of length scale for hyperparameter tuning.
      */
-    public ThinPlateSpline(double sigma) {
+    public ThinPlateSpline(double sigma, double lo, double hi) {
         if (sigma <= 0) {
             throw new IllegalArgumentException("sigma is not positive: " + sigma);
         }
 
         this.sigma = sigma;
+        this.lo = lo;
+        this.hi = hi;
     }
 
-    /** Returns the length scale of kernel. */
+    /**
+     * Returns the length scale of kernel.
+     * @return the length scale of kernel.
+     */
     public double scale() {
         return sigma;
     }
 
     @Override
     public String toString() {
-        return String.format("ThinPlateSpline(%.4f)", sigma);
+        return String.format("TpsKernel(%.4f)", sigma);
     }
 
     @Override
     public double k(double dist) {
         double d = dist / sigma;
         return d * d * Math.log(d);
+    }
+
+    @Override
+    public double[] kg(double dist) {
+        double[] g = new double[2];
+        double d = dist / sigma;
+        double k = d * d * Math.log(d);
+        g[0] = k;
+        g[1] = -d * d * (2.0 * Math.log(d) + 1.0) / sigma;
+        return g;
     }
 }

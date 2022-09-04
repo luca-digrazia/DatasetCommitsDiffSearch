@@ -25,6 +25,7 @@ import smile.math.MathEx;
 import smile.math.kernel.MercerKernel;
 import smile.math.matrix.Matrix;
 import smile.stat.distribution.MultivariateGaussianDistribution;
+import smile.util.Strings;
 
 /**
  * Gaussian Process for Regression. A Gaussian process is a stochastic process
@@ -157,7 +158,7 @@ public class GaussianProcessRegression<T> implements Regression<T> {
         @Override
         public String toString() {
             return String.format("GaussianProcessRegression.Prediction {\n  mean    = %s\n  std.dev = %s\n  cov     = %s\n}",
-                    Arrays.toString(mu), Arrays.toString(sd), cov.toString(true));
+                    Strings.toString(mu), Strings.toString(sd), cov.toString(true));
         }
     }
 
@@ -301,15 +302,15 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      * Fits a regular Gaussian process model.
      * @param x the training dataset.
      * @param y the response variable.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @return the model.
      */
-    public static GaussianProcessRegression<double[]> fit(double[][] x, double[] y, Properties params) {
-        MercerKernel<double[]> kernel = MercerKernel.of(params.getProperty("smile.gaussian_process.kernel", "linear"));
-        double noise = Double.parseDouble(params.getProperty("smile.gaussian_process.noise", "1E-10"));
-        boolean normalize = Boolean.parseBoolean(params.getProperty("smile.gaussian_process.normalize", "true"));
-        double tol = Double.parseDouble(params.getProperty("smile.gaussian_process.tolerance", "1E-5"));
-        int maxIter = Integer.parseInt(params.getProperty("smile.gaussian_process.max_iterations", "0"));
+    public static GaussianProcessRegression<double[]> fit(double[][] x, double[] y, Properties prop) {
+        MercerKernel<double[]> kernel = MercerKernel.of(prop.getProperty("smile.gaussian.process.kernel", "linear"));
+        double noise = Double.parseDouble(prop.getProperty("smile.gaussian.process.noise", "1E-10"));
+        boolean normalize = Boolean.parseBoolean(prop.getProperty("smile.gaussian.process.normalize", "true"));
+        double tol = Double.parseDouble(prop.getProperty("smile.gaussian.process.tolerance", "1E-5"));
+        int maxIter = Integer.parseInt(prop.getProperty("smile.gaussian.process.max.iterations", "0"));
         return fit(x, y, kernel, noise, normalize, tol, maxIter);
     }
 
@@ -318,15 +319,15 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      * @param x the training dataset.
      * @param y the response variable.
      * @param kernel the Mercer kernel.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @param <T> the data type of samples.
      * @return the model.
      */
-    public static <T> GaussianProcessRegression<T> fit(T[] x, double[] y, MercerKernel<T> kernel, Properties params) {
-        double noise = Double.parseDouble(params.getProperty("smile.gaussian_process.noise", "1E-10"));
-        boolean normalize = Boolean.parseBoolean(params.getProperty("smile.gaussian_process.normalize", "true"));
-        double tol = Double.parseDouble(params.getProperty("smile.gaussian_process.tolerance", "1E-5"));
-        int maxIter = Integer.parseInt(params.getProperty("smile.gaussian_process.max_iterations", "0"));
+    public static <T> GaussianProcessRegression<T> fit(T[] x, double[] y, MercerKernel<T> kernel, Properties prop) {
+        double noise = Double.parseDouble(prop.getProperty("smile.gaussian.process.noise", "1E-10"));
+        boolean normalize = Boolean.parseBoolean(prop.getProperty("smile.gaussian.process.normalize", "true"));
+        double tol = Double.parseDouble(prop.getProperty("smile.gaussian.process.tolerance", "1E-5"));
+        int maxIter = Integer.parseInt(prop.getProperty("smile.gaussian.process.max.iterations", "0"));
         return fit(x, y, kernel, noise, normalize, tol, maxIter);
     }
 
@@ -419,13 +420,13 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      *          be chosen randomly from the training set or as the centers of
      *          k-means clustering.
      * @param kernel the Mercer kernel.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @param <T> the data type of samples.
      * @return the model.
      */
-    public static <T> GaussianProcessRegression<T> fit(T[] x, double[] y, T[] t, MercerKernel<T> kernel, Properties params) {
-        double noise = Double.parseDouble(params.getProperty("smile.gaussian_process.noise", "1E-10"));
-        boolean normalize = Boolean.parseBoolean(params.getProperty("smile.gaussian_process.normalize", "true"));
+    public static <T> GaussianProcessRegression<T> fit(T[] x, double[] y, T[] t, MercerKernel<T> kernel, Properties prop) {
+        double noise = Double.parseDouble(prop.getProperty("smile.gaussian.process.noise", "1E-10"));
+        boolean normalize = Boolean.parseBoolean(prop.getProperty("smile.gaussian.process.normalize", "true"));
         return fit(x, y, t, kernel, noise, normalize);
     }
 
@@ -500,13 +501,13 @@ public class GaussianProcessRegression<T> implements Regression<T> {
      * @param y the response variable.
      * @param t the inducing input, which are pre-selected for Nystrom approximation.
      * @param kernel the Mercer kernel.
-     * @param params the hyper-parameters.
+     * @param prop the hyper-parameters.
      * @param <T> the data type of samples.
      * @return the model.
      */
-    public static <T> GaussianProcessRegression<T> nystrom(T[] x, double[] y, T[] t, MercerKernel<T> kernel, Properties params) {
-        double noise = Double.parseDouble(params.getProperty("smile.gaussian_process.noise", "1E-10"));
-        boolean normalize = Boolean.parseBoolean(params.getProperty("smile.gaussian_process.normalize", "true"));
+    public static <T> GaussianProcessRegression<T> nystrom(T[] x, double[] y, T[] t, MercerKernel<T> kernel, Properties prop) {
+        double noise = Double.parseDouble(prop.getProperty("smile.gaussian.process.noise", "1E-10"));
+        boolean normalize = Boolean.parseBoolean(prop.getProperty("smile.gaussian.process.normalize", "true"));
         return nystrom(x, y, t, kernel, noise, normalize);
     }
 
