@@ -145,7 +145,9 @@ public abstract class CcModule
 
   public abstract CppSemantics getSemantics();
 
-  public abstract CppSemantics getSemantics(Language language);
+  private CppSemantics getSemantics(Language language) {
+    return (language == Language.CPP) ? getSemantics() : ObjcCppSemantics.NO_MODULES;
+  }
 
   @Override
   public Provider getCcToolchainProvider() {
