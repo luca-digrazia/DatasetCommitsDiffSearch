@@ -1,10 +1,9 @@
 package io.quarkus.arc.processor;
 
-import java.util.Collection;
 import org.jboss.jandex.DotName;
 
 /**
- * Allows a build-time extension to register synthetic beans.
+ * Allows a build-time extension to register synthetic beans and observers.
  *
  * @author Martin Kouba
  */
@@ -45,10 +44,6 @@ public interface BeanRegistrar extends BuildExtension {
          * @return a new stream of beans
          */
         BeanStream beans();
-
-        default Collection<InjectionPointInfo> getInjectionPoints() {
-            return get(BuildExtension.Key.INJECTION_POINTS);
-        }
 
     }
 

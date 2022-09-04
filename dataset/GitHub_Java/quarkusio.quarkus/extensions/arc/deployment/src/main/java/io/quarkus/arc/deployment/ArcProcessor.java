@@ -3,7 +3,6 @@ package io.quarkus.arc.deployment;
 import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -36,6 +35,7 @@ import io.quarkus.arc.processor.BeanConfigurator;
 import io.quarkus.arc.processor.BeanDefiningAnnotation;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.arc.processor.BeanProcessor;
+import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.BytecodeTransformer;
 import io.quarkus.arc.processor.ContextConfigurator;
 import io.quarkus.arc.processor.ContextRegistrar;
@@ -113,8 +113,7 @@ public class ArcProcessor {
             List<UnremovableBeanBuildItem> removalExclusions,
             Optional<TestClassPredicateBuildItem> testClassPredicate,
             Capabilities capabilities,
-            BuildProducer<FeatureBuildItem> feature,
-            CustomScopeAnnotationsBuildItem scopes) {
+            BuildProducer<FeatureBuildItem> feature) {
 
         if (!arcConfig.isRemoveUnusedBeansFieldValid()) {
             throw new IllegalArgumentException("Invalid configuration value set for 'quarkus.arc.remove-unused-beans'." +
@@ -147,7 +146,7 @@ public class ArcProcessor {
                 ClassInfo beanClass = transformationContext.getTarget().asClass();
                 String beanClassName = beanClass.name().toString();
                 if (additionalBeansTypes.contains(beanClassName)) {
-                    if (scopes.isScopeDeclaredOn(beanClass)) {
+                    if (BuiltinScope.isDeclaredOn(beanClass)) {
                         // If it declares a built-in scope no action is needed
                         return;
                     }
@@ -382,15 +381,6 @@ public class ArcProcessor {
     @BuildStep
     AdditionalBeanBuildItem launchMode() {
         return new AdditionalBeanBuildItem(LaunchModeProducer.class);
-    }
-
-    @BuildStep
-    CustomScopeAnnotationsBuildItem exposeCustomScopeNames(List<ContextRegistrarBuildItem> contextBuildItems) {
-        Collection<DotName> namesList = new ArrayList<>();
-        for (ContextRegistrarBuildItem item : contextBuildItems) {
-            namesList.addAll(item.getAnnotationNames());
-        }
-        return new CustomScopeAnnotationsBuildItem(namesList);
     }
 
     private abstract static class AbstractCompositeApplicationClassesPredicate<T> implements Predicate<T> {

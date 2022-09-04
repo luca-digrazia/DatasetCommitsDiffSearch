@@ -16,7 +16,7 @@ public interface ObserverRegistrar extends BuildExtension {
     interface RegistrationContext extends BuildContext {
 
         /**
-         * Configure a new synthetic observer. The observer is not added to the deployment unless the
+         * Configura a new synthetic observer. The observer is not added to the deployment unless the
          * {@link ObserverConfigurator#done()} method is called.
          * 
          * @return a new synthetic observer configurator

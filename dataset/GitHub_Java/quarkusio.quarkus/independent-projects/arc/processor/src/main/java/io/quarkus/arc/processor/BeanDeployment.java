@@ -509,10 +509,9 @@ public class BeanDeployment {
                         }
                     }
                 }
-                boolean isAdditionalStereotypeBuildItem = additionalStereotypes.containsKey(stereotypeName);
                 final ScopeInfo scope = getValidScope(scopes, stereotypeClass);
                 stereotypes.put(stereotypeName, new StereotypeInfo(scope, bindings, isAlternative, alternativePriority,
-                        isNamed, false, isAdditionalStereotypeBuildItem, stereotypeClass));
+                        isNamed, stereotypeClass));
             }
         }
         //if an additional bean defining annotation has a default scope we register it as a stereotype
@@ -524,7 +523,7 @@ public class BeanDeployment {
                     if (stereotypeClassInfo != null) {
                         stereotypes.put(i.getAnnotation(), new StereotypeInfo(scope, Collections.emptyList(),
                                 false, null, false, true,
-                                false, stereotypeClassInfo));
+                                stereotypeClassInfo));
                     }
                 }
             }
@@ -569,12 +568,6 @@ public class BeanDeployment {
         Set<FieldInfo> producerFields = new HashSet<>();
         Map<MethodInfo, Set<ClassInfo>> syncObserverMethods = new HashMap<>();
         Map<MethodInfo, Set<ClassInfo>> asyncObserverMethods = new HashMap<>();
-        // Stereotypes excluding additional BeanDefiningAnnotations
-        List<DotName> realStereotypes = this.stereotypes.entrySet().stream()
-                .filter(e -> !e.getValue().isAdditionalBeanDefiningAnnotation()
-                        && !e.getValue().isAdditionalStereotypeBuildItem())
-                .map(Entry::getKey)
-                .collect(Collectors.toList());
 
         for (ClassInfo beanClass : index.getKnownClasses()) {
 
@@ -668,18 +661,6 @@ public class BeanDeployment {
                     if (annotationStore.getAnnotations(method).isEmpty()) {
                         continue;
                     }
-                    // Verify that non-producer methods are not annotated with stereotypes
-                    // only account for 'real' stereotypes that are not additional BeanDefiningAnnotations
-                    if (!annotationStore.hasAnnotation(method, DotNames.PRODUCES)) {
-                        for (AnnotationInstance i : annotationStore.getAnnotations(method)) {
-                            if (realStereotypes.contains(i.name())) {
-                                throw new DefinitionException(
-                                        "Method " + method + " of class " + beanClass
-                                                + " is not a producer method, but is annotated " +
-                                                "with a stereotype: " + i.name().toString());
-                            }
-                        }
-                    }
                     if (annotationStore.hasAnnotation(method, DotNames.OBSERVES)) {
                         syncObserverMethods.computeIfAbsent(method, ignored -> new HashSet<>())
                                 .add(beanClass);
@@ -721,16 +702,6 @@ public class BeanDeployment {
                         LOGGER.debugf("Producer field found but %s has no bean defining annotation - using @Dependent",
                                 beanClass);
                         beanClasses.add(beanClass);
-                    }
-                } else {
-                    // Verify that non-producer fields are not annotated with stereotypes
-                    for (AnnotationInstance i : annotationStore.getAnnotations(field)) {
-                        if (realStereotypes.contains(i.name())) {
-                            throw new DefinitionException(
-                                    "Field " + field + " of class " + beanClass
-                                            + " is not a producer field, but is annotated " +
-                                            "with a stereotype: " + i.name().toString());
-                        }
                     }
                 }
             }
@@ -1047,12 +1018,8 @@ public class BeanDeployment {
 
         @Override
         public ObserverConfigurator configure() {
-            ObserverConfigurator configurator = new ObserverConfigurator(beanDeployment::addSyntheticObserver);
-            if (extension != null) {
-                // Extension may be null if called directly from the ObserverRegistrationPhaseBuildItem 
-                configurator.beanClass(DotName.createSimple(extension.getClass().getName()));
-            }
-            return configurator;
+            return new ObserverConfigurator(DotName.createSimple(extension.getClass().getName()),
+                    beanDeployment::addSyntheticObserver);
         }
 
         @Override
