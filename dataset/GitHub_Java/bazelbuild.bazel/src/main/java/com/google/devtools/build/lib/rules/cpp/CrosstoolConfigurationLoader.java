@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -46,7 +47,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.concurrent.ExecutionException;
 import javax.annotation.Nullable;
 
@@ -70,6 +70,9 @@ public class CrosstoolConfigurationLoader {
   /** A class that holds the results of reading a CROSSTOOL file. */
   @AutoCodec
   public static class CrosstoolFile {
+    public static final ObjectCodec<CrosstoolFile> CODEC =
+        new CrosstoolConfigurationLoader_CrosstoolFile_AutoCodec();
+
     private final String location;
     private final CrosstoolConfig.CrosstoolRelease proto;
     private final String md5;
@@ -361,12 +364,9 @@ public class CrosstoolConfigurationLoader {
     }
 
     if (selectedIdentifier == null) {
-      HashSet<String> seenCpus = new HashSet<>();
       StringBuilder cpuBuilder = new StringBuilder();
       for (CrosstoolConfig.DefaultCpuToolchain selector : release.getDefaultToolchainList()) {
-        if (seenCpus.add(selector.getCpu())) {
-          cpuBuilder.append("  ").append(selector.getCpu()).append(",\n");
-        }
+        cpuBuilder.append("  ").append(selector.getCpu()).append(",\n");
       }
       throw new InvalidConfigurationException(
           "No default_toolchain found for cpu '"
