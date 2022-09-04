@@ -30,74 +30,34 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.client.InvocationCallback;
-import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
-import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.container.PreMatching;
-import javax.ws.rs.container.ResourceContext;
-import javax.ws.rs.container.ResourceInfo;
 import javax.ws.rs.container.Suspended;
 import javax.ws.rs.core.Application;
-import javax.ws.rs.core.Configuration;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.Feature;
-import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.PathSegment;
-import javax.ws.rs.core.Request;
-import javax.ws.rs.core.SecurityContext;
-import javax.ws.rs.core.UriInfo;
 import javax.ws.rs.ext.ContextResolver;
 import javax.ws.rs.ext.ExceptionMapper;
 import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.MessageBodyWriter;
 import javax.ws.rs.ext.ParamConverterProvider;
 import javax.ws.rs.ext.Provider;
-import javax.ws.rs.ext.Providers;
 import javax.ws.rs.ext.ReaderInterceptor;
 import javax.ws.rs.ext.WriterInterceptor;
-import javax.ws.rs.sse.Sse;
-import javax.ws.rs.sse.SseEventSink;
 
 import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.jandex.DotName;
 
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.rest.Blocking;
-import io.quarkus.rest.RequireCDIRequestScope;
-import io.quarkus.rest.RestCookie;
-import io.quarkus.rest.RestForm;
-import io.quarkus.rest.RestHeader;
-import io.quarkus.rest.RestMatrix;
-import io.quarkus.rest.RestPath;
-import io.quarkus.rest.RestQuery;
-import io.quarkus.rest.runtime.spi.QuarkusRestContainerRequestContext;
-import io.quarkus.rest.runtime.spi.QuarkusRestContainerResponseContext;
-import io.quarkus.rest.runtime.spi.QuarkusRestContext;
-import io.quarkus.rest.runtime.spi.SimplifiedResourceInfo;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
-import io.vertx.core.http.HttpServerRequest;
-import io.vertx.core.http.HttpServerResponse;
 
 public final class QuarkusRestDotNames {
-
-    // injectable @Context types
-    public static final DotName URI_INFO = DotName.createSimple(UriInfo.class.getName());
-    public static final DotName HTTP_HEADERS = DotName.createSimple(HttpHeaders.class.getName());
-    public static final DotName REQUEST = DotName.createSimple(Request.class.getName());
-    public static final DotName SECURITY_CONTEXT = DotName.createSimple(SecurityContext.class.getName());
-    public static final DotName PROVIDERS = DotName.createSimple(Providers.class.getName());
-    public static final DotName RESOURCE_CONTEXT = DotName.createSimple(ResourceContext.class.getName());
-    public static final DotName CONFIGURATION = DotName.createSimple(Configuration.class.getName());
-    public static final DotName SSE = DotName.createSimple(Sse.class.getName());
-    public static final DotName SSE_EVENT_SINK = DotName.createSimple(SseEventSink.class.getName());
-    public static final DotName RESOURCE_INFO = DotName.createSimple(ResourceInfo.class.getName());
-    public static final DotName HTTP_SERVER_REQUEST = DotName.createSimple(HttpServerRequest.class.getName());
-    public static final DotName HTTP_SERVER_RESPONSE = DotName.createSimple(HttpServerResponse.class.getName());
-    public static final DotName QUARKUS_REST_CONTEXT = DotName.createSimple(QuarkusRestContext.class.getName());
 
     public static final DotName CONSUMES = DotName.createSimple(Consumes.class.getName());
     public static final DotName PRODUCES = DotName.createSimple(Produces.class.getName());
@@ -109,12 +69,6 @@ public final class QuarkusRestDotNames {
     public static final DotName FORM_PARAM = DotName.createSimple(FormParam.class.getName());
     public static final DotName MATRIX_PARAM = DotName.createSimple(MatrixParam.class.getName());
     public static final DotName COOKIE_PARAM = DotName.createSimple(CookieParam.class.getName());
-    public static final DotName REST_PATH_PARAM = DotName.createSimple(RestPath.class.getName());
-    public static final DotName REST_QUERY_PARAM = DotName.createSimple(RestQuery.class.getName());
-    public static final DotName REST_HEADER_PARAM = DotName.createSimple(RestHeader.class.getName());
-    public static final DotName REST_FORM_PARAM = DotName.createSimple(RestForm.class.getName());
-    public static final DotName REST_MATRIX_PARAM = DotName.createSimple(RestMatrix.class.getName());
-    public static final DotName REST_COOKIE_PARAM = DotName.createSimple(RestCookie.class.getName());
     public static final DotName GET = DotName.createSimple(javax.ws.rs.GET.class.getName());
     public static final DotName HEAD = DotName.createSimple(javax.ws.rs.HEAD.class.getName());
     public static final DotName DELETE = DotName.createSimple(javax.ws.rs.DELETE.class.getName());
@@ -151,7 +105,6 @@ public final class QuarkusRestDotNames {
     public static final DotName INVOCATION_CALLBACK = DotName.createSimple(InvocationCallback.class.getName());
 
     public static final DotName BLOCKING = DotName.createSimple(Blocking.class.getName());
-    public static final DotName REQUIRE_CDI_REQUEST_SCOPE = DotName.createSimple(RequireCDIRequestScope.class.getName());
     public static final DotName SUSPENDED = DotName.createSimple(Suspended.class.getName());
     public static final DotName PRE_MATCHING = DotName.createSimple(PreMatching.class.getName());
 
@@ -192,19 +145,6 @@ public final class QuarkusRestDotNames {
     public static final DotName JSONP_JSON_NUMBER = DotName.createSimple(javax.json.JsonNumber.class.getName());
     public static final DotName JSONP_JSON_VALUE = DotName.createSimple(javax.json.JsonValue.class.getName());
     public static final DotName JSONP_JSON_STRING = DotName.createSimple(javax.json.JsonString.class.getName());
-
-    public static final DotName CUSTOM_CONTAINER_REQUEST_FILTER = DotName
-            .createSimple(io.quarkus.rest.ContainerRequestFilter.class.getName());
-    public static final DotName CUSTOM_CONTAINER_RESPONSE_FILTER = DotName
-            .createSimple(io.quarkus.rest.ContainerResponseFilter.class.getName());
-
-    public static final DotName CONTAINER_REQUEST_CONTEXT = DotName.createSimple(ContainerRequestContext.class.getName());
-    public static final DotName CONTAINER_RESPONSE_CONTEXT = DotName.createSimple(ContainerResponseContext.class.getName());
-    public static final DotName QUARKUS_REST_CONTAINER_REQUEST_CONTEXT = DotName
-            .createSimple(QuarkusRestContainerRequestContext.class.getName());
-    public static final DotName QUARKUS_REST_CONTAINER_RESPONSE_CONTEXT = DotName
-            .createSimple(QuarkusRestContainerResponseContext.class.getName());
-    public static final DotName SIMPLIFIED_RESOURCE_INFO = DotName.createSimple(SimplifiedResourceInfo.class.getName());
 
     public static final Set<DotName> RESOURCE_CTOR_PARAMS_THAT_NEED_HANDLING = new HashSet<>(
             Arrays.asList(QUERY_PARAM, HEADER_PARAM, PATH_PARAM, MATRIX_PARAM, COOKIE_PARAM));

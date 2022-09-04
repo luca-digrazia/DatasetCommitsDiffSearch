@@ -749,7 +749,7 @@ public class QuarkusRestRecorder {
 
         Type returnType = TypeSignatureParser.parse(method.getReturnType());
         Type nonAsyncReturnType = getNonAsyncReturnType(returnType);
-        Class<?> rawNonAsyncReturnType = getRawType(nonAsyncReturnType);
+        Class<Object> rawNonAsyncReturnType = (Class<Object>) getRawType(nonAsyncReturnType);
 
         // FIXME: those two should not be in sequence unless we intend to support CompletionStage<Uni<String>>
         handlers.add(new CompletionStageResponseHandler());
@@ -773,8 +773,7 @@ public class QuarkusRestRecorder {
                     //its a wildcard type, makes it hard to determine statically
                     if (mediaType.isWildcardType() || mediaType.isWildcardSubtype()) {
                         handlers.add(new VariableProducesHandler(serverMediaType, serialisers));
-                    } else if (rawNonAsyncReturnType != Void.class
-                            && rawNonAsyncReturnType != void.class) {
+                    } else {
                         List<ResourceWriter> buildTimeWriters = serialisers.findBuildTimeWriters(rawNonAsyncReturnType,
                                 RuntimeType.SERVER, method.getProduces());
                         if (buildTimeWriters == null) {
