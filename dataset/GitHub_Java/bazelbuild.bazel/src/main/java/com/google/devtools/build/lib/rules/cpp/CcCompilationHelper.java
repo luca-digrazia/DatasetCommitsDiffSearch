@@ -52,6 +52,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CompilationInfoApi;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -203,19 +204,36 @@ public final class CcCompilationHelper {
   public static final class CompilationInfo implements CompilationInfoApi {
     private final CcCompilationContext ccCompilationContext;
     private final CppDebugFileProvider cppDebugFileProvider;
+    private final Map<String, NestedSet<Artifact>> outputGroups;
     private final CcCompilationOutputs compilationOutputs;
 
     private CompilationInfo(
         CcCompilationContext ccCompilationContext,
         CppDebugFileProvider cppDebugFileProvider,
+        Map<String, NestedSet<Artifact>> outputGroups,
         CcCompilationOutputs compilationOutputs) {
       this.ccCompilationContext = ccCompilationContext;
       this.cppDebugFileProvider = cppDebugFileProvider;
+      this.outputGroups = outputGroups;
       this.compilationOutputs = compilationOutputs;
+    }
+
+    public Map<String, NestedSet<Artifact>> getOutputGroups() {
+      return outputGroups;
     }
 
     public CppDebugFileProvider getCppDebugFileProvider() {
       return cppDebugFileProvider;
+    }
+
+    @Override
+    public Map<String, SkylarkNestedSet> getSkylarkOutputGroups() {
+      Map<String, SkylarkNestedSet> skylarkOutputGroups = new TreeMap<>();
+      for (Map.Entry<String, NestedSet<Artifact>> entry : outputGroups.entrySet()) {
+        skylarkOutputGroups.put(
+            entry.getKey(), SkylarkNestedSet.of(Artifact.class, entry.getValue()));
+      }
+      return skylarkOutputGroups;
     }
 
     @Override
@@ -257,6 +275,7 @@ public final class CcCompilationHelper {
   private boolean fake;
 
   private boolean checkDepsGenerateCpp = true;
+  private boolean emitCompileProviders;
   private final SourceCategory sourceCategory;
   private final List<VariablesExtension> variablesExtensions = new ArrayList<>();
   @Nullable private CppModuleMap cppModuleMap;
@@ -671,6 +690,16 @@ public final class CcCompilationHelper {
   }
 
   /**
+   * Enables the output of the {@code files_to_compile} and {@code compilation_prerequisites} output
+   * groups.
+   */
+  // TODO(bazel-team): We probably need to adjust this for the multi-language rules.
+  public CcCompilationHelper enableCompileProviders() {
+    this.emitCompileProviders = true;
+    return this;
+  }
+
+  /**
    * Causes actions generated from this CcCompilationHelper not to use build semantics (includes,
    * headers, srcs) from dependencies.
    */
@@ -758,34 +787,20 @@ public final class CcCompilationHelper {
     CppDebugFileProvider cppDebugFileProvider =
         new CppDebugFileProvider(dwoArtifacts.getDwoArtifacts(), dwoArtifacts.getPicDwoArtifacts());
 
-    return new CompilationInfo(ccCompilationContext, cppDebugFileProvider, ccOutputs);
-  }
-
-  public static Map<String, NestedSet<Artifact>> buildOutputGroups(
-      CcCompilationOutputs ccCompilationOutputs) {
     Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
-    outputGroups.put(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps());
-    return outputGroups;
-  }
+    outputGroups.put(OutputGroupInfo.TEMP_FILES, ccOutputs.getTemps());
+    if (emitCompileProviders) {
+      boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
+      boolean usePic = ccToolchain.usePicForDynamicLibraries(featureConfiguration);
+      outputGroups.put(
+          OutputGroupInfo.FILES_TO_COMPILE,
+          ccOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
+      outputGroups.put(
+          OutputGroupInfo.COMPILATION_PREREQUISITES,
+          CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContext));
+    }
 
-  public static Map<String, NestedSet<Artifact>> buildOutputGroupsForEmittingCompileProviders(
-      CcCompilationOutputs ccCompilationOutputs,
-      CcCompilationContext ccCompilationContext,
-      CppConfiguration cppConfiguration,
-      CcToolchainProvider ccToolchain,
-      FeatureConfiguration featureConfiguration,
-      RuleContext ruleContext) {
-    Map<String, NestedSet<Artifact>> outputGroups = new TreeMap<>();
-    outputGroups.put(OutputGroupInfo.TEMP_FILES, ccCompilationOutputs.getTemps());
-    boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
-    boolean usePic = ccToolchain.usePicForDynamicLibraries(featureConfiguration);
-    outputGroups.put(
-        OutputGroupInfo.FILES_TO_COMPILE,
-        ccCompilationOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
-    outputGroups.put(
-        OutputGroupInfo.COMPILATION_PREREQUISITES,
-        CcCommon.collectCompilationPrerequisites(ruleContext, ccCompilationContext));
-    return outputGroups;
+    return new CompilationInfo(ccCompilationContext, cppDebugFileProvider, outputGroups, ccOutputs);
   }
 
   @Immutable

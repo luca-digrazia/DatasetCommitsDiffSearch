@@ -405,13 +405,8 @@ public class CcToolchainProviderHelper {
     SkyKey ccSupportKey = null;
     CToolchain toolchain = null;
 
-    if (cppConfiguration.disableCrosstool() && attributes.getCcToolchainConfigInfo() == null) {
-      ruleContext.ruleError(
-          "cc_toolchain.toolchain_config attribute must be specified. See "
-              + "https://github.com/bazelbuild/bazel/issues/7320 for details.");
-    }
-
-    if (attributes.getCcToolchainConfigInfo() != null) {
+    if (cppConfiguration.enableCcToolchainConfigInfoFromSkylark()
+        && attributes.getCcToolchainConfigInfo() != null) {
       if (fdoZip != null) {
         ccSupportKey = CcSkyframeSupportValue.key(fdoZip, /* packageWithCrosstoolInIt= */ null);
       }
@@ -725,17 +720,20 @@ public class CcToolchainProviderHelper {
       CrosstoolRelease crosstoolFromCcToolchainSuiteProtoAttribute)
       throws RuleErrorException {
 
-    CcToolchainConfigInfo configInfo = attributes.getCcToolchainConfigInfo();
+    if (cppConfiguration.enableCcToolchainConfigInfoFromSkylark()) {
+      // Attempt to obtain CppToolchainInfo from the 'toolchain_config' attribute of cc_toolchain.
+      CcToolchainConfigInfo configInfo = attributes.getCcToolchainConfigInfo();
 
-    if (configInfo != null) {
-      try {
-        return CppToolchainInfo.create(
-            ruleContext.getLabel(),
-            configInfo,
-            cppConfiguration.disableLegacyCrosstoolFields(),
-            cppConfiguration.disableGenruleCcToolchainDependency());
-      } catch (EvalException e) {
-        throw ruleContext.throwWithRuleError(e.getMessage());
+      if (configInfo != null) {
+        try {
+          return CppToolchainInfo.create(
+              ruleContext.getLabel(),
+              configInfo,
+              cppConfiguration.disableLegacyCrosstoolFields(),
+              cppConfiguration.disableGenruleCcToolchainDependency());
+        } catch (EvalException e) {
+          throw ruleContext.throwWithRuleError(e.getMessage());
+        }
       }
     }
 

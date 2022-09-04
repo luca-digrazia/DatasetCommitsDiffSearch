@@ -82,8 +82,6 @@ public enum CompileBuildVariables {
   GCOV_GCNO_FILE("gcov_gcno_file"),
   /** Variable for the LTO indexing bitcode file. */
   LTO_INDEXING_BITCODE_FILE("lto_indexing_bitcode_file"),
-  /** Variable marking fission is used. */
-  IS_USING_FISSION("is_using_fission"),
   /** Variable for the per object debug info file. */
   PER_OBJECT_DEBUG_INFO_FILE("per_object_debug_info_file"),
   /** Variable present when the output is compiled as position independent. */
@@ -114,7 +112,6 @@ public enum CompileBuildVariables {
       String sourceFile,
       String outputFile,
       String gcnoFile,
-      boolean isUsingFission,
       String dwoFile,
       String ltoIndexingFile,
       ImmutableList<String> includes,
@@ -138,7 +135,6 @@ public enum CompileBuildVariables {
           sourceFile,
           outputFile,
           gcnoFile,
-          isUsingFission,
           dwoFile,
           ltoIndexingFile,
           includes,
@@ -173,7 +169,6 @@ public enum CompileBuildVariables {
       // updated.
       String outputFile,
       String gcnoFile,
-      boolean isUsingFission,
       String dwoFile,
       String ltoIndexingFile,
       ImmutableList<String> includes,
@@ -297,9 +292,6 @@ public enum CompileBuildVariables {
       buildVariables.addStringVariable(GCOV_GCNO_FILE.getVariableName(), gcnoFile);
     }
 
-    if (isUsingFission) {
-      buildVariables.addStringVariable(IS_USING_FISSION.getVariableName(), "");
-    }
     if (dwoFile != null) {
       buildVariables.addStringVariable(PER_OBJECT_DEBUG_INFO_FILE.getVariableName(), dwoFile);
     }

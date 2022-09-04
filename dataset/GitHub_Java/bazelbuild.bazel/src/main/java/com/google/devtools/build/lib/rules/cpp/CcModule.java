@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static com.google.common.base.StandardSystemProperty.LINE_SEPARATOR;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Strings;
@@ -360,63 +358,16 @@ public class CcModule
     Artifact interfaceLibrary = nullIfNone(interfaceLibraryObject, Artifact.class);
 
     Artifact notNullArtifactForIdentifier = null;
-    StringBuilder extensionErrorsBuilder = new StringBuilder();
-    String extensionErrorMessage = "does not have any of the allowed extensions";
     if (staticLibrary != null) {
-      String filename = staticLibrary.getFilename();
-      if (!Link.ARCHIVE_FILETYPES.matches(filename)
-          && (!alwayslink || !Link.LINK_LIBRARY_FILETYPES.matches(filename))) {
-        String extensions = Link.ARCHIVE_FILETYPES.toString();
-        if (alwayslink) {
-          extensions += ", " + Link.LINK_LIBRARY_FILETYPES;
-        }
-        extensionErrorsBuilder.append(
-            String.format("'%s' %s %s", filename, extensionErrorMessage, extensions));
-        extensionErrorsBuilder.append(LINE_SEPARATOR.value());
-      }
       notNullArtifactForIdentifier = staticLibrary;
-    }
-    if (picStaticLibrary != null) {
-      String filename = picStaticLibrary.getFilename();
-      if (!Link.ARCHIVE_FILETYPES.matches(filename)
-          && (!alwayslink || !Link.LINK_LIBRARY_FILETYPES.matches(filename))) {
-        String extensions = Link.ARCHIVE_FILETYPES.toString();
-        if (alwayslink) {
-          extensions += ", " + Link.LINK_LIBRARY_FILETYPES;
-        }
-        extensionErrorsBuilder.append(
-            String.format("'%s' %s %s", filename, extensionErrorMessage, extensions));
-        extensionErrorsBuilder.append(LINE_SEPARATOR.value());
-      }
+    } else if (picStaticLibrary != null) {
       notNullArtifactForIdentifier = picStaticLibrary;
-    }
-    if (dynamicLibrary != null) {
-      String filename = dynamicLibrary.getFilename();
-      if (!Link.ONLY_SHARED_LIBRARY_FILETYPES.matches(filename)) {
-        extensionErrorsBuilder.append(
-            String.format(
-                "'%s' %s %s", filename, extensionErrorMessage, Link.ONLY_SHARED_LIBRARY_FILETYPES));
-        extensionErrorsBuilder.append(LINE_SEPARATOR.value());
-      }
+    } else if (dynamicLibrary != null) {
       notNullArtifactForIdentifier = dynamicLibrary;
-    }
-    if (interfaceLibrary != null) {
-      String filename = interfaceLibrary.getFilename();
-      if (!Link.ONLY_INTERFACE_LIBRARY_FILETYPES.matches(filename)) {
-        extensionErrorsBuilder.append(
-            String.format(
-                "'%s' %s %s",
-                filename, extensionErrorMessage, Link.ONLY_INTERFACE_LIBRARY_FILETYPES));
-        extensionErrorsBuilder.append(LINE_SEPARATOR.value());
-      }
+    } else if (interfaceLibrary != null) {
       notNullArtifactForIdentifier = interfaceLibrary;
-    }
-    if (notNullArtifactForIdentifier == null) {
+    } else {
       throw new EvalException(location, "Must pass at least one artifact");
-    }
-    String extensionErrors = extensionErrorsBuilder.toString();
-    if (!extensionErrors.isEmpty()) {
-      throw new EvalException(location, extensionErrors);
     }
 
     Artifact resolvedSymlinkDynamicLibrary = null;

@@ -197,10 +197,11 @@ public final class JavaCompilationHelper {
    *     --experimental_java_coverage is true).
    * @param nativeHeaderOutput an archive of generated native header files.
    */
-  public JavaCompileAction createCompileAction(
+  public void createCompileAction(
       Artifact outputJar,
       Artifact manifestProtoOutput,
       @Nullable Artifact gensrcOutputJar,
+      @Nullable Artifact outputDepsProto,
       @Nullable Artifact instrumentationMetadataJar,
       @Nullable Artifact nativeHeaderOutput) {
 
@@ -241,7 +242,7 @@ public final class JavaCompilationHelper {
     builder.setNativeHeaderOutput(nativeHeaderOutput);
     builder.setManifestProtoOutput(manifestProtoOutput);
     builder.setGensrcOutputJar(gensrcOutputJar);
-    builder.setOutputDepsProto(getOutputDepsProtoPath(classJar));
+    builder.setOutputDepsProto(outputDepsProto);
     builder.setAdditionalOutputs(attributes.getAdditionalOutputs());
     builder.setMetadata(instrumentationMetadataJar);
     builder.setInstrumentationJars(jacocoInstrumentation);
@@ -263,7 +264,7 @@ public final class JavaCompilationHelper {
     builder.setTargetLabel(
         attributes.getTargetLabel() == null ? ruleContext.getLabel() : attributes.getTargetLabel());
     builder.setInjectingRuleKind(attributes.getInjectingRuleKind());
-    return builder.build(ruleContext, semantics);
+    builder.build(ruleContext, semantics);
   }
 
   private ImmutableMap<String, String> getExecutionInfo() {
@@ -326,19 +327,22 @@ public final class JavaCompilationHelper {
    * @param outputJar the class jar Artifact to create with the Action
    * @param manifestProtoOutput the output artifact for the manifest proto emitted from JavaBuilder
    * @param gensrcJar the generated sources jar Artifact to create with the Action
+   * @param outputDepsProto the compiler-generated jdeps file to create with the Action
    * @param javaArtifactsBuilder the build to store the instrumentation metadata in
    * @param nativeHeaderOutput an archive of generated native header files.
    */
-  public JavaCompileAction createCompileActionWithInstrumentation(
+  public void createCompileActionWithInstrumentation(
       Artifact outputJar,
       Artifact manifestProtoOutput,
       @Nullable Artifact gensrcJar,
+      @Nullable Artifact outputDepsProto,
       JavaCompilationArtifacts.Builder javaArtifactsBuilder,
       @Nullable Artifact nativeHeaderOutput) {
-    return createCompileAction(
+    createCompileAction(
         outputJar,
         manifestProtoOutput,
         gensrcJar,
+        outputDepsProto,
         createInstrumentationMetadata(outputJar, javaArtifactsBuilder),
         nativeHeaderOutput);
   }
@@ -564,17 +568,26 @@ public final class JavaCompilationHelper {
   }
 
   /**
-   * Creates the jdeps file path if needed. Returns null if the target can't emit dependency
+   * Creates the jdeps file artifact if needed. Returns null if the target can't emit dependency
    * information (i.e there is no compilation step, the target acts as an alias).
    *
    * @param outputJar output jar artifact used to derive the name
    * @return the jdeps file artifact or null if the target can't generate such a file
    */
-  public PathFragment getOutputDepsProtoPath(Artifact outputJar) {
+  public Artifact createOutputDepsProtoArtifact(
+      Artifact outputJar, JavaCompilationArtifacts.Builder builder) {
     if (!generatesOutputDeps()) {
       return null;
     }
-    return FileSystemUtils.replaceExtension(outputJar.getExecPath(), ".jdeps");
+
+    Artifact outputDepsProtoArtifact =
+        getRuleContext()
+            .getDerivedArtifact(
+                FileSystemUtils.replaceExtension(outputJar.getRootRelativePath(), ".jdeps"),
+                outputJar.getRoot());
+
+    builder.setCompileTimeDependencies(outputDepsProtoArtifact);
+    return outputDepsProtoArtifact;
   }
 
   /**

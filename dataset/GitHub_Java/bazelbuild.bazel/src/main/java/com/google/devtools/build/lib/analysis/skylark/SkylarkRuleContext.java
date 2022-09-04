@@ -63,7 +63,6 @@ import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
-import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -85,7 +84,7 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
@@ -135,7 +134,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
   private FragmentCollection fragments;
   private FragmentCollection hostFragments;
   private AspectDescriptor aspectDescriptor;
-  private final StarlarkSemantics starlarkSemantics;
+  private final SkylarkSemantics skylarkSemantics;
 
   private SkylarkDict<String, String> makeVariables;
   private SkylarkAttributesCollection attributesCollection;
@@ -148,23 +147,21 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
 
   /**
    * Creates a new SkylarkRuleContext using ruleContext.
-   *
-   * @param aspectDescriptor aspect for which the context is created, or <code>null</code> if it is
-   *     for a rule.
+   * @param aspectDescriptor aspect for which the context is created, or <code>null</code>
+   *        if it is for a rule.
    * @throws InterruptedException
    */
-  public SkylarkRuleContext(
-      RuleContext ruleContext,
+  public SkylarkRuleContext(RuleContext ruleContext,
       @Nullable AspectDescriptor aspectDescriptor,
-      StarlarkSemantics starlarkSemantics)
-      throws EvalException, InterruptedException, RuleErrorException {
-    this.actionFactory = new SkylarkActionFactory(this, starlarkSemantics, ruleContext);
+      SkylarkSemantics skylarkSemantics)
+      throws EvalException, InterruptedException {
+    this.actionFactory = new SkylarkActionFactory(this, skylarkSemantics, ruleContext);
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.ruleLabelCanonicalName = ruleContext.getLabel().getCanonicalForm();
     this.fragments = new FragmentCollection(ruleContext, NoTransition.INSTANCE);
     this.hostFragments = new FragmentCollection(ruleContext, HostTransition.INSTANCE);
     this.aspectDescriptor = aspectDescriptor;
-    this.starlarkSemantics = starlarkSemantics;
+    this.skylarkSemantics = skylarkSemantics;
 
     if (aspectDescriptor == null) {
       this.isForAspect = false;
@@ -262,11 +259,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
       this.ruleAttributesCollection = ruleBuilder.build();
     }
 
-    try {
-      makeVariables = ruleContext.getConfigurationMakeVariableContext().collectMakeVariables();
-    } catch (ExpansionException e) {
-      throw ruleContext.throwWithRuleError(e.getMessage());
-    }
+    makeVariables = ruleContext.getConfigurationMakeVariableContext().collectMakeVariables();
   }
 
   /**
@@ -737,7 +730,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
       Object var2,
       Object fileSuffix,
       Location loc) throws EvalException {
-    checkDeprecated("ctx.actions.declare_file", "ctx.new_file", null, starlarkSemantics);
+    checkDeprecated("ctx.actions.declare_file", "ctx.new_file", null, skylarkSemantics);
     checkMutable("new_file");
 
     // Determine which of new_file's four signatures is being used. Yes, this is terrible.
@@ -792,7 +785,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
   @Override
   public Artifact newDirectory(String name, Object siblingArtifactUnchecked) throws EvalException {
     checkDeprecated(
-        "ctx.actions.declare_directory", "ctx.experimental_new_directory", null, starlarkSemantics);
+        "ctx.actions.declare_directory", "ctx.experimental_new_directory", null, skylarkSemantics);
     checkMutable("experimental_new_directory");
     return actionFactory.declareDirectory(name, siblingArtifactUnchecked);
   }
@@ -1094,8 +1087,8 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
         helper.getToolsRunfilesSuppliers());
   }
 
-  public StarlarkSemantics getSkylarkSemantics() {
-    return starlarkSemantics;
+  public SkylarkSemantics getSkylarkSemantics() {
+    return skylarkSemantics;
   }
 
   /**
@@ -1138,8 +1131,7 @@ public final class SkylarkRuleContext implements SkylarkRuleContextApi {
   private static final String SCRIPT_SUFFIX = ".script.sh";
 
   private static void checkDeprecated(
-      String newApi, String oldApi, Location loc, StarlarkSemantics semantics)
-      throws EvalException {
+      String newApi, String oldApi, Location loc, SkylarkSemantics semantics) throws EvalException {
     if (semantics.incompatibleNewActionsApi()) {
       throw new EvalException(
           loc,

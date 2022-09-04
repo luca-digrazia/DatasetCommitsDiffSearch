@@ -89,22 +89,21 @@ public class CppCompileActionBuilder {
    * rule.
    */
   public CppCompileActionBuilder(RuleContext ruleContext, CcToolchainProvider ccToolchain) {
-    this(
-        ruleContext,
-        ruleContext.attributes().has("$grep_includes")
-            ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
-            : null,
-        ccToolchain,
-        ruleContext.getConfiguration());
+    this(ruleContext, ccToolchain, ruleContext.getConfiguration());
   }
 
   /** Creates a builder from a rule and configuration. */
   public CppCompileActionBuilder(
-      ActionConstructionContext actionConstructionContext,
-      Artifact grepIncludes,
+      RuleContext ruleContext,
       CcToolchainProvider ccToolchain,
       BuildConfiguration configuration) {
-    this(actionConstructionContext.getActionOwner(), configuration, ccToolchain, grepIncludes);
+    this(
+        ruleContext.getActionOwner(),
+        configuration,
+        ccToolchain,
+        ruleContext.attributes().has("$grep_includes")
+            ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
+            : null);
   }
 
   /** Creates a builder from a rule and configuration. */
