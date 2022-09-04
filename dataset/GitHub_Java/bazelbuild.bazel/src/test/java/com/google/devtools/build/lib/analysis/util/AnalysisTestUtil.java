@@ -23,22 +23,20 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
@@ -76,7 +74,7 @@ public final class AnalysisTestUtil {
   public static final TopLevelArtifactContext TOP_LEVEL_ARTIFACT_CONTEXT =
       new TopLevelArtifactContext(
           /*runTestsExclusively=*/false,
-          /*outputGroups=*/ImmutableSortedSet.copyOf(OutputGroupInfo.DEFAULT_GROUPS));
+          /*outputGroups=*/ImmutableSortedSet.copyOf(OutputGroupProvider.DEFAULT_GROUPS));
 
   /**
    * An {@link AnalysisEnvironment} implementation that collects the actions registered.
@@ -121,22 +119,22 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getDerivedArtifact(PathFragment rootRelativePath, Root root) {
       return original.getDerivedArtifact(rootRelativePath, root);
     }
 
     @Override
-    public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, Root root) {
       return original.getConstantMetadataArtifact(rootRelativePath, root);
     }
 
     @Override
-    public SpecialArtifact getTreeArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getTreeArtifact(PathFragment rootRelativePath, Root root) {
       return null;
     }
 
     @Override
-    public Artifact getFilesetArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root) {
       return original.getFilesetArtifact(rootRelativePath, root);
     }
 
@@ -191,11 +189,6 @@ public final class AnalysisTestUtil {
     public ImmutableSet<Artifact> getOrphanArtifacts() {
       return original.getOrphanArtifacts();
     }
-
-    @Override
-    public ActionKeyContext getActionKeyContext() {
-      return original.getActionKeyContext();
-    }
   }
 
   /** A dummy WorkspaceStatusAction. */
@@ -234,7 +227,7 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public String computeKey(ActionKeyContext actionKeyContext) {
+    public String computeKey() {
       return "";
     }
 
@@ -327,12 +320,12 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getConstantMetadataArtifact(PathFragment rootRelativePath, Root root) {
       return null;
     }
 
     @Override
-    public SpecialArtifact getTreeArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getTreeArtifact(PathFragment rootRelativePath, Root root) {
       return null;
     }
 
@@ -367,12 +360,12 @@ public final class AnalysisTestUtil {
     }
 
     @Override
-    public Artifact getFilesetArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getFilesetArtifact(PathFragment rootRelativePath, Root root) {
       return null;
     }
 
     @Override
-    public Artifact getDerivedArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getDerivedArtifact(PathFragment rootRelativePath, Root root) {
       return null;
     }
 
@@ -394,17 +387,12 @@ public final class AnalysisTestUtil {
 
     @Override
     public ArtifactOwner getOwner() {
-      return ArtifactOwner.NullArtifactOwner.INSTANCE;
+      return ArtifactOwner.NULL_OWNER;
     }
 
     @Override
     public ImmutableSet<Artifact> getOrphanArtifacts() {
       return ImmutableSet.<Artifact>of();
-    }
-
-    @Override
-    public ActionKeyContext getActionKeyContext() {
-      return null;
     }
   };
 
@@ -427,23 +415,26 @@ public final class AnalysisTestUtil {
     BuildConfiguration targetConfiguration =
         Iterables.getOnlyElement(configurations.getTargetConfigurations());
     rootMap.put(
-        targetConfiguration.getBinDirectory(RepositoryName.MAIN).getRoot().toString(), "bin");
+        targetConfiguration.getBinDirectory(RepositoryName.MAIN).getPath().toString(),
+        "bin");
     // In preparation for merging genfiles/ and bin/, we don't differentiate them in tests anymore
     rootMap.put(
-        targetConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getRoot().toString(), "bin");
+        targetConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getPath().toString(),
+        "bin");
     rootMap.put(
-        targetConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getRoot().toString(),
+        targetConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getPath().toString(),
         "internal");
 
     BuildConfiguration hostConfiguration = configurations.getHostConfiguration();
     rootMap.put(
-        hostConfiguration.getBinDirectory(RepositoryName.MAIN).getRoot().toString(), "bin(host)");
+        hostConfiguration.getBinDirectory(RepositoryName.MAIN).getPath().toString(),
+        "bin(host)");
     // In preparation for merging genfiles/ and bin/, we don't differentiate them in tests anymore
     rootMap.put(
-        hostConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getRoot().toString(),
+        hostConfiguration.getGenfilesDirectory(RepositoryName.MAIN).getPath().toString(),
         "bin(host)");
     rootMap.put(
-        hostConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getRoot().toString(),
+        hostConfiguration.getMiddlemanDirectory(RepositoryName.MAIN).getPath().toString(),
         "internal(host)");
 
     // The output paths that bin, genfiles, etc. refer to may or may not include the C++-contributed
@@ -460,11 +451,14 @@ public final class AnalysisTestUtil {
 
     Set<String> files = new LinkedHashSet<>();
     for (Artifact artifact : artifacts) {
-      ArtifactRoot root = artifact.getRoot();
+      Root root = artifact.getRoot();
       if (root.isSourceRoot()) {
         files.add("src " + artifact.getRootRelativePath());
       } else {
-        String name = rootMap.getOrDefault(root.getRoot().toString(), "/");
+        String name = rootMap.get(root.getPath().toString());
+        if (name == null) {
+          name = "/";
+        }
         files.add(name + " " + artifact.getRootRelativePath());
       }
     }

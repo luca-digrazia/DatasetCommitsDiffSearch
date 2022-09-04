@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
@@ -69,7 +68,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
 
   @Before
   public final void createExecutor() throws Exception {
-    executor = new DummyExecutor(fileSystem, rootDirectory);
+    executor = new DummyExecutor(rootDirectory);
   }
 
   private static final class TrackingEvaluationProgressReceiver
@@ -208,7 +207,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected String computeKey(ActionKeyContext actionKeyContext) {
+    protected String computeKey() {
       return getPrimaryOutput().getExecPathString() + executionCounter.get();
     }
   }
@@ -389,7 +388,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         null);
 
     // Sanity check that our invalidation receiver is working correctly. We'll rely on it again.
-    SkyKey actionKey = ActionExecutionValue.key(ACTION_LOOKUP_KEY, 0);
+    SkyKey actionKey = ActionExecutionValue.key(OWNER_KEY, 0);
     TrackingEvaluationProgressReceiver.EvaluatedEntry evaluatedAction =
         progressReceiver.getEvalutedEntry(actionKey);
     assertThat(evaluatedAction).isNotNull();
@@ -652,7 +651,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
     }
 
     @Override
-    protected String computeKey(ActionKeyContext actionKeyContext) {
+    protected String computeKey() {
       return new Fingerprint().addInt(42).hexDigestAndReset();
     }
   }

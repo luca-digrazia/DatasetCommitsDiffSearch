@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.actions;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadCompatible;
 import com.google.devtools.build.lib.profiler.Describable;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import java.io.IOException;
@@ -78,14 +77,16 @@ import javax.annotation.Nullable;
 public interface Action extends ActionExecutionMetadata, Describable {
 
   /**
-   * Prepares for executing this action; called by the Builder prior to executing the Action itself.
-   * This method should prepare the file system, so that the execution of the Action can write the
-   * output files. At a minimum any pre-existing and write protected output files should be removed
-   * or the permissions should be changed, so that they can be safely overwritten by the action.
+   * Prepares for executing this action; called by the Builder prior to
+   * executing the Action itself. This method should prepare the file system, so
+   * that the execution of the Action can write the output files. At a minimum
+   * any pre-existing and write protected output files should be removed or the
+   * permissions should be changed, so that they can be safely overwritten by
+   * the action.
    *
    * @throws IOException if there is an error deleting the outputs.
    */
-  void prepare(FileSystem fileSystem, Path execRoot) throws IOException;
+  void prepare(Path execRoot) throws IOException;
 
   /**
    * Executes this action; called by the Builder when all of this Action's inputs have been
@@ -184,6 +185,12 @@ public interface Action extends ActionExecutionMetadata, Describable {
   boolean showsOutputUnconditionally();
 
   boolean canRemoveAfterExecution();
+
+  /**
+   * Returns true if an {@link com.google.devtools.build.lib.analysis.extra.ExtraAction} action can
+   * be attached to this action. If not, extra actions should not be attached to this action.
+   */
+  boolean extraActionCanAttach();
 
   /**
    * Called by {@link com.google.devtools.build.lib.analysis.extra.ExtraAction} at execution time to

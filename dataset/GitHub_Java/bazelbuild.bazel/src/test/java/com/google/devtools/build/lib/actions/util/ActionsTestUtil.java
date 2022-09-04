@@ -13,11 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions.util;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.util.Preconditions.checkArgument;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
@@ -34,7 +33,6 @@ import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -63,6 +61,7 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.ResourceUsage;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -104,59 +103,38 @@ public final class ActionsTestUtil {
 
   private static final Label NULL_LABEL = Label.parseAbsoluteUnchecked("//null/action:owner");
 
-  public static ActionExecutionContext createContext(
-      Executor executor,
-      ActionKeyContext actionKeyContext,
-      FileOutErr fileOutErr,
-      Path execRoot,
-      MetadataHandler metadataHandler,
-      @Nullable ActionGraph actionGraph) {
+  public static ActionExecutionContext createContext(Executor executor, FileOutErr fileOutErr,
+      Path execRoot, MetadataHandler metadataHandler, @Nullable ActionGraph actionGraph) {
     return createContext(
-        executor,
-        actionKeyContext,
-        fileOutErr,
-        execRoot,
-        metadataHandler,
-        ImmutableMap.of(),
+        executor, fileOutErr, execRoot, metadataHandler, ImmutableMap.<String, String>of(),
         actionGraph);
   }
 
-  public static ActionExecutionContext createContext(
-      Executor executor,
-      ActionKeyContext actionKeyContext,
-      FileOutErr fileOutErr,
-      Path execRoot,
-      MetadataHandler metadataHandler,
-      Map<String, String> clientEnv,
+  public static ActionExecutionContext createContext(Executor executor, FileOutErr fileOutErr,
+      Path execRoot, MetadataHandler metadataHandler, Map<String, String> clientEnv,
       @Nullable ActionGraph actionGraph) {
     return new ActionExecutionContext(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         ActionInputPrefetcher.NONE,
-        actionKeyContext,
         metadataHandler,
         fileOutErr,
-        ImmutableMap.copyOf(clientEnv),
+        ImmutableMap.<String, String>copyOf(clientEnv),
         actionGraph == null
             ? createDummyArtifactExpander()
             : ActionInputHelper.actionGraphArtifactExpander(actionGraph));
   }
 
-  public static ActionExecutionContext createContextForInputDiscovery(
-      Executor executor,
-      ActionKeyContext actionKeyContext,
-      FileOutErr fileOutErr,
-      Path execRoot,
-      MetadataHandler metadataHandler,
+  public static ActionExecutionContext createContextForInputDiscovery(Executor executor,
+      FileOutErr fileOutErr, Path execRoot, MetadataHandler metadataHandler,
       BuildDriver buildDriver) {
     return ActionExecutionContext.forInputDiscovery(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
         ActionInputPrefetcher.NONE,
-        actionKeyContext,
         metadataHandler,
         fileOutErr,
-        ImmutableMap.of(),
+        ImmutableMap.<String, String>of(),
         new BlockingSkyFunctionEnvironment(
             buildDriver, executor == null ? null : executor.getEventHandler()));
   }
@@ -164,14 +142,8 @@ public final class ActionsTestUtil {
   public static ActionExecutionContext createContext(EventHandler eventHandler) {
     DummyExecutor dummyExecutor = new DummyExecutor(eventHandler);
     return new ActionExecutionContext(
-        dummyExecutor,
-        null,
-        ActionInputPrefetcher.NONE,
-        new ActionKeyContext(),
-        null,
-        null,
-        ImmutableMap.of(),
-        createDummyArtifactExpander());
+        dummyExecutor, null, ActionInputPrefetcher.NONE, null, null,
+        ImmutableMap.<String, String>of(), createDummyArtifactExpander());
   }
 
   private static ArtifactExpander createDummyArtifactExpander() {
@@ -299,8 +271,7 @@ public final class ActionsTestUtil {
       return ActionResult.EMPTY;
     }
 
-    @Override
-    protected String computeKey(ActionKeyContext actionKeyContext) {
+    @Override protected String computeKey() {
       return "action";
     }
 
@@ -651,15 +622,6 @@ public final class ActionsTestUtil {
         result.add(detail);
       }
       return result;
-    }
-
-    /** Counts the total number of misses registered so far regardless of their reason. */
-    public int countMisses() {
-      int total = 0;
-      for (Map.Entry<MissReason, Integer> entry : details.entrySet()) {
-        total += entry.getValue();
-      }
-      return total;
     }
   }
 

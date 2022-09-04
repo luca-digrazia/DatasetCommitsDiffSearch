@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -56,8 +55,7 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
 
   @Before
   public void createArtifacts() throws Exception  {
-    Path execRoot = scratch.getFileSystem().getPath("/exec");
-    rootDir = Root.asDerivedRoot(execRoot, scratch.dir("/exec/out"));
+    rootDir = Root.asDerivedRoot(scratch.dir("/exec/root"));
     outputArtifact = getBinArtifactWithNoOwner("destination.txt");
     FileSystemUtils.createDirectoryAndParents(outputArtifact.getPath().getParentDirectory());
     treeArtifact = createTreeArtifact("artifact/myTreeFileArtifact");
@@ -77,8 +75,8 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
     Action action = createParameterFileWriteAction(
         ImmutableList.of(treeArtifact),
         createTreeArtifactExpansionCommandLine());
-    assertThat(Artifact.toExecPaths(action.getInputs()))
-        .containsExactly("out/artifact/myTreeFileArtifact");
+    assertThat(Artifact.toExecPaths(action.getInputs())).containsExactly(
+        "artifact/myTreeFileArtifact");
   }
 
   @Test
@@ -104,8 +102,8 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
     assertThat(content.trim())
         .isEqualTo(
             "--flag1\n"
-                + "out/artifact/myTreeFileArtifact/artifacts/treeFileArtifact1\n"
-                + "out/artifact/myTreeFileArtifact/artifacts/treeFileArtifact2");
+                + "artifact/myTreeFileArtifact/artifacts/treeFileArtifact1\n"
+                + "artifact/myTreeFileArtifact/artifacts/treeFileArtifact2");
   }
 
   private Artifact createTreeArtifact(String rootRelativePath) {
@@ -167,16 +165,9 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
       }
     };
 
-    Executor executor = new TestExecutorBuilder(fileSystem, directories, binTools).build();
-    return new ActionExecutionContext(
-        executor,
-        null,
-        ActionInputPrefetcher.NONE,
-        actionKeyContext,
-        null,
-        new FileOutErr(),
-        ImmutableMap.<String, String>of(),
-        artifactExpander);
+    Executor executor = new TestExecutorBuilder(directories, binTools).build();
+    return new ActionExecutionContext(executor, null, ActionInputPrefetcher.NONE, null,
+        new FileOutErr(), ImmutableMap.<String, String>of(), artifactExpander);
   }
 
   private enum KeyAttributes {
@@ -207,7 +198,6 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
               commandLine,
               parameterFileType,
               charset);
-        },
-        actionKeyContext);
+        });
   }
 }

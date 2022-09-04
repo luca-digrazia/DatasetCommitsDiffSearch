@@ -15,15 +15,14 @@ package com.google.devtools.build.lib.actions.util;
 
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.NULL_ACTION_OWNER;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -127,9 +126,11 @@ public class TestAction extends AbstractAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addPaths(Artifact.asSortedPathFragments(getOutputs()));
-    fp.addPaths(Artifact.asSortedPathFragments(getMandatoryInputs()));
+  protected String computeKey() {
+    Fingerprint f = new Fingerprint();
+    f.addPaths(Artifact.asSortedPathFragments(getOutputs()));
+    f.addPaths(Artifact.asSortedPathFragments(getMandatoryInputs()));
+    return f.hexDigestAndReset();
   }
 
   @Override

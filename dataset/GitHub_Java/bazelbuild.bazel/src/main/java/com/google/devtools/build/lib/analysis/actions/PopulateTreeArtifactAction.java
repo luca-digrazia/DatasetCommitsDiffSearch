@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.analysis.actions;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -39,12 +38,14 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * An action that populates a TreeArtifact with the contents of an archive file.
@@ -190,7 +191,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
     }
 
     // Execute the spawn.
-    List<SpawnResult> spawnResults;
+    Set<SpawnResult> spawnResults;
     try {
       spawnResults = getContext(actionExecutionContext).exec(spawn, actionExecutionContext);
     } catch (ExecException e) {

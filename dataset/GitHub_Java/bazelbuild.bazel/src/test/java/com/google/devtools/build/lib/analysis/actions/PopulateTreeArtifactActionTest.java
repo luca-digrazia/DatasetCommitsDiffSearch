@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.analysis.util.ActionTester.ActionCombinatio
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.vfs.FileStatus;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
@@ -110,15 +109,13 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
 
   @Before
   public void setRootDir() throws Exception  {
-    Path execRoot = scratch.getFileSystem().getPath("/exec");
-    root = Root.asDerivedRoot(execRoot, scratch.dir("/exec/out"));
+    root = Root.asDerivedRoot(scratch.dir("/exec/root"));
   }
 
   @Test
   public void testActionOutputs() throws Exception {
     Action action = createPopulateTreeArtifactAction();
-    assertThat(Artifact.toExecPaths(action.getOutputs()))
-        .containsExactly("out/test/archive_member");
+    assertThat(Artifact.toExecPaths(action.getOutputs())).containsExactly("test/archive_member");
   }
 
   @Test
@@ -135,11 +132,10 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     PopulateTreeArtifactAction action = createPopulateTreeArtifactAction();
     Spawn spawn = action.createSpawn();
     Iterable<Artifact> outputs = actionInputsToArtifacts(spawn.getOutputFiles());
-    assertThat(Artifact.toExecPaths(outputs))
-        .containsExactly(
-            "out/test/archive_member/archive_members/1.class",
-            "out/test/archive_member/archive_members/2.class",
-            "out/test/archive_member/archive_members/txt/text.txt");
+    assertThat(Artifact.toExecPaths(outputs)).containsExactly(
+        "test/archive_member/archive_members/1.class",
+        "test/archive_member/archive_members/2.class",
+        "test/archive_member/archive_members/txt/text.txt");
   }
 
   @Test
@@ -157,15 +153,13 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
   public void testSpawnArguments() throws Exception {
     PopulateTreeArtifactAction action = createPopulateTreeArtifactAction();
     BaseSpawn spawn = (BaseSpawn) action.createSpawn();
-    assertThat(spawn.getArguments())
-        .containsExactly(
-            "unzipBinary",
-            "x",
-            "myArchive.zip",
-            "-d",
-            "out/test/archive_member",
-            "@archiveManifest.txt")
-        .inOrder();
+    assertThat(spawn.getArguments()).containsExactly(
+        "unzipBinary",
+        "x",
+        "myArchive.zip",
+        "-d",
+        "test/archive_member",
+        "@archiveManifest.txt").inOrder();
   }
 
   @Test
@@ -177,11 +171,10 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
 
     assertThat(actionResult.spawnResults()).isEmpty();
 
-    assertThat(Artifact.toExecPaths(treefileArtifacts))
-        .containsExactly(
-            "out/test/archive_member/archive_members/1.class",
-            "out/test/archive_member/archive_members/2.class",
-            "out/test/archive_member/archive_members/txt/text.txt");
+    assertThat(Artifact.toExecPaths(treefileArtifacts)).containsExactly(
+        "test/archive_member/archive_members/1.class",
+        "test/archive_member/archive_members/2.class",
+        "test/archive_member/archive_members/txt/text.txt");
   }
 
   @Test
@@ -300,8 +293,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
                 treeArtifactToPopulate,
                 zipper);
           }
-        },
-        actionKeyContext);
+        });
   }
 
   private PopulateTreeArtifactAction createPopulateTreeArtifactAction() throws Exception {
@@ -327,16 +319,14 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
 
   private ActionExecutionContext actionExecutionContext(
       List<Artifact> storingExpandedTreeFileArtifacts) throws Exception {
-    Executor executor =
-        new TestExecutorBuilder(fileSystem, directories, null)
-            .setExecution(PopulateTreeArtifactAction.MNEMONIC, mock(SpawnActionContext.class))
-            .build();
+    Executor executor = new TestExecutorBuilder(directories, null)
+        .setExecution(PopulateTreeArtifactAction.MNEMONIC, mock(SpawnActionContext.class))
+        .build();
 
     return new ActionExecutionContext(
         executor,
         null,
         ActionInputPrefetcher.NONE,
-        actionKeyContext,
         new TestMetadataHandler(storingExpandedTreeFileArtifacts),
         null,
         ImmutableMap.<String, String>of(),

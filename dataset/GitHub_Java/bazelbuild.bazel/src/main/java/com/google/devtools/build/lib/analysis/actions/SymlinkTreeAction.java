@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Preconditions;
-import com.google.devtools.build.lib.vfs.Path;
 import javax.annotation.Nullable;
 
 /**
@@ -76,11 +75,9 @@ public final class SymlinkTreeAction extends AbstractAction {
       Artifact inputManifest, Artifact artifactMiddleman) {
     ImmutableList.Builder<Artifact> result = ImmutableList.<Artifact>builder()
         .add(inputManifest);
-    if (artifactMiddleman != null) {
-      Path path = artifactMiddleman.getPath();
-      if (!path.getFileSystem().supportsSymbolicLinksNatively(path)) {
-        result.add(artifactMiddleman);
-      }
+    if (artifactMiddleman != null
+        && !artifactMiddleman.getPath().getFileSystem().supportsSymbolicLinksNatively()) {
+      result.add(artifactMiddleman);
     }
     return result.build();
   }

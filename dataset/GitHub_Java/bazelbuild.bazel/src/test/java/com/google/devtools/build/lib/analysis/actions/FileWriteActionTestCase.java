@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -55,18 +54,9 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
 
   @Before
   public final void createExecutorAndContext() throws Exception {
-    BinTools binTools = BinTools.forUnitTesting(directories, analysisMock.getEmbeddedTools());
-    executor = new TestExecutorBuilder(fileSystem, directories, binTools).build();
-    context =
-        new ActionExecutionContext(
-            executor,
-            null,
-            ActionInputPrefetcher.NONE,
-            actionKeyContext,
-            null,
-            new FileOutErr(),
-            ImmutableMap.<String, String>of(),
-            null);
+    executor = new TestExecutorBuilder(directories, binTools).build();
+    context = new ActionExecutionContext(executor, null, ActionInputPrefetcher.NONE, null,
+        new FileOutErr(), ImmutableMap.<String, String>of(), null);
   }
 
   protected abstract Action createAction(
@@ -119,7 +109,6 @@ public abstract class FileWriteActionTestCase extends BuildViewTestCase {
                 attributesToFlip.contains(KeyAttributes.DATA) ? "0" : "1",
                 attributesToFlip.contains(KeyAttributes.MAKE_EXECUTABLE));
           }
-        },
-        actionKeyContext);
+        });
   }
 }
