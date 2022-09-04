@@ -15,8 +15,6 @@
  */
 package org.androidannotations.test15;
 
-import java.util.List;
-
 import org.androidannotations.annotations.Background;
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.UiThread;
@@ -26,27 +24,18 @@ import android.app.Activity;
 @EActivity
 public class ActivityWithGenerics extends Activity {
 
-    // @UiThread
-    // <T, S extends Number & List<String>> void emptyUiMethod(T param, S param2) {
-    // // Not possible due to Codemodel's constraints
-    // }
-
-    @UiThread
-    <T, S extends Number> void emptyUiMethod(List<? extends T> param, List<? super S> param2) {
-    }
+	// @UiThread
+	// <T, S extends Number & List<String>> void emptyUiMethod(T param, S param2) {
+	// // Not possible due to Codemodel's constraints
+	// }
 
 	@UiThread
 	<T, S extends Number> void emptyUiMethod(T param) {
 
 	}
-	
-	@Background
-	<T, S extends Number> void emptyBackgroundMethod(T param) {
-		
-	}
 
 	@Background
-	<T extends Number> void emptyBackgroundMethod(T param, List<T> param2) {
+	<T, S extends Number> void emptyBackgroundMethod(T param) {
 
 	}
 
