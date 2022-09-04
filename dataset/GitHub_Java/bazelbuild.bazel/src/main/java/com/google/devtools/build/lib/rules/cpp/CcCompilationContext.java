@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -57,7 +56,8 @@ import javax.annotation.Nullable;
 public final class CcCompilationContext implements CcCompilationContextApi {
   /** An empty {@code CcCompilationContext}. */
   public static final CcCompilationContext EMPTY =
-      builder(/* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null)
+      new Builder(
+              /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null)
           .build();
 
   private final CommandLineCcCompilationContext commandLineCcCompilationContext;
@@ -256,9 +256,8 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     // We'd prefer for these types to use ImmutableSet/ImmutableMap. However, constructing these is
     // substantially more costly in a way that shows up in profiles.
     Map<PathFragment, Artifact> pathToLegalOutputArtifact = new HashMap<>();
-    Collection<HeaderInfo> infos = transitiveHeaderInfos.toCollection();
-    Set<Artifact> modularHeaders = CompactHashSet.createWithExpectedSize(infos.size());
-    for (HeaderInfo transitiveHeaderInfo : infos) {
+    Set<Artifact> modularHeaders = new HashSet<>();
+    for (HeaderInfo transitiveHeaderInfo : transitiveHeaderInfos) {
       boolean isModule = createModularHeaders && transitiveHeaderInfo.getModule(usePic) != null;
       // Not using range-based for loops here as often there is exactly one element in this list
       // and the amount of garbage created by SingletonImmutableList.iterator() is significant.
@@ -431,7 +430,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
 
   public static CcCompilationContext merge(Collection<CcCompilationContext> ccCompilationContexts) {
     CcCompilationContext.Builder builder =
-        CcCompilationContext.builder(
+        new CcCompilationContext.Builder(
             /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null);
     builder.mergeDependentCcCompilationContexts(ccCompilationContexts);
     return builder.build();
@@ -464,14 +463,6 @@ public final class CcCompilationContext implements CcCompilationContextApi {
       this.systemIncludeDirs = systemIncludeDirs;
       this.defines = defines;
     }
-  }
-
-  /** Creates a new builder for a {@link CcCompilationContext} instance. */
-  public static Builder builder(
-      ActionConstructionContext actionConstructionContext,
-      BuildConfiguration configuration,
-      Label label) {
-    return new Builder(actionConstructionContext, configuration, label);
   }
 
   /** Builder class for {@link CcCompilationContext}. */
@@ -508,11 +499,10 @@ public final class CcCompilationContext implements CcCompilationContextApi {
     private final Label label;
 
     /** Creates a new builder for a {@link CcCompilationContext} instance. */
-    private Builder(
+    public Builder(
         ActionConstructionContext actionConstructionContext,
         BuildConfiguration configuration,
         Label label) {
-      // private to avoid class initialization deadlock between this class and its outer class
       this.actionConstructionContext = actionConstructionContext;
       this.configuration = configuration;
       this.label = label;
