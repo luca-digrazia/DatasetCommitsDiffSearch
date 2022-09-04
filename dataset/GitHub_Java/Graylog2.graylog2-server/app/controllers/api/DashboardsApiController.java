@@ -20,12 +20,15 @@
 package controllers.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.gson.Gson;
+import com.google.inject.Inject;
 import controllers.AuthenticatedController;
-import lib.security.RestPermissions;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
+import lib.security.RestPermissions;
 import org.graylog2.restclient.lib.timeranges.InvalidRangeParametersException;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
 import org.graylog2.restclient.models.User;
@@ -33,32 +36,25 @@ import org.graylog2.restclient.models.api.requests.dashboards.UserSetWidgetPosit
 import org.graylog2.restclient.models.api.responses.dashboards.DashboardWidgetValueResponse;
 import org.graylog2.restclient.models.dashboards.Dashboard;
 import org.graylog2.restclient.models.dashboards.DashboardService;
-import org.graylog2.restclient.models.dashboards.widgets.DashboardWidget;
-import org.graylog2.restclient.models.dashboards.widgets.FieldChartWidget;
-import org.graylog2.restclient.models.dashboards.widgets.QuickvaluesWidget;
-import org.graylog2.restclient.models.dashboards.widgets.SearchResultChartWidget;
-import org.graylog2.restclient.models.dashboards.widgets.SearchResultCountWidget;
-import org.graylog2.restclient.models.dashboards.widgets.StreamSearchResultCountWidget;
+import org.graylog2.restclient.models.NodeService;
+import org.graylog2.restclient.models.dashboards.widgets.*;
 import play.Logger;
-import play.libs.Json;
-import play.mvc.BodyParser;
 import play.mvc.Result;
 import views.helpers.Permissions;
 
-import javax.inject.Inject;
 import java.io.IOException;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class DashboardsApiController extends AuthenticatedController {
-    private final DashboardService dashboardService;
 
     @Inject
-    public DashboardsApiController(DashboardService dashboardService) {
-        this.dashboardService = dashboardService;
-    }
+    private NodeService nodeService;
+
+    @Inject
+    private DashboardService dashboardService;
 
     public Result index() {
         try {
@@ -73,7 +69,7 @@ public class DashboardsApiController extends AuthenticatedController {
                 result.put(d.getId(), dashboard);
             }
 
-            return ok(Json.toJson(result));
+            return ok(new Gson().toJson(result)).as("application/json");
         } catch (APIException e) {
             String message = "Could not get dashboards. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -95,7 +91,7 @@ public class DashboardsApiController extends AuthenticatedController {
                 result.put(d.getId(), dashboard);
             }
 
-            return ok(Json.toJson(result));
+            return ok(new Gson().toJson(result)).as("application/json");
         } catch (APIException e) {
             String message = "Could not get dashboards. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -107,7 +103,7 @@ public class DashboardsApiController extends AuthenticatedController {
     private Iterable<? extends Dashboard> getAllWritable(User user) throws IOException, APIException {
         List<Dashboard> writable = Lists.newArrayList();
 
-        for (Dashboard dashboard : dashboardService.getAll()) {
+        for(Dashboard dashboard : dashboardService.getAll()) {
             if (Permissions.isPermitted(user, RestPermissions.DASHBOARDS_EDIT, dashboard.getId())) {
                 writable.add(dashboard);
             }
@@ -116,12 +112,13 @@ public class DashboardsApiController extends AuthenticatedController {
         return writable;
     }
 
-    @BodyParser.Of(BodyParser.Json.class)
     public Result setWidgetPositions(String dashboardId) {
+        JsonNode request = request().body().asJson();
+        ObjectMapper mapper = new ObjectMapper();
 
         try {
             Dashboard dashboard = dashboardService.get(dashboardId);
-            UserSetWidgetPositionsRequest positions = Json.fromJson(request().body().asJson(), UserSetWidgetPositionsRequest.class);
+            UserSetWidgetPositionsRequest positions = mapper.readValue(request.toString(), UserSetWidgetPositionsRequest.class);
             dashboard.setWidgetPositions(positions.positions);
         } catch (APIException e) {
             String message = "Could not update positions. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
@@ -146,7 +143,7 @@ public class DashboardsApiController extends AuthenticatedController {
             result.put("calculated_at", widgetValue.calculatedAt);
             result.put("time_range", widgetValue.computationTimeRange);
 
-            return ok(Json.toJson(result));
+            return ok(new Gson().toJson(result)).as("application/json");
         } catch (APIException e) {
             String message = "Could not get dashboard. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -181,7 +178,6 @@ public class DashboardsApiController extends AuthenticatedController {
         return resultValue;
     }
 
-    @BodyParser.Of(BodyParser.FormUrlEncoded.class)
     public Result addWidget(String dashboardId) {
         try {
             final Map<String, String> params = flattenFormUrlEncoded(request().body().asFormUrlEncoded());
@@ -201,14 +197,14 @@ public class DashboardsApiController extends AuthenticatedController {
                 }
 
                 timerange = TimeRange.factory(rangeType, relative, params.get("from"), params.get("to"), params.get("keyword"));
-            } catch (InvalidRangeParametersException e2) {
+            } catch(InvalidRangeParametersException e2) {
                 return status(400, views.html.errors.error.render("Invalid range parameters provided.", e2, request()));
-            } catch (IllegalArgumentException e1) {
+            } catch(IllegalArgumentException e1) {
                 return status(400, views.html.errors.error.render("Invalid range type provided.", e1, request()));
             }
 
             String streamId;
-            if (params.containsKey("streamId")) {
+            if(params.containsKey("streamId")) {
                 streamId = params.get("streamId");
             } else {
                 streamId = params.get("streamid");
@@ -282,7 +278,6 @@ public class DashboardsApiController extends AuthenticatedController {
         }
     }
 
-    @BodyParser.Of(BodyParser.FormUrlEncoded.class)
     public Result updateWidgetDescription(String dashboardId, String widgetId) {
         String newDescription = flattenFormUrlEncoded(request().body().asFormUrlEncoded()).get("description");
 
@@ -305,7 +300,6 @@ public class DashboardsApiController extends AuthenticatedController {
         }
     }
 
-    @BodyParser.Of(BodyParser.FormUrlEncoded.class)
     public Result updateWidgetCacheTime(String dashboardId, String widgetId) {
         String newCacheTimeS = flattenFormUrlEncoded(request().body().asFormUrlEncoded()).get("cacheTime");
 
