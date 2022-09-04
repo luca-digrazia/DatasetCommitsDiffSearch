@@ -21,17 +21,17 @@
 package org.graylog2.periodical;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.net.SocketAddress;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
-import java.util.List;
+import java.util.Map.Entry;
 import org.apache.log4j.Logger;
 import org.graylog2.GraphiteFormatter;
 import org.graylog2.GraylogServer;
 import org.graylog2.MessageCounter;
+import org.graylog2.Tools;
 
 /**
  * GraphiteWriterThread.java: 08.05.2012 16:13:29
@@ -51,14 +51,12 @@ public class GraphiteWriterThread implements Runnable {
 
     String carbonHost;
     int carbonPort;
-    SocketAddress carbonServer;
 
     public GraphiteWriterThread(GraylogServer graylogServer) {
         this.graylogServer = graylogServer;
 
         carbonHost = graylogServer.getConfiguration().getGraphiteCarbonHost();
-        carbonPort = graylogServer.getConfiguration().getGraphiteCarbonTcpPort();
-        this.carbonServer = new InetSocketAddress(carbonHost, carbonPort);
+        carbonPort = graylogServer.getConfiguration().getGraphiteCarbonUdpPort();
     }
 
     @Override
@@ -71,7 +69,10 @@ public class GraphiteWriterThread implements Runnable {
         MessageCounter counter = this.graylogServer.getMessageCounterManager().get(COUNTER_NAME);
         try {
             GraphiteFormatter f = new GraphiteFormatter(counter);
-            send(f.getAllMetrics());
+
+            for(byte[] b : f.getAllMetrics()) {
+                send(b);
+            }
 
             LOG.debug("Sent message counts to Graphite at <" + carbonHost + ":" + carbonPort + ">.");
         } catch (Exception e) {
@@ -81,25 +82,25 @@ public class GraphiteWriterThread implements Runnable {
         }
     }
 
-    private boolean send(List<String> metrics) {
+    private boolean send(byte[] what) {
+        DatagramSocket sock = null;
+
         try {
-            Socket sock = new Socket();
-            sock.connect(this.carbonServer, 5000);
+            sock = new DatagramSocket();
+            InetAddress destination = InetAddress.getByName(carbonHost);
 
-            PrintWriter out = new PrintWriter(sock.getOutputStream(), true);
-
-            for (String metric : metrics) {
-                out.write(metric + "\n");
-            }
-            
-            out.close();
-            sock.close();
+            DatagramPacket pkg = new DatagramPacket(what, what.length, destination, carbonPort);
+            sock.send(pkg);
         } catch (SocketException e) {
             LOG.error("Could not send data to Graphite", e);
         } catch (UnknownHostException e) {
             LOG.error("Could not send data to Graphite (Unknown host: <" + carbonHost + ">)", e);
         } catch (IOException e) {
             LOG.error("Could not send data to Graphite (IO error):", e);
+        } finally {
+            if (sock != null) {
+                sock.close();
+            }
         }
 
         return true;

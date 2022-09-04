@@ -1,5 +1,5 @@
 /**
- * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
+ * Copyright 2010 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -32,6 +32,7 @@ import com.github.joschi.jadconfig.ValidatorMethod;
 import com.github.joschi.jadconfig.converters.StringListConverter;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
+import com.github.joschi.jadconfig.validators.PositiveLongValidator;
 import com.google.common.collect.Lists;
 import com.mongodb.ServerAddress;
 
@@ -45,27 +46,15 @@ public class Configuration {
 
     private static final Logger LOG = Logger.getLogger(Configuration.class);
 
-    @Parameter(value = "is_master", required = true)
-    private boolean isMaster = true;
-    
     @Parameter(value = "syslog_listen_port", required = true, validator = InetPortValidator.class)
     private int syslogListenPort = 514;
-    
+
+    @Parameter(value = "syslog_protocol", required = true)
+    private String syslogProtocol = "udp";
+
     @Parameter(value = "syslog_listen_address")
     private String syslogListenAddress = "0.0.0.0";
 
-    @Parameter(value = "syslog_enable_udp", required = true)
-    private boolean syslogEnableUdp = true;
-
-    @Parameter(value = "syslog_enable_tcp", required = true)
-    private boolean syslogEnableTcp = false;
-    
-    @Parameter(value = "syslog_use_nul_delimiter", required = false)
-    private boolean syslogUseNulDelimiter = false;
-    
-    @Parameter(value = "syslog_store_full_message", required = false)
-    private boolean syslogStoreFullMessage = true;
-    
     @Parameter(value = "force_syslog_rdns", required = true)
     private boolean forceSyslogRdns = false;
 
@@ -110,6 +99,9 @@ public class Configuration {
 
     @Parameter(value = "mongodb_replica_set", converter = StringListConverter.class)
     private List<String> mongoReplicaSet;
+
+    @Parameter(value = "messages_collection_size", required = true, validator = PositiveLongValidator.class)
+    private long messagesCollectionSize = 50 * 1000 * 1000;
 
     @Parameter(value = "use_gelf", required = true)
     private boolean useGELF = false;
@@ -156,40 +148,9 @@ public class Configuration {
     @Parameter(value = "graphite_carbon_host", required = false)
     private String graphiteCarbonHost = "127.0.0.1";
 
-    @Parameter(value = "graphite_carbon_tcp_port", validator = InetPortValidator.class, required = false)
-    private int graphiteCarbonTcpPort = 2003;
+    @Parameter(value = "graphite_carbon_udp_port", validator = InetPortValidator.class, required = false)
+    private int graphiteCarbonUdpPort = 2003;
 
-    @Parameter(value = "enable_libratometrics_output", required = false)
-    private boolean enableLibratoMetricsOutput = false;
-
-    @Parameter(value = "libratometrics_api_user", required = false)
-    private String libratometricsApiUser;
-
-    @Parameter(value = "libratometrics_api_token", required = false)
-    private String libratometricsApiToken;
-
-    @Parameter(value = "libratometrics_stream_filter", required = false)
-    private String libratometricsStreamFilter = "";
-
-    @Parameter(value = "libratometrics_host_filter", required = false)
-    private String libratometricsHostFilter = "";
-
-    @Parameter(value = "libratometrics_interval", validator = PositiveIntegerValidator.class, required = false)
-    private int libratometricsInterval = 10;
-
-    @Parameter(value = "libratometrics_prefix", required = false)
-    private String libratometricsPrefix = "gl2";
-
-    @Parameter(value = "enable_healthcheck_http_api", required = false)
-    private boolean enableHealthCheckHttpApi = false;
-    
-    @Parameter(value = "healthcheck_http_api_port", validator = InetPortValidator.class, required = false)
-    private int healthcheckHttpApiPort = 8010;
-    
-    public boolean isMaster() {
-        return isMaster;
-    }
-    
     public int getSyslogListenPort() {
         return syslogListenPort;
     }
@@ -198,24 +159,8 @@ public class Configuration {
         return syslogListenAddress;
     }
 
-    public boolean isSyslogUdpEnabled() {
-        return syslogEnableUdp;
-    }
-    
-    public boolean isSyslogTcpEnabled() {
-        return syslogEnableTcp;
-    }
-    
-    public boolean isSyslogUseNulDelimiterEnabled() {
-        return syslogUseNulDelimiter;
-    }
-    
-    public boolean isSyslogStoreFullMessageEnabled() {
-        return syslogStoreFullMessage;
-    }
-    
-    public void setISyslogStoreFullMessageEnabled(boolean b) {
-        syslogStoreFullMessage = b;
+    public String getSyslogProtocol() {
+        return syslogProtocol;
     }
 
     public boolean getForceSyslogRdns() {
@@ -276,6 +221,10 @@ public class Configuration {
 
     public int getMongoThreadsAllowedToBlockMultiplier() {
         return mongoThreadsAllowedToBlockMultiplier;
+    }
+
+    public long getMessagesCollectionSize() {
+        return messagesCollectionSize;
     }
 
     public boolean isUseGELF() {
@@ -365,55 +314,21 @@ public class Configuration {
         return graphiteCarbonHost;
     }
 
-    public int getGraphiteCarbonTcpPort() {
-        return graphiteCarbonTcpPort;
+    public int getGraphiteCarbonUdpPort() {
+        return graphiteCarbonUdpPort;
     }
 
-    public boolean isEnableLibratoMetricsOutput() {
-        return enableLibratoMetricsOutput;
-    }
-
-    public String getLibratoMetricsAPIUser() {
-        return libratometricsApiUser;
-    }
-
-    public String getLibratoMetricsAPIToken() {
-        return libratometricsApiToken;
-    }
-
-    public List<String> getLibratoMetricsStreamFilter() {
-        List<String> r = Lists.newArrayList();
-        r.addAll(Arrays.asList(libratometricsStreamFilter.split(",")));
-
-        return r;
-    }
-
-    public String getLibratoMetricsHostsFilter() {
-        return libratometricsHostFilter;
-    }
-
-    public int getLibratoMetricsInterval() {
-        return libratometricsInterval;
-    }
-
-    public String getLibratoMetricsPrefix() {
-        return libratometricsPrefix;
-    }
-    
-    public boolean isEnableHealthCheckHttpApi() {
-        return enableHealthCheckHttpApi;
-    }
-
-    public int getHealthCheckHttpApiPort() {
-        return healthcheckHttpApiPort;
-    }
-    
     @ValidatorMethod
     public void validate() throws ValidationException {
 
         if (isMongoUseAuth() && (null == getMongoUser() || null == getMongoPassword())) {
 
             throw new ValidationException("mongodb_user and mongodb_password have to be set if mongodb_useauth is true");
+        }
+
+        // Is the syslog_procotol valid?
+        if (!Arrays.asList("tcp", "udp").contains(getSyslogProtocol())) {
+            throw new ValidationException("Invalid syslog_protocol: " + getSyslogProtocol());
         }
     }
 

@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map.Entry;
 
 /**
+ * GraphiteFormatter.java: 08.05.2012 18:58:14
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class GraphiteFormatter {
@@ -35,25 +37,25 @@ public class GraphiteFormatter {
         this.counter = counter;
     }
 
-    public List<String> getAllMetrics() {
-        List<String> r = Lists.newArrayList();
+    public List<byte[]> getAllMetrics() {
+        List<byte[]> r = Lists.newArrayList();
 
         int now = Tools.getUTCTimestamp();
 
         // Overall count.
         String overall = "graylog2.messagecounts.total " + counter.getTotalCount() + " " + now;
-        r.add(overall);
+        r.add(overall.getBytes());
 
         // Streams.
         for(Entry<String, Integer> stream : counter.getStreamCounts().entrySet()) {
             String sval = "graylog2.messagecounts.streams." + stream.getKey() + " " + stream.getValue() + " " + now;
-            r.add(sval);
+            r.add(sval.getBytes());
         }
 
         // Hosts.
         for(Entry<String, Integer> host : counter.getHostCounts().entrySet()) {
             String hval = "graylog2.messagecounts.hosts." + Tools.decodeBase64(host.getKey()).replaceAll("[^a-zA-Z0-9]", "") + " " + host.getValue() + " " + Tools.getUTCTimestamp();
-            r.add(hval);
+            r.add(hval.getBytes());
         }
 
         return r;

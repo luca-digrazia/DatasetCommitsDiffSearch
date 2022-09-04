@@ -67,8 +67,6 @@ public final class Main {
      */
     public static void main(String[] args) {
 
-        // So jung kommen wir nicht mehr zusammen.
-
         final CommandLineArguments commandLineArguments = new CommandLineArguments();
         final JCommander jCommander = new JCommander(commandLineArguments, args);
         jCommander.setProgramName("graylog2");
@@ -128,9 +126,8 @@ public final class Main {
         server.registerInitializer(new MessageCounterInitializer(server));
         server.registerInitializer(new SyslogServerInitializer(server, configuration));
         server.registerInitializer(new MessageRetentionInitializer(server));
-        if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer(server)); }
-        if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer(server)); }
-
+        if (configuration.isEnableGraphiteOutput()) { server.registerInitializer(new GraphiteInitializer(server)); }
+        
         // Register inputs.
         if (configuration.isUseGELF()) { server.registerInput(new GELFUDPInput()); }
         if (configuration.getSyslogProtocol().equals("udp")) {
