@@ -345,21 +345,23 @@ public class ProtoCompileActionBuilder {
   private static class MissingPrerequisiteException extends Exception {}
 
   public static void writeDescriptorSet(
-      RuleContext ruleContext, ProtoSourcesProvider protoProvider, Services allowServices) {
-    Artifact output = protoProvider.getDirectDescriptorSet();
-    NestedSet<Artifact> dependenciesDescriptorSets =
-        ProtoCommon.computeDependenciesDescriptorSets(ruleContext);
+      RuleContext ruleContext,
+      final CharSequence outReplacement,
+      ProtoSourcesProvider protoProvider,
+      Artifact output,
+      Services allowServices,
+      NestedSet<Artifact> transitiveDescriptorSets) {
     if (protoProvider.getDirectProtoSources().isEmpty()) {
       ruleContext.registerAction(
           FileWriteAction.createEmptyWithInputs(
-              ruleContext.getActionOwner(), dependenciesDescriptorSets, output));
+              ruleContext.getActionOwner(), transitiveDescriptorSets, output));
       return;
     }
 
     SpawnAction.Builder actions =
         createActions(
             ruleContext,
-            ImmutableList.of(createDescriptorSetToolchain(output.getExecPathString())),
+            ImmutableList.of(createDescriptorSetToolchain(outReplacement)),
             protoProvider,
             ruleContext.getLabel(),
             ImmutableList.of(output),
@@ -371,7 +373,7 @@ public class ProtoCompileActionBuilder {
     }
 
     actions.setMnemonic("GenProtoDescriptorSet");
-    actions.addTransitiveInputs(dependenciesDescriptorSets);
+    actions.addTransitiveInputs(transitiveDescriptorSets);
     ruleContext.registerAction(actions.build(ruleContext));
   }
 
