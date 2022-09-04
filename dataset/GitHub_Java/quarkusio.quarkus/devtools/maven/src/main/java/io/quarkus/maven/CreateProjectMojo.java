@@ -44,6 +44,7 @@ import org.eclipse.aether.repository.RemoteRepository;
 import org.fusesource.jansi.Ansi;
 
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.cli.commands.AddExtensionResult;
 import io.quarkus.cli.commands.AddExtensions;
@@ -55,6 +56,10 @@ import io.quarkus.generators.SourceType;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.components.Prompter;
 import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
+import io.quarkus.platform.descriptor.resolver.json.QuarkusJsonPlatformDescriptorResolver;
+import io.quarkus.platform.tools.config.QuarkusPlatformConfig;
+import io.quarkus.platform.tools.maven.MojoMessageWriter;
 
 /**
  * This goal helps in setting up Quarkus Maven project with quarkus-maven-plugin, with sensible defaults
@@ -78,21 +83,12 @@ public class CreateProjectMojo extends AbstractMojo {
     @Parameter(property = "projectVersion")
     private String projectVersion;
 
-    /**
-     * Group ID of the target platform BOM
-     */
-    @Parameter(property = "platformGroupId", required = false)
+    @Parameter(property = "platformGroupId", defaultValue = CreateUtils.DEFAULT_PLATFORM_BOM_GROUP_ID)
     private String bomGroupId;
 
-    /**
-     * Artifact ID of the target platform BOM
-     */
-    @Parameter(property = "platformArtifactId", required = false)
+    @Parameter(property = "platformArtifactId", defaultValue = CreateUtils.DEFAULT_PLATFORM_BOM_ARTIFACT_ID)
     private String bomArtifactId;
 
-    /**
-     * Version of the target platform BOM
-     */
     @Parameter(property = "platformVersion", required = false)
     private String bomVersion;
 
@@ -147,7 +143,19 @@ public class CreateProjectMojo extends AbstractMojo {
         } catch (AppModelResolverException e1) {
             throw new MojoExecutionException("Failed to initialize Maven artifact resolver", e1);
         }
-        CreateUtils.setGlobalPlatformDescriptor(bomGroupId, bomArtifactId, bomVersion, mvn, getLog());
+
+        if (CreateUtils.QUARKUS_CORE_BOM_ARTIFACT_ID.equals(bomArtifactId)
+                && (bomVersion == null || bomVersion.isEmpty())) {
+            bomVersion = CreateUtils.resolvePluginInfo(getClass()).getVersion();
+        }
+
+        // We assume platform specified by user refers to a BOM.
+        final QuarkusPlatformDescriptor platform = QuarkusJsonPlatformDescriptorResolver.newInstance()
+                .setMessageWriter(new MojoMessageWriter(getLog()))
+                .setArtifactResolver(new BootstrapAppModelResolver(mvn))
+                .resolveFromBom(bomGroupId, bomArtifactId, bomVersion);
+
+        QuarkusPlatformConfig.defaultConfigBuilder().setPlatformDescriptor(platform).build();
 
         // We detect the Maven version during the project generation to indicate the user immediately that the installed
         // version may not be supported.
@@ -392,7 +400,7 @@ public class CreateProjectMojo extends AbstractMojo {
         getLog().info(ansi().a("Navigate into this directory and launch your application with ")
                 .bold()
                 .fg(Ansi.Color.CYAN)
-                .a("mvn quarkus:dev")
+                .a("mvn compile quarkus:dev")
                 .reset()
                 .toString());
         getLog().info(
