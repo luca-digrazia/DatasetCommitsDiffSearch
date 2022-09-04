@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
@@ -72,9 +71,7 @@ public abstract class AndroidSkylarkData
   @Override
   public AndroidAssetsInfo assetsFromDeps(
       SkylarkList<AndroidAssetsInfo> deps, boolean neverlink, Environment env) {
-    // We assume this is an analysis-phase thread.
-    Label label = ((BazelStarlarkContext) env.getStarlarkContext()).getAnalysisRuleLabel();
-    return AssetDependencies.fromProviders(deps, neverlink).toInfo(label);
+    return AssetDependencies.fromProviders(deps, neverlink).toInfo(env.getCallerLabel());
   }
 
   @Override
