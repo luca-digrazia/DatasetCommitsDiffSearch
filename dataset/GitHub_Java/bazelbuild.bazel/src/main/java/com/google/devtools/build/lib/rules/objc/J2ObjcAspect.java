@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault.Resolver;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
@@ -77,10 +76,8 @@ import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
 import com.google.devtools.build.lib.rules.proto.SupportData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.io.Serializable;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -91,13 +88,11 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
   private static final ExtraCompileArgs EXTRA_COMPILE_ARGS = new ExtraCompileArgs(
       "-fno-strict-overflow");
 
-  private static LabelLateBoundDefault<ProtoConfiguration> getProtoToolchainLabel(
-      String defaultValue) {
+  private static LabelLateBoundDefault<?> getProtoToolchainLabel(String defaultValue) {
     return LabelLateBoundDefault.fromTargetConfiguration(
         ProtoConfiguration.class,
         Label.parseAbsoluteUnchecked(defaultValue),
-        (Resolver<ProtoConfiguration, Label> & Serializable)
-            (rule, attributes, protoConfig) -> protoConfig.protoToolchainForJ2objc());
+        (rule, attributes, protoConfig) -> protoConfig.protoToolchainForJ2objc());
   }
 
   private static final ImmutableList<Attribute> JAVA_DEPENDENT_ATTRIBUTES =
@@ -112,8 +107,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
   private static final String J2OBJC_PROTO_TOOLCHAIN_ATTR = ":j2objc_proto_toolchain";
 
-  @AutoCodec @AutoCodec.VisibleForSerialization
-  static final LabelLateBoundDefault<?> DEAD_CODE_REPORT =
+  private static final LabelLateBoundDefault<?> DEAD_CODE_REPORT =
       LabelLateBoundDefault.fromTargetConfiguration(
           J2ObjcConfiguration.class,
           null,
