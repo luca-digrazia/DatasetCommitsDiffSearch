@@ -1,5 +1,5 @@
-/*
- * Copyright 2013 TORCH UG
+/**
+ * Copyright 2013 Kay Roepke <kay@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package lib;
 
@@ -22,16 +23,13 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
 import com.google.inject.Singleton;
-import lib.security.Graylog2ServerUnavailableException;
 import models.Node;
-import models.api.responses.cluster.NodesResponse;
-import models.api.responses.cluster.NodeSummaryResponse;
+import models.api.responses.NodeResponse;
+import models.api.responses.NodeSummaryResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -68,52 +66,24 @@ public class ServerNodesRefreshService {
         public List<Node> call() throws Exception {
             List<Node> newNodes = Lists.newArrayList();
             log.debug("Updating graylog2 server node list from node {}", node);
-            NodesResponse response = api.get(NodesResponse.class)
+            NodeResponse response = api.get(NodeResponse.class)
                     .path("/system/cluster/nodes")
                     .node(node)
-                    .unauthenticated()
                     .execute();
             int i = 0;
             for (NodeSummaryResponse nsr : response.nodes) {
                 log.debug("Adding graylog2 server node {} to current set of nodes ({}/{})", nsr.transportAddress, ++i, response.nodes.size());
-                final Node newNode = nodeFactory.fromSummaryResponse(nsr);
-                newNode.setActive(true);
-                newNodes.add(newNode);
+                newNodes.add(nodeFactory.fromSummaryResponse(nsr));
             }
             return newNodes;
         }
     }
 
-    private void resolveConfiguredNodes() {
-        // either we have just started and never seen any servers, or we lost connection to all servers in our cluster
-        // resolve all configured nodes, to figure out the proper transport addresses in this network
-        final Collection<Node> configuredNodes = serverNodes.getConfiguredNodes();
-        final Map<Node, NodeSummaryResponse> responses =
-                api.get(NodeSummaryResponse.class).path("/system/cluster/node").nodes(configuredNodes).timeout(2, TimeUnit.SECONDS).executeOnAll();
-        List<Node> resolvedNodes = Lists.newArrayList();
-        for (Map.Entry<Node, NodeSummaryResponse> nsr : responses.entrySet()) {
-            final Node resolvedNode = nodeFactory.fromSummaryResponse(nsr.getValue());
-            resolvedNode.setActive(true);
-            resolvedNodes.add(resolvedNode);
-            serverNodes.linkConfiguredNode(nsr.getKey(), resolvedNode);
-        }
-        serverNodes.put(resolvedNodes);
-    }
-
     public void start() {
-        // try to resolve the configured nodes immediately on startup, so we can rely on this being done in tests.
-        // won't make a difference to a production instance (except delay startup sequence slightly)
-        resolveConfiguredNodes();
-
         executor.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                try {
-                    refreshNodeList();
-                } catch (Graylog2ServerUnavailableException e) {
-                    resolveConfiguredNodes();
-                }
-
+                refreshNodeList();
             }
         }, 0L, 5L, TimeUnit.SECONDS);
     }
@@ -122,22 +92,15 @@ public class ServerNodesRefreshService {
         executor.shutdown();
     }
 
-    /**
-     * Re-reads the cluster node state from a server.
-     *
-     * @return true if a cluster node list could be read, false if the read failed
-     */
-    private boolean refreshNodeList() {
+    public void refreshNodeList() {
         final Node initialNode = serverNodes.any();
         final RefreshOperation refreshOperation = new RefreshOperation(initialNode);
         final List<Node> nodeList;
         try {
             nodeList = refreshOperation.call();
-            serverNodes.put(nodeList);
-            return true;
+            serverNodes.setCurrentNodes(nodeList);
         } catch (Exception e) {
             log.warn("Could not retrieve graylog2 node list from node " + initialNode + ". Retrying automatically.", e);
         }
-        return false;
     }
 }
