@@ -184,7 +184,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       new MemoizingEvaluator.EmittedEventState();
   private final PackageFactory pkgFactory;
   private final WorkspaceStatusAction.Factory workspaceStatusActionFactory;
-  private final FileSystem fileSystem;
   private final BlazeDirectories directories;
   protected final ExternalFilesHelper externalFilesHelper;
   @Nullable protected OutputService outputService;
@@ -291,7 +290,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   protected SkyframeExecutor(
       EvaluatorSupplier evaluatorSupplier,
       PackageFactory pkgFactory,
-      FileSystem fileSystem,
       BlazeDirectories directories,
       Factory workspaceStatusActionFactory,
       ImmutableList<BuildInfoFactory> buildInfoFactories,
@@ -313,7 +311,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         syscalls, cyclesReporter, pkgLocator, numPackagesLoaded, this);
     this.resourceManager = ResourceManager.instance();
     this.skyframeActionExecutor = new SkyframeActionExecutor(eventBus, statusReporterRef);
-    this.fileSystem = fileSystem;
     this.directories = Preconditions.checkNotNull(directories);
     ImmutableMap.Builder<BuildInfoKey, BuildInfoFactory> factoryMapBuilder = ImmutableMap.builder();
     for (BuildInfoFactory factory : buildInfoFactories) {
@@ -692,8 +689,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    *       way).
    * </ol>
    */
-  public void decideKeepIncrementalStateAndResetEvaluatorIfNecessary(
-      boolean batch, Options viewOptions) {
+  public void decideKeepIncrementalState(boolean batch, Options viewOptions) {
     // Assume incrementality.
   }
 
@@ -1449,7 +1445,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         fragmentsMap.put(key.getLabel(), allFragments);
       } else {
         depsToEvaluate.add(key);
-        transitiveFragmentSkyKeys.add(TransitiveTargetKey.of(key.getLabel()));
+        transitiveFragmentSkyKeys.add(TransitiveTargetValue.key(key.getLabel()));
       }
     }
     EvaluationResult<SkyValue> fragmentsResult = evaluateSkyKeys(
@@ -1460,11 +1456,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     for (Dependency key : keys) {
       if (!depsToEvaluate.contains(key)) {
         // No fragments to compute here.
-      } else if (fragmentsResult.getError(TransitiveTargetKey.of(key.getLabel())) != null) {
+      } else if (fragmentsResult.getError(TransitiveTargetValue.key(key.getLabel())) != null) {
         labelsWithErrors.add(key.getLabel());
       } else {
         TransitiveTargetValue ttv =
-            (TransitiveTargetValue) fragmentsResult.get(TransitiveTargetKey.of(key.getLabel()));
+            (TransitiveTargetValue) fragmentsResult.get(TransitiveTargetValue.key(key.getLabel()));
         fragmentsMap.put(key.getLabel(), ttv.getTransitiveConfigFragments().toSet());
       }
     }
@@ -1683,7 +1679,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         throws InterruptedException {
       List<SkyKey> valueNames = new ArrayList<>();
       for (Label label : labelsToVisit) {
-        valueNames.add(TransitiveTargetKey.of(label));
+        valueNames.add(TransitiveTargetValue.key(label));
       }
       return buildDriver.evaluate(valueNames, keepGoing, parallelThreads, eventHandler);
     }
@@ -1843,7 +1839,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   @VisibleForTesting
   public FileSystem getFileSystemForTesting() {
-    return fileSystem;
+    return directories.getFileSystem();
   }
 
   @VisibleForTesting
