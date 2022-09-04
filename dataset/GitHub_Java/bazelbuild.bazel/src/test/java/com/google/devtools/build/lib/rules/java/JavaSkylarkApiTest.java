@@ -1969,8 +1969,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
             .getToolchainLabel();
     assertThat(
             javaToolchainLabel.toString().endsWith("jdk:remote_toolchain")
-                || javaToolchainLabel.toString().endsWith("jdk:toolchain")
-                || javaToolchainLabel.toString().endsWith("jdk:toolchain_host"))
+                || javaToolchainLabel.toString().endsWith("jdk:toolchain"))
         .named(javaToolchainLabel.toString())
         .isTrue();
   }
@@ -2147,6 +2146,10 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
       JavaCompilationArgsProvider args, JavaCompilationArgsProvider otherArgs) {
     if (!nestedSetsOfArtifactHaveTheSameParent(
         args.getTransitiveCompileTimeJars(), otherArgs.getTransitiveCompileTimeJars())) {
+      return false;
+    }
+    if (!nestedSetsOfArtifactHaveTheSameParent(
+        args.getInstrumentationMetadata(), otherArgs.getInstrumentationMetadata())) {
       return false;
     }
     if (!nestedSetsOfArtifactHaveTheSameParent(args.getRuntimeJars(), otherArgs.getRuntimeJars())) {
