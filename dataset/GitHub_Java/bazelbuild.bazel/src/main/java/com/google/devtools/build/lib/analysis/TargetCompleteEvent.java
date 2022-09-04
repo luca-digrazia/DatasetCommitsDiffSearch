@@ -136,10 +136,8 @@ public final class TargetCompleteEvent
     this.label = targetAndData.getConfiguredTarget().getLabel();
     this.aliasLabel = targetAndData.getConfiguredTarget().getOriginalLabel();
     this.configuredTargetKey =
-        ConfiguredTargetKey.builder()
-            .setConfiguredTarget(targetAndData.getConfiguredTarget())
-            .setConfiguration(targetAndData.getConfiguration())
-            .build();
+        ConfiguredTargetKey.of(
+            targetAndData.getConfiguredTarget(), targetAndData.getConfiguration());
     postedAfterBuilder.add(BuildEventIdUtil.targetConfigured(aliasLabel));
     DetailedExitCode mostImportantDetailedExitCode = null;
     for (Cause cause : getRootCauses().toList()) {
@@ -163,7 +161,7 @@ public final class TargetCompleteEvent
             ? targetAndData.getConfiguredTarget().getProvider(TestProvider.class).getTestParams()
             : null;
     InstrumentedFilesInfo instrumentedFilesProvider =
-        targetAndData.getConfiguredTarget().get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
+        targetAndData.getConfiguredTarget().get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
     if (instrumentedFilesProvider == null) {
       this.baselineCoverageArtifacts = null;
     } else {

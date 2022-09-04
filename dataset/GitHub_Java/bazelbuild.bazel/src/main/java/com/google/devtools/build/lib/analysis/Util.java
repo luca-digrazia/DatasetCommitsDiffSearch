@@ -99,12 +99,10 @@ public abstract class Util {
   private static void addLabelsAndConfigs(
       Set<ConfiguredTargetKey> set, List<ConfiguredTargetAndData> deps) {
     for (ConfiguredTargetAndData dep : deps) {
-      // Dereference any aliases that might be present.
       set.add(
-          ConfiguredTargetKey.builder()
-              .setLabel(dep.getConfiguredTarget().getOriginalLabel())
-              .setConfiguration(dep.getConfiguration())
-              .build());
+          ConfiguredTargetKey.of(
+              // Dereference any aliases that might be present.
+              dep.getConfiguredTarget().getOriginalLabel(), dep.getConfiguration()));
     }
   }
 }

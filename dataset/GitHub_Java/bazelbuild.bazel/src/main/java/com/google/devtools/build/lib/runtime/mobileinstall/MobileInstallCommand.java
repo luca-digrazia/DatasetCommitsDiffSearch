@@ -72,12 +72,10 @@ import java.util.List;
 )
 public class MobileInstallCommand implements BlazeCommand {
 
-  /** An enumeration of all the modes that mobile-install supports. */
-  public enum Mode {
-    CLASSIC,
-    CLASSIC_INTERNAL_TEST_DO_NOT_USE,
-    SKYLARK
-  }
+  /**
+   * An enumeration of all the modes that mobile-install supports.
+   */
+  public enum Mode { CLASSIC, CLASSIC_INTERNAL_TEST_DO_NOT_USE, SKYLARK }
 
   /**
    * Converter for the --mode option.
@@ -118,16 +116,17 @@ public class MobileInstallCommand implements BlazeCommand {
     public boolean incremental;
 
     @Option(
-        name = "mode",
-        defaultValue = "classic",
-        converter = ModeConverter.class,
-        documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.EXECUTION},
-        metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-        help =
-            "Select how to run mobile-install. \"classic\" runs the current version of"
-                + " mobile-install. \"skylark\" uses the new Starlark version, which has support"
-                + " for android_test.")
+      name = "mode",
+      defaultValue = "classic",
+      converter = ModeConverter.class,
+      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
+      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.EXECUTION},
+      metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+      help =
+          "Select how to run mobile-install. \"classic\" runs the current version of "
+              + "mobile-install. \"skylark\" uses the new skylark version, which has support for "
+              + "android_test."
+    )
     public Mode mode;
 
     @Option(
@@ -219,7 +218,7 @@ public class MobileInstallCommand implements BlazeCommand {
     Collection<ConfiguredTarget> targetsBuilt = result.getSuccessfulTargets();
     if (targetsBuilt == null) {
       env.getReporter().handle(Event.warn(NO_TARGET_MESSAGE));
-      return BlazeCommandResult.success();
+      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
     }
     if (targetsBuilt.size() != 1) {
       env.getReporter().handle(Event.error(SINGLE_TARGET_MESSAGE));
@@ -300,7 +299,7 @@ public class MobileInstallCommand implements BlazeCommand {
           .execute(outErr.getOutputStream(), outErr.getErrorStream())
           .getTerminationStatus()
           .getExitCode();
-      return BlazeCommandResult.success();
+      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
     } catch (BadExitStatusException e) {
       String message =
           "Non-zero return code '"
@@ -336,7 +335,7 @@ public class MobileInstallCommand implements BlazeCommand {
       } else {
         optionsParser.parse(
             PriorityCategory.COMMAND_LINE,
-            "Options required by the Starlark implementation of mobile-install command",
+            "Options required by the skylark implementation of mobile-install command",
             ImmutableList.of(
                 "--aspects=" + options.mobileInstallAspect + "%MIASPECT",
                 "--output_groups=mobile_install" + INTERNAL_SUFFIX,

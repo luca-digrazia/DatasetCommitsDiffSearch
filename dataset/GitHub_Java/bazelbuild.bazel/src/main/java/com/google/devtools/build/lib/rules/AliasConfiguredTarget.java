@@ -37,8 +37,8 @@ import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import javax.annotation.Nullable;
 
 /**
- * This configured target pretends to be whatever type of target "actual" is, returning its label,
- * transitive info providers and target.
+ * This configured target pretends to be whatever type of target "actual" is, returning its
+ * transitive info providers and target, but returning its own label.
  *
  * <p>Transitive info providers can also be overridden.
  */
@@ -133,9 +133,9 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
     if (name.equals(LABEL_FIELD)) {
       return getLabel();
     } else if (name.equals(FILES_FIELD)) {
-      // A shortcut for files to build in Starlark. FileConfiguredTarget and RuleConfiguredTarget
+      // A shortcut for files to build in Skylark. FileConfiguredTarget and RuleConfiguredTarget
       // always has FileProvider and Error- and PackageGroupConfiguredTarget-s shouldn't be
-      // accessible in Starlark.
+      // accessible in Skylark.
       return Depset.of(Artifact.TYPE, getProvider(FileProvider.class).getFilesToBuild());
     }
     return actual.getValue(name);

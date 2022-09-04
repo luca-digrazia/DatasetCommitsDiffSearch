@@ -15,12 +15,12 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
+import com.google.devtools.build.lib.syntax.ClassObject;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Structure;
 
 /**
  * A {@link ConfiguredTarget} is conceptually a {@link TransitiveInfoCollection} coupled with the
@@ -32,7 +32,7 @@ import net.starlark.java.eval.Structure;
  * their direct dependencies, only the corresponding {@link TransitiveInfoCollection}s. Also, {@link
  * ConfiguredTarget} objects should not be accessible from the action graph.
  */
-public interface ConfiguredTarget extends TransitiveInfoCollection, Structure {
+public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject, StarlarkValue {
 
   /** All <code>ConfiguredTarget</code>s have a "label" field. */
   String LABEL_FIELD = "label";
@@ -41,7 +41,9 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, Structure {
   String FILES_FIELD = "files";
 
   default String getConfigurationChecksum() {
-    return getConfigurationKey() == null ? null : getConfigurationKey().getOptions().checksum();
+    return getConfigurationKey() == null
+        ? null
+        : getConfigurationKey().getOptionsDiff().getChecksum();
   }
 
   /**
@@ -55,18 +57,25 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, Structure {
   @Nullable
   BuildConfigurationValue.Key getConfigurationKey();
 
-  /** Returns keys for a legacy Starlark provider. */
+  /** Returns keys for a legacy Skylark provider. */
   @Override
   ImmutableCollection<String> getFieldNames();
 
   /**
-   * Returns a legacy Starlark provider.
+   * Returns a legacy Skylark provider.
    *
-   * <p>Overrides {@link Structure#getValue(String)}, but does not allow EvalException to be thrown.
+   * <p>Overrides {@link ClassObject#getValue(String)}, but does not allow EvalException to be
+   * thrown.
    */
   @Nullable
   @Override
   Object getValue(String name);
+
+  /** Returns a source artifact if this is an input file. */
+  @Nullable
+  default SourceArtifact getSourceArtifact() {
+    return null;
+  }
 
   /**
    * If the configured target is an alias, return the actual target, otherwise return the current
@@ -83,13 +92,5 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, Structure {
    */
   default Label getOriginalLabel() {
     return getLabel();
-  }
-
-  /**
-   * The configuration conditions that trigger this configured target's configurable attributes. For
-   * targets that do not support configurable attributes, this will be an empty map.
-   */
-  default ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions() {
-    return ImmutableMap.of();
   }
 }

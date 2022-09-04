@@ -318,7 +318,7 @@ public class ConfiguredTargetQueryEnvironment
   @Nullable
   private ConfiguredTarget getConfiguredTarget(Label label, BuildConfiguration configuration)
       throws InterruptedException {
-    return getValueFromKey(ConfiguredTargetKey.of(label, configuration));
+    return getValueFromKey(ConfiguredTargetValue.key(label, configuration));
   }
 
   @Override

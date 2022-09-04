@@ -17,6 +17,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
@@ -25,16 +26,17 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.AnalysisProtosV2;
-import com.google.devtools.build.lib.analysis.AspectValue;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.query2.aquery.AqueryActionFilter;
 import com.google.devtools.build.lib.query2.aquery.AqueryUtils;
+import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.util.Pair;
 import java.io.IOException;
@@ -216,8 +218,11 @@ public class ActionGraphDump {
     if (includeArtifacts) {
       // Store inputs
       NestedSet<Artifact> inputs = action.getInputs();
-      if (!inputs.isEmpty()) {
-        actionBuilder.addInputDepSetIds(knownNestedSets.dataToIdAndStreamOutputProto(inputs));
+      NestedSetView<Artifact> nestedSetView = new NestedSetView<>(inputs);
+
+      if (!nestedSetView.directs().isEmpty() || !nestedSetView.transitives().isEmpty()) {
+        actionBuilder.addInputDepSetIds(
+            knownNestedSets.dataToIdAndStreamOutputProto(nestedSetView));
       }
 
       // store outputs
@@ -238,7 +243,8 @@ public class ActionGraphDump {
     if (!includeInActionGraph(configuredTarget.getLabel().toString())) {
       return;
     }
-    for (ActionAnalysisMetadata action : aspectValue.getActions()) {
+    for (int i = 0; i < aspectValue.getNumActions(); i++) {
+      Action action = aspectValue.getAction(i);
       dumpSingleAction(configuredTarget, action);
     }
   }
@@ -249,7 +255,8 @@ public class ActionGraphDump {
     if (!includeInActionGraph(configuredTarget.getLabel().toString())) {
       return;
     }
-    for (ActionAnalysisMetadata action : configuredTargetValue.getActions()) {
+    List<ActionAnalysisMetadata> actions = configuredTargetValue.getActions();
+    for (ActionAnalysisMetadata action : actions) {
       dumpSingleAction(configuredTarget, action);
     }
   }
