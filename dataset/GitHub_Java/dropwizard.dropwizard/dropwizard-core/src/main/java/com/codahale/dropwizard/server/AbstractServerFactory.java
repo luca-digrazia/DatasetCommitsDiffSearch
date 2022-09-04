@@ -7,8 +7,9 @@ import com.codahale.dropwizard.jetty.NonblockingServletHolder;
 import com.codahale.dropwizard.jetty.RequestLogFactory;
 import com.codahale.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import com.codahale.dropwizard.servlets.ThreadNameFilter;
-import com.codahale.dropwizard.util.Duration;
-import com.codahale.dropwizard.validation.MinDuration;
+import com.codahale.dropwizard.util.Size;
+import com.codahale.dropwizard.util.SizeUnit;
+import com.codahale.dropwizard.validation.MinSize;
 import com.codahale.dropwizard.validation.ValidationMethod;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.health.HealthCheckRegistry;
@@ -44,51 +45,6 @@ import java.util.EnumSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.regex.Pattern;
 
-/**
- * A base class for {@link ServerFactory} implementations.
- * <p/>
- * <b>Configuration Parameters:</b>
- * <table>
- *     <tr>
- *         <td>Name</td>
- *         <td>Default</td>
- *         <td>Description</td>
- *     </tr>
- *     <tr>
- *         <td>{@code requestLog}</td>
- *         <td></td>
- *         <td>The {@link RequestLogFactory request log} configuration.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code gzip}</td>
- *         <td></td>
- *         <td>The {@link GzipHandlerFactory GZIP} configuration.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code maxThreads}</td>
- *         <td>1024</td>
- *         <td>The maximum number of threads to use for requests.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code minThreads}</td>
- *         <td>8</td>
- *         <td>The minimum number of threads to use for requests.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code maxQueuedRequests}</td>
- *         <td>1024</td>
- *         <td>The maximum number of requests to queue before blocking the acceptors.</td>
- *     </tr>
- *     <tr>
- *         <td>{@code idleThreadTimeout}</td>
- *         <td>1 minute</td>
- *         <td>The amount of time a worker thread can be idle before being stopped.</td>
- *     </tr>
- * </table>
- *
- * @see DefaultServerFactory
- * @see SimpleServerFactory
- */
 public abstract class AbstractServerFactory implements ServerFactory {
     private static final Logger LOGGER = LoggerFactory.getLogger(ServerFactory.class);
     private static final Pattern WINDOWS_NEWLINE = Pattern.compile("\\r\\n?");
@@ -107,10 +63,11 @@ public abstract class AbstractServerFactory implements ServerFactory {
     @Min(1)
     private int minThreads = 8;
 
-    private int maxQueuedRequests = 1024;
+    @NotNull
+    @MinSize(value = 8, unit = SizeUnit.KILOBYTES)
+    private Size outputBufferSize = Size.kilobytes(32);
 
-    @MinDuration(1)
-    private Duration idleThreadTimeout = Duration.minutes(1);
+    private int maxQueuedRequests = Integer.MAX_VALUE;
 
     @JsonIgnore
     @ValidationMethod(message = "must have a smaller minThreads than maxThreads")
@@ -159,6 +116,16 @@ public abstract class AbstractServerFactory implements ServerFactory {
     }
 
     @JsonProperty
+    public Size getOutputBufferSize() {
+        return outputBufferSize;
+    }
+
+    @JsonProperty
+    public void setOutputBufferSize(Size outputBufferSize) {
+        this.outputBufferSize = outputBufferSize;
+    }
+
+    @JsonProperty
     public int getMaxQueuedRequests() {
         return maxQueuedRequests;
     }
@@ -166,16 +133,6 @@ public abstract class AbstractServerFactory implements ServerFactory {
     @JsonProperty
     public void setMaxQueuedRequests(int maxQueuedRequests) {
         this.maxQueuedRequests = maxQueuedRequests;
-    }
-
-    @JsonProperty
-    public Duration getIdleThreadTimeout() {
-        return idleThreadTimeout;
-    }
-
-    @JsonProperty
-    public void setIdleThreadTimeout(Duration idleThreadTimeout) {
-        this.idleThreadTimeout = idleThreadTimeout;
     }
 
     protected Handler createAdminServlet(ServletContextHandler handler,
@@ -203,8 +160,7 @@ public abstract class AbstractServerFactory implements ServerFactory {
 
     protected ThreadPool createThreadPool(MetricRegistry metricRegistry) {
         final BlockingQueue<Runnable> queue = new BlockingArrayQueue<>(minThreads, maxThreads, maxQueuedRequests);
-        return new InstrumentedQueuedThreadPool(metricRegistry, "dw", maxThreads, minThreads,
-                                                (int) idleThreadTimeout.toMilliseconds(), queue);
+        return new InstrumentedQueuedThreadPool(metricRegistry, "dw", maxThreads, minThreads, 60000, queue);
     }
 
     protected Server buildServer(LifecycleEnvironment lifecycle, ThreadPool threadPool) {
