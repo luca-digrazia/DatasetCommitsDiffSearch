@@ -110,14 +110,8 @@ public class PackageCacheTest extends FoundationTestCase {
   private void setUpSkyframe(
       PackageCacheOptions packageCacheOptions,
       SkylarkSemanticsOptions skylarkSemanticsOptions) {
-    PathPackageLocator pkgLocator =
-        PathPackageLocator.create(
-            null,
-            packageCacheOptions.packagePath,
-            reporter,
-            rootDirectory,
-            rootDirectory,
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
+    PathPackageLocator pkgLocator = PathPackageLocator.create(
+        null, packageCacheOptions.packagePath, reporter, rootDirectory, rootDirectory);
     packageCacheOptions.showLoadingProgress = true;
     packageCacheOptions.globbingThreads = 7;
     skyframeExecutor.preparePackageLoading(

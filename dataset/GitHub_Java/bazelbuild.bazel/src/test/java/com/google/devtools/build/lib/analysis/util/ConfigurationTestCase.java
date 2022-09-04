@@ -97,10 +97,7 @@ public abstract class ConfigurationTestCase extends FoundationTestCase {
     analysisMock = getAnalysisMock();
     ConfiguredRuleClassProvider ruleClassProvider = analysisMock.createRuleClassProvider();
     PathPackageLocator pkgLocator =
-        new PathPackageLocator(
-            outputBase,
-            ImmutableList.of(rootDirectory),
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
+        new PathPackageLocator(outputBase, ImmutableList.of(rootDirectory));
     final PackageFactory pkgFactory;
     BlazeDirectories directories =
         new BlazeDirectories(
