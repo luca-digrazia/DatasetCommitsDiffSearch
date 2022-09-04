@@ -14,16 +14,14 @@ package com.google.devtools.build.lib.rules.cpp;
 // limitations under the License.
 
 import com.google.auto.value.AutoValue;
-import com.google.auto.value.AutoValue.CopyAnnotations;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkApi;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import java.util.List;
 import javax.annotation.Nullable;
 
@@ -36,8 +34,6 @@ import javax.annotation.Nullable;
  * dynamic params for executable and dynamic params for dynamic library.
  */
 @AutoValue
-@Immutable
-@CopyAnnotations
 public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
 
   public Artifact getDynamicLibraryForRuntimeOrNull(boolean linkingStatically) {
@@ -66,11 +62,11 @@ public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
 
   @Nullable
   @Override
-  public Sequence<Artifact> getObjectFilesForStarlark() {
+  public SkylarkList<Artifact> getObjectFilesForStarlark() {
     if (getObjectFiles() == null) {
-      return StarlarkList.empty();
+      return MutableList.empty();
     }
-    return StarlarkList.immutableCopyOf(getObjectFiles());
+    return SkylarkList.createImmutable(getObjectFiles());
   }
 
   @Nullable
@@ -88,11 +84,11 @@ public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
 
   @Nullable
   @Override
-  public Sequence<Artifact> getPicObjectFilesForStarlark() {
+  public SkylarkList<Artifact> getPicObjectFilesForStarlark() {
     if (getPicObjectFiles() == null) {
-      return StarlarkList.empty();
+      return MutableList.empty();
     }
-    return StarlarkList.immutableCopyOf(getPicObjectFiles());
+    return SkylarkList.createImmutable(getPicObjectFiles());
   }
 
   @Nullable
@@ -345,3 +341,4 @@ public abstract class LibraryToLink implements LibraryToLinkApi<Artifact> {
     }
   }
 }
+

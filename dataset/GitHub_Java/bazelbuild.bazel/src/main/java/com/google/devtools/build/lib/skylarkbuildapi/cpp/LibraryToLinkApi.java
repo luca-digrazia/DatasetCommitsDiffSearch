@@ -15,64 +15,49 @@
 package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
-import net.starlark.java.annot.StarlarkMethod;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 
 /**
  * A library the user can link to. This is different from a simple linker input in that it also has
  * a library identifier.
  */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "LibraryToLink",
-    category = StarlarkDocumentationCategory.BUILTIN,
+    category = SkylarkModuleCategory.BUILTIN,
     doc = "A library the user can link against.")
-public interface LibraryToLinkApi<FileT extends FileApi> extends StarlarkValue {
-  @StarlarkMethod(
+public interface LibraryToLinkApi<FileT extends FileApi> {
+  @SkylarkCallable(
       name = "objects",
       allowReturnNones = true,
       doc = "<code>List</code> of object files in the library.",
       structField = true)
-  Sequence<FileT> getObjectFilesForStarlark();
+  SkylarkList<FileT> getObjectFilesForStarlark();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "pic_objects",
       allowReturnNones = true,
       doc = "<code>List</code> of pic object files in the library.",
       structField = true)
-  Sequence<FileT> getPicObjectFilesForStarlark();
+  SkylarkList<FileT> getPicObjectFilesForStarlark();
 
-  @StarlarkMethod(
-      name = "lto_bitcode_files",
-      allowReturnNones = true,
-      doc = "<code>List</code> of LTO bitcode files in the library.",
-      structField = true)
-  Sequence<FileT> getLtoBitcodeFilesForStarlark();
-
-  @StarlarkMethod(
-      name = "pic_lto_bitcode_files",
-      allowReturnNones = true,
-      doc = "<code>List</code> of pic LTO bitcode files in the library.",
-      structField = true)
-  Sequence<FileT> getPicLtoBitcodeFilesForStarlark();
-
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "static_library",
       allowReturnNones = true,
       doc = "<code>Artifact</code> of static library to be linked.",
       structField = true)
   FileT getStaticLibrary();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "pic_static_library",
       allowReturnNones = true,
       doc = "<code>Artifact</code> of pic static library to be linked.",
       structField = true)
   FileT getPicStaticLibrary();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "dynamic_library",
       doc =
           "<code>Artifact</code> of dynamic library to be linked. Always used for runtime "
@@ -81,7 +66,7 @@ public interface LibraryToLinkApi<FileT extends FileApi> extends StarlarkValue {
       structField = true)
   FileT getDynamicLibrary();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "resolved_symlink_dynamic_library",
       doc =
           "The resolved <code>Artifact</code> of the dynamic library to be linked if "
@@ -90,14 +75,14 @@ public interface LibraryToLinkApi<FileT extends FileApi> extends StarlarkValue {
       structField = true)
   FileT getResolvedSymlinkDynamicLibrary();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "interface_library",
       doc = "<code>Artifact</code> of interface library to be linked.",
       allowReturnNones = true,
       structField = true)
   FileT getInterfaceLibrary();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "resolved_symlink_interface_library",
       doc =
           "The resolved <code>Artifact</code> of the interface library to be linked if "
@@ -106,7 +91,7 @@ public interface LibraryToLinkApi<FileT extends FileApi> extends StarlarkValue {
       structField = true)
   FileT getResolvedSymlinkInterfaceLibrary();
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "alwayslink",
       doc = "Whether to link the static library/objects in the --whole_archive block.",
       allowReturnNones = true,
