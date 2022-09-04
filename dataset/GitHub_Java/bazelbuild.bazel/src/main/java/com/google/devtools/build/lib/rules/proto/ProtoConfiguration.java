@@ -42,7 +42,7 @@ public class ProtoConfiguration extends Fragment implements ProtoConfigurationAp
   public static class Options extends FragmentOptions {
     @Option(
         name = "incompatible_generated_protos_in_virtual_imports",
-        defaultValue = "true",
+        defaultValue = "false",
         documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
         effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
         metadataTags = {
