@@ -1,6 +1,7 @@
 package io.quarkus.panache.common.deployment.visitors;
 
 import static io.quarkus.panache.common.deployment.PanacheEntityEnhancer.JSON_IGNORE_DOT_NAME;
+import static io.quarkus.panache.common.deployment.PanacheEntityEnhancer.JSON_PROPERTY_DOT_NAME;
 import static io.quarkus.panache.common.deployment.PanacheEntityEnhancer.JSON_PROPERTY_SIGNATURE;
 
 import java.lang.reflect.Modifier;
@@ -159,9 +160,7 @@ public abstract class PanacheEntityClassVisitor<EntityFieldType extends EntityFi
                 descriptor,
                 signature,
                 null);
-        for (int i = 0; i < parameters.size(); i++) {
-            mv.visitParameter(method.parameterName(i), 0 /* modifiers */);
-        }
+        AsmUtil.copyParameterNames(mv, method);
         mv.visitCode();
         for (PanacheMethodCustomizer customizer : methodCustomizers) {
             customizer.customize(thisClass, method, mv);
@@ -227,7 +226,19 @@ public abstract class PanacheEntityClassVisitor<EntityFieldType extends EntityFi
                 // Add an explicit Jackson annotation so that the entire property is not ignored due to having @XmlTransient
                 // on the field
                 if (shouldAddJsonProperty(field)) {
-                    mv.visitAnnotation(JSON_PROPERTY_SIGNATURE, true);
+                    AnnotationVisitor visitor = mv.visitAnnotation(JSON_PROPERTY_SIGNATURE, true);
+                    FieldInfo fieldInfo = entityInfo.field(field.name);
+                    if (fieldInfo != null) {
+                        AnnotationInstance jsonPropertyInstance = fieldInfo.annotation(JSON_PROPERTY_DOT_NAME);
+                        // propagate the value of @JsonProperty field annotation to the newly added method annotation
+                        if (jsonPropertyInstance != null) {
+                            AnnotationValue jsonPropertyValue = jsonPropertyInstance.value();
+                            if ((jsonPropertyValue != null) && !jsonPropertyValue.asString().isEmpty()) {
+                                visitor.visit("value", jsonPropertyValue.asString());
+                            }
+                        }
+                    }
+                    visitor.visitEnd();
                 }
                 mv.visitEnd();
             }
