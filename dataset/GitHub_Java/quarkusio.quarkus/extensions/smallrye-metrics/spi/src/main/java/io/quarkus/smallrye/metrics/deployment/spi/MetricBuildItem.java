@@ -10,7 +10,6 @@ import io.quarkus.builder.item.MultiBuildItem;
 /**
  * Build item that is picked up by the SmallRye Metrics extension to register metrics required by other extensions.
  */
-@Deprecated
 public final class MetricBuildItem extends MultiBuildItem {
 
     private final Metadata metadata;
