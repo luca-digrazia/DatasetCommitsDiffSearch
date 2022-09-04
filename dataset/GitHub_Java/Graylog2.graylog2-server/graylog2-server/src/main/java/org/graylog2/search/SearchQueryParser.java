@@ -28,10 +28,14 @@ import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
 import org.joda.time.format.DateTimeFormatter;
 import org.joda.time.format.ISODateTimeFormat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nonnull;
+import java.io.UnsupportedEncodingException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -42,6 +46,7 @@ import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static java.util.Objects.requireNonNull;
+import static org.graylog2.search.SearchQueryField.Type.STRING;
 
 /**
  * Parses a simple query language for use in list filtering of data sitting in MongoDB.
@@ -80,10 +85,13 @@ public class SearchQueryParser {
     private static final Pattern QUERY_SPLITTER_PATTERN = Pattern.compile("(\\S+:(=|=~|<|<=|>|>=)?'(?:[^'\\\\]|\\\\.)*')|(\\S+:(=|=~|<|<=|>|>=)?\"(?:[^\"\\\\]|\\\\.)*\")|\\S+|\\S+:(=|=~|<|<=|>|>=)?\\S+");
     private static final String INVALID_ENTRY_MESSAGE = "Chunk [%s] is not a valid entry";
     private static final String QUOTE_REPLACE_REGEX = "^[\"']|[\"']$";
-    public static final SearchQueryOperator DEFAULT_OPERATOR = SearchQueryOperators.REGEXP;
+    public static final SearchQueryOperator DEFAULT_STRING_OPERATOR = SearchQueryOperators.REGEXP;
+    public static final SearchQueryOperator DEFAULT_OPERATOR = SearchQueryOperators.EQUALS;
+
+    private static final Logger LOG = LoggerFactory.getLogger(SearchQueryParser.class);
 
     // We parse all date strings in UTC because we store and show all dates in UTC as well.
-    private static final List<DateTimeFormatter> DATE_TIME_FORMATTERS = ImmutableList.of(
+    private static final ImmutableList<DateTimeFormatter> DATE_TIME_FORMATTERS = ImmutableList.of(
             DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss").withZoneUTC(),
             DateTimeFormat.forPattern("yyyy-MM-dd HH:mm:ss.SSS").withZoneUTC(),
             ISODateTimeFormat.dateTimeParser().withOffsetParsed().withZoneUTC()
@@ -116,7 +124,7 @@ public class SearchQueryParser {
     public SearchQueryParser(@Nonnull String defaultField,
                              @Nonnull Map<String, SearchQueryField> allowedFieldsWithMapping) {
         this.defaultField = requireNonNull(defaultField);
-        this.defaultFieldKey = SearchQueryField.create(defaultField, SearchQueryField.Type.STRING);
+        this.defaultFieldKey = SearchQueryField.create(defaultField, STRING);
         this.dbFieldMapping = allowedFieldsWithMapping;
     }
 
@@ -125,9 +133,17 @@ public class SearchQueryParser {
         return QUERY_SPLITTER_PATTERN.matcher(queryString);
     }
 
-    public SearchQuery parse(String queryString) {
+    public SearchQuery parse(String encodedQueryString) {
+        String queryString = encodedQueryString;
+
         if (Strings.isNullOrEmpty(queryString) || "*".equals(queryString)) {
             return new SearchQuery(queryString);
+        }
+
+        try {
+            queryString = URLDecoder.decode(encodedQueryString, StandardCharsets.UTF_8.name());
+        } catch (UnsupportedEncodingException e) {
+            LOG.warn("Could not find correct character set for decoding: {}", e.getMessage());
         }
 
         final Matcher matcher = querySplitterMatcher(requireNonNull(queryString).trim());
@@ -231,15 +247,20 @@ public class SearchQueryParser {
     FieldValue createFieldValue(SearchQueryField field, String quotedStringValue, boolean negate) {
         // Make sure there are no quotes in the value (e.g. `"foo"' --> `foo')
         final String value = quotedStringValue.replaceAll(QUOTE_REPLACE_REGEX, "");
-        final Pair<String, SearchQueryOperator> pair = extractOperator(value, DEFAULT_OPERATOR);
+        final SearchQueryField.Type fieldType = field.getFieldType();
+        final Pair<String, SearchQueryOperator> pair = extractOperator(value, fieldType == STRING ? DEFAULT_STRING_OPERATOR : DEFAULT_OPERATOR);
 
-        switch (field.getFieldType()) {
+        switch (fieldType) {
             case DATE:
                 return new FieldValue(parseDate(pair.getLeft()), pair.getRight(), negate);
             case STRING:
                 return new FieldValue(pair.getLeft(), pair.getRight(), negate);
+            case INT:
+                return new FieldValue(Integer.parseInt(pair.getLeft()), pair.getRight(), negate);
+            case LONG:
+                return new FieldValue(Long.parseLong(pair.getLeft()), pair.getRight(), negate);
             default:
-                throw new IllegalArgumentException("Unhandled field type: " + field.getFieldType().toString());
+                throw new IllegalArgumentException("Unhandled field type: " + fieldType.toString());
         }
     }
 
@@ -249,7 +270,7 @@ public class SearchQueryParser {
         private final boolean negate;
 
         public FieldValue(final Object value, final boolean negate) {
-            this(value, DEFAULT_OPERATOR, negate);
+            this(value, DEFAULT_STRING_OPERATOR, negate);
         }
 
         public FieldValue(final Object value, final SearchQueryOperator operator, final boolean negate) {

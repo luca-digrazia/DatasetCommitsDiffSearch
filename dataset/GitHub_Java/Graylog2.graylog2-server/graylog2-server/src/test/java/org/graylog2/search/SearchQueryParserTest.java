@@ -30,6 +30,9 @@ import org.mongojack.internal.query.CollectionQueryCondition;
 import org.mongojack.internal.query.CompoundQueryCondition;
 import org.mongojack.internal.query.QueryCondition;
 
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
@@ -58,6 +61,35 @@ public class SearchQueryParserTest {
         final DBQuery.Query dbQuery = query.toDBQuery();
         final Collection<String> fieldNamesUsed = extractFieldNames(dbQuery.conditions());
         assertThat(fieldNamesUsed).containsExactly("name");
+    }
+
+    @Test
+    public void decodeQuery() throws UnsupportedEncodingException {
+        SearchQueryParser parser = new SearchQueryParser("defaultfield", ImmutableSet.of("name", "id"));
+        final String urlEncodedQuery = URLEncoder.encode("name:foo", StandardCharsets.UTF_8.name());
+        final SearchQuery query = parser.parse(urlEncodedQuery);
+        final Multimap<String, SearchQueryParser.FieldValue> queryMap = query.getQueryMap();
+
+        assertThat(queryMap.size()).isEqualTo(1);
+        assertThat(queryMap.get("name")).containsOnly(new SearchQueryParser.FieldValue("foo", false));
+        assertThat(query.hasDisallowedKeys()).isFalse();
+        assertThat(query.getDisallowedKeys()).isEmpty();
+
+        final DBQuery.Query dbQuery = query.toDBQuery();
+        final Collection<String> fieldNamesUsed = extractFieldNames(dbQuery.conditions());
+        assertThat(fieldNamesUsed).containsExactly("name");
+    }
+
+    @Test
+    public void nullQuery() {
+        SearchQueryParser parser = new SearchQueryParser("defaultfield", ImmutableSet.of("name", "id"));
+        final SearchQuery query = parser.parse(null);
+
+        assertThat(query.getQueryString()).isNullOrEmpty();
+
+        final Multimap<String, SearchQueryParser.FieldValue> queryMap = query.getQueryMap();
+
+        assertThat(queryMap.size()).isEqualTo(0);
     }
 
     @Test
@@ -128,31 +160,48 @@ public class SearchQueryParserTest {
         final SearchQueryParser parser = new SearchQueryParser("defaultfield",
                 ImmutableMap.of(
                         "id", SearchQueryField.create("real_id"),
-                        "date", SearchQueryField.create("created_at", SearchQueryField.Type.DATE))
+                        "date", SearchQueryField.create("created_at", SearchQueryField.Type.DATE),
+                        "int", SearchQueryField.create("int", SearchQueryField.Type.INT))
         );
 
         final SearchQueryOperator defaultOp = SearchQueryOperators.REGEXP;
 
-        checkQuery(parser, "", "", defaultOp);
-        checkQuery(parser, "h", "h", defaultOp);
-        checkQuery(parser, "he", "he", defaultOp);
-        checkQuery(parser, "hel", "hel", defaultOp);
-        checkQuery(parser, "hello", "hello", defaultOp);
+        checkQuery(parser, "", SearchQueryField.Type.STRING, "", defaultOp);
+        checkQuery(parser, "h", SearchQueryField.Type.STRING, "h", defaultOp);
+        checkQuery(parser, "he", SearchQueryField.Type.STRING, "he", defaultOp);
+        checkQuery(parser, "hel", SearchQueryField.Type.STRING, "hel", defaultOp);
+        checkQuery(parser, "hello", SearchQueryField.Type.STRING, "hello", defaultOp);
+        checkQuery(parser, "=~ hello", SearchQueryField.Type.STRING, "hello", SearchQueryOperators.REGEXP);
+        checkQuery(parser, "=  hello", SearchQueryField.Type.STRING, "hello", SearchQueryOperators.EQUALS);
 
-        checkQuery(parser, ">=2017-03-23", "2017-03-23", SearchQueryOperators.GREATER_EQUALS);
-        checkQuery(parser, ">= 2017-03-23", "2017-03-23", SearchQueryOperators.GREATER_EQUALS);
-        checkQuery(parser, "<=2017-03-23", "2017-03-23", SearchQueryOperators.LESS_EQUALS);
-        checkQuery(parser, "<=  2017-03-23", "2017-03-23", SearchQueryOperators.LESS_EQUALS);
-        checkQuery(parser, ">2017-03-23", "2017-03-23", SearchQueryOperators.GREATER);
-        checkQuery(parser, ">    2017-03-23", "2017-03-23", SearchQueryOperators.GREATER);
-        checkQuery(parser, "<2017-03-23", "2017-03-23", SearchQueryOperators.LESS);
-        checkQuery(parser, "< 2017-03-23", "2017-03-23", SearchQueryOperators.LESS);
-        checkQuery(parser, "=~ hello", "hello", SearchQueryOperators.REGEXP);
-        checkQuery(parser, "=  hello", "hello", SearchQueryOperators.EQUALS);
+        checkQuery(parser, ">=2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.GREATER_EQUALS);
+        checkQuery(parser, ">= 2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.GREATER_EQUALS);
+        checkQuery(parser, "<=2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.LESS_EQUALS);
+        checkQuery(parser, "<=  2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.LESS_EQUALS);
+        checkQuery(parser, ">2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.GREATER);
+        checkQuery(parser, ">    2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.GREATER);
+        checkQuery(parser, "<2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.LESS);
+        checkQuery(parser, "< 2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.LESS);
+        checkQuery(parser, "2017-03-23", SearchQueryField.Type.DATE, "2017-03-23", SearchQueryOperators.EQUALS);
+
+        checkQuery(parser, ">=1", SearchQueryField.Type.INT, "1", SearchQueryOperators.GREATER_EQUALS);
+        checkQuery(parser, "<=1", SearchQueryField.Type.INT, "1", SearchQueryOperators.LESS_EQUALS);
+        checkQuery(parser, ">1", SearchQueryField.Type.INT, "1", SearchQueryOperators.GREATER);
+        checkQuery(parser, "<1", SearchQueryField.Type.INT, "1", SearchQueryOperators.LESS);
+        checkQuery(parser, "=1", SearchQueryField.Type.INT, "1", SearchQueryOperators.EQUALS);
+        checkQuery(parser, "1", SearchQueryField.Type.INT, "1", SearchQueryOperators.EQUALS);
+
+        checkQuery(parser, ">=1", SearchQueryField.Type.LONG, "1", SearchQueryOperators.GREATER_EQUALS);
+        checkQuery(parser, "<=1", SearchQueryField.Type.LONG, "1", SearchQueryOperators.LESS_EQUALS);
+        checkQuery(parser, ">1", SearchQueryField.Type.LONG, "1", SearchQueryOperators.GREATER);
+        checkQuery(parser, "<1", SearchQueryField.Type.LONG, "1", SearchQueryOperators.LESS);
+        checkQuery(parser, "=1", SearchQueryField.Type.LONG, "1", SearchQueryOperators.EQUALS);
+        checkQuery(parser, "1", SearchQueryField.Type.LONG, "1", SearchQueryOperators.EQUALS);
     }
 
-    private void checkQuery(SearchQueryParser parser, String query, String expectedQuery, SearchQueryOperator expectedOp) {
-        final Pair<String, SearchQueryOperator> pair = parser.extractOperator(query, SearchQueryOperators.REGEXP);
+    private void checkQuery(SearchQueryParser parser, String query, SearchQueryField.Type type, String expectedQuery, SearchQueryOperator expectedOp) {
+        final SearchQueryOperator defaultOperator = type == SearchQueryField.Type.STRING ? SearchQueryParser.DEFAULT_STRING_OPERATOR : SearchQueryParser.DEFAULT_OPERATOR;
+        final Pair<String, SearchQueryOperator> pair = parser.extractOperator(query, defaultOperator);
         assertThat(pair.getLeft()).isEqualTo(expectedQuery);
         assertThat(pair.getRight()).isEqualTo(expectedOp);
     }
@@ -185,7 +234,7 @@ public class SearchQueryParserTest {
         final SearchQueryParser parser = new SearchQueryParser("defaultfield", fields);
 
         final SearchQueryParser.FieldValue v1 = parser.createFieldValue(fields.get("id"), "abc", false);
-        assertThat(v1.getOperator()).isEqualTo(SearchQueryParser.DEFAULT_OPERATOR);
+        assertThat(v1.getOperator()).isEqualTo(SearchQueryParser.DEFAULT_STRING_OPERATOR);
         assertThat(v1.getValue()).isEqualTo("abc");
         assertThat(v1.isNegate()).isFalse();
 
