@@ -421,10 +421,23 @@ final class Eval {
 
   private static Object eval(StarlarkThread.Frame fr, Expression expr)
       throws EvalException, InterruptedException {
+    // TODO(adonovan): don't push and pop all the time. We should only need the stack of function
+    // call frames, and we should recycle them.
+    // TODO(adonovan): put the StarlarkThread into the Java thread-local store
+    // once only, in push, and undo this in pop.
     try {
-      return doEval(fr, expr);
-    } catch (EvalException ex) {
-      throw maybeTransformException(expr, ex);
+      if (Callstack.enabled) {
+        Callstack.push(expr);
+      }
+      try {
+        return doEval(fr, expr);
+      } catch (EvalException ex) {
+        throw maybeTransformException(expr, ex);
+      }
+    } finally {
+      if (Callstack.enabled) {
+        Callstack.pop();
+      }
     }
   }
 
@@ -607,17 +620,10 @@ final class Eval {
             if (result != null) {
               return result;
             }
-
-            // Assuming validation was successfully applied before execution
-            // (which is not yet true for copybara, but will be soon),
-            // then the identifier must have been resolved but the
-            // resolution was not annotated onto the syntax tree---because
-            // it's a BUILD file that may share trees with the prelude.
-            // So this error does not mean "undefined variable" (morally a
-            // static error), but "variable was (dynamically) referenced
-            // before being bound", as in 'print(x); x=1'.
-            throw new EvalException(
-                id.getStartLocation(), "variable '" + name + "' is referenced before assignment");
+            String error =
+                ValidationEnvironment.createInvalidIdentifierException(
+                    name, fr.thread.getVariableNames());
+            throw new EvalException(id.getStartLocation(), error);
           }
 
           Object result;

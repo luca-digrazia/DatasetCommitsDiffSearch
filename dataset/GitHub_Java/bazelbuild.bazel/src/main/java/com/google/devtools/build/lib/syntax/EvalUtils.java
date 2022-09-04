@@ -252,6 +252,8 @@ public final class EvalUtils {
     } else if (StarlarkCallable.class.isAssignableFrom(c)) {
       // TODO(adonovan): each StarlarkCallable should report its own type string.
       return "function";
+    } else if (c.equals(SelectorValue.class)) {
+      return "select";
     } else {
       if (c.getSimpleName().isEmpty()) {
         return c.getName();
@@ -262,15 +264,15 @@ public final class EvalUtils {
   }
 
   public static void lock(Object object, Location loc) {
-    if (object instanceof Mutability.Freezable) {
-      Mutability.Freezable x = (Mutability.Freezable) object;
+    if (object instanceof StarlarkMutable) {
+      StarlarkMutable x = (StarlarkMutable) object;
       x.mutability().lock(x, loc);
     }
   }
 
   public static void unlock(Object object, Location loc) {
-    if (object instanceof Mutability.Freezable) {
-      Mutability.Freezable x = (Mutability.Freezable) object;
+    if (object instanceof StarlarkMutable) {
+      StarlarkMutable x = (StarlarkMutable) object;
       x.mutability().unlock(x, loc);
     }
   }
@@ -745,36 +747,36 @@ public final class EvalUtils {
   }
 
   /**
-   * Parses the input as a file, validates it in the module environment using options defined by
-   * {@code thread.getSemantics}, and returns the syntax tree. It uses Starlark (not BUILD)
-   * validation semantics.
+   * Parses the input as a file, validates it in the {@code thread.getGlobals} environment using
+   * options defined by {@code thread.getSemantics}, and returns the syntax tree. It uses Starlark
+   * (not BUILD) validation semantics.
    *
    * <p>The thread is primarily used for its Module. Scan/parse/validate errors are recorded in the
    * StarlarkFile. It is the caller's responsibility to inspect them.
    */
-  public static StarlarkFile parseAndValidate(
-      ParserInput input, Module module, StarlarkSemantics semantics) {
+  public static StarlarkFile parseAndValidateSkylark(ParserInput input, StarlarkThread thread) {
     StarlarkFile file = StarlarkFile.parse(input);
-    ValidationEnvironment.validateFile(file, module, semantics, /*isBuildFile=*/ false);
+    ValidationEnvironment.validateFile(
+        file, thread.getGlobals(), thread.getSemantics(), /*isBuildFile=*/ false);
     return file;
   }
 
   /**
-   * Parses the input as a file, validates it in the module environment using options defined by
-   * {@code thread.getSemantics}, and executes it. It uses Starlark (not BUILD) validation
-   * semantics.
+   * Parses the input as a file, validates it in the {@code thread.getGlobals} environment using
+   * options defined by {@code thread.getSemantics}, and executes it. It uses Starlark (not BUILD)
+   * validation semantics.
    */
-  public static void exec(ParserInput input, Module module, StarlarkThread thread)
+  public static void exec(ParserInput input, StarlarkThread thread)
       throws SyntaxError, EvalException, InterruptedException {
-    StarlarkFile file = parseAndValidate(input, module, thread.getSemantics());
+    StarlarkFile file = parseAndValidateSkylark(input, thread);
     if (!file.ok()) {
       throw new SyntaxError(file.errors());
     }
-    exec(file, module, thread);
+    exec(file, thread);
   }
 
   /** Executes a parsed, validated Starlark file in a given StarlarkThread. */
-  public static void exec(StarlarkFile file, Module module, StarlarkThread thread)
+  public static void exec(StarlarkFile file, StarlarkThread thread)
       throws EvalException, InterruptedException {
     StarlarkFunction toplevel =
         new StarlarkFunction(
@@ -783,7 +785,7 @@ public final class EvalUtils {
             FunctionSignature.NOARGS,
             /*defaultValues=*/ Tuple.empty(),
             file.getStatements(),
-            module);
+            thread.getGlobals());
     // Hack: assume unresolved identifiers are globals.
     toplevel.isToplevel = true;
 
@@ -791,14 +793,14 @@ public final class EvalUtils {
   }
 
   /**
-   * Parses the input as an expression, validates it in the module environment using options defined
-   * by {@code thread.getSemantics}, and evaluates it. It uses Starlark (not BUILD) validation
-   * semantics.
+   * Parses the input as an expression, validates it in the {@code thread.getGlobals} environment
+   * using options defined by {@code thread.getSemantics}, and evaluates it. It uses Starlark (not
+   * BUILD) validation semantics.
    */
-  public static Object eval(ParserInput input, Module module, StarlarkThread thread)
+  public static Object eval(ParserInput input, StarlarkThread thread)
       throws SyntaxError, EvalException, InterruptedException {
     Expression expr = Expression.parse(input);
-    ValidationEnvironment.validateExpr(expr, module, thread.getSemantics());
+    ValidationEnvironment.validateExpr(expr, thread.getGlobals(), thread.getSemantics());
 
     // Turn expression into a no-arg StarlarkFunction and call it.
     StarlarkFunction fn =
@@ -808,27 +810,27 @@ public final class EvalUtils {
             FunctionSignature.NOARGS,
             /*defaultValues=*/ Tuple.empty(),
             ImmutableList.<Statement>of(new ReturnStatement(expr)),
-            module);
+            thread.getGlobals());
 
     return Starlark.fastcall(thread, fn, NOARGS, NOARGS);
   }
 
   /**
-   * Parses the input as a file, validates it in the module environment using options defined by
-   * {@code thread.getSemantics}, and executes it. The function uses Starlark (not BUILD) validation
-   * semantics. If the final statement is an expression statement, it returns the value of that
-   * expression, otherwise it returns null.
+   * Parses the input as a file, validates it in the {@code thread.getGlobals} environment using
+   * options defined by {@code thread.getSemantics}, and executes it. The function uses Starlark
+   * (not BUILD) validation semantics. If the final statement is an expression statement, it returns
+   * the value of that expression, otherwise it returns null.
    *
    * <p>The function's name is intentionally unattractive. Don't call it unless you're accepting
    * strings from an interactive user interface such as a REPL or debugger; use {@link #exec} or
    * {@link #eval} instead.
    */
   @Nullable
-  public static Object execAndEvalOptionalFinalExpression(
-      ParserInput input, Module module, StarlarkThread thread)
+  public static Object execAndEvalOptionalFinalExpression(ParserInput input, StarlarkThread thread)
       throws SyntaxError, EvalException, InterruptedException {
     StarlarkFile file = StarlarkFile.parse(input);
-    ValidationEnvironment.validateFile(file, module, thread.getSemantics(), /*isBuildFile=*/ false);
+    ValidationEnvironment.validateFile(
+        file, thread.getGlobals(), thread.getSemantics(), /*isBuildFile=*/ false);
     if (!file.ok()) {
       throw new SyntaxError(file.errors());
     }
@@ -853,7 +855,7 @@ public final class EvalUtils {
             FunctionSignature.NOARGS,
             /*defaultValues=*/ Tuple.empty(),
             stmts,
-            module);
+            thread.getGlobals());
     // Hack: assume unresolved identifiers are globals.
     toplevel.isToplevel = true;
 

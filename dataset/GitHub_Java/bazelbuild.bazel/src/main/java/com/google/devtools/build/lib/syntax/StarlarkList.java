@@ -44,8 +44,7 @@ import javax.annotation.Nullable;
             + "['a', 'b', 'c', 'd'][::2]  # ['a', 'c']\n"
             + "['a', 'b', 'c', 'd'][3:0:-1]  # ['d', 'c', 'b']</pre>"
             + "Lists are mutable, as in Python.")
-public final class StarlarkList<E> extends AbstractList<E>
-    implements Sequence<E>, StarlarkValue, Mutability.Freezable {
+public final class StarlarkList<E> extends AbstractList<E> implements Sequence<E>, StarlarkMutable {
 
   // The implementation strategy is similar to ArrayList,
   // but without the extra indirection of using ArrayList.
@@ -182,12 +181,7 @@ public final class StarlarkList<E> extends AbstractList<E>
 
   @Override
   public int hashCode() {
-    // Roll our own hash code to avoid iterating through null part of elems.
-    int result = 1;
-    for (int i = 0; i < size; i++) {
-      result = 31 * result + elems[i].hashCode();
-    }
-    return 6047 + 4673 * result;
+    return 6047 + 4673 * Arrays.hashCode(elems);
   }
 
   @Override

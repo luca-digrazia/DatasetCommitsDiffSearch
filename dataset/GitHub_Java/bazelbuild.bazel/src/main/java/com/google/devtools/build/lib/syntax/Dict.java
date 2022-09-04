@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.Lists;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -40,14 +41,12 @@ import javax.annotation.Nullable;
     name = "dict",
     category = SkylarkModuleCategory.BUILTIN,
     doc =
-        "dict is a built-in type representing an associative mapping or <i>dictionary</i>. A"
-            + " dictionary supports indexing using <code>d[k]</code> and key membership testing"
-            + " using <code>k in d</code>; both operations take constant time. Unfrozen"
-            + " dictionaries are mutable, and may be updated by assigning to <code>d[k]</code> or"
-            + " by calling certain methods. Dictionaries are iterable; iteration yields the"
-            + " sequence of keys in insertion order. Iteration order is unaffected by updating the"
-            + " value associated with an existing key, but is affected by removing then"
-            + " reinserting a key.</p>\n"
+        "A language built-in type representing a dictionary (associative mapping). Dictionaries"
+            + " are mutable, indexable, ordered, iterable (equivalent to iterating over its keys),"
+            + " and support fast membership tests of keys using the <code>in</code> operator. The"
+            + " order of the keys is the order of their most recent insertion: it is unaffected by"
+            + " updating the value associated with an existing key, but is affected by removing"
+            + " then reinserting a key.</p>\n"
             + "<pre>d = {0: 0, 2: 2, 1: 1}\n"
             + "[k for k in d]  # [0, 2, 1]\n"
             + "d.pop(2)\n"
@@ -55,25 +54,21 @@ import javax.annotation.Nullable;
             + "0 in d, \"a\" in d  # (True, False)\n"
             + "[(k, v) for k, v in d.items()]  # [(0, \"a\"), (1, 1), (2, \"b\")]\n"
             + "</pre>\n"
-            + "<p>There are three ways to construct a dictionary:</p>\n"
-            + "<ol>\n"
-            + "<li>A dictionary expression <code>{k: v, ...}</code> yields a new dictionary with"
-            + " the specified key/value entries, inserted in the order they appear in the"
-            + " expression. Evaluation fails if any two key expressions yield the same"
-            + " value.</p>\n"
-            + "<li>A dictionary comprehension <code>{k: v for vars in seq}</code> yields a new"
-            + " dictionary into which each key/value pair is inserted in loop iteration order."
-            + " Duplicates are permitted: the first insertion of a given key determines its"
-            + " position in the sequence, and the last determines its associated value.</p>\n"
+            + "<p>There are 3 ways to construct a dictionary, each with a different treatment of"
+            + " duplicate keys:</p>\n"
+            + "<p>The dict literal expression will result in a dynamic error if duplicate keys are"
+            + " given, regardless of whether the keys are themselves given as literals. The keys'"
+            + " insertion order is the order in which they are given in the expression.</p>\n"
+            + "<p>In the dict comprehension, key/value pairs yielded by the generator expression is"
+            + " set in the dictionary in the order yielded: the first occurrence of the key"
+            + " determines its insertion order, and the last determines the value associated to"
+            + " it.</p>\n"
             + "<pre class=\"language-python\">\n"
             + "{k: v for k, v in ((\"a\", 0), (\"b\", 1), (\"a\", 2))}  # {\"a\": 2, \"b\": 1}\n"
             + "{i: 2*i for i in range(3)}  # {0: 0, 1: 2, 2: 4}\n"
             + "</pre>\n"
-            + "<li>A call to the built-in <a href=\"globals.html#dict\">dict</a> function returns"
-            + " a dictionary containing the specified entries, which are inserted in argument"
-            + " order, positional arguments before named. As with comprehensions, duplicate keys"
-            + " are permitted.\n"
-            + "</ol>")
+            + "<p>The <a href=\"globals.html#dict\">dict()</a> global function is documented"
+            + " elsewhere.<p>")
 // TODO(b/64208606): eliminate these type parameters as they are wildly unsound.
 // Starlark code may update a Dict in ways incompatible with its Java
 // parameterized type. There is no realistic static or dynamic way to prevent
@@ -82,14 +77,9 @@ import javax.annotation.Nullable;
 // Unchecked warnings should be treated as errors.
 // Ditto Sequence.
 public final class Dict<K, V>
-    implements Map<K, V>,
-        StarlarkValue,
-        Mutability.Freezable,
-        SkylarkIndexable,
-        StarlarkIterable<K> {
+    implements Map<K, V>, StarlarkMutable, SkylarkIndexable, StarlarkIterable<K> {
 
   private final LinkedHashMap<K, V> contents;
-  private int iteratorCount; // number of active iterators (unused once frozen)
 
   /** Final except for {@link #unsafeShallowFreeze}; must not be modified any other way. */
   private Mutability mutability;
@@ -119,19 +109,6 @@ public final class Dict<K, V>
   @Override
   public boolean isImmutable() {
     return mutability().isFrozen();
-  }
-
-  @Override
-  public boolean updateIteratorCount(int delta) {
-    if (mutability().isFrozen()) {
-      return false;
-    }
-    if (delta > 0) {
-      iteratorCount++;
-    } else if (delta < 0) {
-      iteratorCount--;
-    }
-    return iteratorCount > 0;
   }
 
   @Override
@@ -414,7 +391,7 @@ public final class Dict<K, V>
    * @throws EvalException if the key is invalid or the dict is frozen
    */
   public void put(K key, V value, Location unused) throws EvalException {
-    Starlark.checkMutable(this);
+    checkMutable();
     EvalUtils.checkHashable(key);
     contents.put(key, value);
   }
@@ -428,7 +405,7 @@ public final class Dict<K, V>
    */
   public <KK extends K, VV extends V> void putAll(Map<KK, VV> map, Location unused)
       throws EvalException {
-    Starlark.checkMutable(this);
+    checkMutable();
     for (Map.Entry<KK, VV> e : map.entrySet()) {
       KK k = e.getKey();
       EvalUtils.checkHashable(k);
@@ -445,7 +422,7 @@ public final class Dict<K, V>
    * @throws EvalException if the dict is frozen
    */
   V remove(Object key, Location unused) throws EvalException {
-    Starlark.checkMutable(this);
+    checkMutable();
     return contents.remove(key);
   }
 
@@ -462,7 +439,7 @@ public final class Dict<K, V>
    * @throws EvalException if the dict is frozen
    */
   private void clear(Location unused) throws EvalException {
-    Starlark.checkMutable(this);
+    checkMutable();
     contents.clear();
   }
 
@@ -643,7 +620,7 @@ public final class Dict<K, V>
 
   // disallowed java.util.Map update operations
 
-  // TODO(adonovan): make mutability exception a subclass of (unchecked)
+  // TODO(adonovan): make MutabilityException a subclass of (unchecked)
   // UnsupportedOperationException, allowing the primary Dict operations
   // to satisfy the Map operations below in the usual way (like ImmutableMap does).
   // Add "ForStarlark" suffix to disambiguate SkylarkCallable-annotated methods.
