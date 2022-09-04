@@ -38,8 +38,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
 
     private TextView mSwitchSize;
 
-    private TextView mChangeRotate;
-
     private List<SwitchVideoModel> mUrlList = new ArrayList<>();
 
     //记住切换数据源类型
@@ -47,13 +45,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
 
     //数据源
     private int mSourcePosition = 0;
-
-    /**
-     * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
-     */
-    public SampleVideo(Context context, Boolean fullFlag) {
-        super(context, fullFlag);
-    }
 
     public SampleVideo(Context context) {
         super(context);
@@ -72,7 +63,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
     private void initView() {
         mMoreScale = (TextView) findViewById(R.id.moreScale);
         mSwitchSize = (TextView) findViewById(R.id.switchSize);
-        mChangeRotate = (TextView) findViewById(R.id.change_rotate);
 
         //切换清晰度
         mMoreScale.setOnClickListener(new OnClickListener() {
@@ -105,20 +95,6 @@ public class SampleVideo extends StandardGSYVideoPlayer {
             @Override
             public void onClick(View v) {
                 showSwitchDialog();
-            }
-        });
-
-        mChangeRotate.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if((mTextureView.getRotation() - mRotate) == 270) {
-                    mTextureView.setRotation(mRotate);
-                    mTextureView.requestLayout();
-                } else {
-                    mTextureView.setRotation(mTextureView.getRotation() + 90);
-                    mTextureView.requestLayout();
-                }
-
             }
         });
 

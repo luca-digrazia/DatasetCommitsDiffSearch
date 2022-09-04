@@ -11,6 +11,7 @@ import android.widget.SeekBar;
 
 import com.shuyu.gsyvideoplayer.GSYPreViewManager;
 import com.shuyu.gsyvideoplayer.GSYTextureView;
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.R;
 
 /**
@@ -33,14 +34,17 @@ public class CustomGSYVideoPlayer extends StandardGSYVideoPlayer {
 
     public CustomGSYVideoPlayer(Context context) {
         super(context);
-        initView();
     }
 
     public CustomGSYVideoPlayer(Context context, AttributeSet attrs) {
         super(context, attrs);
-        initView();
     }
 
+    @Override
+    protected void init(Context context) {
+        super.init(context);
+        initView();
+    }
 
     private void initView() {
         mPreviewLayout = (RelativeLayout) findViewById(R.id.preview_layout);
@@ -99,7 +103,7 @@ public class CustomGSYVideoPlayer extends StandardGSYVideoPlayer {
     @Override
     public void onProgressChanged(SeekBar seekBar, final int progress, boolean fromUser) {
         super.onProgressChanged(seekBar, progress, fromUser);
-        if (fromUser) {
+        if (fromUser && mOpenPreView) {
             int width = seekBar.getWidth();
             int offset = (int) (width - (getResources().getDimension(R.dimen.seek_bar_image) / 2)) / 100 * progress;
 
@@ -107,8 +111,10 @@ public class CustomGSYVideoPlayer extends StandardGSYVideoPlayer {
             layoutParams.leftMargin = offset;
             //设置帧预览图的显示位置
             mPreviewLayout.setLayoutParams(layoutParams);
-            if (GSYPreViewManager.instance().getMediaPlayer() != null && mHadPlay
-                    && Math.abs(progress - mPreProgress) > 2 && (mCacheFile || mOpenPreView)) {
+            if (GSYPreViewManager.instance().getMediaPlayer() != null
+                    && mHadPlay && (mOpenPreView)
+                    && GSYPreViewManager.instance().isSeekToComplete()) {
+                GSYPreViewManager.instance().setSeekToComplete(false);
                 int time = progress * getDuration() / 100;
                 GSYPreViewManager.instance().getMediaPlayer().seekTo(time);
                 mPreProgress = progress;
@@ -119,19 +125,25 @@ public class CustomGSYVideoPlayer extends StandardGSYVideoPlayer {
     @Override
     public void onStartTrackingTouch(SeekBar seekBar) {
         super.onStartTrackingTouch(seekBar);
-        mIsFromUser = true;
-        mPreviewLayout.setVisibility(VISIBLE);
-        mPreProgress = -2;
+        if (mOpenPreView) {
+            mIsFromUser = true;
+            mPreviewLayout.setVisibility(VISIBLE);
+            mPreProgress = -2;
+        }
     }
 
     @Override
     public void onStopTrackingTouch(SeekBar seekBar) {
-        if (mPreProgress >= 0) {
-            seekBar.setProgress(mPreProgress);
+        if (mOpenPreView) {
+            if (mPreProgress >= 0) {
+                seekBar.setProgress(mPreProgress);
+            }
+            super.onStopTrackingTouch(seekBar);
+            mIsFromUser = false;
+            mPreviewLayout.setVisibility(GONE);
+        } else {
+            super.onStopTrackingTouch(seekBar);
         }
-        super.onStopTrackingTouch(seekBar);
-        mIsFromUser = false;
-        mPreviewLayout.setVisibility(GONE);
     }
 
     @Override
@@ -155,8 +167,7 @@ public class CustomGSYVideoPlayer extends StandardGSYVideoPlayer {
     }
 
     /**
-     * 是否打开滑动预览，对已缓存文件默认生效
-     * 如果是本地文件需要设置打开，默认关闭
+     * 如果是需要进度条预览的设置打开，默认关闭
      */
     public void setOpenPreView(boolean localFile) {
         this.mOpenPreView = localFile;

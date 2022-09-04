@@ -51,7 +51,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
 
     protected ProgressBar mBottomProgressBar;
 
-    private View mLoadingProgressBar;
+    private ENDownloadView mLoadingProgressBar;
 
     protected TextView mTitleTextView; //title
 
@@ -102,13 +102,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         setVideoAllCallBack(standardVideoAllCallBack);
     }
 
-    /**
-     * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
-     */
-    public StandardGSYVideoPlayer(Context context, Boolean fullFlag) {
-        super(context, fullFlag);
-    }
-
     public StandardGSYVideoPlayer(Context context) {
         super(context);
     }
@@ -125,7 +118,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mThumbImageViewLayout = (RelativeLayout) findViewById(R.id.thumb);
         mLockScreen = (ImageView) findViewById(R.id.lock_screen);
 
-        mLoadingProgressBar = findViewById(R.id.loading);
+        mLoadingProgressBar = (ENDownloadView) findViewById(R.id.loading);
 
         mThumbImageViewLayout.setVisibility(GONE);
         mThumbImageViewLayout.setOnClickListener(this);
@@ -420,9 +413,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).reset();
-        }
+        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.VISIBLE);
         mCoverImageView.setVisibility(View.VISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -436,9 +427,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.VISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).start();
-        }
+        mLoadingProgressBar.start();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.VISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -462,9 +451,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).reset();
-        }
+        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -484,9 +471,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).reset();
-        }
+        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         //mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -508,9 +493,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.VISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).start();
-        }
+        mLoadingProgressBar.start();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -523,9 +506,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.VISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).start();
-        }
+        mLoadingProgressBar.start();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.VISIBLE);
@@ -539,9 +520,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.INVISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).reset();
-        }
+        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -554,9 +533,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.VISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).reset();
-        }
+        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.VISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -570,9 +547,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).reset();
-        }
+        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.VISIBLE);
         mCoverImageView.setVisibility(View.INVISIBLE);
         mBottomProgressBar.setVisibility(View.VISIBLE);
@@ -586,9 +561,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         mBottomContainer.setVisibility(View.INVISIBLE);
         mStartButton.setVisibility(View.VISIBLE);
         mLoadingProgressBar.setVisibility(View.INVISIBLE);
-        if (mLoadingProgressBar instanceof ENDownloadView) {
-            ((ENDownloadView)mLoadingProgressBar).reset();
-        }
+        mLoadingProgressBar.reset();
         mThumbImageViewLayout.setVisibility(View.INVISIBLE);
         mCoverImageView.setVisibility(View.VISIBLE);
         mBottomProgressBar.setVisibility(View.INVISIBLE);
@@ -596,7 +569,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         updateStartImage();
     }
 
-    protected void updateStartImage() {
+    private void updateStartImage() {
         ENPlayView enPlayView = (ENPlayView) mStartButton;
         enPlayView.setDuration(500);
         if (mCurrentState == CURRENT_STATE_PLAYING) {
@@ -679,7 +652,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         super.dismissProgressDialog();
         if (mProgressDialog != null) {
             mProgressDialog.dismiss();
-            mProgressDialog = null;
         }
     }
 
@@ -720,7 +692,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         super.dismissVolumeDialog();
         if (mVolumeDialog != null) {
             mVolumeDialog.dismiss();
-            mVolumeDialog = null;
         }
     }
 
@@ -757,7 +728,6 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         super.dismissVolumeDialog();
         if (mBrightnessDialog != null) {
             mBrightnessDialog.dismiss();
-            mBrightnessDialog = null;
         }
     }
 
