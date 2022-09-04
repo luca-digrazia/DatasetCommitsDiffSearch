@@ -23,14 +23,11 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.ShellEscaper;
 import java.io.IOException;
@@ -38,9 +35,10 @@ import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.Charset;
 
-/** Action to write a parameter file for a {@link CommandLine}. */
+/**
+ * Action to write a parameter file for a {@link CommandLine}.
+ */
 @Immutable // if commandLine and charset are immutable
-@AutoCodec
 public final class ParameterFileWriteAction extends AbstractFileWriteAction {
 
   private static final String GUID = "45f678d8-e395-401e-8446-e795ccc6361f";
@@ -75,7 +73,6 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
    * @param type the type of the file
    * @param charset the charset of the file
    */
-  @AutoCodec.Instantiator
   public ParameterFileWriteAction(
       ActionOwner owner,
       Iterable<Artifact> inputs,
@@ -83,7 +80,7 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
       CommandLine commandLine,
       ParameterFileType type,
       Charset charset) {
-    super(owner, inputs, output, false);
+    super(owner, ImmutableList.copyOf(inputs), output, false);
     this.commandLine = commandLine;
     this.type = type;
     this.charset = charset;
@@ -121,11 +118,6 @@ public final class ParameterFileWriteAction extends AbstractFileWriteAction {
       throw new UserExecException(e);
     }
     return new ParamFileWriter(arguments);
-  }
-
-  @VisibleForSerialization
-  Artifact getOutput() {
-    return Iterables.getOnlyElement(outputs);
   }
 
   private class ParamFileWriter implements DeterministicWriter {

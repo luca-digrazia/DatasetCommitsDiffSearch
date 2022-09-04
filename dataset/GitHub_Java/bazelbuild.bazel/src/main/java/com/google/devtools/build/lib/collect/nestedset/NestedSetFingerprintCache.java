@@ -15,26 +15,17 @@
 package com.google.devtools.build.lib.collect.nestedset;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.HashMultiset;
-import com.google.common.collect.Multiset;
 import com.google.devtools.build.lib.analysis.actions.CommandLineItem;
-import com.google.devtools.build.lib.analysis.actions.CommandLineItem.MapFn;
 import com.google.devtools.build.lib.util.Fingerprint;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** Computes fingerprints for nested sets, reusing sub-computations from children. */
 public class NestedSetFingerprintCache {
-  private static final int DIGEST_SIZE = 16;
-  private static final int EMPTY_SET_DIGEST = 104_395_303;
+  private static final byte[] EMPTY_SET_BYTES = new byte[] {};
 
   /** Memoize the subresults. We have to have one cache per type of command item map function. */
-  private Map<CommandLineItem.MapFn<?>, DigestMap> mapFnToDigestMap = createMap();
-
-  private final Set<Class<?>> seenMapFns = new HashSet<>();
-  private final Multiset<Class<?>> seenParametrizedMapFns = HashMultiset.create();
+  private Map<CommandLineItem.MapFn<?>, Map<Object, byte[]>> mapFnToFingerprints = createMap();
 
   public <T> void addNestedSetToFingerprint(Fingerprint fingerprint, NestedSet<T> nestedSet) {
     addNestedSetToFingerprint(CommandLineItem.MapFn.DEFAULT, fingerprint, nestedSet);
@@ -42,85 +33,58 @@ public class NestedSetFingerprintCache {
 
   public <T> void addNestedSetToFingerprint(
       CommandLineItem.MapFn<? super T> mapFn, Fingerprint fingerprint, NestedSet<T> nestedSet) {
-    if (mapFn instanceof CommandLineItem.CapturingMapFn) {
-      addNestedSetToFingerprintSlow(mapFn, fingerprint, nestedSet);
-      return;
-    }
-    // Only top-level nested sets can be empty, so we can bail here
-    if (nestedSet.isEmpty()) {
-      fingerprint.addInt(EMPTY_SET_DIGEST);
-      return;
-    }
-    DigestMap digestMap = mapFnToDigestMap.computeIfAbsent(mapFn, this::newDigestMap);
+    Map<Object, byte[]> fingerprints =
+        mapFnToFingerprints.computeIfAbsent(mapFn, k -> new ConcurrentHashMap<>());
     fingerprint.addInt(nestedSet.getOrder().ordinal());
     Object children = nestedSet.rawChildren();
-    addToFingerprint(mapFn, fingerprint, digestMap, children);
-  }
-
-  private <T> void addNestedSetToFingerprintSlow(
-      MapFn<? super T> mapFn, Fingerprint fingerprint, NestedSet<T> nestedSet) {
-    for (T object : nestedSet) {
-      mapFn.expandToCommandLine(object, fingerprint);
-    }
+    byte[] bytes = getBytes(mapFn, fingerprints, children);
+    fingerprint.addBytes(bytes);
   }
 
   public void clear() {
-    mapFnToDigestMap = createMap();
-    seenMapFns.clear();
-    seenParametrizedMapFns.clear();
+    mapFnToFingerprints = createMap();
   }
 
   @SuppressWarnings("unchecked")
-  private <T> void addToFingerprint(
-      CommandLineItem.MapFn<? super T> mapFn,
-      Fingerprint fingerprint,
-      DigestMap digestMap,
-      Object children) {
-    if (children instanceof Object[]) {
-      if (!digestMap.readDigest(children, fingerprint)) {
-        Fingerprint childrenFingerprint = new Fingerprint();
+  private <T> byte[] getBytes(
+      CommandLineItem.MapFn<? super T> mapFn, Map<Object, byte[]> fingerprints, Object children) {
+    byte[] bytes = fingerprints.get(children);
+    if (bytes == null) {
+      if (children instanceof Object[]) {
+        Fingerprint fingerprint = new Fingerprint();
         for (Object child : (Object[]) children) {
-          addToFingerprint(mapFn, childrenFingerprint, digestMap, child);
+          if (child instanceof Object[]) {
+            fingerprint.addBytes(getBytes(mapFn, fingerprints, child));
+          } else {
+            addToFingerprint(mapFn, fingerprint, (T) child);
+          }
         }
-        digestMap.insertAndReadDigest(children, childrenFingerprint, fingerprint);
+        bytes = fingerprint.digestAndReset();
+
+        // There is no point memoizing anything except the multi-item case,
+        // since the single-item case gets inlined into its parents anyway,
+        // and the empty set is a singleton
+        fingerprints.put(children, bytes);
+      } else if (children != NestedSet.EMPTY_CHILDREN) {
+        // Single item
+        Fingerprint fingerprint = new Fingerprint();
+        addToFingerprint(mapFn, fingerprint, (T) children);
+        bytes = fingerprint.digestAndReset();
+      } else {
+        // Empty nested set
+        bytes = EMPTY_SET_BYTES;
       }
-    } else {
-      addToFingerprint(mapFn, fingerprint, (T) children);
     }
+    return bytes;
   }
 
   @VisibleForTesting
   <T> void addToFingerprint(
       CommandLineItem.MapFn<? super T> mapFn, Fingerprint fingerprint, T object) {
-    mapFn.expandToCommandLine(object, fingerprint);
+    fingerprint.addString(mapFn.expandToCommandLine(object));
   }
 
-  private static Map<CommandLineItem.MapFn<?>, DigestMap> createMap() {
+  private static Map<CommandLineItem.MapFn<?>, Map<Object, byte[]>> createMap() {
     return new ConcurrentHashMap<>();
-  }
-
-  private DigestMap newDigestMap(CommandLineItem.MapFn<?> mapFn) {
-    Class<?> mapFnClass = mapFn.getClass();
-    if (mapFn instanceof CommandLineItem.ParametrizedMapFn) {
-      int occurrences = seenParametrizedMapFns.add(mapFnClass, 1) + 1;
-      if (occurrences > ((CommandLineItem.ParametrizedMapFn) mapFn).maxInstancesAllowed()) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Too many instances of CommandLineItem.ParametrizedMapFn '%s' detected. "
-                    + "Please construct fewer instances or use CommandLineItem.CapturingMapFn.",
-                mapFnClass.getName()));
-      }
-    } else {
-      if (!seenMapFns.add(mapFnClass)) {
-        throw new IllegalArgumentException(
-            String.format(
-                "Illegal mapFn implementation: '%s'. "
-                    + "CommandLineItem.MapFn instances must be singletons. "
-                    + "Please see CommandLineItem.ParametrizedMapFn or "
-                    + "CommandLineItem.CapturingMapFn for alternatives.",
-                mapFnClass.getName()));
-      }
-    }
-    return new DigestMap(DIGEST_SIZE, 1024);
   }
 }

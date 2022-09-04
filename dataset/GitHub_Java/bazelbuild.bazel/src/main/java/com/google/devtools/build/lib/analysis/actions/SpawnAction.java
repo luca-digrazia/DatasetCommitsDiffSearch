@@ -37,13 +37,11 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.CommandAction;
-import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
@@ -60,7 +58,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LazyString;
@@ -69,6 +66,7 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.errorprone.annotations.CompileTimeConstant;
 import com.google.errorprone.annotations.FormatMethod;
 import com.google.errorprone.annotations.FormatString;
+import com.google.protobuf.GeneratedMessage.GeneratedExtension;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -79,12 +77,22 @@ import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
 /** An Action representing an arbitrary subprocess to be forked and exec'd. */
-@AutoCodec
 public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifier, CommandAction {
 
-  /** Sets extensions on {@link ExtraActionInfo}. */
-  public interface ExtraActionInfoSupplier {
-    void extend(ExtraActionInfo.Builder builder);
+
+  /** Sets extensions on ExtraActionInfo **/
+  protected static class ExtraActionInfoSupplier<T> {
+    private final GeneratedExtension<ExtraActionInfo, T> extension;
+    private final T value;
+
+    protected ExtraActionInfoSupplier(GeneratedExtension<ExtraActionInfo, T> extension, T value) {
+      this.extension = extension;
+      this.value = value;
+    }
+
+    void extend(ExtraActionInfo.Builder builder) {
+      builder.setExtension(extension, value);
+    }
   }
 
   private static final String GUID = "ebd6fce3-093e-45ee-adb6-bf513b602f0d";
@@ -99,7 +107,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   private final ResourceSet resourceSet;
   private final ImmutableMap<String, String> executionInfo;
 
-  private final ExtraActionInfoSupplier extraActionInfoSupplier;
+  private final ExtraActionInfoSupplier<?> extraActionInfoSupplier;
 
   /**
    * Constructs a SpawnAction using direct initialization arguments.
@@ -121,7 +129,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    * @param progressMessage the message printed during the progression of the build.
    * @param mnemonic the mnemonic that is reported in the master log.
    */
-  @AutoCodec.Instantiator
   public SpawnAction(
       ActionOwner owner,
       Iterable<Artifact> tools,
@@ -188,7 +195,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       RunfilesSupplier runfilesSupplier,
       String mnemonic,
       boolean executeUnconditionally,
-      ExtraActionInfoSupplier extraActionInfoSupplier) {
+      ExtraActionInfoSupplier<?> extraActionInfoSupplier) {
     super(owner, tools, inputs, runfilesSupplier, outputs, env);
     this.resourceSet = resourceSet;
     this.executionInfo = executionInfo;
@@ -602,7 +609,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
     private CharSequence progressMessage;
     private String mnemonic = "Unknown";
-    protected ExtraActionInfoSupplier extraActionInfoSupplier = null;
+    protected ExtraActionInfoSupplier<?> extraActionInfoSupplier = null;
     private boolean disableSandboxing = false;
 
     /**
@@ -1337,8 +1344,9 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       return this;
     }
 
-    public <T> Builder setExtraActionInfo(ExtraActionInfoSupplier extraActionInfoSupplier) {
-      this.extraActionInfoSupplier = extraActionInfoSupplier;
+    public <T> Builder setExtraActionInfo(
+        GeneratedExtension<ExtraActionInfo, T> extension, T value) {
+      this.extraActionInfoSupplier = new ExtraActionInfoSupplier<>(extension, value);
       return this;
     }
 
@@ -1352,8 +1360,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    * Command line implementation that optimises for containing executable args, command lines, and
    * command lines spilled to param files.
    */
-  @AutoCodec
-  static class SpawnActionCommandLine extends CommandLine {
+  private static class SpawnActionCommandLine extends CommandLine {
     private final Object[] values;
 
     SpawnActionCommandLine(Object[] values) {
