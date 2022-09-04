@@ -47,7 +47,7 @@ public class FormAuthenticationMechanism implements HttpAuthenticationMechanism 
 
     public void init(HttpConfiguration httpConfiguration, HttpBuildTimeConfig buildTimeConfig) {
         String key;
-        if (!httpConfiguration.encryptionKey.isPresent()) {
+        if (httpConfiguration.encryptionKey.isEmpty()) {
             if (encryptionKey != null) {
                 //persist across dev mode restarts
                 key = encryptionKey;
@@ -58,7 +58,7 @@ public class FormAuthenticationMechanism implements HttpAuthenticationMechanism 
                 log.warn("Encryption key was not specified for persistent FORM auth, using temporary key " + key);
             }
         } else {
-            key = httpConfiguration.encryptionKey.get();
+            key = httpConfiguration.encryptionKey;
         }
         FormAuthConfig form = buildTimeConfig.auth.form;
         loginManager = new PersistentLoginManager(key, "quarkus-credential", form.timeout.toMillis(),
