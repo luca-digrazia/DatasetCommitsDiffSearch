@@ -419,14 +419,12 @@ public final class HibernateOrmProcessor {
             integratorClasses.add((Class<? extends Integrator>) recorderContext.classProxy(integratorClassName));
         }
 
-        Map<String, List<HibernateOrmIntegrationStaticInitListener>> integrationStaticInitListeners = HibernateOrmIntegrationStaticConfiguredBuildItem
+        List<HibernateOrmIntegrationStaticInitListener> integrationStaticInitListeners = HibernateOrmIntegrationStaticConfiguredBuildItem
                 .collectListeners(integrationBuildItems);
 
         List<QuarkusPersistenceUnitDefinition> finalStagePUDescriptors = new ArrayList<>();
         for (PersistenceUnitDescriptorBuildItem pud : persistenceUnitDescriptorBuildItems) {
-            finalStagePUDescriptors.add(
-                    pud.asOutputPersistenceUnitDefinition(integrationStaticInitListeners
-                            .getOrDefault(pud.getPersistenceUnitName(), Collections.emptyList())));
+            finalStagePUDescriptors.add(pud.asOutputPersistenceUnitDefinition(integrationStaticInitListeners));
         }
 
         //Make it possible to record the QuarkusPersistenceUnitDefinition as bytecode:

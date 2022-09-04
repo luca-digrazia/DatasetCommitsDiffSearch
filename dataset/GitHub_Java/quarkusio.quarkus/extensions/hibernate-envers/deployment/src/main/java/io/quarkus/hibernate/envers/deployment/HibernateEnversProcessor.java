@@ -16,7 +16,6 @@ import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.hibernate.envers.HibernateEnversBuildTimeConfig;
 import io.quarkus.hibernate.envers.HibernateEnversRecorder;
 import io.quarkus.hibernate.orm.deployment.AdditionalJpaModelBuildItem;
-import io.quarkus.hibernate.orm.deployment.PersistenceUnitDescriptorBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationStaticConfiguredBuildItem;
 
 public final class HibernateEnversProcessor {
@@ -54,13 +53,10 @@ public final class HibernateEnversProcessor {
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
     public void applyConfig(HibernateEnversRecorder recorder, HibernateEnversBuildTimeConfig buildTimeConfig,
-            List<PersistenceUnitDescriptorBuildItem> persistenceUnitDescriptorBuildItems,
             BuildProducer<HibernateOrmIntegrationStaticConfiguredBuildItem> integrationProducer) {
-        for (PersistenceUnitDescriptorBuildItem puDescriptor : persistenceUnitDescriptorBuildItems) {
-            integrationProducer.produce(
-                    new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_ENVERS,
-                            puDescriptor.getPersistenceUnitName(), recorder.createStaticInitListener(buildTimeConfig)));
-        }
+        integrationProducer.produce(
+                new HibernateOrmIntegrationStaticConfiguredBuildItem(HIBERNATE_ENVERS,
+                        recorder.createStaticInitListener(buildTimeConfig)));
     }
 
     @BuildStep

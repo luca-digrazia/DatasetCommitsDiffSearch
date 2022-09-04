@@ -13,16 +13,12 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.TreeSet;
-
-import javax.persistence.EntityManager;
 
 import org.hibernate.Hibernate;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.deployment.index.IndexingUtil;
@@ -36,57 +32,19 @@ public class HibernateOrmAnnotationsTest {
     private static final DotName RETENTION = DotName.createSimple(Retention.class.getName());
     private static final DotName TARGET = DotName.createSimple(Target.class.getName());
 
-    private static Index jpaIndex;
-    private static Index hibernateIndex;
-
-    @BeforeAll
-    public static void index() throws IOException {
-        jpaIndex = IndexingUtil.indexJar(determineJpaJarLocation());
-        hibernateIndex = IndexingUtil.indexJar(determineHibernateJarLocation());
-    }
-
     @Test
-    public void testNoMissingJpaAnnotation() {
-        Set<DotName> jpaMappingAnnotations = findRuntimeAnnotations(jpaIndex);
-        jpaMappingAnnotations.removeIf(name -> name.toString().startsWith("javax.persistence.metamodel."));
+    public void testNoMissingPackageLevelAnnotation() throws IOException {
+        Index index = indexHibernateJar();
 
-        assertThat(HibernateOrmAnnotations.JPA_MAPPING_ANNOTATIONS)
-                .containsExactlyInAnyOrderElementsOf(jpaMappingAnnotations);
-    }
-
-    @Test
-    public void testNoMissingHibernateAnnotation() {
-        Set<DotName> hibernateMappingAnnotations = findRuntimeAnnotations(hibernateIndex);
-        hibernateMappingAnnotations.removeIf(name -> name.toString().contains(".internal."));
-        hibernateMappingAnnotations.removeIf(name -> name.toString().contains(".spi."));
-
-        assertThat(HibernateOrmAnnotations.HIBERNATE_MAPPING_ANNOTATIONS)
-                .containsExactlyInAnyOrderElementsOf(hibernateMappingAnnotations);
-    }
-
-    @Test
-    public void testNoMissingPackageLevelAnnotation() {
-        Set<DotName> packageLevelHibernateAnnotations = findRuntimeAnnotationsByTargetType(jpaIndex, ElementType.PACKAGE);
-        packageLevelHibernateAnnotations.addAll(findRuntimeAnnotationsByTargetType(hibernateIndex, ElementType.PACKAGE));
+        Set<DotName> packageLevelHibernateAnnotations = findRuntimeAnnotationsByTargetType(index, ElementType.PACKAGE);
         packageLevelHibernateAnnotations.removeIf(name -> name.toString().contains(".internal."));
 
         assertThat(HibernateOrmAnnotations.PACKAGE_ANNOTATIONS)
                 .containsExactlyInAnyOrderElementsOf(packageLevelHibernateAnnotations);
     }
 
-    private Set<DotName> findRuntimeAnnotations(Index index) {
-        Set<DotName> annotations = new HashSet<>();
-        for (AnnotationInstance retentionAnnotation : index.getAnnotations(RETENTION)) {
-            ClassInfo annotation = retentionAnnotation.target().asClass();
-            if (RetentionPolicy.RUNTIME.name().equals(retentionAnnotation.value().asEnum())) {
-                annotations.add(annotation.name());
-            }
-        }
-        return annotations;
-    }
-
     private Set<DotName> findRuntimeAnnotationsByTargetType(Index index, ElementType targetType) {
-        Set<DotName> annotations = new TreeSet<>();
+        Set<DotName> annotations = new HashSet<>();
         for (AnnotationInstance retentionAnnotation : index.getAnnotations(RETENTION)) {
             ClassInfo annotation = retentionAnnotation.target().asClass();
             if (RetentionPolicy.RUNTIME.name().equals(retentionAnnotation.value().asEnum())
@@ -108,15 +66,11 @@ public class HibernateOrmAnnotationsTest {
         return allowedTargetTypes.contains(targetType.name());
     }
 
-    private static File determineJpaJarLocation() {
-        URL url = EntityManager.class.getProtectionDomain().getCodeSource().getLocation();
-        if (!url.getProtocol().equals("file")) {
-            throw new IllegalStateException("JPA JAR is not a local file? " + url);
-        }
-        return new File(url.getPath());
+    private Index indexHibernateJar() throws IOException {
+        return IndexingUtil.indexJar(determineHibernateJarLocation());
     }
 
-    private static File determineHibernateJarLocation() {
+    private File determineHibernateJarLocation() {
         URL url = Hibernate.class.getProtectionDomain().getCodeSource().getLocation();
         if (!url.getProtocol().equals("file")) {
             throw new IllegalStateException("Hibernate JAR is not a local file? " + url);
