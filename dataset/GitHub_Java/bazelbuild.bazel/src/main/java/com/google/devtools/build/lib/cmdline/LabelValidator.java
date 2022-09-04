@@ -39,11 +39,7 @@ public final class LabelValidator {
    * Matches characters allowed in package name (allowed are A-Z, a-z, 0-9, '/', '-', '.' and '_')
    */
   private static final CharMatcher ALLOWED_CHARACTERS_IN_PACKAGE_NAME =
-      CharMatcher.inRange('0', '9')
-          .or(CharMatcher.inRange('a', 'z'))
-          .or(CharMatcher.inRange('A', 'Z'))
-          .or(CharMatcher.anyOf("/-._"))
-          .precomputed();
+      CharMatcher.javaLetterOrDigit().or(CharMatcher.anyOf("/-._")).precomputed();
 
   /**
    * Matches characters allowed in target names regardless of context.
@@ -125,10 +121,6 @@ public final class LabelValidator {
    */
   @Nullable
   public static String validateTargetName(String targetName) {
-    // We allow labels equaling '.' or ending in '/.' for now. If we ever
-    // actually configure the target we will report an error, but they are permitted for
-    // data directories.
-
     // Code optimized for the common case: success.
     int len = targetName.length();
     if (len == 0) {
