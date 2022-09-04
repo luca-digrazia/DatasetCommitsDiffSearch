@@ -5,7 +5,6 @@ import java.util.Map;
 import java.util.Set;
 
 import io.quarkus.runtime.annotations.Recorder;
-import io.quarkus.vertx.http.runtime.devmode.AdditionalRouteDescription;
 import io.quarkus.vertx.http.runtime.devmode.RouteDescription;
 
 @Recorder
@@ -15,7 +14,7 @@ public class ExceptionMapperRecorder {
         NotFoundExceptionMapper.staticResources(resources);
     }
 
-    public void setAdditionalEndpoints(List<AdditionalRouteDescription> additionalEndpoints) {
+    public void setAdditionalEndpoints(List<String> additionalEndpoints) {
         NotFoundExceptionMapper.setAdditionalEndpoints(additionalEndpoints);
     }
 
