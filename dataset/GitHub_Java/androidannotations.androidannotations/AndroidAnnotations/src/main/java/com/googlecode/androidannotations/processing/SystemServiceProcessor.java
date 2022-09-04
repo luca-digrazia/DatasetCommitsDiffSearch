@@ -17,7 +17,6 @@ package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
-import java.util.Map;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.type.TypeMirror;
@@ -28,7 +27,6 @@ import com.googlecode.androidannotations.model.AndroidSystemServices;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
-import com.sun.codemodel.JCodeModel;
 
 public class SystemServiceProcessor implements ElementProcessor {
 
@@ -54,17 +52,11 @@ public class SystemServiceProcessor implements ElementProcessor {
 
 		Element enclosingElement = element.getEnclosingElement();
 		MetaActivity metaActivity = metaModel.getMetaActivities().get(enclosingElement);
-		List<Instruction> beforeCreateInstructions = metaActivity.getBeforeCreateInstructions();
+		List<Instruction> onCreateInstructions = metaActivity.getOnCreateInstructions();
 
 		Instruction instruction = new SystemServiceInstruction(fieldName, fieldTypeQualifiedName, serviceConstant);
-		beforeCreateInstructions.add(instruction);
+		onCreateInstructions.add(instruction);
 
-	}
-
-	@Override
-	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
-		// TODO Auto-generated method stub
-		
 	}
 
 }

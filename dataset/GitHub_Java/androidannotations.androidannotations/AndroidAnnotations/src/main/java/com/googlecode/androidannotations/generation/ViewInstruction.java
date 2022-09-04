@@ -17,23 +17,25 @@ package com.googlecode.androidannotations.generation;
 
 import com.googlecode.androidannotations.model.Instruction;
 
-public class SystemServiceInstruction implements Instruction {
+public class ViewInstruction implements Instruction {
 
-	private static final String FORMAT = "        %s = (%s) getSystemService(%s);\n\n";
+	private static final String FORMAT = "        %s = (%s) findViewById(%s);\n\n";
 
 	private final String fieldName;
-	private final String fieldTypeQualifiedName;
-	private final String serviceConstant;
 
-	public SystemServiceInstruction(String fieldName, String fieldTypeQualifiedName, String serviceConstant) {
+	private final String typeQualifiedName;
+
+	private final String viewQualifiedId;
+
+	public ViewInstruction(String fieldName, String typeQualifiedName, String viewQualifiedId) {
 		this.fieldName = fieldName;
-		this.fieldTypeQualifiedName = fieldTypeQualifiedName;
-		this.serviceConstant = serviceConstant;
+		this.typeQualifiedName = typeQualifiedName;
+		this.viewQualifiedId = viewQualifiedId;
 	}
 
 	@Override
 	public String generate() {
-		return String.format(FORMAT, fieldName, fieldTypeQualifiedName, serviceConstant);
+		return String.format(FORMAT, fieldName, typeQualifiedName, viewQualifiedId);
 	}
 
 }
