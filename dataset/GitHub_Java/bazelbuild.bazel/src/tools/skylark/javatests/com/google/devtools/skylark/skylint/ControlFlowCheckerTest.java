@@ -26,12 +26,19 @@ public class ControlFlowCheckerTest {
   private static List<Issue> findIssues(String... lines) {
     String content = String.join("\n", lines);
     BuildFileAST ast =
-        BuildFileAST.parseSkylarkString(
+        BuildFileAST.parseString(
             event -> {
               throw new IllegalArgumentException(event.getMessage());
             },
             content);
     return ControlFlowChecker.check(ast);
+  }
+
+  @Test
+  public void testAnalyzerToleratesTopLevelFail() throws Exception {
+    Truth.assertThat(
+            findIssues("fail(\"fail is considered a return, but not at the top level\")"))
+        .isEmpty();
   }
 
   @Test
@@ -44,7 +51,12 @@ public class ControlFlowCheckerTest {
                     "  else:",
                     "    return x")
                 .toString())
-        .contains("some but not all execution paths of 'some_function' return a value");
+        .contains(
+            "1:1-5:12: some but not all execution paths of 'some_function' return a value."
+                + " If it is intentional, make it explicit using 'return None'."
+                + " If you know these cannot happen,"
+                + " add the statement `fail('unreachable')` to them."
+                + " For more details, have a look at the documentation. [missing-return-value]");
   }
 
   @Test
@@ -58,8 +70,16 @@ public class ControlFlowCheckerTest {
                 "    return # missing value")
             .toString();
     Truth.assertThat(messages)
-        .contains("some but not all execution paths of 'some_function' return a value");
-    Truth.assertThat(messages).contains(":5:5: return value missing");
+        .contains(
+            "1:1-5:10: some but not all execution paths of 'some_function' return a value."
+                + " If it is intentional, make it explicit using 'return None'."
+                + " If you know these cannot happen,"
+                + " add the statement `fail('unreachable')` to them."
+                + " For more details, have a look at the documentation. [missing-return-value]");
+    Truth.assertThat(messages)
+        .contains(
+            "5:5-5:10: return value missing (you can `return None` if this is desired)"
+                + " [missing-return-value]");
   }
 
   @Test
@@ -74,7 +94,12 @@ public class ControlFlowCheckerTest {
                     "  else:",
                     "    return not x")
                 .toString())
-        .contains("some but not all execution paths of 'f' return a value");
+        .contains(
+            "1:1-7:16: some but not all execution paths of 'f' return a value."
+                + " If it is intentional, make it explicit using 'return None'."
+                + " If you know these cannot happen,"
+                + " add the statement `fail('unreachable')` to them."
+                + " For more details, have a look at the documentation. [missing-return-value]");
   }
 
   @Test
@@ -90,7 +115,12 @@ public class ControlFlowCheckerTest {
                     "  else:",
                     "    return x")
                 .toString())
-        .contains("some but not all execution paths of 'f' return a value");
+        .contains(
+            "1:1-8:12: some but not all execution paths of 'f' return a value."
+                + " If it is intentional, make it explicit using 'return None'."
+                + " If you know these cannot happen,"
+                + " add the statement `fail('unreachable')` to them."
+                + " For more details, have a look at the documentation. [missing-return-value]");
   }
 
   @Test
@@ -103,7 +133,9 @@ public class ControlFlowCheckerTest {
                     "  elif not x:",
                     "    return not x")
                 .toString())
-        .contains("some but not all execution paths of 'some_function' return a value");
+        .containsMatch(
+            "1:1-5:16: some but not all execution paths of 'some_function' return a value."
+                + " .+ \\[missing-return-value\\]");
   }
 
   @Test
@@ -116,7 +148,24 @@ public class ControlFlowCheckerTest {
                     "  print('foo')",
                     "  # return missing here")
                 .toString())
-        .contains("some but not all execution paths of 'some_function' return a value");
+        .containsMatch(
+            "1:1-4:14: some but not all execution paths of 'some_function' return a value."
+                + " .+ \\[missing-return-value\\]");
+  }
+
+  @Test
+  public void testForAndFallOffEnd() throws Exception {
+    Truth.assertThat(
+            findIssues(
+                    "def some_function():",
+                    "  for x in []:",
+                    "    return x",
+                    "  print('foo')",
+                    "  # return missing here")
+                .toString())
+        .containsMatch(
+            "1:1-4:14: some but not all execution paths of 'some_function' return a value."
+                + " .+ \\[missing-return-value\\]");
   }
 
   @Test
@@ -129,8 +178,69 @@ public class ControlFlowCheckerTest {
                 "  return x")
             .toString();
     Truth.assertThat(messages)
-        .contains("some but not all execution paths of 'some_function' return a value");
-    Truth.assertThat(messages).contains(":3:5: return value missing");
+        .containsMatch(
+            "1:1-4:10: some but not all execution paths of 'some_function' return a value."
+                + " .+ \\[missing-return-value\\]");
+    Truth.assertThat(messages)
+        .contains(
+            "3:5-3:10: return value missing (you can `return None` if this is desired)"
+                + " [missing-return-value]");
+  }
+
+  @Test
+  public void testUnreachableAfterIf() throws Exception {
+    String messages =
+        findIssues(
+                "def some_function(x):",
+                "  if x:",
+                "    return",
+                "  else:",
+                "    fail('fail')",
+                "  print('This line is unreachable')")
+            .toString();
+    Truth.assertThat(messages).contains("6:3-6:35: unreachable statement [unreachable-statement]");
+  }
+
+  @Test
+  public void testNoUnreachableDuplicates() throws Exception {
+    List<Issue> messages =
+        findIssues(
+            "def some_function():",
+            "  return",
+            "  print('unreachable1')",
+            "  print('unreachable2')");
+    Truth.assertThat(messages).hasSize(1);
+  }
+
+  @Test
+  public void testUnreachableAfterBreakContinue() throws Exception {
+    String messages =
+        findIssues(
+                "def some_function(x):",
+                "  for y in x:",
+                "    if y:",
+                "      break",
+                "    else:",
+                "      continue",
+                "    print('unreachable')")
+            .toString();
+    Truth.assertThat(messages).contains("7:5-7:24: unreachable statement [unreachable-statement]");
+  }
+
+  @Test
+  public void testReachableStatements() throws Exception {
+    Truth.assertThat(
+            findIssues(
+                "def some_function(x):",
+                "  if x:",
+                "    return",
+                "  for y in []:",
+                "    if y:",
+                "      continue",
+                "    else:",
+                "      fail('fail')",
+                "  return"))
+        .isEmpty();
   }
 
   @Test
@@ -191,19 +301,21 @@ public class ControlFlowCheckerTest {
                 "  else:",
                 "    return y"))
         .isEmpty();
-    Truth.assertThat(
-            findIssues(
-                "def f(x,y):",
-                "  if x:",
-                "    return x",
-                "  else:",
-                "    return x",
-                "  # from now on everything's unreachable",
-                "  print('bar')",
-                "  if y:",
-                "    return x",
-                "  # no else branch but doesn't matter since it's unreachable"))
-        .isEmpty();
+    List<Issue> issues =
+        findIssues(
+            "def f(x,y):",
+            "  if x:",
+            "    return x",
+            "  else:",
+            "    return x",
+            "  # from now on everything's unreachable",
+            "  print('bar')",
+            "  if y:",
+            "    return x",
+            "  # no else branch but doesn't matter since it's unreachable");
+    Truth.assertThat(issues).hasSize(1);
+    Truth.assertThat(issues.toString())
+        .contains("7:3-7:14: unreachable statement [unreachable-statement]");
   }
 
   @Test
