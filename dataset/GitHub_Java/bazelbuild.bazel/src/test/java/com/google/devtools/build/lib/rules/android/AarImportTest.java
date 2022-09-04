@@ -265,14 +265,8 @@ public class AarImportTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testDepsCheckerActionDoesNotExistsForLevelOff() throws Exception {
-    useConfiguration("--experimental_import_deps_checking=off");
-    ConfiguredTarget aarImportTarget = getConfiguredTarget("//a:bar");
-    OutputGroupInfo outputGroupInfo = aarImportTarget.get(OutputGroupInfo.SKYLARK_CONSTRUCTOR);
-    NestedSet<Artifact> outputGroup =
-        outputGroupInfo.getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL);
-    assertThat(outputGroup).hasSize(1);
-    assertThat(ActionsTestUtil.getFirstArtifactEndingWith(outputGroup, "jdeps.proto")).isNull();
+  public void testDepsCheckerActionExistsForLevelOff() throws Exception {
+    checkDepsCheckerActionExistsForLevel(ImportDepsCheckingLevel.OFF, "silence");
   }
 
   private void checkDepsCheckerActionExistsForLevel(
@@ -465,7 +459,6 @@ public class AarImportTest extends BuildViewTestCase {
 
   @Test
   public void testJavaCompilationArgsProvider() throws Exception {
-    useConfiguration("--experimental_import_deps_checking=ERROR");
     ConfiguredTarget aarImportTarget = getConfiguredTarget("//a:bar");
 
     JavaCompilationArgsProvider provider =

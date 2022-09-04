@@ -93,7 +93,6 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
         "  ],",
         ")");
     setupTargetDevice();
-    setSkylarkSemanticsOptions("--experimental_google_legacy_api");
   }
 
   // TODO(ajmichael): Share this with AndroidDeviceTest.java
@@ -258,11 +257,11 @@ public class AndroidInstrumentationTestTest extends AndroidBuildViewTestCase {
   }
 
   private static Artifact getInstrumentationApk(ConfiguredTarget instrumentation) {
-    return instrumentation.get(AndroidInstrumentationInfo.PROVIDER).getTarget().getApk();
+    return instrumentation.get(AndroidInstrumentationInfo.PROVIDER).getInstrumentationApk();
   }
 
   private static Artifact getTargetApk(ConfiguredTarget instrumentation) {
-    return instrumentation.get(ApkInfo.PROVIDER).getApk();
+    return instrumentation.get(AndroidInstrumentationInfo.PROVIDER).getTargetApk();
   }
 
   private String getTestStubContents(ConfiguredTarget androidInstrumentationTest) throws Exception {

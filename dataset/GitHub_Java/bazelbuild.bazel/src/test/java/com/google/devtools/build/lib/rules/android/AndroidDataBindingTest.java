@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.rules.android;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
 import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getJavacArguments;
@@ -354,7 +353,9 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
     final UsesDataBindingProvider usesDataBindingProvider = a.get(UsesDataBindingProvider.PROVIDER);
 
-    assertWithMessage(UsesDataBindingProvider.NAME).that(usesDataBindingProvider).isNotNull();
+    Truth.assertThat(usesDataBindingProvider)
+        .named(UsesDataBindingProvider.NAME)
+        .isNotNull();
 
     Truth.assertThat(
             usesDataBindingProvider
@@ -407,8 +408,8 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
         ")");
     useConfiguration("--android_sdk=//sdk:sdk");
     ConfiguredTarget b = getConfiguredTarget("//java/b:b");
-    assertWithMessage("UsesDataBindingProvider")
-        .that(b.get(UsesDataBindingProvider.PROVIDER))
+    Truth.assertThat(b.get(UsesDataBindingProvider.PROVIDER))
+        .named("UsesDataBindingProvider")
         .isNotNull();
   }
 }
