@@ -27,7 +27,7 @@ import org.bson.types.ObjectId;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNTypes;
-import org.graylog.security.PermissionAndRoleResolver;
+import org.graylog.security.GrantPermissionResolver;
 import org.graylog.security.permissions.GRNPermission;
 import org.graylog.testing.mongodb.MongoDBFixtures;
 import org.graylog.testing.mongodb.MongoDBInstance;
@@ -53,7 +53,6 @@ import org.mockito.junit.MockitoRule;
 
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -84,7 +83,7 @@ public class UserServiceImplTest {
     @Mock
     private EventBus serverEventBus;
     @Mock
-    private PermissionAndRoleResolver permissionAndRoleResolver;
+    private GrantPermissionResolver grantPermissionResolver;
 
     @Before
     public void setUp() throws Exception {
@@ -93,7 +92,7 @@ public class UserServiceImplTest {
         this.permissions = new Permissions(ImmutableSet.of(new RestPermissions()));
         this.userFactory = new UserImplFactory(configuration, permissions);
         this.userService = new UserServiceImpl(mongoConnection, configuration, roleService, accessTokenService,
-                userFactory, permissionsResolver, serverEventBus, GRNRegistry.createWithBuiltinTypes(), permissionAndRoleResolver);
+                userFactory, permissionsResolver, serverEventBus, GRNRegistry.createWithBuiltinTypes(), grantPermissionResolver);
 
         when(roleService.getAdminRoleObjectId()).thenReturn("deadbeef");
     }
@@ -115,44 +114,6 @@ public class UserServiceImplTest {
         assertThat(user.getId()).isEqualTo("54e3deadbeefdeadbeef0001");
         assertThat(user.getName()).isEqualTo("user1");
         assertThat(user.getEmail()).isEqualTo("user1@example.com");
-    }
-
-    @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
-    public void testLoadByUserIds() throws Exception {
-        final List<User> users = userService.loadByIds(ImmutableSet.of(
-                "54e3deadbeefdeadbeef0001",
-                "54e3deadbeefdeadbeef0002",
-                UserImpl.LocalAdminUser.LOCAL_ADMIN_ID
-        ));
-
-        assertThat(users).hasSize(3);
-
-        assertThat(users.get(0).getId()).isEqualTo("local:admin");
-        assertThat(users.get(0).getName()).isEqualTo("admin");
-        assertThat(users.get(0).getEmail()).isEmpty();
-
-        assertThat(users.get(1).getId()).isEqualTo("54e3deadbeefdeadbeef0001");
-        assertThat(users.get(1).getName()).isEqualTo("user1");
-        assertThat(users.get(1).getEmail()).isEqualTo("user1@example.com");
-
-        assertThat(users.get(2).getId()).isEqualTo("54e3deadbeefdeadbeef0002");
-        assertThat(users.get(2).getName()).isEqualTo("user2");
-        assertThat(users.get(2).getEmail()).isEqualTo("user2@example.com");
-    }
-
-    @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
-    public void testLoadByUserIdsWithAdminOnly() throws Exception {
-        final List<User> users = userService.loadByIds(ImmutableSet.of(
-                UserImpl.LocalAdminUser.LOCAL_ADMIN_ID
-        ));
-
-        assertThat(users).hasSize(1);
-
-        assertThat(users.get(0).getId()).isEqualTo("local:admin");
-        assertThat(users.get(0).getName()).isEqualTo("admin");
-        assertThat(users.get(0).getEmail()).isEmpty();
     }
 
     @Test(expected = RuntimeException.class)
@@ -304,7 +265,7 @@ public class UserServiceImplTest {
         final GRNRegistry grnRegistry = GRNRegistry.createWithBuiltinTypes();
         final UserService userService = new UserServiceImpl(mongoConnection, configuration, roleService,
                 accessTokenService, userFactory, permissionResolver,
-                serverEventBus, grnRegistry, permissionAndRoleResolver);
+                serverEventBus, grnRegistry, grantPermissionResolver);
 
         final UserImplFactory factory = new UserImplFactory(new Configuration(), permissions);
         final UserImpl user = factory.create(new HashMap<>());
@@ -317,13 +278,13 @@ public class UserServiceImplTest {
         when(permissionResolver.resolveStringPermission(role.getId())).thenReturn(Collections.singleton("foo:bar"));
         final GRNPermission ownerShipPermission = GRNPermission.create(RestPermissions.ENTITY_OWN, grnRegistry.newGRN(GRNTypes.DASHBOARD, "1234"));
         final GRN userGRN = grnRegistry.ofUser(user);
-        when(permissionAndRoleResolver.resolvePermissionsForPrincipal(userGRN))
+        when(grantPermissionResolver.resolvePermissionsForPrincipal(userGRN))
                 .thenReturn(ImmutableSet.of(
                         new WildcardPermission("perm:from:grant"),
                         ownerShipPermission));
 
         final String roleId = "12345";
-        when(permissionAndRoleResolver.resolveRolesForPrincipal(userGRN)).thenReturn(ImmutableSet.of(roleId));
+        when(grantPermissionResolver.resolveRolesForPrincipal(userGRN)).thenReturn(ImmutableSet.of(roleId));
         when(permissionResolver.resolveStringPermission(roleId)).thenReturn(ImmutableSet.of("perm:from:role"));
 
         assertThat(userService.getPermissionsForUser(user).stream().map(p -> p instanceof WildcardPermission ? p.toString() : p).collect(Collectors.toSet()))

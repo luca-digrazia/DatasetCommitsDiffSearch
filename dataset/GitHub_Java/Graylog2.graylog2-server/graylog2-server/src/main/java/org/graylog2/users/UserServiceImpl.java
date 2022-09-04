@@ -47,7 +47,6 @@ import org.graylog2.shared.users.Role;
 import org.graylog2.shared.users.Roles;
 import org.graylog2.shared.users.UserService;
 import org.graylog2.users.events.UserChangedEvent;
-import org.graylog2.users.events.UserDeletedEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -189,30 +188,15 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
 
     @Override
     public int delete(final String username) {
-        DBObject query = new BasicDBObject();
-        query.put(UserImpl.USERNAME, username);
-
-        final List<DBObject> result = query(UserImpl.class, query);
-        if (result == null || result.isEmpty()) {
-            return 0;
-        }
-
-        final ImmutableList.Builder<UserDeletedEvent> deletedUsers = ImmutableList.builder();
-        result.forEach(userObject -> {
-            final ObjectId userId = (ObjectId) userObject.get("_id");
-            deletedUsers.add(UserDeletedEvent.create(userId.toHexString(), username));
-        });
-
         LOG.debug("Deleting user(s) with username \"{}\"", username);
-        query = BasicDBObjectBuilder.start(UserImpl.USERNAME, username).get();
-        final int deleteCount = destroy(query, UserImpl.COLLECTION_NAME);
+        final DBObject query = BasicDBObjectBuilder.start(UserImpl.USERNAME, username).get();
+        final int result = destroy(query, UserImpl.COLLECTION_NAME);
 
-        if (deleteCount > 1) {
-            LOG.warn("Removed {} users matching username \"{}\".", deleteCount, username);
+        if (result > 1) {
+            LOG.warn("Removed {} users matching username \"{}\".", result, username);
         }
         accesstokenService.deleteAllForUser(username);
-        deletedUsers.build().forEach(serverEventBus::post);
-        return deleteCount;
+        return result;
     }
 
     @Override
