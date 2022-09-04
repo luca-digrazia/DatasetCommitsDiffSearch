@@ -18,7 +18,6 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.ActionResult;
 import build.bazel.remote.execution.v2.Command;
-import build.bazel.remote.execution.v2.Platform;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
@@ -99,25 +98,18 @@ final class RemoteSpawnCache implements SpawnCache {
     SortedMap<PathFragment, ActionInput> inputMap = context.getInputMapping(true);
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
     TreeNodeRepository repository =
-        new TreeNodeRepository(
-            execRoot,
-            context.getMetadataProvider(),
-            digestUtil,
-            options.incompatibleRemoteSymlinks);
+        new TreeNodeRepository(execRoot, context.getMetadataProvider(), digestUtil);
     TreeNode inputRoot;
     try (SilentCloseable c = Profiler.instance().profile("RemoteCache.computeMerkleDigests")) {
       inputRoot = repository.buildFromActionInputs(inputMap);
       repository.computeMerkleDigests(inputRoot);
     }
-
-    // Get the remote platform properties.
-    Platform platform =
-        RemoteSpawnRunner.parsePlatform(
-            spawn.getExecutionPlatform(), options.remoteDefaultPlatformProperties);
-
     Command command =
         RemoteSpawnRunner.buildCommand(
-            spawn.getOutputFiles(), spawn.getArguments(), spawn.getEnvironment(), platform);
+            spawn.getOutputFiles(),
+            spawn.getArguments(),
+            spawn.getEnvironment(),
+            spawn.getExecutionPlatform());
     Action action;
     final ActionKey actionKey;
     try (SilentCloseable c = Profiler.instance().profile("RemoteCache.buildAction")) {
