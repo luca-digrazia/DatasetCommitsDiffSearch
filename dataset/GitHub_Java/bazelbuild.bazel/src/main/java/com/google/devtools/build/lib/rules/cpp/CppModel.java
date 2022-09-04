@@ -110,12 +110,6 @@ public final class CppModel {
   public static final String MODULE_FILES_VARIABLE_NAME = "module_files";
 
   /**
-   * Name of the build variable for includes that compiler needs to include into sources to be
-   * compiled.
-   */
-  public static final String INCLUDES_VARIABLE_NAME = "includes";
-
-  /**
    * Name of the build variable for the collection of include paths.
    *
    * @see CppCompilationContext#getIncludeDirs().
@@ -1516,10 +1510,11 @@ public final class CppModel {
     // On Windows, we cannot build a shared library with symbols unresolved, so here we dynamically
     // link to all it's dependencies.
     if (featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-      CcLinkParams.Builder ccLinkParamsBuilder =
+      CcLinkParams.Builder ccLinkParamsbuilder =
           CcLinkParams.builder(/* linkingStatically= */ false, /* linkShared= */ true);
-      ccLinkParamsBuilder.addCcLibrary(ruleContext);
-      dynamicLinkActionBuilder.addLinkParams(ccLinkParamsBuilder.build(), ruleContext);
+      ccLinkParamsbuilder.addCcLibrary(
+          ruleContext, false, ImmutableList.of(), CcLinkingOutputs.EMPTY);
+      dynamicLinkActionBuilder.addLinkParams(ccLinkParamsbuilder.build(), ruleContext);
     }
 
     if (!ccOutputs.getLtoBitcodeFiles().isEmpty()
