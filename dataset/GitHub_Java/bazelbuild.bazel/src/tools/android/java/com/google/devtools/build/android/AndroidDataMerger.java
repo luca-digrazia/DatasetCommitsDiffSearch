@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
+import com.android.ide.common.res2.MergingException;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Stopwatch;
@@ -20,7 +21,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.android.AndroidResourceMerger.MergingException;
 import com.google.devtools.build.android.ParsedAndroidData.Builder;
 import com.google.devtools.build.android.ParsedAndroidData.ParsedAndroidDataBuildingPathWalker;
 import java.io.IOException;
@@ -60,7 +60,7 @@ class AndroidDataMerger {
         dependency.deserialize(deserializer, parsedDataBuilder.consumers());
       } catch (DeserializationException e) {
         if (!e.isLegacy()) {
-          throw MergingException.wrapException(e);
+          throw MergingException.wrapException(e).build();
         }
         logger.fine(
             String.format(
@@ -290,7 +290,7 @@ class AndroidDataMerger {
       return doMerge(
           transitive, direct, parsedPrimary, primaryData.getManifest(), allowPrimaryOverrideAll);
     } catch (IOException e) {
-      throw MergingException.wrapException(e);
+      throw MergingException.wrapException(e).build();
     }
   }
 
@@ -431,7 +431,7 @@ class AndroidDataMerger {
       return UnwrittenMergedAndroidData.of(
           primaryManifest, primaryBuilder.build(), transitiveBuilder.build());
     } catch (IOException e) {
-      throw MergingException.wrapException(e);
+      throw MergingException.wrapException(e).build();
     }
   }
 }
