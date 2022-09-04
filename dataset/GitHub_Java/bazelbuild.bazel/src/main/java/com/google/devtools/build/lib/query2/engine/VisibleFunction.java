@@ -63,17 +63,22 @@ public class VisibleFunction implements QueryFunction {
     final QueryTaskFuture<ThreadSafeMutableSet<T>> toSetFuture =
         QueryUtil.evalAll(env, context, args.get(0).getExpression());
     Function<ThreadSafeMutableSet<T>, QueryTaskFuture<Void>> computeVisibleNodesAsyncFunction =
-        toSet ->
-            env.eval(
-                args.get(1).getExpression(),
-                context,
-                partialResult -> {
-                  for (T t : partialResult) {
-                    if (visibleToAll(env, toSet, t)) {
-                      callback.process(ImmutableList.of(t));
-                    }
+        new Function<ThreadSafeMutableSet<T>, QueryTaskFuture<Void>>() {
+          @Override
+          public QueryTaskFuture<Void> apply(final ThreadSafeMutableSet<T> toSet) {
+            return env.eval(args.get(1).getExpression(), context, new Callback<T>() {
+              @Override
+              public void process(Iterable<T> partialResult)
+                  throws QueryException, InterruptedException {
+                for (T t : partialResult) {
+                  if (visibleToAll(env, toSet, t)) {
+                    callback.process(ImmutableList.of(t));
                   }
-                });
+                }
+              }
+            });
+          }
+        };
     return env.transformAsync(toSetFuture, computeVisibleNodesAsyncFunction);
   }
 

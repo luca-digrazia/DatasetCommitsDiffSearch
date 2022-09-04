@@ -19,7 +19,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
-import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -57,6 +57,7 @@ import java.util.Set;
  */
 @Command(name = "query",
          options = { PackageCacheOptions.class,
+                     SkylarkSemanticsOptions.class,
                      QueryOptions.class },
          help = "resource:query.txt",
          shortDescription = "Executes a dependency graph query.",
@@ -206,7 +207,7 @@ public final class QueryCommand implements BlazeCommand {
       }
     }
 
-    env.getEventBus().post(new NoBuildEvent(env.getCommandName(), env.getCommandStartTime(), true));
+    env.getEventBus().post(new NoBuildEvent(env.getCommandName(), env.getCommandStartTime()));
     if (!streamResults) {
       disableAnsiCharactersFiltering(env);
       try {
@@ -240,10 +241,7 @@ public final class QueryCommand implements BlazeCommand {
       env.getReporter().handle(Event.info("Empty results"));
     }
 
-    ExitCode exitCode = result.getSuccess() ? ExitCode.SUCCESS : ExitCode.PARTIAL_ANALYSIS_FAILURE;
-    env.getEventBus()
-        .post(new NoBuildRequestFinishedEvent(exitCode, runtime.getClock().currentTimeMillis()));
-    return exitCode;
+    return result.getSuccess() ? ExitCode.SUCCESS : ExitCode.PARTIAL_ANALYSIS_FAILURE;
   }
 
   /**

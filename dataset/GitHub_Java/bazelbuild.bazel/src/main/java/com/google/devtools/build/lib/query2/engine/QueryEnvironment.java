@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.query2.engine;
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -112,19 +111,18 @@ public interface QueryEnvironment<T> {
     Iterable<ArgumentType> getArgumentTypes();
 
     /**
-     * Returns a {@link QueryTaskFuture} representing the asynchronous application of this {@link
-     * QueryFunction} to the given {@code args}, feeding the results to the given {@code callback}.
+     * Returns a {@link QueryTaskFuture} representing the asynchronous application of this
+     * {@link QueryFunction} to the given {@code args}, feeding the results to the given
+     * {@code callback}.
      *
      * @param env the query environment this function is evaluated in.
      * @param expression the expression being evaluated.
-     * @param context the context relevant to the expression being evaluated. Contains the variable
-     *     bindings from {@link LetExpression}s.
      * @param args the input arguments. These are type-checked against the specification returned by
      *     {@link #getArgumentTypes} and {@link #getMandatoryArguments}
      */
     <T> QueryTaskFuture<Void> eval(
         QueryEnvironment<T> env,
-        QueryExpressionContext<T> context,
+        VariableContext<T> context,
         QueryExpression expression,
         List<Argument> args,
         Callback<T> callback);
@@ -144,9 +142,6 @@ public interface QueryEnvironment<T> {
     }
   }
 
-  /** Returns all of the targets in <code>target</code>'s package, in some stable order. */
-  Collection<T> getSiblingTargetsInPackage(T target);
-
   /**
    * Invokes {@code callback} with the set of target nodes in the graph for the specified target
    * pattern, in 'blaze build' syntax.
@@ -160,19 +155,16 @@ public interface QueryEnvironment<T> {
   T getOrCreate(T target);
 
   /** Returns the direct forward dependencies of the specified targets. */
-  Iterable<T> getFwdDeps(Iterable<T> targets, QueryExpressionContext<T> context)
-      throws InterruptedException;
+  Iterable<T> getFwdDeps(Iterable<T> targets) throws InterruptedException;
 
   /** Returns the direct reverse dependencies of the specified targets. */
-  Iterable<T> getReverseDeps(Iterable<T> targets, QueryExpressionContext<T> context)
-      throws InterruptedException;
+  Iterable<T> getReverseDeps(Iterable<T> targets) throws InterruptedException;
 
   /**
    * Returns the forward transitive closure of all of the targets in "targets". Callers must ensure
    * that {@link #buildTransitiveClosure} has been called for the relevant subgraph.
    */
-  ThreadSafeMutableSet<T> getTransitiveClosure(
-      ThreadSafeMutableSet<T> targets, QueryExpressionContext<T> context)
+  ThreadSafeMutableSet<T> getTransitiveClosure(ThreadSafeMutableSet<T> targets)
       throws InterruptedException;
 
   /**
@@ -189,12 +181,11 @@ public interface QueryEnvironment<T> {
                               int maxDepth) throws QueryException, InterruptedException;
 
   /** Returns the ordered sequence of nodes on some path from "from" to "to". */
-  Iterable<T> getNodesOnPath(T from, T to, QueryExpressionContext<T> context)
-      throws InterruptedException;
+  Iterable<T> getNodesOnPath(T from, T to) throws InterruptedException;
 
   /**
-   * Returns a {@link QueryTaskFuture} representing the asynchronous evaluation of the given {@code
-   * expr} and passing of the results to the given {@code callback}.
+   * Returns a {@link QueryTaskFuture} representing the asynchronous evaluation of the given
+   * {@code expr} and passing of the results to the given {@code callback}.
    *
    * <p>Note that this method should guarantee that the callback does not see repeated elements.
    *
@@ -202,7 +193,7 @@ public interface QueryEnvironment<T> {
    * @param callback The caller callback to notify when results are available
    */
   QueryTaskFuture<Void> eval(
-      QueryExpression expr, QueryExpressionContext<T> context, Callback<T> callback);
+      QueryExpression expr, VariableContext<T> context, Callback<T> callback);
 
   /**
    * An asynchronous computation of part of a query evaluation.
@@ -400,16 +391,12 @@ public interface QueryEnvironment<T> {
   void reportBuildFileError(QueryExpression expression, String msg) throws QueryException;
 
   /**
-   * Returns the set of BUILD, and optionally Skylark files that define the given set of targets.
-   * Each such file is itself represented as a target in the result.
+   * Returns the set of BUILD, and optionally sub-included and Skylark files that define the given
+   * set of targets. Each such file is itself represented as a target in the result.
    */
   ThreadSafeMutableSet<T> getBuildFiles(
-      QueryExpression caller,
-      ThreadSafeMutableSet<T> nodes,
-      boolean buildFiles,
-      boolean loads,
-      QueryExpressionContext<T> context)
-      throws QueryException, InterruptedException;
+      QueryExpression caller, ThreadSafeMutableSet<T> nodes, boolean buildFiles,
+      boolean subincludes, boolean loads) throws QueryException, InterruptedException;
 
   /**
    * Returns an object that can be used to query information about targets. Implementations should
@@ -558,17 +545,16 @@ public interface QueryEnvironment<T> {
   ImmutableList<QueryFunction> DEFAULT_QUERY_FUNCTIONS =
       ImmutableList.of(
           new AllPathsFunction(),
-          new AttrFunction(),
           new BuildFilesFunction(),
-          new DepsFunction(),
-          new FilterFunction(),
-          new KindFunction(),
-          new LabelsFunction(),
           new LoadFilesFunction(),
-          new RdepsFunction(),
-          new SiblingsFunction(),
+          new AttrFunction(),
+          new FilterFunction(),
+          new LabelsFunction(),
+          new KindFunction(),
           new SomeFunction(),
           new SomePathFunction(),
           new TestsFunction(),
+          new DepsFunction(),
+          new RdepsFunction(),
           new VisibleFunction());
 }

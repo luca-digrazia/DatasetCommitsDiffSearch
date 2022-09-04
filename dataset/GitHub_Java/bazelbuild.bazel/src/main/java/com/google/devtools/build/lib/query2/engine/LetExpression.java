@@ -77,10 +77,13 @@ class LetExpression extends QueryExpression {
     QueryTaskFuture<ThreadSafeMutableSet<T>> varValueFuture =
         QueryUtil.evalAll(env, context, varExpr);
     Function<ThreadSafeMutableSet<T>, QueryTaskFuture<Void>> evalBodyAsyncFunction =
-        varValue -> {
-          VariableContext<T> bodyContext = VariableContext.with(context, varName, varValue);
-          return env.eval(bodyExpr, bodyContext, callback);
-        };
+        new Function<ThreadSafeMutableSet<T>, QueryTaskFuture<Void>>() {
+          @Override
+          public QueryTaskFuture<Void> apply(ThreadSafeMutableSet<T> varValue) {
+            VariableContext<T> bodyContext = VariableContext.with(context, varName, varValue);
+            return env.eval(bodyExpr, bodyContext, callback);
+          }
+    };
     return env.transformAsync(varValueFuture, evalBodyAsyncFunction);
   }
 

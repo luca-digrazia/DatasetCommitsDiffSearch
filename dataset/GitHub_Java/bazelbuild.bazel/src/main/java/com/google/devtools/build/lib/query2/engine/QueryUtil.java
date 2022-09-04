@@ -105,10 +105,7 @@ public final class QueryUtil {
     return new OrderedAggregateAllOutputFormatterCallbackImpl<>(env);
   }
 
-  /**
-   * Returns a fresh {@link AggregateAllCallback} instance that aggregates all of the values into an
-   * {@link ThreadSafeMutableSet}.
-   */
+  /** Returns a fresh {@link AggregateAllCallback} instance. */
   public static <T> AggregateAllCallback<T, ThreadSafeMutableSet<T>> newAggregateAllCallback(
       QueryEnvironment<T> env) {
     return new AggregateAllOutputFormatterCallbackImpl<>(env);

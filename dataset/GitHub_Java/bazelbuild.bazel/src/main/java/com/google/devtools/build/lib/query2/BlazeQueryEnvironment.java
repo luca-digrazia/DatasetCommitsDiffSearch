@@ -13,10 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
-
+import com.google.common.base.Function;
 import com.google.common.base.Predicate;
+import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
@@ -67,6 +68,13 @@ import java.util.Set;
  * The environment of a Blaze query. Not thread-safe.
  */
 public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target> {
+  private static final Function<Target, Label> TO_LABEL = new Function<Target, Label>() {
+    @Override
+    public Label apply(Target input) {
+      return input.getLabel();
+    }
+  };
+
   private static final int MAX_DEPTH_FULL_SCAN_LIMIT = 20;
   private final Map<String, Set<Target>> resolvedTargetPatterns = new HashMap<>();
   private final TargetPatternEvaluator targetPatternEvaluator;
@@ -315,7 +323,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     if (maxDepth >= MAX_DEPTH_FULL_SCAN_LIMIT && transitivePackageLoader != null) {
       // Only do the full visitation if "maxDepth" is large enough. Otherwise, the benefits of
       // preloading will be outweighed by the cost of doing more work than necessary.
-      Set<Label> labels = targets.stream().map(Target::getLabel).collect(toImmutableSet());
+      Set<Label> labels = ImmutableSet.copyOf(Collections2.transform(targets, TO_LABEL));
       transitivePackageLoader.sync(eventHandler, labels, keepGoing, loadingPhaseThreads);
     }
   }
@@ -413,6 +421,15 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
     return dependentFiles;
   }
+
+  private static final Function<ResolvedTargets<Target>, Set<Target>> RESOLVED_TARGETS_TO_TARGETS =
+      new Function<ResolvedTargets<Target>, Set<Target>>() {
+        @Override
+        public Set<Target> apply(ResolvedTargets<Target> resolvedTargets) {
+          return resolvedTargets.getTargets();
+        }
+      };
+
   @Override
   protected void preloadOrThrow(QueryExpression caller, Collection<String> patterns)
       throws TargetParsingException, InterruptedException {
@@ -422,7 +439,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       resolvedTargetPatterns.putAll(
           Maps.transformValues(
               targetPatternEvaluator.preloadTargetPatterns(eventHandler, patterns, keepGoing),
-              ResolvedTargets::getTargets));
+              RESOLVED_TARGETS_TO_TARGETS));
     }
   }
 
