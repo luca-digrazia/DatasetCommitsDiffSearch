@@ -769,8 +769,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     null,
                     ImmutableList.<Artifact>of(testTreeArtifact),
                     ImmutableMap.<Artifact, Artifact>of(),
-                    null,
-                    /* mustKeepDebug= */ false));
+                    null));
 
     CppLinkAction linkAction = builder.build();
 

@@ -26,6 +26,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ActionConfig;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -39,7 +40,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariableValu
 import com.google.devtools.build.lib.skyframe.serialization.AutoRegistry;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodecs;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
-import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -351,9 +351,9 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
   private String getFlagParsingError(String value) throws Exception {
     try {
       getExpansionOfFlag(value);
-      fail("Expected EvalException");
+      fail("Expected InvalidConfigurationException");
       return "";
-    } catch (EvalException e) {
+    } catch (InvalidConfigurationException e) {
       return e.getMessage();
     }
   }
@@ -1015,8 +1015,8 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
       buildFeatures(
           "feature { name: '<<<collision>>>' }",
           "feature { name: '<<<collision>>>' }");
-      fail("Expected EvalException");
-    } catch (EvalException e) {
+      fail("Expected InvalidConfigurationException");
+    } catch (InvalidConfigurationException e) {
       assertThat(e).hasMessageThat().contains("<<<collision>>>");
     }
   }
@@ -1025,8 +1025,8 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
   public void testReferenceToUndefinedFeature() throws Exception {
     try {
       buildFeatures("feature { name: 'a' implies: '<<<undefined>>>' }");
-      fail("Expected EvalException");
-    } catch (EvalException e) {
+      fail("Expected InvalidConfigurationException");
+    } catch (InvalidConfigurationException e) {
       assertThat(e).hasMessageThat().contains("<<<undefined>>>");
     }
   }
@@ -1621,8 +1621,8 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
           "  config_name: 'action-a'",
           "  action_name: 'action-2'",
           "}");
-      fail("Expected EvalException");
-    } catch (EvalException e) {
+      fail("Expected InvalidConfigurationException");
+    } catch (InvalidConfigurationException e) {
       assertThat(e)
           .hasMessageThat()
           .contains("feature or action config 'action-a' was specified multiple times.");
@@ -1641,8 +1641,8 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
           "  config_name: 'name-b'",
           "  action_name: 'action-a'",
           "}");
-      fail("Expected EvalException");
-    } catch (EvalException e) {
+      fail("Expected InvalidConfigurationException");
+    } catch (InvalidConfigurationException e) {
       assertThat(e).hasMessageThat().contains("multiple action configs for action 'action-a'");
     }
   }
@@ -1677,8 +1677,8 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
               "  }",
               "}")
           .getFeatureConfiguration(ImmutableSet.of("c++-compile"));
-      fail("Should throw EvalException");
-    } catch (EvalException e) {
+      fail("Should throw InvalidConfigurationException");
+    } catch (InvalidConfigurationException e) {
       assertThat(e)
           .hasMessageThat()
           .contains(String.format(ActionConfig.FLAG_SET_WITH_ACTION_ERROR, "c++-compile"));
@@ -1744,8 +1744,8 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
           "category_name: 'NONEXISTENT_CATEGORY'",
           "prefix: 'foo'",
           "extension: 'bar'}");
-      fail("Should throw EvalException.");
-    } catch (EvalException e) {
+      fail("Should throw InvalidConfigurationException.");
+    } catch (InvalidConfigurationException e) {
       assertThat(e)
           .hasMessageThat()
           .contains("Artifact category NONEXISTENT_CATEGORY not recognized");
@@ -1762,8 +1762,8 @@ public class CcToolchainFeaturesTest extends FoundationTestCase {
               "prefix: 'foo'",
               "extension: '.a'}");
       toolchainFeatures.getArtifactNameForCategory(ArtifactCategory.DYNAMIC_LIBRARY, "output_name");
-      fail("Should throw EvalException.");
-    } catch (EvalException e) {
+      fail("Should throw InvalidConfigurationException.");
+    } catch (InvalidConfigurationException e) {
       assertThat(e)
           .hasMessageThat()
           .contains(
