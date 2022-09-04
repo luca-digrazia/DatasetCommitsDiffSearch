@@ -79,11 +79,7 @@ class ApiClientImpl implements ApiClient {
 
     @Override
     public void stop() {
-        try {
-            Runtime.getRuntime().removeShutdownHook(shutdownHook);
-        } catch (IllegalStateException e) {
-            // ignore race at shutdown.
-        }
+        Runtime.getRuntime().removeShutdownHook(shutdownHook);
         client.close();
     }
 
