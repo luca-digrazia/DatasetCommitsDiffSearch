@@ -31,11 +31,11 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
-import com.google.devtools.build.lib.analysis.DependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
+import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
+import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.DuplicateException;
 import com.google.devtools.build.lib.analysis.EmptyConfiguredTarget;
-import com.google.devtools.build.lib.analysis.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
@@ -359,13 +359,14 @@ public final class ConfiguredTargetFunction implements SkyFunction {
         ConfiguredValueCreationException cvce = (ConfiguredValueCreationException) e.getCause();
 
         // Check if this is caused by an unresolved toolchain, and report it as such.
+        // TODO(b/151742236): check non-default {@link ExecGroup} toolchains as well.
         if (unloadedToolchainContexts != null) {
-          ImmutableSet<Label> requiredToolchains =
-              unloadedToolchainContexts.getResolvedToolchains();
+          UnloadedToolchainContext finalUnloadedToolchainContext =
+              unloadedToolchainContexts.getDefaultToolchainContext();
           Set<Label> toolchainDependencyErrors =
               cvce.getRootCauses().toList().stream()
                   .map(Cause::getLabel)
-                  .filter(requiredToolchains::contains)
+                  .filter(l -> finalUnloadedToolchainContext.resolvedToolchainLabels().contains(l))
                   .collect(ImmutableSet.toImmutableSet());
 
           if (!toolchainDependencyErrors.isEmpty()) {
@@ -604,7 +605,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               transitiveRootCauses,
               ((ConfiguredRuleClassProvider) ruleClassProvider).getTrimmingTransitionFactory());
     } catch (EvalException e) {
-      // EvalException can only be thrown by computed Starlark attributes in the current rule.
+      // EvalException can only be thrown by computed Skylark attributes in the current rule.
       env.getListener().handle(Event.error(e.getLocation(), e.getMessage()));
       throw new DependencyEvaluationException(
           new ConfiguredValueCreationException(

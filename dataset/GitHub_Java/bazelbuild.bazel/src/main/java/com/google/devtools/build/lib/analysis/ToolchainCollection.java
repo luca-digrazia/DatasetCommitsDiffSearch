@@ -13,78 +13,39 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
-
-import com.google.auto.value.AutoValue;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.ExecGroup;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
- * A wrapper class for a map of exec_group names to their relevant ToolchainContext.
+ * A wrapper class for a map of exec_group names to their relevent ToolchainContext.
  *
- * @param <T> any class that extends ToolchainContext. This generic allows ToolchainCollection to be
- *     used, e.g., both before and after toolchain resolution.
+ * @param <T> any class that extends ToolchainCollection so this can be used, e.g., both before and
+ *     after toolchain resolution.
  */
-@AutoValue
-public abstract class ToolchainCollection<T extends ToolchainContext> {
+public class ToolchainCollection<T extends ToolchainContext> {
+  @VisibleForTesting public static final String DEFAULT_EXEC_GROUP_NAME = "default_exec_group";
 
   /** A map of execution group names to toolchain contexts. */
-  public abstract ImmutableMap<String, T> getContextMap();
+  private final ImmutableMap<String, T> toolchainContexts;
 
-  public T getDefaultToolchainContext() {
-    return getContextMap().get(ExecGroup.DEFAULT_EXEC_GROUP_NAME);
-  }
-
-  public boolean hasToolchainContext(String execGroup) {
-    return getContextMap().containsKey(execGroup);
-  }
-
-  public T getToolchainContext(String execGroup) {
-    return getContextMap().get(execGroup);
-  }
-
-  public ImmutableSet<Label> getResolvedToolchains() {
-    return getContextMap().values().stream()
-        .flatMap(c -> c.resolvedToolchainLabels().stream())
-        .collect(toImmutableSet());
-  }
-
-  public ImmutableSet<String> getExecGroupNames() {
-    return getContextMap().keySet();
-  }
-
-  /**
-   * This is safe because all toolchain context in a toolchain collection should have the same
-   * target platform
-   */
-  public PlatformInfo getTargetPlatform() {
-    return getDefaultToolchainContext().targetPlatform();
-  }
-
-  @SuppressWarnings("unchecked")
-  public ToolchainCollection<ToolchainContext> asToolchainContexts() {
-    return (ToolchainCollection<ToolchainContext>) this;
-  }
-
-  /** Returns a new builder for {@link ToolchainCollection} instances. */
-  public static <T extends ToolchainContext> Builder<T> builder() {
-    return new Builder<T>();
+  private ToolchainCollection(Map<String, T> contexts) {
+    Preconditions.checkArgument(contexts.containsKey(DEFAULT_EXEC_GROUP_NAME));
+    toolchainContexts = ImmutableMap.copyOf(contexts);
   }
 
   /** Builder for ToolchainCollection. */
-  public static final class Builder<T extends ToolchainContext> {
-    // This is not immutable so that we can check for duplicate keys easily.
+  public static class Builder<T extends ToolchainContext> {
     private final Map<String, T> toolchainContexts = new HashMap<>();
 
     public ToolchainCollection<T> build() {
-      Preconditions.checkArgument(toolchainContexts.containsKey(ExecGroup.DEFAULT_EXEC_GROUP_NAME));
-      return new AutoValue_ToolchainCollection<T>(ImmutableMap.copyOf(toolchainContexts));
+      return new ToolchainCollection<>(toolchainContexts);
     }
 
     public void addContext(String execGroup, T context) {
@@ -96,8 +57,32 @@ public abstract class ToolchainCollection<T extends ToolchainContext> {
     }
 
     public Builder<T> addDefaultContext(T context) {
-      addContext(ExecGroup.DEFAULT_EXEC_GROUP_NAME, context);
+      addContext(DEFAULT_EXEC_GROUP_NAME, context);
       return this;
     }
+  }
+
+  public T getDefaultToolchainContext() {
+    return toolchainContexts.get(DEFAULT_EXEC_GROUP_NAME);
+  }
+
+  public T getToolchainContext(String execGroup) {
+    return toolchainContexts.get(execGroup);
+  }
+
+  public ImmutableSet<Label> getRequiredToolchains() {
+    Set<Label> requiredToolchains = new HashSet<>();
+    for (T context : toolchainContexts.values()) {
+      requiredToolchains.addAll(context.resolvedToolchainLabels());
+    }
+    return ImmutableSet.copyOf(requiredToolchains);
+  }
+
+  public ToolchainCollection<ToolchainContext> asToolchainContexts() {
+    return new ToolchainCollection<>(ImmutableMap.copyOf(toolchainContexts));
+  }
+
+  public ImmutableMap<String, T> getContextMap() {
+    return toolchainContexts;
   }
 }
