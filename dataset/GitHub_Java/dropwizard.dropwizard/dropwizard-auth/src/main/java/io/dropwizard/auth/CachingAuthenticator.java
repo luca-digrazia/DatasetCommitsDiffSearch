@@ -84,8 +84,7 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
             Throwables.propagateIfPossible(cause, AuthenticationException.class);
             throw new AuthenticationException(cause);
         } catch (UncheckedExecutionException e) {
-            Throwables.throwIfUnchecked(e.getCause());
-            throw e;
+            throw Throwables.propagate(e.getCause());
         } finally {
             context.stop();
         }
@@ -147,6 +146,5 @@ public class CachingAuthenticator<C, P extends Principal> implements Authenticat
      * Exception thrown by {@link CacheLoader#load(Object)} when the authenticator returns {@link Optional#empty()}.
      * This is used to prevent caching of invalid credentials.
      */
-    private static class InvalidCredentialsException extends Exception {
-    }
+    private static class InvalidCredentialsException extends Exception {}
 }

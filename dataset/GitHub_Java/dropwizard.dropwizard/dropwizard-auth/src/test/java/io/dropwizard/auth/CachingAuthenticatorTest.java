@@ -3,15 +3,17 @@ package io.dropwizard.auth;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.cache.CacheBuilderSpec;
 import com.google.common.collect.ImmutableSet;
+import org.hamcrest.CoreMatchers;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 import org.mockito.InOrder;
 
 import java.security.Principal;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -24,6 +26,8 @@ public class CachingAuthenticatorTest {
     private final Authenticator<String, Principal> underlying = mock(Authenticator.class);
     private final CachingAuthenticator<String, Principal> cached =
         new CachingAuthenticator<>(new MetricRegistry(), underlying, CacheBuilderSpec.parse("maximumSize=1"));
+    @Rule
+    public ExpectedException expected = ExpectedException.none();
 
     @Before
     public void setUp() throws Exception {
@@ -111,19 +115,15 @@ public class CachingAuthenticatorTest {
     public void shouldPropagateAuthenticationException() throws AuthenticationException {
         final AuthenticationException e = new AuthenticationException("Auth failed");
         when(underlying.authenticate(anyString())).thenThrow(e);
-
-        assertThatExceptionOfType(AuthenticationException.class)
-            .isThrownBy(() -> cached.authenticate("credentials"))
-            .satisfies(i -> assertThat(i).isSameAs(e));
+        expected.expect(CoreMatchers.sameInstance(e));
+        cached.authenticate("credentials");
     }
 
     @Test
     public void shouldPropagateRuntimeException() throws AuthenticationException {
         final RuntimeException e = new NullPointerException();
         when(underlying.authenticate(anyString())).thenThrow(e);
-
-        assertThatExceptionOfType(RuntimeException.class)
-            .isThrownBy(() -> cached.authenticate("credentials"))
-            .satisfies(i -> assertThat(i).isSameAs(e));
+        expected.expect(CoreMatchers.sameInstance(e));
+        cached.authenticate("credentials");
     }
 }
