@@ -16,12 +16,9 @@ package com.google.devtools.build.lib.collect.nestedset;
 import static java.util.stream.Collectors.joining;
 
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.protobuf.ByteString;
 import java.util.AbstractCollection;
 import java.util.Arrays;
 import java.util.Collection;
@@ -37,35 +34,26 @@ import javax.annotation.Nullable;
  * @see NestedSetBuilder
  */
 @SuppressWarnings("unchecked")
-@AutoCodec
 public final class NestedSet<E> implements Iterable<E> {
 
-  /**
-   * Order and size of set packed into one int.
-   *
-   * <p>Bits 31-2: size, bits 1-0: order enum ordinal. The order is assigned on construction time,
-   * the size is computed on the first expansion and set afterwards so it's available for {@link
-   * #replay}.
-   */
-  private int orderAndSize;
-
+  private final Order order;
   private final Object children;
   private byte[] memo;
 
   private static final byte[] LEAF_MEMO = {};
-  @AutoCodec static final Object[] EMPTY_CHILDREN = {};
+  static final Object[] EMPTY_CHILDREN = {};
 
   /**
    * Construct an empty NestedSet.  Should only be called by Order's class initializer.
    */
   NestedSet(Order order) {
-    this.orderAndSize = order.ordinal();
+    this.order = order;
     this.children = EMPTY_CHILDREN;
     this.memo = LEAF_MEMO;
   }
 
   NestedSet(Order order, Set<E> direct, Set<NestedSet<E>> transitive) {
-    this.orderAndSize = order.ordinal();
+    this.order = order;
 
     // The iteration order of these collections is the order in which we add the items.
     Collection<E> directOrder = direct;
@@ -104,9 +92,6 @@ public final class NestedSet<E> implements Iterable<E> {
         for (E member : directOrder) {
           if (member instanceof Object[]) {
             throw new IllegalArgumentException("cannot store Object[] in NestedSet");
-          }
-          if (member instanceof ByteString) {
-            throw new IllegalArgumentException("cannot store ByteString in NestedSet");
           }
           if (!alreadyInserted.contains(member)) {
             children[n++] = member;
@@ -150,9 +135,8 @@ public final class NestedSet<E> implements Iterable<E> {
   }
 
   // Only used by deserialization
-  @AutoCodec.Instantiator
   NestedSet(Order order, Object children) {
-    this.orderAndSize = order.ordinal();
+    this.order = order;
     this.children = children;
     boolean hasChildren =
         children instanceof Object[]
@@ -164,7 +148,7 @@ public final class NestedSet<E> implements Iterable<E> {
    * Returns the ordering of this nested set.
    */
   public Order getOrder() {
-    return Order.getOrder(orderAndSize & 3);
+    return order;
   }
 
   /**
@@ -211,7 +195,7 @@ public final class NestedSet<E> implements Iterable<E> {
     if (isEmpty()) {
       return ImmutableList.of();
     }
-    return getOrder() == Order.LINK_ORDER ? expand().reverse() : expand();
+    return order == Order.LINK_ORDER ? expand().reverse() : expand();
   }
 
   /**
@@ -238,10 +222,9 @@ public final class NestedSet<E> implements Iterable<E> {
       return true;
     }
     return other != null
-        && getOrder() == other.getOrder()
+        && order == other.order
         && (children.equals(other.children)
-            || (!isSingleton()
-                && !other.isSingleton()
+            || (!isSingleton() && !other.isSingleton()
                 && Arrays.equals((Object[]) children, (Object[]) other.children)));
   }
 
@@ -256,8 +239,8 @@ public final class NestedSet<E> implements Iterable<E> {
    */
   public int shallowHashCode() {
     return isSingleton()
-        ? Objects.hash(getOrder(), children)
-        : Objects.hash(getOrder(), Arrays.hashCode((Object[]) children));
+        ? Objects.hash(order, children)
+        : Objects.hash(order, Arrays.hashCode((Object[]) children));
   }
 
   @Override
@@ -304,7 +287,10 @@ public final class NestedSet<E> implements Iterable<E> {
       return ImmutableList.copyOf(members);
     }
     Object[] children = (Object[]) this.children;
-    ImmutableList.Builder<E> output = ImmutableList.builderWithExpectedSize(orderAndSize >> 2);
+    // TODO:  We could record the exact size (inside memo, or by making order an int with two bits
+    // for Order.ordinal()) and avoid an array copy here.  It's not directly visible in profiles but
+    // it would reduce garbage generated.
+    ImmutableList.Builder<E> output = ImmutableList.builder();
     replay(output, children, memo, 0);
     return output.build();
   }
@@ -345,20 +331,18 @@ public final class NestedSet<E> implements Iterable<E> {
     if (bytes <= memo.length - 16) {
       memo = Arrays.copyOf(memo, bytes);
     }
-    Preconditions.checkState(members.size() < (Integer.MAX_VALUE >> 2));
-    orderAndSize |= (members.size()) << 2;
     return members;
   }
 
   /**
-   * Perform a depth-first traversal of {@code children}, tracking visited arrays in {@code sets}
-   * and visited leaves in {@code members}. We also record which edges were taken in {@code
-   * this.memo} starting at {@code pos}.
+   * Perform a depth-first traversal of {@code children}, tracking visited
+   * arrays in {@code sets} and visited leaves in {@code members}.  We also
+   * record which edges were taken in {@code this.memo} starting at {@code pos}.
    *
-   * <p>Returns the final value of {@code pos}.
+   * Returns the final value of {@code pos}.
    */
-  private int walk(
-      CompactHashSet<Object> sets, CompactHashSet<E> members, Object[] children, int pos) {
+  private int walk(CompactHashSet<Object> sets, CompactHashSet<E> members,
+                   Object[] children, int pos) {
     for (Object child : children) {
       if ((pos >> 3) >= memo.length) {
         memo = Arrays.copyOf(memo, memo.length * 2);
@@ -390,11 +374,11 @@ public final class NestedSet<E> implements Iterable<E> {
   }
 
   /**
-   * Repeat a previous traversal of {@code children} performed by {@link #walk} and recorded in
-   * {@code memo}, appending leaves to {@code output}.
+   * Repeat a previous traversal of {@code children} performed by {@link #walk}
+   * and recorded in {@code memo}, appending leaves to {@code output}.
    */
-  private static <E> int replay(
-      ImmutableList.Builder<E> output, Object[] children, byte[] memo, int pos) {
+  private static <E> int replay(ImmutableList.Builder<E> output, Object[] children,
+                                byte[] memo, int pos) {
     for (Object child : children) {
       if ((memo[pos >> 3] & (1 << (pos & 7))) != 0) {
         if (child instanceof Object[]) {
