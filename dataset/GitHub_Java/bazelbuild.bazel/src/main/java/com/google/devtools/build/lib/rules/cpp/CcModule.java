@@ -1985,20 +1985,17 @@ public abstract class CcModule
             CppFileTypes.CPP_SOURCE,
             CppFileTypes.C_SOURCE,
             CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR,
-            CppFileTypes.ASSEMBLER),
-        /* allowAnyTreeArtifacts= */ true);
+            CppFileTypes.ASSEMBLER));
     validateExtensions(
         "public_hdrs",
         publicHeaders,
         FileTypeSet.of(CppFileTypes.CPP_HEADER),
-        FileTypeSet.of(CppFileTypes.CPP_HEADER),
-        /* allowAnyTreeArtifacts= */ true);
+        FileTypeSet.of(CppFileTypes.CPP_HEADER));
     validateExtensions(
         "private_hdrs",
         privateHeaders,
         FileTypeSet.of(CppFileTypes.CPP_HEADER),
-        FileTypeSet.of(CppFileTypes.CPP_HEADER),
-        /* allowAnyTreeArtifacts= */ true);
+        FileTypeSet.of(CppFileTypes.CPP_HEADER));
 
     if (disallowNopicOutputs && disallowPicOutputs) {
       throw Starlark.errorf("Either PIC or no PIC actions have to be created.");
@@ -2247,20 +2244,11 @@ public abstract class CcModule
       Object objectsObject, Object picObjectsObject) throws EvalException {
     CcCompilationOutputs.Builder ccCompilationOutputsBuilder = CcCompilationOutputs.builder();
     NestedSet<Artifact> objects = convertToNestedSet(objectsObject, Artifact.class, "objects");
-    validateExtensions(
-        "objects",
-        objects.toList(),
-        Link.OBJECT_FILETYPES,
-        Link.OBJECT_FILETYPES,
-        /* allowAnyTreeArtifacts= */ false);
+    validateExtensions("objects", objects.toList(), Link.OBJECT_FILETYPES, Link.OBJECT_FILETYPES);
     NestedSet<Artifact> picObjects =
         convertToNestedSet(picObjectsObject, Artifact.class, "pic_objects");
     validateExtensions(
-        "pic_objects",
-        picObjects.toList(),
-        Link.OBJECT_FILETYPES,
-        Link.OBJECT_FILETYPES,
-        /* allowAnyTreeArtifacts= */ false);
+        "pic_objects", picObjects.toList(), Link.OBJECT_FILETYPES, Link.OBJECT_FILETYPES);
     ccCompilationOutputsBuilder.addObjectFiles(objects.toList());
     ccCompilationOutputsBuilder.addPicObjectFiles(picObjects.toList());
     return ccCompilationOutputsBuilder.build();
@@ -2270,13 +2258,9 @@ public abstract class CcModule
       String paramName,
       List<Artifact> files,
       FileTypeSet validFileTypeSet,
-      FileTypeSet fileTypeForErrorMessage,
-      boolean allowAnyTreeArtifacts)
+      FileTypeSet fileTypeForErrorMessage)
       throws EvalException {
     for (Artifact file : files) {
-      if (allowAnyTreeArtifacts && file.isTreeArtifact()) {
-        continue;
-      }
       if (!validFileTypeSet.matches(file.getFilename())) {
         throw Starlark.errorf(
             "'%s' has wrong extension. The list of possible extensions for '%s' is: %s",
