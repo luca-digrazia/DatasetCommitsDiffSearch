@@ -68,7 +68,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
@@ -1455,7 +1454,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Set<Class<? extends BuildConfiguration.Fragment>> depFragments =
           fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
-        for (BuildOptions toOptions : ConfigurationResolver.applyTransition(
+        for (BuildOptions toOptions : ConfiguredTargetFunction.getDynamicTransitionOptions(
             fromOptions, key.getTransition(), depFragments, ruleClassProvider, true)) {
           configSkyKeys.add(BuildConfigurationValue.key(depFragments, toOptions));
         }
@@ -1470,7 +1469,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       Set<Class<? extends BuildConfiguration.Fragment>> depFragments =
           fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
-        for (BuildOptions toOptions : ConfigurationResolver.applyTransition(
+        for (BuildOptions toOptions : ConfiguredTargetFunction.getDynamicTransitionOptions(
             fromOptions, key.getTransition(), depFragments, ruleClassProvider, true)) {
           SkyKey configKey = BuildConfigurationValue.key(depFragments, toOptions);
           BuildConfigurationValue configValue =

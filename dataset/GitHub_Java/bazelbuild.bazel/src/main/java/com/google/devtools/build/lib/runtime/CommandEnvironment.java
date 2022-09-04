@@ -69,7 +69,6 @@ public final class CommandEnvironment {
   private final BlazeDirectories directories;
 
   private UUID commandId;  // Unique identifier for the command being run
-  private String buildRequestId;  // Unique identifier for the build being run
   private final Reporter reporter;
   private final EventBus eventBus;
   private final BlazeModule.ModuleEnvironment blazeModuleEnvironment;
@@ -125,7 +124,6 @@ public final class CommandEnvironment {
     this.workspace = workspace;
     this.directories = workspace.getDirectories();
     this.commandId = null; // Will be set once we get the client environment
-    this.buildRequestId = null;  // Will be set once we get the client environment
     this.reporter = new Reporter(eventBus);
     this.eventBus = eventBus;
     this.commandThread = commandThread;
@@ -246,29 +244,6 @@ public final class CommandEnvironment {
     return Collections.unmodifiableMap(result);
   }
 
-  private UUID getUuidFromEnvOrGenerate(String varName) {
-    // Try to set the clientId from the client environment.
-    String uuidString = clientEnv.getOrDefault(varName, "");
-    if (!uuidString.isEmpty()) {
-      try {
-        return UUID.fromString(uuidString);
-      } catch (IllegalArgumentException e) {
-        // String was malformed, so we will resort to generating a random UUID
-      }
-    }
-    // We have been provided with the client environment, but it didn't contain
-    // the variable; hence generate our own id.
-    return UUID.randomUUID();
-  }
-
-  private String getFromEnvOrGenerate(String varName) {
-    String id = clientEnv.getOrDefault(varName, "");
-    if (id.isEmpty()) {
-      id = UUID.randomUUID().toString();
-    }
-    return id;
-  }
-
   private void updateClientEnv(List<Map.Entry<String, String>> clientEnvList) {
     Preconditions.checkState(clientEnv.isEmpty());
 
@@ -276,11 +251,21 @@ public final class CommandEnvironment {
     for (Map.Entry<String, String> entry : env) {
       clientEnv.put(entry.getKey(), entry.getValue());
     }
+    // Try to set the clientId from the client environment.
     if (commandId == null) {
-      commandId = getUuidFromEnvOrGenerate("BAZEL_INTERNAL_INVOCATION_ID");
+      String uuidString = clientEnv.get("BAZEL_INTERNAL_INVOCATION_ID");
+      if (uuidString != null) {
+        try {
+          commandId = UUID.fromString(uuidString);
+        } catch (IllegalArgumentException e) {
+          // String was malformed, so we will resort to generating a random UUID
+        }
+      }
     }
-    if (buildRequestId == null) {
-      buildRequestId = getFromEnvOrGenerate("BAZEL_INTERNAL_BUILD_REQUEST_ID");
+    if (commandId == null) {
+      // We have been provided with the client environment, but it didn't contain
+      // the invocation id; hence generate our own.
+      commandId = UUID.randomUUID();
     }
     setCommandIdInCrashData();
   }
@@ -316,15 +301,14 @@ public final class CommandEnvironment {
    * the build info.
    */
   public UUID getCommandId() {
-    return Preconditions.checkNotNull(commandId);
-  }
-
-  /**
-   * Returns the ID that Blaze uses to identify everything logged from the current build request.
-   * TODO(olaola): this should be a UUID, but some existing clients still use arbitrary strings.
-   */
-  public String getBuildRequestId() {
-    return Preconditions.checkNotNull(buildRequestId);
+    if (commandId == null) {
+      // The commandId should not be requested before the beforeCommand is executed, as the
+      // commandId might be set through the client environment. However, to simplify testing,
+      // we set the id value before we throw the exception.
+      commandId = UUID.randomUUID();
+      throw new IllegalArgumentException("Build Id requested before client environment provided");
+    }
+    return commandId;
   }
 
   public SkyframeExecutor getSkyframeExecutor() {
