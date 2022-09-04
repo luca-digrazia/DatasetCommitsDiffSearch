@@ -375,7 +375,6 @@ public class QuarkusProdModeTest
                     .setApplicationRoot(deploymentDir)
                     .setMode(QuarkusBootstrap.Mode.PROD)
                     .setLocalProjectDiscovery(true)
-                    .setIsolateDeployment(true)
                     .addExcludedPath(testLocation)
                     .setProjectRoot(testLocation)
                     .setTargetDirectory(buildDir)
