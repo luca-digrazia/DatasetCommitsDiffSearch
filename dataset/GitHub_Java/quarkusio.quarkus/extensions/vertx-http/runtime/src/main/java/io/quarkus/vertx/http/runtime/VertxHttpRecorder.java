@@ -109,7 +109,6 @@ public class VertxHttpRecorder {
 
     private static volatile Handler<RoutingContext> hotReplacementHandler;
     private static volatile HotReplacementContext hotReplacementContext;
-    private static volatile RemoteSyncHandler remoteSyncHandler;
 
     private static volatile Runnable closeTask;
 
@@ -124,14 +123,7 @@ public class VertxHttpRecorder {
             //as the underlying handler has not had a chance to install a read handler yet
             //and data that arrives while the blocking task is being processed will be lost
             httpServerRequest.pause();
-            Handler<HttpServerRequest> rh = VertxHttpRecorder.rootHandler;
-            if (rh != null) {
-                rh.handle(httpServerRequest);
-            } else {
-                //very rare race condition, that can happen when dev mode is shutting down
-                httpServerRequest.resume();
-                httpServerRequest.response().setStatusCode(503).end();
-            }
+            rootHandler.handle(httpServerRequest);
         }
     };
 
@@ -382,7 +374,7 @@ public class VertxHttpRecorder {
             });
         }
         if (launchMode == LaunchMode.DEVELOPMENT && liveReloadConfig.password.isPresent()) {
-            root = remoteSyncHandler = new RemoteSyncHandler(liveReloadConfig.password.get(), root, hotReplacementContext);
+            root = new RemoteSyncHandler(liveReloadConfig.password.get(), root, hotReplacementContext);
         }
         rootHandler = root;
     }
@@ -465,10 +457,6 @@ public class VertxHttpRecorder {
                             }
                         }
                         closeTask = null;
-                        if (remoteSyncHandler != null) {
-                            remoteSyncHandler.close();
-                            remoteSyncHandler = null;
-                        }
                     }
                 }
             };
@@ -877,15 +865,10 @@ public class VertxHttpRecorder {
                             clearHttpProperty = true;
                             schema = "http";
                         }
-                        String portPropertyValue = String.valueOf(actualPort);
-                        String portPropertyName = (launchMode == LaunchMode.TEST ? "quarkus." + schema + ".test-port"
-                                : "quarkus." + schema + ".port");
-                        System.setProperty(portPropertyName, portPropertyValue);
-                        if (launchMode.isDevOrTest()) {
-                            // set the profile property as well to make sure we don't have any inconsistencies
-                            System.setProperty(propertyWithProfilePrefix(portPropertyName),
-                                    portPropertyValue);
-                        }
+                        System.setProperty(
+                                launchMode == LaunchMode.TEST ? "quarkus." + schema + ".test-port"
+                                        : "quarkus." + schema + ".port",
+                                String.valueOf(actualPort));
                         // Set in HttpOptions to output the port in the Timing class
                         options.setPort(actualPort);
                     }
@@ -899,19 +882,10 @@ public class VertxHttpRecorder {
         @Override
         public void stop(Future<Void> stopFuture) {
             if (clearHttpProperty) {
-                String portPropertyName = launchMode == LaunchMode.TEST ? "quarkus.http.test-port" : "quarkus.http.port";
-                System.clearProperty(portPropertyName);
-                if (launchMode.isDevOrTest()) {
-                    System.clearProperty(propertyWithProfilePrefix(portPropertyName));
-                }
-
+                System.clearProperty(launchMode == LaunchMode.TEST ? "quarkus.http.test-port" : "quarkus.http.port");
             }
             if (clearHttpsProperty) {
-                String portPropertyName = launchMode == LaunchMode.TEST ? "quarkus.https.test-port" : "quarkus.https.port";
-                System.clearProperty(portPropertyName);
-                if (launchMode.isDevOrTest()) {
-                    System.clearProperty(propertyWithProfilePrefix(portPropertyName));
-                }
+                System.clearProperty(launchMode == LaunchMode.TEST ? "quarkus.https.test-port" : "quarkus.https.port");
             }
 
             final AtomicInteger remainingCount = new AtomicInteger(0);
@@ -940,10 +914,6 @@ public class VertxHttpRecorder {
             if (domainSocketServer != null) {
                 domainSocketServer.close(handleClose);
             }
-        }
-
-        private String propertyWithProfilePrefix(String portPropertyName) {
-            return "%" + launchMode.getDefaultProfile() + "." + portPropertyName;
         }
     }
 
