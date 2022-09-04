@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.packages.WorkspaceFactoryHelper;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.RepositoryModuleApi;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.DebugFrame;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
@@ -49,7 +48,7 @@ import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.Tuple;
+import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -123,6 +122,7 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
         RuleClass.Builder builder,
         Location ruleClassDefinitionLocation,
         BaseFunction implementation) {
+      super(FunctionSignature.KWARGS);
       this.builder = builder;
       this.ruleClassDefinitionLocation = ruleClassDefinitionLocation;
       this.implementation = implementation;
@@ -131,11 +131,6 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     @Override
     public String getName() {
       return "repository_rule";
-    }
-
-    @Override
-    public FunctionSignature getSignature() {
-      return FunctionSignature.KWARGS;
     }
 
     @Override
@@ -159,11 +154,11 @@ public class SkylarkRepositoryModule implements RepositoryModuleApi {
     }
 
     @Override
-    public Object call(
+    public Object callImpl(
         StarlarkThread thread,
         @Nullable FuncallExpression call,
-        Tuple<Object> args,
-        Dict<String, Object> kwargs)
+        List<Object> args,
+        Map<String, Object> kwargs)
         throws EvalException, InterruptedException {
       if (!args.isEmpty()) {
         throw new EvalException(null, "unexpected positional arguments");
