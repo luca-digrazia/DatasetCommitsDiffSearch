@@ -16,50 +16,39 @@
  */
 package org.graylog2.filters;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.collect.Lists;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.inputs.Extractor;
-import org.graylog2.rest.models.system.inputs.responses.InputCreated;
-import org.graylog2.rest.models.system.inputs.responses.InputDeleted;
-import org.graylog2.rest.models.system.inputs.responses.InputUpdated;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.inject.Named;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.stream.Collectors;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 
 public class ExtractorFilter implements MessageFilter {
     private static final Logger LOG = LoggerFactory.getLogger(ExtractorFilter.class);
     private static final String NAME = "Extractor";
 
-    private final ConcurrentMap<String, List<Extractor>> extractors = new ConcurrentHashMap<>();
+    private Cache<String, List<Extractor>> cache = CacheBuilder.newBuilder()
+            .expireAfterWrite(1, TimeUnit.SECONDS)
+            .build();
 
     private final InputService inputService;
-    private final ScheduledExecutorService scheduler;
 
     @Inject
-    public ExtractorFilter(InputService inputService,
-                           EventBus serverEventBus,
-                           @Named("daemonScheduler") ScheduledExecutorService scheduler) {
+    public ExtractorFilter(InputService inputService) {
         this.inputService = inputService;
-        this.scheduler = scheduler;
-
-        loadAllExtractors();
-
-        // TODO: This class needs lifecycle management to avoid leaking objects in the EventBus
-        serverEventBus.register(this);
     }
 
     @Override
@@ -68,7 +57,7 @@ public class ExtractorFilter implements MessageFilter {
             return false;
         }
 
-        for (final Extractor extractor : extractors.getOrDefault(msg.getSourceInputId(), Collections.emptyList())) {
+        for (final Extractor extractor : loadExtractors(msg.getSourceInputId())) {
             try {
                 extractor.runExtractor(msg);
             } catch (Exception e) {
@@ -81,47 +70,34 @@ public class ExtractorFilter implements MessageFilter {
         return false;
     }
 
-    @Subscribe
-    @SuppressWarnings("unused")
-    public void handleInputCreate(final InputCreated event) {
-        LOG.debug("Load extractors for input <{}>", event.id());
-        scheduler.submit(() -> loadExtractors(event.id()));
-    }
-
-    @Subscribe
-    @SuppressWarnings("unused")
-    public void handleInputDelete(final InputDeleted event) {
-        LOG.debug("Removing input from extractors cache <{}>", event.id());
-        extractors.remove(event.id());
-    }
-
-    @Subscribe
-    @SuppressWarnings("unused")
-    public void handleInputUpdate(final InputUpdated event) {
-        scheduler.submit(() -> loadExtractors(event.id()));
-    }
-
-    private void loadAllExtractors() {
+    private List<Extractor> loadExtractors(final String inputId) {
         try {
-            inputService.all().forEach(input -> loadExtractors(input.getId()));
-        } catch (Exception e) {
-            LOG.error("Unable to load extractors for all inputs", e);
-        }
-    }
+            return cache.get(inputId, new Callable<List<Extractor>>() {
+                @Override
+                public List<Extractor> call() throws Exception {
+                    LOG.debug("Re-loading extractors for input <{}> into cache.", inputId);
 
-    private void loadExtractors(final String inputId) {
-        LOG.debug("Re-loading extractors for input <{}>", inputId);
+                    try {
+                        Input input = inputService.find(inputId);
 
-        try {
-            final Input input = inputService.find(inputId);
-            final List<Extractor> sortedExtractors = inputService.getExtractors(input)
-                    .stream()
-                    .sorted((e1, e2) -> e1.getOrder().intValue() - e2.getOrder().intValue())
-                    .collect(Collectors.toList());
+                        List<Extractor> sorted = Lists.newArrayList(inputService.getExtractors(input));
 
-            extractors.put(inputId, ImmutableList.copyOf(sortedExtractors));
-        } catch (NotFoundException e) {
-            LOG.warn("Unable to load input <{}>: {}", inputId, e.getMessage());
+                        Collections.sort(sorted, new Comparator<Extractor>() {
+                            public int compare(Extractor e1, Extractor e2) {
+                                return e1.getOrder().intValue() - e2.getOrder().intValue();
+                            }
+                        });
+
+                        return sorted;
+                    } catch (NotFoundException e) {
+                        LOG.warn("Unable to load input: {}", e.getMessage());
+                        return Collections.emptyList();
+                    }
+                }
+            });
+        } catch (ExecutionException e) {
+            LOG.error("Could not load extractors into cache. Returning empty list.", e);
+            return Collections.emptyList();
         }
     }
 
