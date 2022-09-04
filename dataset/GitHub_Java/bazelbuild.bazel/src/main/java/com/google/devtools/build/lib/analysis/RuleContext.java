@@ -412,7 +412,7 @@ public final class RuleContext extends TargetContext
    * Returns the workspace name for the rule.
    */
   public String getWorkspaceName() {
-    return rule.getPackage().getWorkspaceName();
+    return rule.getRepository().strippedName();
   }
 
   /**
@@ -1606,8 +1606,6 @@ public final class RuleContext extends TargetContext
    * content-based path for this artifact (see {@link
    * BuildConfiguration#useContentBasedOutputPaths()}).
    */
-  // TODO(bazel-team): Consider removing contentBasedPath stuff, which is unused as of 18 months
-  // after its introduction in cl/252148134.
   private Artifact getImplicitOutputArtifact(String path, boolean contentBasedPath) {
     return getPackageRelativeArtifact(path, getBinOrGenfilesDirectory(), contentBasedPath);
   }
