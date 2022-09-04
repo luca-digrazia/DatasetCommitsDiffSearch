@@ -32,14 +32,12 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
-import com.google.devtools.build.lib.analysis.DependencyKey;
 import com.google.devtools.build.lib.analysis.DependencyKind;
 import com.google.devtools.build.lib.analysis.DuplicateException;
 import com.google.devtools.build.lib.analysis.EmptyConfiguredTarget;
 import com.google.devtools.build.lib.analysis.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
-import com.google.devtools.build.lib.analysis.RuleContext.InvalidExecGroupException;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
@@ -591,12 +589,12 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       BuildOptions defaultBuildOptions)
       throws DependencyEvaluationException, ConfiguredTargetFunctionException,
           AspectCreationException, InterruptedException {
-    // Create the map from attributes to set of (target, transition) pairs.
-    OrderedSetMultimap<DependencyKind, DependencyKey> initialDependencies;
+    // Create the map from attributes to set of (target, configuration) pairs.
+    OrderedSetMultimap<DependencyKind, Dependency> depValueNames;
     BuildConfiguration configuration = ctgValue.getConfiguration();
     Label label = ctgValue.getLabel();
     try {
-      initialDependencies =
+      depValueNames =
           resolver.dependentNodeMap(
               ctgValue,
               hostConfiguration,
@@ -617,11 +615,11 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
     // Trim each dep's configuration so it only includes the fragments needed by its transitive
     // closure.
-    OrderedSetMultimap<DependencyKind, Dependency> depValueNames =
+    depValueNames =
         ConfigurationResolver.resolveConfigurations(
             env,
             ctgValue,
-            initialDependencies,
+            depValueNames,
             hostConfiguration,
             defaultBuildOptions,
             configConditions);
@@ -714,10 +712,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     ImmutableList.Builder<Dependency> depsBuilder = ImmutableList.builder();
     for (Label configurabilityLabel : configLabels) {
       Dependency configurabilityDependency =
-          Dependency.builder()
-              .setLabel(configurabilityLabel)
-              .setConfiguration(ctgValue.getConfiguration())
-              .build();
+          Dependency.withConfiguration(configurabilityLabel, ctgValue.getConfiguration());
       depsBuilder.add(configurabilityDependency);
     }
 
@@ -955,8 +950,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       return null;
     } catch (ActionConflictException e) {
       throw new ConfiguredTargetFunctionException(e);
-    } catch (InvalidExecGroupException e) {
-      throw new ConfiguredTargetFunctionException(e);
     }
 
     events.replayOn(env.getListener());
@@ -1029,10 +1022,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
 
     private ConfiguredTargetFunctionException(ActionConflictException e) {
-      super(e, Transience.PERSISTENT);
-    }
-
-    private ConfiguredTargetFunctionException(InvalidExecGroupException e) {
       super(e, Transience.PERSISTENT);
     }
   }
