@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -30,7 +31,7 @@ import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.config.ConfigFeatureFlag;
-import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidFeatureFlagSetProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidFeatureFlagSetProviderApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import java.util.Map;
@@ -65,10 +66,10 @@ public final class AndroidFeatureFlagSetProvider extends NativeInfo
 
   /**
    * Constructs a definition for the attribute used to restrict access to feature flags. The
-   * allowlist will only be reached if the feature_flags attribute is explicitly set.
+   * whitelist will only be reached if the feature_flags attribute is explicitly set.
    */
-  public static Attribute.Builder<Label> getAllowlistAttribute(RuleDefinitionEnvironment env) {
-    return ConfigFeatureFlag.getAllowlistAttribute(env, FEATURE_FLAG_ATTR);
+  public static Attribute.Builder<Label> getWhitelistAttribute(RuleDefinitionEnvironment env) {
+    return ConfigFeatureFlag.getWhitelistAttribute(env, FEATURE_FLAG_ATTR);
   }
 
   /**
@@ -101,7 +102,7 @@ public final class AndroidFeatureFlagSetProvider extends NativeInfo
     }
 
     Iterable<? extends TransitiveInfoCollection> actualTargets =
-        ruleContext.getPrerequisites(FEATURE_FLAG_ATTR);
+        ruleContext.getPrerequisites(FEATURE_FLAG_ATTR, TransitionMode.TARGET);
     RuleErrorException exception = null;
     for (TransitiveInfoCollection target : actualTargets) {
       Label label = AliasProvider.getDependencyLabel(target);

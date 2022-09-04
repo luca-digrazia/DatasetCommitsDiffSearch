@@ -29,19 +29,17 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Out
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.causes.Cause;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Collection;
 
 /** This event is fired as soon as a top-level aspect is either built or fails. */
 public class AspectCompleteEvent
     implements SkyValue, BuildEventWithOrderConstraint, EventReportingArtifacts {
-  private final Label label;
-  private final AspectDescriptor descriptor;
+  private final AspectValue aspectValue;
   private final NestedSet<Cause> rootCauses;
   private final Collection<BuildEventId> postedAfter;
   private final CompletionContext completionContext;
@@ -49,14 +47,12 @@ public class AspectCompleteEvent
   private final BuildEventId configurationEventId;
 
   private AspectCompleteEvent(
-      Label label,
-      AspectDescriptor descriptor,
+      AspectValue aspectValue,
       NestedSet<Cause> rootCauses,
       CompletionContext completionContext,
       NestedSet<ArtifactsInOutputGroup> artifactOutputGroups,
       BuildEventId configurationEventId) {
-    this.label = label;
-    this.descriptor = descriptor;
+    this.aspectValue = aspectValue;
     this.rootCauses =
         (rootCauses == null) ? NestedSetBuilder.<Cause>emptySet(Order.STABLE_ORDER) : rootCauses;
     ImmutableList.Builder<BuildEventId> postedAfterBuilder = ImmutableList.builder();
@@ -75,13 +71,7 @@ public class AspectCompleteEvent
       CompletionContext completionContext,
       NestedSet<ArtifactsInOutputGroup> artifacts,
       BuildEventId configurationEventId) {
-    return new AspectCompleteEvent(
-        value.getKey().getLabel(),
-        value.getAspect().getDescriptor(),
-        null,
-        completionContext,
-        artifacts,
-        configurationEventId);
+    return new AspectCompleteEvent(value, null, completionContext, artifacts, configurationEventId);
   }
 
   /**
@@ -89,18 +79,19 @@ public class AspectCompleteEvent
    */
   public static AspectCompleteEvent createFailed(
       AspectValue value,
-      CompletionContext ctx,
       NestedSet<Cause> rootCauses,
       BuildEventId configurationEventId,
       NestedSet<ArtifactsInOutputGroup> outputs) {
     Preconditions.checkArgument(!rootCauses.isEmpty());
     return new AspectCompleteEvent(
-        value.getKey().getLabel(),
-        value.getAspect().getDescriptor(),
-        rootCauses,
-        ctx,
-        outputs,
-        configurationEventId);
+        value, rootCauses, CompletionContext.FAILED_COMPLETION_CTX, outputs, configurationEventId);
+  }
+
+  /**
+   * Returns the target associated with the event.
+   */
+  public AspectValue getAspectValue() {
+    return aspectValue;
   }
 
   /**
@@ -118,7 +109,9 @@ public class AspectCompleteEvent
   @Override
   public BuildEventId getEventId() {
     return BuildEventIdUtil.aspectCompleted(
-        label, configurationEventId, descriptor.getDescription());
+        aspectValue.getKey().getLabel(),
+        configurationEventId,
+        aspectValue.getAspect().getDescriptor().getDescription());
   }
 
   @Override
@@ -153,7 +146,9 @@ public class AspectCompleteEvent
       for (ArtifactsInOutputGroup artifactsInGroup : artifactOutputGroups.toList()) {
         OutputGroup.Builder groupBuilder = OutputGroup.newBuilder();
         groupBuilder.setName(artifactsInGroup.getOutputGroup());
-        groupBuilder.addFileSets(namer.apply(artifactsInGroup.getArtifacts().toNode()));
+        groupBuilder.addFileSets(
+            namer.apply(
+                (new NestedSetView<Artifact>(artifactsInGroup.getArtifacts())).identifier()));
         builder.addOutputGroup(groupBuilder.build());
       }
     }

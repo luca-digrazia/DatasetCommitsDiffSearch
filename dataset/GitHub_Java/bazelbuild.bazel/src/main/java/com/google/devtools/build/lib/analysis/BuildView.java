@@ -322,9 +322,9 @@ public class BuildView {
             bzlFileLoadLikeString = bzlFileLoadLikeString + ".bzl";
           }
         }
-        Label starlarkFileLabel;
+        Label skylarkFileLabel;
         try {
-          starlarkFileLabel =
+          skylarkFileLabel =
               Label.parseAbsolute(
                   bzlFileLoadLikeString, /* repositoryMapping= */ ImmutableMap.of());
         } catch (LabelSyntaxException e) {
@@ -332,7 +332,7 @@ public class BuildView {
               String.format("Invalid aspect '%s': %s", aspect, e.getMessage()), e);
         }
 
-        String starlarkFunctionName = aspect.substring(delimiterPosition + 1);
+        String skylarkFunctionName = aspect.substring(delimiterPosition + 1);
         for (TargetAndConfiguration targetSpec : topLevelTargetsWithConfigs) {
           if (targetSpec.getConfiguration() != null
               && targetSpec.getConfiguration().trimConfigurationsRetroactively()) {
@@ -342,14 +342,14 @@ public class BuildView {
           aspectConfigurations.put(
               Pair.of(targetSpec.getLabel(), aspect), targetSpec.getConfiguration());
           aspectKeys.add(
-              AspectValueKey.createStarlarkAspectKey(
+              AspectValueKey.createSkylarkAspectKey(
                   targetSpec.getLabel(),
                   // For invoking top-level aspects, use the top-level configuration for both the
                   // aspect and the base target while the top-level configuration is untrimmed.
                   targetSpec.getConfiguration(),
                   targetSpec.getConfiguration(),
-                  starlarkFileLabel,
-                  starlarkFunctionName));
+                  skylarkFileLabel,
+                  skylarkFunctionName));
         }
       } else {
         final NativeAspectClass aspectFactoryClass =
