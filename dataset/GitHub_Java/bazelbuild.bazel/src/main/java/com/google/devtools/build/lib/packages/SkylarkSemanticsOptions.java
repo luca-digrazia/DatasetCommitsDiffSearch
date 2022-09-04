@@ -99,19 +99,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleComprehensionVariablesDoNotLeak;
 
   @Option(
-    name = "incompatible_depset_union",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help =
-        "If set to true, depset union using `+`, `|` or `.union` are forbidden. "
-            + "Use the `depset` constructor instead."
-  )
-  public boolean incompatibleDepsetUnion;
-
-  @Option(
     name = "incompatible_depset_is_not_iterable",
     defaultValue = "false",
     category = "incompatible changes",
@@ -135,17 +122,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     help = "If set to true, the dictionary literal syntax doesn't allow duplicated keys."
   )
   public boolean incompatibleDictLiteralHasNoDuplicates;
-
-  @Option(
-    name = "incompatible_disable_glob_tracking",
-    defaultValue = "false",
-    category = "incompatible changes",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
-    help = "If set to true, do not track the values of globs (this is used by rare specific cases"
-  )
-  public boolean incompatibleDisableGlobTracking;
 
   @Option(
     name = "incompatible_disallow_dict_plus",
@@ -184,7 +160,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
 
   @Option(
     name = "incompatible_disallow_uncalled_set_constructor",
-    defaultValue = "true",
+    defaultValue = "false",
     category = "incompatible changes",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
@@ -194,8 +170,21 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleDisallowUncalledSetConstructor;
 
   @Option(
-    name = "incompatible_load_argument_is_label",
+    name = "incompatible_list_plus_equals_inplace",
     defaultValue = "true",
+    category = "incompatible changes",
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+    help =
+        "If set to true, `+=` on lists works like the `extend` method mutating the original "
+            + "list. Otherwise it copies the original list without mutating it."
+  )
+  public boolean incompatibleListPlusEqualsInplace;
+
+  @Option(
+    name = "incompatible_load_argument_is_label",
+    defaultValue = "false",
     category = "incompatible changes",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
@@ -245,6 +234,20 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   )
   public boolean incompatibleStringIsNotIterable;
 
+  /**
+   * Used in testing to produce a truly minimalistic Extension object for certain evaluation
+   * contexts. This flag is Bazel-specific.
+   */
+  // TODO(bazel-team): A pending incompatible change will make it so that load()ed and built-in
+  // symbols do not get re-exported, making this flag obsolete.
+  @Option(
+    name = "internal_do_not_export_builtins",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    effectTags = {OptionEffectTag.UNKNOWN}
+  )
+  public boolean internalDoNotExportBuiltins;
+
   /** Used in an integration test to confirm that flags are visible to the interpreter. */
   @Option(
     name = "internal_skylark_flag_test_canary",
@@ -262,17 +265,17 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleCheckedArithmetic(incompatibleCheckedArithmetic)
         .incompatibleComprehensionVariablesDoNotLeak(incompatibleComprehensionVariablesDoNotLeak)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
-        .incompatibleDepsetUnion(incompatibleDepsetUnion)
         .incompatibleDictLiteralHasNoDuplicates(incompatibleDictLiteralHasNoDuplicates)
-        .incompatibleDisableGlobTracking(incompatibleDisableGlobTracking)
         .incompatibleDisallowDictPlus(incompatibleDisallowDictPlus)
         .incompatibleDisallowKeywordOnlyArgs(incompatibleDisallowKeywordOnlyArgs)
         .incompatibleDisallowToplevelIfStatement(incompatibleDisallowToplevelIfStatement)
         .incompatibleDisallowUncalledSetConstructor(incompatibleDisallowUncalledSetConstructor)
+        .incompatibleListPlusEqualsInplace(incompatibleListPlusEqualsInplace)
         .incompatibleLoadArgumentIsLabel(incompatibleLoadArgumentIsLabel)
         .incompatibleNewActionsApi(incompatibleNewActionsApi)
         .incompatibleShowAllPrintMessages(incompatibleShowAllPrintMessages)
         .incompatibleStringIsNotIterable(incompatibleStringIsNotIterable)
+        .internalDoNotExportBuiltins(internalDoNotExportBuiltins)
         .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
         .build();
   }
