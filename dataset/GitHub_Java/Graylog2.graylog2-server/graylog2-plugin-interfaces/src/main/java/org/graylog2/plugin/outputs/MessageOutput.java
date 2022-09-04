@@ -23,6 +23,9 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 
+import java.util.List;
+import java.util.Map;
+
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
@@ -31,6 +34,7 @@ public interface MessageOutput {
     public void initialize(Configuration config) throws MessageOutputConfigurationException;
     public void write(Message message) throws Exception;
     public ConfigurationRequest getRequestedConfiguration();
+    public Map<String, String> getRequestedStreamConfiguration();
     public String getName();
     public String getHumanName();
     public String getLinkToDocs();
