@@ -640,6 +640,10 @@ public class AndroidResourceProcessor {
     }
   }
 
+  public static void writeDummyManifestForAapt(Path dummyManifest, String packageForR) {
+    AndroidManifestProcessor.writeDummyManifestForAapt(dummyManifest, packageForR);
+  }
+
   /** Shutdown AOSP utilized thread-pool. */
   public void shutdown() {
     FullyQualifiedName.logCacheUsage(logger);
