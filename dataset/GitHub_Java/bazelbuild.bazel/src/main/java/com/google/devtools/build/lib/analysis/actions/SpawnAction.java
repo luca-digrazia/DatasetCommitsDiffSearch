@@ -191,7 +191,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       ActionOwner owner,
       Iterable<Artifact> tools,
       Iterable<Artifact> inputs,
-      Iterable<? extends Artifact> outputs,
+      Iterable<Artifact> outputs,
       Artifact primaryOutput,
       ResourceSet resourceSet,
       CommandLines commandLines,
