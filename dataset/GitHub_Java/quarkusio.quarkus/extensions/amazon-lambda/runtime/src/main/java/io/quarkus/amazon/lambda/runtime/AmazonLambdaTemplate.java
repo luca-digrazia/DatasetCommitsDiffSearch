@@ -25,12 +25,12 @@ public class AmazonLambdaTemplate {
 
     private static final Logger log = Logger.getLogger(AmazonLambdaTemplate.class);
 
-    @SuppressWarnings("rawtypes")
-    public void start(Class<? extends RequestHandler<?, ?>> handlerClass,
+    protected static final String QUARKUS_INTERNAL_AWS_LAMBDA_TEST_API = "quarkus-internal.aws-lambda.test-api";
+
+    public void start(Class<? extends RequestHandler> handlerClass,
             ShutdownContext context,
             RuntimeValue<Class<?>> handlerType,
             BeanContainer beanContainer) {
-
         RequestHandler handler = beanContainer.instance(handlerClass);
 
         final ObjectMapper mapper = new ObjectMapper().configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
@@ -47,17 +47,17 @@ public class AmazonLambdaTemplate {
         });
 
         Thread t = new Thread(new Runnable() {
-            @SuppressWarnings("unchecked")
             @Override
             public void run() {
 
                 try {
-                    URL requestUrl = AmazonLambdaApi.invocationNext();
+                    URL requestUrl = new URL(
+                            "http://" + runtimeApi() + "/2018-06-01/runtime/invocation/next");
                     while (running.get()) {
 
                         HttpURLConnection requestConnection = (HttpURLConnection) requestUrl.openConnection();
                         try {
-                            String requestId = requestConnection.getHeaderField(AmazonLambdaApi.LAMBDA_RUNTIME_AWS_REQUEST_ID);
+                            String requestId = requestConnection.getHeaderField("Lambda-Runtime-Aws-Request-Id");
                             Object response;
                             try {
                                 Object val = objectReader.readValue(requestConnection.getInputStream());
@@ -66,24 +66,31 @@ public class AmazonLambdaTemplate {
                             } catch (Exception e) {
                                 log.error("Failed to run lambda", e);
                                 FunctionError fe = new FunctionError(e.getClass().getName(), e.getMessage());
-                                URL responseUrl = AmazonLambdaApi.invocationError(requestId);
+                                URL responseUrl = new URL(
+                                        "http://" + runtimeApi() + "/2018-06-01/runtime/invocation/"
+                                                + requestId + "/error");
+
                                 HttpURLConnection responseConnection = (HttpURLConnection) responseUrl.openConnection();
                                 responseConnection.setDoOutput(true);
                                 responseConnection.setRequestMethod("POST");
                                 mapper.writeValue(responseConnection.getOutputStream(), fe);
                                 while (responseConnection.getInputStream().read() != -1) {
-                                    // Read data
+
                                 }
+
                                 continue;
                             }
 
-                            URL responseUrl = AmazonLambdaApi.invocationResponse(requestId);
+                            URL responseUrl = new URL(
+                                    "http://" + runtimeApi() + "/2018-06-01/runtime/invocation/"
+                                            + requestId + "/response");
+
                             HttpURLConnection responseConnection = (HttpURLConnection) responseUrl.openConnection();
                             responseConnection.setDoOutput(true);
                             responseConnection.setRequestMethod("POST");
                             mapper.writeValue(responseConnection.getOutputStream(), response);
                             while (responseConnection.getInputStream().read() != -1) {
-                                // Read data
+
                             }
                         } catch (Exception e) {
                             log.error("Error running lambda", e);
@@ -101,7 +108,8 @@ public class AmazonLambdaTemplate {
                 } catch (Exception e) {
                     try {
                         log.error("Lambda init error", e);
-                        URL errorUrl = AmazonLambdaApi.initError();
+                        URL errorUrl = new URL(
+                                "http://" + runtimeApi() + "/2018-06-01/runtime/init/error");
                         HttpURLConnection responseConnection = (HttpURLConnection) errorUrl.openConnection();
                         responseConnection.setDoOutput(true);
                         responseConnection.setRequestMethod("POST");
@@ -126,7 +134,15 @@ public class AmazonLambdaTemplate {
 
     }
 
-    public RuntimeValue<Class<?>> discoverParameterTypes(Class<? extends RequestHandler<?, ?>> handlerClass) {
+    private String runtimeApi() {
+        String testApi = System.getProperty(QUARKUS_INTERNAL_AWS_LAMBDA_TEST_API);
+        if (testApi != null) {
+            return testApi;
+        }
+        return System.getenv("AWS_LAMBDA_RUNTIME_API");
+    }
+
+    public RuntimeValue<Class<?>> discoverParameterTypes(Class<? extends RequestHandler> handlerClass) {
         final Method[] methods = handlerClass.getMethods();
         Method method = null;
         for (int i = 0; i < methods.length && method == null; i++) {

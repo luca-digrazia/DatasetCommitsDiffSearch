@@ -22,7 +22,7 @@ public class AmazonLambdaContext implements Context {
     private String invokedFunctionArn;
     private CognitoIdentity cognitoIdentity;
     private ClientContext clientContext;
-    private long runtimeDeadlineMs = 0;
+    private int remainingTimeInMillis;
     private int memoryLimitInMB;
     private LambdaLogger logger;
 
@@ -48,9 +48,10 @@ public class AmazonLambdaContext implements Context {
         String functionMemorySize = System.getenv("AWS_LAMBDA_FUNCTION_MEMORY_SIZE");
         memoryLimitInMB = functionMemorySize != null ? Integer.valueOf(functionMemorySize) : 0;
 
-        String runtimeDeadline = request.getHeaderField("Lambda-Runtime-Deadline-Ms");
-        if (runtimeDeadline != null) {
-            runtimeDeadlineMs = Long.valueOf(runtimeDeadline);
+        String runtimeDeadlineMs = request.getHeaderField("Lambda-Runtime-Deadline-Ms");
+        if (runtimeDeadlineMs != null) {
+            remainingTimeInMillis = (int) (Long.valueOf(runtimeDeadlineMs)
+                    - new Date().getTime());
         }
         logger = LambdaRuntime.getLogger();
     }
@@ -97,7 +98,7 @@ public class AmazonLambdaContext implements Context {
 
     @Override
     public int getRemainingTimeInMillis() {
-        return (int) (runtimeDeadlineMs - Math.round(System.nanoTime() / 1_000_000d));
+        return remainingTimeInMillis;
     }
 
     @Override
@@ -108,5 +109,22 @@ public class AmazonLambdaContext implements Context {
     @Override
     public LambdaLogger getLogger() {
         return logger;
+    }
+
+    @Override
+    public String toString() {
+        return new StringJoiner(", ", AmazonLambdaContext.class.getSimpleName() + "[", "]")
+                .add("awsRequestId='" + awsRequestId + "'")
+                .add("logGroupName='" + logGroupName + "'")
+                .add("logStreamName='" + logStreamName + "'")
+                .add("functionName='" + functionName + "'")
+                .add("functionVersion='" + functionVersion + "'")
+                .add("invokedFunctionArn='" + invokedFunctionArn + "'")
+                .add("cognitoIdentity=" + cognitoIdentity)
+                .add("clientContext=" + clientContext)
+                .add("remainingTimeInMillis=" + remainingTimeInMillis)
+                .add("memoryLimitInMB=" + memoryLimitInMB)
+                .add("logger=" + logger)
+                .toString();
     }
 }
