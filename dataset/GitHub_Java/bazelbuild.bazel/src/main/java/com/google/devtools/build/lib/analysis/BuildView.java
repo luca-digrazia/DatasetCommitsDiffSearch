@@ -26,6 +26,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Multimap;
@@ -44,7 +45,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
-import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
@@ -954,12 +954,9 @@ public class BuildView {
 
       @Override
       protected List<BuildConfiguration> getConfigurations(
-          FragmentClassSet fragments, Iterable<BuildOptions> buildOptions) {
-        Preconditions.checkArgument(
-            ct.getConfiguration().fragmentClasses().equals(fragments),
-            "Mismatch: %s %s",
-            ct,
-            fragments);
+          ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragments,
+          Iterable<BuildOptions> buildOptions) {
+        Preconditions.checkArgument(ct.getConfiguration().fragmentClasses().equals(fragments));
         Dependency asDep = Dependency.withTransitionAndAspects(ct.getLabel(),
             NoTransition.INSTANCE, AspectCollection.EMPTY);
         ImmutableList.Builder<BuildConfiguration> builder = ImmutableList.builder();

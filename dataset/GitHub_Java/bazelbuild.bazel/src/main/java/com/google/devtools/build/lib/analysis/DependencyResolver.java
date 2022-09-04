@@ -18,12 +18,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.analysis.AspectCollection.AspectCycleOnPathException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.DynamicTransitionMapper;
-import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.TransitionResolver;
@@ -875,7 +875,8 @@ public abstract class DependencyResolver {
    */
   @Nullable
   protected abstract List<BuildConfiguration> getConfigurations(
-      FragmentClassSet fragments, Iterable<BuildOptions> buildOptions)
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragments,
+      Iterable<BuildOptions> buildOptions)
       throws InvalidConfigurationException, InterruptedException;
 
   /**

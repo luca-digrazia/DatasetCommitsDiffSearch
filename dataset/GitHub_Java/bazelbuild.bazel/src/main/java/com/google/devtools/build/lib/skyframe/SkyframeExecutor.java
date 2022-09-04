@@ -71,7 +71,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollectio
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
-import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
@@ -1624,7 +1623,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @VisibleForTesting
   public BuildConfiguration getConfigurationForTesting(
       ExtendedEventHandler eventHandler,
-      FragmentClassSet fragments,
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> fragments,
       BuildOptions options)
       throws InterruptedException {
     SkyKey key = BuildConfigurationValue.key(fragments, options);
