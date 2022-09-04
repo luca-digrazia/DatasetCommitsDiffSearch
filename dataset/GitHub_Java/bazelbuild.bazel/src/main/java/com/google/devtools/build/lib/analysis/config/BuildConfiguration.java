@@ -725,6 +725,7 @@ public class BuildConfiguration {
     )
     public boolean legacyExternalRunfiles;
 
+    @Deprecated
     @Option(
       name = "check_fileset_dependencies_recursively",
       defaultValue = "true",
@@ -739,10 +740,14 @@ public class BuildConfiguration {
     @Option(
       name = "experimental_skyframe_native_filesets",
       defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
-      deprecationWarning = "Skyframe-native filesets are now the default, and legacy "
-              + "implementation will be removed soon."
+      category = "experimental",
+      documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
+      effectTags = { OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION },
+      metadataTags = { OptionMetadataTag.EXPERIMENTAL },
+      help =
+          "If true, Blaze will use the skyframe-native implementation of the Fileset rule."
+              + " This offers improved performance in incremental builds of Filesets as well as"
+              + " correct incremental behavior."
     )
     public boolean skyframeNativeFileset;
 
@@ -1166,7 +1171,6 @@ public class BuildConfiguration {
   private final ActionEnvironment testEnv;
 
   private final BuildOptions buildOptions;
-  private final BuildOptions.OptionsDiffForReconstruction buildOptionsDiff;
   private final Options options;
 
   private final String mnemonic;
@@ -1319,12 +1323,12 @@ public class BuildConfiguration {
     return fragmentsInterner.intern(ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter));
   }
 
-  /** Constructs a new BuildConfiguration instance. */
-  public BuildConfiguration(
-      BlazeDirectories directories,
+  /**
+   * Constructs a new BuildConfiguration instance.
+   */
+  public BuildConfiguration(BlazeDirectories directories,
       Map<Class<? extends Fragment>, Fragment> fragmentsMap,
       BuildOptions buildOptions,
-      BuildOptions.OptionsDiffForReconstruction buildOptionsDiff,
       String repositoryName) {
     this.directories = directories;
     this.fragments = makeFragmentsMap(fragmentsMap);
@@ -1333,7 +1337,6 @@ public class BuildConfiguration {
     this.skylarkVisibleFragments = buildIndexOfSkylarkVisibleFragments();
     this.repositoryName = repositoryName;
     this.buildOptions = buildOptions.clone();
-    this.buildOptionsDiff = buildOptionsDiff;
     this.actionsEnabled = buildOptions.enableActions();
     this.options = buildOptions.get(Options.class);
     this.separateGenfilesDirectory = options.separateGenfilesDirectory;
@@ -1416,9 +1419,7 @@ public class BuildConfiguration {
    * configuration is assumed to have).
    */
   public BuildConfiguration clone(
-      FragmentClassSet fragmentClasses,
-      RuleClassProvider ruleClassProvider,
-      BuildOptions defaultBuildOptions) {
+      FragmentClassSet fragmentClasses, RuleClassProvider ruleClassProvider) {
 
     ClassToInstanceMap<Fragment> fragmentsMap = MutableClassToInstanceMap.create();
     for (Fragment fragment : fragments.values()) {
@@ -1433,7 +1434,6 @@ public class BuildConfiguration {
             directories,
             fragmentsMap,
             options,
-            BuildOptions.diffForReconstruction(defaultBuildOptions, options),
             mainRepositoryName.strippedName());
     return newConfig;
   }
@@ -1960,10 +1960,6 @@ public class BuildConfiguration {
    */
   public BuildOptions getOptions() {
     return buildOptions;
-  }
-
-  public BuildOptions.OptionsDiffForReconstruction getBuildOptionsDiff() {
-    return buildOptionsDiff;
   }
 
   public String getCpu() {
