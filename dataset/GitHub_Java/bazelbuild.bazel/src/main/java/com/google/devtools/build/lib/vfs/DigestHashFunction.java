@@ -72,6 +72,7 @@ public class DigestHashFunction {
   public static final DigestHashFunction SHA256 = register(Hashing.sha256(), "SHA-256", "SHA256");
 
   private static DigestHashFunction defaultHash;
+  private static boolean defaultHasBeenSet = false;
 
   private final HashFunction hashFunction;
   private final DigestLength digestLength;
@@ -144,11 +145,10 @@ public class DigestHashFunction {
    */
   public static synchronized DigestHashFunction getDefault()
       throws DefaultHashFunctionNotSetException {
-    DigestHashFunction hash = defaultHash;
-    if (hash == null) {
+    if (!defaultHasBeenSet) {
       throw new DefaultHashFunctionNotSetException("DigestHashFunction default has not been set");
     }
-    return hash;
+    return defaultHash;
   }
 
   /**
@@ -161,7 +161,7 @@ public class DigestHashFunction {
       // Some tests use this class without calling GoogleUnixFileSystemModule.globalInit().
       Preconditions.checkState(
           System.getenv("TEST_TMPDIR") != null, "Default hash function has not been set");
-      return DigestHashFunction.MD5;
+      return DEFAULT_HASH_FOR_TESTS;
     }
   }
 
@@ -181,16 +181,14 @@ public class DigestHashFunction {
    */
   public static synchronized void setDefault(DigestHashFunction hash)
       throws DefaultAlreadySetException {
-    Preconditions.checkNotNull(hash);
-    // Permit redundant calls.  This is difficult to avoid with test suites.
-    if (defaultHash == null || defaultHash == hash) {
-      defaultHash = hash;
-      return;
+    if (defaultHasBeenSet) {
+      throw new DefaultAlreadySetException(
+          String.format(
+              "setDefault(%s) failed. The default has already been set to %s, you cannot reset it.",
+              hash.name, defaultHash.name));
     }
-    throw new DefaultAlreadySetException(
-        String.format(
-            "setDefault(%s) failed. The default has already been set to %s, you cannot change it.",
-            hash.name, defaultHash.name));
+    defaultHash = hash;
+    defaultHasBeenSet = true;
   }
 
   /** Failure to set the default if the default already being set. */
@@ -271,4 +269,13 @@ public class DigestHashFunction {
   static Collection<DigestHashFunction> getPossibleHashFunctions() {
     return hashFunctionRegistry.values();
   }
+
+  /**
+   * For tests that are testing the FileSystems themselves, those test should be parametrized and
+   * run with all the standard hash functions that Bazel supports using {@link
+   * #getPossibleHashFunctions} above. For tests that just need a FileSystem to test some adjacent
+   * behavior, though, we use this default.
+   */
+  @VisibleForTesting
+  public static final DigestHashFunction DEFAULT_HASH_FOR_TESTS = DigestHashFunction.MD5;
 }
