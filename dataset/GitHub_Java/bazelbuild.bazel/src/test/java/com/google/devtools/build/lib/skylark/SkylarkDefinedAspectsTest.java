@@ -1252,7 +1252,7 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
     } catch (ViewCreationFailedException e) {
       // expect to fail.
     }
-    assertContainsEvent("Every .bzl file must have a corresponding package");
+    assertContainsEvent("Unable to load package for '//foo:aspect.bzl'");
   }
 
   @Test
@@ -2752,7 +2752,7 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
   public static final class WithKeepGoing extends SkylarkDefinedAspectsTest {
     @Override
     protected FlagBuilder defaultFlags() {
-      return super.defaultFlags().with(Flag.KEEP_GOING);
+      return new FlagBuilder().with(Flag.KEEP_GOING);
     }
 
     @Override

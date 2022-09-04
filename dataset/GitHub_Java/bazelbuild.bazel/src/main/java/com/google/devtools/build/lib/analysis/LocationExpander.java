@@ -175,6 +175,7 @@ public final class LocationExpander {
   private String expand(String value, ErrorReporter reporter) {
     int restart = 0;
 
+    int attrLength = value.length();
     StringBuilder result = new StringBuilder(value.length());
 
     while (true) {
@@ -374,8 +375,8 @@ public final class LocationExpander {
     if (ruleContext.getRule().isAttrDefined("srcs", BuildType.LABEL_LIST)) {
       for (TransitiveInfoCollection src : ruleContext
           .getPrerequisitesIf("srcs", Mode.TARGET, FileProvider.class)) {
-        mapGet(locationMap, AliasProvider.getDependencyLabel(src))
-            .addAll(src.getProvider(FileProvider.class).getFilesToBuild().toList());
+        Iterables.addAll(mapGet(locationMap, AliasProvider.getDependencyLabel(src)),
+            src.getProvider(FileProvider.class).getFilesToBuild());
       }
     }
 
@@ -404,7 +405,7 @@ public final class LocationExpander {
       if (executableArtifact != null) {
         mapGet(locationMap, label).add(executableArtifact);
       } else {
-        mapGet(locationMap, label).addAll(filesToRun.getFilesToRun().toList());
+        Iterables.addAll(mapGet(locationMap, label), filesToRun.getFilesToRun());
       }
     }
     return locationMap;
