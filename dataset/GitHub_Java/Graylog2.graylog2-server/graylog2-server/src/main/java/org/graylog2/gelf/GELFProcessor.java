@@ -20,7 +20,6 @@
 
 package org.graylog2.gelf;
 
-import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -29,6 +28,8 @@ import org.graylog2.Core;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
+import org.graylog2.plugin.inputs.MessageInput;
+import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,11 +46,6 @@ public class GELFProcessor {
     private static final Logger LOG = LoggerFactory.getLogger(GELFProcessor.class);
     private Core server;
 
-    private final Meter incomingMessages;
-    private final Meter incompleteMessages;
-    private final Meter processedMessages;
-    private final Timer gelfParsedTime;
-
     private final ObjectMapper objectMapper;
 
     public GELFProcessor(Core server) {
@@ -57,32 +53,30 @@ public class GELFProcessor {
 
         objectMapper = new ObjectMapper();
         objectMapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
-
-        this.incomingMessages = server.metrics().meter(name(GELFProcessor.class, "incomingMessages"));
-        this.incompleteMessages = server.metrics().meter(name(GELFProcessor.class, "incompleteMessages"));
-        this.processedMessages = server.metrics().meter(name(GELFProcessor.class, "processedMessages"));
-        this.gelfParsedTime = server.metrics().timer(name(GELFProcessor.class, "gelfParsedTime"));
     }
 
-    public void messageReceived(GELFMessage message) throws BufferOutOfCapacityException {
-        incomingMessages.mark();
-        
+    public void messageReceived(GELFMessage message, MessageInput sourceInput) throws BufferOutOfCapacityException {
+        String metricName = sourceInput.getUniqueReadableId();
+
+        server.metrics().meter(name(metricName, "incomingMessages")).mark();
+
         // Convert to LogMessage
-        Message lm = parse(message.getJSON());
+        Message lm = parse(message.getJSON(), sourceInput);
 
         if (!lm.isComplete()) {
-            incompleteMessages.mark();
+            server.metrics().meter(name(metricName, "incompleteMessages")).mark();
             LOG.debug("Skipping incomplete message.");
+            return;
         }
 
         // Add to process buffer.
         LOG.debug("Adding received GELF message <{}> to process buffer: {}", lm.getId(), lm);
-        processedMessages.mark();
-        server.getProcessBuffer().insertCached(lm);
+        server.metrics().meter(name(metricName, "processedMessages")).mark();
+        server.getProcessBuffer().insertCached(lm, sourceInput);
     }
 
-    private Message parse(String message) {
-        Timer.Context tcx = gelfParsedTime.time();
+    private Message parse(String message, MessageInput sourceInput) {
+        Timer.Context tcx = server.metrics().timer(name(sourceInput.getUniqueReadableId(), "gelfParsedTime")).time();
 
         JsonNode json;
 
@@ -96,20 +90,24 @@ public class GELFProcessor {
         if (json == null) {
             throw new IllegalStateException("JSON is null/could not be parsed (invalid JSON)");
         }
-        
+
         // Timestamp.
-        double timestamp = doubleValue(json, "timestamp");
-        if (timestamp <= 0) {
-            timestamp = Tools.getUTCTimestampWithMilliseconds();
+        double messageTimestamp = doubleValue(json, "timestamp");
+        DateTime timestamp;
+        if (messageTimestamp <= 0) {
+            timestamp = new DateTime();
+        } else {
+            timestamp = Tools.dateTimeFromDouble(messageTimestamp);
         }
-        
+
         Message lm = new Message(
         		this.stringValue(json, "short_message"),
         		this.stringValue(json, "host"),
-        		timestamp);
-        
+        		timestamp
+        );
+
         lm.addField("full_message", this.stringValue(json, "full_message"));
-        
+
         String file = this.stringValue(json, "file");
 
         if (file != null && !file.isEmpty()) {
@@ -120,7 +118,7 @@ public class GELFProcessor {
         if (line > -1) {
         	lm.addField("line", line);
         }
-        
+
         // Level is set by server if not specified by client.
         long level = this.longValue(json, "level");
         if (level > -1) {
@@ -142,22 +140,38 @@ public class GELFProcessor {
             String key = entry.getKey();
             JsonNode value = entry.getValue();
 
-            // Skip standard fields.
-            if (null != lm.getField(key) || Message.RESERVED_FIELDS.contains(key)) {
+            // Don't include GELF syntax underscore in message field key.
+            if (key.startsWith("_") && key.length() > 1) {
+                key = key.substring(1);
+            }
+
+            // We already set short_message and host as message and source. Do not add as fields again.
+            if (key.equals("short_message") || key.equals("host")) {
                 continue;
             }
 
-            // Convert JSON containers to Strings.
-            if (value.isContainerNode()) {
-                lm.addField(key, value.toString());
-            } else {
-                lm.addField(key, value.asText());
+            // Skip standard or already set fields.
+            if (lm.getField(key) != null || Message.RESERVED_FIELDS.contains(key)) {
+                continue;
             }
+
+            // Convert JSON containers to Strings, and pick a suitable number representation.
+            Object fieldValue;
+            if (value.isContainerNode()) {
+                fieldValue = value.toString();
+            } else if (value.isFloatingPointNumber()) {
+                fieldValue = value.asDouble();
+            } else if (value.isIntegralNumber()) {
+                fieldValue = value.asLong();
+            } else {
+                fieldValue = value.asText();
+            }
+            lm.addField(key, fieldValue);
         }
 
         // Stop metrics timer.
         tcx.stop();
-        
+
         return lm;
     }
 
