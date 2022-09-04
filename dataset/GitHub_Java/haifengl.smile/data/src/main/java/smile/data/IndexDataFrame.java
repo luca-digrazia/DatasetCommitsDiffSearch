@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.data;
 
 import java.util.Arrays;
@@ -24,14 +22,16 @@ import java.util.stream.Stream;
 
 import smile.data.type.*;
 import smile.data.vector.*;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
 
 /**
  * A data frame with a new index instead of the default [0, n) row index.
  *
  * @author Haifeng Li
  */
-public class IndexDataFrame implements DataFrame {
+class IndexDataFrame implements DataFrame {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(IndexDataFrame.class);
+
     /** The underlying data frame. */
     private DataFrame df;
     /** The row index. */
@@ -69,7 +69,7 @@ public class IndexDataFrame implements DataFrame {
 
     @Override
     public int size() {
-        return index.length;
+        return df.size();
     }
 
     @Override
@@ -89,7 +89,7 @@ public class IndexDataFrame implements DataFrame {
 
     @Override
     public BaseVector column(int i) {
-        return df.column(i).get(index);
+        return df.column(i);
     }
 
     @Override
@@ -135,11 +135,6 @@ public class IndexDataFrame implements DataFrame {
     @Override
     public DoubleVector doubleVector(int i) {
         return df.doubleVector(i);
-    }
-
-    @Override
-    public StringVector stringVector(int i) {
-        return df.stringVector(i);
     }
 
     @Override
@@ -193,5 +188,11 @@ public class IndexDataFrame implements DataFrame {
     @Override
     public Tuple get(int i) {
         return df.get(index[i]);
+    }
+
+    @Override
+    public DenseMatrix toMatrix() {
+        // Although clean, this is not optimal in term of performance.
+        return rebase().toMatrix();
     }
 }

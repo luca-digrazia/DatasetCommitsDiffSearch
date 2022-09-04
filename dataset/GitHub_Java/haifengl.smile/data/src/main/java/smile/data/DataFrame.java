@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.data;
 
 import java.sql.ResultSet;
@@ -23,10 +21,9 @@ import java.util.*;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-import java.util.stream.Stream;
+
 import smile.data.measure.DiscreteMeasure;
 import smile.data.measure.Measure;
-import smile.data.measure.NominalScale;
 import smile.data.type.*;
 import smile.data.vector.*;
 import smile.data.vector.Vector;
@@ -61,15 +58,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
                 .toArray(new DataType[fields.length]);
     }
 
-
-    /** Returns the column measures. */
-    default Measure[] measures() {
-        StructField[] fields = schema().fields();
-        return Arrays.stream(fields)
-                .map(field -> field.measure.orElse(null))
-                .toArray(Measure[]::new);
-    }
-
     /**
      * Returns the number of rows.
      */
@@ -84,18 +72,28 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /** Returns the structure of data frame. */
     default DataFrame structure() {
-        List<BaseVector> vectors = Arrays.asList(
-                Vector.of("Column", String.class, names()),
-                Vector.of("Type", DataType.class, types()),
-                Vector.of("Measure", Measure.class, measures())
-        );
+        if (schema().measure().isEmpty()) {
+            List<BaseVector> vectors = Arrays.asList(
+                    Vector.of("Column", String.class, names()),
+                    Vector.of("Type", DataType.class, types())
+            );
 
-        return new DataFrameImpl(vectors);
-    }
+            return new DataFrameImpl(vectors);
 
-    /** Returns a new data frame without rows that have null/missing values. */
-    default DataFrame omitNullRows() {
-        return DataFrame.of(stream().filter(r -> !r.hasNull()), schema().unboxed());
+        } else {
+            Measure[] measures = new Measure[ncols()];
+            for (Map.Entry<String, Measure> e : schema().measure().entrySet()) {
+                measures[columnIndex(e.getKey())] = e.getValue();
+            }
+
+            List<BaseVector> vectors = Arrays.asList(
+                    Vector.of("Column", String.class, names()),
+                    Vector.of("Type", DataType.class, types()),
+                    Vector.of("Measure", Measure.class, measures)
+            );
+
+            return new DataFrameImpl(vectors);
+        }
     }
 
     /** Returns the cell at (i, j). */
@@ -106,17 +104,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     /** Returns the cell at (i, j). */
     default Object get(int i, String field) {
         return get(i).get(field);
-    }
-
-    /** Returns a new data frame with row indexing. */
-    default DataFrame of(int... index) {
-        return new IndexDataFrame(this, index);
-    }
-
-    /** Returns a new data frame with boolean indexing. */
-    default DataFrame of(boolean... index) {
-        int[] idx = IntStream.range(0, index.length).filter(i -> index[i]).toArray();
-        return new IndexDataFrame(this, idx);
     }
 
     /** Checks whether the value at position (i, j) is null. */
@@ -319,7 +306,12 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         if (o instanceof String) {
             return (String) o;
         } else {
-            return schema().field(j).toString(o);
+            Measure measure = schema().measure().get(schema().field(j).name);
+            if (measure != null) {
+                return measure.toString(o);
+            } else {
+                return schema().field(j).type.toString(o);
+            }
         }
     }
 
@@ -408,8 +400,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      * @throws ClassCastException when the data is not nominal or ordinal.
      */
     default String getScale(int i, int j) {
-        int x = getInt(i, j);
-        return schema().field(j).measure.map(m -> ((DiscreteMeasure) m).toString(x)).orElseGet(() -> String.valueOf(x));
+        return ((DiscreteMeasure) schema().measure().get(schema().field(j).name)).toString(getInt(i, j));
     }
 
     /**
@@ -603,19 +594,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         return doubleVector(columnIndex(e.toString()));
     }
 
-    /** Selects column based on the column index. */
-    StringVector stringVector(int i);
-
-    /** Selects column based on the column name. */
-    default StringVector stringVector(String colName) {
-        return stringVector(columnIndex(colName));
-    }
-
-    /** Selects column using an enum value. */
-    default StringVector stringVector(Enum<?> e) {
-        return stringVector(columnIndex(e.toString()));
-    }
-
     /** Selects a new DataFrame with given column indices. */
     DataFrame select(int... cols);
 
@@ -655,43 +633,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     }
 
     /**
-     * Returns a new DataFrame with given string columns converted to nominal.
-     *
-     * @param cols string column names. If empty, all string columns
-     *             in the data frame will be converted.
-     * @return a new DataFrame.
-     */
-    default DataFrame factorize(String... cols) {
-        if (cols.length == 0) {
-            cols = Arrays.stream(schema().fields())
-                    .filter(field -> field.type.isString())
-                    .map(field -> field.name)
-                    .toArray(String[]::new);
-        }
-
-        HashSet<String> set = new HashSet<>(Arrays.asList(cols));
-        BaseVector[] vectors = Arrays.stream(names()).map(col -> {
-            if (set.contains(col)) {
-                StringVector c = stringVector(col);
-                NominalScale scale = c.nominal();
-                return c.factorize(scale);
-            } else return column(col);
-        }).toArray(BaseVector[]::new);
-
-        return of(vectors);
-    }
-
-    /**
-     * Return an array obtained by converting all the variables
-     * in a data frame to numeric mode and then binding them together
-     * as the columns of a matrix. Nominal and ordinal variables are
-     * replaced by their internal codes. Missing values/nulls will be
-     * encoded as Double.NaN.
-     */
-    double[][] toArray();
-
-    /**
-     * Return a matrix obtained by converting all the variables
+     * Return the matrix obtained by converting all the variables
      * in a data frame to numeric mode and then binding them together
      * as the columns of a matrix. Nominal and ordinal variables are
      * replaced by their internal codes. Missing values/nulls will be
@@ -704,7 +646,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
         int ncols = ncols();
         String[] names = names();
         DataType[] types = types();
-        Measure[] measures = measures();
         String[] col = new String[ncols];
         double[] min = new double[ncols];
         double[] max = new double[ncols];
@@ -713,7 +654,8 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
         int k = 0;
         for (int j = 0; j < ncols; j++) {
-            if (measures[j] != null && measures[j] instanceof DiscreteMeasure) continue;
+            Measure measure = schema().measure().get(names[j]);
+            if (measure != null && measure instanceof DiscreteMeasure) continue;
 
             DataType type = types[j];
             if (type.isInt()) {
@@ -891,50 +833,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     }
 
     /**
-     * Creates a DataFrame from a 2-dimensional array.
-     * @param data The data array.
-     * @param names the name of columns.
-     */
-    static DataFrame of(double[][] data, String... names) {
-        int p = data[0].length;
-        if (names == null || names.length == 0) {
-            names = IntStream.range(1, p+1).mapToObj(i -> "V"+i).toArray(String[]::new);
-        }
-
-        DoubleVector[] vectors = new DoubleVector[p];
-        for (int j = 0; j < p; j++) {
-            double[] x = new double[data.length];
-            for (int i = 0; i < x.length; i++) {
-                x[i] = data[i][j];
-            }
-            vectors[j] = DoubleVector.of(names[j], x);
-        }
-        return DataFrame.of(vectors);
-    }
-
-    /**
-     * Creates a DataFrame from a 2-dimensional array.
-     * @param data The data array.
-     * @param names the name of columns.
-     */
-    static DataFrame of(int[][] data, String... names) {
-        int p = data[0].length;
-        if (names == null || names.length == 0) {
-            names = IntStream.range(1, p+1).mapToObj(i -> "V"+i).toArray(String[]::new);
-        }
-
-        IntVector[] vectors = new IntVector[p];
-        for (int j = 0; j < p; j++) {
-            int[] x = new int[data.length];
-            for (int i = 0; i < x.length; i++) {
-                x[i] = data[i][j];
-            }
-            vectors[j] = IntVector.of(names[j], x);
-        }
-        return DataFrame.of(vectors);
-    }
-
-    /**
      * Creates a DataFrame from a collection.
      * @param data The data collection.
      * @param clazz The class type of elements.
@@ -942,22 +840,6 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
      */
     static <T> DataFrame of(List<T> data, Class<T> clazz) {
         return new DataFrameImpl(data, clazz);
-    }
-
-    /**
-     * Creates a DataFrame from a stream of tuples.
-     * @param data The data stream.
-     */
-    static DataFrame of(Stream<Tuple> data) {
-        return new DataFrameImpl(data);
-    }
-
-    /**
-     * Creates a DataFrame from a stream of tuples.
-     * @param data The data stream.
-     */
-    static DataFrame of(Stream<Tuple> data, StructType schema) {
-        return new DataFrameImpl(data, schema);
     }
 
     /**
@@ -969,26 +851,19 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
     }
 
     /**
-     * Creates a DataFrame from a set of tuples.
-     * @param data The data collection.
-     */
-    static DataFrame of(List<Tuple> data, StructType schema) {
-        return new DataFrameImpl(data, schema);
-    }
-
-    /**
      * Creates a DataFrame from a set of Maps.
      * @param data The data collection.
      */
-    static <T> DataFrame of(Collection<Map<String, T>> data, StructType schema) {
-        List<Tuple> rows = data.stream().map(map -> {
+    static <T> DataFrame of(List<Map<String, T>> data, StructType schema) {
+        List<Tuple> rows = new ArrayList<>(data.size());
+        for (Map<String, T> map : data) {
             Object[] row = new Object[schema.length()];
             for (int i = 0; i < row.length; i++) {
-                row[i] = map.get(schema.fieldName(i));
+                row[i] = map.get(schema.field(i).name);
             }
-            return Tuple.of(row, schema);
-        }).collect(Collectors.toList());
-        return of(rows, schema);
+            rows.add(Tuple.of(row, schema));
+        }
+        return of(rows);
     }
 
     /**
@@ -1042,8 +917,9 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
 
     /**
      * Returns a stream collector that accumulates tuples into a Matrix.
+     * @param bias add a bias column (all ones) if true.
      */
-    static Collector<Tuple, List<Tuple>, DenseMatrix> matrix() {
+    static Collector<Tuple, List<Tuple>, DenseMatrix> collectMatrix() {
         return Collector.of(
                 // supplier
                 () -> new ArrayList<Tuple>(),
@@ -1058,7 +934,7 @@ public interface DataFrame extends Dataset<Tuple>, Iterable<BaseVector> {
                     }
                     int nrows = container.size();
                     int ncols = container.get(0).length();
-                    DenseMatrix m = Matrix.zeros(nrows, ncols);
+                    DenseMatrix m = Matrix.of(nrows, ncols, 0.0);
                     for (int i = 0; i < nrows; i++) {
                         for (int j = 0; j < ncols; j++) {
                             m.set(i, j, container.get(i).getDouble(j));

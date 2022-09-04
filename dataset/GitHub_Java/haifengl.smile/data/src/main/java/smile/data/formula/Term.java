@@ -1,31 +1,26 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.data.formula;
 
 import smile.data.Tuple;
-import smile.data.measure.Measure;
 import smile.data.type.DataType;
-import smile.data.type.StructField;
 import smile.data.vector.*;
 import smile.data.DataFrame;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
 /**
  * A term is recursively constructed from constant symbols,
@@ -40,21 +35,8 @@ public interface Term extends HyperTerm {
         return Collections.singletonList(this);
     }
 
-    /** Returns the name of output values. */
-    String name();
-
     /** Returns the data type of output values. */
     DataType type();
-
-    /** Returns the optional level of measurements of output values. */
-    default Optional<Measure> measure() {
-        return Optional.empty();
-    }
-
-    /** Returns the field meta data of output variable. */
-    default StructField field() {
-        return new StructField(name(), type(), measure().orElse(null));
-    }
 
     /** Applies the term on a data object. */
     Object apply(Tuple o);
@@ -111,7 +93,7 @@ public interface Term extends HyperTerm {
 
     default BaseVector apply(DataFrame df) {
         if (isVariable()) {
-            return df.column(name());
+            return df.column(toString());
         }
 
         int size = df.size();
@@ -119,55 +101,55 @@ public interface Term extends HyperTerm {
             case Integer: {
                 int[] values = new int[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsInt(df.get(i));
-                return IntVector.of(field(), values);
+                return IntVector.of(toString(), values);
             }
 
             case Long: {
                 long[] values = new long[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsLong(df.get(i));
-                return LongVector.of(field(), values);
+                return LongVector.of(toString(), values);
             }
 
             case Double: {
                 double[] values = new double[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsDouble(df.get(i));
-                return DoubleVector.of(field(), values);
+                return DoubleVector.of(toString(), values);
             }
 
             case Float: {
                 float[] values = new float[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsFloat(df.get(i));
-                return FloatVector.of(field(), values);
+                return FloatVector.of(toString(), values);
             }
 
             case Boolean: {
                 boolean[] values = new boolean[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsBoolean(df.get(i));
-                return BooleanVector.of(field(), values);
+                return BooleanVector.of(toString(), values);
             }
 
             case Byte: {
                 byte[] values = new byte[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsByte(df.get(i));
-                return ByteVector.of(field(), values);
+                return ByteVector.of(toString(), values);
             }
 
             case Short: {
                 short[] values = new short[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsShort(df.get(i));
-                return ShortVector.of(field(), values);
+                return ShortVector.of(toString(), values);
             }
 
             case Char: {
                 char[] values = new char[size];
                 for (int i = 0; i < size; i++) values[i] = applyAsChar(df.get(i));
-                return CharVector.of(field(), values);
+                return CharVector.of(toString(), values);
             }
 
             default: {
                 Object[] values = new Object[size];
                 for (int i = 0; i < size; i++) values[i] = apply(df.get(i));
-                return Vector.of(field(), values);
+                return Vector.of(toString(), type(), values);
             }
         }
     }
