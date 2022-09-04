@@ -29,8 +29,6 @@ import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
-import org.androidannotations.holder.GeneratedClassHolder;
-
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JExpression;
@@ -116,6 +114,7 @@ public class BundleHelper {
 			if (isTypeParcelable(elementType)) {
 				methodNameToSave = "put" + "ParcelableArray";
 				methodNameToRestore = "get" + "ParcelableArray";
+				restoreCallNeedCastStatement = true;
 
 				if (hasTypeArguments) {
 					restoreCallNeedsSuppressWarning = true;
@@ -185,36 +184,43 @@ public class BundleHelper {
 		}
 	}
 
+	public boolean restoreCallNeedCastStatement() {
+		return restoreCallNeedCastStatement;
+	}
+
+	public boolean restoreCallNeedsSuppressWarning() {
+		return restoreCallNeedsSuppressWarning;
+	}
+
 	public String getMethodNameToSave() {
 		return methodNameToSave;
 	}
 
+	public String getMethodNameToRestore() {
+		return methodNameToRestore;
+	}
+
 	private boolean isTypeParcelable(TypeElement elementType) {
+
 		TypeElement parcelableType = annotationHelper.typeElementFromQualifiedName(CanonicalNameConstants.PARCELABLE);
+
 		return elementType != null && annotationHelper.isSubtype(elementType, parcelableType);
 	}
 
-	public JExpression getExpressionToRestoreFromIntentOrBundle(JClass variableClass, JExpression intent, JExpression extras, JExpression extraKey, JMethod method, GeneratedClassHolder holder) {
+	public JExpression getExpressionToRestoreFromIntentOrBundle(JClass variableClass, JExpression intent, JExpression extras, JExpression extraKey, JMethod method) {
 		if ("byte[]".equals(element.toString())) {
 			return intent.invoke("getByteArrayExtra").arg(extraKey);
 		} else {
-			return getExpressionToRestoreFromBundle(variableClass, extras, extraKey, method, holder);
+			return getExpressionToRestoreFromBundle(variableClass, extras, extraKey, method);
 		}
 	}
 
-	public JExpression getExpressionToRestoreFromBundle(JClass variableClass, JExpression bundle, JExpression extraKey, JMethod method, GeneratedClassHolder holder) {
-		JExpression expressionToRestore;
-		if (methodNameToRestore.equals("getParcelableArray")) {
-			JClass erasure = variableClass.elementType().erasure().array();
-			expressionToRestore = holder.refClass(org.androidannotations.api.bundle.BundleHelper.class).staticInvoke("getParcelableArray").arg(bundle).arg(extraKey).arg(erasure.dotclass());
-		} else {
-			expressionToRestore = JExpr.invoke(bundle, methodNameToRestore).arg(extraKey);
-		}
-
-		if (restoreCallNeedCastStatement) {
+	public JExpression getExpressionToRestoreFromBundle(JClass variableClass, JExpression bundle, JExpression extraKey, JMethod method) {
+		JExpression expressionToRestore = JExpr.invoke(bundle, methodNameToRestore).arg(extraKey);
+		if (restoreCallNeedCastStatement()) {
 			expressionToRestore = JExpr.cast(variableClass, expressionToRestore);
 
-			if (restoreCallNeedsSuppressWarning) {
+			if (restoreCallNeedsSuppressWarning()) {
 				codeModelHelper.addSuppressWarnings(method, "unchecked");
 			}
 		}

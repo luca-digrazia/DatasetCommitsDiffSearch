@@ -42,7 +42,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-public class ItemLongClickHandler extends AbstractViewListenerHandler {
+public class ItemLongClickHandler extends AbstractListenerHandler {
 
 	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
@@ -115,7 +115,7 @@ public class ItemLongClickHandler extends AbstractViewListenerHandler {
 	}
 
 	@Override
-	protected JClass getListenerTargetClass() {
+	protected JClass getViewClass() {
 		return classes().ADAPTER_VIEW.narrow(codeModel().wildcard());
 	}
 }

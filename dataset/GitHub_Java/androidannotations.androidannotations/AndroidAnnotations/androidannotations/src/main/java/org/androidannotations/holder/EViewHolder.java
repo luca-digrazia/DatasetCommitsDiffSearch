@@ -20,7 +20,6 @@ import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 import static com.sun.codemodel.JMod.STATIC;
 import static javax.lang.model.element.ElementKind.CONSTRUCTOR;
-import static org.androidannotations.helper.ModelConstants.generationSuffix;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -44,7 +43,7 @@ import com.sun.codemodel.JVar;
 public class EViewHolder extends EComponentWithViewSupportHolder {
 
 	protected static final String ALREADY_INFLATED_COMMENT = "" // +
-			+ "The alreadyInflated_ hack is needed because of an Android bug\n" // +
+			+ "The mAlreadyInflated_ hack is needed because of an Android bug\n" // +
 			+ "which leads to infinite calls of onFinishInflate()\n" //
 			+ "when inflating a layout with a parent and using\n" //
 			+ "the <merge /> tag.";
@@ -111,7 +110,7 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 
 	@Override
 	protected void setInit() {
-		init = generatedClass.method(PRIVATE, codeModel().VOID, "init" + generationSuffix());
+		init = generatedClass.method(PRIVATE, codeModel().VOID, "init_");
 		viewNotifierHelper.wrapInitWithNotifier();
 	}
 
@@ -137,7 +136,7 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 	protected void setOnFinishInflate() {
 		onFinishInflate = generatedClass.method(PUBLIC, codeModel().VOID, "onFinishInflate");
 		onFinishInflate.annotate(Override.class);
-		onFinishInflate.javadoc().append(ALREADY_INFLATED_COMMENT.replaceAll("alreadyInflated_", "alreadyInflated" + generationSuffix()));
+		onFinishInflate.javadoc().append(ALREADY_INFLATED_COMMENT);
 
 		JBlock ifNotInflated = onFinishInflate.body()._if(getAlreadyInflated().not())._then();
 		ifNotInflated.assign(getAlreadyInflated(), JExpr.TRUE);
@@ -156,6 +155,6 @@ public class EViewHolder extends EComponentWithViewSupportHolder {
 	}
 
 	private void setAlreadyInflated() {
-		alreadyInflated = generatedClass.field(PRIVATE, JType.parse(codeModel(), "boolean"), "alreadyInflated" + generationSuffix(), JExpr.FALSE);
+		alreadyInflated = generatedClass.field(PRIVATE, JType.parse(codeModel(), "boolean"), "alreadyInflated_", JExpr.FALSE);
 	}
 }
