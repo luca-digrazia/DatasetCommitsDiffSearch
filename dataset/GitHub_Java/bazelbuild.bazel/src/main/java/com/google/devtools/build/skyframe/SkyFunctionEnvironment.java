@@ -158,7 +158,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         depKeysAsSet = depKeys.toSet();
         evaluatorContext
             .getGraph()
-            .getBatchAsync(
+            .prefetchBatch(
                 requestor,
                 Reason.PREFETCH,
                 Iterables.filter(oldDeps, Predicates.not(Predicates.in(depKeysAsSet))));
@@ -620,16 +620,5 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
   @Override
   public boolean inErrorBubblingForTesting() {
     return bubbleErrorInfo != null;
-  }
-
-  @Override
-  public void registerDependencies(Iterable<SkyKey> keys) {
-    newlyRequestedDeps.startGroup();
-    for (SkyKey key : keys) {
-      if (!directDeps.containsKey(key)) {
-        addDep(key);
-      }
-    }
-    newlyRequestedDeps.endGroup();
   }
 }
