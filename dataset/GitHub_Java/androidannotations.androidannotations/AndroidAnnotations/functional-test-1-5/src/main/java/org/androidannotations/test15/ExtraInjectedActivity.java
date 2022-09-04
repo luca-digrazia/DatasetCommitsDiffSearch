@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,25 +15,25 @@
  */
 package org.androidannotations.test15;
 
-import java.util.List;
-
-import android.app.Activity;
-import android.content.Intent;
+import java.util.ArrayList;
 
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.Extra;
 
+import android.app.Activity;
+import android.content.Intent;
+
 @EActivity
 public class ExtraInjectedActivity extends Activity {
 
-	@Extra("stringExtra")
+	@Extra("aStringExtra")
 	String stringExtra;
 
 	@Extra("arrayExtra")
 	CustomData[] arrayExtra;
 
 	@Extra("listExtra")
-	List<String> listExtra;
+	ArrayList<String> listExtra;
 
 	@Extra("intExtra")
 	int intExtra;
@@ -44,6 +44,9 @@ public class ExtraInjectedActivity extends Activity {
 	@Extra
 	String extraWithoutValue;
 
+	@Extra
+	ParcelableSerializableData parcelableSerializableData;
+
 	@Override
 	protected void onNewIntent(Intent intent) {
 		setIntent(intent);
@@ -52,6 +55,10 @@ public class ExtraInjectedActivity extends Activity {
 	void intentWithExtras() {
 		ExtraInjectedActivity_.intent(this).arrayExtra(null).start();
 		ExtraInjectedActivity_.intent(this).intExtra(42).get();
-		ExtraInjectedActivity_.intent(this).stringExtra("hello").startForResult(42);
+		ExtraInjectedActivity_.intent(this).stringExtra("hello")
+				.startForResult(42);
+		ExtraInjectedActivity_.intent(this)
+				.parcelableSerializableData(new ParcelableSerializableData())
+				.get();
 	}
 }

@@ -154,7 +154,10 @@ public class BundleHelper {
 				methodNameToSave = "put" + "Serializable";
 				methodNameToRestore = "get" + "Serializable";
 				restoreCallNeedCastStatement = true;
-				restoreCallNeedsSuppressWarning = true;
+
+				if (hasTypeArguments) {
+					restoreCallNeedsSuppressWarning = true;
+				}
 			}
 
 		} else {

@@ -26,6 +26,7 @@ import javax.lang.model.element.Element;
 import javax.lang.model.type.TypeMirror;
 
 import org.androidannotations.annotations.FragmentArg;
+import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.BundleHelper;
 import org.androidannotations.helper.CaseHelper;
@@ -46,6 +47,7 @@ import com.sun.codemodel.JVar;
 public class FragmentArgHandler extends BaseAnnotationHandler<EFragmentHolder> {
 
 	private final AnnotationHelper annotationHelper;
+	private final APTCodeModelHelper codeModelHelper = new APTCodeModelHelper();
 
 	public FragmentArgHandler(ProcessingEnvironment processingEnvironment) {
 		super(FragmentArg.class, processingEnvironment);
