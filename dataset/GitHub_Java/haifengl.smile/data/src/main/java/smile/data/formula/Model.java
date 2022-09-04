@@ -18,6 +18,7 @@ package smile.data.formula;
 import smile.data.Instance;
 import smile.data.Tuple;
 import smile.data.type.DataType;
+import smile.data.type.DataTypes;
 import smile.data.type.StructType;
 
 /**
@@ -29,14 +30,14 @@ import smile.data.type.StructType;
  */
 public class Model extends Formula {
     /** The response variable. */
-    private Term y;
+    private Factor y;
 
     /**
      * Constructor.
      * @param y the response variable. All other columns will be used as predictors.
      */
-    public Model(Term y) {
-        this(y, Terms.all());
+    public Model(Factor y) {
+        this(y, all());
     }
 
     /**
@@ -44,8 +45,8 @@ public class Model extends Formula {
      * @param y the response variable.
      * @param x the predictor terms.
      */
-    public Model(Term y, HyperTerm... x) {
-        super(removeY(y, x));
+    public Model(Factor y, Term... x) {
+        super(removey(y, x));
         this.y = y;
 
         DataType type = y.type();
@@ -55,10 +56,10 @@ public class Model extends Formula {
     }
 
     /** Returns a new array of terms that includes x but removes y. */
-    private static HyperTerm[] removeY(Term y, HyperTerm... x) {
-        HyperTerm[] terms = new HyperTerm[x.length+1];
+    private static Term[] removey(Factor y, Term... x) {
+        Term[] terms = new Term[x.length+1];
         System.arraycopy(x, 0, terms, 0, x.length);
-        terms[x.length] = new Delete(y);
+        terms[x.length] = remove(y);
         return terms;
     }
 
@@ -72,40 +73,31 @@ public class Model extends Formula {
      * Apply the formula on a tuple to generate the model data.
      */
     public Instance<Tuple> map(Tuple o) {
-        switch (y.type().id()) {
-            case Double:
-            case Float:
-                return new Instance<Tuple>() {
-                    @Override
-                    public Tuple x() {
-                        return apply(o);
-                    }
+        DataType type = y.type();
+        if (type == DataTypes.DoubleObjectType || type == DataTypes.FloatType) {
+            return new Instance<Tuple>() {
+                @Override
+                public Tuple x() {
+                    return apply(o);
+                }
 
-                    @Override
-                    public double y() {
-                        return y.applyAsDouble(o);
-                    }
-                };
+                @Override
+                public double y() {
+                    return y.applyAsDouble(o);
+                }
+            };
+        } else {
+            return new Instance<Tuple>() {
+                @Override
+                public Tuple x() {
+                    return apply(o);
+                }
 
-            case Integer:
-            case Boolean:
-            case Short:
-            case Byte:
-            case Char:
-                return new Instance<Tuple>() {
-                    @Override
-                    public Tuple x() {
-                        return apply(o);
-                    }
-
-                    @Override
-                    public int label() {
-                        return y.applyAsInt(o);
-                    }
-                };
-
-            default:
-                throw new UnsupportedOperationException("Unsupported response type: " + y.type());
+                @Override
+                public int label() {
+                    return y.applyAsInt(o);
+                }
+            };
         }
     }
 
