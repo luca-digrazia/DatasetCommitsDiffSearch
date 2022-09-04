@@ -16,6 +16,7 @@
 
 package org.jboss.shamrock.jaeger.runtime;
 
+import org.jboss.shamrock.runtime.annotations.ConfigItem;
 import org.jboss.shamrock.runtime.annotations.Template;
 import java.util.Optional;
 
@@ -35,24 +36,26 @@ public class JaegerDeploymentTemplate {
 
     private static final Logger log = Logger.getLogger(JaegerDeploymentTemplate.class);
 
-    public void registerTracer(JaegerConfig jaeger) {
+    public void registerTracer(JaegerConfig jaegerConfig) {
         if (!registered) {
-            System.out.println("JaegerDeploymentTemplate service name = " + jaeger.serviceName);
-            if (isValidConfig(jaeger)) {
-                initTracerConfig(jaeger);
+            if (isValidConfig(jaegerConfig)) {
                 GlobalTracer.register(new ShamrockJaegerTracer());
             }
             registered = true;
         }
     }
 
-    private boolean isValidConfig(JaegerConfig jaeger) {
+    private boolean isValidConfig(JaegerConfig config) {
+        System.out.println("JaegerDeploymentTemplate config = "+config);
+        System.out.println("JaegerDeploymentTemplate config.serviceName = " + config.serviceName);
+        System.out.println("JaegerDeploymentTemplate config.jaegerServiceName = " + config.jaegerServiceName);
         Config mpconfig = ConfigProvider.getConfig();
         Optional<String> serviceName = mpconfig.getOptionalValue(JAEGER_SERVICE_NAME, String.class);
+        System.out.println("MP-config JAEGER_SERVICE_NAME = " + serviceName);
         Optional<String> endpoint = mpconfig.getOptionalValue(JAEGER_ENDPOINT, String.class);
-        if (!jaeger.serviceName.isPresent() && !serviceName.isPresent()) {
+        if (!config.serviceName.isPresent() && !serviceName.isPresent()) {
             log.warn("Jaeger service name has not been defined (e.g. JAEGER_SERVICE_NAME environment variable or system properties)");
-        } else if (!jaeger.endpoint.isPresent() && !endpoint.isPresent()) {
+        } else if (!config.endpoint.isPresent() && !endpoint.isPresent()) {
             log.warn("Jaeger collector endpoint has not been defined (e.g. JAEGER_ENDPOINT environment variable or system properties)");
             // Return true for now, so we can reproduce issue with UdpSender
             return true;
@@ -60,31 +63,6 @@ public class JaegerDeploymentTemplate {
             return true;
         }
         return false;
-    }
-
-    private void initTracerConfig(JaegerConfig jaeger) {
-        initTracerProperty("JAEGER_ENDPOINT", jaeger.endpoint);
-        initTracerProperty("JAEGER_AUTH_TOKEN", jaeger.authToken);
-        initTracerProperty("JAEGER_USER", jaeger.user);
-        initTracerProperty("JAEGER_PASSWORD", jaeger.password);
-        initTracerProperty("JAEGER_AGENT_HOST", jaeger.agentHost);
-        initTracerProperty("JAEGER_AGENT_PORT", jaeger.agentPort);
-        initTracerProperty("JAEGER_REPORTER_LOG_SPANS", jaeger.reporterLogSpans);
-        initTracerProperty("JAEGER_REPORTER_MAX_QUEUE_SIZE", jaeger.reporterMaxQueueSize);
-        initTracerProperty("JAEGER_REPORTER_FLUSH_INTERVAL", jaeger.reporterFlushInterval);
-        initTracerProperty("JAEGER_SAMPLER_TYPE", jaeger.samplerType);
-        initTracerProperty("JAEGER_SAMPLER_PARAM", jaeger.samplerParam);
-        initTracerProperty("JAEGER_SAMPLER_MANAGER_HOST_PORT", jaeger.samplerManagerHostPort);
-        initTracerProperty("JAEGER_SERVICE_NAME", jaeger.serviceName);
-        initTracerProperty("JAEGER_TAGS", jaeger.tags);
-        initTracerProperty("JAEGER_PROPAGATION", jaeger.propagation);
-        initTracerProperty("JAEGER_SENDER_FACTORY", jaeger.senderFactory);
-    }
-
-    private void initTracerProperty(String property, Optional<String> value) {
-        if (value.isPresent()) {
-            System.setProperty(property, value.get());
-        }
     }
 }
 
