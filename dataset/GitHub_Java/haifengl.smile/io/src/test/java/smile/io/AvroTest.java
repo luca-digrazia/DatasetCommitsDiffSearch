@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.io;
 
 import org.junit.After;
@@ -29,9 +27,6 @@ import smile.data.type.StructField;
 import smile.math.matrix.DenseMatrix;
 import smile.util.Paths;
 
-import java.io.InputStream;
-import java.nio.file.Files;
-
 import static org.junit.Assert.*;
 
 /**
@@ -44,8 +39,7 @@ public class AvroTest {
 
     public AvroTest() {
         try {
-            InputStream stream = Files.newInputStream(Paths.getTestData("avro/userdata.avsc"));
-            Schema schema = new Schema.Parser().parse(stream);
+            Schema schema = new Schema.Parser().parse(Paths.getTestData("avro/userdata.avsc").toFile());
             Avro avro = new Avro(schema);
             df = avro.read(Paths.getTestData("avro/userdata1.avro"));
         } catch (Exception ex) {
