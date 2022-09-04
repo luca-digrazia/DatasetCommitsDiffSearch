@@ -1,29 +1,28 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.rest.models.users.responses;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
+import org.apache.shiro.authz.permission.WildcardPermission;
 import org.graylog.grn.GRNRegistry;
 import org.graylog.grn.GRNTypes;
-import org.graylog.security.permissions.CaseSensitiveWildcardPermission;
 import org.graylog.security.permissions.GRNPermission;
-import org.graylog2.plugin.database.users.User;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.graylog2.shared.security.RestPermissions;
 import org.junit.jupiter.api.Test;
@@ -39,10 +38,8 @@ class UserSummaryTest {
             "1234",
             "user",
             "email",
-            "Hans",
-            "Dampf",
             "Hans Dampf",
-            ImmutableList.of(new CaseSensitiveWildcardPermission("dashboard:create:123")),
+            ImmutableList.of(new WildcardPermission("dashboard:create:123")),
             ImmutableList.of(GRNPermission.create(RestPermissions.ENTITY_OWN, grnRegistry.newGRN(GRNTypes.STREAM, "1234"))),
             null,
             null,
@@ -53,8 +50,7 @@ class UserSummaryTest {
             null,
             true,
             null,
-            null,
-            User.AccountStatus.ENABLED
+            null
     );
 
     @Test

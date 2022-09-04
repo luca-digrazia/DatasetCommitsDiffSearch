@@ -1,11 +1,32 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.rest.resources.roles;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Sets;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.apache.shiro.authz.permission.WildcardPermission;
+import org.graylog.security.permissions.GRNPermission;
+import org.graylog2.audit.AuditEventTypes;
+import org.graylog2.audit.jersey.AuditEvent;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.database.users.User;
@@ -38,8 +59,9 @@ import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
@@ -62,12 +84,12 @@ public class RolesResource extends RestResource {
 
     @GET
     @RequiresPermissions(RestPermissions.ROLES_READ)
-    @ApiOperation(value = "List all roles", notes = "")
+    @ApiOperation("List all roles")
     public RolesResponse listAll() throws NotFoundException {
         final Set<Role> roles = roleService.loadAll();
-        Set<RoleResponse> roleResponses = Sets.newHashSet();
+        Set<RoleResponse> roleResponses = Sets.newHashSetWithExpectedSize(roles.size());
         for (Role role : roles) {
-            roleResponses.add(RoleResponse.create(role.getName(), role.getPermissions()));
+            roleResponses.add(RoleResponse.create(role.getName(), Optional.ofNullable(role.getDescription()), role.getPermissions(), role.isReadOnly()));
         }
 
         return RolesResponse.create(roleResponses);
@@ -80,91 +102,125 @@ public class RolesResource extends RestResource {
         checkPermission(RestPermissions.ROLES_READ, name);
 
         final Role role = roleService.load(name);
-        return RoleResponse.create(role.getName(), role.getPermissions());
+        return RoleResponse.create(role.getName(), Optional.ofNullable(role.getDescription()), role.getPermissions(), role.isReadOnly());
     }
 
     @POST
     @RequiresPermissions(RestPermissions.ROLES_CREATE)
-    @ApiOperation(value = "Create a new role", notes = "")
+    @ApiOperation("Create a new role")
+    @AuditEvent(type = AuditEventTypes.ROLE_CREATE)
     public Response create(@ApiParam(name = "JSON body", value = "The new role to create", required = true) @Valid @NotNull RoleResponse roleResponse) {
-        try {
-            roleService.load(roleResponse.name());
+        if (roleService.exists(roleResponse.name())) {
             throw new BadRequestException("Role " + roleResponse.name() + " already exists.");
-        } catch (NotFoundException ignored) {
         }
 
         Role role = new RoleImpl();
         role.setName(roleResponse.name());
         role.setPermissions(roleResponse.permissions());
+        roleResponse.description().ifPresent(role::setDescription);
+
         try {
             role = roleService.save(role);
         } catch (ValidationException e) {
-            log.error("Invalid role creation request.");
-            throw new BadRequestException(e);
+            log.error("Invalid role creation request", e);
+            throw new BadRequestException("Couldn't create role \"" + roleResponse.name() + "\"", e);
         }
 
         final URI uri = getUriBuilderToSelf().path(RolesResource.class)
                 .path("{rolename}")
                 .build(role.getName());
 
-        return Response.created(uri).entity(RoleResponse.create(role.getName(), role.getPermissions())).build();
+        return Response.created(uri).entity(RoleResponse.create(role.getName(),
+                Optional.ofNullable(role.getDescription()),
+                role.getPermissions(),
+                role.isReadOnly())).build();
     }
 
     @PUT
     @Path("{rolename}")
     @ApiOperation("Update an existing role")
+    @AuditEvent(type = AuditEventTypes.ROLE_UPDATE)
     public RoleResponse update(
             @ApiParam(name = "rolename", required = true) @PathParam("rolename") String name,
-            @ApiParam(name = "JSON Body", value = "The new representation of the role", required = true) RoleResponse role) throws NotFoundException {
-        final Role roleToUpdate = roleService.load(name);
+            @ApiParam(name = "JSON Body", value = "The new representation of the role", required = true) RoleResponse roleRepresentation) throws NotFoundException {
+        checkPermission(RestPermissions.ROLES_EDIT, name);
 
-        roleToUpdate.setName(role.name());
-        roleToUpdate.setPermissions(role.permissions());
-        try {
-            roleService.save(roleToUpdate);
-        } catch (ValidationException e) {
-            throw new BadRequestException(e);
+        final Role role = roleService.load(name);
+        if (role.isReadOnly()) {
+            throw new BadRequestException("Cannot update read only role " + name);
         }
-        return RoleResponse.create(roleToUpdate.getName(), roleToUpdate.getPermissions());
+
+        role.setName(roleRepresentation.name());
+        role.setPermissions(roleRepresentation.permissions());
+        roleRepresentation.description().ifPresent(role::setDescription);
+
+        try {
+            roleService.save(role);
+        } catch (ValidationException e) {
+            throw new BadRequestException("Couldn't update role \"" + roleRepresentation.name() + "\"", e);
+        }
+
+        return RoleResponse.create(role.getName(), Optional.ofNullable(role.getDescription()), role.getPermissions(),
+                roleRepresentation.readOnly());
     }
 
     @DELETE
     @Path("{rolename}")
-    @ApiOperation(value = "Remove the named role")
-    public Response delete(@ApiParam(name = "rolename", required = true) @PathParam("rolename") String name) throws NotFoundException {
+    @ApiOperation("Remove the named role and dissociate any users from it")
+    @AuditEvent(type = AuditEventTypes.ROLE_DELETE)
+    public void delete(@ApiParam(name = "rolename", required = true) @PathParam("rolename") String name) throws NotFoundException {
         checkPermission(RestPermissions.ROLES_DELETE, name);
 
-        if (roleService.delete(name) == 0) {
-            throw new NotFoundException();
+        final Role role = roleService.load(name);
+        if (role.isReadOnly()) {
+            throw new BadRequestException("Cannot delete read only system role " + name);
         }
-        return Response.noContent().build();
+        userService.dissociateAllUsersFromRole(role);
+
+        if (roleService.delete(name) == 0) {
+            throw new NotFoundException("Couldn't find role " + name);
+        }
     }
 
     @GET
     @Path("{rolename}/members")
     @RequiresPermissions({RestPermissions.USERS_LIST, RestPermissions.ROLES_READ})
-    @ApiOperation(value = "Retrieve the role's members")
+    @ApiOperation("Retrieve the role's members")
     public RoleMembershipResponse getMembers(@ApiParam(name = "rolename", required = true) @PathParam("rolename") String name) throws NotFoundException {
         final Role role = roleService.load(name);
-
         final Collection<User> users = userService.loadAllForRole(role);
 
-        Set<UserSummary> userSummaries = Sets.newHashSet();
+        Set<UserSummary> userSummaries = Sets.newHashSetWithExpectedSize(users.size());
         for (User user : users) {
+            final Set<String> roleNames = userService.getRoleNames(user);
+
+            List<WildcardPermission> wildcardPermissions;
+            List<GRNPermission> grnPermissions;
+            if (isPermitted(RestPermissions.USERS_PERMISSIONSEDIT, user.getName())) {
+                wildcardPermissions = userService.getWildcardPermissionsForUser(user);
+                grnPermissions = userService.getGRNPermissionsForUser(user);
+            } else {
+                wildcardPermissions = ImmutableList.of();
+                grnPermissions = ImmutableList.of();
+            }
             userSummaries.add(UserSummary.create(
                     user.getId(),
                     user.getName(),
                     user.getEmail(),
                     user.getFullName(),
-                    isPermitted(RestPermissions.USERS_PERMISSIONSEDIT,
-                                user.getName()) ? user.getPermissions() : Collections.<String>emptyList(),
+                    wildcardPermissions,
+                    grnPermissions,
                     user.getPreferences(),
                     firstNonNull(user.getTimeZone(), DateTimeZone.UTC).getID(),
                     user.getSessionTimeoutMs(),
                     user.isReadOnly(),
                     user.isExternalUser(),
-                    user.getStartpage()
-            ));
+                    user.getStartpage(),
+                    roleNames,
+                    // there is no session information available in this call, so we set it to null
+                    false,
+                    null,
+                    null));
         }
 
         return RoleMembershipResponse.create(role.getName(), userSummaries);
@@ -173,10 +229,12 @@ public class RolesResource extends RestResource {
     @PUT
     @Path("{rolename}/members/{username}")
     @ApiOperation("Add a user to a role")
+    @AuditEvent(type = AuditEventTypes.ROLE_MEMBERSHIP_UPDATE)
     public Response addMember(@ApiParam(name = "rolename") @PathParam("rolename") String rolename,
                               @ApiParam(name = "username") @PathParam("username") String username,
-                              @ApiParam(name = "JSON Body") String body) throws NotFoundException {
-        checkPermission(RestPermissions.ROLES_EDIT, username);
+                              @ApiParam(name = "JSON Body", value = "Placeholder because PUT requests should have a body. Set to '{}', the content will be ignored.", defaultValue = "{}") String body) throws NotFoundException {
+        checkPermission(RestPermissions.USERS_EDIT, username);
+        checkPermission(RestPermissions.ROLES_EDIT, rolename);
 
         final User user = userService.load(username);
         if (user == null) {
@@ -202,9 +260,11 @@ public class RolesResource extends RestResource {
     @DELETE
     @Path("{rolename}/members/{username}")
     @ApiOperation("Remove a user from a role")
+    @AuditEvent(type = AuditEventTypes.ROLE_MEMBERSHIP_DELETE)
     public Response removeMember(@ApiParam(name = "rolename") @PathParam("rolename") String rolename,
                                  @ApiParam(name = "username") @PathParam("username") String username) throws NotFoundException {
-        checkPermission(RestPermissions.ROLES_EDIT, username);
+        checkPermission(RestPermissions.USERS_EDIT, username);
+        checkPermission(RestPermissions.ROLES_EDIT, rolename);
 
         final User user = userService.load(username);
         if (user == null) {
@@ -223,7 +283,6 @@ public class RolesResource extends RestResource {
         } catch (ValidationException e) {
             throw new BadRequestException("Validation failed", e);
         }
-
 
         return status(Response.Status.NO_CONTENT).build();
     }
