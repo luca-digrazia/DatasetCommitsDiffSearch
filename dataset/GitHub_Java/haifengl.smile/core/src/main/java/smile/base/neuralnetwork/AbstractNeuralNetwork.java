@@ -37,15 +37,15 @@ public abstract class AbstractNeuralNetwork {
     /**
      * learning rate
      */
-    protected double eta = 0.3;
+    protected double eta = 0.1;
     /**
      * momentum factor
      */
-    protected double alpha = 0.3;
+    protected double alpha = 0.0;
     /**
      * weight decay factor, which is also a regularization term.
      */
-    protected double lambda = 0.1;
+    protected double lambda = 0.0;
     /**
      * The input layer with bias.
      */
@@ -115,7 +115,7 @@ public abstract class AbstractNeuralNetwork {
     /**
      * Sets the weight decay factor. After each weight update,
      * every weight is simply "decayed" or shrunk according to
-     * w = w * (1 - 2 * eta * lambda).
+     * w = w * (1 - eta * lambda).
      */
     public void setWeightDecay(double lambda) {
         if (lambda < 0.0 || lambda > 0.1) {
@@ -149,7 +149,7 @@ public abstract class AbstractNeuralNetwork {
     /**
      * Propagates the signals through the neural network.
      */
-    protected void propagate(double[] x) {
+    public void propagate(double[] x) {
         if (x.length != x1.length - 1) {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, x1.length-1));
         }
@@ -164,32 +164,26 @@ public abstract class AbstractNeuralNetwork {
     /**
      * Propagates the errors back through the network.
      */
-    protected void backpropagate(double[] y) {
+    public void backpropagate(double[] y) {
         computeOutputError(y);
         for (int l = net.length; --l > 0;) {
-            net[l].computeGradient(net[l-1].getOutput());
+            net[l].computeUpdate(net[l-1].getOutput(), eta, alpha);
             net[l-1].backpropagate(net[l]);
         }
 
-        net[0].computeGradient(x1);
-    }
-
-    /**
-     * Returns the output layer.
-     */
-    protected Layer outputLayer() {
-        return net[net.length - 1];
+        net[0].computeUpdate(x1, eta, alpha);
     }
 
     /** Updates the weights. */
     protected void update() {
-        double decay = 1.0 - 2 * eta * lambda;
-        if (decay < 0.9) {
+        double decay = 1.0 - eta * lambda;
+        if (decay <= 0.0) {
             throw new IllegalStateException(String.format("Invalid learning rate (eta = %.2f) and/or decay (lambda = %.2f)", eta, lambda));
         }
 
         for (Layer layer : net) {
-            layer.update(eta, alpha, decay);
+            layer.update();
+            if (decay < 1.0) layer.decay(decay);
         }
     }
 
@@ -198,7 +192,7 @@ public abstract class AbstractNeuralNetwork {
      * @param target the desired output.
      * @return the error defined by loss function.
      */
-    protected double computeOutputError(double[] target) {
+    public double computeOutputError(double[] target) {
         return computeOutputError(target, 1.0);
     }
 
@@ -208,41 +202,36 @@ public abstract class AbstractNeuralNetwork {
      * @param weight a positive weight value associated with the training instance.
      * @return the error defined by loss function.
      */
-    protected double computeOutputError(double[] target, double weight) {
-        Layer outputLayer = outputLayer();
+    public double computeOutputError(double[] target, double weight) {
+        Layer outputLayer = net[net.length - 1];
 
         int units = outputLayer.getOutputUnits();
         if (target.length != units) {
             throw new IllegalArgumentException(String.format("Invalid target vector size: %d, expected: %d", target.length, units));
         }
 
-        ActivationFunction activation = outputLayer.getActivation();
         double[] output = outputLayer.getOutput();
         double[] error = outputLayer.getError();
         double err = 0.0;
         for (int i = 0; i < units; i++) {
-            double o = output[i];
-            double t = target[i];
-            double g = t - o;
+            double out = output[i];
+            double g = target[i] - out;
 
             switch (obj) {
                 case LEAST_MEAN_SQUARES:
                     err += 0.5 * g * g;
-                    if (activation == ActivationFunction.LOGISTIC_SIGMOID) {
-                        g *= o * (1.0 - o);
-                    }
                     break;
 
                 case CROSS_ENTROPY:
-                    switch (activation) {
+                    switch (outputLayer.getActivation()) {
                         case SOFTMAX:
-                            err -= t * log(o);
+                            err -= target[i] * log(out);
                             break;
 
                         case LOGISTIC_SIGMOID:
                             // We have only one output neuron in this case.
-                            err = -t * log(o) - (1.0 - t) * log(1.0 - o);
-                            g *= o * (1.0 - o);
+                            err = -target[i] * log(out) - (1.0 - target[i]) * log(1.0 - out);
+                            g *= out * (1.0 - out);
                             break;
 
                         default:
@@ -253,7 +242,7 @@ public abstract class AbstractNeuralNetwork {
             error[i] = weight * g;
         }
 
-        return weight * err;
+        return err;
     }
 
     /**

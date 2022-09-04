@@ -127,18 +127,17 @@ public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassi
     public NeuralNetwork(ObjectiveFunction obj, Layer... net) {
         super(obj, net);
 
-        Layer outputLayer = outputLayer();
+        Layer outputLayer = net[net.length-1];
         ActivationFunction activation = outputLayer.getActivation();
         switch (obj) {
             case LEAST_MEAN_SQUARES:
                 if (activation == ActivationFunction.SOFTMAX) {
                     throw new IllegalArgumentException("Sofmax activation function is invalid for least mean squares error.");
                 }
-                break;
 
             case CROSS_ENTROPY:
-                //this.alpha = 0.0;
-                //this.lambda = 0.0;
+                this.alpha = 0.0;
+                this.lambda = 0.0;
                 switch (activation) {
                     case RECTIFIER:
                     case LINEAR:
@@ -156,7 +155,6 @@ public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassi
                         }
                         break;
                 }
-                break;
         }
 
         k = outputLayer.getOutputUnits();
@@ -175,38 +173,26 @@ public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassi
     public int predict(double[] x, double[] y) {
         propagate(x);
 
-        Layer outputLayer = outputLayer();
+        Layer outputLayer = net[net.length - 1];
         System.arraycopy(outputLayer.getOutput(), 0, y, 0, outputLayer.getOutputUnits());
 
-        return output();
+        if (outputLayer.getOutputUnits() == 1) {
+            return outputLayer.getOutput()[0] > 0.5 ? 0 : 1;
+        } else {
+            return MathEx.whichMax(outputLayer.getOutput());
+        }
     }
 
     @Override
     public int predict(double[] x) {
         propagate(x);
-        return output();
-    }
 
-    /** Returns the prediction. */
-    private int output() {
-        Layer outputLayer = outputLayer();
-        int units = outputLayer.getOutputUnits();
-        double[] output = outputLayer.getOutput();
-
-        if (units == 1) {
-            return output[0] > 0.5 ? 0 : 1;
+        Layer outputLayer = net[net.length - 1];
+        if (outputLayer.getOutputUnits() == 1) {
+            return outputLayer.getOutput()[0] > 0.5 ? 0 : 1;
+        } else {
+            return MathEx.whichMax(outputLayer.getOutput());
         }
-
-        int y = -1;
-        double max = Double.NEGATIVE_INFINITY;
-        for (int i = 0; i < units; i++) {
-            if (output[i] > max) {
-                max = output[i];
-                y = i;
-            }
-        }
-
-        return y;
     }
 
     @Override
@@ -217,7 +203,6 @@ public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassi
         update();
     }
 
-    /** Mini-batch. */
     @Override
     public void update(double[][] x, int[] y) {
         for (int i = 0; i < x.length; i++) {
@@ -231,19 +216,19 @@ public class NeuralNetwork extends AbstractNeuralNetwork implements OnlineClassi
 
     /** Sets the target vector. */
     private void setTarget(int y) {
-        Layer outputLayer = outputLayer();
+        Layer outputLayer = net[net.length - 1];
         switch (obj) {
             case CROSS_ENTROPY:
                 switch (outputLayer.getActivation()) {
                     case LOGISTIC_SIGMOID:
-                        target[0] = y == 0 ? 0.9 : 0.1;
+                        target[0] = y == 0 ? 1.0 : 0.0;
                         break;
 
                     default:
                         for (int i = 0; i < target.length; i++) {
-                            target[i] = 0.1;
+                            target[i] = 0.0;
                         }
-                        target[y] = 0.9;
+                        target[y] = 1.0;
                 }
                 break;
 

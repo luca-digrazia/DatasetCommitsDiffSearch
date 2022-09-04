@@ -46,7 +46,7 @@ import smile.base.neuralnetwork.ObjectiveFunction;
     public NeuralNetwork(Layer... net) {
         super(ObjectiveFunction.LEAST_MEAN_SQUARES, net);
 
-        Layer outputLayer = outputLayer();
+        Layer outputLayer = net[net.length - 1];
         if (outputLayer.getOutputUnits() != 1) {
             throw new IllegalArgumentException("The output layer must have only one output value: " + outputLayer.getOutputUnits());
         }
@@ -55,7 +55,7 @@ import smile.base.neuralnetwork.ObjectiveFunction;
     @Override
     public double predict(double[] x) {
         propagate(x);
-        return outputLayer().getOutput()[0];
+        return net[net.length-1].getOutput()[0];
     }
 
     @Override

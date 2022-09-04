@@ -59,21 +59,16 @@ public abstract class Split {
     InternalNode parent;
 
     /**
-     * unsplittable[j] is true if
+     * insplitable[j] is true if
      * <ul>
      * <li>The column j in the node is constant</li>
      * <li>The column j is almost constant, i.e. but after the split,
      * the size of one or two children is less than nodeSize.</li>
      * <li>The column j is not (almost) constant, but the impurity of
-     * node doesn't decrease after the split. Therefore, the mutual
-     * information between y and column j is very low.</li>
+     * node doesn't decrease after the split.</li>
      * </ul>
-     * For the first two cases, the column j in the children nodes
-     * (split on another column) are still unsplittable. In last case,
-     * column j may become splittable later after the node splits on
-     * another column. However, we still would like to ignore it
-     * because of the low mutual information. It likely introduces
-     * more noise than information.
+     * No matter which case, the column j in the children nodes
+     * (split on another column) are still insplitable.
      */
     boolean[] unsplittable;
 
