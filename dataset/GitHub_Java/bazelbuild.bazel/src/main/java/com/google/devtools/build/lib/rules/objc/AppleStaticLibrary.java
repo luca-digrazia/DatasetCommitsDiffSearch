@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper;
 import com.google.devtools.build.lib.rules.cpp.CcInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
-import com.google.devtools.build.lib.rules.cpp.ObjcCppSemantics;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import java.util.Collection;
@@ -130,7 +129,6 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
         ProtobufSupport protoSupport =
             new ProtobufSupport(
                     ruleContext,
-                    ObjcCppSemantics.INSTANCE,
                     childToolchainConfig,
                     protosToAvoid,
                     objcProtoProviders,
@@ -166,7 +164,8 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
       librariesToLipo.add(intermediateArtifacts.strippedSingleArchitectureLibrary());
 
       CompilationSupport compilationSupport =
-          new CompilationSupport.Builder(ruleContext, ObjcCppSemantics.INSTANCE)
+          new CompilationSupport.Builder()
+              .setRuleContext(ruleContext)
               .setConfig(childToolchainConfig)
               .setToolchainProvider(childToolchain)
               .setOutputGroupCollector(outputGroupCollector)
