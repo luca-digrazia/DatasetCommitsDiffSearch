@@ -91,7 +91,7 @@ public final class JavaCompilationInfoProvider
 
   @Override
   public ImmutableList<Artifact> getBootClasspath() {
-    return bootClasspath.toList();
+    return ImmutableList.copyOf(bootClasspath);
   }
 
   public NestedSet<Artifact> getBootClasspathAsNestedSet() {

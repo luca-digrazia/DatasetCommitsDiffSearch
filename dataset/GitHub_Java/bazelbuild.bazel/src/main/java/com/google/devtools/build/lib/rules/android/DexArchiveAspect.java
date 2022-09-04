@@ -460,7 +460,7 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
             .useDefaultShellEnvironment()
             .setExecutable(ruleContext.getExecutablePrerequisite(desugarPrereqName, Mode.HOST))
             .addInput(jar)
-            .addTransitiveInputs(bootclasspath)
+            .addInputs(bootclasspath)
             .addTransitiveInputs(classpath)
             .addOutput(result)
             .setMnemonic("Desugar")

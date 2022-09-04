@@ -510,17 +510,14 @@ public class JavaTargetAttributes {
    *
    * <p>This excludes the artifacts made available by jars in the deployment environment.
    */
-  public NestedSet<Artifact> getRuntimeClassPathForArchive() {
-    NestedSet<Artifact> runtimeClasspath = getRuntimeClassPath();
+  public Iterable<Artifact> getRuntimeClassPathForArchive() {
+    Iterable<Artifact> runtimeClasspath = getRuntimeClassPath();
 
     if (getExcludedArtifacts().isEmpty()) {
       return runtimeClasspath;
     } else {
-      return NestedSetBuilder.wrap(
-          Order.STABLE_ORDER,
-          Iterables.filter(
-              runtimeClasspath.toList(),
-              Predicates.not(Predicates.in(getExcludedArtifacts().toSet()))));
+      return Iterables.filter(
+          runtimeClasspath, Predicates.not(Predicates.in(getExcludedArtifacts().toSet())));
     }
   }
 

@@ -279,10 +279,12 @@ public final class JavaCompilationHelper {
    * create a separate jar for the compilation and add resources with singlejar.
    */
   private boolean separateResourceJar(JavaTargetAttributes attributes) {
-    return !attributes.getResources().isEmpty()
-        || !attributes.getResourceJars().isEmpty()
-        || !attributes.getClassPathResources().isEmpty()
-        || !getTranslations().isEmpty();
+    return !Iterables.isEmpty(
+        Iterables.concat(
+            attributes.getResources().values(),
+            attributes.getResourceJars(),
+            attributes.getClassPathResources(),
+            getTranslations()));
   }
 
   private ImmutableMap<String, String> getExecutionInfo() throws InterruptedException {
@@ -411,10 +413,7 @@ public final class JavaCompilationHelper {
     builder.setSourceJars(attributes.getSourceJars());
     builder.setClasspathEntries(attributes.getCompileTimeClassPath());
     builder.setBootclasspathEntries(
-        NestedSetBuilder.<Artifact>stableOrder()
-            .addTransitive(getBootclasspathOrDefault())
-            .addTransitive(getExtdirInputs())
-            .build());
+        ImmutableList.copyOf(Iterables.concat(getBootclasspathOrDefault(), getExtdirInputs())));
 
     // only run API-generating annotation processors during header compilation
     JavaPluginInfo plugins = attributes.plugins().apiGeneratingPlugins();
@@ -762,8 +761,8 @@ public final class JavaCompilationHelper {
   }
 
   /** Returns the extdir artifacts. */
-  private final NestedSet<Artifact> getExtdirInputs() {
-    return javaToolchain.getExtclasspath();
+  private final ImmutableList<Artifact> getExtdirInputs() {
+    return javaToolchain.getExtclasspath().toList();
   }
 
   /**
