@@ -30,6 +30,7 @@ import org.graylog2.auditlog.AuditLogStdOutConfiguration;
 import org.graylog2.auditlog.AuditLogger;
 import org.graylog2.bindings.AlarmCallbackBindings;
 import org.graylog2.bindings.ConfigurationModule;
+import org.graylog2.decorators.DecoratorBindings;
 import org.graylog2.bindings.InitializerBindings;
 import org.graylog2.bindings.MessageFilterBindings;
 import org.graylog2.bindings.MessageOutputBindings;
@@ -47,7 +48,6 @@ import org.graylog2.configuration.EmailConfiguration;
 import org.graylog2.configuration.MongoDbConfiguration;
 import org.graylog2.configuration.VersionCheckConfiguration;
 import org.graylog2.dashboards.DashboardBindings;
-import org.graylog2.decorators.DecoratorBindings;
 import org.graylog2.indexer.retention.RetentionStrategyBindings;
 import org.graylog2.indexer.rotation.RotationStrategyBindings;
 import org.graylog2.messageprocessors.MessageProcessorModule;
@@ -120,7 +120,7 @@ public class Server extends ServerBootstrap {
             new AuditLogModule()
         );
 
-        if (configuration.isWebEnable() && !configuration.isRestAndWebOnSamePort()) {
+        if (configuration.isWebEnable()) {
             modules.add(new WebInterfaceModule());
         }
 

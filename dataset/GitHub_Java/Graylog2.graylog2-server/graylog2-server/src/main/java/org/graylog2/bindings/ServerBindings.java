@@ -29,9 +29,9 @@ import org.graylog2.alerts.FormattedEmailAlertSender;
 import org.graylog2.alerts.types.FieldContentValueAlertCondition;
 import org.graylog2.alerts.types.FieldValueAlertCondition;
 import org.graylog2.alerts.types.MessageCountAlertCondition;
+import org.graylog2.auditlog.jersey.AuditLogDynamicFeature;
 import org.graylog2.bindings.providers.BundleExporterProvider;
 import org.graylog2.bindings.providers.BundleImporterProvider;
-import org.graylog2.bindings.providers.ClusterEventBusProvider;
 import org.graylog2.bindings.providers.DefaultSecurityManagerProvider;
 import org.graylog2.bindings.providers.EsClientProvider;
 import org.graylog2.bindings.providers.EsNodeProvider;
@@ -43,9 +43,9 @@ import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
 import org.graylog2.bundles.BundleService;
 import org.graylog2.cluster.ClusterConfigServiceImpl;
 import org.graylog2.dashboards.widgets.WidgetCacheTime;
-import org.graylog2.dashboards.widgets.WidgetEventsListener;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.events.ClusterEventBus;
+import org.graylog2.bindings.providers.ClusterEventBusProvider;
 import org.graylog2.filters.FilterService;
 import org.graylog2.filters.FilterServiceImpl;
 import org.graylog2.grok.GrokPatternRegistry;
@@ -59,16 +59,16 @@ import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.inputs.InputEventListener;
 import org.graylog2.inputs.InputStateListener;
 import org.graylog2.inputs.PersistedInputsImpl;
+import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.RulesEngine;
 import org.graylog2.plugin.cluster.ClusterConfigService;
-import org.graylog2.plugin.decorators.SearchResponseDecorator;
+import org.graylog2.plugin.decorators.MessageDecorator;
 import org.graylog2.plugin.inject.Graylog2Module;
 import org.graylog2.rest.NotFoundExceptionMapper;
 import org.graylog2.rest.ScrollChunkWriter;
 import org.graylog2.rest.ValidationExceptionMapper;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsImpl;
-import org.graylog2.security.realm.AuthenticatingRealmModule;
 import org.graylog2.security.realm.LdapUserAuthenticator;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.inputs.PersistedInputs;
@@ -89,7 +89,6 @@ import org.graylog2.system.shutdown.GracefulShutdown;
 import org.graylog2.system.stats.ClusterStatsModule;
 import org.graylog2.users.RoleService;
 import org.graylog2.users.RoleServiceImpl;
-import org.graylog2.users.StartPageCleanupListener;
 import org.graylog2.users.UserImpl;
 
 import javax.ws.rs.container.DynamicFeature;
@@ -114,8 +113,7 @@ public class ServerBindings extends Graylog2Module {
         bindExceptionMappers();
         bindAdditionalJerseyComponents();
         bindEventBusListeners();
-        install(new AuthenticatingRealmModule());
-        bindSearchResponseDecorators();
+        bindMessageDecorators();
     }
 
     private void bindProviders() {
@@ -188,6 +186,7 @@ public class ServerBindings extends Graylog2Module {
         final Multibinder<Class<? extends DynamicFeature>> dynamicFeatures = jerseyDynamicFeatureBinder();
         dynamicFeatures.addBinding().toInstance(MetricsDynamicBinding.class);
         dynamicFeatures.addBinding().toInstance(RestrictToMasterFeature.class);
+        dynamicFeatures.addBinding().toInstance(AuditLogDynamicFeature.class);
     }
 
     private void bindExceptionMappers() {
@@ -205,12 +204,10 @@ public class ServerBindings extends Graylog2Module {
         bind(InputEventListener.class).asEagerSingleton();
         bind(LocalDebugEventListener.class).asEagerSingleton();
         bind(ClusterDebugEventListener.class).asEagerSingleton();
-        bind(StartPageCleanupListener.class).asEagerSingleton();
-        bind(WidgetEventsListener.class).asEagerSingleton();
     }
 
-    private void bindSearchResponseDecorators() {
+    private void bindMessageDecorators() {
         // only triggering an initialize to make sure that the binding exists
-        final MapBinder<String, SearchResponseDecorator.Factory> searchResponseDecoratorBinder = searchResponseDecoratorBinder();
+        final MapBinder<String, MessageDecorator.Factory> messageDecoratorBinder = messageDecoratorBinder();
     }
 }
