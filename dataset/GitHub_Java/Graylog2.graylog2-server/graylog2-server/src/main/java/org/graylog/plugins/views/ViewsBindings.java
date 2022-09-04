@@ -29,14 +29,13 @@ import org.graylog.plugins.views.migrations.V20191203120602_MigrateSavedSearches
 import org.graylog.plugins.views.migrations.V20191204000000_RemoveLegacyViewsPermissions;
 import org.graylog.plugins.views.migrations.V20200204122000_MigrateUntypedViewsToDashboards.V20200204122000_MigrateUntypedViewsToDashboards;
 import org.graylog.plugins.views.migrations.V20200409083200_RemoveRootQueriesFromMigratedDashboards;
-import org.graylog.plugins.views.migrations.V20200730000000_AddGl2MessageIdFieldAliasForEvents;
-import org.graylog.plugins.views.providers.ExportBackendProvider;
 import org.graylog.plugins.views.search.SearchRequirements;
 import org.graylog.plugins.views.search.SearchRequiresParameterSupport;
 import org.graylog.plugins.views.search.ValueParameter;
 import org.graylog.plugins.views.search.db.InMemorySearchJobService;
 import org.graylog.plugins.views.search.db.SearchJobService;
 import org.graylog.plugins.views.search.db.SearchesCleanUpJob;
+import org.graylog.plugins.views.search.elasticsearch.ESGeneratedQueryContext;
 import org.graylog.plugins.views.search.elasticsearch.ElasticsearchQueryString;
 import org.graylog.plugins.views.search.export.ChunkDecorator;
 import org.graylog.plugins.views.search.export.DecoratingMessagesExporter;
@@ -44,6 +43,9 @@ import org.graylog.plugins.views.search.export.ExportBackend;
 import org.graylog.plugins.views.search.export.LegacyChunkDecorator;
 import org.graylog.plugins.views.search.export.MessagesExporter;
 import org.graylog.plugins.views.search.export.SimpleMessageChunkCsvWriter;
+import org.graylog.plugins.views.search.export.es.ElasticsearchExportBackend;
+import org.graylog.plugins.views.search.export.es.RequestStrategy;
+import org.graylog.plugins.views.search.export.es.Scroll;
 import org.graylog.plugins.views.search.filter.AndFilter;
 import org.graylog.plugins.views.search.filter.OrFilter;
 import org.graylog.plugins.views.search.filter.QueryStringFilter;
@@ -72,6 +74,12 @@ import org.graylog.plugins.views.search.searchtypes.pivot.series.SumOfSquares;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Variance;
 import org.graylog.plugins.views.search.views.RequiresParameterSupport;
 import org.graylog.plugins.views.search.views.ViewRequirements;
+import org.graylog.plugins.views.search.views.sharing.AllUsersOfInstance;
+import org.graylog.plugins.views.search.views.sharing.AllUsersOfInstanceStrategy;
+import org.graylog.plugins.views.search.views.sharing.SpecificRoles;
+import org.graylog.plugins.views.search.views.sharing.SpecificRolesStrategy;
+import org.graylog.plugins.views.search.views.sharing.SpecificUsers;
+import org.graylog.plugins.views.search.views.sharing.SpecificUsersStrategy;
 import org.graylog.plugins.views.search.views.widgets.aggregation.AggregationConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.AreaVisualizationConfigDTO;
 import org.graylog.plugins.views.search.views.widgets.aggregation.AutoIntervalDTO;
@@ -97,14 +105,9 @@ public class ViewsBindings extends ViewsModule {
 
     @Override
     protected void configure() {
-        registerExportBackendProvider();
-
         registerRestControllerPackage(getClass().getPackage().getName());
 
         addPermissions(ViewsRestPermissions.class);
-
-        // Calling this once to set up binder, so injection does not fail.
-        esQueryDecoratorBinder();
 
         // filter
         registerJacksonSubtype(AndFilter.class);
@@ -140,6 +143,8 @@ public class ViewsBindings extends ViewsModule {
         registerJacksonSubtype(AutoIntervalDTO.class);
 
         bind(SearchJobService.class).to(InMemorySearchJobService.class).in(Scopes.SINGLETON);
+        bind(ExportBackend.class).to(ElasticsearchExportBackend.class);
+        bind(RequestStrategy.class).to(Scroll.class);
         bind(ChunkDecorator.class).to(LegacyChunkDecorator.class);
         bind(MessagesExporter.class).to(DecoratingMessagesExporter.class);
 
@@ -158,15 +163,17 @@ public class ViewsBindings extends ViewsModule {
         addMigration(V20190127111728_MigrateWidgetFormatSettings.class);
         addMigration(V20200204122000_MigrateUntypedViewsToDashboards.class);
         addMigration(V20200409083200_RemoveRootQueriesFromMigratedDashboards.class);
-        addMigration(V20200730000000_AddGl2MessageIdFieldAliasForEvents.class);
 
         addAuditEventTypes(ViewsAuditEventTypes.class);
 
+        registerViewSharingSubtypes();
+        registerSharingStrategies();
         registerSortConfigSubclasses();
         registerParameterSubtypes();
 
         install(new FactoryModuleBuilder().build(ViewRequirements.Factory.class));
         install(new FactoryModuleBuilder().build(SearchRequirements.Factory.class));
+        install(new FactoryModuleBuilder().build(ESGeneratedQueryContext.Factory.class));
 
         registerViewRequirement(RequiresParameterSupport.class);
         registerSearchRequirement(SearchRequiresParameterSupport.class);
@@ -178,10 +185,6 @@ public class ViewsBindings extends ViewsModule {
         registerExceptionMappers();
 
         jerseyAdditionalComponentsBinder().addBinding().toInstance(SimpleMessageChunkCsvWriter.class);
-    }
-
-    private void registerExportBackendProvider() {
-        binder().bind(ExportBackend.class).toProvider(ExportBackendProvider.class);
     }
 
     private void registerSortConfigSubclasses() {
@@ -207,8 +210,20 @@ public class ViewsBindings extends ViewsModule {
         registerJacksonSubtype(AreaVisualizationConfigDTO.class);
     }
 
+    private void registerViewSharingSubtypes() {
+        registerJacksonSubtype(AllUsersOfInstance.class);
+        registerJacksonSubtype(SpecificRoles.class);
+        registerJacksonSubtype(SpecificUsers.class);
+    }
+
     private void registerParameterSubtypes() {
         registerJacksonSubtype(ValueParameter.class);
+    }
+
+    private void registerSharingStrategies() {
+        registerSharingStrategy(AllUsersOfInstance.TYPE, AllUsersOfInstanceStrategy.class);
+        registerSharingStrategy(SpecificRoles.TYPE, SpecificRolesStrategy.class);
+        registerSharingStrategy(SpecificUsers.TYPE, SpecificUsersStrategy.class);
     }
 
     private void registerExceptionMappers() {
