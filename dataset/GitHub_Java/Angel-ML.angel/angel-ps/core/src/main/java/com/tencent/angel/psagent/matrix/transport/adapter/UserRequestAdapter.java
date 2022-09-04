@@ -23,7 +23,6 @@ import com.tencent.angel.PartitionKey;
 import com.tencent.angel.client.local.AngelLocalClient;
 import com.tencent.angel.conf.AngelConf;
 import com.tencent.angel.exception.AngelException;
-import com.tencent.angel.exception.PSRPCException;
 import com.tencent.angel.ml.math2.matrix.Matrix;
 import com.tencent.angel.ml.math2.matrix.RowBasedMatrix;
 import com.tencent.angel.ml.math2.vector.ComponentVector;
@@ -755,22 +754,6 @@ public class UserRequestAdapter {
     }
   }
 
-  public void notifySubTaskFailed(int requestId, int subTaskId, String errorLog) {
-    PartitionResponseCache cache = requestIdToSubresponsMap.get(requestId);
-    FutureResult result = requestIdToResultMap.get(requestId);
-    if (cache == null || result == null) {
-      return;
-    }
-
-    try {
-      cache.lock.lock();
-      clear(requestId);
-      result.setExecuteError("Sub-Task " + subTaskId + " execution failed, failed message=" + errorLog);
-    } finally {
-      cache.lock.unlock();
-    }
-  }
-
   private void clear(int requestId) {
     requests.remove(requestId);
     requestIdToSubresponsMap.remove(requestId);
@@ -798,7 +781,8 @@ public class UserRequestAdapter {
       if (row instanceof ComponentVector || row.isDense()) {
         return true;
       }
-      int partNum = PSAgentContext.get().getMatrixMetaManager().getRowPartitionSize(matrixId, rowId);
+      int partNum =
+        PSAgentContext.get().getMatrixMetaManager().getRowPartitionSize(matrixId, rowId);
       if (partNum > partNumThreshold && row.getSize() < colNumThreshold) {
         return false;
       } else {
@@ -806,8 +790,8 @@ public class UserRequestAdapter {
       }
     } else {
       return PSAgentContext.get().getConf()
-              .getBoolean(AngelConf.ANGEL_PSAGENT_UPDATE_SPLIT_VIEW_ENABLE,
-                      AngelConf.DEFAULT_ANGEL_PSAGENT_UPDATE_SPLIT_VIEW_ENABLE);
+        .getBoolean(AngelConf.ANGEL_PSAGENT_UPDATE_SPLIT_VIEW_ENABLE,
+          AngelConf.DEFAULT_ANGEL_PSAGENT_UPDATE_SPLIT_VIEW_ENABLE);
     }
   }
 
