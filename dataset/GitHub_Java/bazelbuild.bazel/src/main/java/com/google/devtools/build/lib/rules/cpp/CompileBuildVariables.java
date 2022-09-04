@@ -151,7 +151,7 @@ public enum CompileBuildVariables {
       NestedSet<PathFragment> quoteIncludeDirs,
       NestedSet<PathFragment> systemIncludeDirs,
       NestedSet<PathFragment> frameworkIncludeDirs,
-      Iterable<String> defines,
+      NestedSet<String> defines,
       Iterable<String> localDefines) {
     try {
       if (usePic
@@ -219,7 +219,7 @@ public enum CompileBuildVariables {
       NestedSet<String> quoteIncludeDirs,
       NestedSet<String> systemIncludeDirs,
       NestedSet<String> frameworkIncludeDirs,
-      Iterable<String> defines,
+      NestedSet<String> defines,
       Iterable<String> localDefines)
       throws EvalException {
     if (usePic
@@ -281,7 +281,7 @@ public enum CompileBuildVariables {
       NestedSet<String> quoteIncludeDirs,
       NestedSet<String> systemIncludeDirs,
       NestedSet<String> frameworkIncludeDirs,
-      Iterable<String> defines,
+      NestedSet<String> defines,
       Iterable<String> localDefines) {
     CcToolchainVariables.Builder buildVariables = CcToolchainVariables.builder(parent);
     setupCommonVariablesInternal(
@@ -396,7 +396,7 @@ public enum CompileBuildVariables {
       List<PathFragment> quoteIncludeDirs,
       List<PathFragment> systemIncludeDirs,
       List<PathFragment> frameworkIncludeDirs,
-      Iterable<String> defines,
+      NestedSet<String> defines,
       Iterable<String> localDefines) {
     setupCommonVariablesInternal(
         buildVariables,
@@ -428,7 +428,7 @@ public enum CompileBuildVariables {
       NestedSet<String> quoteIncludeDirs,
       NestedSet<String> systemIncludeDirs,
       NestedSet<String> frameworkIncludeDirs,
-      Iterable<String> defines,
+      NestedSet<String> defines,
       Iterable<String> localDefines) {
     Preconditions.checkNotNull(directModuleMaps);
     Preconditions.checkNotNull(includeDirs);
@@ -463,16 +463,21 @@ public enum CompileBuildVariables {
     buildVariables.addStringSequenceVariable(
         FRAMEWORK_PATHS.getVariableName(), frameworkIncludeDirs);
 
-    Iterable<String> allDefines;
+    NestedSet<String> allDefines;
     if (fdoStamp != null) {
       // Stamp FDO builds with FDO subtype string
       allDefines =
-          Iterables.concat(
-              defines,
-              localDefines,
-              ImmutableList.of(CppConfiguration.FDO_STAMP_MACRO + "=\"" + fdoStamp + "\""));
+          NestedSetBuilder.<String>linkOrder()
+              .addTransitive(defines)
+              .addTransitive(NestedSetBuilder.wrap(Order.STABLE_ORDER, localDefines))
+              .add(CppConfiguration.FDO_STAMP_MACRO + "=\"" + fdoStamp + "\"")
+              .build();
     } else {
-      allDefines = Iterables.concat(defines, localDefines);
+      allDefines =
+          NestedSetBuilder.<String>linkOrder()
+              .addTransitive(defines)
+              .addTransitive(NestedSetBuilder.wrap(Order.STABLE_ORDER, localDefines))
+              .build();
     }
 
     buildVariables.addStringSequenceVariable(PREPROCESSOR_DEFINES.getVariableName(), allDefines);
