@@ -56,7 +56,6 @@ import com.google.devtools.build.lib.syntax.NodeVisitor;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Resolver;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
@@ -65,6 +64,7 @@ import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
 import com.google.devtools.build.lib.syntax.StringLiteral;
 import com.google.devtools.build.lib.syntax.Tuple;
+import com.google.devtools.build.lib.syntax.ValidationEnvironment;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -449,12 +449,7 @@ public final class PackageFactory {
   @VisibleForTesting
   public Package.Builder newPackageBuilder(
       PackageIdentifier packageId, String runfilesPrefix, StarlarkSemantics starlarkSemantics) {
-    return new Package.Builder(
-        packageBuilderHelper,
-        packageId,
-        runfilesPrefix,
-        starlarkSemantics,
-        Package.Builder.EMPTY_REPOSITORY_MAPPING);
+    return new Package.Builder(packageBuilderHelper, packageId, runfilesPrefix, starlarkSemantics);
   }
 
   @VisibleForTesting
@@ -717,11 +712,7 @@ public final class PackageFactory {
       throws InterruptedException {
     Package.Builder pkgBuilder =
         new Package.Builder(
-                packageBuilderHelper,
-                packageId,
-                ruleClassProvider.getRunfilesPrefix(),
-                semantics,
-                repositoryMapping)
+                packageBuilderHelper, packageId, ruleClassProvider.getRunfilesPrefix(), semantics)
             .setFilename(buildFilePath)
             .setDefaultVisibility(defaultVisibility)
             // "defaultVisibility" comes from the command line.
@@ -730,6 +721,7 @@ public final class PackageFactory {
             .setDefaultVisibilitySet(false)
             .setStarlarkFileDependencies(skylarkFileDependencies)
             .setWorkspaceName(workspaceName)
+            .setRepositoryMapping(repositoryMapping)
             .setThirdPartyLicenceExistencePolicy(
                 ruleClassProvider.getThirdPartyLicenseExistencePolicy());
     StoredEventHandler eventHandler = new StoredEventHandler();
@@ -790,7 +782,7 @@ public final class PackageFactory {
       Module module = thread.getGlobals();
 
       // Validate.
-      Resolver.resolveFile(file, module);
+      ValidationEnvironment.validateFile(file, module);
       if (!file.ok()) {
         Event.replayEventsOn(pkgContext.eventHandler, file.errors());
         return false;
