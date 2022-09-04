@@ -119,6 +119,11 @@ public class Notification extends Persisted {
         return notifications;
     }
 
+    @Override
+    public ObjectId getId() {
+        return this.id;
+    }
+
     public DateTime getTimestamp() {
         return timestamp;
     }

@@ -1,5 +1,6 @@
 package org.graylog2.periodical;
 
+import org.elasticsearch.Version;
 import org.elasticsearch.action.admin.cluster.node.info.NodeInfo;
 import org.graylog2.Core;
 import org.graylog2.notifications.Notification;
@@ -34,10 +35,9 @@ public class IndexerClusterCheckerThread implements Runnable {
                         node.getProcess().getMaxFileDescriptors());
 
                 // Write notification.
-                Notification.buildNow(core)
-                        .addType(Notification.Type.ES_OPEN_FILES)
-                        .addSeverity(Notification.Severity.URGENT)
-                        .publishIfFirst();
+                if (Notification.isFirst(core, Notification.Type.ES_OPEN_FILES)) {
+                    Notification.publish(core, Notification.Type.ES_OPEN_FILES, Notification.Severity.URGENT);
+                }
             }
         }
 
