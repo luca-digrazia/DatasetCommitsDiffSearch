@@ -22,13 +22,9 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.SkylarkProvider;
-import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.util.BazelMockAndroidSupport;
 import java.util.List;
 import java.util.Map;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -36,20 +32,6 @@ import org.junit.runners.JUnit4;
 /** Tests for StarlarkAttributeTransitionProvider. */
 @RunWith(JUnit4.class)
 public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
-
-  @Before
-  public void setupMyInfo() throws Exception {
-    scratch.file("myinfo/myinfo.bzl", "MyInfo = provider()");
-
-    scratch.file("myinfo/BUILD");
-  }
-
-  private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
-    Provider.Key key =
-        new SkylarkProvider.SkylarkKey(
-            Label.parseAbsolute("//myinfo:myinfo.bzl", ImmutableMap.of()), "MyInfo");
-    return (StructImpl) configuredTarget.get(key);
-  }
 
   private void writeWhitelistFile() throws Exception {
     scratch.file(
@@ -68,46 +50,6 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
     scratch.file(
         "test/skylark/my_rule.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
-        "def transition_func(settings, attr):",
-        "  return [",
-        "    {'//command_line_option:cpu': 'k8'},",
-        "    {'//command_line_option:cpu': 'armeabi-v7a'}",
-        "  ]",
-        "my_transition = transition(implementation = transition_func, inputs = [],",
-        "  outputs = ['//command_line_option:cpu'])",
-        "def impl(ctx): ",
-        "  return MyInfo(",
-        "    split_attr_deps = ctx.split_attr.deps,",
-        "    split_attr_dep = ctx.split_attr.dep,",
-        "    k8_deps = ctx.split_attr.deps.get('k8', None),",
-        "    attr_deps = ctx.attr.deps,",
-        "    attr_dep = ctx.attr.dep)",
-        "my_rule = rule(",
-        "  implementation = impl,",
-        "  attrs = {",
-        "    'deps': attr.label_list(cfg = my_transition),",
-        "    'dep':  attr.label(cfg = my_transition),",
-        "    '_whitelist_function_transition': attr.label(",
-        "        default = '//tools/whitelists/function_transition_whitelist',",
-        "    ),",
-        "  })");
-
-    scratch.file(
-        "test/skylark/BUILD",
-        "load('//test/skylark:my_rule.bzl', 'my_rule')",
-        "my_rule(name = 'test', deps = [':main1', ':main2'], dep = ':main1')",
-        "cc_binary(name = 'main1', srcs = ['main1.c'])",
-        "cc_binary(name = 'main2', srcs = ['main2.c'])");
-  }
-
-  private void writeBasicTestFiles_dictOfDict() throws Exception {
-    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions=true");
-    writeWhitelistFile();
-    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
-    scratch.file(
-        "test/skylark/my_rule.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def transition_func(settings, attr):",
         "  return {",
         "      't0': {'//command_line_option:cpu': 'k8'},",
@@ -116,7 +58,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
         "my_transition = transition(implementation = transition_func, inputs = [],",
         "  outputs = ['//command_line_option:cpu'])",
         "def impl(ctx): ",
-        "  return MyInfo(",
+        "  return struct(",
         "    split_attr_deps = ctx.split_attr.deps,",
         "    split_attr_dep = ctx.split_attr.dep,",
         "    k8_deps = ctx.split_attr.deps.get('k8', None),",
@@ -138,12 +80,6 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
         "my_rule(name = 'test', deps = [':main1', ':main2'], dep = ':main1')",
         "cc_binary(name = 'main1', srcs = ['main1.c'])",
         "cc_binary(name = 'main2', srcs = ['main2.c'])");
-  }
-
-  @Test
-  public void testFunctionSplitTransitionCheckSplitAttrDeps_dictOfDict() throws Exception {
-    writeBasicTestFiles_dictOfDict();
-    testSplitTransitionCheckSplitAttrDeps(getConfiguredTarget("//test/skylark:test"));
   }
 
   @Test
@@ -183,16 +119,15 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
     scratch.file(
         "test/not_whitelisted/my_rule.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def transition_func(settings, attr):",
-        "  return [",
-        "    {'//command_line_option:cpu': 'k8'},",
-        "    {'//command_line_option:cpu': 'armeabi-v7a'}",
-        "  ]",
+        "  return {",
+        "      't0': {'//command_line_option:cpu': 'k8'},",
+        "      't1': {'//command_line_option:cpu': 'armeabi-v7a'},",
+        "  }",
         "my_transition = transition(implementation = transition_func, inputs = [],",
         "  outputs = ['//command_line_option:cpu'])",
         "def impl(ctx): ",
-        "  return MyInfo(",
+        "  return struct(",
         "    split_attr_deps = ctx.split_attr.deps,",
         "    split_attr_dep = ctx.split_attr.dep,",
         "    k8_deps = ctx.split_attr.deps.get('k8', None),",
@@ -226,8 +161,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     // }
     @SuppressWarnings("unchecked")
     Map<String, List<ConfiguredTarget>> splitDeps =
-        (Map<String, List<ConfiguredTarget>>)
-            getMyInfoFromTarget(target).getValue("split_attr_deps");
+        (Map<String, List<ConfiguredTarget>>) target.get("split_attr_deps");
     assertThat(splitDeps).containsKey("k8");
     assertThat(splitDeps).containsKey("armeabi-v7a");
     assertThat(splitDeps.get("k8")).hasSize(2);
@@ -248,7 +182,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     // }
     @SuppressWarnings("unchecked")
     Map<String, ConfiguredTarget> splitDep =
-        (Map<String, ConfiguredTarget>) getMyInfoFromTarget(target).getValue("split_attr_dep");
+        (Map<String, ConfiguredTarget>) target.get("split_attr_dep");
     assertThat(splitDep).containsKey("k8");
     assertThat(splitDep).containsKey("armeabi-v7a");
     assertThat(getConfiguration(splitDep.get("k8")).getCpu()).isEqualTo("k8");
@@ -259,8 +193,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     // The regular ctx.attr.deps should be a single list with all the branches of the split merged
     // together (i.e. for aspects).
     @SuppressWarnings("unchecked")
-    List<ConfiguredTarget> attrDeps =
-        (List<ConfiguredTarget>) getMyInfoFromTarget(target).getValue("attr_deps");
+    List<ConfiguredTarget> attrDeps = (List<ConfiguredTarget>) target.get("attr_deps");
     assertThat(attrDeps).hasSize(4);
     ListMultimap<String, Object> attrDepsMap = ArrayListMultimap.create();
     for (ConfiguredTarget ct : attrDeps) {
@@ -274,8 +207,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     // Check that even though my_rule.dep is defined as a single label, ctx.attr.dep is still a list
     // with multiple ConfiguredTarget objects because of the two different CPUs.
     @SuppressWarnings("unchecked")
-    List<ConfiguredTarget> attrDep =
-        (List<ConfiguredTarget>) getMyInfoFromTarget(target).getValue("attr_dep");
+    List<ConfiguredTarget> attrDep = (List<ConfiguredTarget>) target.get("attr_dep");
     assertThat(attrDep).hasSize(2);
     ListMultimap<String, Object> attrDepMap = ArrayListMultimap.create();
     for (ConfiguredTarget ct : attrDep) {
@@ -288,8 +220,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
   private void testSplitTransitionCheckK8Deps(ConfiguredTarget target) throws Exception {
     // Check that the deps were correctly accessed from within Skylark.
     @SuppressWarnings("unchecked")
-    List<ConfiguredTarget> k8Deps =
-        (List<ConfiguredTarget>) getMyInfoFromTarget(target).getValue("k8_deps");
+    List<ConfiguredTarget> k8Deps = (List<ConfiguredTarget>) target.get("k8_deps");
     assertThat(k8Deps).hasSize(2);
     assertThat(getConfiguration(k8Deps.get(0)).getCpu()).isEqualTo("k8");
     assertThat(getConfiguration(k8Deps.get(1)).getCpu()).isEqualTo("k8");
@@ -301,17 +232,18 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
     scratch.file(
         "test/skylark/my_rule.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def transition_func(settings, attr):",
-        "  transitions = []",
+        "  transitions = {}",
         "  for cpu in settings['//command_line_option:fat_apk_cpu']:",
-        "    transitions.append({'//command_line_option:cpu': cpu,})",
+        "    transitions[cpu] = {",
+        "      '//command_line_option:cpu': cpu,",
+        "    }",
         "  return transitions",
         "my_transition = transition(implementation = transition_func, ",
         "  inputs = ['//command_line_option:fat_apk_cpu'],",
         "  outputs = ['//command_line_option:cpu'])",
         "def impl(ctx): ",
-        "  return MyInfo(split_attr_dep = ctx.split_attr.dep)",
+        "  return struct(split_attr_dep = ctx.split_attr.dep)",
         "my_rule = rule(",
         "  implementation = impl,",
         "  attrs = {",
@@ -343,7 +275,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
     @SuppressWarnings("unchecked")
     Map<String, ConfiguredTarget> splitDep =
-        (Map<String, ConfiguredTarget>) getMyInfoFromTarget(target).getValue("split_attr_dep");
+        (Map<String, ConfiguredTarget>) target.get("split_attr_dep");
     assertThat(splitDep).containsKey("k8");
     assertThat(splitDep).containsKey("armeabi-v7a");
     assertThat(getConfiguration(splitDep.get("k8")).getCpu()).isEqualTo("k8");
@@ -356,7 +288,6 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
     scratch.file(
         "test/skylark/my_rule.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "def transition_func(settings, attr):",
         "  return {",
         "    '//command_line_option:cpu': 'armeabi-v7a',",
@@ -368,7 +299,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
         "            '//command_line_option:dynamic_mode',",
         "            '//command_line_option:crosstool_top'])",
         "def impl(ctx): ",
-        "  return MyInfo(split_attr_dep = ctx.split_attr.dep)",
+        "  return struct(split_attr_dep = ctx.split_attr.dep)",
         "my_rule = rule(",
         "  implementation = impl,",
         "  attrs = {",
@@ -394,7 +325,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
 
     @SuppressWarnings("unchecked")
     Map<String, ConfiguredTarget> splitDep =
-        (Map<String, ConfiguredTarget>) getMyInfoFromTarget(target).getValue("split_attr_dep");
+        (Map<String, ConfiguredTarget>) target.get("split_attr_dep");
     assertThat(splitDep).containsKey("armeabi-v7a");
     assertThat(getConfiguration(splitDep.get("armeabi-v7a")).getCpu()).isEqualTo("armeabi-v7a");
   }
@@ -795,7 +726,6 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
   private void writeRulesWithAttrTransitionBzl() throws Exception {
     scratch.file(
         "test/skylark/rules.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "load('//test/skylark:build_settings.bzl', 'BuildSettingInfo')",
         "def _transition_impl(settings, attr):",
         "  return {'//test/skylark:the-answer': 42}",
@@ -805,7 +735,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
         "  outputs = ['//test/skylark:the-answer']",
         ")",
         "def _rule_impl(ctx):",
-        "  return MyInfo(dep = ctx.attr.dep)",
+        "  return struct(dep = ctx.attr.dep)",
         "my_rule = rule(",
         "  implementation = _rule_impl,",
         "  attrs = {",
@@ -839,11 +769,9 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
         "my_rule(name = 'dep')",
         "int_flag(name = 'the-answer', build_setting_default = 0)");
 
-    @SuppressWarnings("unchecked")
     ConfiguredTarget dep =
         Iterables.getOnlyElement(
-            (List<ConfiguredTarget>)
-                getMyInfoFromTarget(getConfiguredTarget("//test/skylark:test")).getValue("dep"));
+            (List<ConfiguredTarget>) getConfiguredTarget("//test/skylark:test").get("dep"));
     assertThat(
             getConfiguration(dep)
                 .getOptions()
@@ -876,10 +804,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
                 .get(Label.parseAbsoluteUnchecked("//test/skylark:the-answer")))
         .isEqualTo(7);
 
-    @SuppressWarnings("unchecked")
-    ConfiguredTarget dep =
-        Iterables.getOnlyElement(
-            (List<ConfiguredTarget>) getMyInfoFromTarget(test).getValue("dep"));
+    ConfiguredTarget dep = Iterables.getOnlyElement((List<ConfiguredTarget>) test.get("dep"));
     assertThat(
             getConfiguration(dep)
                 .getOptions()
@@ -896,7 +821,6 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     writeBuildSettingsBzl();
     scratch.file(
         "test/skylark/rules.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
         "load('//test/skylark:build_settings.bzl', 'BuildSettingInfo')",
         "def _transition_impl(settings, attr):",
         "  return {'//test/skylark:the-answer': 'What do you get if you multiply six by nine?'}",
@@ -906,7 +830,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
         "  outputs = ['//test/skylark:the-answer']",
         ")",
         "def _rule_impl(ctx):",
-        "  return MyInfo(dep = ctx.attr.dep)",
+        "  return struct(dep = ctx.attr.dep)",
         "my_rule = rule(",
         "  implementation = _rule_impl,",
         "  attrs = {",

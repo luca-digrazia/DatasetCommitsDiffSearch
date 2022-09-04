@@ -14,9 +14,11 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -26,7 +28,20 @@ import org.junit.runners.JUnit4;
 
 /**
  * Tests for StarlarkRuleTransitionProvider.
+ *
+ * <p>Note: Some tests in this class use the assertThrows pattern and some use the remove
+ * failFastHandler and assertEvent pattern for reporting errors. The tests that employ the
+ * assertThrows pattern throws errors from the Starlark-defined implementation function of the
+ * transition. Errors that are thrown here are stored in their own EventHandler and replayed all at
+ * once. Unlike the failFastHandler, there's no (easy) way in the test to remove the EventHandler
+ * that is attached to all {@code StarlarkDefinedConfigTransition}s so we must catch the {@code
+ * AssertionError} throws by the failFastHandler.
+ *
+ * <p>TODO(bazel-team): find a way to disable the starlark transition event handler for testing.
+ *
+ * <p>In production, the errors appear the same as other errors in this test.
  */
+// TODO(juliexxia): fix the assertionErrors AND FIGURE OUT THE TESTS HELP
 @RunWith(JUnit4.class)
 public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
 
@@ -192,7 +207,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
     scratch.file("test/BUILD", "load('//test:rules.bzl', 'my_rule')", "my_rule(name = 'test')");
 
     reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test");
+    assertThrows(TransitionException.class, () -> getConfiguredTarget("//test"));
     assertContainsEvent(
         "Rule transition only allowed to return a single transitioned configuration.");
   }
@@ -240,7 +255,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         ")");
 
     reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test");
+    assertThrows(TransitionException.class, () -> getConfiguredTarget("//test"));
     assertContainsEvent(
         "No attribute 'my_configurable_attr'. "
             + "Either this attribute does not exist for this rule or is set by a select. "
@@ -412,10 +427,12 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
 
     useConfiguration(ImmutableMap.of("//test:cute-animal-fact", "cats can't taste sugar"));
 
-    reporter.removeHandler(failFastHandler);
-    getConfiguration(getConfiguredTarget("//test"));
-    assertContainsEvent(
-        "expected value of type 'string' for " + "//test:cute-animal-fact, but got 24 (int)");
+    TransitionException exception =
+        assertThrows(
+            TransitionException.class, () -> getConfiguration(getConfiguredTarget("//test")));
+    assertThat(exception.getMessage())
+        .contains(
+            "expected value of type 'string' for " + "//test:cute-animal-fact, but got 24 (int)");
   }
 
   @Test
@@ -433,11 +450,13 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         ")");
     writeRulesBuildSettingsAndBUILDforBuildSettingTransitionTests();
 
-    reporter.removeHandler(failFastHandler);
-    getConfiguration(getConfiguredTarget("//test"));
-    assertContainsEvent(
-        "no such target '//test:i-am-not-real': target "
-            + "'i-am-not-real' not declared in package 'test'");
+    TransitionException exception =
+        assertThrows(
+            TransitionException.class, () -> getConfiguration(getConfiguredTarget("//test")));
+    assertThat(exception.getMessage())
+        .contains(
+            "no such target '//test:i-am-not-real': target "
+                + "'i-am-not-real' not declared in package 'test'");
   }
 
   @Test
@@ -480,10 +499,12 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         "my_rule(name = 'test')",
         "non_build_setting(name = 'cute-animal-fact')");
 
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test");
-    assertContainsEvent(
-        "attempting to transition on '//test:cute-animal-fact' which is not a build setting");
+    TransitionException exception =
+        assertThrows(
+            TransitionException.class, () -> getConfiguration(getConfiguredTarget("//test")));
+    assertThat(exception.getMessage())
+        .contains(
+            "attempting to transition on '//test:cute-animal-fact' which is not a build setting");
   }
 
   // TODO(juliexxia): flip this test when we can read build settings.
@@ -503,7 +524,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
     writeRulesBuildSettingsAndBUILDforBuildSettingTransitionTests();
 
     reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test");
+    assertThrows(TransitionException.class, () -> getConfiguredTarget("//test"));
     assertContainsEvent(
         "transition inputs [//test:cute-animal-fact] do not correspond to valid settings");
   }
@@ -535,7 +556,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
     scratch.file("test/BUILD", "load('//test:rules.bzl', 'my_rule')", "my_rule(name = 'test')");
 
     reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test");
+    assertThrows(TransitionException.class, () -> getConfiguredTarget("//test"));
     assertContainsEvent("too many (2) positional arguments in call to _impl(settings)");
   }
 
