@@ -18,8 +18,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import com.google.common.io.BaseEncoding;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics;
 import com.google.devtools.build.lib.actions.cache.Protos.ActionCacheStatistics.MissReason;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
@@ -80,10 +78,10 @@ public interface ActionCache {
     @Nullable
     // Null iff the corresponding action does not do input discovery.
     private final List<String> files;
-    // If null, digest is non-null and the entry is immutable.
-    private Map<String, FileArtifactValue> mdMap;
-    private byte[] digest;
-    private final byte[] usedClientEnvDigest;
+    // If null, md5Digest is non-null and the entry is immutable.
+    private Map<String, Metadata> mdMap;
+    private Md5Digest md5Digest;
+    private final Md5Digest usedClientEnvDigest;
 
     public Entry(String key, Map<String, String> usedClientEnv, boolean discoversInputs) {
       actionKey = key;
@@ -93,22 +91,25 @@ public interface ActionCache {
     }
 
     public Entry(
-        String key, byte[] usedClientEnvDigest, @Nullable List<String> files, byte[] digest) {
+        String key,
+        Md5Digest usedClientEnvDigest,
+        @Nullable List<String> files,
+        Md5Digest md5Digest) {
       actionKey = key;
       this.usedClientEnvDigest = usedClientEnvDigest;
       this.files = files;
-      this.digest = digest;
+      this.md5Digest = md5Digest;
       mdMap = null;
     }
 
     /**
-     * Adds the artifact, specified by the executable relative path and its metadata into the cache
-     * entry.
+     * Adds the artifact, specified by the executable relative path and its
+     * metadata into the cache entry.
      */
-    public void addFile(PathFragment relativePath, FileArtifactValue md) {
+    public void addFile(PathFragment relativePath, Metadata md) {
       Preconditions.checkState(mdMap != null);
       Preconditions.checkState(!isCorrupted());
-      Preconditions.checkState(digest == null);
+      Preconditions.checkState(md5Digest == null);
 
       String execPath = relativePath.getPathString();
       if (discoversInputs()) {
@@ -125,22 +126,22 @@ public interface ActionCache {
     }
 
     /** @return the effectively used client environment */
-    public byte[] getUsedClientEnvDigest() {
+    public Md5Digest getUsedClientEnvDigest() {
       return usedClientEnvDigest;
     }
 
     /**
-     * Returns the combined digest of the action's inputs and outputs.
+     * Returns the combined md5Digest of the action's inputs and outputs.
      *
-     * <p>This may compress the data into a more compact representation, and makes the object
+     * <p>This may compresses the data into a more compact representation, and makes the object
      * immutable.
      */
-    public byte[] getFileDigest() {
-      if (digest == null) {
-        digest = DigestUtils.fromMetadata(mdMap);
+    public Md5Digest getFileDigest() {
+      if (md5Digest == null) {
+        md5Digest = DigestUtils.fromMetadata(mdMap);
         mdMap = null;
       }
-      return digest;
+      return md5Digest;
     }
 
     /**
@@ -164,23 +165,16 @@ public interface ActionCache {
       return files != null;
     }
 
-    private static final String formatDigest(byte[] digest) {
-      return BaseEncoding.base16().lowerCase().encode(digest);
-    }
-
     @Override
     public String toString() {
       StringBuilder builder = new StringBuilder();
       builder.append("      actionKey = ").append(actionKey).append("\n");
-      builder
-          .append("      usedClientEnvKey = ")
-          .append(formatDigest(usedClientEnvDigest))
-          .append("\n");
+      builder.append("      usedClientEnvKey = ").append(usedClientEnvDigest).append("\n");
       builder.append("      digestKey = ");
-      if (digest == null) {
-        builder.append(formatDigest(DigestUtils.fromMetadata(mdMap))).append(" (from mdMap)\n");
+      if (md5Digest == null) {
+        builder.append(DigestUtils.fromMetadata(mdMap)).append(" (from mdMap)\n");
       } else {
-        builder.append(formatDigest(digest)).append("\n");
+        builder.append(md5Digest).append("\n");
       }
 
       if (discoversInputs()) {
