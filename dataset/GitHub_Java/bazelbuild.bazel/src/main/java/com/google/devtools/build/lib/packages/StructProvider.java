@@ -26,18 +26,18 @@ import java.util.Map;
  *
  * <p>Its singleton instance is {@link StructProvider#STRUCT}.
  */
-public final class StructProvider extends BuiltinProvider<StructImpl>
+public final class StructProvider extends BuiltinProvider<Info>
     implements StructApi.StructProviderApi {
 
   /** "struct" function. */
   public static final StructProvider STRUCT = new StructProvider();
 
   StructProvider() {
-    super("struct", StructImpl.class);
+    super("struct", Info.class);
   }
 
   @Override
-  public StructImpl createStruct(SkylarkDict<?, ?> kwargs, Location loc) throws EvalException {
+  public Info createStruct(SkylarkDict<?, ?> kwargs, Location loc) throws EvalException {
     Map<String, Object> kwargsMap = kwargs.getContents(String.class, Object.class, "kwargs");
     if (kwargsMap.containsKey("to_json")) {
       throw new EvalException(loc, "cannot override built-in struct function 'to_json'");
@@ -49,7 +49,7 @@ public final class StructProvider extends BuiltinProvider<StructImpl>
   }
 
   /**
-   * Creates a struct with the given field values and message format for unknown fields.
+   * Creates a struct with the he given field values and message format for unknown fields.
    *
    * <p>The custom message is useful for objects that have fields but aren't exactly used as
    * providers, such as the {@code native} object, and the struct fields of {@code ctx} like

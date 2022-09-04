@@ -120,16 +120,16 @@ public class SkylarkEvaluationTest extends EvaluationTest {
       return "I'm a mock named " + myName;
     }
 
-    @SkylarkCallable(name = "value_of", documented = false)
+    @SkylarkCallable(documented = false)
     public static Integer valueOf(String str) {
       return Integer.valueOf(str);
     }
-    @SkylarkCallable(name = "is_empty", documented = false)
+    @SkylarkCallable(documented = false)
     public Boolean isEmpty(String str) {
       return str.isEmpty();
     }
     public void value() {}
-    @SkylarkCallable(name = "return_bad", documented = false)
+    @SkylarkCallable(documented = false)
     public Bad returnBad() {
       return new Bad();
     }
@@ -482,7 +482,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @SkylarkModule(name = "MockInterface", doc = "")
   static interface MockInterface {
-    @SkylarkCallable(name = "is_empty_interface", documented = false)
+    @SkylarkCallable(documented = false)
     public Boolean isEmptyInterface(String str);
   }
 
