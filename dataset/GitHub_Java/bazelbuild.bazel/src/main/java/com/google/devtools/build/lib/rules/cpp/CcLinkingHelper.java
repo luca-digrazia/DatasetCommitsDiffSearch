@@ -917,8 +917,8 @@ public final class CcLinkingHelper {
       linkedName = linkedName.substring(3);
       artifactRoot =
           ((RuleContext) actionConstructionContext).getRule().hasBinaryOutput()
-              ? configuration.getBinDirectory(label.getRepository())
-              : configuration.getGenfilesDirectory(label.getRepository());
+              ? configuration.getBinDir()
+              : configuration.getGenfilesDir();
     }
       PathFragment artifactFragment =
           PathFragment.create(label.getName()).getParentDirectory().getRelative(linkedName);

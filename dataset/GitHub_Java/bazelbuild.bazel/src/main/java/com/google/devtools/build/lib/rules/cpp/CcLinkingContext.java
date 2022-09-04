@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import javax.annotation.Nullable;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.Printer;
 import net.starlark.java.eval.Sequence;
@@ -109,7 +108,6 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
    * <p>This object is required because linkstamp files may include other headers which will have to
    * be provided during compilation.
    */
-  @Immutable
   public static final class Linkstamp implements LinkstampApi<Artifact> {
     private final Artifact artifact;
     private final NestedSet<Artifact> declaredIncludeSrcs;
@@ -163,11 +161,6 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
     }
 
     @Override
-    public final boolean isImmutable() {
-      return true; // immutable and Starlark-hashable
-    }
-
-    @Override
     public boolean equals(Object obj) {
       if (this == obj) {
         return true;
@@ -200,7 +193,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
     private final ImmutableList<Artifact> nonCodeInputs;
     private final ImmutableList<Linkstamp> linkstamps;
 
-    public LinkerInput(
+    private LinkerInput(
         Label owner,
         ImmutableList<LibraryToLink> libraries,
         ImmutableList<LinkOptions> userLinkFlags,
@@ -376,7 +369,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   }
 
   private final NestedSet<LinkerInput> linkerInputs;
-  @Nullable private final ExtraLinkTimeLibraries extraLinkTimeLibraries;
+  private final ExtraLinkTimeLibraries extraLinkTimeLibraries;
 
   @Override
   public void debugPrint(Printer printer) {
@@ -389,8 +382,7 @@ public class CcLinkingContext implements CcLinkingContextApi<Artifact> {
   }
 
   public CcLinkingContext(
-      NestedSet<LinkerInput> linkerInputs,
-      @Nullable ExtraLinkTimeLibraries extraLinkTimeLibraries) {
+      NestedSet<LinkerInput> linkerInputs, ExtraLinkTimeLibraries extraLinkTimeLibraries) {
     this.linkerInputs = linkerInputs;
     this.extraLinkTimeLibraries = extraLinkTimeLibraries;
   }
