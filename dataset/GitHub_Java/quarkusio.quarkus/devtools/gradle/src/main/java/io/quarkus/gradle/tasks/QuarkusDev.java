@@ -29,8 +29,6 @@ import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
-import javax.inject.Inject;
-
 import org.apache.tools.ant.types.Commandline;
 import org.gradle.api.GradleException;
 import org.gradle.api.Project;
@@ -81,13 +79,8 @@ public class QuarkusDev extends QuarkusTask {
 
     private List<String> compilerArgs = new LinkedList<>();
 
-    @Inject
     public QuarkusDev() {
         super("Development mode: enables hot deployment with background compilation");
-    }
-
-    public QuarkusDev(String name) {
-        super(name);
     }
 
     @InputDirectory
@@ -338,7 +331,6 @@ public class QuarkusDev extends QuarkusTask {
             tempFile.deleteOnExit();
 
             context.setDevModeRunnerJarFile(tempFile);
-            modifyDevModeContext(context);
             try (ZipOutputStream out = new ZipOutputStream(new FileOutputStream(tempFile))) {
                 out.putNextEntry(new ZipEntry("META-INF/"));
                 Manifest manifest = new Manifest();
@@ -389,10 +381,6 @@ public class QuarkusDev extends QuarkusTask {
         } catch (Exception e) {
             throw new GradleException("Failed to run", e);
         }
-    }
-
-    protected void modifyDevModeContext(DevModeContext devModeContext) {
-
     }
 
     private void addSelfWithLocalDeps(Project project, DevModeContext context, Set<String> visited,
@@ -452,7 +440,7 @@ public class QuarkusDev extends QuarkusTask {
             resourcesOutputPath = classesDir;
         }
 
-        DevModeContext.ModuleInfo wsModuleInfo = new DevModeContext.ModuleInfo(key,
+        DevModeContext.ModuleInfo wsModuleInfo = new DevModeContext.ModuleInfo(
                 project.getName(),
                 project.getProjectDir().getAbsolutePath(),
                 sourcePaths,
@@ -531,7 +519,7 @@ public class QuarkusDev extends QuarkusTask {
 
     private void addToClassPaths(StringBuilder classPathManifest, File file) {
         if (filesIncludedInClasspath.add(file)) {
-            getProject().getLogger().debug("Adding dependency {}", file);
+            getProject().getLogger().info("Adding dependency {}", file);
 
             final URI uri = file.toPath().toAbsolutePath().toUri();
             classPathManifest.append(uri).append(" ");
