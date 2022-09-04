@@ -89,10 +89,9 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
    *
    * <p>A subclass implements a specific data structure interface, say {@link List}, and refines the
    * return type of {@link #getContentsUnsafe} to be that interface. The subclass implements all of
-   * the interface's accessors such that they defer to the result of {@code getContentsUnsafe}.
-   * Accessors such as {@link Collection#iterator()} must return unmodifiable views. The subclass
-   * implements final versions of all the interface's mutating methods such that they are marked
-   * {@code @Deprecated} and throw {@link UnsupportedOperationException}.
+   * the interface's accessors such that they defer to the result of {@code getContentsUnsafe}. The
+   * subclass implements final versions of all the interface's mutating methods such that they
+   * are marked {@code @Deprecated} and throw {@link UnsupportedOperationException}.
    *
    * <p>A concrete subclass may provide alternative mutating methods that take in a {@link
    * Mutability} and validate that the mutation is allowed using {@link #checkMutable}. This
@@ -146,9 +145,12 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
       return getContentsUnsafe().isEmpty();
     }
 
+    // TODO(bazel-team): Is exposing this a mutability violation? Same for listIterator() and
+    // subList() below, as well as the entrySet(), keySet(), and values() map methods. Could address
+    // by returning views over a Collections.unmodifiableCollection(), etc.
     @Override
     public Iterator<E> iterator() {
-      return Collections.unmodifiableCollection(getContentsUnsafe()).iterator();
+      return getContentsUnsafe().iterator();
     }
 
     @Override
@@ -156,7 +158,6 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
       return getContentsUnsafe().size();
     }
 
-    // toArray() and toArray(T[]) return copies, so we don't need an unmodifiable view.
     @Override
     public Object[] toArray() {
       return getContentsUnsafe().toArray();
@@ -231,17 +232,17 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
 
     @Override
     public ListIterator<E> listIterator() {
-      return Collections.unmodifiableList(getContentsUnsafe()).listIterator();
+      return getContentsUnsafe().listIterator();
     }
 
     @Override
     public ListIterator<E> listIterator(int index) {
-      return Collections.unmodifiableList(getContentsUnsafe()).listIterator(index);
+      return getContentsUnsafe().listIterator(index);
     }
 
     @Override
     public List<E> subList(int fromIndex, int toIndex) {
-      return Collections.unmodifiableList(getContentsUnsafe()).subList(fromIndex, toIndex);
+      return getContentsUnsafe().subList(fromIndex, toIndex);
     }
 
     // (Disallowed) writing methods of List, in alphabetic order.
@@ -291,7 +292,7 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
 
     @Override
     public Set<Map.Entry<K, V>> entrySet() {
-      return Collections.unmodifiableMap(getContentsUnsafe()).entrySet();
+      return getContentsUnsafe().entrySet();
     }
 
     @Override
@@ -306,7 +307,7 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
 
     @Override
     public Set<K> keySet() {
-      return Collections.unmodifiableMap(getContentsUnsafe()).keySet();
+      return getContentsUnsafe().keySet();
     }
 
     @Override
@@ -316,7 +317,7 @@ public abstract class SkylarkMutable implements Freezable, SkylarkValue {
 
     @Override
     public Collection<V> values() {
-      return Collections.unmodifiableMap(getContentsUnsafe()).values();
+      return getContentsUnsafe().values();
     }
 
     // (Disallowed) writing methods of Map, in alphabetic order.
