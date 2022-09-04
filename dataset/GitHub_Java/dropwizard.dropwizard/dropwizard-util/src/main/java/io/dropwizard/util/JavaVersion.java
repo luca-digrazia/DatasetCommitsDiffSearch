@@ -2,9 +2,6 @@ package io.dropwizard.util;
 
 import javax.annotation.Nullable;
 
-/**
- * @since 2.0
- */
 public final class JavaVersion {
     private JavaVersion() {
     }
