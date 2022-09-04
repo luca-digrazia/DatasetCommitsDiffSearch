@@ -15,17 +15,16 @@
  */
 package org.androidannotations.otto.handler;
 
-import javax.lang.model.element.AnnotationMirror;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-
+import com.sun.codemodel.JMethod;
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.ElementValidation;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.helper.ValidatorParameterHelper;
 import org.androidannotations.holder.EComponentHolder;
+import org.androidannotations.process.ElementValidation;
 
-import com.helger.jcodemodel.JMethod;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 
 public abstract class AbstractOttoHandler extends BaseAnnotationHandler<EComponentHolder> {
 
@@ -36,11 +35,16 @@ public abstract class AbstractOttoHandler extends BaseAnnotationHandler<ECompone
 	@Override
 	public void validate(Element element, ElementValidation valid) {
 		if (!annotationHelper.enclosingElementHasEnhancedComponentAnnotation(element)) {
-			// do nothing when otto annotations are used in non-enhanced classes
+			valid.invalidate();
 			return;
 		}
 
 		ExecutableElement executableElement = (ExecutableElement) element;
+
+		/*
+		 * We check that twice to skip invalid annotated elements
+		 */
+		validatorHelper.enclosingElementHasEnhancedComponentAnnotation(executableElement, valid);
 
 		validateReturnType(executableElement, valid);
 
@@ -59,10 +63,6 @@ public abstract class AbstractOttoHandler extends BaseAnnotationHandler<ECompone
 
 	@Override
 	public void process(Element element, EComponentHolder holder) throws Exception {
-		if (!annotationHelper.enclosingElementHasEnhancedComponentAnnotation(element)) {
-			// do nothing when otto annotations are used in non-enhanced classes
-			return;
-		}
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		JMethod method = codeModelHelper.overrideAnnotatedMethod(executableElement, holder);
