@@ -255,8 +255,6 @@ public class FakeCcModule
       Sequence<?> sources,
       Sequence<?> publicHeaders,
       Sequence<?> privateHeaders,
-      Object textualHeaders,
-      Object additionalExportedHeaders,
       Sequence<?> includes,
       Sequence<?> quoteIncludes,
       Sequence<?> systemIncludes,
@@ -273,10 +271,6 @@ public class FakeCcModule
       Sequence<?> additionalInputs,
       Object moduleMap,
       Object additionalModuleMaps,
-      Object propagateModuleMapToCompileAction,
-      Object doNotGenerateModuleMap,
-      Object codeCoverageEnabled,
-      Object hdrsCheckingMode,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
     return null;

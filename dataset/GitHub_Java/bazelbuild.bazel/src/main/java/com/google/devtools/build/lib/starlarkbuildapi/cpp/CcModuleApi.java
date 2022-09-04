@@ -840,19 +840,17 @@ public interface CcModuleApi<
             defaultValue = "unbound"),
         @Param(
             name = "textual_hdrs",
-            documented = false,
+            doc = "",
             positional = false,
             named = true,
             defaultValue = "unbound"),
         @Param(
             name = "modular_public_hdrs",
-            documented = false,
             positional = false,
             named = true,
             defaultValue = "unbound"),
         @Param(
             name = "modular_private_hdrs",
-            documented = false,
             positional = false,
             named = true,
             defaultValue = "unbound"),
@@ -873,8 +871,7 @@ public interface CcModuleApi<
 
   @StarlarkMethod(
       name = "create_module_map",
-      documented = false,
-      doc = "Creates a <code>CcModuleMap</code>.",
+      doc = "Creates a <code>CompilationContext</code>.",
       useStarlarkThread = true,
       parameters = {
         @Param(name = "file", positional = false, named = true),
