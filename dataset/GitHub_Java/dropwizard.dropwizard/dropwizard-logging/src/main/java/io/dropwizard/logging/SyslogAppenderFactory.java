@@ -4,10 +4,12 @@ import ch.qos.logback.classic.LoggerContext;
 import ch.qos.logback.classic.net.SyslogAppender;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.Appender;
-import ch.qos.logback.core.Layout;
 import ch.qos.logback.core.net.SyslogConstants;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import io.dropwizard.logging.async.AsyncAppenderFactory;
+import io.dropwizard.logging.filter.LevelFilterFactory;
+import io.dropwizard.logging.layout.LayoutFactory;
 
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
@@ -63,22 +65,36 @@ import java.util.regex.Pattern;
  *             for details.
  *         </td>
  *     </tr>
+ *     <tr>
+ *         <td>{@code includeStackTrace}</td>
+ *         <td>include stack traces in log messages</td>
+ *         <td>
+ *             Setting {@code includeStackTrace} to {@code false} causes no Throwable's stack trace data to be sent to the syslog daemon.
+ *             By default, stack trace data is sent to syslog daemon.
+ *             See <a href="http://logback.qos.ch/apidocs/ch/qos/logback/classic/net/SyslogAppender.html#setThrowableExcluded(boolean)">the Logback documentation</a>
+ *             for details.
+ *         </td>
+ *     </tr>
  * </table>
  *
  * @see AbstractAppenderFactory
  */
 @JsonTypeName("syslog")
-public class SyslogAppenderFactory extends AbstractAppenderFactory {
+public class SyslogAppenderFactory extends AbstractAppenderFactory<ILoggingEvent> {
     public enum Facility {
+        ALERT,
+        AUDIT,
         AUTH,
         AUTHPRIV,
         DAEMON,
+        CLOCK,
         CRON,
         FTP,
         LPR,
         KERN,
         MAIL,
         NEWS,
+        NTP,
         SYSLOG,
         USER,
         UUCP,
@@ -96,14 +112,14 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
     private static final String LOG_TOKEN_PID = "%pid";
 
     private static final Pattern PID_PATTERN = Pattern.compile("(\\d+)@");
-    private static String PID = "";
+    private static String pid = "";
 
     // make an attempt to get the PID of the process
     // this will only work on UNIX platforms; for others, the PID will be "unknown"
     static {
         final Matcher matcher = PID_PATTERN.matcher(ManagementFactory.getRuntimeMXBean().getName());
         if (matcher.find()) {
-            PID = "[" + matcher.group(1) + "]";
+            pid = "[" + matcher.group(1) + "]";
         }
     }
 
@@ -117,28 +133,16 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
     @NotNull
     private Facility facility = Facility.LOCAL0;
 
-    // prefix the logFormat with the application name and PID (if available)
-    private String logFormat = LOG_TOKEN_NAME + LOG_TOKEN_PID + ": " +
-            SyslogAppender.DEFAULT_SUFFIX_PATTERN;
+    // PrefixedThrowableProxyConverter does not apply to syslog appenders, as stack traces are sent separately from
+    // the main message. This means that the standard prefix of `!` is not used for syslog
+    @NotNull
+    private String stackTracePrefix = SyslogAppender.DEFAULT_STACKTRACE_PATTERN;
 
     private boolean includeStackTrace = true;
 
-    /**
-     * Returns the Logback pattern with which events will be formatted.
-     */
-    @Override
-    @JsonProperty
-    public String getLogFormat() {
-        return logFormat;
-    }
-
-    /**
-     * Sets the Logback pattern with which events will be formatted.
-     */
-    @Override
-    @JsonProperty
-    public void setLogFormat(String logFormat) {
-        this.logFormat = logFormat;
+    public SyslogAppenderFactory() {
+        // prefix the logFormat with the application name and PID (if available)
+        this.logFormat = LOG_TOKEN_NAME + LOG_TOKEN_PID + ": " + SyslogAppender.DEFAULT_SUFFIX_PATTERN;
     }
 
     /**
@@ -184,18 +188,35 @@ public class SyslogAppenderFactory extends AbstractAppenderFactory {
         this.includeStackTrace = includeStackTrace;
     }
 
+    @JsonProperty
+    public String getStackTracePrefix() {
+        return stackTracePrefix;
+    }
+
+    @JsonProperty
+    public void setStackTracePrefix(String stackTracePrefix) {
+        this.stackTracePrefix = stackTracePrefix;
+    }
+
     @Override
-    public Appender<ILoggingEvent> build(LoggerContext context, String applicationName, Layout<ILoggingEvent> layout) {
+    public Appender<ILoggingEvent> build(LoggerContext context, String applicationName, LayoutFactory<ILoggingEvent> layoutFactory,
+                                         LevelFilterFactory<ILoggingEvent> levelFilterFactory, AsyncAppenderFactory<ILoggingEvent> asyncAppenderFactory) {
         final SyslogAppender appender = new SyslogAppender();
         appender.setName("syslog-appender");
         appender.setContext(context);
-        appender.setSuffixPattern(logFormat.replaceAll(LOG_TOKEN_PID, PID).replaceAll(LOG_TOKEN_NAME, applicationName));
+        if (logFormat != null && !logFormat.isEmpty()) {
+            appender.setSuffixPattern(logFormat
+                    .replace(LOG_TOKEN_PID, pid)
+                    .replace(LOG_TOKEN_NAME, Matcher.quoteReplacement(applicationName)));
+        }
         appender.setSyslogHost(host);
         appender.setPort(port);
         appender.setFacility(facility.toString().toLowerCase(Locale.ENGLISH));
         appender.setThrowableExcluded(!includeStackTrace);
-        addThresholdFilter(appender, threshold);
+        appender.setStackTracePattern(stackTracePrefix);
+        appender.addFilter(levelFilterFactory.build(threshold));
+        getFilterFactories().forEach(f -> appender.addFilter(f.build()));
         appender.start();
-        return wrapAsync(appender);
+        return wrapAsync(appender, asyncAppenderFactory);
     }
 }
