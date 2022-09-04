@@ -364,9 +364,8 @@ public class AttrXmlResourceValue implements XmlResourceValue {
     throw new IllegalArgumentException(this + " is not a combinable resource.");
   }
 
-  /** Represents the xml value for an attr definition. */
   @CheckReturnValue
-  public interface ResourceXmlAttrValue {
+  interface ResourceXmlAttrValue {
 
     ValuesResourceDefinition writeTo(ValuesResourceDefinition writer);
 

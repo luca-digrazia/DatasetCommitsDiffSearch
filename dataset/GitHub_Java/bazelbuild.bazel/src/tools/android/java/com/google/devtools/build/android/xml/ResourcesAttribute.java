@@ -48,11 +48,7 @@ public class ResourcesAttribute implements XmlResourceValue {
     }
   };
 
-  /**
-   * Represents the semantic meaning of an xml attribute and how it is combined with other
-   * attributes of the same type.
-   */
-  public static enum AttributeType {
+  private static enum AttributeType {
     UNCOMBINABLE(null, null),
     TOOLS_IGNORE("{http://schemas.android.com/tools}ignore", COMMA_SEPARATED_COMBINER),
     TOOLS_MENU("{http://schemas.android.com/tools}menu", COMMA_SEPARATED_COMBINER),
@@ -78,10 +74,6 @@ public class ResourcesAttribute implements XmlResourceValue {
       this.name = name;
       this.combiner = combiner;
     }
-
-    public boolean isCombining() {
-      return this != UNCOMBINABLE;
-    }
   }
 
   public static ResourcesAttribute of(FullyQualifiedName fqn, String name, String value) {
@@ -102,6 +94,7 @@ public class ResourcesAttribute implements XmlResourceValue {
   private final String value;
 
   private ResourcesAttribute(AttributeType type, String name, String value) {
+
     this.type = type;
     this.name = name;
     this.value = value;
@@ -155,7 +148,7 @@ public class ResourcesAttribute implements XmlResourceValue {
   }
 
   public boolean isCombining() {
-    return type.isCombining();
+    return type != AttributeType.UNCOMBINABLE;
   }
 
   @Override

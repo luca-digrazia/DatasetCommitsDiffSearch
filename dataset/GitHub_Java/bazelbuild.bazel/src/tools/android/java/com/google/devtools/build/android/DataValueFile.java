@@ -129,9 +129,4 @@ public class DataValueFile implements DataResource, DataAsset {
   public String asConflictString() {
     return source.asConflictString();
   }
-
-  @Override
-  public boolean valueEquals(DataValue value) {
-    return equals(value);
-  }
 }

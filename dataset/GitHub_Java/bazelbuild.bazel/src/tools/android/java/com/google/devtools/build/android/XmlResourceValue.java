@@ -17,7 +17,9 @@ import com.google.devtools.build.android.xml.Namespaces;
 import java.io.IOException;
 import java.io.OutputStream;
 
-/** An {@link XmlResourceValue} is extracted from xml files in the resource 'values' directory. */
+/**
+ * An {@link XmlResourceValue} is extracted from xml files in the resource 'values' directory.
+ */
 public interface XmlResourceValue {
   /**
    * Each XmlValue is expected to write a valid representation in xml to the writer.
@@ -33,7 +35,7 @@ public interface XmlResourceValue {
 
   /**
    * Combines these xml values together and returns a single value.
-   *
+   * 
    * @param value Another resource to be combined with this one.
    * @return A union of the values of these two values.
    * @throws IllegalArgumentException if either value cannot combine with the other.

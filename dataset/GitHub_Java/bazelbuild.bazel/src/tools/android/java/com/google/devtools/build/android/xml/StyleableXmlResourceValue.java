@@ -13,12 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.android.xml;
 
-import com.android.aapt.Resources.Styleable;
-import com.android.aapt.Resources.Value;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
 import com.google.common.collect.Iterables;
@@ -34,7 +31,6 @@ import com.google.devtools.build.android.proto.SerializeFormat.DataValueXml.XmlT
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.AbstractMap.SimpleEntry;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -165,28 +161,6 @@ public class StyleableXmlResourceValue implements XmlResourceValue {
             Iterables.transform(proto.getReferencesList(), DATA_KEY_TO_FULLY_QUALIFIED_NAME)));
   }
 
-  public static XmlResourceValue from(
-      Value proto, Map<String, Boolean> qualifiedReferenceInlineStatus) {
-    Map<FullyQualifiedName, Boolean> attributes = new HashMap<>();
-
-    Styleable styleable = proto.getCompoundValue().getStyleable();
-    for (Styleable.Entry entry : styleable.getEntryList()) {
-      final FullyQualifiedName reference =
-          FullyQualifiedName.fromReference(entry.getAttr().getName());
-      final String qualifiedReference = reference.asQualifiedReference();
-      Preconditions.checkArgument(
-          qualifiedReferenceInlineStatus.containsKey(qualifiedReference),
-          "Styleable reference %s is not in %s",
-          qualifiedReference,
-          qualifiedReferenceInlineStatus.keySet());
-
-      attributes.put(reference, qualifiedReferenceInlineStatus.get(qualifiedReference));
-      qualifiedReferenceInlineStatus.put(qualifiedReference, false);
-    }
-
-    return of(ImmutableMap.copyOf(attributes));
-  }
-
   @Override
   public int hashCode() {
     return attrs.hashCode();
@@ -209,12 +183,12 @@ public class StyleableXmlResourceValue implements XmlResourceValue {
   /**
    * Combines this instance with another {@link StyleableXmlResourceValue}.
    *
-   * <p>Defining two Styleables (undocumented in the official Android Docs) with the same {@link
-   * FullyQualifiedName} results in a single Styleable containing a union of all the attribute
-   * references.
+   * Defining two Styleables (undocumented in the official Android Docs) with the same
+   * {@link FullyQualifiedName} results in a single Styleable containing a union of all the
+   * attribute references.
    *
-   * @param value Another {@link StyleableXmlResourceValue} with the same {@link
-   *     FullyQualifiedName}.
+   * @param value Another {@link StyleableXmlResourceValue} with the same
+   *     {@link FullyQualifiedName}.
    * @return {@link StyleableXmlResourceValue} containing a sorted union of the attribute
    *     references.
    * @throws IllegalArgumentException if value is not an {@link StyleableXmlResourceValue}.

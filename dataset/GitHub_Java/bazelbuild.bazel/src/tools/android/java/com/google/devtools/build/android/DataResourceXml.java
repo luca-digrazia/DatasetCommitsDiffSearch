@@ -369,13 +369,4 @@ public class DataResourceXml implements DataResource {
   public String asConflictString() {
     return source.asConflictString();
   }
-
-  @Override
-  public boolean valueEquals(DataValue value) {
-    if (!(value instanceof DataResourceXml)) {
-      return false;
-    }
-    DataResourceXml other = (DataResourceXml) value;
-    return Objects.equals(xml, other.xml);
-  }
 }
