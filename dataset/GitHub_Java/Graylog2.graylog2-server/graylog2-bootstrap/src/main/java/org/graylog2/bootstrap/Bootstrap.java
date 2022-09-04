@@ -58,7 +58,7 @@ import org.graylog2.shared.bindings.InstantiationService;
 import org.graylog2.shared.initializers.ServiceManagerListener;
 import org.graylog2.shared.journal.KafkaJournalModule;
 import org.graylog2.shared.journal.NoopJournalModule;
-import org.graylog2.shared.plugins.LegacyPluginLoader;
+import org.graylog2.shared.plugins.PluginLoader;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.reflections.Reflections;
@@ -294,9 +294,9 @@ public abstract class Bootstrap implements Runnable {
     }
 
     protected List<PluginModule> loadPluginModules(String pluginPath) {
-        LegacyPluginLoader legacyPluginLoader = new LegacyPluginLoader(new File(pluginPath));
+        PluginLoader pluginLoader = new PluginLoader(new File(pluginPath));
         List<PluginModule> pluginModules = Lists.newArrayList();
-        for (Plugin plugin : legacyPluginLoader.loadPlugins())
+        for (Plugin plugin : pluginLoader.loadPlugins())
             pluginModules.addAll(plugin.modules());
 
         LOG.debug("Loaded modules: " + pluginModules);
