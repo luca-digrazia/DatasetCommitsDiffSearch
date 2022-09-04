@@ -317,7 +317,7 @@ public class NinjaParserStep {
         parseExpected(NinjaToken.NEWLINE);
       }
     }
-    return fileScope.createScopeFromExpandedValues(ImmutableSortedMap.copyOf(expandedVariables));
+    return fileScope.createTargetsScope(ImmutableSortedMap.copyOf(expandedVariables));
   }
 
   /**
