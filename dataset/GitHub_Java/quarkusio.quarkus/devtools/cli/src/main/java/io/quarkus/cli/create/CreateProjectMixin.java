@@ -1,7 +1,5 @@
 package io.quarkus.cli.create;
 
-import static java.util.Objects.requireNonNull;
-
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
@@ -9,17 +7,16 @@ import java.util.Set;
 import java.util.TreeMap;
 
 import io.quarkus.cli.common.OutputOptionMixin;
-import io.quarkus.cli.common.RegistryClientMixin;
+import io.quarkus.cli.common.TargetQuarkusVersionGroup;
+import io.quarkus.cli.common.ToggleRegistryClientMixin;
 import io.quarkus.devtools.commands.CreateProject;
 import io.quarkus.devtools.commands.data.QuarkusCommandInvocation;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
-import io.quarkus.devtools.project.QuarkusProjectHelper;
 import io.quarkus.devtools.project.codegen.CreateProjectHelper;
 import io.quarkus.devtools.project.codegen.ProjectGenerator;
 import io.quarkus.devtools.project.codegen.SourceType;
 import io.quarkus.registry.RegistryResolutionException;
-import io.quarkus.registry.catalog.ExtensionCatalog;
 import picocli.CommandLine.Help;
 import picocli.CommandLine.Mixin;
 import picocli.CommandLine.Model.CommandSpec;
@@ -27,7 +24,6 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Spec;
 
 public class CreateProjectMixin {
-
     Map<String, Object> values = new HashMap<>();
     Path outputPath;
     Path projectRootPath;
@@ -41,7 +37,13 @@ public class CreateProjectMixin {
     String targetDirectory;
 
     @Mixin
-    RegistryClientMixin registryClient;
+    ToggleRegistryClientMixin registryClient;
+
+    public void setTestOutputDirectory(Path testOutputDirectory) {
+        if (testOutputDirectory != null && targetDirectory == null) {
+            outputPath = testOutputDirectory;
+        }
+    }
 
     public Path outputDirectory() {
         if (outputPath == null) {
@@ -50,10 +52,29 @@ public class CreateProjectMixin {
         return outputPath;
     }
 
+    /**
+     * Resolve and remember the configured project directory.
+     *
+     * @param log Output Mixin that will be used to emit error messages
+     * @return true IFF configured project root directory already exists
+     */
+    public boolean checkProjectRootAlreadyExists(OutputOptionMixin log) {
+        if (projectRootPath == null) {
+            try {
+                projectRootPath = CreateProjectHelper.checkProjectRootPath(outputDirectory(), projectDirName);
+                return false;
+            } catch (IllegalArgumentException iex) {
+                log.error(iex.getMessage());
+                log.out().printf("Use '-a' or '--artifactId' to choose a new artifactId and directory name.%n");
+                log.out().printf("See '%s --help' for more information.%n", mixee.qualifiedName());
+                return true;
+            }
+        }
+        return false;
+    }
+
     public Path projectRoot() {
         if (projectRootPath == null) {
-            requireNonNull(projectDirName,
-                    "Must configure project directory name (e.g. using setSingleProjectGAV or equivalent");
             projectRootPath = CreateProjectHelper.checkProjectRootPath(outputDirectory(), projectDirName);
         }
         return projectRootPath;
@@ -79,7 +100,7 @@ public class CreateProjectMixin {
         setValue(ProjectGenerator.PACKAGE_NAME, codeGeneration.packageName);
         setValue(ProjectGenerator.APP_CONFIG, codeGeneration.getAppConfig());
 
-        // TODO: Can we drop the negative constant? Can we use the same one for JBang?
+        setValue(CreateProject.NO_CODE, !codeGeneration.includeCode);
         setValue(CreateProject.NO_BUILDTOOL_WRAPPER, !codeGeneration.includeWrapper);
     }
 
@@ -90,23 +111,25 @@ public class CreateProjectMixin {
     }
 
     public QuarkusCommandInvocation build(BuildTool buildTool, TargetQuarkusVersionGroup targetVersion,
-            OutputOptionMixin log)
+            OutputOptionMixin log, Map<String, String> properties)
             throws RegistryResolutionException {
 
-        // TODO: Allow this to be configured? infer from active Java version?
+        // TODO: Allow the Java version to be configured? infer from active Java version?
         CreateProjectHelper.setJavaVersion(values, null);
         CreateProjectHelper.handleSpringConfiguration(values);
         log.debug("Creating an app using the following settings: %s", values);
 
-        if (buildTool == null) {
-            // Adapt some settings for JBang
-            setValue("noJBangWrapper", values.get(CreateProject.NO_BUILDTOOL_WRAPPER));
-            // TODO: JBang should be a proper build tool
-            buildTool = BuildTool.MAVEN;
-        }
+        QuarkusProject qp = registryClient.createQuarkusProject(projectRoot(), targetVersion, buildTool, log);
 
-        ExtensionCatalog catalog = registryClient.getExtensionCatalog(targetVersion, log);
-        QuarkusProject qp = QuarkusProjectHelper.getProject(projectRoot(), catalog, buildTool, log);
+        properties.entrySet().forEach(x -> {
+            if (x.getValue().length() > 0) {
+                System.setProperty(x.getKey(), x.getValue());
+                log.info("property: %s=%s", x.getKey(), x.getValue());
+            } else {
+                System.setProperty(x.getKey(), "");
+                log.info("property: %s", x.getKey());
+            }
+        });
         return new QuarkusCommandInvocation(qp, values);
     }
 

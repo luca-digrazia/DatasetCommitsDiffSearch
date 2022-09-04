@@ -5,7 +5,6 @@ import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -25,11 +24,6 @@ public class CliProjectMavenTest {
     public void setupTestDirectories() throws Exception {
         CliDriver.deleteDir(workspaceRoot);
         project = workspaceRoot.resolve("code-with-quarkus");
-    }
-
-    @AfterEach
-    public void afterEachCleanup() throws Exception {
-        CliDriver.afterEachCleanup();
     }
 
     @Test
@@ -92,13 +86,6 @@ public class CliProjectMavenTest {
                 "result should contain '-Dproperty=value1 -Dproperty2=value2':\n" + result.stdout);
 
         CliDriver.invokeValidateBuild(project);
-
-        result = CliDriver.execute(workspaceRoot, "create", "app", "--dry-run", "--verbose", "-e", "-B",
-                "--output-directory=" + nested,
-                "silly:my-project:0.1.0");
-        Assertions.assertEquals(CommandLine.ExitCode.OK, result.exitCode, "Expected OK return code. " + result);
-        Assertions.assertTrue(result.stdout.contains("WARN"),
-                "Expected a warning that the directory already exists. " + result);
     }
 
     @Test

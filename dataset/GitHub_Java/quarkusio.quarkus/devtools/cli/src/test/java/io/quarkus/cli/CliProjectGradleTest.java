@@ -8,7 +8,6 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,11 +36,6 @@ public class CliProjectGradleTest {
     public void setupTestDirectories() throws Exception {
         CliDriver.deleteDir(workspaceRoot);
         project = workspaceRoot.resolve("code-with-quarkus");
-    }
-
-    @AfterEach
-    public void afterEachCleanup() throws Exception {
-        CliDriver.afterEachCleanup();
     }
 
     @BeforeAll
