@@ -7,7 +7,6 @@ import org.graylog.plugins.netflow.flows.FlowException;
 import org.graylog.plugins.netflow.flows.InvalidFlowVersionException;
 import org.graylog.plugins.netflow.utils.UUIDs;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
@@ -123,7 +122,7 @@ public class NetFlowV5Packet implements NetFlowPacket {
         }
 
         final long uptime = getUnsignedInteger(buf, 4, 4);
-        final DateTime timestamp = new DateTime(getUnsignedInteger(buf, 8, 4) * 1000, DateTimeZone.UTC);
+        final DateTime timestamp = new DateTime(getUnsignedInteger(buf, 8, 4) * 1000);
         final UUID id = UUIDs.startOf(timestamp.getMillis());
         final long flowSequence = getUnsignedInteger(buf, 16, 4);
         final int engineType = (int) getUnsignedInteger(buf, 20, 1);
