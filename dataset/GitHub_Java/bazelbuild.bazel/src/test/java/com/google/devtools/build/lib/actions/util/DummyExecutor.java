@@ -20,7 +20,7 @@ import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsClassProvider;
@@ -32,17 +32,17 @@ public final class DummyExecutor implements Executor {
 
   private final FileSystem fileSystem;
   private final Path inputDir;
-  private final ExtendedEventHandler eventHandler;
+  private final EventHandler eventHandler;
 
   public DummyExecutor(FileSystem fileSystem, Path inputDir) {
     this(fileSystem, inputDir, null);
   }
 
-  public DummyExecutor(ExtendedEventHandler eventHandler) {
+  public DummyExecutor(EventHandler eventHandler) {
     this(null, null, eventHandler);
   }
 
-  public DummyExecutor(FileSystem fileSystem, Path inputDir, ExtendedEventHandler eventHandler) {
+  public DummyExecutor(FileSystem fileSystem, Path inputDir, EventHandler eventHandler) {
     this.fileSystem = fileSystem;
     this.inputDir = inputDir;
     this.eventHandler = eventHandler;
@@ -74,7 +74,7 @@ public final class DummyExecutor implements Executor {
   }
 
   @Override
-  public ExtendedEventHandler getEventHandler() {
+  public EventHandler getEventHandler() {
     return eventHandler;
   }
 

@@ -56,6 +56,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReference;
@@ -115,7 +116,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       return null;
     }
     Map<String, String> clientEnv = new HashMap<>();
-    for (Map.Entry<SkyKey, SkyValue> entry : clientEnvLookup.entrySet()) {
+    for (Entry<SkyKey, SkyValue> entry : clientEnvLookup.entrySet()) {
       ClientEnvironmentValue envValue = (ClientEnvironmentValue) entry.getValue();
       if (envValue.getValue() != null) {
         clientEnv.put((String) entry.getKey().argument(), envValue.getValue());
@@ -515,7 +516,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     Map<SkyKey, SkyValue> nonMandatoryDiscovered =
         env.getValues(newlyDiscoveredInputsToSkyKeys(discoveredInputs, inputData.keySet()));
     if (!env.valuesMissing()) {
-      for (Map.Entry<SkyKey, SkyValue> entry : nonMandatoryDiscovered.entrySet()) {
+      for (Entry<SkyKey, SkyValue> entry : nonMandatoryDiscovered.entrySet()) {
         Artifact input = ArtifactSkyKey.artifact(entry.getKey());
         if (entry.getValue() instanceof TreeArtifactValue) {
           TreeArtifactValue treeValue = (TreeArtifactValue) entry.getValue();
