@@ -840,7 +840,7 @@ public final class CppModel {
             ruleContext, ccToolchain, ArtifactCategory.COVERAGE_DATA_FILE, outputName);
     // TODO(djasper): This is now duplicated. Refactor the various create..Action functions.
     Artifact gcnoFile =
-        isCodeCoverageEnabled() && !CppHelper.isLipoOptimization(cppConfiguration, ccToolchain)
+        isCodeCoverageEnabled() && !cppConfiguration.isLipoOptimization()
             ? CppHelper.getCompileOutputArtifact(ruleContext, gcnoFileName, configuration)
             : null;
 
@@ -967,7 +967,7 @@ public final class CppModel {
       throws RuleErrorException {
     ImmutableList.Builder<Artifact> directOutputs = new ImmutableList.Builder<>();
     PathFragment ccRelativeName = semantics.getEffectiveSourcePath(sourceArtifact);
-    if (CppHelper.isLipoOptimization(cppConfiguration, ccToolchain)) {
+    if (cppConfiguration.isLipoOptimization()) {
       // TODO(bazel-team): we shouldn't be needing this, merging context with the binary
       // is a superset of necessary information.
       LipoContextProvider lipoProvider =
@@ -1078,7 +1078,7 @@ public final class CppModel {
 
         // Create non-PIC compile actions
         Artifact gcnoFile =
-            !CppHelper.isLipoOptimization(cppConfiguration, ccToolchain) && enableCoverage
+            !cppConfiguration.isLipoOptimization() && enableCoverage
                 ? CppHelper.getCompileOutputArtifact(ruleContext, gcnoFileName, configuration)
                 : null;
 
