@@ -20,12 +20,10 @@
 
 package org.graylog2.inputs.gelf.gelf;
 
-import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.inject.Inject;
 import org.graylog2.plugin.InputHost;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
@@ -48,9 +46,6 @@ public class GELFProcessor {
     private static final Logger LOG = LoggerFactory.getLogger(GELFProcessor.class);
     private InputHost server;
 
-    @Inject
-    private MetricRegistry metricRegistry;
-
     private final ObjectMapper objectMapper;
 
     public GELFProcessor(InputHost server) {
@@ -63,7 +58,7 @@ public class GELFProcessor {
     public void messageReceived(GELFMessage message, MessageInput sourceInput) throws BufferOutOfCapacityException {
         String metricName = sourceInput.getUniqueReadableId();
 
-        metricRegistry.meter(name(metricName, "incomingMessages")).mark();
+        server.metrics().meter(name(metricName, "incomingMessages")).mark();
 
         // Convert to LogMessage
         Message lm = null;
@@ -75,19 +70,19 @@ public class GELFProcessor {
         }
 
         if (lm == null || !lm.isComplete()) {
-            metricRegistry.meter(name(metricName, "incompleteMessages")).mark();
+            server.metrics().meter(name(metricName, "incompleteMessages")).mark();
             LOG.debug("Skipping incomplete message.");
             return;
         }
 
         // Add to process buffer.
         LOG.debug("Adding received GELF message <{}> to process buffer: {}", lm.getId(), lm);
-        metricRegistry.meter(name(metricName, "processedMessages")).mark();
+        server.metrics().meter(name(metricName, "processedMessages")).mark();
         server.getProcessBuffer().insertCached(lm, sourceInput);
     }
 
     private Message parse(String message, MessageInput sourceInput) {
-        Timer.Context tcx = metricRegistry.timer(name(sourceInput.getUniqueReadableId(), "gelfParsedTime")).time();
+        Timer.Context tcx = server.metrics().timer(name(sourceInput.getUniqueReadableId(), "gelfParsedTime")).time();
 
         JsonNode json;
 
