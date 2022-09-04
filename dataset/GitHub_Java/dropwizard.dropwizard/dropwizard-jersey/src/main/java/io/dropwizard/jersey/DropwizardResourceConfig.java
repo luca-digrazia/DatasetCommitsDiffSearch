@@ -64,7 +64,6 @@ public class DropwizardResourceConfig extends ResourceConfig {
         register(OptionalMessageBodyWriter.class);
         register(OptionalParamFeature.class);
         register(new SessionFactoryProvider.Binder());
-        EncodingFilter.enableFor(this, GZipEncoder.class);
     }
 
     public static DropwizardResourceConfig forTesting(MetricRegistry metricRegistry) {
@@ -74,7 +73,7 @@ public class DropwizardResourceConfig extends ResourceConfig {
     public void logComponents() {
         LOGGER.debug("resources = {}", canonicalNamesByAnnotation(Path.class));
         LOGGER.debug("providers = {}", canonicalNamesByAnnotation(Provider.class));
-        LOGGER.info(getEndpointsInfo());
+        LOGGER.info(logEndpoints());
     }
 
     public String getUrlPattern() {
@@ -109,7 +108,8 @@ public class DropwizardResourceConfig extends ResourceConfig {
         return result;
     }
 
-    public String getEndpointsInfo() {
+    @VisibleForTesting
+    String logEndpoints() {
         final StringBuilder msg = new StringBuilder(1024);
         msg.append("The following paths were found for the configured resources:");
         msg.append(NEWLINE).append(NEWLINE);
