@@ -23,7 +23,6 @@ import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.search.aggregations.bucket.histogram.DateHistogram;
 import org.elasticsearch.search.aggregations.metrics.stats.Stats;
 import org.graylog2.indexer.searches.Searches;
-import org.joda.time.MutableDateTime;
 
 import java.util.Map;
 
@@ -74,16 +73,16 @@ public class FieldHistogramResult extends HistogramResult {
 
             results.put(timestamp, resultMap);
         }
-        final MutableDateTime currentTime = new MutableDateTime(minTimestamp);
-        while (currentTime.getMillis() < maxTimestamp) {
-            Map<String, Number> entry = results.get(currentTime.getMillis());
+        long curTimestamp = minTimestamp;
+        while (curTimestamp < maxTimestamp) {
+            Map<String, Number> entry = results.get(curTimestamp);
 
             // advance timestamp by the interval's seconds value
-            currentTime.add(interval.getPeriod());
+            curTimestamp += interval.getPeriod().toStandardSeconds().getSeconds();
 
             if (entry == null) {
                 // synthesize a 0 value for this timestamp
-                results.put(currentTime.getMillis(), EMPTY_RESULT);
+                results.put(curTimestamp, EMPTY_RESULT);
             }
         }
         return results;

@@ -16,7 +16,6 @@
  */
 package org.graylog2.indexer.searches;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Sets;
 import org.elasticsearch.action.search.SearchRequest;
 import org.elasticsearch.action.search.SearchRequestBuilder;
@@ -113,25 +112,6 @@ public class Searches {
         public Period getPeriod() {
             return period;
         }
-
-        public DateHistogram.Interval toESInterval() {
-            switch (this.name()) {
-                case "MINUTE":
-                    return DateHistogram.Interval.MINUTE;
-                case "HOUR":
-                    return DateHistogram.Interval.HOUR;
-                case "DAY":
-                    return DateHistogram.Interval.DAY;
-                case "WEEK":
-                    return DateHistogram.Interval.WEEK;
-                case "MONTH":
-                    return DateHistogram.Interval.MONTH;
-                case "QUARTER":
-                    return DateHistogram.Interval.QUARTER;
-                default:
-                    return DateHistogram.Interval.YEAR;
-            }
-        }
     }
 
 
@@ -145,18 +125,10 @@ public class Searches {
                     Deflector deflector,
                     IndexRangeService indexRangeService,
                     Node node) {
-        this(configuration, deflector, indexRangeService, node.client());
-    }
-
-    @VisibleForTesting
-    Searches(Configuration configuration,
-                    Deflector deflector,
-                    IndexRangeService indexRangeService,
-                    Client client) {
         this.configuration = configuration;
         this.deflector = deflector;
         this.indexRangeService = indexRangeService;
-        this.c = client;
+        this.c = node.client();
     }
 
     public CountResult count(String query, TimeRange range) {
@@ -411,7 +383,7 @@ public class Searches {
                 .subAggregation(
                         AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
                                 .field("timestamp")
-                                .interval(interval.toESInterval()))
+                                .interval(interval.getPeriod().toStandardDuration().getMillis()))
                 .filter(standardFilters(range, filter));
 
         QueryStringQueryBuilder qs = queryString(query);
@@ -441,7 +413,7 @@ public class Searches {
                         AggregationBuilders.dateHistogram(AGG_HISTOGRAM)
                                 .field("timestamp")
                                 .subAggregation(AggregationBuilders.stats(AGG_STATS).field(field))
-                                .interval(interval.toESInterval())
+                                .interval(interval.getPeriod().toStandardDuration().getMillis())
                 )
                 .filter(standardFilters(range, filter));
 

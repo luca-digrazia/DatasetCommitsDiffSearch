@@ -19,69 +19,70 @@ package org.graylog2.indexer.results;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.aggregations.metrics.cardinality.Cardinality;
 import org.elasticsearch.search.aggregations.metrics.stats.extended.ExtendedStats;
 
-import javax.annotation.Nullable;
 import java.util.List;
 
 public class FieldStatsResult extends IndexQueryResult {
 
-    @Nullable
-    private final ExtendedStats extendedStats;
-    @Nullable
-    private final Cardinality cardinality;
+    private final long count;
+    private final double sum;
+    private final double sumOfSquares;
+    private final double mean;
+    private final double min;
+    private final double max;
+    private final double variance;
+    private final double stdDeviation;
     private List<ResultMessage> searchHits;
 
+    public FieldStatsResult(ExtendedStats f, String originalQuery, BytesReference builtQuery, TimeValue took) {
+        super(originalQuery, builtQuery, took);
 
-    public FieldStatsResult(@Nullable ExtendedStats extendedStats,
-                            @Nullable Cardinality cardinality,
-                            SearchHits hits,
-                            String query,
-                            BytesReference source, TimeValue took) {
-        super(query, source, took);
+        this.count = f.getCount();
+        this.sum = f.getSum();
+        this.sumOfSquares = f.getSumOfSquares();
+        this.mean = f.getAvg();
+        this.min = f.getMin();
+        this.max = f.getMax();
+        this.variance = f.getVariance();
+        this.stdDeviation = f.getStdDeviation();
+    }
 
-
-        this.extendedStats = extendedStats;
-        this.cardinality = cardinality;
-        this.searchHits = buildResults(hits);
+    public FieldStatsResult(ExtendedStats facet, SearchHits searchHits, String query, BytesReference source, TimeValue took) {
+        this(facet, query, source, took);
+        this.searchHits = buildResults(searchHits);
     }
 
     public long getCount() {
-        return extendedStats != null ? extendedStats.getCount() : 0;
+        return count;
     }
 
     public double getSum() {
-        return extendedStats != null ? extendedStats.getSum() : 0;
+        return sum;
     }
 
     public double getSumOfSquares() {
-        return extendedStats != null ? extendedStats.getSumOfSquares() : 0;
+        return sumOfSquares;
     }
 
     public double getMean() {
-        return extendedStats != null ? extendedStats.getAvg() : 0;
+        return mean;
     }
 
     public double getMin() {
-        return extendedStats != null ? extendedStats.getMin() : 0;
+        return min;
     }
 
     public double getMax() {
-        return extendedStats != null ? extendedStats.getMax() : 0;
+        return max;
     }
 
     public double getVariance() {
-        return extendedStats != null ? extendedStats.getVariance() : 0;
+        return variance;
     }
 
     public double getStdDeviation() {
-        return extendedStats != null ? extendedStats.getStdDeviation() : 0;
-    }
-
-
-    public long getCardinality() {
-        return cardinality == null ? 0 : cardinality.getValue();
+        return stdDeviation;
     }
 
     public List<ResultMessage> getSearchHits() {
