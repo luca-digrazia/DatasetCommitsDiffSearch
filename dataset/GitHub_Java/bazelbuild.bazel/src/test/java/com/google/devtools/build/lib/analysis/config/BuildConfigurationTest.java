@@ -29,8 +29,8 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
-import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodecAdapter;
+import com.google.devtools.build.lib.skyframe.serialization.testutils.ObjectCodecTester;
 import com.google.devtools.common.options.Options;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -288,8 +288,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
                 ImmutableSortedSet.orderedBy(BuildConfiguration.lexicalFragmentSorter)
                     .add(CppConfiguration.class)
                     .build()),
-            analysisMock.createRuleClassProvider(),
-            skyframeExecutor.getDefaultBuildOptions());
+            analysisMock.createRuleClassProvider());
     BuildConfiguration hostConfig = createHost();
 
     assertThat(config.equalsOrIsSupersetOf(trimmedConfig)).isTrue();
@@ -373,7 +372,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
     return new ConfigurationFragmentFactory() {
       @Override
       public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions)
-          throws InterruptedException {
+          throws InvalidConfigurationException, InterruptedException {
         try {
           env.getTarget(Label.parseAbsoluteUnchecked(label));
         } catch (NoSuchPackageException e) {
@@ -431,7 +430,10 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
 
   @Test
   public void testCodec() throws Exception {
-    new SerializationTester(
+    ObjectCodecTester.newBuilder(
+            new InjectingObjectCodecAdapter<>(
+                BuildConfiguration.CODEC, () -> getScratch().getFileSystem()))
+        .addSubjects(
             create(),
             create("--cpu=piii"),
             create("--javacopt=foo"),
@@ -451,9 +453,8 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
                 "qspace=a\\ quoted\\ space",
                 "--define",
                 "#a=pounda"))
-        .addDependency(FileSystem.class, getScratch().getFileSystem())
-        .setVerificationFunction(BuildConfigurationTest::verifyDeserialized)
-        .runTests();
+        .verificationFunction(BuildConfigurationTest::verifyDeserialized)
+        .buildAndRunTests();
   }
 
   /**
