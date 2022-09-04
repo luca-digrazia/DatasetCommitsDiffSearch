@@ -93,11 +93,7 @@ public class Environment {
         } catch (IllegalStateException e) {
             SharedMetricRegistries.setDefault("default", metricRegistry);
         }
-        try {
-            SharedHealthCheckRegistries.getDefault();
-        } catch (IllegalStateException e) {
-            SharedHealthCheckRegistries.setDefault("default", healthCheckRegistry);
-        }
+        SharedHealthCheckRegistries.add("default", healthCheckRegistry);
     }
 
     /**
