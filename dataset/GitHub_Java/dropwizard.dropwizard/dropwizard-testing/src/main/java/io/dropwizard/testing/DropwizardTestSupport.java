@@ -72,12 +72,8 @@ public class DropwizardTestSupport<C extends Configuration> {
     }
 
     public void after() {
-        try {
-            stopIfRequired();
-        }
-        finally {
-            resetConfigOverrides();
-        }
+        stopIfRequired();
+        resetConfigOverrides();
     }
 
     private void stopIfRequired() {
