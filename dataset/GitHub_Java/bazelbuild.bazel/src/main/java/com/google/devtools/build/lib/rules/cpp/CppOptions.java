@@ -669,6 +669,15 @@ public class CppOptions extends FragmentOptions {
   public boolean pruneCppInputDiscovery;
 
   @Option(
+    name = "experimental_no_dotd_scanning_with_modules",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
+    effectTags = {OptionEffectTag.EXECUTION, OptionEffectTag.CHANGES_INPUTS},
+    help = "If enabled, don't analyze generated .d files in builds with Clang's C++ modules."
+  )
+  public boolean noDotdScanningWithModules;
+
+  @Option(
     name = "parse_headers_verifies_modules",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
@@ -767,7 +776,7 @@ public class CppOptions extends FragmentOptions {
         OptionMetadataTag.INCOMPATIBLE_CHANGE,
         OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
-      help = "Flag for disabling access to the C++ toolchain API through the ctx.fragments.cpp.")
+      help = "Flag for disabling access to the C++ toolchain API through the ctx.fragments.cpp .")
   public boolean disableLegacyToolchainSkylarkApi;
 
   @Option(
@@ -787,20 +796,6 @@ public class CppOptions extends FragmentOptions {
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help = "If true, C++ Skylark API exposing compilation flags will be disabled.")
   public boolean disableLegacyCompilationApi;
-
-  @Option(
-      name = "incompatible_disable_legacy_flags_cc_toolchain_api",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "Flag for disabling the legacy cc_toolchain Skylark API for accessing legacy "
-              + "CROSSTOOL fields.")
-  public boolean disableLegacyFlagsCcToolchainApi;
 
   @Option(
       name = "experimental_disable_linking_mode_flags",
@@ -827,7 +822,7 @@ public class CppOptions extends FragmentOptions {
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help =
-          "If true, Bazel will not read crosstool flags from legacy crosstool fields (see #5187).")
+          "If true, Bazel will not read crosstool flags from legacy crosstool fields (see #5187.")
   public boolean disableLegacyCrosstoolFields;
 
   @Option(
@@ -942,6 +937,7 @@ public class CppOptions extends FragmentOptions {
     host.fdoProfileLabel = null;
     host.inmemoryDotdFiles = inmemoryDotdFiles;
     host.pruneCppInputDiscovery = pruneCppInputDiscovery;
+    host.noDotdScanningWithModules = noDotdScanningWithModules;
 
     return host;
   }

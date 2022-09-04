@@ -517,7 +517,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     ImmutableList.Builder<PathFragment> builtInIncludeDirectoriesBuilder = ImmutableList.builder();
     for (String s : cppToolchainInfo.getRawBuiltInIncludeDirectories()) {
       builtInIncludeDirectoriesBuilder.add(
-          CcToolchainProviderHelper.resolveIncludeDir(s, sysroot, crosstoolTopPathFragment));
+          CcToolchain.resolveIncludeDir(s, sysroot, crosstoolTopPathFragment));
     }
     return builtInIncludeDirectoriesBuilder.build();
   }
