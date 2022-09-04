@@ -103,6 +103,7 @@ public class FastBootMetadataBuilder {
     private final Collection<ProvidedService> providedServices;
     private final PreGeneratedProxies preGeneratedProxies;
     private final Optional<String> dataSource;
+    private final MultiTenancyStrategy multiTenancyStrategy;
     private final boolean isReactive;
     private final boolean fromPersistenceXml;
     private final List<HibernateOrmIntegrationStaticDescriptor> integrationStaticDescriptors;
@@ -188,11 +189,13 @@ public class FastBootMetadataBuilder {
         // was passed
         metamodelBuilder.applyTempClassLoader(null);
 
-        final MultiTenancyStrategy multiTenancyStrategy = puDefinition.getMultitenancyStrategy();
-        if (multiTenancyStrategy != null && multiTenancyStrategy != MultiTenancyStrategy.NONE) {
+        final MultiTenancyStrategy strategy = puDefinition.getMultitenancyStrategy();
+        if (strategy != null && strategy != MultiTenancyStrategy.NONE) {
             ssrBuilder.addService(MultiTenantConnectionProvider.class,
                     new HibernateMultiTenantConnectionProvider(puDefinition.getName()));
         }
+        this.multiTenancyStrategy = strategy;
+
     }
 
     /**
@@ -212,11 +215,6 @@ public class FastBootMetadataBuilder {
         }
 
         cfg.put(PERSISTENCE_UNIT_NAME, persistenceUnit.getName());
-
-        MultiTenancyStrategy multiTenancyStrategy = puDefinition.getMultitenancyStrategy();
-        if (multiTenancyStrategy != null) {
-            cfg.put(AvailableSettings.MULTI_TENANT, multiTenancyStrategy);
-        }
 
         applyTransactionProperties(persistenceUnit, cfg);
         applyJdbcConnectionProperties(cfg);
@@ -373,7 +371,7 @@ public class FastBootMetadataBuilder {
         destroyServiceRegistry();
         ProxyDefinitions proxyClassDefinitions = ProxyDefinitions.createFromMetadata(storeableMetadata, preGeneratedProxies);
         return new RecordedState(dialect, storeableMetadata, buildTimeSettings, getIntegrators(),
-                providedServices, integrationSettingsBuilder.build(), proxyClassDefinitions, dataSource,
+                providedServices, integrationSettingsBuilder.build(), proxyClassDefinitions, dataSource, multiTenancyStrategy,
                 isReactive, fromPersistenceXml);
     }
 
