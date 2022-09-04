@@ -30,10 +30,13 @@ import com.google.devtools.build.lib.bazel.commands.FetchCommand;
 import com.google.devtools.build.lib.bazel.commands.SyncCommand;
 import com.google.devtools.build.lib.bazel.repository.LocalConfigPlatformFunction;
 import com.google.devtools.build.lib.bazel.repository.LocalConfigPlatformRule;
+import com.google.devtools.build.lib.bazel.repository.MavenDownloader;
+import com.google.devtools.build.lib.bazel.repository.MavenJarFunction;
+import com.google.devtools.build.lib.bazel.repository.MavenServerFunction;
+import com.google.devtools.build.lib.bazel.repository.MavenServerRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.RepositoryOptions;
 import com.google.devtools.build.lib.bazel.repository.RepositoryOptions.RepositoryOverride;
 import com.google.devtools.build.lib.bazel.repository.cache.RepositoryCache;
-import com.google.devtools.build.lib.bazel.repository.downloader.DownloadManager;
 import com.google.devtools.build.lib.bazel.repository.downloader.HttpDownloader;
 import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryModule;
@@ -41,6 +44,8 @@ import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryFun
 import com.google.devtools.build.lib.bazel.rules.android.AndroidNdkRepositoryRule;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryFunction;
 import com.google.devtools.build.lib.bazel.rules.android.AndroidSdkRepositoryRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
+import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
@@ -58,8 +63,6 @@ import com.google.devtools.build.lib.runtime.BlazeModule;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
-import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutorFactory;
 import com.google.devtools.build.lib.runtime.ServerBuilder;
 import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
 import com.google.devtools.build.lib.runtime.commands.InfoItem;
@@ -96,9 +99,8 @@ public class BazelRepositoryModule extends BlazeModule {
   private final AtomicBoolean isFetch = new AtomicBoolean(false);
   private final SkylarkRepositoryFunction skylarkRepositoryFunction;
   private final RepositoryCache repositoryCache = new RepositoryCache();
-  private final HttpDownloader httpDownloader = new HttpDownloader();
-  private final DownloadManager downloadManager =
-      new DownloadManager(repositoryCache, httpDownloader);
+  private final HttpDownloader httpDownloader = new HttpDownloader(repositoryCache);
+  private final MavenDownloader mavenDownloader = new MavenDownloader(repositoryCache);
   private final MutableSupplier<Map<String, String>> clientEnvironmentSupplier =
       new MutableSupplier<>();
   private ImmutableMap<RepositoryName, PathFragment> overrides = ImmutableMap.of();
@@ -111,8 +113,8 @@ public class BazelRepositoryModule extends BlazeModule {
   private final ManagedDirectoriesKnowledgeImpl managedDirectoriesKnowledge;
 
   public BazelRepositoryModule() {
-    this.skylarkRepositoryFunction = new SkylarkRepositoryFunction(downloadManager);
-    this.repositoryHandlers = repositoryRules();
+    this.skylarkRepositoryFunction = new SkylarkRepositoryFunction(httpDownloader);
+    this.repositoryHandlers = repositoryRules(httpDownloader, mavenDownloader);
     ManagedDirectoriesListener listener =
         repositoryNamesWithManagedDirs -> {
           Set<String> conflicting =
@@ -132,12 +134,15 @@ public class BazelRepositoryModule extends BlazeModule {
     managedDirectoriesKnowledge = new ManagedDirectoriesKnowledgeImpl(listener);
   }
 
-  public static ImmutableMap<String, RepositoryFunction> repositoryRules() {
+  public static ImmutableMap<String, RepositoryFunction> repositoryRules(
+      HttpDownloader httpDownloader, MavenDownloader mavenDownloader) {
     return ImmutableMap.<String, RepositoryFunction>builder()
         .put(LocalRepositoryRule.NAME, new LocalRepositoryFunction())
+        .put(MavenJarRule.NAME, new MavenJarFunction(mavenDownloader))
         .put(NewLocalRepositoryRule.NAME, new NewLocalRepositoryFunction())
         .put(AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction())
         .put(AndroidNdkRepositoryRule.NAME, new AndroidNdkRepositoryFunction())
+        .put(MavenServerRule.NAME, new MavenServerRepositoryFunction())
         .put(LocalConfigPlatformRule.NAME, new LocalConfigPlatformFunction())
         .build();
   }
@@ -184,6 +189,7 @@ public class BazelRepositoryModule extends BlazeModule {
             directories,
             managedDirectoriesKnowledge);
     builder.addSkyFunction(SkyFunctions.REPOSITORY_DIRECTORY, repositoryDelegatorFunction);
+    builder.addSkyFunction(MavenServerFunction.NAME, new MavenServerFunction(directories));
     filesystem = runtime.getFileSystem();
   }
 
@@ -262,8 +268,10 @@ public class BazelRepositoryModule extends BlazeModule {
       }
 
       if (repoOptions.experimentalDistdir != null) {
-        downloadManager.setDistdir(
-            repoOptions.experimentalDistdir.stream()
+        httpDownloader.setDistdir(
+            repoOptions
+                .experimentalDistdir
+                .stream()
                 .map(
                     path ->
                         path.isAbsolute()
@@ -271,7 +279,7 @@ public class BazelRepositoryModule extends BlazeModule {
                             : env.getBlazeWorkspace().getWorkspace().getRelative(path))
                 .collect(Collectors.toList()));
       } else {
-        downloadManager.setDistdir(ImmutableList.<Path>of());
+        httpDownloader.setDistdir(ImmutableList.<Path>of());
       }
 
       if (repoOptions.httpTimeoutScaling > 0) {
@@ -326,14 +334,6 @@ public class BazelRepositoryModule extends BlazeModule {
         outputVerificationRules =
             ImmutableSet.copyOf(repoOptions.experimentalVerifyRepositoryRules);
       }
-
-      RepositoryRemoteExecutorFactory remoteExecutorFactory =
-          env.getRuntime().getRepositoryRemoteExecutorFactory();
-      RepositoryRemoteExecutor remoteExecutor = null;
-      if (remoteExecutorFactory != null) {
-        remoteExecutor = remoteExecutorFactory.create();
-      }
-      skylarkRepositoryFunction.setRepositoryRemoteExecutor(remoteExecutor);
     }
   }
 

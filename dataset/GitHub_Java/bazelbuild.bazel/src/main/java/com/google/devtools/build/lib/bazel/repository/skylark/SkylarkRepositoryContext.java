@@ -14,10 +14,10 @@
 
 package com.google.devtools.build.lib.bazel.repository.skylark;
 
+
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ascii;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -46,20 +46,19 @@ import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
-import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
-import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor.ExecutionResult;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.SkylarkRepositoryContextApi;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.util.StringUtilities;
-import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -101,8 +100,6 @@ public class SkylarkRepositoryContext
   private final HttpDownloader httpDownloader;
   private final double timeoutScaling;
   private final Map<String, String> markerData;
-  private final StarlarkSemantics starlarkSemantics;
-  private final RepositoryRemoteExecutor remoteExecutor;
 
   /**
    * Create a new context (repository_ctx) object for a skylark repository rule ({@code rule}
@@ -118,9 +115,7 @@ public class SkylarkRepositoryContext
       HttpDownloader httpDownloader,
       Path embeddedBinariesRoot,
       double timeoutScaling,
-      Map<String, String> markerData,
-      StarlarkSemantics starlarkSemantics,
-      @Nullable RepositoryRemoteExecutor remoteExecutor)
+      Map<String, String> markerData)
       throws EvalException {
     this.rule = rule;
     this.packageLocator = packageLocator;
@@ -136,14 +131,16 @@ public class SkylarkRepositoryContext
     ImmutableMap.Builder<String, Object> attrBuilder = new ImmutableMap.Builder<>();
     for (String name : attrs.getAttributeNames()) {
       if (!name.equals("$local")) {
-        // Attribute values should be type safe
+        Object val = attrs.getObject(name);
         attrBuilder.put(
-            Attribute.getSkylarkName(name), Starlark.fromJava(attrs.getObject(name), null));
+            Attribute.getSkylarkName(name),
+            val == null
+                ? Starlark.NONE
+                // Attribute values should be type safe
+                : SkylarkType.convertToSkylark(val, (StarlarkThread) null));
       }
     }
     attrObject = StructProvider.STRUCT.create(attrBuilder.build(), "No such attribute '%s'");
-    this.starlarkSemantics = starlarkSemantics;
-    this.remoteExecutor = remoteExecutor;
   }
 
   @Override
@@ -187,10 +184,9 @@ public class SkylarkRepositoryContext
       throws EvalException, InterruptedException {
     if (path instanceof String) {
       PathFragment pathFragment = PathFragment.create(path.toString());
-      return new SkylarkPath(
-          pathFragment.isAbsolute()
-              ? outputDirectory.getFileSystem().getPath(path.toString())
-              : outputDirectory.getRelative(pathFragment));
+      return new SkylarkPath(pathFragment.isAbsolute()
+          ? outputDirectory.getFileSystem().getPath(path.toString())
+          : outputDirectory.getRelative(pathFragment));
     } else if (path instanceof Label) {
       return getPathFromLabel((Label) path);
     } else if (path instanceof SkylarkPath) {
@@ -292,7 +288,7 @@ public class SkylarkRepositoryContext
   public void createFileFromTemplate(
       Object path,
       Object template,
-      Dict<?, ?> substitutions, // <String, String> expected
+      SkylarkDict<?, ?> substitutions, // <String, String> expected
       Boolean executable,
       Location location)
       throws RepositoryFunctionException, EvalException, InterruptedException {
@@ -369,99 +365,17 @@ public class SkylarkRepositoryContext
     }
   }
 
-  boolean isRemotable() {
-    Object remotable = rule.getAttributeContainer().getAttr("$remotable");
-    if (remotable != null) {
-      return (Boolean) remotable;
-    }
-    return false;
-  }
-
-  private boolean canExecuteRemote() {
-    boolean featureEnabled = starlarkSemantics.experimentalRepoRemoteExec();
-    boolean remoteExecEnabled = remoteExecutor != null;
-    return featureEnabled && isRemotable() && remoteExecEnabled;
-  }
-
-  @SuppressWarnings("unchecked")
-  private ImmutableMap<String, String> getExecProperties() throws EvalException {
-    Dict<String, String> execPropertiesDict =
-        (Dict<String, String>) getAttr().getValue("exec_properties", Dict.class);
-    Map<String, String> execPropertiesMap =
-        execPropertiesDict.getContents(String.class, String.class, "exec_properties");
-    return ImmutableMap.copyOf(execPropertiesMap);
-  }
-
-  private static void validateArguments(Sequence<?> arguments, Location location)
-      throws EvalException {
-    for (Object arg : arguments) {
-      if (arg instanceof SkylarkPath) {
-        throw new EvalException(
-            location,
-            "Argument '"
-                + arg
-                + "' is of type path. Paths are not supported for repository rules"
-                + " marked as remotable.");
-      }
-    }
-  }
-
-  private SkylarkExecutionResult executeRemote(
-      Sequence<?> argumentsUnchecked, // <String> expected
-      int timeout,
-      Map<String, String> environment,
-      boolean quiet,
-      String workingDirectory,
-      Location location)
-      throws EvalException, InterruptedException {
-    Preconditions.checkState(canExecuteRemote());
-
-    ImmutableList<String> arguments =
-        argumentsUnchecked.stream().map(Object::toString).collect(ImmutableList.toImmutableList());
-    ImmutableMap<String, String> execProperties = getExecProperties();
-    try {
-      ExecutionResult result =
-          remoteExecutor.execute(
-              arguments,
-              execProperties,
-              ImmutableMap.copyOf(environment),
-              workingDirectory,
-              Duration.ofSeconds(timeout));
-
-      String stdout = new String(result.stdout(), StandardCharsets.US_ASCII);
-      String stderr = new String(result.stderr(), StandardCharsets.US_ASCII);
-
-      if (!quiet) {
-        OutErr outErr = OutErr.SYSTEM_OUT_ERR;
-        outErr.printOut(stdout);
-        outErr.printErr(stderr);
-      }
-
-      return new SkylarkExecutionResult(result.exitCode(), stdout, stderr);
-    } catch (IOException e) {
-      throw new EvalException(location, "remote_execute failed", e);
-    }
-  }
-
   @Override
   public SkylarkExecutionResult execute(
       Sequence<?> arguments, // <String> or <SkylarkPath> expected
       Integer timeout,
-      Dict<?, ?> uncheckedEnvironment, // <String, String> expected
+      SkylarkDict<?, ?> uncheckedEnvironment, // <String, String> expected
       boolean quiet,
       String workingDirectory,
       Location location)
       throws EvalException, RepositoryFunctionException, InterruptedException {
     Map<String, String> environment =
         uncheckedEnvironment.getContents(String.class, String.class, "environment");
-    if (isRemotable()) {
-      validateArguments(arguments, location);
-    }
-    if (canExecuteRemote()) {
-      return executeRemote(arguments, timeout, environment, quiet, workingDirectory, location);
-    }
-
-    // Execute on the local/host machine
     WorkspaceRuleEvent w =
         WorkspaceRuleEvent.newExecuteEvent(
             arguments,
@@ -596,16 +510,17 @@ public class SkylarkRepositoryContext
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"}) // Explained in method comment
-  private static Map<String, Dict<?, ?>> getAuthContents(
-      Dict<?, ?> authUnchecked, @Nullable String description) throws EvalException {
-    // This method would not be worth having (Dict#getContents could be called
-    // instead), except that some trickery is required to cast Map<String, Dict> to
-    // Map<String, Dict<?, ?>>.
+  private static Map<String, SkylarkDict<?, ?>> getAuthContents(
+      SkylarkDict<?, ?> authUnchecked, @Nullable String description) throws EvalException {
+    // This method would not be worth having (SkylarkDict#getContents could be called
+    // instead), except that some trickery is required to cast Map<String, SkylarkDict> to
+    // Map<String, SkylarkDict<?, ?>>.
 
-    // getContents can only guarantee raw types, so Dict is the raw type here.
-    Map<String, Dict> result = authUnchecked.getContents(String.class, Dict.class, description);
+    // getContents can only guarantee raw types, so SkylarkDict is the raw type here.
+    Map<String, SkylarkDict> result =
+        authUnchecked.getContents(String.class, SkylarkDict.class, description);
 
-    return (Map<String, Dict<?, ?>>) (Map<String, ? extends Dict>) result;
+    return (Map<String, SkylarkDict<?, ?>>) (Map<String, ? extends SkylarkDict>) result;
   }
 
   @Override
@@ -616,7 +531,7 @@ public class SkylarkRepositoryContext
       Boolean executable,
       Boolean allowFail,
       String canonicalId,
-      Dict<?, ?> authUnchecked, // <String, Dict<?, ?>> expected
+      SkylarkDict<?, ?> authUnchecked, // <String, SkylarkDict<?, ?>> expected
       String integrity,
       Location location)
       throws RepositoryFunctionException, EvalException, InterruptedException {
@@ -674,7 +589,7 @@ public class SkylarkRepositoryContext
           new IOException("thread interrupted"), Transience.TRANSIENT);
     } catch (IOException e) {
       if (allowFail) {
-        Dict<String, Object> dict = Dict.of(null, "success", false);
+        SkylarkDict<String, Object> dict = SkylarkDict.of(null, "success", false);
         return StructProvider.STRUCT.createStruct(dict, null);
       } else {
         throw new RepositoryFunctionException(e, Transience.TRANSIENT);
@@ -731,7 +646,7 @@ public class SkylarkRepositoryContext
       String stripPrefix,
       Boolean allowFail,
       String canonicalId,
-      Dict<?, ?> auth, // <String, Dict<?, ?>> expected
+      SkylarkDict<?, ?> auth, // <String, SkylarkDict<?, ?>> expected
       String integrity,
       Location location)
       throws RepositoryFunctionException, InterruptedException, EvalException {
@@ -790,7 +705,7 @@ public class SkylarkRepositoryContext
     } catch (IOException e) {
       env.getListener().post(w);
       if (allowFail) {
-        Dict<String, Object> dict = Dict.of(null, "success", false);
+        SkylarkDict<String, Object> dict = SkylarkDict.of(null, "success", false);
         return StructProvider.STRUCT.createStruct(dict, null);
       } else {
         throw new RepositoryFunctionException(e, Transience.TRANSIENT);
@@ -900,7 +815,7 @@ public class SkylarkRepositoryContext
     if (finalChecksum.getKeyType() == KeyType.SHA256) {
       out.put("sha256", finalChecksum.toString());
     }
-    return StructProvider.STRUCT.createStruct(Dict.copyOf(null, out.build()), null);
+    return StructProvider.STRUCT.createStruct(SkylarkDict.copyOf(null, out.build()), null);
   }
 
   private static ImmutableList<String> checkAllUrls(Iterable<?> urlList) throws EvalException {
@@ -1050,13 +965,13 @@ public class SkylarkRepositoryContext
    * authentication, adding those headers is enough; for other forms of authentication other
    * measures might be necessary.
    */
-  private static Map<URI, Map<String, String>> getAuthHeaders(Map<String, Dict<?, ?>> auth)
+  private static Map<URI, Map<String, String>> getAuthHeaders(Map<String, SkylarkDict<?, ?>> auth)
       throws RepositoryFunctionException, EvalException {
     ImmutableMap.Builder<URI, Map<String, String>> headers = new ImmutableMap.Builder<>();
-    for (Map.Entry<String, Dict<?, ?>> entry : auth.entrySet()) {
+    for (Map.Entry<String, SkylarkDict<?, ?>> entry : auth.entrySet()) {
       try {
         URL url = new URL(entry.getKey());
-        Dict<?, ?> authMap = entry.getValue();
+        SkylarkDict<?, ?> authMap = entry.getValue();
         if (authMap.containsKey("type")) {
           if ("basic".equals(authMap.get("type"))) {
             if (!authMap.containsKey("login") || !authMap.containsKey("password")) {
