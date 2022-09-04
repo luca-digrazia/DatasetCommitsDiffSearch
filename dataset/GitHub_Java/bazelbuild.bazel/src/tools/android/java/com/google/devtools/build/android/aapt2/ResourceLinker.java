@@ -72,7 +72,7 @@ import java.util.stream.Stream;
 public class ResourceLinker {
 
   private static final Predicate<String> IS_JAR = s -> s.endsWith(".jar");
-  private static final String PROTO_EXTENSION = "-pb.apk";
+  private static final String PROTO_EXTENSION = "pb-apk";
   private static final String BINARY_EXTENSION = "apk";
   private boolean debug;
   private static final Predicate<DirectoryEntry> IS_FLAT_FILE =
@@ -348,6 +348,27 @@ public class ResourceLinker {
     return fileName.substring(0, lastIndex).concat(".").concat(newExtension);
   }
 
+  private Path convertToBinary(ProtoApk apk) {
+    Path apkPath = apk.asApkPath();
+    try {
+      profiler.startTask("convertToBinary");
+      final Path outPath =
+          workingDirectory.resolveSibling(
+              replaceExtension(apkPath.getFileName().toString(), BINARY_EXTENSION));
+      logger.fine(
+          new AaptCommandBuilder(aapt2)
+              .add("convert")
+              .add("-o", outPath)
+              .add("--output-format", "binary")
+              .add(apkPath.toString())
+              .execute("Converting " + apkPath));
+      profiler.recordEndOf("convertToBinary");
+      return outPath;
+    } catch (IOException e) {
+      throw new LinkError(e);
+    }
+  }
+
   private ProtoApk linkProtoApk(
       CompiledResources compiled,
       Path rTxt,
@@ -550,7 +571,7 @@ public class ResourceLinker {
               .add("--stable-ids", resourceIds)
               .add("--manifest", manifest)
               .addRepeated("-I", StaticLibrary.toPathStrings(linkAgainst))
-              .add("-R", protoApk.asApkPath())
+              .add("-R", convertToBinary(protoApk))
               .add("-o", apk.toString())
               .execute(String.format("Re-linking %s", protoApkPath)));
       return combineApks(protoApkPath, apk, working);
