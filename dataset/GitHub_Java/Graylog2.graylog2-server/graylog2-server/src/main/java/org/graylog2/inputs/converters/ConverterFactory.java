@@ -45,14 +45,6 @@ public class ConverterFactory {
                 return new SyslogPriFacilityConverter(config);
             case IP_ANONYMIZER:
                 return new IPAnonymizerConverter(config);
-            case TOKENIZER:
-                return new TokenizerConverter(config);
-            case CSV:
-                return new CsvConverter(config);
-            case LOWERCASE:
-                return new LowercaseConverter(config);
-            case UPPERCASE:
-                return new UppercaseConverter(config);
             default:
                 throw new NoSuchConverterException();
         }

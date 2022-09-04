@@ -21,6 +21,8 @@
  */
 package org.graylog2.plugin.inputs;
 
+import com.google.common.collect.Maps;
+
 import java.util.Map;
 
 /**
@@ -35,11 +37,7 @@ public abstract class Converter {
         SPLIT_AND_COUNT,
         SYSLOG_PRI_LEVEL,
         SYSLOG_PRI_FACILITY,
-        TOKENIZER,
-        IP_ANONYMIZER,
-        CSV,
-        LOWERCASE,
-        UPPERCASE
+        IP_ANONYMIZER
     }
 
     private final Type type;
@@ -59,6 +57,5 @@ public abstract class Converter {
     }
 
     public abstract Object convert(String value);
-    public abstract boolean buildsMultipleFields();
 
 }
