@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,22 +13,20 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
 import smile.math.MathEx;
 
 /**
- * The "shifted" geometric distribution is a discrete probability distribution
- * of the number of failures before the first success, supported on the set
+ * The "shifted" geometric distribution is a discrete probability distribution of the
+ * number of failures before the first success, supported on the set
  * {0, 1, 2, 3, &hellip;}.
  * If the probability of success on each trial is p, then the probability that
  * the k-<i>th</i> trial (out of k trials) is the first success is
- * <pre>
- *     Pr(X = k) = (1 - p)<sup>k</sup> p
- * </pre>.
- *
+ * Pr(X = k) = (1 - p)<sup>k</sup> p.
+
  * @see GeometricDistribution
  *
  * @author Haifeng Li

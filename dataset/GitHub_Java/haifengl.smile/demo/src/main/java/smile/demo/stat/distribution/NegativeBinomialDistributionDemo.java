@@ -31,10 +31,9 @@ import javax.swing.JSlider;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
 
-import smile.plot.swing.Canvas;
-import smile.plot.swing.BarPlot;
-import smile.plot.swing.Histogram;
-import smile.plot.swing.Staircase;
+import smile.plot.PlotCanvas;
+import smile.plot.BarPlot;
+import smile.plot.Histogram;
 import smile.stat.distribution.NegativeBinomialDistribution;
 
 /**
@@ -45,9 +44,9 @@ import smile.stat.distribution.NegativeBinomialDistribution;
 public class NegativeBinomialDistributionDemo extends JPanel implements ChangeListener {
     private JPanel optionPane;
     private JPanel canvas;
-    private Canvas pdf;
-    private Canvas cdf;
-    private Canvas histogram;
+    private PlotCanvas pdf;
+    private PlotCanvas cdf;
+    private PlotCanvas histogram;
     private JSlider nSlider;
     private JSlider probSlider;
     private int n = 10;
@@ -97,34 +96,35 @@ public class NegativeBinomialDistributionDemo extends JPanel implements ChangeLi
 
         NegativeBinomialDistribution dist = new NegativeBinomialDistribution(n, prob);
 
-        double[] p = new double[50];
+        double[][] p = new double[50][2];
         double[][] q = new double[50][2];
         for (int i = 0; i < p.length; i++) {
-            p[i] = dist.p(i);
+            p[i][0] = i;
+            p[i][1] = dist.p(p[i][0]);
             q[i][0] = i;
-            q[i][1] = dist.cdf(i);
+            q[i][1] = dist.cdf(p[i][0]);
         }
 
         double[] lowerBound = {0.0, 0.0};
         double[] upperBound = {50.0, 1.0};
-        pdf = new Canvas(lowerBound, upperBound);
-        pdf.add(BarPlot.of(p));
+        pdf = new PlotCanvas(lowerBound, upperBound);
+        pdf.add(new BarPlot(p));
         pdf.setTitle("PDF");
-        canvas.add(pdf.panel());
+        canvas.add(pdf);
 
-        cdf = new Canvas(lowerBound, upperBound);
-        cdf.add(Staircase.of(q));
+        cdf = new PlotCanvas(lowerBound, upperBound);
+        cdf.staircase(q, Color.BLACK);
         cdf.setTitle("CDF");
-        canvas.add(cdf.panel());
+        canvas.add(cdf);
 
         int[] data = new int[500];
         for (int i = 0; i < data.length; i++) {
             data[i] = (int) dist.rand();
         }
 
-        histogram = Histogram.of(data, 20, true).canvas();
+        histogram = Histogram.plot(data, 20);
         histogram.setTitle("Histogram");
-        canvas.add(histogram.panel());
+        canvas.add(histogram);
     }
 
     @Override
@@ -137,19 +137,20 @@ public class NegativeBinomialDistributionDemo extends JPanel implements ChangeLi
 
             NegativeBinomialDistribution dist = new NegativeBinomialDistribution(n, prob);
 
-            double[] p = new double[50];
+            double[][] p = new double[50][2];
             double[][] q = new double[50][2];
             for (int i = 0; i < p.length; i++) {
-                p[i] = dist.p(i);
+                p[i][0] = i;
+                p[i][1] = dist.p(p[i][0]);
                 q[i][0] = i;
-                q[i][1] = dist.cdf(i);
+                q[i][1] = dist.cdf(p[i][0]);
             }
 
             pdf.clear();
-            pdf.add(BarPlot.of(p));
+            pdf.add(new BarPlot(p));
 
             cdf.clear();
-            cdf.add(Staircase.of(q));
+            cdf.staircase(q, Color.BLACK);
 
             int[] data = new int[500];
             for (int i = 0; i < data.length; i++) {
@@ -157,7 +158,7 @@ public class NegativeBinomialDistributionDemo extends JPanel implements ChangeLi
             }
 
             histogram.clear();
-            histogram.add(Histogram.of(data, 20, true));
+            histogram.histogram(data, 20, Color.BLUE);
             canvas.repaint();
         }
     }

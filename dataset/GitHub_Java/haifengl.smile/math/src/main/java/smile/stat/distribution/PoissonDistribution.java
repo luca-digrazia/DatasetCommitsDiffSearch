@@ -17,8 +17,9 @@
 
 package smile.stat.distribution;
 
-import smile.math.MathEx;
+import javafx.geometry.Pos;
 import smile.math.special.Gamma;
+import smile.math.MathEx;
 
 /**
  * Poisson distribution expresses the probability of a number of events

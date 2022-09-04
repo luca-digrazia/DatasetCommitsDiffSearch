@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,17 +13,17 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
 import smile.math.MathEx;
 
 /**
- * Univariate discrete distributions. Basically, this class adds common
- * distribution methods that accept integer argument beside float argument.
- * A quantile function is provided based on bisection searching.
- * Likelihood and log likelihood functions are also implemented here.
+ * This is the base class of univariate discrete distributions. Basically,
+ * this class adds common distribution methods that accept integer argument
+ * beside float argument. A quantile function is provided based on bisection
+ * searching. Likelihood and log likelihood functions are also implemented here.
  *
  * @author Haifeng Li
  */
@@ -94,10 +94,9 @@ public abstract class DiscreteDistribution extends AbstractDistribution {
     }
 
     /**
-     * Invertion of cdf by bisection numeric root finding of
-     * <code>cdf(x) = p</code> for discrete distribution.
-     * @return an integer <code>n</code> such that
-     *         <code>P(&lt;n) &le; p &le; P(&lt;n+1)</code>.
+     * Invertion of cdf by bisection numeric root finding of "cdf(x) = p"
+     * for discrete distribution.* Returns integer n such that
+     * P(<n) &le; p &le; P(<n+1).
      */
     protected double quantile(double p, int xmin, int xmax) {
         while (xmax - xmin > 1) {

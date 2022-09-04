@@ -19,8 +19,9 @@ package smile.stat.distribution;
 
 import java.util.Arrays;
 import java.util.stream.Collectors;
+import java.util.stream.DoubleStream;
+
 import smile.math.MathEx;
-import smile.util.IntSet;
 
 /**
  * An empirical distribution function or empirical cdf, is a cumulative
@@ -36,13 +37,21 @@ public class EmpiricalDistribution extends DiscreteDistribution {
     private static final long serialVersionUID = 2L;
 
     /**
-     * The probabilities for each x.
-     */
-    public final double[] p;
-    /**
      * The possible values of random variable.
      */
-    private IntSet x;
+    private int[] x;
+    /**
+     * Minimum value of x.
+     */
+    private int xMin;
+    /**
+     * Maximum value of x.
+     */
+    private int xMax;
+    /**
+     * Probabilities for each x.
+     */
+    private double[] p;
     /**
      * CDF at each x.
      */
@@ -57,23 +66,16 @@ public class EmpiricalDistribution extends DiscreteDistribution {
 
     /**
      * Constructor.
-     * @param prob the probabilities.
      */
     public EmpiricalDistribution(double[] prob) {
-        this(prob, IntSet.of(prob.length));
-    }
-
-    /**
-     * Constructor.
-     * @param prob the probabilities.
-     * @param x the values of random variable.
-     */
-    public EmpiricalDistribution(double[] prob, IntSet x) {
         if (prob.length == 0) {
             throw new IllegalArgumentException("Empty probability set.");
         }
 
-        this.x = x;
+        xMin = 0;
+        xMax = prob.length - 1;
+
+        x = new int[prob.length];
         p = new double[prob.length];
         cdf = new double[prob.length];
 
@@ -86,15 +88,15 @@ public class EmpiricalDistribution extends DiscreteDistribution {
                 throw new IllegalArgumentException("Invalid probability " + p[i]);
             }
 
+            x[i] = i;
             p[i] = prob[i];
 
             if (i > 0) {
                 cdf[i] = cdf[i - 1] + p[i];
             }
 
-            int xi = x.valueOf(i);
-            mean += xi * p[i];
-            mean2 += xi * xi * p[i];
+            mean += x[i] * p[i];
+            mean2 += x[i] * x[i] * p[i];
             entropy -= p[i] * MathEx.log2(p[i]);
         }
 
@@ -108,37 +110,44 @@ public class EmpiricalDistribution extends DiscreteDistribution {
 
     /**
      * Estimates the distribution.
-     * @param data the training data.
      */
-    public static EmpiricalDistribution fit(int[] data) {
-        return fit(data, IntSet.of(data));
-    }
-
-    /**
-     * Estimates the distribution. Sometimes, the data may not
-     * contain all possible values. In this case, the user should
-     * provide the value set.
-     * @param data the training data.
-     * @param x the value set.
-     */
-    public static EmpiricalDistribution fit(int[] data, IntSet x) {
+    public EmpiricalDistribution(int[] data) {
         if (data.length == 0) {
             throw new IllegalArgumentException("Empty dataset.");
         }
 
-        int k = x.size();
-        double[] p = new double[k];
+        xMin = MathEx.min(data);
+        xMax = MathEx.max(data);
 
-        for (int xi : data) {
-            p[x.indexOf(xi)]++;
+        int n = xMax - xMin + 1;
+        x = new int[n];
+        p = new double[n];
+        cdf = new double[n];
+
+        for (int i = 0; i < data.length; i++) {
+            p[data[i] - xMin]++;
         }
 
-        int n = data.length;
-        for (int i = 0; i < k; i++) {
-            p[i] /= n;
+        mean = 0.0;
+        double mean2 = 0.0;
+        entropy = 0.0;
+        for (int i = 0; i < n; i++) {
+            x[i] = xMin + i;
+            p[i] /= data.length;
+
+            if (i == 0) {
+                cdf[0] = p[0];
+            } else {
+                cdf[i] = cdf[i - 1] + p[i];
+            }
+
+            mean += x[i] * p[i];
+            mean2 += x[i] * x[i] * p[i];
+            entropy -= p[i] * MathEx.log2(p[i]);
         }
 
-        return new EmpiricalDistribution(p, x);
+        variance = mean2 - mean * mean;
+        sd = Math.sqrt(variance);
     }
 
     @Override
@@ -184,9 +193,9 @@ public class EmpiricalDistribution extends DiscreteDistribution {
         rU -= k;  /* rU becomes rU-[rU] */
 
         if (rU < q[k]) {
-            return x.valueOf(k);
+            return k;
         } else {
-            return x.valueOf(a[k]);
+            return a[k];
         }
     }
 
@@ -205,9 +214,9 @@ public class EmpiricalDistribution extends DiscreteDistribution {
             rU -= k;  /* rU becomes rU-[rU] */
 
             if (rU < q[k]) {
-                ans[i] = x.valueOf(k);
+                ans[i] = k;
             } else {
-                ans[i] = x.valueOf(a[k]);
+                ans[i] = a[k];
             }
         }
 
@@ -256,30 +265,30 @@ public class EmpiricalDistribution extends DiscreteDistribution {
 
     @Override
     public double p(int k) {
-        if (k < x.min || k > x.max) {
+        if (k < xMin || k > xMax) {
             return 0.0;
         } else {
-            return p[x.indexOf(k)];
+            return p[k - xMin];
         }
     }
 
     @Override
     public double logp(int k) {
-        if (k < x.min || k > x.max) {
+        if (k < xMin || k > xMax) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return Math.log(p[x.indexOf(k)]);
+            return Math.log(p[k - xMin]);
         }
     }
 
     @Override
     public double cdf(double k) {
-        if (k < x.min) {
+        if (k < xMin) {
             return 0.0;
-        } else if (k >= x.max) {
+        } else if (k >= xMax) {
             return 1.0;
         } else {
-            return cdf[x.indexOf((int) Math.floor(k))];
+            return cdf[(int) Math.floor(k - xMin)];
         }
     }
 
@@ -291,9 +300,9 @@ public class EmpiricalDistribution extends DiscreteDistribution {
 
         int k = Arrays.binarySearch(cdf, p);
         if (k < 0) {
-            return x.valueOf(-k - 1);
+            return x[-k - 1];
         } else {
-            return x.valueOf(k);
+            return x[k];
         }
     }
 }

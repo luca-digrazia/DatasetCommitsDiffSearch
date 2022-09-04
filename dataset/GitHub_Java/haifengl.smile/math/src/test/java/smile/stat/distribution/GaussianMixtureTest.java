@@ -65,7 +65,6 @@ public class GaussianMixtureTest {
 
         GaussianMixture mixture = GaussianMixture.fit(data);
         System.out.println(mixture);
-        assertEquals(3, mixture.size());
     }
 
     @Test

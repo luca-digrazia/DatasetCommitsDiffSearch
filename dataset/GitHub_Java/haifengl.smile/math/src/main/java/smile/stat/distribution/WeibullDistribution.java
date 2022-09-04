@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -27,10 +27,8 @@ import smile.math.special.Gamma;
  * the shape parameter. The distribution has two parameters: k &gt; 0 is the shape
  * parameter and &lambda; &gt; 0 is the scale parameter of the distribution.
  * The probability density function is
- * <pre>
- *     f(x;&lambda;,k) = k/&lambda; (x/&lambda;)<sup>k-1</sup>e<sup>-(x/&lambda;)<sup>k</sup></sup>
- * </pre>
- * for <code>x &ge; 0</code>.
+ * f(x;&lambda;,k) = k/&lambda; (x/&lambda;)<sup>k-1</sup>e<sup>-(x/&lambda;)<sup>k</sup></sup>
+ * for x &ge; 0.
  * <p>
  * The Weibull distribution is often used in the field of life data analysis
  * due to its flexibility - it can mimic the behavior of other statistical
