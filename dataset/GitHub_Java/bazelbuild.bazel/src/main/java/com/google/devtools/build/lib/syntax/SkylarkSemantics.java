@@ -132,8 +132,6 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean experimentalStarlarkConfigTransitions();
 
-  public abstract String experimentalTransitionWhitelistLocation();
-
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
 
   public abstract boolean incompatibleDepsetIsNotIterable();
@@ -143,6 +141,8 @@ public abstract class SkylarkSemantics {
   public abstract boolean incompatibleDisableDeprecatedAttrParams();
 
   public abstract boolean incompatibleDisableObjcProviderResources();
+
+  public abstract boolean incompatibleDisallowConflictingProviders();
 
   public abstract boolean incompatibleDisallowDataTransition();
 
@@ -157,6 +157,8 @@ public abstract class SkylarkSemantics {
   public abstract boolean incompatibleDisallowLoadLabelsToCrossPackageBoundaries();
 
   public abstract boolean incompatibleDisallowOldStyleArgsAdd();
+
+  public abstract boolean incompatibleDisallowSlashOperator();
 
   public abstract boolean incompatibleExpandDirectories();
 
@@ -173,6 +175,8 @@ public abstract class SkylarkSemantics {
   public abstract boolean incompatibleNoTargetOutputGroup();
 
   public abstract boolean incompatibleNoTransitiveLoads();
+
+  public abstract boolean incompatibleRangeType();
 
   public abstract boolean incompatibleRemoveNativeMavenJar();
 
@@ -207,12 +211,12 @@ public abstract class SkylarkSemantics {
           .experimentalRemapMainRepo(false)
           .experimentalPlatformsApi(false)
           .experimentalStarlarkConfigTransitions(false)
-          .experimentalTransitionWhitelistLocation("")
           .incompatibleBzlDisallowLoadAfterStatement(false)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
           .incompatibleDisableDeprecatedAttrParams(false)
           .incompatibleDisableObjcProviderResources(false)
+          .incompatibleDisallowConflictingProviders(true)
           .incompatibleDisallowDataTransition(false)
           .incompatibleDisallowDictPlus(false)
           .incompatibleDisallowFileType(false)
@@ -220,6 +224,7 @@ public abstract class SkylarkSemantics {
           .incompatibleDisallowLegacyJavaInfo(false)
           .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(false)
           .incompatibleDisallowOldStyleArgsAdd(false)
+          .incompatibleDisallowSlashOperator(true)
           .incompatibleExpandDirectories(false)
           .incompatibleGenerateJavaCommonSourceJar(false)
           .incompatibleNewActionsApi(false)
@@ -228,6 +233,7 @@ public abstract class SkylarkSemantics {
           .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
           .incompatibleNoTransitiveLoads(false)
+          .incompatibleRangeType(true)
           .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRequireFeatureConfigurationForPic(false)
           .incompatibleStricArgumentOrdering(false)
@@ -256,8 +262,6 @@ public abstract class SkylarkSemantics {
 
     public abstract Builder experimentalStarlarkConfigTransitions(boolean value);
 
-    public abstract Builder experimentalTransitionWhitelistLocation(String value);
-
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
     public abstract Builder incompatibleDepsetIsNotIterable(boolean value);
@@ -269,6 +273,8 @@ public abstract class SkylarkSemantics {
     public abstract Builder incompatibleRequireFeatureConfigurationForPic(boolean value);
 
     public abstract Builder incompatibleDisableObjcProviderResources(boolean value);
+
+    public abstract Builder incompatibleDisallowConflictingProviders(boolean value);
 
     public abstract Builder incompatibleDisallowDataTransition(boolean value);
 
@@ -283,6 +289,8 @@ public abstract class SkylarkSemantics {
     public abstract Builder incompatibleDisallowLoadLabelsToCrossPackageBoundaries(boolean value);
 
     public abstract Builder incompatibleDisallowOldStyleArgsAdd(boolean value);
+
+    public abstract Builder incompatibleDisallowSlashOperator(boolean value);
 
     public abstract Builder incompatibleExpandDirectories(boolean value);
 
@@ -300,6 +308,8 @@ public abstract class SkylarkSemantics {
 
     public abstract Builder incompatibleNoTransitiveLoads(boolean value);
 
+    public abstract Builder incompatibleRangeType(boolean value);
+
     public abstract Builder incompatibleRemoveNativeMavenJar(boolean value);
 
     public abstract Builder incompatibleStricArgumentOrdering(boolean value);
@@ -311,4 +321,3 @@ public abstract class SkylarkSemantics {
     public abstract SkylarkSemantics build();
   }
 }
-

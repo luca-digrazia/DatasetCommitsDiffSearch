@@ -145,18 +145,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean experimentalStarlarkConfigTransitions;
 
   @Option(
-      name = "experimental_transition_whitelist_location",
-      defaultValue = "",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help =
-          "If not empty, turns on whitelist checking for starlark-defined split transitions "
-              + "using package groups from the specified location. If empty, starlark-defined split"
-              + "transitions are enabled in all locations.")
-  public String experimentalTransitionWhitelistLocation;
-
-  @Option(
     name = "incompatible_bzl_disallow_load_after_statement",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -242,6 +230,21 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
     help = "If set to true, disallow use of deprecated resource fields on the Objc provider."
   )
   public boolean incompatibleDisableObjcProviderResources;
+
+  @Option(
+      name = "incompatible_disallow_conflicting_providers",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+          OptionMetadataTag.INCOMPATIBLE_CHANGE,
+          OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, disallow rule implementation functions from returning multiple "
+          + "instances of the same type of provider. (If false, only the last in the list will be "
+          + "used.)"
+  )
+  public boolean incompatibleDisallowConflictingProviders;
 
   @Option(
       name = "incompatible_disallow_data_transition",
@@ -332,6 +335,18 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       help = "If set to true, java_common.compile will always generate an output source jar."
   )
   public boolean incompatibleGenerateJavaCommonSourceJar;
+
+  @Option(
+      name = "incompatible_disallow_slash_operator",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, the `/` operator is disabled. Use `//` for integer division.")
+  public boolean incompatibleDisallowSlashOperator;
 
   /** Controls legacy arguments to ctx.actions.Args#add. */
   @Option(
@@ -446,6 +461,19 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleNoTransitiveLoads;
 
   @Option(
+      name = "incompatible_range_type",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, range() will use the 'range' type instead of 'list'."
+  )
+  public boolean incompatibleRangeType;
+
+  @Option(
       name = "incompatible_remove_native_maven_jar",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -496,7 +524,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   )
   public boolean internalSkylarkFlagTestCanary;
 
-
   /** Constructs a {@link SkylarkSemantics} object corresponding to this set of option values. */
   public SkylarkSemantics toSkylarkSemantics() {
     return SkylarkSemantics.builder()
@@ -510,12 +537,12 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
             experimentalJavaCommonCreateProviderEnabledPackages)
         .experimentalPlatformsApi(experimentalPlatformsApi)
         .experimentalStarlarkConfigTransitions(experimentalStarlarkConfigTransitions)
-        .experimentalTransitionWhitelistLocation(experimentalTransitionWhitelistLocation)
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
         .incompatibleDisableDeprecatedAttrParams(incompatibleDisableDeprecatedAttrParams)
         .incompatibleDisableObjcProviderResources(incompatibleDisableObjcProviderResources)
+        .incompatibleDisallowConflictingProviders(incompatibleDisallowConflictingProviders)
         .incompatibleDisallowDataTransition(incompatibleDisallowDataTransition)
         .incompatibleDisallowDictPlus(incompatibleDisallowDictPlus)
         .incompatibleDisallowFileType(incompatibleDisallowFileType)
@@ -524,6 +551,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(
             incompatibleDisallowLoadLabelsToCrossPackageBoundaries)
         .incompatibleDisallowOldStyleArgsAdd(incompatibleDisallowOldStyleArgsAdd)
+        .incompatibleDisallowSlashOperator(incompatibleDisallowSlashOperator)
         .incompatibleExpandDirectories(incompatibleExpandDirectories)
         .incompatibleGenerateJavaCommonSourceJar(incompatibleGenerateJavaCommonSourceJar)
         .incompatibleNewActionsApi(incompatibleNewActionsApi)
@@ -532,6 +560,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleNoSupportToolsInActionInputs(incompatibleNoSupportToolsInActionInputs)
         .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
         .incompatibleNoTransitiveLoads(incompatibleNoTransitiveLoads)
+        .incompatibleRangeType(incompatibleRangeType)
         .incompatibleRemoveNativeMavenJar(incompatibleRemoveNativeMavenJar)
         .incompatibleRequireFeatureConfigurationForPic(requireFeatureConfigurationForPic)
         .incompatibleStricArgumentOrdering(incompatibleStricArgumentOrdering)
@@ -540,4 +569,3 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .build();
   }
 }
-
