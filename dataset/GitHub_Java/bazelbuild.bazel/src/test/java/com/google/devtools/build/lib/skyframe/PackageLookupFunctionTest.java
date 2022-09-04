@@ -444,15 +444,17 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
       return params;
     }
 
-    private final String repositoryPath;
-    private final String packagePath;
-    private final String expectedCorrectedPackageIdentifier;
+    private String description;
+    private String repositoryPath;
+    private String packagePath;
+    private String expectedCorrectedPackageIdentifier;
 
     public CorrectedLocalRepositoryTest(
-        String unusedDescription,
+        String description,
         String repositoryPath,
         String packagePath,
         String expectedCorrectedPackageIdentifier) {
+      this.description = description;
       this.repositoryPath = repositoryPath;
       this.packagePath = packagePath;
       this.expectedCorrectedPackageIdentifier = expectedCorrectedPackageIdentifier;
@@ -465,6 +467,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
 
     @Test
     public void testCorrectPackageDetection_relativePath() throws Exception {
+      String fullPackagePath = packagePath + "/BUILD";
       scratch.overwriteFile(
           "WORKSPACE", "local_repository(name='local', path='" + repositoryPath + "')");
       scratch.file(PathFragment.create(repositoryPath).getRelative("WORKSPACE").getPathString());
@@ -492,6 +495,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
 
     @Test
     public void testCorrectPackageDetection_absolutePath() throws Exception {
+      String fullPackagePath = packagePath + "/BUILD";
       scratch.overwriteFile(
           "WORKSPACE",
           "local_repository(name='local', path=__workspace_dir__ + '/" + repositoryPath + "')");
