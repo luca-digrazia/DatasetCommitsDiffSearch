@@ -106,9 +106,7 @@ public class EndpointIndexer {
                         AnnotationInstance formParam = anns.get(QrsDotNames.FORM_PARAM);
                         ParameterType type;
                         if (moreThanOne(pathParam, queryParam, headerParam, formParam)) {
-                            throw new RuntimeException(
-                                    "Cannot have more than one of @PathParam, @QueryParam, @HeaderParam, @FormParam on "
-                                            + info);
+                            throw new RuntimeException("Cannot have more than one of @PathParam, @QueryParam, @HeaderParam, @FormParam on " + info);
                         } else if (pathParam != null) {
                             name = pathParam.value().asString();
                             type = ParameterType.PATH;
@@ -178,8 +176,8 @@ public class EndpointIndexer {
     private static boolean moreThanOne(AnnotationInstance... annotations) {
         boolean oneNonNull = false;
         for (AnnotationInstance annotation : annotations) {
-            if (annotation != null) {
-                if (oneNonNull)
+            if(annotation != null) {
+                if(oneNonNull)
                     return true;
                 oneNonNull = true;
             }
