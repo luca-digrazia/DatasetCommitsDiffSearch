@@ -1,5 +1,7 @@
 package io.quarkus.oidc.runtime;
 
+import java.util.concurrent.Executor;
+
 import javax.annotation.PostConstruct;
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.event.Event;
@@ -73,26 +75,12 @@ public class DefaultTenantConfigResolver {
     }
 
     Uni<TenantConfigContext> resolveContext(RoutingContext context) {
-        Uni<TenantConfigContext> uniTenantContext = getDynamicTenantContext(context);
-        if (uniTenantContext != null) {
-            return uniTenantContext;
-        }
-        TenantConfigContext tenantContext = getStaticTenantContext(context);
-        if (tenantContext != null && !tenantContext.ready) {
+        Uni<TenantConfigContext> tenantContext = getDynamicTenantContext(context);
 
-            // check if it the connection has already been created            
-            TenantConfigContext readyTenantContext = tenantConfigBean.getDynamicTenantsConfig()
-                    .get(tenantContext.oidcConfig.tenantId.get());
-            if (readyTenantContext == null) {
-                LOG.debugf("Tenant '%s' is not initialized yet, trying to create OIDC connection now",
-                        tenantContext.oidcConfig.tenantId.get());
-                return tenantConfigBean.getTenantConfigContextFactory().apply(tenantContext.oidcConfig);
-            } else {
-                tenantContext = readyTenantContext;
-            }
+        if (tenantContext == null) {
+            tenantContext = Uni.createFrom().item(getStaticTenantContext(context));
         }
-
-        return Uni.createFrom().item(tenantContext);
+        return tenantContext;
     }
 
     private TenantConfigContext getStaticTenantContext(RoutingContext context) {
@@ -114,9 +102,7 @@ public class DefaultTenantConfigResolver {
         TenantConfigContext configContext = tenantId != null ? tenantConfigBean.getStaticTenantsConfig().get(tenantId) : null;
         if (configContext == null) {
             if (tenantId != null && !tenantId.isEmpty()) {
-                LOG.debugf(
-                        "Registered TenantResolver has not provided the configuration for tenant '%s', using the default tenant",
-                        tenantId);
+                LOG.debugf("No configuration with a tenant id '%s' has been found, using the default configuration");
             }
             configContext = tenantConfigBean.getDefaultTenant();
         }
@@ -177,4 +163,7 @@ public class DefaultTenantConfigResolver {
         return enableHttpForwardedPrefix;
     }
 
+    public Executor getBlockingExecutor() {
+        return tenantConfigBean.getBlockingExecutor();
+    }
 }
