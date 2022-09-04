@@ -18,16 +18,14 @@ import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.LocationExpander.LocationFunction;
-import com.google.devtools.build.lib.analysis.LocationExpander.Options;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import java.util.Collection;
 import java.util.Map;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -49,59 +47,67 @@ import javax.annotation.Nullable;
  */
 final class LocationTemplateContext implements TemplateContext {
   private final TemplateContext delegate;
-  private final Function<String, String> locationFunction;
-  private final Function<String, String> locationsFunction;
+  private final ImmutableMap<String, LocationFunction> functions;
+  private final ImmutableMap<RepositoryName, RepositoryName> repositoryMapping;
+  private final boolean windowsPath;
 
   private LocationTemplateContext(
       TemplateContext delegate,
       Label root,
       Supplier<Map<Label, Collection<Artifact>>> locationMap,
-      boolean execPaths) {
+      boolean execPaths,
+      boolean legacyExternalRunfiles,
+      ImmutableMap<RepositoryName, RepositoryName> repositoryMapping,
+      boolean windowsPath) {
     this.delegate = delegate;
-    this.locationFunction = new LocationFunction(root, locationMap, execPaths, false);
-    this.locationsFunction = new LocationFunction(root, locationMap, execPaths, true);
+    this.functions =
+        LocationExpander.allLocationFunctions(root, locationMap, execPaths, legacyExternalRunfiles);
+    this.repositoryMapping = repositoryMapping;
+    this.windowsPath = windowsPath;
   }
 
-  private LocationTemplateContext(
+  public LocationTemplateContext(
       TemplateContext delegate,
       RuleContext ruleContext,
       @Nullable ImmutableMap<Label, ImmutableCollection<Artifact>> labelMap,
-      ImmutableSet<Options> options) {
+      boolean execPaths,
+      boolean allowData,
+      boolean windowsPath) {
     this(
         delegate,
         ruleContext.getLabel(),
         // Use a memoizing supplier to avoid eagerly building the location map.
         Suppliers.memoize(
-            () -> LocationExpander.buildLocationMap(
-                ruleContext, labelMap, options.contains(Options.ALLOW_DATA))),
-        options.contains(Options.EXEC_PATHS));
-  }
-
-  public LocationTemplateContext(
-      TemplateContext delegate,
-      RuleContext ruleContext,
-      @Nullable ImmutableMap<Label, ImmutableCollection<Artifact>> labelMap,
-      LocationExpander.Options... options) {
-    this(delegate, ruleContext, labelMap, ImmutableSet.copyOf(options));
-  }
-
-  public LocationTemplateContext(
-      TemplateContext delegate, RuleContext ruleContext, LocationExpander.Options... options) {
-    this(delegate, ruleContext, null, ImmutableSet.copyOf(options));
+            () -> LocationExpander.buildLocationMap(ruleContext, labelMap, allowData)),
+        execPaths,
+        ruleContext.getConfiguration().legacyExternalRunfiles(),
+        ruleContext.getRule().getPackage().getRepositoryMapping(),
+        windowsPath);
   }
 
   @Override
   public String lookupVariable(String name) throws ExpansionException {
-    return delegate.lookupVariable(name);
+    String val = delegate.lookupVariable(name);
+    if (windowsPath) {
+      val = val.replace('/', '\\');
+    }
+    return val;
   }
 
   @Override
   public String lookupFunction(String name, String param) throws ExpansionException {
+    String val = lookupFunctionImpl(name, param);
+    if (windowsPath) {
+      val = val.replace('/', '\\');
+    }
+    return val;
+  }
+
+  private String lookupFunctionImpl(String name, String param) throws ExpansionException {
     try {
-      if ("location".equals(name)) {
-        return locationFunction.apply(param);
-      } else if ("locations".equals(name)) {
-        return locationsFunction.apply(param);
+      LocationFunction f = functions.get(name);
+      if (f != null) {
+        return f.apply(param, repositoryMapping);
       }
     } catch (IllegalStateException e) {
       throw new ExpansionException(e.getMessage(), e);
