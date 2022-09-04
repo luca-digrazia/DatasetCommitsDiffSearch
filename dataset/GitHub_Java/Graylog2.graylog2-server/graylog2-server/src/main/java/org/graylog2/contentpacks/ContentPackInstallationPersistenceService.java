@@ -26,7 +26,7 @@ import org.graylog2.contentpacks.model.ContentPackInstallation;
 import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.entities.NativeEntityDescriptor;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.rest.models.system.contentpacks.responses.ContentPackMetadata;
+import org.graylog2.rest.models.system.contenpacks.responses.ContentPackMetadata;
 import org.mongojack.DBCursor;
 import org.mongojack.DBQuery;
 import org.mongojack.JacksonDBCollection;
@@ -34,6 +34,7 @@ import org.mongojack.WriteResult;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Locale;
@@ -142,11 +143,14 @@ public class ContentPackInstallationPersistenceService {
     }
 
     public long countInstallationOfEntityByIdAndFoundOnSystem(ModelId entityId) {
-        final DBQuery.Query query = DBQuery.elemMatch(ContentPackInstallation.FIELD_ENTITIES,
-                DBQuery.and(
-                        DBQuery.is(NativeEntityDescriptor.FIELD_ENTITY_FOUND_ON_SYSTEM, true),
-                        DBQuery.is(NativeEntityDescriptor.FIELD_META_ID, entityId.id())));
+        final String foundOnSystemField = String.format(Locale.ROOT, "%s.%s", ContentPackInstallation.FIELD_ENTITIES, NativeEntityDescriptor.FIELD_ENTITY_FOUND_ON_SYSTEM);
 
-        return dbCollection.getCount(query);
+        DBCursor<ContentPackInstallation> dbInstallations = dbCollection.find(DBQuery.is(foundOnSystemField, true));
+        ImmutableSet<ContentPackInstallation> installations =  ImmutableSet.copyOf((Iterator<ContentPackInstallation>) dbInstallations);
+        return installations.stream().map(ContentPackInstallation::entities)
+                .flatMap(Collection::stream)
+                .filter(nativeEntityDescriptor -> nativeEntityDescriptor.id().toString().matches(entityId.toString()) &&
+                        nativeEntityDescriptor.foundOnSystem() != null && nativeEntityDescriptor.foundOnSystem())
+                .count();
     }
 }

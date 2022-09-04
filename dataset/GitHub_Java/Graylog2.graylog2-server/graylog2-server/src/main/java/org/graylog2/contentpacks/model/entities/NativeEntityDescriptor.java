@@ -43,7 +43,8 @@ public abstract class NativeEntityDescriptor implements Identified, Typed {
     public abstract String title();
 
     @JsonProperty(FIELD_ENTITY_FOUND_ON_SYSTEM)
-    public abstract boolean foundOnSystem();
+    @Nullable
+    public abstract Boolean foundOnSystem();
 
     public abstract Builder toBuilder();
 
@@ -57,22 +58,22 @@ public abstract class NativeEntityDescriptor implements Identified, Typed {
     }
 
     public static NativeEntityDescriptor create(ModelId contentPackEntityId, ModelId id, ModelType type, String title,
-                                                boolean foundOnSystem) {
+                                                Boolean foundOnServer) {
         return builder()
                 .contentPackEntityId(contentPackEntityId)
                 .id(id)
                 .title(title)
                 .type(type)
-                .foundOnSystem(foundOnSystem)
+                .foundOnSystem(foundOnServer)
                 .build();
     }
 
     /**
-     * Shortcut for {@link #create(String, String, ModelType, String, boolean)}
+     * Shortcut for {@link #create(String, String, ModelType, String, Boolean)}
      */
     public static NativeEntityDescriptor create(String contentPackEntityId, String nativeId, ModelType type, String title,
-                                                boolean foundOnSystem) {
-        return create(ModelId.of(contentPackEntityId), ModelId.of(nativeId), type, title, foundOnSystem);
+                                                Boolean foundOnServer) {
+        return create(ModelId.of(contentPackEntityId), ModelId.of(nativeId), type, title, foundOnServer);
     }
 
     public static NativeEntityDescriptor create(String contentPackEntityId, String nativeId, ModelType type, String title) {
@@ -80,8 +81,8 @@ public abstract class NativeEntityDescriptor implements Identified, Typed {
     }
 
     public static NativeEntityDescriptor create(ModelId contentPackEntityId, String nativeId, ModelType type, String title,
-                                                boolean foundOnSystem) {
-        return create(contentPackEntityId, ModelId.of(nativeId), type, title, foundOnSystem);
+                                                Boolean foundOnServer) {
+        return create(contentPackEntityId, ModelId.of(nativeId), type, title, foundOnServer);
     }
 
     public static NativeEntityDescriptor create(ModelId contentPackEntityId, String nativeId, ModelType type, String title) {
@@ -102,7 +103,7 @@ public abstract class NativeEntityDescriptor implements Identified, Typed {
         abstract Builder title(String title);
 
         @JsonProperty(FIELD_ENTITY_FOUND_ON_SYSTEM)
-        public abstract Builder foundOnSystem(boolean foundOnSystem);
+        public abstract Builder foundOnSystem(Boolean foundOnServer);
 
         public abstract NativeEntityDescriptor build();
     }
