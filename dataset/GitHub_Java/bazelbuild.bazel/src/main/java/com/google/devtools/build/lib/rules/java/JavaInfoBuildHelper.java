@@ -73,7 +73,7 @@ final class JavaInfoBuildHelper {
    * @param compileTimeDeps compile time dependencies that were used to create the output jar
    * @param runtimeDeps runtime dependencies that are needed for this library
    * @param exports libraries to make available for users of this library. <a
-   *     href="https://docs.bazel.build/versions/main/be/java.html#java_library"
+   *     href="https://docs.bazel.build/versions/master/be/java.html#java_library"
    *     target="_top">java_library.exports</a>
    * @param exportedPlugins A list of exported plugins.
    * @param nativeLibraries CC library dependencies that are needed for this library
@@ -252,6 +252,7 @@ final class JavaInfoBuildHelper {
       List<String> javacOpts,
       List<JavaInfo> deps,
       List<JavaInfo> runtimeDeps,
+      List<JavaInfo> experimentalLocalCompileTimeDeps,
       List<JavaInfo> exports,
       List<JavaPluginInfo> plugins,
       List<JavaPluginInfo> exportedPlugins,
@@ -305,6 +306,12 @@ final class JavaInfoBuildHelper {
     helper.setPlugins(pluginInfo);
     helper.setNeverlink(neverlink);
 
+    NestedSet<Artifact> localCompileTimeDeps =
+        JavaCompilationArgsProvider.merge(
+                streamProviders(experimentalLocalCompileTimeDeps, JavaCompilationArgsProvider.class)
+                    .collect(toImmutableList()))
+            .getTransitiveCompileTimeJars();
+
     JavaRuleOutputJarsProvider.Builder outputJarsBuilder = JavaRuleOutputJarsProvider.builder();
 
     if (outputSourceJar == null) {
@@ -323,7 +330,8 @@ final class JavaInfoBuildHelper {
             // Include JavaGenJarsProviders from both deps and exports in the JavaGenJarsProvider
             // added to javaInfoBuilder for this target.
             JavaInfo.fetchProvidersFromList(concat(deps, exports), JavaGenJarsProvider.class),
-            ImmutableList.copyOf(annotationProcessorAdditionalInputs));
+            ImmutableList.copyOf(annotationProcessorAdditionalInputs),
+            localCompileTimeDeps);
 
     JavaCompilationArgsProvider javaCompilationArgsProvider =
         helper.buildCompilationArgsProvider(artifacts, true, neverlink);
