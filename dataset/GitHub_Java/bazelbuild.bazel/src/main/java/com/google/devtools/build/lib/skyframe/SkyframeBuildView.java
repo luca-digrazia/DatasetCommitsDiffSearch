@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -33,10 +34,12 @@ import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictEx
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.analysis.AnalysisFailureEvent;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
+import com.google.devtools.build.lib.analysis.BuildView;
 import com.google.devtools.build.lib.analysis.CachingAnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ConfiguredTargetFactory;
+import com.google.devtools.build.lib.analysis.LegacyAnalysisFailureEvent;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
@@ -48,7 +51,6 @@ import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
-import com.google.devtools.build.lib.causes.LoadingFailedCause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
@@ -74,12 +76,12 @@ import com.google.devtools.build.skyframe.EvaluationProgressReceiver;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Supplier;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -88,6 +90,8 @@ import javax.annotation.Nullable;
  * <p>Covers enough functionality to work as a substitute for {@code BuildView#configureTargets}.
  */
 public final class SkyframeBuildView {
+  private static final Logger logger = Logger.getLogger(BuildView.class.getName());
+
   private final ConfiguredTargetFactory factory;
   private final ArtifactFactory artifactFactory;
   private final SkyframeExecutor skyframeExecutor;
@@ -328,34 +332,26 @@ public final class SkyframeBuildView {
       skyframeExecutor.getCyclesReporter().reportCycles(errorInfo.getCycleInfo(), errorKey,
           eventHandler);
       Exception cause = errorInfo.getException();
+      Label analysisRootCause = null;
       BuildEventId configuration = null;
       Iterable<Cause> rootCauses;
       if (cause instanceof ConfiguredValueCreationException) {
         ConfiguredValueCreationException ctCause = (ConfiguredValueCreationException) cause;
-        // Previously, the nested set was de-duplicating loading root cause labels. Now that we
-        // track Cause instances including a message, we get one event per label and message. In
-        // order to keep backwards compatibility, we de-duplicate root cause labels here.
-        // TODO(ulfjack): Remove this code once we've migrated to the BEP.
-        Set<Label> loadingRootCauses = new HashSet<>();
-        for (Cause rootCause : ctCause.getRootCauses()) {
-          if (rootCause instanceof LoadingFailedCause) {
-            hasLoadingError = true;
-            loadingRootCauses.add(rootCause.getLabel());
-          }
+        for (Label rootCause : ctCause.getRootCauses()) {
+          hasLoadingError = true;
+          eventBus.post(new LoadingFailureEvent(topLevelLabel, rootCause));
         }
-        for (Label loadingRootCause : loadingRootCauses) {
-          // This event is only for backwards compatibility with the old event protocol. Remove
-          // once we've migrated to the build event protocol.
-          eventBus.post(new LoadingFailureEvent(topLevelLabel, loadingRootCause));
-        }
-        rootCauses = ctCause.getRootCauses();
+        analysisRootCause = ctCause.getAnalysisRootCause();
+        rootCauses = analysisRootCause != null
+            ? ImmutableList.of(new LabelCause(analysisRootCause))
+            : ImmutableList.copyOf(Iterables.transform(ctCause.getRootCauses(), LabelCause::new));
         configuration = ctCause.getConfiguration();
       } else if (!Iterables.isEmpty(errorInfo.getCycleInfo())) {
-        Label analysisRootCause = maybeGetConfiguredTargetCycleCulprit(
+        analysisRootCause = maybeGetConfiguredTargetCycleCulprit(
             topLevelLabel, errorInfo.getCycleInfo());
+        // TODO(ulfjack): Report the dependency cycle.
         rootCauses = analysisRootCause != null
-            ? ImmutableList.of(new LabelCause(analysisRootCause, "Dependency cycle"))
-            // TODO(ulfjack): We need to report the dependency cycle here. How?
+            ? ImmutableList.of(new LabelCause(analysisRootCause))
             : ImmutableList.of();
       } else if (cause instanceof ActionConflictException) {
         ((ActionConflictException) cause).reportTo(eventHandler);
@@ -371,6 +367,9 @@ public final class SkyframeBuildView {
       ConfiguredTargetKey configuredTargetKey =
           ConfiguredTargetKey.of(
               topLevelLabel, label.getConfigurationKey(), label.isHostConfiguration());
+      if (analysisRootCause != null) {
+        eventBus.post(new LegacyAnalysisFailureEvent(configuredTargetKey, analysisRootCause));
+      }
       eventBus.post(new AnalysisFailureEvent(configuredTargetKey, configuration, rootCauses));
     }
 
@@ -674,14 +673,12 @@ public final class SkyframeBuildView {
     }
 
     @Override
-    public void evaluated(
-        SkyKey skyKey,
-        Supplier<EvaluationSuccessState> evaluationSuccessState,
+    public void evaluated(SkyKey skyKey, Supplier<SkyValue> skyValueSupplier,
         EvaluationState state) {
       if (skyKey.functionName().equals(SkyFunctions.CONFIGURED_TARGET)) {
         switch (state) {
           case BUILT:
-            if (evaluationSuccessState.get().succeeded()) {
+            if (skyValueSupplier.get() != null) {
               evaluatedConfiguredTargets.add(skyKey);
               // During multithreaded operation, this is only set to true, so no concurrency issues.
               someConfiguredTargetEvaluated = true;

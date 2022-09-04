@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.runtime;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.HashMultimap;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
@@ -29,8 +28,8 @@ import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.AliasProvider;
-import com.google.devtools.build.lib.analysis.AnalysisFailureEvent;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.LegacyAnalysisFailureEvent;
 import com.google.devtools.build.lib.analysis.TargetCompleteEvent;
 import com.google.devtools.build.lib.analysis.test.TestProvider;
 import com.google.devtools.build.lib.analysis.test.TestResult;
@@ -91,7 +90,7 @@ public class AggregatingTestListener {
     // Add all target runs to the map, assuming 1:1 status artifact <-> result.
     synchronized (summaryLock) {
       for (ConfiguredTarget target : event.getTestTargets()) {
-        ImmutableList<Artifact.DerivedArtifact> statusArtifacts =
+        Iterable<Artifact> statusArtifacts =
             target.getProvider(TestProvider.class).getTestParams().getTestStatusArtifacts();
         Preconditions.checkState(
             remainingRuns.putAll(asKey(target), statusArtifacts),
@@ -208,7 +207,7 @@ public class AggregatingTestListener {
   }
 
   @Subscribe
-  public void analysisFailure(AnalysisFailureEvent event) {
+  public void analysisFailure(LegacyAnalysisFailureEvent event) {
     targetFailure(event.getFailedTarget());
   }
 
