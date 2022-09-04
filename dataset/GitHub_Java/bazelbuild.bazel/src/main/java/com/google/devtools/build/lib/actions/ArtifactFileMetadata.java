@@ -114,7 +114,7 @@ public abstract class ArtifactFileMetadata {
     fp.addBoolean(isFile());
     if (isFile()) {
       fp.addLong(getSize());
-      fp.addDigestedBytes(getDigest());
+      fp.addBytes(getDigest());
     }
     return fp.getFingerprint();
   }
