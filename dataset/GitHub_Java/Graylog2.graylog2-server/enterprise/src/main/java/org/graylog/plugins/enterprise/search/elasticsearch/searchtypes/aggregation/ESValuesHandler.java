@@ -1,6 +1,5 @@
 package org.graylog.plugins.enterprise.search.elasticsearch.searchtypes.aggregation;
 
-import io.searchbox.core.SearchResult;
 import io.searchbox.core.search.aggregation.Aggregation;
 import io.searchbox.core.search.aggregation.MetricAggregation;
 import io.searchbox.core.search.aggregation.TermsAggregation;
@@ -16,7 +15,6 @@ import org.jooq.lambda.tuple.Tuple2;
 import javax.annotation.Nonnull;
 import javax.inject.Inject;
 import java.util.List;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class ESValuesHandler implements ESAggregationSpecHandler<ValuesGroup, TermsAggregation> {
@@ -29,23 +27,20 @@ public class ESValuesHandler implements ESAggregationSpecHandler<ValuesGroup, Te
 
     @Nonnull
     @Override
-    public Optional<AggregationBuilder> doCreateAggregation(String name,
-                                                            ValuesGroup aggregationSpec,
-                                                            ESAggregation searchTypeHandler,
-                                                            ESGeneratedQueryContext queryContext) {
+    public AggregationBuilder doCreateAggregation(String name,
+                                                  ValuesGroup aggregationSpec,
+                                                  ESAggregation searchTypeHandler,
+                                                  ESGeneratedQueryContext queryContext) {
         final TermsAggregationBuilder terms = AggregationBuilders.terms(name)
                 .field(aggregationSpec.field());
 
         queryContext.recordAggregationType(aggregationSpec, name, TermsAggregation.class);
 
-        return Optional.of(StreamEx.of(aggregationSpec.subAggregations().iterator())
+        return StreamEx.of(aggregationSpec.subAggregations().iterator())
                 .map(spec -> searchTypeHandler
                         .handlerForType(spec.type())
                         .createAggregation(searchTypeHandler.nextName(), spec, searchTypeHandler, queryContext))
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .reduce(terms, AggregationBuilder::subAggregation)
-        );
+                .reduce(terms, AggregationBuilder::subAggregation);
     }
 
     @Override
@@ -55,13 +50,14 @@ public class ESValuesHandler implements ESAggregationSpecHandler<ValuesGroup, Te
     }
 
     @Override
-    public ValuesGroup.Result doHandleResult(ValuesGroup aggregationSpec, SearchResult queryResult, TermsAggregation termsAggregation, ESAggregation searchTypeHandler, ESGeneratedQueryContext esGeneratedQueryContext) {
+    public ValuesGroup.Result doHandleResult(ValuesGroup aggregationSpec, TermsAggregation termsAggregation, ESAggregation searchTypeHandler, ESGeneratedQueryContext esGeneratedQueryContext) {
         final List<ValuesGroup.Bucket> buckets = termsAggregation.getBuckets().stream()
                 .map(bucket -> {
                     return ValuesGroup.Bucket.builder()
                             .key(bucket.getKey())
-                            .metrics(subAggregationConverter.convert(aggregationSpec.metrics(), searchTypeHandler, esGeneratedQueryContext, queryResult, bucket))
-                            .groups(subAggregationConverter.convert(aggregationSpec.groups(), searchTypeHandler, esGeneratedQueryContext, queryResult, bucket))
+                            .count(bucket.getCount())
+                            .metrics(subAggregationConverter.convert(aggregationSpec.metrics(), searchTypeHandler, esGeneratedQueryContext, bucket))
+                            .groups(subAggregationConverter.convert(aggregationSpec.groups(), searchTypeHandler, esGeneratedQueryContext, bucket))
                             .build();
                 })
                 .collect(Collectors.toList());
