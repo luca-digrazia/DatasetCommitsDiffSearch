@@ -40,6 +40,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import javax.annotation.Nullable;
 
 /**
  * Helper class for taking URLs and converting them according to an optional config specified by
@@ -186,14 +187,26 @@ public class UrlRewriter {
     }
 
     return rewrittenUrls.build().stream()
-        .map(
-            urlString -> {
-              try {
-                return new URL(url.getProtocol() + "://" + urlString);
-              } catch (MalformedURLException e) {
-                throw new IllegalStateException(e);
-              }
-            })
+        .map(urlString -> prefixWithProtocol(urlString, url.getProtocol()))
         .collect(toImmutableList());
+  }
+
+  /** Prefixes url with protocol if not already prefixed by {@link #REWRITABLE_SCHEMES} */
+  private static URL prefixWithProtocol(String url, String protocol) {
+    try {
+      for (String schemaPrefix : REWRITABLE_SCHEMES) {
+        if (url.startsWith(schemaPrefix + "://")) {
+          return new URL(url);
+        }
+      }
+      return new URL(protocol + "://" + url);
+    } catch (MalformedURLException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  @Nullable
+  public String getAllBlockedMessage() {
+    return config.getAllBlockedMessage();
   }
 }
