@@ -78,9 +78,6 @@ public class AMQPConsumer implements Runnable {
             case SYSLOG:
                 this.syslogProcessor = new SyslogProcessor(server);
                 break;
-            default:
-            	LOG.error("Unknown input type {} for queue {}", queueConfig.getInputType(), queueConfig.getQueueName());
-            	break;
         }
     }
     
@@ -221,8 +218,6 @@ public class AMQPConsumer implements Runnable {
 
                              handledSyslogMessages.mark();
                              break;
-                         default:
-                        	 LOG.error("Unknown input type {} for queue {}", queueConfig.getInputType(), queueConfig.getQueueName());
                      }
                      
                      channel.basicAck(envelope.getDeliveryTag(), false);
