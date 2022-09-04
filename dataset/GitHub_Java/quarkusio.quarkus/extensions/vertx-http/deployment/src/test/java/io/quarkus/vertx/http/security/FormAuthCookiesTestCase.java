@@ -138,13 +138,6 @@ public class FormAuthCookiesTestCase {
         }
     }
 
-    private void waitForPointInTime(long pointInFuture) throws InterruptedException {
-        long wait = pointInFuture - System.currentTimeMillis();
-        assertTrue(wait > 0, "Having to wait for " + wait
-                + " ms for another request is unexpected. The previous one took too long.");
-        Thread.sleep(wait);
-    }
-
     @TestHTTPResource
     URL url;
 
@@ -175,17 +168,15 @@ public class FormAuthCookiesTestCase {
                 assertTrue(StringUtils.isNotBlank(credentialCookieValue), "Credential cookie value must not be blank.");
             }
 
-            long t0 = System.currentTimeMillis();
-
-            waitForPointInTime(t0 + 400);
+            Thread.sleep(400);
 
             doRegularGet(httpClient, cookieStore, credentialCookieValue);
 
-            waitForPointInTime(t0 + 700);
+            Thread.sleep(400);
 
             doRegularGet(httpClient, cookieStore, credentialCookieValue);
 
-            waitForPointInTime(t0 + 1300);
+            Thread.sleep(400);
 
             HttpGet httpGet = new HttpGet(url.toString() + "/admin%E2%9D%A4");
             try (CloseableHttpResponse adminResponse = httpClient.execute(httpGet)) {
@@ -200,17 +191,15 @@ public class FormAuthCookiesTestCase {
 
             }
 
-            t0 = System.currentTimeMillis();
-
-            waitForPointInTime(t0 + 400);
+            Thread.sleep(400);
 
             doRegularGet(httpClient, cookieStore, credentialCookieValue);
 
-            waitForPointInTime(t0 + 700);
+            Thread.sleep(400);
 
             doRegularGet(httpClient, cookieStore, credentialCookieValue);
 
-            waitForPointInTime(t0 + 3600);
+            Thread.sleep(2000);
 
             httpGet = new HttpGet(url.toString() + "/admin%E2%9D%A4");
             try (CloseableHttpResponse adminResponse = httpClient.execute(httpGet)) {
