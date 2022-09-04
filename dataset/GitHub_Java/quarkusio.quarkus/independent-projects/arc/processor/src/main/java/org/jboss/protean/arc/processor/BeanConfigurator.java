@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -72,14 +71,18 @@ public final class BeanConfigurator<T> {
 
     /**
      *
-     * @param implClassName
+     * @param implClass
      * @param beanDeployment
      * @param beanConsumer
      */
-    BeanConfigurator(DotName implClassName, BeanDeployment beanDeployment, Consumer<BeanInfo> beanConsumer) {
-        this.implClass = beanDeployment.getIndex().getClassByName(Objects.requireNonNull(implClassName));
+    BeanConfigurator(Class<?> implClass, BeanDeployment beanDeployment, Consumer<BeanInfo> beanConsumer) {
         this.beanDeployment = beanDeployment;
         this.beanConsumer = beanConsumer;
+        this.implClass = beanDeployment.getIndex().getClassByName(DotName.createSimple(implClass.getName()));
+        if (this.implClass == null) {
+            // TODO we have a problem
+            throw new IllegalArgumentException();
+        }
         this.types = new HashSet<>();
         this.qualifiers = new HashSet<>();
         this.scope = ScopeInfo.DEPENDENT;
@@ -128,11 +131,6 @@ public final class BeanConfigurator<T> {
 
     public BeanConfigurator<T> types(Type... types) {
         Collections.addAll(this.types, types);
-        return this;
-    }
-    
-    public BeanConfigurator<T> addType(DotName className) {
-        this.types.add(Type.create(className, Kind.CLASS));
         return this;
     }
     
