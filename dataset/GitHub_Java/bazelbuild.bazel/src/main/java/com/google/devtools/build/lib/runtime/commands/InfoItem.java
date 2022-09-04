@@ -181,7 +181,7 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(env);
-      return print(env.getDirectories().getExecRoot());
+      return print(env.getRuntime().getWorkspace().getExecRoot());
     }
   }
 
@@ -572,15 +572,10 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       String result = "";
-      for (Map.Entry<String, String> entry : env.getWhitelistedActionEnv().entrySet()) {
+      for (Map.Entry<String, String> entry : env.getWhitelistedClientEnv().entrySet()) {
         // TODO(bazel-team): as the syntax of our rc-files does not support to express new-lines in
         // values, we produce syntax errors if the value of the entry contains a newline character.
         result += "build --action_env=" + entry.getKey() + "=" + entry.getValue() + "\n";
-      }
-      for (Map.Entry<String, String> entry : env.getWhitelistedTestEnv().entrySet()) {
-        // TODO(bazel-team): as the syntax of our rc-files does not support to express new-lines in
-        // values, we produce syntax errors if the value of the entry contains a newline character.
-        result += "build --test_env=" + entry.getKey() + "=" + entry.getValue() + "\n";
       }
       return print(result);
     }

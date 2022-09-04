@@ -91,7 +91,7 @@ public class InfoCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(OptionsParser optionsParser) { }
+  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) { }
 
   @Override
   public ExitCode exec(final CommandEnvironment env, final OptionsProvider optionsProvider) {
