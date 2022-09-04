@@ -18,7 +18,6 @@ import com.google.devtools.build.docgen.builtin.BuiltinProtos.Callable;
 import com.google.devtools.build.docgen.builtin.BuiltinProtos.Param;
 import com.google.devtools.build.docgen.builtin.BuiltinProtos.Type;
 import com.google.devtools.build.docgen.builtin.BuiltinProtos.Value;
-import com.google.devtools.build.docgen.skylark.SkylarkConstructorMethodDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkMethodDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkModuleDoc;
 import com.google.devtools.build.docgen.skylark.SkylarkParamDoc;
@@ -51,12 +50,7 @@ public class ApiExporter {
         type.setName(mod.getName());
         type.setDoc(mod.getDocumentation());
         for (SkylarkMethodDoc meth : mod.getJavaMethods()) {
-          // Constructors should be exported as globals.
-          if (meth instanceof SkylarkConstructorMethodDoc) {
-            builtins.addGlobal(collectFieldInfo(meth));
-          } else {
-            type.addField(collectFieldInfo(meth));
-          }
+          type.addField(collectFieldInfo(meth));
         }
         builtins.addType(type);
 
