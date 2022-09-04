@@ -284,9 +284,7 @@ public class DumpCommand implements BlazeCommand {
         out.println();
       }
 
-      return success
-          ? BlazeCommandResult.success()
-          : BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
+      return BlazeCommandResult.exitCode(success ? ExitCode.SUCCESS : ExitCode.ANALYSIS_FAILURE);
 
     } finally {
       out.flush();
