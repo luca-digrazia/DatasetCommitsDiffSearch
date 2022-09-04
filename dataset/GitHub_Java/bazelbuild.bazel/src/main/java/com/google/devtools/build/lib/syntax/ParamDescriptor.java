@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.syntax;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
 
@@ -35,7 +36,7 @@ final class ParamDescriptor {
   private final SkylarkType skylarkType;
   // The semantics flag responsible for disabling this parameter, or null if enabled.
   // It is an error for Starlark code to supply a value to a disabled parameter.
-  @Nullable private final String disabledByFlag;
+  @Nullable private final FlagIdentifier disabledByFlag;
 
   private ParamDescriptor(
       String name,
@@ -46,7 +47,7 @@ final class ParamDescriptor {
       boolean named,
       boolean positional,
       SkylarkType skylarkType,
-      @Nullable String disabledByFlag) {
+      @Nullable FlagIdentifier disabledByFlag) {
     this.name = name;
     this.defaultValue = defaultExpr.isEmpty() ? null : evalDefault(name, defaultExpr);
     this.type = type;
@@ -68,15 +69,14 @@ final class ParamDescriptor {
     boolean noneable = param.noneable();
 
     String defaultExpr = param.defaultValue();
-    String disabledByFlag = null;
+    FlagIdentifier disabledByFlag = null;
     if (!starlarkSemantics.isFeatureEnabledBasedOnTogglingFlags(
         param.enableOnlyWithFlag(), param.disableWithFlag())) {
       defaultExpr = param.valueWhenDisabled();
       disabledByFlag =
-          !param.enableOnlyWithFlag().isEmpty()
+          param.enableOnlyWithFlag() != FlagIdentifier.NONE
               ? param.enableOnlyWithFlag()
               : param.disableWithFlag();
-      Preconditions.checkState(!disabledByFlag.isEmpty());
     }
 
     return new ParamDescriptor(
@@ -157,7 +157,7 @@ final class ParamDescriptor {
 
   /** Returns the flag responsible for disabling this parameter, or null if it is enabled. */
   @Nullable
-  String disabledByFlag() {
+  FlagIdentifier disabledByFlag() {
     return disabledByFlag;
   }
 
@@ -191,7 +191,6 @@ final class ParamDescriptor {
               .useDefaultSemantics()
               .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
               .build();
-      Module module = thread.getGlobals();
 
       // Disable polling of the java.lang.Thread.interrupt flag during
       // Starlark evaluation. Assuming the expression does not call a
@@ -215,7 +214,7 @@ final class ParamDescriptor {
       // See https://docs.oracle.com/javase/specs/jls/se12/html/jls-12.html#jls-12.4
       thread.ignoreThreadInterrupts();
 
-      x = EvalUtils.eval(ParserInput.fromLines(expr), module, thread);
+      x = EvalUtils.eval(ParserInput.fromLines(expr), thread);
     } catch (InterruptedException ex) {
       throw new IllegalStateException(ex); // can't happen
     } catch (SyntaxError | EvalException ex) {

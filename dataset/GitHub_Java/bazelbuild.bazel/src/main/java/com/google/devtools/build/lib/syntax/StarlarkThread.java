@@ -105,8 +105,9 @@ public final class StarlarkThread {
     return v == null ? null : key.cast(v);
   }
 
-  /** A Frame records information about an active function call. */
-  static final class Frame implements Debug.Frame {
+  /** A CallFrame records information about an active function call. */
+  // TODO(adonovan): move CallFrame to top level as "Frame".
+  static final class CallFrame implements Debug.Frame {
     final StarlarkThread thread;
     final StarlarkCallable fn; // the called function
     @Nullable final Debugger dbg = Debug.debugger.get(); // the debugger, if active for this frame
@@ -129,7 +130,7 @@ public final class StarlarkThread {
 
     private final Module savedModule; // the saved module of the parent (TODO(adonovan): eliminate)
 
-    private Frame(StarlarkThread thread, StarlarkCallable fn, Module savedModule) {
+    CallFrame(StarlarkThread thread, StarlarkCallable fn, Module savedModule) {
       this.thread = thread;
       this.fn = fn;
       this.savedModule = savedModule;
@@ -343,14 +344,14 @@ public final class StarlarkThread {
   private final Map<String, Extension> importedExtensions;
 
   /** Stack of active function calls. */
-  private final ArrayList<Frame> callstack = new ArrayList<>();
+  private final ArrayList<CallFrame> callstack = new ArrayList<>();
 
   /** A hook for notifications of assignments at top level. */
   PostAssignHook postAssignHook;
 
   /** Pushes a function onto the call stack. */
   void push(StarlarkCallable fn) {
-    Frame fr = new Frame(this, fn, this.globalFrame);
+    CallFrame fr = new CallFrame(this, fn, this.globalFrame);
     callstack.add(fr);
 
     // Push the function onto the allocation tracker's stack.
@@ -388,7 +389,7 @@ public final class StarlarkThread {
   /** Pops a function off the call stack. */
   void pop() {
     int last = callstack.size() - 1;
-    Frame top = callstack.get(last);
+    CallFrame top = callstack.get(last);
     callstack.remove(last); // pop
     this.globalFrame = top.savedModule;
 
@@ -449,7 +450,7 @@ public final class StarlarkThread {
   boolean isRecursiveCall(StarlarkFunction fn) {
     // Find fn buried within stack. (The top of the stack is assumed to be fn.)
     for (int i = callstack.size() - 2; i >= 0; --i) {
-      Frame fr = callstack.get(i);
+      CallFrame fr = callstack.get(i);
       // TODO(adonovan): compare code, not closure values, otherwise
       // one can defeat this check by writing the Y combinator.
       if (fr.fn.equals(fn)) {
@@ -481,7 +482,7 @@ public final class StarlarkThread {
   }
 
   // Returns the stack frame at the specified depth. 0 means top of stack, 1 is its caller, etc.
-  Frame frame(int depth) {
+  CallFrame frame(int depth) {
     return callstack.get(callstack.size() - 1 - depth);
   }
 
@@ -671,7 +672,7 @@ public final class StarlarkThread {
    */
   public ImmutableList<CallStackEntry> getCallStack() {
     ImmutableList.Builder<CallStackEntry> stack = ImmutableList.builder();
-    for (Frame fr : callstack) {
+    for (CallFrame fr : callstack) {
       stack.add(new CallStackEntry(fr.fn.getName(), fr.loc));
     }
     return stack.build();
