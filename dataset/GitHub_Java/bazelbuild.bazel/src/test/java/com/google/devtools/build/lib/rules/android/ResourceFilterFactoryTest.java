@@ -60,8 +60,7 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
             manifest.getOwnerLabel().getPackageName(), "resourceContainer_" + resources.hashCode());
 
     return ResourceContainer.builder()
-        .setAndroidResources(
-            AndroidResources.forResources(errorConsumer, resources, "resource_files"))
+        .setResources(AndroidResources.forResources(errorConsumer, resources, "resource_files"))
         .setLabel(label)
         .setManifestExported(false)
         .setManifest(manifest)
@@ -402,11 +401,11 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
         filteredResourceDeps.getDirectResourceContainers().toList();
     assertThat(directContainers).hasSize(2);
 
-    AndroidResources directToDiscard = directContainers.get(0).getAndroidResources();
+    AndroidResources directToDiscard = directContainers.get(0).getResources();
     assertThat(directToDiscard.getResources()).isEmpty();
     assertThat(directToDiscard.getResourceRoots()).isEmpty();
 
-    AndroidResources directToKeep = directContainers.get(1).getAndroidResources();
+    AndroidResources directToKeep = directContainers.get(1).getResources();
     assertThat(directToKeep.getResources()).containsExactly(directResourceToKeep);
     assertThat(directToKeep.getResourceRoots())
         .containsExactly(
@@ -416,11 +415,11 @@ public class ResourceFilterFactoryTest extends ResourceTestBase {
         filteredResourceDeps.getTransitiveResourceContainers().toList();
     assertThat(transitiveContainers).hasSize(2);
 
-    AndroidResources transitiveToDiscard = transitiveContainers.get(0).getAndroidResources();
+    AndroidResources transitiveToDiscard = transitiveContainers.get(0).getResources();
     assertThat(transitiveToDiscard.getResources()).isEmpty();
     assertThat(transitiveToDiscard.getResourceRoots()).isEmpty();
 
-    AndroidResources transitiveToKeep = transitiveContainers.get(1).getAndroidResources();
+    AndroidResources transitiveToKeep = transitiveContainers.get(1).getResources();
     assertThat(transitiveToKeep.getResources()).containsExactly(transitiveResourceToKeep);
     assertThat(transitiveToKeep.getResourceRoots())
         .containsExactly(

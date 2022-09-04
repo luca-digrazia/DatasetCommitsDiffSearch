@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
 
@@ -267,19 +266,8 @@ public final class ApplicationManifest {
   }
 
   public ApplicationManifest renamePackage(RuleContext ruleContext, String customPackage) {
-    Optional<Artifact> stamped = maybeSetManifestPackage(ruleContext, manifest, customPackage);
-
-    if (!stamped.isPresent()) {
-      return this;
-    }
-
-    return new ApplicationManifest(ruleContext, stamped.get(), targetAaptVersion);
-  }
-
-  static Optional<Artifact> maybeSetManifestPackage(
-      RuleContext ruleContext, Artifact manifest, String customPackage) {
     if (isNullOrEmpty(customPackage)) {
-      return Optional.empty();
+      return this;
     }
     Artifact outputManifest =
         ruleContext.getUniqueDirectoryArtifact(
@@ -287,13 +275,12 @@ public final class ApplicationManifest {
             "AndroidManifest.xml",
             ruleContext.getBinOrGenfilesDirectory());
     new ManifestMergerActionBuilder(ruleContext)
-        .setManifest(manifest)
+        .setManifest(getManifest())
         .setLibrary(true)
         .setCustomPackage(customPackage)
         .setManifestOutput(outputManifest)
         .build(ruleContext);
-
-    return Optional.of(outputManifest);
+    return new ApplicationManifest(ruleContext, outputManifest, targetAaptVersion);
   }
 
   public ResourceApk packTestWithDataAndResources(
@@ -392,6 +379,7 @@ public final class ApplicationManifest {
     ResourceContainer merged =
         new AndroidResourceMergingActionBuilder(ruleContext)
             .setJavaPackage(resourceContainer.getJavaPackage())
+            .withPrimary(resourceContainer)
             .withDependencies(resourceDeps)
             .setMergedResourcesOut(mergedResources)
             .setManifestOut(manifestOut)
@@ -401,7 +389,7 @@ public final class ApplicationManifest {
                     .getConfiguration()
                     .getFragment(AndroidConfiguration.class)
                     .throwOnResourceConflict())
-            .build(ruleContext, resourceContainer);
+            .build(ruleContext);
 
     ResourceContainer processed =
         new AndroidResourceValidatorActionBuilder(ruleContext)
@@ -657,6 +645,7 @@ public final class ApplicationManifest {
     ResourceContainer merged =
         new AndroidResourceMergingActionBuilder(ruleContext)
             .setJavaPackage(resourceContainer.getJavaPackage())
+            .withPrimary(resourceContainer)
             .withDependencies(resourceDeps)
             .setThrowOnResourceConflict(androidConfiguration.throwOnResourceConflict())
             .setUseCompiledMerge(skipParsingAction)
@@ -665,7 +654,7 @@ public final class ApplicationManifest {
             .setManifestOut(manifestOut)
             .setClassJarOut(rJavaClassJar)
             .setDataBindingInfoZip(dataBindingInfoZip)
-            .build(ruleContext, resourceContainer);
+            .build(ruleContext);
 
     ResourceContainer processed =
         new AndroidResourceValidatorActionBuilder(ruleContext)

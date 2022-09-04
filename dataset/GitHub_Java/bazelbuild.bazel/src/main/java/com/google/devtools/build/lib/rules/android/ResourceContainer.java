@@ -42,7 +42,7 @@ import javax.annotation.Nullable;
   category = SkylarkModuleCategory.NONE,
   doc = "The Android resources contributed by a single target."
 )
-public abstract class ResourceContainer implements CompiledMergableAndroidData {
+public abstract class ResourceContainer implements MergableAndroidData {
   /** The type of resource in question: either asset or a resource. */
   public enum ResourceType {
     ASSETS("assets"),
@@ -73,7 +73,6 @@ public abstract class ResourceContainer implements CompiledMergableAndroidData {
     doc = "Returns the manifest for the target.",
     structField = true
   )
-  @Override
   public abstract Artifact getManifest();
 
   @Nullable
@@ -95,7 +94,6 @@ public abstract class ResourceContainer implements CompiledMergableAndroidData {
         : getResources().getResources();
   }
 
-  @Override
   public Iterable<Artifact> getArtifacts() {
     return Iterables.concat(getAssets().getAssets(), getResources().getResources());
   }

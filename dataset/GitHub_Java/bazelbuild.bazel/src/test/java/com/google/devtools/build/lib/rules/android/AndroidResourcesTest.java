@@ -243,7 +243,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
         ruleContext,
         /* inputs = */ ImmutableList.<Artifact>builder()
             .addAll(parsed.getResources())
-            .add(parsed.getManifest())
+            .add(getManifest())
             .build(),
         /* outputs = */ ImmutableList.of(
             parsed.getCompiledSymbols(), DataBinding.getSuffixedInfoFile(ruleContext, "_unused")));
@@ -291,8 +291,7 @@ public class AndroidResourcesTest extends ResourceTestBase {
         new AndroidResources(
             resources, AndroidResources.getResourceRoots(ruleContext, resources, "resource_files"));
     StampedAndroidManifest manifest =
-        new AndroidManifest(getManifest(), "some.java.pkg", /* exported = */ true)
-            .stamp(ruleContext);
+        new StampedAndroidManifest(ruleContext, getManifest(), "some.java.pkg", false);
 
     ParsedAndroidResources parsed = raw.parse(ruleContext, manifest);
 
