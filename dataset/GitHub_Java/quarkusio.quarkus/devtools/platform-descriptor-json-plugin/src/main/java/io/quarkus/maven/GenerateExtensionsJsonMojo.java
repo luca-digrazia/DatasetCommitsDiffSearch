@@ -5,7 +5,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.StringReader;
 import java.nio.file.FileSystem;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,14 +43,6 @@ import org.eclipse.aether.resolution.ArtifactDescriptorRequest;
 import org.eclipse.aether.resolution.ArtifactRequest;
 import org.eclipse.aether.resolution.ArtifactResolutionException;
 import org.eclipse.aether.resolution.ArtifactResult;
-
-import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 import io.quarkus.bootstrap.BootstrapConstants;
 import io.quarkus.bootstrap.util.ZipUtils;
@@ -217,19 +208,6 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
     }
 
     private JsonObject processDependency(Artifact artifact) throws IOException {
-        JsonNode onode = processDependencyToObjectNode(artifact);
-
-        if (onode != null) {
-            // TODO: this is a dirty hack to avoid redoing existing javax.json code
-            String json = getMapper(false).writeValueAsString(onode);
-            JsonReader jsonReader = Json.createReader(new StringReader(json));
-            return jsonReader.readObject();
-        } else {
-            return null;
-        }
-    }
-
-    private JsonNode processDependencyToObjectNode(Artifact artifact) throws IOException {
         final Path path = artifact.getFile().toPath();
         if (Files.isDirectory(path)) {
             return processMetaInfDir(artifact, path.resolve(BootstrapConstants.META_INF));
@@ -240,84 +218,50 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         }
     }
 
-    /**
-     * Load and return javax.jsonObject based on yaml, json or properties file.
-     * 
-     * @param artifact
-     * @param metaInfDir
-     * @return
-     * @throws IOException
-     */
-    private JsonNode processMetaInfDir(Artifact artifact, Path metaInfDir)
+    private JsonObject processMetaInfDir(Artifact artifact, Path metaInfDir)
             throws IOException {
-
-        ObjectMapper mapper = null;
-
         if (!Files.exists(metaInfDir)) {
             return null;
         }
-        Path jsonOrYaml = null;
-
-        Path yaml = metaInfDir.resolve(BootstrapConstants.QUARKUS_EXTENSION_FILE_NAME);
-        if (Files.exists(yaml)) {
-            mapper = getMapper(true);
-            jsonOrYaml = yaml;
-        } else {
-            Path json = metaInfDir.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME);
-            if (!Files.exists(json)) {
-                final Path props = metaInfDir.resolve(BootstrapConstants.DESCRIPTOR_FILE_NAME);
-                if (Files.exists(props)) {
-                    return mapper.createObjectNode()
-                            .put(Extension.ARTIFACT_ID, artifact.getArtifactId())
-                            .put(Extension.GROUP_ID, artifact.getGroupId())
-                            .put("version", artifact.getVersion())
-                            .put("name", artifact.getArtifactId());
-                } else {
-                    return null;
-                }
-            } else {
-                jsonOrYaml = json;
-                mapper = getMapper(false);
+        final Path p = metaInfDir.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME);
+        if (!Files.exists(p)) {
+            final Path props = metaInfDir.resolve(BootstrapConstants.DESCRIPTOR_FILE_NAME);
+            if (Files.exists(props)) {
+                return Json.createObjectBuilder()
+                        .add("artifact-id", artifact.getArtifactId())
+                        .add("group-id", artifact.getGroupId())
+                        .add("version", artifact.getVersion())
+                        .add("name", artifact.getArtifactId())
+                        .build();
             }
+            return null;
         }
-        return processPlatformArtifact(artifact, jsonOrYaml, mapper);
+        return processPlatformArtifact(artifact, p);
     }
 
-    private JsonNode processPlatformArtifact(Artifact artifact, Path descriptor, ObjectMapper mapper)
+    private JsonObject processPlatformArtifact(Artifact artifact, Path descriptor)
             throws IOException {
         try (InputStream is = Files.newInputStream(descriptor)) {
-            ObjectNode object = mapper.readValue(is, ObjectNode.class);
-            transformLegacyToNew(object, mapper);
-            debug("Adding Quarkus extension %s:%s", object.get(Extension.GROUP_ID), object.get(Extension.ARTIFACT_ID));
-            return object;
-        } catch (IOException io) {
-            throw new IOException("Failed to parse " + descriptor, io);
-        }
-    }
-
-    private ObjectMapper getMapper(boolean yaml) {
-
-        if (yaml) {
-            YAMLFactory yf = new YAMLFactory();
-            return new ObjectMapper(yf)
-                    .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
-        } else {
-            return new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
-                    .enable(JsonParser.Feature.ALLOW_COMMENTS).enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS)
-                    .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
+            try (JsonReader reader = Json.createReader(is)) {
+                final JsonObject object = reader.readObject();
+                debug("Adding Quarkus extension %s:%s", object.get("groupId"), object.get("artifactId"));
+                return object;
+            }
+        } catch (IOException e) {
+            throw new IOException("Failed to parse " + descriptor, e);
         }
     }
 
     private String extensionId(JsonObject extObject) {
-        String artId = extObject.getString(Extension.ARTIFACT_ID, "");
+        String artId = extObject.getString("artifactId", "");
         if (artId.isEmpty()) {
             getLog().warn("Missing artifactId in extension overrides in " + extObject.toString());
         }
-        String groupId = extObject.getString(Extension.GROUP_ID, "");
+        String groupId = extObject.getString("artifactId", "");
         if (groupId.isEmpty()) {
             return artId;
         } else {
-            return extObject.getString(Extension.GROUP_ID, "") + ":" + artId;
+            return extObject.getString("groupId", "") + ":" + artId;
         }
     }
 
@@ -361,48 +305,4 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         }
         getLog().debug(String.format(msg, args));
     }
-
-    //TODO: duplicate from ExtensionDescriptor - move to shared location?
-    private void transformLegacyToNew(ObjectNode extObject, ObjectMapper mapper) {
-        ObjectNode metadata = null;
-
-        // Note: groupId and artifactId shouldn't normally be in the source json but
-        // just putting it
-        // here for completenes
-        if (extObject.get("groupId") != null) {
-            extObject.set(Extension.GROUP_ID, extObject.get("groupId"));
-            extObject.remove("groupId");
-        }
-
-        if (extObject.get("artifactId") != null) {
-            extObject.set(Extension.ARTIFACT_ID, extObject.get("artifactId"));
-            extObject.remove("artifactId");
-        }
-
-        JsonNode mvalue = extObject.get("metadata");
-        if (mvalue != null && mvalue.isObject()) {
-            metadata = (ObjectNode) mvalue;
-        } else {
-            metadata = mapper.createObjectNode();
-        }
-
-        if (extObject.get("labels") != null) {
-            metadata.set("keywords", extObject.get("labels"));
-            extObject.remove("labels");
-        }
-
-        if (extObject.get("guide") != null) {
-            metadata.set("guide", extObject.get("guide"));
-            extObject.remove("guide");
-        }
-
-        if (extObject.get("shortName") != null) {
-            metadata.set("short-name", extObject.get("shortName"));
-            extObject.remove("shortName");
-        }
-
-        extObject.set("metadata", metadata);
-
-    }
-
 }
