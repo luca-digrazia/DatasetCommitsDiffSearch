@@ -15,41 +15,74 @@
 package com.google.devtools.build.lib.rules.proto;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import javax.annotation.Nullable;
 
-/**
- * A helper class for the *Support classes containing some data from ProtoLibrary.
- */
+/** A helper class for the *Support classes containing some data from ProtoLibrary. */
+@AutoCodec
 @AutoValue
 @Immutable
 public abstract class SupportData {
+  @AutoCodec.Instantiator
   public static SupportData create(
-      Predicate<TransitiveInfoCollection> nonWeakDepsPredicate,
-      ImmutableList<Artifact> protoSources,
+      ImmutableList<Artifact> directProtoSources,
+      NestedSet<Artifact> protosInDirectDeps,
       NestedSet<Artifact> transitiveImports,
-      Artifact usedDirectDeps,
-      boolean hasProtoSources) {
+      NestedSet<String> transitiveProtoPathFlags,
+      String protoSourceRoot,
+      NestedSet<String> directProtoSourceRoots,
+      boolean hasProtoSources,
+      @Nullable NestedSet<Artifact> protosInExports,
+      @Nullable NestedSet<String> exportedProtoSourceRoots) {
     return new AutoValue_SupportData(
-        nonWeakDepsPredicate, protoSources, transitiveImports, usedDirectDeps, hasProtoSources);
+        directProtoSources,
+        transitiveImports,
+        protosInDirectDeps,
+        transitiveProtoPathFlags,
+        protoSourceRoot,
+        directProtoSourceRoots,
+        hasProtoSources,
+        protosInExports,
+        exportedProtoSourceRoots);
   }
-
-  public abstract Predicate<TransitiveInfoCollection> getNonWeakDepsPredicate();
 
   public abstract ImmutableList<Artifact> getDirectProtoSources();
 
   public abstract NestedSet<Artifact> getTransitiveImports();
 
-  @Nullable
-  public abstract Artifact getUsedDirectDeps();
+  /**
+   * .proto files in the direct dependencies of this proto_library. Used for strict deps checking.
+   */
+  public abstract NestedSet<Artifact> getProtosInDirectDeps();
+
+  /**
+   * Directories of .proto sources collected from the transitive closure. These flags will be passed
+   * to {@code protoc} in the specified order, via the {@code --proto_path} flag.
+   */
+  public abstract NestedSet<String> getTransitiveProtoPathFlags();
+
+  /** The {@code proto_source_root} of the current library. */
+  public abstract String getProtoSourceRoot();
+
+  /**
+   * The {@code proto_source_root}'s collected from the current library and the direct dependencies.
+   */
+  public abstract NestedSet<String> getDirectProtoSourceRoots();
 
   public abstract boolean hasProtoSources();
+
+  /** .proto files in the exported dependencies of this proto_library. */
+  public abstract @Nullable NestedSet<Artifact> getProtosInExports();
+
+  /**
+   * The {@code proto_source_root}'s collected from the current library and the exported
+   * dependencies.
+   */
+  public abstract @Nullable NestedSet<String> getExportedProtoSourceRoots();
 
   SupportData() {}
 }
