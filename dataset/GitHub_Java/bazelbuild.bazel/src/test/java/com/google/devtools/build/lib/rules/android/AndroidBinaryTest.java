@@ -23,7 +23,7 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.hasInpu
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
 import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getJavacArguments;
 import static com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper.getProcessorpath;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Ascii;
 import com.google.common.base.Joiner;
@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
-import com.google.devtools.build.lib.analysis.RequiredConfigFragmentsProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -94,7 +93,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "java/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
     scratch.file("java/android/A.java", "package android; public class A {};");
-    setStarlarkSemanticsOptions("--experimental_google_legacy_api");
+    setSkylarkSemanticsOptions("--experimental_google_legacy_api");
   }
 
   @Test
@@ -3399,29 +3398,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     FileWriteAction action = (FileWriteAction) getGeneratingAction(flagList);
     assertThat(action.getFileContents())
         .isEqualTo("//java/com/foo:flag1: on\n//java/com/foo:flag2: off");
-  }
-
-  @Test
-  public void featureFlagsSetByAndroidBinaryAreInRequiredFragments() throws Exception {
-    useConfiguration("--include_config_fragments_provider=direct");
-    scratch.file(
-        "java/com/foo/BUILD",
-        "config_feature_flag(",
-        "  name = 'flag1',",
-        "  allowed_values = ['on', 'off'],",
-        "  default_value = 'off',",
-        ")",
-        "android_binary(",
-        "  name = 'foo',",
-        "  manifest = 'AndroidManifest.xml',",
-        "  srcs = [':FooFlags.java'],",
-        "  feature_flags = {",
-        "    'flag1': 'on',",
-        "  },",
-        ")");
-    ConfiguredTarget ct = getConfiguredTarget("//java/com/foo:foo");
-    assertThat(ct.getProvider(RequiredConfigFragmentsProvider.class).getRequiredConfigFragments())
-        .contains("//java/com/foo:flag1");
   }
 
   @Test

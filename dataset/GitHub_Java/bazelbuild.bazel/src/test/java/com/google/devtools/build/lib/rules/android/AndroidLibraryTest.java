@@ -2262,11 +2262,13 @@ public class AndroidLibraryTest extends AndroidBuildViewTestCase {
     ImmutableList<Artifact> bClasspath =
         JavaInfo.getProvider(JavaCompilationInfoProvider.class, bTarget)
             .getCompilationClasspath()
-            .toCollection(Artifact.class);
+            .getSet(Artifact.class)
+            .toList();
     ImmutableList<Artifact> cClasspath =
         JavaInfo.getProvider(JavaCompilationInfoProvider.class, cTarget)
             .getCompilationClasspath()
-            .toCollection(Artifact.class);
+            .getSet(Artifact.class)
+            .toList();
 
     assertThat(bClasspath).isEmpty();
     assertThat(cClasspath)
