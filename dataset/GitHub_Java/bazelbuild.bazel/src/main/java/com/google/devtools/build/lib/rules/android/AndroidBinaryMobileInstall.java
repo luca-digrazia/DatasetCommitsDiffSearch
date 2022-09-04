@@ -156,6 +156,10 @@ public final class AndroidBinaryMobileInstall {
             .setSignedApk(incrementalApk)
             .setSigningKey(signingKey);
 
+    if (!ruleContext.getFragment(AndroidConfiguration.class).useIncrementalNativeLibs()) {
+      incrementalActionsBuilder.setNativeLibs(nativeLibs);
+    }
+
     incrementalActionsBuilder.registerActions(ruleContext);
 
     Artifact argsArtifact =
@@ -410,10 +414,12 @@ public final class AndroidBinaryMobileInstall {
       commandLine.addExecPath("--apk", apk);
     }
 
-    for (Map.Entry<String, NestedSet<Artifact>> arch : nativeLibs.getMap().entrySet()) {
-      for (Artifact lib : arch.getValue()) {
-        builder.addInput(lib);
-        commandLine.add("--native_lib").addFormatted("%s:%s", arch.getKey(), lib);
+    if (ruleContext.getFragment(AndroidConfiguration.class).useIncrementalNativeLibs()) {
+      for (Map.Entry<String, NestedSet<Artifact>> arch : nativeLibs.getMap().entrySet()) {
+        for (Artifact lib : arch.getValue()) {
+          builder.addInput(lib);
+          commandLine.add("--native_lib").addFormatted("%s:%s", arch.getKey(), lib);
+        }
       }
     }
 

@@ -607,7 +607,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             new ApkInfo(
                 zipAlignedApk,
                 unsignedApk,
-                getCoverageInstrumentationJarForApk(ruleContext, androidCommon),
+                androidCommon.getInstrumentedJar(),
                 resourceApk.getManifest(),
                 AndroidCommon.getApkDebugSigningKey(ruleContext)))
         .addNativeDeclaredProvider(new AndroidPreDexJarProvider(jarToDex))
@@ -615,24 +615,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             AndroidFeatureFlagSetProvider.create(
                 AndroidFeatureFlagSetProvider.getAndValidateFlagMapFromRuleContext(ruleContext)))
         .addOutputGroup("android_deploy_info", deployInfo);
-  }
-
-  /**
-   * For coverage builds, this returns a Jar containing <b>un</b>instrumented bytecode for the
-   * coverage reporter's consumption.  This Jar is often confusingly called <i>instrumented</i>.
-   * This method simply returns the deploy Jar when "new" coverage is used, otherwise the
-   * traditional "instrumented" Jar.  Note the deploy Jar is built anyway for Android binaries.
-   *
-   * @return A Jar containing uninstrumented bytecode or {@code null} for non-coverage builds
-   */
-  @Nullable
-  private static Artifact getCoverageInstrumentationJarForApk(
-      RuleContext ruleContext, AndroidCommon androidCommon) throws InterruptedException {
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()
-        && ruleContext.getConfiguration().isExperimentalJavaCoverage()) {
-      return ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_BINARY_DEPLOY_JAR);
-    }
-    return androidCommon.getInstrumentedJar();
   }
 
   private static NestedSet<Artifact> getLibraryResourceJars(RuleContext ruleContext) {
@@ -1711,7 +1693,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             .add("-dontwarn")
             .add("-dontnote")
             .add("-dontoptimize")
-            .add("-dontobfuscate");
+            .add("-dontobfuscate")
+            .add("-dontpreverify");
 
     List<Artifact> specs = new ArrayList<>();
     specs.addAll(

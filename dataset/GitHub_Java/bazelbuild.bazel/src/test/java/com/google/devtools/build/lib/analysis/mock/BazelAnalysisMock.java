@@ -24,9 +24,7 @@ import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider;
 import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider.StrictActionEnvOptions;
 import com.google.devtools.build.lib.bazel.rules.python.BazelPythonConfiguration;
 import com.google.devtools.build.lib.packages.util.BazelMockCcSupport;
-import com.google.devtools.build.lib.packages.util.BazelMockPythonSupport;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
-import com.google.devtools.build.lib.packages.util.MockPythonSupport;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
@@ -126,14 +124,11 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create(
         "/bazel_tools_workspace/tools/genrule/BUILD", "exports_files(['genrule-setup.sh'])");
 
-    config.create(
-        "/bazel_tools_workspace/tools/test/BUILD",
+    config.create("/bazel_tools_workspace/tools/test/BUILD",
         "filegroup(name = 'runtime', srcs = ['test-setup.sh', 'test-xml-generator.sh'])",
-        "filegroup(name = 'test_wrapper', srcs = ['test_wrapper_bin'])",
         "filegroup(name = 'test_setup', srcs = ['test-setup.sh'])",
         "filegroup(name = 'test_xml_generator', srcs = ['test-xml-generator.sh'])",
         "filegroup(name = 'collect_coverage', srcs = ['collect_coverage.sh'])",
-        "filegroup(name = 'collect_cc_coverage', srcs = ['collect_cc_coverage.sh'])",
         "filegroup(name='coverage_support', srcs=['collect_coverage.sh'])",
         "filegroup(name = 'coverage_report_generator', srcs = ['coverage_report_generator.sh'])");
 
@@ -199,7 +194,6 @@ public final class BazelAnalysisMock extends AnalysisMock {
     config.create("/bazel_tools_workspace/objcproto/well_known_type.proto");
 
     ccSupport().setup(config);
-    pySupport().setup(config);
   }
 
   /** Contents of {@code //tools/android/emulator/BUILD.tools}. */
@@ -336,10 +330,5 @@ public final class BazelAnalysisMock extends AnalysisMock {
   @Override
   public MockCcSupport ccSupport() {
     return BazelMockCcSupport.INSTANCE;
-  }
-
-  @Override
-  public MockPythonSupport pySupport() {
-    return BazelMockPythonSupport.INSTANCE;
   }
 }

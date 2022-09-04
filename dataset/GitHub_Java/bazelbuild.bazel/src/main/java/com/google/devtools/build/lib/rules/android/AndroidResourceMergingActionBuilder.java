@@ -17,6 +17,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.rules.android.AndroidDataConverter.JoinerType;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import javax.annotation.Nullable;
 
 /**
@@ -27,6 +29,18 @@ import javax.annotation.Nullable;
  * AndroidResourcesProcessorBuilder}.
  */
 public class AndroidResourceMergingActionBuilder {
+
+  private static final AndroidDataConverter<MergableAndroidData> RESOURCE_CONTAINER_TO_ARG =
+      AndroidDataConverter.MERGABLE_DATA_CONVERTER;
+
+  @AutoCodec @AutoCodec.VisibleForSerialization
+  static final AndroidDataConverter<ParsedAndroidResources> RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
+      AndroidDataConverter.<ParsedAndroidResources>builder(JoinerType.SEMICOLON_AMPERSAND)
+          .withRoots(ParsedAndroidResources::getResourceRoots)
+          .withRoots(ParsedAndroidResources::getAssetRoots)
+          .withLabel(ParsedAndroidResources::getLabel)
+          .withArtifact(ParsedAndroidResources::getCompiledSymbols)
+          .build();
 
   // Inputs
   private ParsedAndroidResources primary;
@@ -113,7 +127,7 @@ public class AndroidResourceMergingActionBuilder {
     createInputsForBuilder(builder)
         .addInput(
             "--primaryData",
-            AndroidDataConverter.COMPILED_RESOURCE_CONVERTER.map(primary),
+            RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED.map(primary),
             Iterables.concat(
                 primary.getArtifacts(), ImmutableList.of(primary.getCompiledSymbols())));
 
@@ -122,12 +136,13 @@ public class AndroidResourceMergingActionBuilder {
           .addTransitiveFlag(
               "--data",
               dependencies.getTransitiveResourceContainers(),
-              AndroidDataConverter.COMPILED_RESOURCE_CONVERTER)
+              RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED)
           .addTransitiveFlag(
               "--directData",
               dependencies.getDirectResourceContainers(),
-              AndroidDataConverter.COMPILED_RESOURCE_CONVERTER)
+              RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED)
           .addTransitiveInputValues(dependencies.getTransitiveResources())
+          .addTransitiveInputValues(dependencies.getTransitiveAssets())
           .addTransitiveInputValues(dependencies.getTransitiveCompiledSymbols());
     }
 
@@ -140,20 +155,17 @@ public class AndroidResourceMergingActionBuilder {
     createInputsForBuilder(builder)
         .addInput(
             "--primaryData",
-            AndroidDataConverter.PARSED_RESOURCE_CONVERTER.map(primary),
+            RESOURCE_CONTAINER_TO_ARG.map(primary),
             Iterables.concat(primary.getArtifacts(), ImmutableList.of(primary.getSymbols())));
 
     if (dependencies != null) {
       builder
           .addTransitiveFlag(
-              "--data",
-              dependencies.getTransitiveResourceContainers(),
-              AndroidDataConverter.PARSED_RESOURCE_CONVERTER)
+              "--data", dependencies.getTransitiveResourceContainers(), RESOURCE_CONTAINER_TO_ARG)
           .addTransitiveFlag(
-              "--directData",
-              dependencies.getDirectResourceContainers(),
-              AndroidDataConverter.PARSED_RESOURCE_CONVERTER)
+              "--directData", dependencies.getDirectResourceContainers(), RESOURCE_CONTAINER_TO_ARG)
           .addTransitiveInputValues(dependencies.getTransitiveResources())
+          .addTransitiveInputValues(dependencies.getTransitiveAssets())
           .addTransitiveInputValues(dependencies.getTransitiveSymbolsBin());
     }
 

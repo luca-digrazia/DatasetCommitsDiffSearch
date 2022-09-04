@@ -187,7 +187,8 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     Artifact instrumentationMetadata =
         helper.createInstrumentationMetadata(classJar, javaArtifactsBuilder);
     Artifact executable; // the artifact for the rule itself
-    if (OS.getCurrent() == OS.WINDOWS) {
+    if (OS.getCurrent() == OS.WINDOWS
+        && ruleContext.getConfiguration().enableWindowsExeLauncher()) {
       executable =
           ruleContext.getImplicitOutputArtifact(ruleContext.getTarget().getName() + ".exe");
     } else {
@@ -205,19 +206,15 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
             javaRuleOutputJarsProviderBuilder,
             javaSourceJarsProviderBuilder);
 
-    String mainClass = javaSemantics.getTestRunnerMainClass();
-    String originalMainClass = mainClass;
-    if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {
-      mainClass = addCoverageSupport(
-          ruleContext,
-          javaSemantics,
-          helper,
-          executable,
-          instrumentationMetadata,
-          javaArtifactsBuilder,
-          attributesBuilder,
-          mainClass);
-    }
+    String mainClass =
+        getMainClass(
+            ruleContext,
+            javaSemantics,
+            helper,
+            executable,
+            instrumentationMetadata,
+            javaArtifactsBuilder,
+            attributesBuilder);
 
     // JavaCompilationHelper.getAttributes() builds the JavaTargetAttributes, after which the
     // JavaTargetAttributes becomes immutable. This is an extra safety check to avoid inconsistent
@@ -263,8 +260,6 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
         getJvmFlags(ruleContext, testClass),
         executable,
         mainClass,
-        originalMainClass,
-        filesToBuildBuilder,
         javaExecutable);
 
     Artifact oneVersionOutputArtifact = null;
@@ -556,21 +551,15 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
   protected abstract ImmutableList<String> getJvmFlags(RuleContext ruleContext, String testClass)
       throws RuleErrorException;
 
-  /**
-   * Enables coverage support for Android and Java targets: adds instrumented jar to the classpath
-   * and modifies main class.
-   *
-   * @return new main class
-   */
-  protected abstract String addCoverageSupport(
+  /** Return the testrunner main class */
+  protected abstract String getMainClass(
       RuleContext ruleContext,
       JavaSemantics javaSemantics,
       JavaCompilationHelper helper,
       Artifact executable,
       Artifact instrumentationMetadata,
       JavaCompilationArtifacts.Builder javaArtifactsBuilder,
-      JavaTargetAttributes.Builder attributesBuilder,
-      String mainClass)
+      JavaTargetAttributes.Builder attributesBuilder)
       throws InterruptedException, RuleErrorException;
 
   /**

@@ -164,11 +164,12 @@ public class AndroidManifest {
        */
       Artifact manifestSymlink =
           dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_SYMLINKED_MANIFEST);
-      dataContext.registerAction(SymlinkAction.toArtifact(
-          dataContext.getActionConstructionContext().getActionOwner(),
-          manifest,
-          manifestSymlink,
-          "Renaming Android manifest for " + dataContext.getLabel()));
+      dataContext.registerAction(
+          new SymlinkAction(
+              dataContext.getActionConstructionContext().getActionOwner(),
+              manifest,
+              manifestSymlink,
+              "Renaming Android manifest for " + dataContext.getLabel()));
       return updateManifest(manifestSymlink);
     }
   }
