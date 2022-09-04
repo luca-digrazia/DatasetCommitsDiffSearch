@@ -2,7 +2,7 @@ package io.quarkus.gradle.tasks;
 
 import org.gradle.api.logging.Logger;
 
-import io.quarkus.platform.tools.MessageWriter;
+import io.quarkus.devtools.messagewriter.MessageWriter;
 
 public class GradleMessageWriter implements MessageWriter {
 
@@ -13,18 +13,18 @@ public class GradleMessageWriter implements MessageWriter {
     }
 
     @Override
-    public void debug(String arg0) {
-        logger.debug(arg0);
+    public void debug(String msg) {
+        logger.debug(msg);
     }
 
     @Override
-    public void error(String arg0) {
-        logger.error(arg0);
+    public void error(String msg) {
+        logger.error(msg);
     }
 
     @Override
-    public void info(String arg0) {
-        logger.info(arg0);
+    public void info(String msg) {
+        logger.lifecycle(msg);
     }
 
     @Override
@@ -33,7 +33,7 @@ public class GradleMessageWriter implements MessageWriter {
     }
 
     @Override
-    public void warn(String arg0) {
-        logger.warn(arg0);
+    public void warn(String msg) {
+        logger.warn(msg);
     }
 }
