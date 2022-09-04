@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,16 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.util;
 
-import com.google.common.base.Function;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
 import com.google.common.collect.Iterables;
-
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Iterator;
-import java.util.List;
 
 /**
  * Various utility methods operating on strings.
@@ -65,34 +60,6 @@ public class StringUtil {
   }
 
   /**
-   * Split a single space-separated string into a List of values.
-   *
-   * <p>Individual values are canonicalized such that within and
-   * across calls to this method, equal values point to the same
-   * object.
-   *
-   * <p>If the input is null, return an empty list.
-   *
-   * @param in space-separated list of values, eg "value1   value2".
-   */
-  public static List<String> splitAndInternString(String in) {
-    List<String> result = new ArrayList<>();
-    if (in == null) {
-      return result;
-    }
-    for (String val : Splitter.on(" ").omitEmptyStrings().split(in)) {
-      // Note that splitter returns a substring(), effectively
-      // retaining the entire "in" String. Make an explicit copy here
-      // to avoid that memory pitfall. Further, because there may be
-      // many concurrent submissions that touch the same files,
-      // attempt to use a single reference for equal strings via the
-      // deduplicator.
-      result.add(StringCanonicalizer.intern(new String(val)));
-    }
-    return result;
-  }
-
-  /**
    * Lists items up to a given limit, then prints how many were omitted.
    */
   public static StringBuilder listItemsWithLimit(StringBuilder appendTo, int limit,
@@ -128,12 +95,7 @@ public class StringUtil {
    */
   public static Iterable<String> append(Iterable<String> values, final String prefix,
       final String suffix) {
-  return Iterables.transform(values, new Function<String, String>() {
-      @Override
-      public String apply(String input) {
-        return prefix + input + suffix;
-      }
-    });
+    return Iterables.transform(values, input -> prefix + input + suffix);
   }
 
   /**
