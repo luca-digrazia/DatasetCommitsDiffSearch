@@ -31,6 +31,13 @@ import com.google.devtools.build.lib.vfs.Path;
  * be recorded for correct caching.
  */
 public interface ConfigurationEnvironment {
+
+  /**
+   * Returns an event handler to report errors to. Note that reporting an error does not cause the
+   * computation to abort - you also need to throw an exception.
+   */
+  ExtendedEventHandler getEventHandler();
+
   /**
    * Returns a target for the given label, loading it if necessary, and throwing an exception if it
    * does not exist.
@@ -83,6 +90,11 @@ public interface ConfigurationEnvironment {
     public TargetProviderEnvironment(
         PackageProvider packageProvider, ExtendedEventHandler eventHandler) {
       this.packageProvider = new LoadedPackageProvider(packageProvider, eventHandler);
+    }
+
+    @Override
+    public ExtendedEventHandler getEventHandler() {
+      return packageProvider.getEventHandler();
     }
 
     @Override

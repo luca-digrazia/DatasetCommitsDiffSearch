@@ -47,33 +47,20 @@ public class FdoSupportValue implements SkyValue {
 
     private final LipoMode lipoMode;
     private final PathFragment fdoZip;
-    private final FdoInputFile fdoPrefetchHintsFile;
     private final String fdoInstrument;
     private final FdoMode fdoMode;
 
-    private Key(
-        LipoMode lipoMode,
-        PathFragment fdoZip,
-        FdoInputFile fdoPrefetchHintsFile,
-        String fdoInstrument,
-        FdoMode fdoMode) {
+    private Key(LipoMode lipoMode, PathFragment fdoZip, String fdoInstrument, FdoMode fdoMode) {
       this.lipoMode = lipoMode;
       this.fdoZip = fdoZip;
-      this.fdoPrefetchHintsFile = fdoPrefetchHintsFile;
       this.fdoInstrument = fdoInstrument;
       this.fdoMode = fdoMode;
     }
 
     @AutoCodec.Instantiator
     @AutoCodec.VisibleForSerialization
-    static Key of(
-        LipoMode lipoMode,
-        PathFragment fdoZip,
-        FdoInputFile fdoPrefetchHintsFile,
-        String fdoInstrument,
-        FdoMode fdoMode) {
-      return interner.intern(
-          new Key(lipoMode, fdoZip, fdoPrefetchHintsFile, fdoInstrument, fdoMode));
+    static Key of(LipoMode lipoMode, PathFragment fdoZip, String fdoInstrument, FdoMode fdoMode) {
+      return interner.intern(new Key(lipoMode, fdoZip, fdoInstrument, fdoMode));
     }
 
     public LipoMode getLipoMode() {
@@ -82,10 +69,6 @@ public class FdoSupportValue implements SkyValue {
 
     public PathFragment getFdoZip() {
       return fdoZip;
-    }
-
-    public FdoInputFile getFdoPrefetchHintsFile() {
-      return fdoPrefetchHintsFile;
     }
 
     public String getFdoInstrument() {
@@ -109,14 +92,13 @@ public class FdoSupportValue implements SkyValue {
       Key that = (Key) o;
       return Objects.equals(this.lipoMode, that.lipoMode)
           && Objects.equals(this.fdoZip, that.fdoZip)
-          && Objects.equals(this.fdoPrefetchHintsFile, that.fdoPrefetchHintsFile)
           && Objects.equals(this.fdoMode, that.fdoMode)
           && Objects.equals(this.fdoInstrument, that.fdoInstrument);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(lipoMode, fdoZip, fdoPrefetchHintsFile, fdoInstrument);
+      return Objects.hash(lipoMode, fdoZip, fdoInstrument);
     }
 
     @Override
@@ -136,11 +118,7 @@ public class FdoSupportValue implements SkyValue {
   }
 
   public static SkyKey key(
-      LipoMode lipoMode,
-      PathFragment fdoZip,
-      FdoInputFile fdoPrefetchHintsFile,
-      String fdoInstrument,
-      FdoMode fdoMode) {
-    return Key.of(lipoMode, fdoZip, fdoPrefetchHintsFile, fdoInstrument, fdoMode);
+      LipoMode lipoMode, PathFragment fdoZip, String fdoInstrument, FdoMode fdoMode) {
+    return Key.of(lipoMode, fdoZip, fdoInstrument, fdoMode);
   }
 }
