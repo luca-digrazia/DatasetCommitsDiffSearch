@@ -69,7 +69,7 @@ public class NinjaGraph implements RuleConfiguredTargetFactory {
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
     if (!ruleContext.getAnalysisEnvironment().getSkylarkSemantics().experimentalNinjaActions()) {
-      throw ruleContext.throwWithRuleError(
+      throw new RuleErrorException(
           "Usage of ninja_graph is only allowed with --experimental_ninja_actions flag");
     }
     Artifact mainArtifact = ruleContext.getPrerequisiteArtifact("main", Mode.TARGET);

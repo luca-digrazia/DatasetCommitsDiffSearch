@@ -71,8 +71,7 @@ public class NinjaBuild implements RuleConfiguredTargetFactory {
             graphProvider.getWorkingDirectory(),
             createSrcsMap(ruleContext),
             depsMapBuilder.build(),
-            symlinksMapBuilder.build(),
-            graphProvider.getOutputRootSymlinks());
+            symlinksMapBuilder.build());
     if (ruleContext.hasErrors()) {
       return null;
     }

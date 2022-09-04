@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.bazel.rules.ninja.actions;
 
 import com.google.common.collect.ImmutableSortedMap;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.bazel.rules.ninja.parser.NinjaTarget;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -31,19 +30,16 @@ public final class NinjaGraphProvider implements TransitiveInfoProvider {
   private final PathFragment workingDirectory;
   private final ImmutableSortedMap<PathFragment, NinjaTarget> usualTargets;
   private final ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargetsMap;
-  private final ImmutableSortedSet<PathFragment> outputRootSymlinks;
 
   public NinjaGraphProvider(
       PathFragment outputRoot,
       PathFragment workingDirectory,
       ImmutableSortedMap<PathFragment, NinjaTarget> usualTargets,
-      ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargetsMap,
-      ImmutableSortedSet<PathFragment> outputRootSymlinks) {
+      ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargetsMap) {
     this.outputRoot = outputRoot;
     this.workingDirectory = workingDirectory;
     this.usualTargets = usualTargets;
     this.phonyTargetsMap = phonyTargetsMap;
-    this.outputRootSymlinks = outputRootSymlinks;
   }
 
   public PathFragment getOutputRoot() {
@@ -60,10 +56,5 @@ public final class NinjaGraphProvider implements TransitiveInfoProvider {
 
   public ImmutableSortedMap<PathFragment, PhonyTarget> getPhonyTargetsMap() {
     return phonyTargetsMap;
-  }
-
-  /** Output paths under output_root, that should be treated as symlink artifacts. */
-  public ImmutableSortedSet<PathFragment> getOutputRootSymlinks() {
-    return outputRootSymlinks;
   }
 }
