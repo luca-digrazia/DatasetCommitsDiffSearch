@@ -16,7 +16,6 @@
  */
 package org.graylog2.security.ldap;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.SimpleTimeLimiter;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -42,7 +41,6 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import java.nio.charset.StandardCharsets;
 import java.text.MessageFormat;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -104,16 +102,14 @@ public class LdapConnector {
 
     @Nullable
     public LdapEntry search(LdapNetworkConnection connection,
-                                          String searchBase,
-                                          String searchPattern,
-                                          String displayNameAttribute,
-                                          String principal,
-                                          boolean activeDirectory,
-                                          String groupSearchBase,
-                                          String groupIdAttribute,
-                                          String groupSearchPattern) throws LdapException, CursorException {
+                            String searchBase,
+                            String searchPattern,
+                            String principal,
+                            boolean activeDirectory,
+                            String groupSearchBase,
+                            String groupIdAttribute,
+                            String groupSearchPattern) throws LdapException, CursorException {
         final LdapEntry ldapEntry = new LdapEntry();
-        final Set<String> groupDns = Sets.newHashSet();
 
         final String filter = MessageFormat.format(searchPattern, sanitizePrincipal(principal));
         if (LOG.isTraceEnabled()) {
@@ -125,7 +121,7 @@ public class LdapConnector {
             entryCursor = connection.search(searchBase,
                                             filter,
                                             SearchScope.SUBTREE,
-                                            groupIdAttribute, displayNameAttribute, "dn", "userPrincipalName", "mail", "rfc822Mailbox", "memberOf");
+                                            "*");
             final Iterator<Entry> it = entryCursor.iterator();
             if (it.hasNext()) {
                 final Entry e = it.next();
@@ -142,56 +138,27 @@ public class LdapConnector {
                         ldapEntry.setBindPrincipal(attribute.getString());
                     }
                     if (attribute.isHumanReadable()) {
-                        ldapEntry.put(attribute.getId(), Joiner.on(", ").join(attribute.iterator()));
-                    }
-                    if ("memberOf".equalsIgnoreCase(attribute.getId())) {
-                        for (Value<?> group : attribute) {
-                            groupDns.add(group.getString());
-                        }
-
+                        ldapEntry.put(attribute.getId(), attribute.getString());
                     }
                 }
             } else {
                 LOG.trace("No LDAP entry found for filter {}", filter);
                 return null;
             }
-            if (!groupDns.isEmpty() && !isNullOrEmpty(groupSearchBase) && !isNullOrEmpty(groupIdAttribute)) {
-                // user had a memberOf attribute which contained group references. resolve each group and collect group names
-                // according to groupIdAttribute if present
-                try {
-                    for (String groupDn : groupDns) {
-                        LOG.trace("Looking up group {}", groupDn);
-                        try {
-                            Entry group = connection.lookup(groupDn, groupIdAttribute);
-                            final Attribute groupId = group.get(groupIdAttribute);
-                            LOG.trace("Resolved {} to group {}", groupDn, groupId);
-                            if (groupId != null) {
-                                final String string = groupId.getString();
-                                ldapEntry.addGroups(Collections.singleton(string));
-                            }
-                        } catch (LdapException e) {
-                            LOG.warn("Error while looking up group " + groupDn, e);
-                        }
-                    }
-                } catch (Exception e) {
-                    LOG.error("Unexpected error during LDAP group resolution", e);
-                }
-            }
-            if (ldapEntry.getGroups().isEmpty() && !isNullOrEmpty(groupSearchBase) && !isNullOrEmpty(groupIdAttribute) && !isNullOrEmpty(groupSearchPattern)) {
+            if (!isNullOrEmpty(groupSearchBase) && !isNullOrEmpty(groupIdAttribute) && !isNullOrEmpty(groupSearchPattern)) {
+                // TODO ActiveDirectory could use the memberOf attribute, but then we'd need to resolve the CN of each group, too.
+                // TODO we do not check for dynamic groups yet.
                 ldapEntry.addGroups(findGroups(connection,
                                                groupSearchBase,
                                                groupSearchPattern,
                                                groupIdAttribute,
-                                               ldapEntry.getDn()
-                ));
+                                               ldapEntry.getDn()));
                 LOG.trace("LDAP search found entry for DN {} with search filter {}: {}",
                           ldapEntry.getDn(),
                           filter,
                           ldapEntry);
             } else {
-                if (groupDns.isEmpty()) {
-                    LOG.info("LDAP group search base, id attribute or object class missing, not iterating over LDAP groups.");
-                }
+                LOG.info("LDAP group search base, id attribute or object class missing, not searching for LDAP groups.");
             }
             return ldapEntry;
         } finally {
@@ -214,7 +181,7 @@ public class LdapConnector {
                     groupSearchBase,
                     groupSearchPattern,
                     SearchScope.SUBTREE,
-                    "objectClass", "uniqueMember", "member", groupIdAttribute);
+                    "*");
             LOG.trace("LDAP search for groups: {} starting at {}", groupSearchPattern, groupSearchBase);
             for (Entry e : groupSearch) {
                 if (LOG.isTraceEnabled()) {
