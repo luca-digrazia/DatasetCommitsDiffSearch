@@ -19,11 +19,12 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
- * This interface represents a symbolic link to an absolute or relative path,
- * stored in an InMemoryFileSystem.
+ * This interface represents a symbolic link to an absolute or relative path, stored in an
+ * InMemoryFileSystem.
  */
-@ThreadSafe @Immutable
-class InMemoryLinkInfo extends InMemoryContentInfo {
+@ThreadSafe
+@Immutable
+final class InMemoryLinkInfo extends InMemoryContentInfo {
 
   private final PathFragment linkContent;
   private final PathFragment normalizedLinkContent;
@@ -31,7 +32,7 @@ class InMemoryLinkInfo extends InMemoryContentInfo {
   InMemoryLinkInfo(Clock clock, PathFragment linkContent) {
     super(clock);
     this.linkContent = linkContent;
-    this.normalizedLinkContent = linkContent.normalize();
+    this.normalizedLinkContent = linkContent;
   }
 
   @Override
@@ -56,7 +57,7 @@ class InMemoryLinkInfo extends InMemoryContentInfo {
 
   @Override
   public long getSize() {
-    return linkContent.toString().length();
+    return linkContent.getSafePathString().length();
   }
 
   /**
