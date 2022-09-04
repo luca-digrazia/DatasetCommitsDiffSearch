@@ -1,6 +1,5 @@
 package org.jboss.resteasy.reactive.client.handlers;
 
-import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.MultiMap;
 import io.vertx.core.buffer.Buffer;
@@ -31,84 +30,70 @@ public class ClientSendRequestHandler implements ClientRestHandler {
             return;
         }
         requestContext.suspend();
-        Future<HttpClientRequest> futureRequest = createRequest(requestContext);
-        futureRequest.onSuccess(new Handler<HttpClientRequest>() {
+        HttpClientRequest httpClientRequest = createRequest(requestContext);
+        Buffer actualEntity = setRequestHeadersAndPrepareBody(httpClientRequest, requestContext);
+        httpClientRequest.handler(new Handler<HttpClientResponse>() {
             @Override
-            public void handle(HttpClientRequest request) {
-                requestContext.setHttpClientRequest(request);
-                Buffer actualEntity = null;
+            public void handle(HttpClientResponse clientResponse) {
                 try {
-                    actualEntity = ClientSendRequestHandler.this
-                            .setRequestHeadersAndPrepareBody(request, requestContext);
-                } catch (IOException e) {
-                    requestContext.resume(new ProcessingException(e));
-                    return;
-                }
-                Future<HttpClientResponse> future;
-                if (actualEntity == AsyncInvokerImpl.EMPTY_BUFFER) {
-                    future = request.send();
-                } else {
-                    future = request.send(actualEntity);
-                }
-
-                future
-                        .onSuccess(new Handler<HttpClientResponse>() {
+                    requestContext.initialiseResponse(clientResponse);
+                    if (!requestContext.isRegisterBodyHandler()) {
+                        clientResponse.pause();
+                        requestContext.resume();
+                    } else {
+                        clientResponse.bodyHandler(new Handler<Buffer>() {
                             @Override
-                            public void handle(HttpClientResponse clientResponse) {
+                            public void handle(Buffer buffer) {
                                 try {
-                                    requestContext.initialiseResponse(clientResponse);
-                                    if (!requestContext.isRegisterBodyHandler()) {
-                                        clientResponse.pause();
-                                        requestContext.resume();
+                                    if (buffer.length() > 0) {
+                                        requestContext.setResponseEntityStream(new ByteArrayInputStream(buffer.getBytes()));
                                     } else {
-                                        clientResponse.bodyHandler(new Handler<Buffer>() {
-                                            @Override
-                                            public void handle(Buffer buffer) {
-                                                try {
-                                                    if (buffer.length() > 0) {
-                                                        requestContext.setResponseEntityStream(
-                                                                new ByteArrayInputStream(buffer.getBytes()));
-                                                    } else {
-                                                        requestContext.setResponseEntityStream(null);
-                                                    }
-                                                    requestContext.resume();
-                                                } catch (Throwable t) {
-                                                    requestContext.resume(t);
-                                                }
-                                            }
-                                        });
+                                        requestContext.setResponseEntityStream(null);
                                     }
+                                    requestContext.resume();
                                 } catch (Throwable t) {
                                     requestContext.resume(t);
                                 }
                             }
-                        })
-                        .onFailure(new Handler<Throwable>() {
-                            @Override
-                            public void handle(Throwable failure) {
-                                if (failure instanceof IOException) {
-                                    requestContext.resume(new ProcessingException(failure));
-                                } else {
-                                    requestContext.resume(failure);
-                                }
-                            }
                         });
+                    }
+                } catch (Throwable t) {
+                    requestContext.resume(t);
+                }
             }
         });
+        httpClientRequest.exceptionHandler(new Handler<Throwable>() {
+            @Override
+            public void handle(Throwable event) {
+                if (event instanceof IOException) {
+                    requestContext.resume(new ProcessingException(event));
+                } else {
+                    requestContext.resume(event);
+                }
+            }
+        });
+        if (actualEntity == AsyncInvokerImpl.EMPTY_BUFFER) {
+            httpClientRequest.end();
+        } else {
+            httpClientRequest.end(actualEntity);
+        }
+
     }
 
-    public Future<HttpClientRequest> createRequest(RestClientRequestContext state) {
+    public <T> HttpClientRequest createRequest(RestClientRequestContext state) {
         HttpClient httpClient = state.getHttpClient();
         URI uri = state.getUri();
         boolean isHttps = "https".equals(uri.getScheme());
         int port = uri.getPort() != -1 ? uri.getPort() : (isHttps ? 443 : 80);
-        return  httpClient.request(
+        HttpClientRequest httpClientRequest = httpClient.request(
+                HttpMethod.valueOf(state.getHttpMethod()),
                 new RequestOptions()
-                        .setMethod(HttpMethod.valueOf(state.getHttpMethod()))
                         .setHost(uri.getHost())
                         .setURI(uri.getPath() + (uri.getQuery() == null ? "" : "?" + uri.getQuery()))
                         .setPort(port)
                         .setSsl(isHttps));
+        state.setHttpClientRequest(httpClientRequest);
+        return httpClientRequest;
     }
 
     private <T> Buffer setRequestHeadersAndPrepareBody(HttpClientRequest httpClientRequest, RestClientRequestContext state)
