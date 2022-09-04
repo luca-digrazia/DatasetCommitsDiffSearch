@@ -157,6 +157,7 @@ import com.google.devtools.build.lib.rules.objc.ObjcProtoAspect;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
+import com.google.devtools.build.lib.rules.objc.ObjcXcodeprojRule;
 import com.google.devtools.build.lib.rules.objc.XcTestAppProvider;
 import com.google.devtools.build.lib.rules.platform.ConstraintSettingRule;
 import com.google.devtools.build.lib.rules.platform.ConstraintValueRule;
@@ -687,6 +688,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new ObjcFrameworkRule());
           builder.addRuleDefinition(new ObjcImportRule());
           builder.addRuleDefinition(new ObjcLibraryRule());
+          builder.addRuleDefinition(new ObjcXcodeprojRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CoptsRule());
           builder.addRuleDefinition(new ObjcRuleClasses.BundlingRule());
           builder.addRuleDefinition(new ObjcRuleClasses.DylibDependingRule(objcProtoAspect));
