@@ -25,6 +25,7 @@ import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.packages.PackageFactory.GlobPatternExtractor;
 import com.google.devtools.build.lib.packages.util.PackageFactoryApparatus;
 import com.google.devtools.build.lib.packages.util.PackageFactoryTestBase;
 import com.google.devtools.build.lib.syntax.ParserInput;
@@ -33,10 +34,8 @@ import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -143,16 +142,16 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
   @Test
   public void testExportsFilesVisibilityMustBeSequence() throws Exception {
     expectEvalError(
-        "in call to exports_files(), parameter 'visibility' got value of type 'depset', want"
-            + " 'sequence or NoneType'",
+        "expected value of type 'sequence or NoneType' for parameter 'visibility', "
+            + "for call to method exports_files",
         "exports_files(srcs=[], visibility=depset(['notice']))");
   }
 
   @Test
   public void testExportsFilesLicensesMustBeSequence() throws Exception {
     expectEvalError(
-        "in call to exports_files(), parameter 'licenses' got value of type 'depset', want"
-            + " 'sequence of strings or NoneType'",
+        "expected value of type 'sequence of strings or NoneType' for parameter 'licenses', "
+            + "for call to method exports_files",
         "exports_files(srcs=[], licenses=depset(['notice']))");
   }
 
@@ -648,7 +647,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     events.setFailFast(false);
     assertGlobFails(
         "glob(['incl'],['excl'],3,True,'extraarg')",
-        "glob() accepts no more than 4 positional arguments but got 5");
+        "expected no more than 4 positional arguments, but got 5, for call to method glob");
   }
 
   @Test
@@ -656,8 +655,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
     events.setFailFast(false);
     assertGlobFails(
         "glob(1, exclude=2)",
-        "in call to glob(), parameter 'include' got value of type 'int', want 'sequence of"
-            + " strings'");
+        "expected value of type 'sequence of strings' for parameter 'include', "
+            + "for call to method glob");
   }
 
   @Test
@@ -753,27 +752,6 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
    assertGlobFails("glob(['?'])", "glob pattern '?' contains forbidden '?' wildcard");
   }
 
-  @Test
-  public void testBadExcludePattern() throws Exception {
-    events.setFailFast(false);
-    // The 'exclude' check is currently only reached if the pattern is "complex".
-    // This seems like a bug:
-    //   assertGlobFails("glob(['BUILD'], ['/'])", "pattern cannot be absolute");
-    assertGlobFails("glob(['BUILD'], ['/*/*'])", "pattern cannot be absolute");
-  }
-
-  @Test
-  public void testGlobEscapesAt() throws Exception {
-    // See lib.skyframe.PackageFunctionTest.globEscapesAt and
-    // https://github.com/bazelbuild/bazel/issues/10606.
-    scratch.file("/p/@f.txt");
-    Path file = scratch.file("/p/BUILD", "print(glob(['*.txt'])[0])");
-    events.setFailFast(false); // we need this to use print (!)
-    packages.eval("p", RootedPath.toRootedPath(root, file));
-    events.assertNoWarningsOrErrors();
-    events.assertContainsDebug(":@f.txt"); // observe prepended colon
-  }
-
   /**
    * Tests that a glob evaluation that encounters an I/O error throws instead of constructing a
    * package.
@@ -842,7 +820,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
   @Test
   public void testPackageGroupNamedArguments() throws Exception {
     expectEvalError(
-        "package_group() got unexpected positional argument", "package_group('skin', name = 'x')");
+        "expected no more than 0 positional arguments, but got 1,",
+        "package_group('skin', name = 'x')");
   }
 
   @Test
@@ -1063,7 +1042,7 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
   @Test
   public void testIncompleteEnvironmentGroup() throws Exception {
     expectEvalError(
-        "environment_group() missing 1 required named argument: defaults",
+        "parameter 'defaults' has no default value, for call to function environment_group",
         "environment(name = 'foo')",
         "environment_group(name='group', environments = [':foo'])");
   }
@@ -1192,7 +1171,8 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
 
   @Test
   public void testGlobPatternExtractor() {
-    StarlarkFile file =
+    GlobPatternExtractor globPatternExtractor = new GlobPatternExtractor();
+    globPatternExtractor.visit(
         StarlarkFile.parse(
             ParserInput.fromLines(
                 "pattern = '*'",
@@ -1202,64 +1182,9 @@ public class PackageFactoryTest extends PackageFactoryTestBase {
                 "  pattern,",
                 "])",
                 "other_variable = glob(include = ['a'], exclude = ['b'])",
-                "third_variable = glob(['c'], exclude_directories = 0)"));
-    List<String> globs = new ArrayList<>();
-    List<String> globsWithDirs = new ArrayList<>();
-    PackageFactory.checkBuildSyntax(
-        file, globs, globsWithDirs, new HashMap<>(), /*eventHandler=*/ null);
-    assertThat(globs).containsExactly("ab", "a", "**/*");
-    assertThat(globsWithDirs).containsExactly("c");
-  }
-
-  // Tests of BUILD file dialect checks:
-
-  @Test
-  public void testDefInBuild() throws Exception {
-    checkBuildDialectError(
-        "def func(): pass", //
-        "function definitions are not allowed in BUILD files");
-  }
-
-  @Test
-  public void testForStatementForbiddenInBuild() throws Exception {
-    checkBuildDialectError(
-        "for _ in []: pass", //
-        "for loops are not allowed");
-  }
-
-  @Test
-  public void testIfStatementForbiddenInBuild() throws Exception {
-    checkBuildDialectError(
-        "if False: pass", //
-        "if statements are not allowed");
-  }
-
-  @Test
-  public void testKwargsForbiddenInBuild() throws Exception {
-    checkBuildDialectError(
-        "print(**dict)", //
-        "**kwargs arguments are not allowed in BUILD files");
-    checkBuildDialectError(
-        "len(dict(**{'a': 1}))", //
-        "**kwargs arguments are not allowed in BUILD files");
-  }
-
-  @Test
-  public void testArgsForbiddenInBuild() throws Exception {
-    checkBuildDialectError(
-        "print(*['a'])", //
-        "*args arguments are not allowed in BUILD files");
-  }
-
-  // Asserts that evaluation of the specified BUILD file produces the expected error.
-  // Modifies: scratch, events, packages; be careful when calling more than once per @Test!
-  private void checkBuildDialectError(String content, String expectedError)
-      throws IOException, InterruptedException, NoSuchPackageException {
-    events.clear();
-    events.setFailFast(false);
-    Path file = scratch.overwriteFile("/p/BUILD", content);
-    Package pkg = packages.eval("p", RootedPath.toRootedPath(root, file));
-    assertThat(pkg.containsErrors()).isTrue();
-    events.assertContainsError(expectedError);
+                "third_variable = glob(['c'], exclude_directories = 0)")));
+    assertThat(globPatternExtractor.getExcludeDirectoriesPatterns())
+        .containsExactly("ab", "a", "**/*");
+    assertThat(globPatternExtractor.getIncludeDirectoriesPatterns()).containsExactly("c");
   }
 }
