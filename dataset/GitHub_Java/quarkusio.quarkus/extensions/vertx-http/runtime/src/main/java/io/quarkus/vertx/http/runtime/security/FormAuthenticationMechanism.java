@@ -152,28 +152,28 @@ public class FormAuthenticationMechanism implements HttpAuthenticationMechanism 
     public Uni<SecurityIdentity> authenticate(RoutingContext context,
             IdentityProviderManager identityProviderManager) {
 
-        if (context.normalizedPath().endsWith(postLocation) && context.request().method().equals(HttpMethod.POST)) {
-            //we always re-auth if it is a post to the auth URL
+        PersistentLoginManager.RestoreResult result = loginManager.restore(context);
+        if (result != null) {
+            Uni<SecurityIdentity> ret = identityProviderManager
+                    .authenticate(new TrustedAuthenticationRequest(result.getPrincipal()));
+            return ret.onItem().invoke(new Consumer<SecurityIdentity>() {
+                @Override
+                public void accept(SecurityIdentity securityIdentity) {
+                    loginManager.save(securityIdentity, context, result, context.request().isSSL());
+                }
+            });
+        }
+
+        if (context.normalisedPath().endsWith(postLocation) && context.request().method().equals(HttpMethod.POST)) {
             return runFormAuth(context, identityProviderManager);
         } else {
-            PersistentLoginManager.RestoreResult result = loginManager.restore(context);
-            if (result != null) {
-                Uni<SecurityIdentity> ret = identityProviderManager
-                        .authenticate(new TrustedAuthenticationRequest(result.getPrincipal()));
-                return ret.onItem().invoke(new Consumer<SecurityIdentity>() {
-                    @Override
-                    public void accept(SecurityIdentity securityIdentity) {
-                        loginManager.save(securityIdentity, context, result, context.request().isSSL());
-                    }
-                });
-            }
             return Uni.createFrom().optional(Optional.empty());
         }
     }
 
     @Override
     public Uni<ChallengeData> getChallenge(RoutingContext context) {
-        if (context.normalizedPath().endsWith(postLocation) && context.request().method().equals(HttpMethod.POST)) {
+        if (context.normalisedPath().endsWith(postLocation) && context.request().method().equals(HttpMethod.POST)) {
             log.debugf("Serving form auth error page %s for %s", loginPage, context);
             // This method would no longer be called if authentication had already occurred.
             return getRedirect(context, errorPage);
