@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
@@ -115,8 +114,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
       CommandLines commandLines,
       CommandLine directCommandLine,
       CommandLineLimits commandLineLimits,
-      CharSequence progressMessage,
-      RunfilesSupplier runfilesSupplier) {
+      CharSequence progressMessage) {
     super(
         owner,
         tools,
@@ -129,12 +127,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
         false,
         // TODO(#3320): This is missing the config's action environment.
         JavaCompileAction.UTF8_ACTION_ENVIRONMENT,
-        /* executionInfo= */ ImmutableMap.of(),
         progressMessage,
-        runfilesSupplier,
-        "Turbine",
-        /* executeUnconditionally= */ false,
-        /* extraActionInfoSupplier= */ null);
+        "Turbine");
     this.directInputs = checkNotNull(directInputs);
     this.directCommandLine = checkNotNull(directCommandLine);
   }
@@ -378,7 +372,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
       NestedSet<Artifact> tools =
           NestedSetBuilder.<Artifact>stableOrder()
               .add(javacJar)
-              .addTransitive(javaToolchain.getHeaderCompiler().getFilesToRun())
+              .add(javaToolchain.getHeaderCompiler())
               .addTransitive(toolsJars)
               .build();
       ImmutableList<Artifact> outputs = ImmutableList.of(outputJar, outputDepsProto);
@@ -415,23 +409,17 @@ public class JavaHeaderCompileAction extends SpawnAction {
         if (noFallback) {
           commandLine.add("--nojavac_fallback");
         }
-        Artifact headerCompiler = javaToolchain.getHeaderCompiler().getExecutable();
-        // The header compiler is either a jar file that needs to be executed using
-        // `java -jar <path>`, or an executable that can be run directly.
-        if (!headerCompiler.getExtension().equals("jar")) {
-          builder.setExecutable(headerCompiler);
-          builder.addTool(javaToolchain.getHeaderCompiler());
-        } else {
-          builder.setJarExecutable(
-              hostJavabase.javaBinaryExecPath(), headerCompiler, javaToolchain.getJvmOptions());
-        }
         ruleContext.registerAction(
             builder
-                .addTransitiveTools(tools)
+                .addTools(tools)
                 .addTransitiveInputs(baseInputs)
                 .addTransitiveInputs(classpath)
                 .addOutputs(outputs)
                 .addCommandLine(commandLine.build(), paramFileInfo)
+                .setJarExecutable(
+                    hostJavabase.javaBinaryExecPath(),
+                    javaToolchain.getHeaderCompiler(),
+                    javaToolchain.getJvmOptions())
                 .setMnemonic("Turbine")
                 .setProgressMessage(getProgressMessage())
                 .build(ruleContext));
@@ -494,12 +482,8 @@ public class JavaHeaderCompileAction extends SpawnAction {
                 false,
                 // TODO(b/63280599): This is missing the config's action environment.
                 JavaCompileAction.UTF8_ACTION_ENVIRONMENT,
-                /* executionInfo= */ ImmutableMap.of(),
                 getProgressMessageWithAnnotationProcessors(),
-                javaToolchain.getHeaderCompiler().getRunfilesSupplier(),
-                "JavacTurbine",
-                /* executeUnconditionally= */ false,
-                /* extraActionInfoSupplier= */ null));
+                "JavacTurbine"));
         return;
       }
 
@@ -526,8 +510,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
               commandLines,
               directCommandLine,
               ruleContext.getConfiguration().getCommandLineLimits(),
-              getProgressMessage(),
-              javaToolchain.getHeaderCompiler().getRunfilesSupplier()));
+              getProgressMessage()));
     }
 
     private LazyString getProgressMessageWithAnnotationProcessors() {
@@ -557,16 +540,11 @@ public class JavaHeaderCompileAction extends SpawnAction {
 
     private CustomCommandLine.Builder getBaseArgs(
         JavaToolchainProvider javaToolchain, JavaRuntimeInfo hostJavabase) {
-      Artifact headerCompiler = javaToolchain.getHeaderCompiler().getExecutable();
-      if (!headerCompiler.getExtension().equals("jar")) {
-        return CustomCommandLine.builder().addExecPath(headerCompiler);
-      } else {
-        return CustomCommandLine.builder()
-            .addPath(hostJavabase.javaBinaryExecPath())
-            .add("-Xverify:none")
-            .addAll(javaToolchain.getJvmOptions())
-            .addExecPath("-jar", headerCompiler);
-      }
+      return CustomCommandLine.builder()
+          .addPath(hostJavabase.javaBinaryExecPath())
+          .add("-Xverify:none")
+          .addAll(javaToolchain.getJvmOptions())
+          .addExecPath("-jar", javaToolchain.getHeaderCompiler());
     }
 
     /**
