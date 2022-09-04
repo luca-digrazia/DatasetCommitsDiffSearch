@@ -426,7 +426,7 @@ public class CppCompileAction extends AbstractAction
     try {
       initialResult =
           actionExecutionContext
-              .getContext(CppIncludeScanningContext.class)
+              .getContext(CppCompileActionContext.class)
               .findAdditionalInputs(
                   this, actionExecutionContext, cppSemantics.getIncludeProcessing());
     } catch (ExecException e) {
@@ -1120,8 +1120,8 @@ public class CppCompileAction extends AbstractAction
     ensureCoverageNotesFilesExist();
 
     // This is the .d file scanning part.
-    CppIncludeExtractionContext scanningContext =
-        actionExecutionContext.getContext(CppIncludeExtractionContext.class);
+    IncludeScanningContext scanningContext =
+        actionExecutionContext.getContext(IncludeScanningContext.class);
     Path execRoot = actionExecutionContext.getExecRoot();
 
     NestedSet<Artifact> discoveredInputs;
@@ -1271,7 +1271,7 @@ public class CppCompileAction extends AbstractAction
       throws ActionExecutionException, InterruptedException {
     Iterable<Artifact> scannedIncludes;
     try {
-      scannedIncludes = actionExecutionContext.getContext(CppIncludeScanningContext.class)
+      scannedIncludes = actionExecutionContext.getContext(CppCompileActionContext.class)
           .findAdditionalInputs(this, actionExecutionContext,  cppSemantics.getIncludeProcessing());
     } catch (ExecException e) {
       throw e.toActionExecutionException(this);

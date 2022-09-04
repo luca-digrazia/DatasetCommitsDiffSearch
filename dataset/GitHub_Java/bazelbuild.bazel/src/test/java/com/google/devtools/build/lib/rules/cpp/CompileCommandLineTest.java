@@ -91,7 +91,7 @@ public class CompileCommandLineTest extends BuildViewTestCase {
                     "  }",
                     "}"))
             .build();
-    assertThat(compileCommandLine.getArguments(/* overwrittenVariables= */ null))
+    assertThat(compileCommandLine.getArgv(scratchArtifact("a/FakeOutput").getExecPath(), null))
         .contains("-some_foo_flag");
   }
 
@@ -133,14 +133,16 @@ public class CompileCommandLineTest extends BuildViewTestCase {
                     "}"))
             .setCoptsFilter(CoptsFilter.fromRegex(Pattern.compile(".*i_am_a_flag.*")))
             .build();
-    return compileCommandLine.getArguments(/* overwrittenVariables= */ null);
+    return compileCommandLine.getArgv(scratchArtifact("a/FakeOutput").getExecPath(), null);
   }
 
   private Builder makeCompileCommandLineBuilder() throws Exception {
     return CompileCommandLine.builder(
         scratchArtifact("a/FakeInput"),
+        scratchArtifact("a/FakeOutput"),
         CoptsFilter.alwaysPasses(),
         "c++-compile",
+        getTargetConfiguration().getFragment(CppConfiguration.class).getCrosstoolTopPathFragment(),
         new DotdFile(scratchArtifact("a/dotD")));
   }
 }

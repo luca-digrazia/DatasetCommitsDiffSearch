@@ -43,7 +43,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
-import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategory;
+import com.google.devtools.build.lib.rules.cpp.CcLibraryHelper.SourceCategory;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProvidesException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
 import javax.annotation.Nullable;
@@ -69,21 +68,6 @@ import javax.annotation.Nullable;
  * Common parts of the implementation of cc rules.
  */
 public final class CcCommon {
-
-  /** Name of the build variable for the sysroot path variable name. */
-  public static final String SYSROOT_VARIABLE_NAME = "sysroot";
-
-  /** Name of the build variable for the path to the input file being processed. */
-  public static final String INPUT_FILE_VARIABLE_NAME = "input_file";
-
-  /**
-   * Name of the build variable for includes that compiler needs to include into sources to be
-   * compiled.
-   */
-  public static final String INCLUDES_VARIABLE_NAME = "includes";
-
-  /** Name of the build variable for stripopts for the strip action. */
-  public static final String STRIPOPTS_VARIABLE_NAME = "stripopts";
 
   private static final String NO_COPTS_ATTRIBUTE = "nocopts";
 
@@ -134,6 +118,7 @@ public final class CcCommon {
   private static final ImmutableSet<String> DEFAULT_FEATURES =
       ImmutableSet.of(
           CppRuleClasses.DEPENDENCY_FILE,
+          CppRuleClasses.COMPILE_ACTION_FLAGS_IN_FLAG_SET,
           CppRuleClasses.RANDOM_SEED,
           CppRuleClasses.MODULE_MAPS,
           CppRuleClasses.MODULE_MAP_HOME_CWD,
@@ -161,31 +146,6 @@ public final class CcCommon {
     this.fdoSupport =
         Preconditions.checkNotNull(
             CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext));
-  }
-
-  /**
-   * Merges a list of output groups into one. The sets for each entry with a given key are merged.
-   */
-  public static Map<String, NestedSet<Artifact>> mergeOutputGroups(
-      ImmutableList<Map<String, NestedSet<Artifact>>> outputGroups) {
-    Map<String, NestedSetBuilder<Artifact>> mergedOutputGroupsBuilder = new TreeMap<>();
-
-    for (Map<String, NestedSet<Artifact>> outputGroup : outputGroups) {
-      for (Map.Entry<String, NestedSet<Artifact>> entryOutputGroup : outputGroup.entrySet()) {
-        String key = entryOutputGroup.getKey();
-        mergedOutputGroupsBuilder.computeIfAbsent(
-            key, (String k) -> NestedSetBuilder.compileOrder());
-        mergedOutputGroupsBuilder.get(key).addTransitive(entryOutputGroup.getValue());
-      }
-    }
-
-    Map<String, NestedSet<Artifact>> mergedOutputGroups = new TreeMap<>();
-    for (Map.Entry<String, NestedSetBuilder<Artifact>> entryOutputGroupBuilder :
-        mergedOutputGroupsBuilder.entrySet()) {
-      mergedOutputGroups.put(
-          entryOutputGroupBuilder.getKey(), entryOutputGroupBuilder.getValue().build());
-    }
-    return mergedOutputGroups;
   }
 
   /**
@@ -560,8 +520,8 @@ public final class CcCommon {
             "ignoring invalid absolute path '" + includesAttr + "'");
         continue;
       }
-      PathFragment includesPath = packageFragment.getRelative(includesAttr);
-      if (includesPath.containsUplevelReferences()) {
+      PathFragment includesPath = packageFragment.getRelative(includesAttr).normalize();
+      if (!includesPath.isNormalized()) {
         ruleContext.attributeError("includes",
             "Path references a path above the execution root.");
       }

@@ -38,11 +38,13 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.vfs.FileSystemProvider;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.WithFeatureSet;
@@ -120,13 +122,17 @@ public class CcToolchainFeatures implements Serializable {
    */
   @AutoCodec(strategy = Strategy.POLYMORPHIC)
   interface StringChunk {
-    ObjectCodec<StringChunk> CODEC = new CcToolchainFeatures_StringChunk_AutoCodec();
+
+    public static final ObjectCodec<StringChunk> CODEC =
+        new CcToolchainFeatures_StringChunk_AutoCodec();
+
     /**
      * Expands this chunk.
      *
      * @param variables binding of variable names to their values for a single flag expansion.
+     * @param flag the flag content to append to.
      */
-    String expand(Variables variables);
+    void expand(Variables variables, StringBuilder flag);
   }
 
   /** A plain text chunk of a string (containing no variables). */
@@ -144,10 +150,10 @@ public class CcToolchainFeatures implements Serializable {
     StringLiteralChunk(String text) {
       this.text = text;
     }
-
+    
     @Override
-    public String expand(Variables variables) {
-      return text;
+    public void expand(Variables variables, StringBuilder flag) {
+      flag.append(text);
     }
 
     @Override
@@ -178,14 +184,14 @@ public class CcToolchainFeatures implements Serializable {
     private VariableChunk(String variableName) {
       this.variableName = variableName;
     }
-
+    
     @Override
-    public String expand(Variables variables) {
+    public void expand(Variables variables, StringBuilder stringBuilder) {
       // We check all variables in FlagGroup.expandCommandLine.
       // If we arrive here with the variable not being available, the variable was provided, but
       // the nesting level of the NestedSequence was deeper than the nesting level of the flag
       // groups.
-      return variables.getStringVariable(variableName);
+      stringBuilder.append(variables.getStringVariable(variableName));
     }
 
     @Override
@@ -331,7 +337,8 @@ public class CcToolchainFeatures implements Serializable {
   @AutoCodec(strategy = Strategy.POLYMORPHIC)
   interface Expandable {
 
-    ObjectCodec<Expandable> CODEC = new CcToolchainFeatures_Expandable_AutoCodec();
+    public static final ObjectCodec<Expandable> CODEC =
+        new CcToolchainFeatures_Expandable_AutoCodec();
 
     /**
      * Expands the current expandable under the given {@code view}, adding new flags to {@code
@@ -345,6 +352,9 @@ public class CcToolchainFeatures implements Serializable {
 
   /**
    * A single flag to be expanded under a set of variables.
+   *
+   * <p>TODO(bazel-team): Consider specializing Flag for the simple case that a flag is just a bit
+   * of text.
    */
   @Immutable
   @AutoCodec
@@ -366,7 +376,7 @@ public class CcToolchainFeatures implements Serializable {
         Variables variables, @Nullable ArtifactExpander expander, List<String> commandLine) {
       StringBuilder flag = new StringBuilder();
       for (StringChunk chunk : chunks) {
-        flag.append(chunk.expand(variables));
+        chunk.expand(variables, flag);
       }
       commandLine.add(flag.toString());
     }
@@ -386,55 +396,6 @@ public class CcToolchainFeatures implements Serializable {
     @Override
     public int hashCode() {
       return Objects.hash(chunks);
-    }
-
-    /** A single environment key/value pair to be expanded under a set of variables. */
-    private static Expandable create(ImmutableList<StringChunk> chunks) {
-      if (chunks.size() == 1) {
-        return new SingleChunkFlag(chunks.get(0));
-      }
-      return new Flag(chunks);
-    }
-
-    /** Optimization for single-chunk case */
-    @Immutable
-    @AutoCodec
-    @VisibleForSerialization
-    static class SingleChunkFlag implements Serializable, Expandable {
-      public static final ObjectCodec<SingleChunkFlag> CODEC =
-          new CcToolchainFeatures_Flag_SingleChunkFlag_AutoCodec();
-
-      private final StringChunk chunk;
-
-      @VisibleForSerialization
-      SingleChunkFlag(StringChunk chunk) {
-        this.chunk = chunk;
-      }
-
-      @Override
-      public void expand(
-          Variables variables,
-          @Nullable ArtifactExpander artifactExpander,
-          List<String> commandLine) {
-        commandLine.add(chunk.expand(variables));
-      }
-
-      @Override
-      public boolean equals(Object o) {
-        if (this == o) {
-          return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-          return false;
-        }
-        SingleChunkFlag that = (SingleChunkFlag) o;
-        return chunk.equals(that.chunk);
-      }
-
-      @Override
-      public int hashCode() {
-        return chunk.hashCode();
-      }
     }
   }
 
@@ -469,7 +430,7 @@ public class CcToolchainFeatures implements Serializable {
     public void addEnvEntry(Variables variables, ImmutableMap.Builder<String, String> envBuilder) {
       StringBuilder value = new StringBuilder();
       for (StringChunk chunk : valueChunks) {
-        value.append(chunk.expand(variables));
+        chunk.expand(variables, value);
       }
       envBuilder.put(key, value.toString());
     }
@@ -542,7 +503,7 @@ public class CcToolchainFeatures implements Serializable {
       }
       for (String flag : flags) {
         StringValueParser parser = new StringValueParser(flag);
-        expandables.add(Flag.create(parser.getChunks()));
+        expandables.add(new Flag(parser.getChunks()));
       }
       for (CToolchain.FlagGroup group : groups) {
         FlagGroup subgroup = new FlagGroup(group);
@@ -1154,7 +1115,7 @@ public class CcToolchainFeatures implements Serializable {
       Variables artifactNameVariables =
           new Variables.Builder().addAllStringVariables(variables).build();
       for (StringChunk chunk : chunks) {
-        resultBuilder.append(chunk.expand(artifactNameVariables));
+        chunk.expand(artifactNameVariables, resultBuilder);
       }
       String result = resultBuilder.toString();
       return result.charAt(0) == '/' ? result.substring(1) : result;
@@ -1168,9 +1129,9 @@ public class CcToolchainFeatures implements Serializable {
    * instance could serve as a top level View used to expand all flag_groups.
    */
   @Immutable
-  @AutoCodec
+  @AutoCodec(dependency = FileSystemProvider.class)
   public static class Variables {
-    public static final ObjectCodec<Variables> CODEC =
+    public static final InjectingObjectCodec<Variables, FileSystemProvider> CODEC =
         new CcToolchainFeatures_Variables_AutoCodec();
 
     /** An empty variables instance. */
@@ -1204,9 +1165,9 @@ public class CcToolchainFeatures implements Serializable {
      * <p>Implementations must be immutable and without any side-effects. They will be expanded and
      * queried multiple times.
      */
-    @AutoCodec(strategy = Strategy.POLYMORPHIC)
+    @AutoCodec(strategy = Strategy.POLYMORPHIC, dependency = FileSystemProvider.class)
     interface VariableValue {
-      ObjectCodec<VariableValue> CODEC =
+      public static final InjectingObjectCodec<VariableValue, FileSystemProvider> CODEC =
           new CcToolchainFeatures_Variables_VariableValue_AutoCodec();
 
       /**
@@ -1420,9 +1381,9 @@ public class CcToolchainFeatures implements Serializable {
      * significantly reduces memory overhead.
      */
     @Immutable
-    @AutoCodec
+    @AutoCodec(dependency = FileSystemProvider.class)
     public static class LibraryToLinkValue extends VariableValueAdapter {
-      public static final ObjectCodec<LibraryToLinkValue> CODEC =
+      public static final InjectingObjectCodec<LibraryToLinkValue, FileSystemProvider> CODEC =
           new CcToolchainFeatures_Variables_LibraryToLinkValue_AutoCodec();
 
       public static final String OBJECT_FILES_FIELD_NAME = "object_files";
@@ -1553,10 +1514,10 @@ public class CcToolchainFeatures implements Serializable {
 
     /** Sequence of arbitrary VariableValue objects. */
     @Immutable
-    @AutoCodec
+    @AutoCodec(dependency = FileSystemProvider.class)
     @VisibleForSerialization
     static final class Sequence extends VariableValueAdapter {
-      public static final ObjectCodec<Sequence> CODEC =
+      public static final InjectingObjectCodec<Sequence, FileSystemProvider> CODEC =
           new CcToolchainFeatures_Variables_Sequence_AutoCodec();
 
       private static final String SEQUENCE_VARIABLE_TYPE_NAME = "sequence";
@@ -1589,10 +1550,10 @@ public class CcToolchainFeatures implements Serializable {
      * significantly reduces memory overhead.
      */
     @Immutable
-    @AutoCodec
+    @AutoCodec(dependency = FileSystemProvider.class)
     @VisibleForSerialization
     static final class StructureSequence extends VariableValueAdapter {
-      public static final ObjectCodec<StructureSequence> CODEC =
+      public static final InjectingObjectCodec<StructureSequence, FileSystemProvider> CODEC =
           new CcToolchainFeatures_Variables_StructureSequence_AutoCodec();
 
       private final ImmutableList<ImmutableMap<String, VariableValue>> values;
@@ -1666,10 +1627,10 @@ public class CcToolchainFeatures implements Serializable {
      * memory overhead is prohibitively big. Use optimized {@link StructureSequence} instead.
      */
     @Immutable
-    @AutoCodec
+    @AutoCodec(dependency = FileSystemProvider.class)
     @VisibleForSerialization
     static final class StructureValue extends VariableValueAdapter {
-      public static final ObjectCodec<StructureValue> CODEC =
+      public static final InjectingObjectCodec<StructureValue, FileSystemProvider> CODEC =
           new CcToolchainFeatures_Variables_StructureValue_AutoCodec();
 
       private static final String STRUCTURE_VARIABLE_TYPE_NAME = "structure";
