@@ -64,9 +64,7 @@ import com.google.devtools.build.lib.exec.CheckUpToDateFilter;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.exec.ExecutorLifecycleListener;
-import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
 import com.google.devtools.build.lib.exec.SpawnActionContextMaps;
-import com.google.devtools.build.lib.exec.SpawnStrategyRegistry;
 import com.google.devtools.build.lib.exec.SymlinkTreeStrategy;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
@@ -138,39 +136,24 @@ public class ExecutionTool {
       throw new ExecutorInitException("Execroot creation failed", e);
     }
 
-    ExecutorBuilder executorBuilder = new ExecutorBuilder();
-    ModuleActionContextRegistry.Builder actionContextRegistryBuilder =
-        executorBuilder.asModuleActionContextRegistryBuilder();
-    SpawnStrategyRegistry.Builder spawnStrategyRegistryBuilder =
-        executorBuilder.asSpawnStrategyRegistryBuilder();
-
+    ExecutorBuilder builder = new ExecutorBuilder();
     for (BlazeModule module : runtime.getBlazeModules()) {
-      try (SilentCloseable ignored = Profiler.instance().profile(module + ".executorInit")) {
-        module.executorInit(env, request, executorBuilder);
-      }
-
-      try (SilentCloseable ignored =
-          Profiler.instance().profile(module + ".registerActionContexts")) {
-        module.registerActionContexts(actionContextRegistryBuilder, env, request);
-      }
-
-      try (SilentCloseable ignored =
-          Profiler.instance().profile(module + ".registerSpawnStrategies")) {
-        module.registerSpawnStrategies(spawnStrategyRegistryBuilder, env);
+      try (SilentCloseable closeable = Profiler.instance().profile(module + ".executorInit")) {
+        module.executorInit(env, request, builder);
       }
     }
-    actionContextRegistryBuilder.register(
+    builder.addActionContext(
         SymlinkTreeActionContext.class,
         new SymlinkTreeStrategy(env.getOutputService(), env.getBlazeWorkspace().getBinTools()));
     // TODO(philwo) - the ExecutionTool should not add arbitrary dependencies on its own, instead
     // these dependencies should be added to the ActionContextConsumer of the module that actually
     // depends on them.
-    actionContextRegistryBuilder
-        .restrictTo(WorkspaceStatusAction.Context.class, "")
-        .restrictTo(SymlinkTreeActionContext.class, "");
+    builder
+        .addStrategyByContext(WorkspaceStatusAction.Context.class, "")
+        .addStrategyByContext(SymlinkTreeActionContext.class, "");
 
-    this.prefetcher = executorBuilder.getActionInputPrefetcher();
-    this.executorLifecycleListeners = executorBuilder.getExecutorLifecycleListeners();
+    this.prefetcher = builder.getActionInputPrefetcher();
+    this.executorLifecycleListeners = builder.getExecutorLifecycleListeners();
 
     // There are many different SpawnActions, and we want to control the action context they use
     // independently from each other, for example, to run genrules locally and Java compile action
@@ -178,9 +161,8 @@ public class ExecutionTool {
     // context class, but also the mnemonic of the action.
     ExecutionOptions options = request.getOptions(ExecutionOptions.class);
     // TODO(jmmv): This should live in some testing-related Blaze module, not here.
-    actionContextRegistryBuilder.restrictTo(TestActionContext.class, options.testStrategy);
-
-    spawnActionContextMaps = executorBuilder.getSpawnActionContextMaps();
+    builder.addStrategyByContext(TestActionContext.class, options.testStrategy);
+    spawnActionContextMaps = builder.getSpawnActionContextMaps();
 
     if (options.availableResources != null && options.removeLocalResources) {
       throw new ExecutorInitException(

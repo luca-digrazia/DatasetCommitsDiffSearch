@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.actions.ActionLookupData;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
@@ -133,8 +134,6 @@ import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledg
 import com.google.devtools.build.lib.rules.repository.ResolvedFileFunction;
 import com.google.devtools.build.lib.rules.repository.ResolvedHashesFunction;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.FileDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
@@ -149,7 +148,6 @@ import com.google.devtools.build.lib.skyframe.trimming.TrimmedConfigurationCache
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.ResourceUsage;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -429,7 +427,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     this.ruleClassProvider = (ConfiguredRuleClassProvider) pkgFactory.getRuleClassProvider();
     this.defaultBuildOptions = defaultBuildOptions;
     this.skyframeActionExecutor =
-        new SkyframeActionExecutor(actionKeyContext, statusReporterRef, this::getPathEntries);
+        new SkyframeActionExecutor(
+            actionKeyContext, statusReporterRef, this::getPathEntries, this::createSourceArtifact);
     this.skyframeBuildView =
         new SkyframeBuildView(
             directories,
@@ -551,10 +550,10 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(
         SkyFunctions.LOAD_SKYLARK_ASPECT,
         new ToplevelSkylarkAspectFunction(skylarkImportLookupFunctionForInlining));
-    map.put(SkyFunctions.ACTION_LOOKUP_CONFLICT_FINDING, new ActionLookupConflictFindingFunction());
     map.put(
-        SkyFunctions.TOP_LEVEL_ACTION_LOOKUP_CONFLICT_FINDING,
-        new TopLevelActionLookupConflictFindingFunction());
+        SkyFunctions.POST_CONFIGURED_TARGET,
+        new PostConfiguredTargetFunction(
+            new BuildViewProvider(), ruleClassProvider, defaultBuildOptions));
     map.put(
         SkyFunctions.BUILD_CONFIGURATION,
         new BuildConfigurationFunction(directories, ruleClassProvider, defaultBuildOptions));
@@ -1240,6 +1239,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return pkgLocator.get().getPathEntries();
   }
 
+  private SourceArtifact createSourceArtifact(PathFragment execPath) {
+    // This is only used by ActionFileSystem.
+    return artifactFactory
+        .get()
+        .getSourceArtifact(execPath, Iterables.getOnlyElement(getPathEntries()));
+  }
+
   public AtomicReference<PathPackageLocator> getPackageLocator() {
     return pkgLocator;
   }
@@ -1506,7 +1512,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     BuildOptions targetOptions = firstTargetConfig.getOptions();
     BuildOptions hostOptions =
         targetOptions.get(CoreOptions.class).useDistinctHostConfiguration
-            ? HostTransition.INSTANCE.patch(targetOptions, eventHandler)
+            ? HostTransition.INSTANCE.patch(targetOptions)
             : targetOptions;
     BuildConfiguration hostConfig = getConfiguration(eventHandler, hostOptions, keepGoing);
 
@@ -2039,6 +2045,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
               ConfigurationResolver.applyTransition(
                       fromOptions, transition, buildSettingPackages, eventHandler)
                   .values();
+          StarlarkTransition.replayEvents(eventHandler, transition);
         } catch (TransitionException e) {
           eventHandler.handle(Event.error(e.getMessage()));
           builder.setHasError();
@@ -2404,29 +2411,25 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * Post-process the targets. Values in the EvaluationResult are known to be transitively
    * error-free from action conflicts.
    */
-  EvaluationResult<ActionLookupConflictFindingValue> filterActionConflicts(
+  public EvaluationResult<PostConfiguredTargetValue> postConfigureTargets(
       ExtendedEventHandler eventHandler,
-      Iterable<ActionLookupValue.ActionLookupKey> keys,
+      List<ConfiguredTargetKey> values,
       boolean keepGoing,
-      ImmutableMap<ActionAnalysisMetadata, SkyframeActionExecutor.ConflictException> badActions,
-      TopLevelArtifactContext topLevelArtifactContext)
+      ImmutableMap<ActionAnalysisMetadata, SkyframeActionExecutor.ConflictException> badActions)
       throws InterruptedException {
     checkActive();
     PrecomputedValue.BAD_ACTIONS.set(injectable(), badActions);
     // Make sure to not run too many analysis threads. This can cause memory thrashing.
-    EvaluationResult<ActionLookupConflictFindingValue> result =
+    EvaluationResult<PostConfiguredTargetValue> result =
         evaluate(
-            TopLevelActionLookupConflictFindingFunction.keys(keys, topLevelArtifactContext),
+            PostConfiguredTargetValue.keys(values),
             keepGoing,
             /*numThreads=*/ ResourceUsage.getAvailableProcessors(),
             eventHandler);
 
-    // Remove all action-conflict detection values immediately for memory efficiency. We are OK with
+    // Remove all post-configured target values immediately for memory efficiency. We are OK with
     // this mini-phase being non-incremental as the failure mode of action conflict is rare.
-    memoizingEvaluator.delete(
-        SkyFunctionName.functionIs(SkyFunctions.ACTION_LOOKUP_CONFLICT_FINDING));
-    memoizingEvaluator.delete(
-        SkyFunctionName.functionIs(SkyFunctions.TOP_LEVEL_ACTION_LOOKUP_CONFLICT_FINDING));
+    memoizingEvaluator.delete(SkyFunctionName.functionIs(SkyFunctions.POST_CONFIGURED_TARGET));
 
     return result;
   }
@@ -2682,19 +2685,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
               ? remoteOptions.getRemoteDefaultExecProperties()
               : ImmutableMap.of());
     } catch (UserExecException e) {
-      throw new AbruptExitException(
-          DetailedExitCode.of(
-              ExitCode.COMMAND_LINE_ERROR,
-              FailureDetail.newBuilder()
-                  .setMessage(e.getMessage())
-                  .setRemoteOptions(
-                      FailureDetails.RemoteOptions.newBuilder()
-                          .setCode(
-                              FailureDetails.RemoteOptions.Code
-                                  .REMOTE_DEFAULT_EXEC_PROPERTIES_LOGIC_ERROR)
-                          .build())
-                  .build()),
-          e);
+      throw new AbruptExitException(e.getMessage(), ExitCode.COMMAND_LINE_ERROR, e);
     }
     setRemoteExecutionEnabled(remoteOptions != null && remoteOptions.isRemoteExecutionEnabled());
     syncPackageLoading(
