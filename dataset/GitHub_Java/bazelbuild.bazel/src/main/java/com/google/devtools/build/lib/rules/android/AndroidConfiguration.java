@@ -416,16 +416,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
         help = "Use SingleJar for multidex dex extraction.")
     public boolean useSingleJarForMultidex;
 
-    @Option(name = "experimental_android_use_resource_prefiltering",
-      defaultValue = "false",
-      category = "undocumented",
-      help = "When building android_binary targets, apply resource_configuration_filters during"
-          + " the analysis phase. Normally, this filtering doesn't occur until near the end of "
-          + "resource processing in the execution phase. Prefiltering resources improves "
-          + "performance for binaries with resource_configuration_filters and lots of resources."
-    )
-    public boolean useResourcePrefiltering;
-
     @Override
     public void addAllLabels(Multimap<String, Label> labelMap) {
       if (androidCrosstoolTop != null) {
@@ -505,7 +495,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final ApkSigningMethod apkSigningMethod;
   private final boolean useSingleJarApkBuilder;
   private final boolean useSingleJarForMultidex;
-  private final boolean useResourcePrefiltering;
 
   AndroidConfiguration(Options options, Label androidSdk) {
     this.sdk = androidSdk;
@@ -534,7 +523,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.useSingleJarApkBuilder = options.useSingleJarApkBuilder;
     this.useSingleJarForMultidex = options.useSingleJarForMultidex;
     this.useRexToCompressDexFiles = options.useRexToCompressDexFiles;
-    this.useResourcePrefiltering = options.useResourcePrefiltering;
   }
 
   public String getCpu() {
@@ -628,10 +616,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useSingleJarForMultidex() {
     return useSingleJarForMultidex;
-  }
-  
-  public boolean useResourcePrefiltering() {
-    return useResourcePrefiltering;
   }
 
   @Override

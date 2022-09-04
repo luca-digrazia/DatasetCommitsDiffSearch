@@ -403,12 +403,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
 
     this.toolchainIdentifier = toolchain.getToolchainIdentifier();
 
-    this.supportsEmbeddedRuntimes = toolchain.getSupportsEmbeddedRuntimes();
     toolchain = addLegacyFeatures(toolchain);
     this.toolchainFeatures = new CcToolchainFeatures(toolchain);
     this.supportsGoldLinker = toolchain.getSupportsGoldLinker();
     this.supportsStartEndLib = toolchain.getSupportsStartEndLib();
     this.supportsInterfaceSharedObjects = toolchain.getSupportsInterfaceSharedObjects();
+    this.supportsEmbeddedRuntimes = toolchain.getSupportsEmbeddedRuntimes();
     this.supportsFission = toolchain.getSupportsFission();
     this.toolchainNeedsPic = toolchain.getNeedsPic();
     this.usePicForBinaries =
@@ -519,10 +519,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     PathFragment defaultSysroot = toolchain.getBuiltinSysroot().length() == 0
         ? null
         : new PathFragment(toolchain.getBuiltinSysroot());
-    if ((defaultSysroot != null) && !defaultSysroot.isNormalized()) {
-      throw new IllegalArgumentException("The built-in sysroot '" + defaultSysroot
-          + "' is not normalized.");
-    }
 
     if ((cppOptions.libcTop != null) && (defaultSysroot == null)) {
       throw new InvalidConfigurationException("The selected toolchain " + toolchainIdentifier
@@ -727,12 +723,12 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
           if (getTargetLibc().equals("macosx")) {
             TextFormat.merge(
                 CppLinkActionConfigs.getCppLinkActionConfigs(
-                    CppLinkPlatform.MAC, features, linkerToolPath, supportsEmbeddedRuntimes),
+                    CppLinkPlatform.MAC, features, linkerToolPath),
                 toolchainBuilder);
           } else {
             TextFormat.merge(
                 CppLinkActionConfigs.getCppLinkActionConfigs(
-                    CppLinkPlatform.LINUX, features, linkerToolPath, supportsEmbeddedRuntimes),
+                    CppLinkPlatform.LINUX, features, linkerToolPath),
                 toolchainBuilder);
           }
         }
@@ -1065,7 +1061,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     if (packageEndIndex != -1 && s.startsWith(PACKAGE_START)) {
       String packageString = s.substring(PACKAGE_START.length(), packageEndIndex);
       try {
-        pathPrefix = PackageIdentifier.parse(packageString).getSourceRoot();
+        pathPrefix = PackageIdentifier.parse(packageString).getPathUnderExecRoot();
       } catch (LabelSyntaxException e) {
         throw new InvalidConfigurationException("The package '" + packageString + "' is not valid");
       }
@@ -1285,9 +1281,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns whether this toolchain supports interface shared objects.
-   *
-   * <p>Should be true if this toolchain generates ELF objects.
+   * Returns whether build_interface_so can build interface shared objects for this toolchain.
+   * Should be true if this toolchain generates ELF objects.
    */
   public boolean supportsInterfaceSharedObjects() {
     return supportsInterfaceSharedObjects;
