@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.packages;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.errorprone.annotations.CheckReturnValue;
+import java.util.Arrays;
 import java.util.BitSet;
 import javax.annotation.Nullable;
 
@@ -153,25 +154,6 @@ abstract class AttributeContainer {
     return numSet;
   }
 
-  /** Returns index into state array for attrIndex, or -1 if not found */
-  private static int getStateIndex(byte[] state, int start, int attrIndex, int mask) {
-    // Binary search, treating values as unsigned bytes.
-    int lo = start;
-    int hi = state.length - 1;
-    while (hi >= lo) {
-      int mid = (lo + hi) / 2;
-      int midAttrIndex = state[mid] & mask;
-      if (midAttrIndex == attrIndex) {
-        return mid;
-      } else if (midAttrIndex < attrIndex) {
-        lo = mid + 1;
-      } else {
-        hi = mid - 1;
-      }
-    }
-    return -1;
-  }
-
   /**
    * A frozen implementation of AttributeContainer which supports RuleClasses with up to 126
    * attributes.
@@ -179,7 +161,7 @@ abstract class AttributeContainer {
   @VisibleForTesting
   static final class Small extends Frozen {
 
-    private final int maxAttrCount;
+    private int maxAttrCount;
 
     // Conceptually an AttributeContainer is an unordered set of triples
     // (attribute, value, explicit).
@@ -237,6 +219,25 @@ abstract class AttributeContainer {
       }
     }
 
+    /** Returns index into state array for attrIndex, or -1 if not found */
+    private int getStateIndex(int attrIndex) {
+      // Binary search on the bottom 7 bits.
+      int lo = 0;
+      int hi = state.length - 1;
+      while (hi >= lo) {
+        int mid = (lo + hi) / 2;
+        int midAttrIndex = state[mid] & 0x7f;
+        if (midAttrIndex == attrIndex) {
+          return mid;
+        } else if (midAttrIndex < attrIndex) {
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      return -1;
+    }
+
     /**
      * Returns true iff the value of the specified attribute is explicitly set in the BUILD file. In
      * addition, this method return false if the rule has no attribute with the given name.
@@ -246,7 +247,7 @@ abstract class AttributeContainer {
       if (attrIndex < 0) {
         return false;
       }
-      int stateIndex = getStateIndex(state, 0, attrIndex, 0x7f);
+      int stateIndex = getStateIndex(attrIndex);
       return stateIndex >= 0 && (state[stateIndex] & 0x80) != 0;
     }
 
@@ -257,7 +258,7 @@ abstract class AttributeContainer {
         throw new IndexOutOfBoundsException(
             "Maximum valid attrIndex is " + (maxAttrCount - 1) + ". Given " + attrIndex);
       }
-      int stateIndex = getStateIndex(state, 0, attrIndex, 0x7f);
+      int stateIndex = getStateIndex(attrIndex);
       return stateIndex < 0 ? null : values[stateIndex];
     }
   }
@@ -307,7 +308,7 @@ abstract class AttributeContainer {
     /** Set the specified bit in the byte array. Assumes bitIndex is a valid index. */
     private static void setBit(byte[] bits, int bitIndex) {
       int idx = (bitIndex + 1);
-      int explicitByte = bits[idx >> 3];
+      byte explicitByte = bits[idx >> 3];
       byte mask = (byte) (1 << (idx & 0x07));
       bits[idx >> 3] = (byte) (explicitByte | mask);
     }
@@ -315,8 +316,8 @@ abstract class AttributeContainer {
     /** Get the specified bit in the byte array. Assumes bitIndex is a valid index. */
     private static boolean getBit(byte[] bits, int bitIndex) {
       int idx = (bitIndex + 1);
-      int explicitByte = bits[idx >> 3];
-      int mask = (byte) (1 << (idx & 0x07));
+      byte explicitByte = bits[idx >> 3];
+      byte mask = (byte) (1 << (idx & 0x07));
       return (explicitByte & mask) != 0;
     }
 
@@ -373,7 +374,7 @@ abstract class AttributeContainer {
             "Maximum valid attrIndex is " + (maxAttrCount - 1) + ". Given " + attrIndex);
       }
       int p = prefixSize(maxAttrCount);
-      int stateIndex = getStateIndex(state, p, attrIndex, 0xff);
+      int stateIndex = Arrays.binarySearch(state, p, state.length, (byte) attrIndex);
       return stateIndex < 0 ? null : values[stateIndex - p];
     }
   }

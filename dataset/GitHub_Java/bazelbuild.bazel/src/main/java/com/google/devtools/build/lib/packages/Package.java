@@ -36,20 +36,18 @@ import com.google.devtools.build.lib.collect.ImmutableSortedKeyMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.packages.License.DistributionType;
 import com.google.devtools.build.lib.packages.Package.Builder.PackageSettings;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading;
-import com.google.devtools.build.lib.server.FailureDetails.PackageLoading.Code;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Module;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -69,11 +67,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Module;
-import net.starlark.java.eval.StarlarkSemantics;
-import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.spelling.SpellChecker;
-import net.starlark.java.syntax.Location;
 
 /**
  * A package, which is a container of {@link Rule}s, each of which contains a dictionary of named
@@ -176,12 +170,6 @@ public class Package {
    * first error, the build may proceed.
    */
   private boolean containsErrors;
-
-  /**
-   * The first detailed error encountered during this package's construction and evaluation, or
-   * {@code null} if there were no such errors or all its errors lacked details.
-   */
-  @Nullable private FailureDetail failureDetail;
 
   /** The list of transitive closure of the Starlark file dependencies. */
   private ImmutableList<Label> starlarkFileDependencies;
@@ -443,7 +431,6 @@ public class Package {
     }
     this.buildFile = builder.buildFile;
     this.containsErrors = builder.containsErrors;
-    this.failureDetail = builder.getFailureDetail();
     this.starlarkFileDependencies = builder.starlarkFileDependencies;
     this.defaultLicense = builder.defaultLicense;
     this.defaultDistributionSet = builder.defaultDistributionSet;
@@ -540,45 +527,6 @@ public class Package {
    */
   public boolean containsErrors() {
     return containsErrors;
-  }
-
-  /**
-   * Returns the first {@link FailureDetail} describing one of the package's errors, or {@code null}
-   * if it has no errors or all its errors lack details.
-   */
-  @Nullable
-  public FailureDetail getFailureDetail() {
-    return failureDetail;
-  }
-
-  /**
-   * Returns a {@link FailureDetail} attributing a target error to the package's {@link
-   * FailureDetail}, or a generic {@link Code#TARGET_MISSING} failure detail if the package has
-   * none.
-   *
-   * <p>May only be called when {@link #containsErrors()} is true and with a target whose package is
-   * this one.
-   */
-  public FailureDetail contextualizeFailureDetailForTarget(Target target) {
-    Preconditions.checkState(
-        target.getPackage().getPackageIdentifier().equals(packageIdentifier),
-        "contextualizeFailureDetailForTarget called for target not in package. target=%s,"
-            + " package=%s",
-        target,
-        this);
-    Preconditions.checkState(
-        containsErrors,
-        "contextualizeFailureDetailForTarget called for package not in error. target=%s",
-        target);
-    String prefix =
-        "Target '" + target.getLabel() + "' contains an error and its package is in error";
-    if (failureDetail == null) {
-      return FailureDetail.newBuilder()
-          .setMessage(prefix)
-          .setPackageLoading(PackageLoading.newBuilder().setCode(Code.TARGET_MISSING))
-          .build();
-    }
-    return failureDetail.toBuilder().setMessage(prefix + ": " + failureDetail.getMessage()).build();
   }
 
   /** Returns an (immutable, ordered) view of all the targets belonging to this package. */
@@ -826,27 +774,9 @@ public class Package {
             helper,
             LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
             workspaceName,
-            starlarkSemantics.getBool(BuildLanguageOptions.INCOMPATIBLE_NO_IMPLICIT_FILE_EXPORT),
+            starlarkSemantics.incompatibleNoImplicitFileExport(),
             Builder.EMPTY_REPOSITORY_MAPPING)
         .setFilename(workspacePath);
-  }
-
-  /**
-   * Returns an error {@link Event} with {@link Location} and {@link DetailedExitCode} properties.
-   */
-  public static Event error(Location location, String message, Code code) {
-    Event error = Event.error(location, message);
-    // The DetailedExitCode's message is the base event's toString because that string nicely
-    // includes the location value.
-    return error.withProperty(DetailedExitCode.class, createDetailedCode(error.toString(), code));
-  }
-
-  public static DetailedExitCode createDetailedCode(String errorMessage, Code code) {
-    return DetailedExitCode.of(
-        FailureDetail.newBuilder()
-            .setMessage(errorMessage)
-            .setPackageLoading(PackageLoading.newBuilder().setCode(code))
-            .build());
   }
 
   /**
@@ -927,19 +857,7 @@ public class Package {
     private final List<Postable> posts = Lists.newArrayList();
     @Nullable private String ioExceptionMessage = null;
     @Nullable private IOException ioException = null;
-    @Nullable private DetailedExitCode ioExceptionDetailedExitCode = null;
     private boolean containsErrors = false;
-    // A package's FailureDetail field derives from its Builder's events. During package
-    // deserialization, those events are unavailable, because those events aren't serialized [*].
-    // Its FailureDetail value is serialized, however. During deserialization, that value is
-    // assigned here, so that it can be assigned to the deserialized package.
-    //
-    // Likewise, during workspace part assembly, errors from parent parts should propagate to their
-    // children.
-    //
-    // [*] Not in the context of the package, anyway. Skyframe values containing a package may
-    // serialize events emitted during its construction/evaluation.
-    @Nullable private FailureDetail failureDetailOverride = null;
 
     private ImmutableList<Label> defaultApplicableLicenses = ImmutableList.of();
     private License defaultLicense = License.NO_LICENSE;
@@ -1226,10 +1144,9 @@ public class Package {
       return this;
     }
 
-    Builder setIOException(IOException e, String message, DetailedExitCode detailedExitCode) {
+    Builder setIOExceptionAndMessage(IOException e, String message) {
       this.ioException = e;
       this.ioExceptionMessage = message;
-      this.ioExceptionDetailedExitCode = detailedExitCode;
       return setContainsErrors();
     }
 
@@ -1262,28 +1179,6 @@ public class Package {
     public Builder addEvent(Event event) {
       this.events.add(event);
       return this;
-    }
-
-    public void setFailureDetailOverride(FailureDetail failureDetail) {
-      failureDetailOverride = failureDetail;
-    }
-
-    @Nullable
-    public FailureDetail getFailureDetail() {
-      if (failureDetailOverride != null) {
-        return failureDetailOverride;
-      }
-
-      for (Event event : this.events) {
-        if (event.getKind() != EventKind.ERROR) {
-          continue;
-        }
-        DetailedExitCode detailedExitCode = event.getProperty(DetailedExitCode.class);
-        if (detailedExitCode != null && detailedExitCode.getFailureDetail() != null) {
-          return detailedExitCode.getFailureDetail();
-        }
-      }
-      return null;
     }
 
     Builder setStarlarkFileDependencies(ImmutableList<Label> starlarkFileDependencies) {
@@ -1335,8 +1230,8 @@ public class Package {
 
     /**
      * Sets the default value to use for a rule's {@link RuleClass#COMPATIBLE_ENVIRONMENT_ATTR}
-     * attribute when not explicitly specified by the rule. Records a package error if any labels
-     * are duplicated.
+     * attribute when not explicitly specified by the rule. Records a package error if
+     * any labels are duplicated.
      */
     void setDefaultCompatibleWith(List<Label> environments, String attrName, Location location) {
       if (hasDuplicateLabels(
@@ -1531,12 +1426,8 @@ public class Package {
         EventHandler eventHandler) {
       Set<Label> dupes = CollectionUtils.duplicatedElementsOf(labels);
       for (Label dupe : dupes) {
-        eventHandler.handle(
-            error(
-                location,
-                String.format(
-                    "label '%s' is duplicated in the '%s' list of '%s'", dupe, attrName, owner),
-                Code.DUPLICATE_LABEL));
+        eventHandler.handle(Event.error(location, String.format(
+            "label '%s' is duplicated in the '%s' list of '%s'", dupe, attrName, owner)));
       }
       return !dupes.isEmpty();
     }
@@ -1562,31 +1453,22 @@ public class Package {
       }
 
       targets.put(group.getName(), group);
-      // Invariant: once group is inserted into targets, it must also:
-      // (a) be inserted into environmentGroups, or
-      // (b) have its group.processMemberEnvironments called.
-      // Otherwise it will remain uninitialized,
-      // causing crashes when it is later toString-ed.
-
-      for (Event error : group.validateMembership()) {
-        eventHandler.handle(error);
+      Collection<Event> membershipErrors = group.validateMembership();
+      if (!membershipErrors.isEmpty()) {
+        for (Event error : membershipErrors) {
+          eventHandler.handle(error);
+        }
         setContainsErrors();
+        return;
       }
 
       // For each declared environment, make sure it doesn't also belong to some other group.
       for (Label environment : group.getEnvironments()) {
         EnvironmentGroup otherGroup = environmentGroups.get(environment);
         if (otherGroup != null) {
-          eventHandler.handle(
-              error(
-                  location,
-                  String.format(
-                      "environment %s belongs to both %s and %s",
-                      environment, group.getLabel(), otherGroup.getLabel()),
-                  Code.ENVIRONMENT_IN_MULTIPLE_GROUPS));
+          eventHandler.handle(Event.error(location, "environment " + environment + " belongs to"
+              + " both " + group.getLabel() + " and " + otherGroup.getLabel()));
           setContainsErrors();
-          // Ensure the orphan gets (trivially) initialized.
-          group.processMemberEnvironments(ImmutableMap.of());
         } else {
           environmentGroups.put(environment, group);
         }
@@ -1635,8 +1517,7 @@ public class Package {
       Preconditions.checkNotNull(buildFileLabel);
       Preconditions.checkNotNull(makeEnv);
       if (ioException != null) {
-        throw new NoSuchPackageException(
-            getPackageIdentifier(), ioExceptionMessage, ioException, ioExceptionDetailedExitCode);
+        throw new NoSuchPackageException(getPackageIdentifier(), ioExceptionMessage, ioException);
       }
 
       // We create the original BUILD InputFile when the package filename is set; however, the
