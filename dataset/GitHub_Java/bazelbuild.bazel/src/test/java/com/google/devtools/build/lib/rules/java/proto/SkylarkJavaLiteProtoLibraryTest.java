@@ -586,7 +586,8 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
 
   private static <P extends TransitiveInfoProvider> P getProvider(
       Class<P> providerClass, ConfiguredTarget target) {
-    JavaProvider javaProvider = target.get(JavaProvider.JAVA_PROVIDER);
+    JavaProvider javaProvider =
+        (JavaProvider) target.get(JavaProvider.JAVA_PROVIDER.getKey());
     return javaProvider.getProvider(providerClass);
   }
 }
