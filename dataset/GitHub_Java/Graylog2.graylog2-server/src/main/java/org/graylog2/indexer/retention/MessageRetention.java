@@ -20,24 +20,39 @@
 
 package org.graylog2.indexer.retention;
 
+import com.google.common.base.Stopwatch;
 import org.apache.log4j.Logger;
-import org.graylog2.ServerValue;
+import org.graylog2.GraylogServer;
 import org.graylog2.Tools;
+import org.graylog2.activities.Activity;
 
 /**
- * MessageRetention.java: Nov 22, 2011 6:58:31 PM
- *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class MessageRetention {
 
     private static final Logger LOG = Logger.getLogger(MessageRetention.class);
+    private final GraylogServer graylogServer;
 
-    public static void performCleanup(int timeDays) {
+    public MessageRetention(final GraylogServer server) {
+        this.graylogServer = server;
     }
 
-    public static void updateLastPerformedTime() {
-        ServerValue.writeMessageRetentionLastPerformed(Tools.getUTCTimestamp());
+    public void performCleanup(int timeDays) {
+        int to = Tools.getTimestampDaysAgo(Tools.getUTCTimestamp(), timeDays);
+        
+        Stopwatch stopWatch = new Stopwatch();
+        stopWatch.start();
+        graylogServer.getIndexer().deleteMessagesByTimeRange(to);
+        stopWatch.stop();
+        
+        String msg = "Deleted all messages older than " + to + " (" + timeDays + " days ago) - took <" + stopWatch.elapsedMillis() + "ms>";
+        LOG.debug(msg);
+        graylogServer.getActivityWriter().write(new Activity(msg, MessageRetention.class));
+    }
+
+    public void updateLastPerformedTime() {
+        graylogServer.getServerValues().writeMessageRetentionLastPerformed(Tools.getUTCTimestamp());
     }
 
 }
