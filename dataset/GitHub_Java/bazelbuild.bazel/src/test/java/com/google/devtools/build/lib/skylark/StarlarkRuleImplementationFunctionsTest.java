@@ -45,8 +45,8 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.starlark.Args;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleContext;
+import com.google.devtools.build.lib.analysis.skylark.Args;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkRuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.Depset;
@@ -381,30 +381,6 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
     assertThat(action.getIncompleteEnvironmentForTesting()).containsExactly("a", "b");
     // We expect "timeout" to be filtered by TargetUtils.
     assertThat(action.getExecutionInfo()).containsExactly("block-network", "foo");
-  }
-
-  @Test
-  public void testCreateSpawnActionEnvAndExecInfo_withWorkerKeyMnemonic() throws Exception {
-    StarlarkRuleContext ruleContext = createRuleContext("//foo:foo");
-    setRuleContext(ruleContext);
-    ev.exec(
-        "ruleContext.actions.run_shell(",
-        "  inputs = ruleContext.files.srcs,",
-        "  outputs = ruleContext.files.srcs,",
-        "  env = {'a' : 'b'},",
-        "  execution_requirements = {",
-        "    'supports-workers': '1',",
-        "    'worker-key-mnemonic': 'MyMnemonic',",
-        "  },",
-        "  mnemonic = 'DummyMnemonic',",
-        "  command = 'dummy_command',",
-        "  progress_message = 'dummy_message')");
-    SpawnAction action =
-        (SpawnAction)
-            Iterables.getOnlyElement(
-                ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
-    assertThat(action.getExecutionInfo())
-        .containsExactly("supports-workers", "1", "worker-key-mnemonic", "MyMnemonic");
   }
 
   @Test
@@ -836,9 +812,10 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
    * usually write those files using UTF-8 encoding. Currently, the string-valued 'substitutions'
    * parameter of the template_action function contains a hack that assumes its input is a UTF-8
    * encoded string which has been ingested as Latin 1. The hack converts the string to its
-   * "correct" UTF-8 value. Once Blaze starts calling {@link
-   * com.google.devtools.build.lib.syntax.ParserInput#fromUTF8} instead of {@code fromLatin1} and
-   * the hack for the substituations parameter is removed, this test will fail.
+   * "correct" UTF-8 value. Once {@link
+   * com.google.devtools.build.lib.syntax.ParserInput#create(byte[],
+   * com.google.devtools.build.lib.vfs.PathFragment)} parses files using UTF-8 and the hack for the
+   * substituations parameter is removed, this test will fail.
    */
   @Test
   public void testCreateTemplateActionWithWrongEncoding() throws Exception {
@@ -2537,9 +2514,9 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
   @Test
   public void testConfigurationField_StarlarkSplitTransitionProhibited() throws Exception {
     scratch.file(
-        "tools/allowlists/function_transition_allowlist/BUILD",
+        "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
-        "    name = 'function_transition_allowlist',",
+        "    name = 'function_transition_whitelist',",
         "    packages = [",
         "        '//...',",
         "    ],",
@@ -2557,8 +2534,8 @@ public class StarlarkRuleImplementationFunctionsTest extends BuildViewTestCase {
         "foo = rule(",
         "  implementation = _foo_impl,",
         "  attrs = {",
-        "    '_allowlist_function_transition': attr.label(",
-        "        default = '//tools/allowlists/function_transition_allowlist'),",
+        "    '_whitelist_function_transition': attr.label(",
+        "        default = '//tools/whitelists/function_transition_whitelist'),",
         "    '_attr': attr.label(",
         "        cfg = foo_transition,",
         "        default = configuration_field(fragment='cpp', name = 'cc_toolchain'))})");
