@@ -15,11 +15,12 @@
  */
 package org.androidannotations.test15.ereceiver;
 
+import org.androidannotations.annotations.EReceiver;
+import org.androidannotations.annotations.ReceiverAction;
+
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import org.androidannotations.annotations.EReceiver;
-import org.androidannotations.annotations.ReceiverAction;
 
 @EReceiver
 public class ReceiverWithActions extends BroadcastReceiver {
@@ -42,7 +43,7 @@ public class ReceiverWithActions extends BroadcastReceiver {
 	}
 
 	@ReceiverAction("ACTION_PARAMETER_TEST")
-	public void onParameterAction(@ReceiverAction.Extra String thisIsMyParameter) {
+	public void onParameterAction(String thisIsMyParameter) {
 		parameterActionReceived = true;
 		parameterActionValue = thisIsMyParameter;
 	}
