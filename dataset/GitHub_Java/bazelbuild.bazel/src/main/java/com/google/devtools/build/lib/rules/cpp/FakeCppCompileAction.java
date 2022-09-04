@@ -63,7 +63,6 @@ public class FakeCppCompileAction extends CppCompileAction {
       CcToolchainVariables variables,
       Artifact sourceFile,
       CppConfiguration cppConfiguration,
-      boolean shareable,
       boolean shouldScanIncludes,
       boolean shouldPruneModules,
       boolean usePic,
@@ -89,7 +88,6 @@ public class FakeCppCompileAction extends CppCompileAction {
         variables,
         sourceFile,
         cppConfiguration,
-        shareable,
         shouldScanIncludes,
         shouldPruneModules,
         usePic,
@@ -220,8 +218,7 @@ public class FakeCppCompileAction extends CppCompileAction {
                         outputPrefix + ShellEscaper.escapeString(outputFile.getExecPathString());
                   }
                   if (input.equals(outputFile.getExecPathString())
-                      || (getDotdFile() != null
-                          && input.equals(getDotdFile().getSafeExecPath().getPathString()))) {
+                      || input.equals(getDotdFile().getSafeExecPath().getPathString())) {
                     result = outputPrefix + ShellEscaper.escapeString(input);
                   }
                   return result;
@@ -234,12 +231,8 @@ public class FakeCppCompileAction extends CppCompileAction {
     try {
       // Ensure that the .d file and .o file are siblings, so that the "mkdir" below works for
       // both.
-      Preconditions.checkState(
-          getDotdFile() == null
-              || outputFile
-                  .getExecPath()
-                  .getParentDirectory()
-                  .equals(getDotdFile().getSafeExecPath().getParentDirectory()));
+      Preconditions.checkState(outputFile.getExecPath().getParentDirectory().equals(
+          getDotdFile().getSafeExecPath().getParentDirectory()));
       FileSystemUtils.writeContent(
           actionExecutionContext.getInputPath(outputFile),
           ISO_8859_1,

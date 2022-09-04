@@ -151,13 +151,18 @@ public class CppCompileAction extends AbstractAction
   private CcToolchainVariables overwrittenVariables = null;
 
   /**
-   * This field is set only for C++ module compiles (compiling .cppmap files into .pcm files). It
-   * stores the modules necessary for building this module as they will later also be required for
-   * building users of this module. Such users can get to this data through this action's {@link
-   * com.google.devtools.build.lib.skyframe.ActionExecutionValue}
+   * Set when a two-stage input discovery is used.
    *
-   * <p>This field is populated either based on the discovered headers in {@link #discoverInputs} or
-   * extracted from the action inputs when restoring it from the action cache.
+   * <p>This field is used in the following scenarios.
+   *
+   * <ul>
+   *   <li><i>Action caching.</i> It is set when restoring from the action cache. It is queried
+   *       immediately after restoration to populate the {@link
+   *       com.google.devtools.build.lib.skyframe.ActionExecutionValue}.
+   *   <li><i>Input discovery</i>It is set by {@link #discoverInputs}. It is queried to
+   *       populate the {@link com.google.devtools.build.lib.skyframe.ActionExecutionValue}.
+   *   <li><i>Compilation</i>Compilation reads this field to know what needs to be staged.
+   * </ul>
    */
   private ImmutableList<Artifact> discoveredModules = null;
 
@@ -382,48 +387,46 @@ public class CppCompileAction extends AbstractAction
    */
   private Iterable<Artifact> filterDiscoveredHeaders(
       ActionExecutionContext actionExecutionContext, Iterable<Artifact> headers) {
-    Set<Artifact> undeclaredHeaders = Sets.newHashSet(headers);
+    // Get the inputs we know about. Note that this (compared to validateInclusions) does not
+    // take mandatoryInputs into account. The reason is that these by definition get added to the
+    // action input and thus are available anyway. Not having to look at them here saves us from
+    // requiring and ArtifactExpander, which actionExecutionContext doesn't have at this point.
+    // This only works as long as mandatory inputs do not contain headers that are built into a
+    // module.
+    Set<Artifact> allowedIncludes =
+        new HashSet<>(ccCompilationContext.getDeclaredIncludeSrcs().toCollection());
+    allowedIncludes.addAll(additionalPrunableHeaders.toCollection());
 
-    // Note that this (compared to validateInclusions) does not take mandatoryInputs into account.
-    // The reason is that these by definition get added to the action input and thus are available
-    // anyway. Not having to look at them here saves us from requiring and ArtifactExpander, which
-    // actionExecutionContext doesn't have at this point. This only works as long as mandatory
-    // inputs do not contain headers that are built into a module.
-    for (Artifact header : ccCompilationContext.getDeclaredIncludeSrcs()) {
-      undeclaredHeaders.remove(header);
-    }
-    for (Artifact header : additionalPrunableHeaders) {
-      undeclaredHeaders.remove(header);
-    }
-    if (undeclaredHeaders.isEmpty()) {
-      return headers;
-    }
-
-    Iterable<PathFragment> ignoreDirs =
-        cppConfiguration.isStrictSystemIncludes()
-            ? getBuiltInIncludeDirectories()
-            : getValidationIgnoredDirs();
-    ArrayList<Artifact> found = new ArrayList<>();
-    // Lazily initialize, so that compiles that properly declare all their files profit.
+    // Whitelisted directories. Lazily initialize, so that compiles that properly declare all
+    // their files profit.
     Set<PathFragment> declaredIncludeDirs = null;
-    for (Artifact header : undeclaredHeaders) {
+    Iterable<PathFragment> ignoreDirs = null;
+
+    // Create a filtered list of headers.
+    ImmutableList.Builder<Artifact> result = ImmutableList.builder();
+    for (Artifact header : headers) {
+      if (allowedIncludes.contains(header)) {
+        result.add(header);
+        continue;
+      }
+      if (ignoreDirs == null) {
+        ignoreDirs =
+            cppConfiguration.isStrictSystemIncludes()
+                ? getBuiltInIncludeDirectories()
+                : getValidationIgnoredDirs();
+      }
       if (FileSystemUtils.startsWithAny(header.getExecPath(), ignoreDirs)) {
-        found.add(header);
+        result.add(header);
         continue;
       }
       if (declaredIncludeDirs == null) {
         declaredIncludeDirs = ccCompilationContext.getDeclaredIncludeDirs().toSet();
       }
       if (isDeclaredIn(actionExecutionContext, header, declaredIncludeDirs)) {
-        found.add(header);
+        result.add(header);
       }
     }
-    undeclaredHeaders.removeAll(found);
-    if (undeclaredHeaders.isEmpty()) {
-      return headers;
-    }
-
-    return Iterables.filter(headers, header -> !undeclaredHeaders.contains(header));
+    return result.build();
   }
 
   @Nullable
@@ -460,15 +463,10 @@ public class CppCompileAction extends AbstractAction
       return null;
     }
 
-    ImmutableList<Artifact> discoveredModules =
-        ImmutableList.copyOf(Sets.union(usedModules, transitivelyUsedModules));
+    discoveredModules = ImmutableList.copyOf(Sets.union(usedModules, transitivelyUsedModules));
     topLevelModules = ImmutableList.copyOf(Sets.difference(usedModules, transitivelyUsedModules));
     usedModules = null;
-    additionalInputs = Iterables.concat(additionalInputs, discoveredModules);
-    if (outputFile.isFileType(CppFileTypes.CPP_MODULE)) {
-      this.discoveredModules = discoveredModules;
-    }
-    return additionalInputs;
+    return Iterables.concat(additionalInputs, discoveredModules);
   }
 
   @Override
@@ -506,10 +504,7 @@ public class CppCompileAction extends AbstractAction
     return grepIncludes;
   }
 
-  /**
-   * Set by {@link #discoverInputs}. Returns a subset of {@link #getAdditionalInputs()} or null, if
-   * this is not a compile action producing a C++ module.
-   */
+  /** Set by {@link #discoverInputsStage2} */
   @Override
   @Nullable
   public ImmutableList<Artifact> getDiscoveredModules() {
@@ -907,18 +902,19 @@ public class CppCompileAction extends AbstractAction
   /**
    * Called by {@link com.google.devtools.build.lib.actions.ActionCacheChecker}
    *
-   * <p>If this is compiling a module, restores the value of {@link #discoveredModules}, which is
-   * used to create the {@link com.google.devtools.build.lib.skyframe.ActionExecutionValue} after an
-   * action cache hit.
+   * <p>Restores the value of {@link #discoveredModules}, which is used to create the {@link
+   * com.google.devtools.build.lib.skyframe.ActionExecutionValue} after an action cache hit.
    */
   @Override
   public synchronized void updateInputs(Iterable<Artifact> inputs) {
     super.updateInputs(inputs);
-    if (outputFile.isFileType(CppFileTypes.CPP_MODULE)) {
-      discoveredModules =
-          ImmutableList.copyOf(
-              Iterables.filter(inputs, input -> input.isFileType(CppFileTypes.CPP_MODULE)));
+    ImmutableList.Builder<Artifact> discoveredModules = ImmutableList.builder();
+    for (Artifact input : inputs) {
+      if (input.isFileType(CppFileTypes.CPP_MODULE)) {
+        discoveredModules.add(input);
+      }
     }
+    this.discoveredModules = discoveredModules.build();
   }
 
   private static void addNonSources(HashSet<Artifact> result, Iterable<Artifact> artifacts) {
@@ -1008,7 +1004,9 @@ public class CppCompileAction extends AbstractAction
     }
 
     if (!shouldScanDotdFiles()) {
-      updateActionInputs(NestedSetBuilder.wrap(Order.STABLE_ORDER, additionalInputs));
+      updateActionInputs(
+          NestedSetBuilder.wrap(
+              Order.STABLE_ORDER, Iterables.concat(discoveredModules, additionalInputs)));
     }
 
     List<SpawnResult> spawnResults;
