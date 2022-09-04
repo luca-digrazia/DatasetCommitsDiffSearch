@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -79,17 +79,6 @@ public class RestTest extends AAProcessorTestHelper {
 	public void client_with_path_variables() throws IOException {
 		CompileResult result = compileFiles(ClientWithPathVariable.class);
 		assertCompilationSuccessful(result);
-	}
-
-	@Test
-	public void client_with_wrong_enhanced_methods() throws IOException {
-		CompileResult result = compileFiles(ClientWithWrongEnhancedMethod.class);
-		assertCompilationErrorOn(ClientWithWrongEnhancedMethod.class, "Object getRestTemplate();", result);
-		assertCompilationErrorOn(ClientWithWrongEnhancedMethod.class, "String getURL();", result);
-		assertCompilationErrorOn(ClientWithWrongEnhancedMethod.class, "String getRootURL();", result);
-		assertCompilationErrorOn(ClientWithWrongEnhancedMethod.class, "String getRootURL(String param);", result);
-		assertCompilationErrorOn(ClientWithWrongEnhancedMethod.class, "boolean setRootURL();", result);
-		assertCompilationErrorCount(5, result);
 	}
 
 }
