@@ -35,13 +35,10 @@ import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
 import javax.lang.model.type.TypeMirror;
 import javax.lang.model.type.WildcardType;
-import javax.lang.model.util.Elements;
 
 import org.androidannotations.processing.EBeanHolder;
-import org.androidannotations.processing.EBeansHolder.Classes;
 
 import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
@@ -55,7 +52,6 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JStatement;
-import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
@@ -229,27 +225,9 @@ public class APTCodeModelHelper {
 		throw new IllegalStateException("Unable to extract target name from JFieldRef");
 	}
 
-	public JTryBlock surroundWithTryCatch(EBeanHolder holder, JBlock block, JBlock content, String exceptionMessage, boolean propagate) {
-		Classes classes = holder.classes();
-		JTryBlock tryBlock = block._try();
-		tryBlock.body().add(content);
-		JCatchBlock catchBlock = tryBlock._catch(classes.RUNTIME_EXCEPTION);
-		JVar exceptionParam = catchBlock.param("e");
-		JInvocation errorInvoke = classes.LOG.staticInvoke("e");
-		errorInvoke.arg(holder.generatedClass.name());
-		errorInvoke.arg(exceptionMessage);
-		errorInvoke.arg(exceptionParam);
-		catchBlock.body().add(errorInvoke);
-		if (propagate) {
-			catchBlock.body()._throw(exceptionParam);
-		}
-		return tryBlock;
-	}
-
 	public JDefinedClass createDelegatingAnonymousRunnableClass(EBeanHolder holder, JMethod delegatedMethod) {
 
 		JCodeModel codeModel = holder.codeModel();
-		Classes classes = holder.classes();
 
 		JDefinedClass anonymousRunnableClass;
 		JBlock previousMethodBody = removeBody(delegatedMethod);
@@ -259,9 +237,7 @@ public class APTCodeModelHelper {
 		JMethod runMethod = anonymousRunnableClass.method(JMod.PUBLIC, codeModel.VOID, "run");
 		runMethod.annotate(Override.class);
 
-		JBlock runMethodBody = runMethod.body();
-
-		surroundWithTryCatch(holder, runMethodBody, previousMethodBody, "A runtime exception was thrown while executing code in a runnable", true);
+		runMethod.body().add( previousMethodBody );
 
 		return anonymousRunnableClass;
 	}
@@ -314,19 +290,17 @@ public class APTCodeModelHelper {
 		return null;
 	}
 
-	public void addActivityIntentBuilder(JCodeModel codeModel, EBeanHolder holder, AnnotationHelper annotationHelper) throws Exception {
-		addIntentBuilder(codeModel, holder, annotationHelper, true);
+	public void addActivityIntentBuilder(JCodeModel codeModel, EBeanHolder holder) throws Exception {
+		addIntentBuilder(codeModel, holder, true);
 	}
 
-	public void addServiceIntentBuilder(JCodeModel codeModel, EBeanHolder holder, AnnotationHelper annotationHelper) throws Exception {
-		addIntentBuilder(codeModel, holder, annotationHelper, false);
+	public void addServiceIntentBuilder(JCodeModel codeModel, EBeanHolder holder) throws Exception {
+		addIntentBuilder(codeModel, holder, false);
 	}
 
-	private void addIntentBuilder(JCodeModel codeModel, EBeanHolder holder, AnnotationHelper annotationHelper, boolean isActivity) throws JClassAlreadyExistsException {
+	private void addIntentBuilder(JCodeModel codeModel, EBeanHolder holder, boolean isActivity) throws JClassAlreadyExistsException {
 		JClass contextClass = holder.classes().CONTEXT;
 		JClass intentClass = holder.classes().INTENT;
-		JClass fragmentClass = holder.classes().FRAGMENT;
-		JClass fragmentSupportClass = holder.classes().SUPPORT_V4_FRAGMENT;
 
 		{
 			holder.intentBuilderClass = holder.generatedClass._class(PUBLIC | STATIC, "IntentBuilder_");
@@ -341,19 +315,6 @@ public class APTCodeModelHelper {
 				JBlock constructorBody = constructor.body();
 				constructorBody.assign(contextField, constructorContextParam);
 				constructorBody.assign(holder.intentField, _new(intentClass).arg(constructorContextParam).arg(holder.generatedClass.dotclass()));
-			}
-			// Additional constructor for fragments (issue #541)
-			Elements elementUtils = annotationHelper.getElementUtils();
-			boolean fragmentInClasspath = elementUtils.getTypeElement(CanonicalNameConstants.FRAGMENT) != null;
-			boolean fragmentSupportInClasspath = elementUtils.getTypeElement(CanonicalNameConstants.SUPPORT_V4_FRAGMENT) != null;
-
-			JFieldVar fragmentField = null;
-			if (fragmentInClasspath) {
-				fragmentField = addIntentBuilderFragmentConstructor(holder, fragmentClass, "fragment_", contextField);
-			}
-			JFieldVar fragmentSupportField = null;
-			if (fragmentSupportInClasspath) {
-				fragmentSupportField = addIntentBuilderFragmentConstructor(holder, fragmentSupportClass, "fragmentSupport_", contextField);
 			}
 
 			{
@@ -382,27 +343,7 @@ public class APTCodeModelHelper {
 
 				JBlock body = method.body();
 				JClass activityClass = holder.classes().ACTIVITY;
-
-				JConditional condition = null;
-				if (fragmentSupportField != null) {
-					condition = body._if(fragmentSupportField.ne(JExpr._null()));
-					condition._then() //
-							.invoke(fragmentSupportField, "startActivityForResult").arg(holder.intentField).arg(requestCode);
-				}
-				if (fragmentField != null) {
-					if (condition == null) {
-						condition = body._if(fragmentField.ne(JExpr._null()));
-					} else {
-						condition = condition._elseif(fragmentField.ne(JExpr._null()));
-					}
-					condition._then() //
-							.invoke(fragmentField, "startActivityForResult").arg(holder.intentField).arg(requestCode);
-				}
-				if (condition == null) {
-					condition = body._if(contextField._instanceof(activityClass));
-				} else {
-					condition = condition._elseif(contextField._instanceof(activityClass));
-				}
+				JConditional condition = body._if(contextField._instanceof(activityClass));
 				condition._then() //
 						.invoke(JExpr.cast(activityClass, contextField), "startActivityForResult").arg(holder.intentField).arg(requestCode);
 				condition._else() //
@@ -418,35 +359,11 @@ public class APTCodeModelHelper {
 			}
 
 			{
-				// intent() with activity param
+				// intent()
 				JMethod method = holder.generatedClass.method(STATIC | PUBLIC, holder.intentBuilderClass, "intent");
 				JVar contextParam = method.param(contextClass, "context");
 				method.body()._return(_new(holder.intentBuilderClass).arg(contextParam));
 			}
-			if (fragmentInClasspath) {
-				// intent() with android.app.Fragment param
-				JMethod method = holder.generatedClass.method(STATIC | PUBLIC, holder.intentBuilderClass, "intent");
-				JVar fragmentParam = method.param(fragmentClass, "fragment");
-				method.body()._return(_new(holder.intentBuilderClass).arg(fragmentParam));
-			}
-			if (fragmentSupportInClasspath) {
-				// intent() with android.support.v4.app.Fragment param
-				JMethod method = holder.generatedClass.method(STATIC | PUBLIC, holder.intentBuilderClass, "intent");
-				JVar fragmentParam = method.param(fragmentSupportClass, "fragment");
-				method.body()._return(_new(holder.intentBuilderClass).arg(fragmentParam));
-			}
 		}
-	}
-
-	private JFieldVar addIntentBuilderFragmentConstructor(EBeanHolder holder, JClass fragmentClass, String fieldName, JFieldVar contextField) {
-
-		JFieldVar fragmentField = holder.intentBuilderClass.field(PRIVATE, fragmentClass, fieldName);
-		JMethod constructor = holder.intentBuilderClass.constructor(JMod.PUBLIC);
-		JVar constructorFragmentParam = constructor.param(fragmentClass, "fragment");
-		JBlock constructorBody = constructor.body();
-		constructorBody.assign(fragmentField, constructorFragmentParam);
-		constructorBody.assign(contextField, constructorFragmentParam.invoke("getActivity"));
-		constructorBody.assign(holder.intentField, _new(holder.classes().INTENT).arg(contextField).arg(holder.generatedClass.dotclass()));
-		return fragmentField;
 	}
 }
