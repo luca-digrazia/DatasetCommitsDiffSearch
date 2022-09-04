@@ -54,18 +54,18 @@ public class Logger {
 	}
 
 	public void error(String message, Object... args) {
-		error(null, null, message, args);
+		error(message, null, null, args);
 	}
 
 	public void error(Element element, String message, Object... args) {
-		error(element, null, message, args);
+		error(message, element, null, args);
 	}
 
 	public void error(Throwable thr, String message, Object... args) {
-		error(null, thr, message, args);
+		error(message, null, thr, args);
 	}
 
-	public void error(Element element, Throwable thr, String message, Object... args) {
+	public void error(String message, Element element, Throwable thr, Object... args) {
 		log(Level.ERROR, message, element, null, thr, args);
 	}
 
