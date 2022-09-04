@@ -52,7 +52,7 @@ public class Blacklist {
         this.mongoObject = blacklist;
     }
 
-    public static List<Blacklist> fetchAll() {
+    public static List<Blacklist> fetchAll() throws Exception {
         if (BlacklistCache.getInstance().valid()) {
             return BlacklistCache.getInstance().get();
         }
