@@ -25,23 +25,23 @@ import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
+import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.LongClick;
 import com.googlecode.androidannotations.helper.ValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
-import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
+import com.googlecode.androidannotations.rclass.RClass;
+import com.googlecode.androidannotations.rclass.RInnerClass;
 import com.googlecode.androidannotations.rclass.RClass.Res;
 
 /**
  * @author Benjamin Fellous
- * @author Pierre-Yves Ricau
  */
 public class LongClickValidator extends ValidatorHelper implements ElementValidator {
 
 	private static final String ANDROID_VIEW_QUALIFIED_NAME = "android.view.View";
-	private final IRClass rClass;
+	private final RClass rClass;
 
-	public LongClickValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
+	public LongClickValidator(ProcessingEnvironment processingEnv, RClass rClass) {
 		super(processingEnv);
 		this.rClass = rClass;
 	}
@@ -60,15 +60,13 @@ public class LongClickValidator extends ValidatorHelper implements ElementValida
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		validateVoidOrBooleanReturnType(element, executableElement, valid);
+		warnVoidReturnType(element, executableElement);
 
 		validateRFieldName(element, valid);
 
 		validateParameters(element, valid, executableElement);
 
 		validateIsNotPrivate(element, valid);
-		
-		validateDoesntThrowException(element, valid);
 
 		return valid.isValid();
 	}
@@ -96,13 +94,9 @@ public class LongClickValidator extends ValidatorHelper implements ElementValida
 		LongClick annotation = element.getAnnotation(LongClick.class);
 		int idValue = annotation.value();
 
-		IRInnerClass rInnerClass = rClass.get(Res.ID);
-		if (idValue == LongClick.DEFAULT_VALUE) {
+		RInnerClass rInnerClass = rClass.get(Res.ID);
+		if (idValue == Click.DEFAULT_VALUE) {
 			String methodName = element.getSimpleName().toString();
-			int lastIndex = methodName.lastIndexOf(actionName());
-			if (lastIndex != -1) {
-				methodName = methodName.substring(0, lastIndex);
-			}
 			if (!rInnerClass.containsField(methodName)) {
 				valid.invalidate();
 				printAnnotationError(element, "Id not found: R.id." + methodName);
@@ -115,14 +109,11 @@ public class LongClickValidator extends ValidatorHelper implements ElementValida
 		}
 	}
 
-	private void validateVoidOrBooleanReturnType(Element element, ExecutableElement executableElement, IsValid valid) {
+	private void warnVoidReturnType(Element element, ExecutableElement executableElement) {
 		TypeMirror returnType = executableElement.getReturnType();
 
-		TypeKind returnKind = returnType.getKind();
-		
-		if (returnKind != TypeKind.BOOLEAN && returnKind != TypeKind.VOID && !returnType.toString().equals("java.lang.Boolean")) {
-			valid.invalidate();
-			printAnnotationError(element, annotationName() + " should only be used on a method with a boolean or a void return type");
+		if (returnType.getKind() != TypeKind.BOOLEAN) {
+			printAnnotationWarning(element, annotationName() + " should only be used on a method with a boolean return type ");
 		}
 	}
 }

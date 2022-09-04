@@ -17,32 +17,27 @@ package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
-import java.util.Map;
 
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.VariableElement;
 
-import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.annotations.ItemClick;
+import com.googlecode.androidannotations.annotations.LongClick;
 import com.googlecode.androidannotations.generation.ItemClickInstruction;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
-import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
+import com.googlecode.androidannotations.rclass.RClass;
+import com.googlecode.androidannotations.rclass.RInnerClass;
 import com.googlecode.androidannotations.rclass.RClass.Res;
-import com.sun.codemodel.JCodeModel;
 
 /**
  * @author Benjamin Fellous
- * @author Pierre-Yves Ricau
  */
 public class ItemClickProcessor implements ElementProcessor {
 
-	private final IRClass rClass;
+	private final RClass rClass;
 
-	public ItemClickProcessor(IRClass rClass) {
+	public ItemClickProcessor(RClass rClass) {
 		this.rClass = rClass;
 	}
 
@@ -59,15 +54,11 @@ public class ItemClickProcessor implements ElementProcessor {
 		ItemClick annotation = element.getAnnotation(ItemClick.class);
 		int idValue = annotation.value();
 
-		IRInnerClass rInnerClass = rClass.get(Res.ID);
+		RInnerClass rInnerClass = rClass.get(Res.ID);
 		String itemClickQualifiedId;
 
-		if (idValue == Id.DEFAULT_VALUE) {
+		if (idValue == LongClick.DEFAULT_VALUE) {
 			String fieldName = element.getSimpleName().toString();
-			int lastIndex = fieldName.lastIndexOf("ItemClicked");
-			if (lastIndex != -1) {
-				fieldName = fieldName.substring(0, lastIndex);
-			}
 			itemClickQualifiedId = rInnerClass.getIdQualifiedName(fieldName);
 		} else {
 			itemClickQualifiedId = rInnerClass.getIdQualifiedName(idValue);
@@ -76,26 +67,10 @@ public class ItemClickProcessor implements ElementProcessor {
 		Element enclosingElement = element.getEnclosingElement();
 		MetaActivity metaActivity = metaModel.getMetaActivities().get(enclosingElement);
 		List<Instruction> onCreateInstructions = metaActivity.getOnCreateInstructions();
-		
-		ExecutableElement executableElement = (ExecutableElement) element;
-		List<? extends VariableElement> parameters = executableElement.getParameters();
 
-		Instruction instruction;
-		if (parameters.size() == 1) {
-			VariableElement parameter = parameters.get(0);
-			String parameterQualifiedName = parameter.asType().toString();
-			instruction = new ItemClickInstruction(methodName, itemClickQualifiedId, parameterQualifiedName);
-		} else {
-			instruction = new ItemClickInstruction(methodName, itemClickQualifiedId);
-		}
+		Instruction instruction = new ItemClickInstruction(methodName, itemClickQualifiedId);
 		onCreateInstructions.add(instruction);
 
-	}
-
-	@Override
-	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
-		// TODO Auto-generated method stub
-		
 	}
 
 }

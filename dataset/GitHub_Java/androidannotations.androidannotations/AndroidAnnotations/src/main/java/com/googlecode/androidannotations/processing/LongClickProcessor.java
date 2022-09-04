@@ -17,34 +17,28 @@ package com.googlecode.androidannotations.processing;
 
 import java.lang.annotation.Annotation;
 import java.util.List;
-import java.util.Map;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
 
-import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.annotations.LongClick;
 import com.googlecode.androidannotations.generation.LongClickInstruction;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
-import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRInnerClass;
+import com.googlecode.androidannotations.rclass.RClass;
+import com.googlecode.androidannotations.rclass.RInnerClass;
 import com.googlecode.androidannotations.rclass.RClass.Res;
-import com.sun.codemodel.JCodeModel;
 
 /**
  * @author Benjamin Fellous
- * @author Pierre-Yves Ricau
  */
 public class LongClickProcessor implements ElementProcessor {
 
-	private final IRClass rClass;
+	private final RClass rClass;
 
-	public LongClickProcessor(IRClass rClass) {
+	public LongClickProcessor(RClass rClass) {
 		this.rClass = rClass;
 	}
 
@@ -61,15 +55,11 @@ public class LongClickProcessor implements ElementProcessor {
 		LongClick annotation = element.getAnnotation(LongClick.class);
 		int idValue = annotation.value();
 
-		IRInnerClass rInnerClass = rClass.get(Res.ID);
+		RInnerClass rInnerClass = rClass.get(Res.ID);
 		String longClickQualifiedId;
 
-		if (idValue == Id.DEFAULT_VALUE) {
+		if (idValue == LongClick.DEFAULT_VALUE) {
 			String fieldName = element.getSimpleName().toString();
-			int lastIndex = fieldName.lastIndexOf("LongClicked");
-			if (lastIndex != -1) {
-				fieldName = fieldName.substring(0, lastIndex);
-			}
 			longClickQualifiedId = rInnerClass.getIdQualifiedName(fieldName);
 		} else {
 			longClickQualifiedId = rInnerClass.getIdQualifiedName(idValue);
@@ -84,18 +74,9 @@ public class LongClickProcessor implements ElementProcessor {
 
 		boolean viewParameter = parameters.size() == 1;
 
-		TypeMirror returnType = executableElement.getReturnType();
-
-		boolean returnMethodResult = returnType.getKind() != TypeKind.VOID;
-		
-		Instruction instruction = new LongClickInstruction(methodName, longClickQualifiedId, viewParameter, returnMethodResult);
+		Instruction instruction = new LongClickInstruction(methodName, longClickQualifiedId, viewParameter);
 		onCreateInstructions.add(instruction);
 
 	}
 
-	@Override
-	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
-		// TODO Auto-generated method stub
-		
-	}
 }
