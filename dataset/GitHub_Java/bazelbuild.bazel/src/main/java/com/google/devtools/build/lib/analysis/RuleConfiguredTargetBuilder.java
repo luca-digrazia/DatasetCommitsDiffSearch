@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.packages.AllowlistChecker;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.Info;
@@ -118,12 +117,6 @@ public final class RuleConfiguredTargetBuilder {
     if (ruleContext.getConfiguration().enforceConstraints()) {
       checkConstraints();
     }
-
-    for (AllowlistChecker allowlistChecker :
-        ruleContext.getRule().getRuleClassObject().getAllowlistCheckers()) {
-      handleAllowlistChecker(allowlistChecker);
-    }
-
     if (ruleContext.hasErrors() && !allowAnalysisFailures) {
       return null;
     }
@@ -169,6 +162,7 @@ public final class RuleConfiguredTargetBuilder {
     // rule doesn't configure InstrumentedFilesInfo. This needs to be done for non-test rules
     // as well, but should be done before initializeTestProvider, which uses that.
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()
+        && ruleContext.getConfiguration().experimentalForwardInstrumentedFilesInfoByDefault()
         && !providersBuilder.contains(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR.getKey())) {
       addNativeDeclaredProvider(InstrumentedFilesCollector.forwardAll(ruleContext));
     }
@@ -278,35 +272,6 @@ public final class RuleConfiguredTargetBuilder {
         generatingActions.getArtifactsByOutputLabel());
   }
 
-  /** Actually process */
-  private void handleAllowlistChecker(AllowlistChecker allowlistChecker) {
-    if (allowlistChecker.attributeSetTrigger() != null
-        && !ruleContext
-            .getRule()
-            .isAttributeValueExplicitlySpecified(allowlistChecker.attributeSetTrigger())) {
-      return;
-    }
-    boolean passing = false;
-    switch (allowlistChecker.locationCheck()) {
-      case INSTANCE:
-        passing = Allowlist.isAvailable(ruleContext, allowlistChecker.allowlistAttr());
-        break;
-      case DEFINITION:
-        passing =
-            Allowlist.isAvailableBasedOnRuleLocation(ruleContext, allowlistChecker.allowlistAttr());
-        break;
-      case INSTANCE_OR_DEFINITION:
-        passing =
-            Allowlist.isAvailable(ruleContext, allowlistChecker.allowlistAttr())
-                || Allowlist.isAvailableBasedOnRuleLocation(
-                    ruleContext, allowlistChecker.allowlistAttr());
-        break;
-    }
-    if (!passing) {
-      ruleContext.ruleError(allowlistChecker.errorMessage());
-    }
-  }
-
   /**
    * Adds {@link RequiredConfigFragmentsProvider} if {@link
    * CoreOptions#includeRequiredConfigFragmentsProvider} isn't {@link
@@ -383,7 +348,7 @@ public final class RuleConfiguredTargetBuilder {
       // not fail the overall build, since those dependencies should have their own builds
       // and tests that should surface any failing validations.
       Attribute attribute = ruleContext.attributes().getAttributeDefinition(attributeName);
-      if (!attribute.isToolDependency()
+      if (!attribute.getTransitionFactory().isTool()
           && !attribute.isImplicit()
           && attribute.getType().getLabelClass() == LabelClass.DEPENDENCY) {
 
