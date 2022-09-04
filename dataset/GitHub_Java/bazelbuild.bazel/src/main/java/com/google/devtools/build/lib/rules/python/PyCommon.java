@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StructImpl;
@@ -71,9 +70,6 @@ public final class PyCommon {
   public static final String IS_USING_SHARED_LIBRARY = "uses_shared_libraries";
   public static final String IMPORTS = "imports";
 
-  public static final String DEFAULT_PYTHON_VERSION_ATTRIBUTE = "default_python_version";
-  public static final String PYTHON_VERSION_ATTRIBUTE = "python_version";
-
   private static final LocalMetadataCollector METADATA_COLLECTOR = new LocalMetadataCollector() {
     @Override
     public void collectMetadataArtifacts(Iterable<Artifact> artifacts,
@@ -86,21 +82,24 @@ public final class PyCommon {
 
   private Artifact executable = null;
 
-  private final NestedSet<Artifact> transitivePythonSources;
+  private NestedSet<Artifact> transitivePythonSources;
 
-  private final PythonVersion sourcesVersion;
-  private final PythonVersion version;
+  private PythonVersion sourcesVersion;
+  private PythonVersion version = null;
   private Map<PathFragment, Artifact> convertedFiles;
 
   private NestedSet<Artifact> filesToBuild = null;
 
   public PyCommon(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
+  }
+
+  public void initCommon(PythonVersion defaultVersion) {
     this.sourcesVersion = getSrcsVersionAttr(ruleContext);
-    this.version = ruleContext.getFragment(PythonConfiguration.class).getPythonVersion();
+    this.version = ruleContext.getFragment(PythonConfiguration.class)
+        .getPythonVersion(defaultVersion);
     this.transitivePythonSources = collectTransitivePythonSources();
     checkSourceIsCompatible(this.version, this.sourcesVersion, ruleContext.getLabel());
-    validatePythonVersionAttr(ruleContext);
   }
 
   public PythonVersion getVersion() {
@@ -116,6 +115,10 @@ public final class PyCommon {
           ruleContext.getImplicitOutputArtifact(ruleContext.getTarget().getName() + ".exe");
     } else {
       executable = ruleContext.createOutputArtifact();
+    }
+    if (this.version == PythonVersion.PY2AND3) {
+      // TODO(bazel-team): we need to create two actions
+      ruleContext.ruleError("PY2AND3 is not yet implemented");
     }
 
     NestedSetBuilder<Artifact> filesToBuildBuilder =
@@ -191,6 +194,12 @@ public final class PyCommon {
         "No such attribute '%s'");
   }
 
+  public PythonVersion getDefaultPythonVersion() {
+    return ruleContext.getRule().isAttrDefined("default_python_version", Type.STRING)
+        ? getPythonVersionAttr(ruleContext)
+        : null;
+  }
+
   /** Returns the parsed value of the "srcs_version" attribute. */
   private static PythonVersion getSrcsVersionAttr(RuleContext ruleContext) {
     String attrValue = ruleContext.attributes().get("srcs_version", Type.STRING);
@@ -207,23 +216,19 @@ public final class PyCommon {
     }
   }
 
-  /**
-   * If the {@code python_version} attribute is defined for {@code ruleContext}, this method reports
-   * an attribute error if the attribute is set explicitly without the new API being enabled (via
-   * {@code --experimental_better_python_version_mixing}).
-   */
-  private static void validatePythonVersionAttr(RuleContext ruleContext) {
-    AttributeMap attrs = ruleContext.attributes();
-    if (!attrs.has(PYTHON_VERSION_ATTRIBUTE, Type.STRING)) {
-      return;
-    }
-    boolean newApiEnabled =
-        ruleContext.getFragment(PythonConfiguration.class).newPyVersionApiEnabled();
-    if (attrs.isAttributeValueExplicitlySpecified(PYTHON_VERSION_ATTRIBUTE) && !newApiEnabled) {
+  /** Returns the parsed value of the "default_python_version" attribute. */
+  private static PythonVersion getPythonVersionAttr(RuleContext ruleContext) {
+    String attrValue = ruleContext.attributes().get("default_python_version", Type.STRING);
+    try {
+      return PythonVersion.parseTargetValue(attrValue);
+    } catch (IllegalArgumentException ex) {
+      // Should already have been disallowed in the rule.
       ruleContext.attributeError(
-          PYTHON_VERSION_ATTRIBUTE,
-          "using the 'python_version' attribute requires the "
-              + "'--experimental_better_python_version_mixing' flag");
+          "default_python_version",
+          String.format(
+              "'%s' is not a valid value. Expected one of: %s",
+              attrValue, Joiner.on(", ").join(PythonVersion.TARGET_STRINGS)));
+      return PythonVersion.DEFAULT_TARGET_VALUE;
     }
   }
 
