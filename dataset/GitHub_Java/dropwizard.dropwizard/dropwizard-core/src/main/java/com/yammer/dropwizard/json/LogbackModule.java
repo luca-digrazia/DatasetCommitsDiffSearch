@@ -47,7 +47,7 @@ class LogbackModule extends Module {
 
     @Override
     public String getModuleName() {
-        return "LogbackModule";
+        return "log4j";
     }
 
     @Override
