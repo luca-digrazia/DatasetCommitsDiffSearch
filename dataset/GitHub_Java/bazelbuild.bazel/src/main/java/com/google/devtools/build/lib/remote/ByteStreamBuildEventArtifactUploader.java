@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.remote;
 import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.RequestMetadata;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -44,6 +45,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Nullable;
 
 /** A {@link BuildEventArtifactUploader} backed by {@link ByteStreamUploader}. */
 class ByteStreamBuildEventArtifactUploader extends AbstractReferenceCounted
@@ -61,11 +63,16 @@ class ByteStreamBuildEventArtifactUploader extends AbstractReferenceCounted
   ByteStreamBuildEventArtifactUploader(
       ByteStreamUploader uploader,
       MissingDigestsFinder missingDigestsFinder,
-      String remoteServerInstanceName,
+      String remoteServerName,
       String buildRequestId,
       String commandId,
+      @Nullable String remoteInstanceName,
       int maxUploadThreads) {
     this.uploader = Preconditions.checkNotNull(uploader);
+    String remoteServerInstanceName = Preconditions.checkNotNull(remoteServerName);
+    if (!Strings.isNullOrEmpty(remoteInstanceName)) {
+      remoteServerInstanceName += "/" + remoteInstanceName;
+    }
     this.buildRequestId = buildRequestId;
     this.commandId = commandId;
     this.remoteServerInstanceName = remoteServerInstanceName;
@@ -152,7 +159,7 @@ class ByteStreamBuildEventArtifactUploader extends AbstractReferenceCounted
   private ListenableFuture<ImmutableIterable<PathMetadata>> queryRemoteCache(
       ImmutableList<ListenableFuture<PathMetadata>> allPaths) throws Exception {
     RequestMetadata metadata =
-        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "bes-upload", null);
+        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "bes-upload");
     RemoteActionExecutionContext context = RemoteActionExecutionContext.create(metadata);
 
     List<PathMetadata> knownRemotePaths = new ArrayList<>(allPaths.size());
@@ -188,7 +195,7 @@ class ByteStreamBuildEventArtifactUploader extends AbstractReferenceCounted
   private ListenableFuture<List<PathMetadata>> uploadLocalFiles(
       ImmutableIterable<PathMetadata> allPaths) {
     RequestMetadata metadata =
-        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "bes-upload", null);
+        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "bes-upload");
     RemoteActionExecutionContext context = RemoteActionExecutionContext.create(metadata);
 
     ImmutableList.Builder<ListenableFuture<PathMetadata>> allPathsUploaded =

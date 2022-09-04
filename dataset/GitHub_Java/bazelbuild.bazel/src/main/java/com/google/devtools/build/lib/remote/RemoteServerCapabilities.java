@@ -69,7 +69,7 @@ class RemoteServerCapabilities {
   public ServerCapabilities get(String buildRequestId, String commandId)
       throws IOException, InterruptedException {
     RequestMetadata metadata =
-        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "capabilities", null);
+        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "capabilities");
     RemoteActionExecutionContext context = RemoteActionExecutionContext.create(metadata);
     try {
       GetCapabilitiesRequest request =

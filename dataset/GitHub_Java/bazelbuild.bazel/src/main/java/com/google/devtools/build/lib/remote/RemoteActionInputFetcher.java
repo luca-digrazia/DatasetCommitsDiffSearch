@@ -19,6 +19,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.flogger.GoogleLogger;
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -32,17 +34,17 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
-import com.google.devtools.build.lib.remote.util.AsyncTaskCache;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
-import com.google.devtools.build.lib.remote.util.RxFutures;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.vfs.Path;
-import io.reactivex.rxjava3.core.Completable;
 import java.io.IOException;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Stages output files that are stored remotely to the local filesystem.
@@ -53,9 +55,16 @@ import java.util.Map;
 class RemoteActionInputFetcher implements ActionInputPrefetcher {
 
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
-  private final AsyncTaskCache.NoResult<Path> downloadCache = AsyncTaskCache.NoResult.create();
 
   private final Object lock = new Object();
+
+  /** Set of successfully downloaded output files. */
+  @GuardedBy("lock")
+  private final Set<Path> downloadedPaths = new HashSet<>();
+
+  @VisibleForTesting
+  @GuardedBy("lock")
+  final Map<Path, ListenableFuture<Void>> downloadsInProgress = new HashMap<>();
 
   private final String buildRequestId;
   private final String commandId;
@@ -101,8 +110,11 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
 
           Path path = execRoot.getRelative(input.getExecPath());
           synchronized (lock) {
-            downloadsToWaitFor.computeIfAbsent(
-                path, key -> RxFutures.toListenableFuture(downloadFileAsync(path, metadata)));
+            if (downloadedPaths.contains(path)) {
+              continue;
+            }
+            ListenableFuture<Void> download = downloadFileAsync(path, metadata);
+            downloadsToWaitFor.putIfAbsent(path, download);
           }
         }
       }
@@ -131,59 +143,65 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
   }
 
   ImmutableSet<Path> downloadedFiles() {
-    return downloadCache.getFinishedTasks();
-  }
-
-  ImmutableSet<Path> downloadsInProgress() {
-    return downloadCache.getInProgressTasks();
-  }
-
-  @VisibleForTesting
-  AsyncTaskCache.NoResult<Path> getDownloadCache() {
-    return downloadCache;
+    synchronized (lock) {
+      return ImmutableSet.copyOf(downloadedPaths);
+    }
   }
 
   void downloadFile(Path path, FileArtifactValue metadata)
       throws IOException, InterruptedException {
-    Utils.getFromFuture(RxFutures.toListenableFuture(downloadFileAsync(path, metadata)));
+    Utils.getFromFuture(downloadFileAsync(path, metadata));
   }
 
-  private Completable downloadFileAsync(Path path, FileArtifactValue metadata) {
-    Completable download =
-        RxFutures.toCompletable(
-                () -> {
-                  RequestMetadata requestMetadata =
-                      TracingMetadataUtils.buildMetadata(
-                          buildRequestId, commandId, metadata.getActionId());
-                  RemoteActionExecutionContext context =
-                      RemoteActionExecutionContext.create(requestMetadata);
+  private ListenableFuture<Void> downloadFileAsync(Path path, FileArtifactValue metadata)
+      throws IOException {
+    synchronized (lock) {
+      if (downloadedPaths.contains(path)) {
+        return Futures.immediateFuture(null);
+      }
 
-                  Digest digest = DigestUtil.buildDigest(metadata.getDigest(), metadata.getSize());
+      ListenableFuture<Void> download = downloadsInProgress.get(path);
+      if (download == null) {
+        RequestMetadata requestMetadata =
+            TracingMetadataUtils.buildMetadata(buildRequestId, commandId, metadata.getActionId());
+        RemoteActionExecutionContext context = RemoteActionExecutionContext.create(requestMetadata);
 
-                  return remoteCache.downloadFile(context, path, digest);
-                },
-                MoreExecutors.directExecutor())
-            .doOnComplete(() -> finalizeDownload(path))
-            .doOnError(error -> deletePartialDownload(path))
-            .doOnDispose(() -> deletePartialDownload(path));
+        Digest digest = DigestUtil.buildDigest(metadata.getDigest(), metadata.getSize());
+        download = remoteCache.downloadFile(context, path, digest);
+        downloadsInProgress.put(path, download);
+        Futures.addCallback(
+            download,
+            new FutureCallback<Void>() {
+              @Override
+              public void onSuccess(Void v) {
+                synchronized (lock) {
+                  downloadsInProgress.remove(path);
+                  downloadedPaths.add(path);
+                }
 
-    return downloadCache.executeIfNot(path, download);
-  }
+                try {
+                  path.chmod(0755);
+                } catch (IOException e) {
+                  logger.atWarning().withCause(e).log("Failed to chmod 755 on %s", path);
+                }
+              }
 
-  private void finalizeDownload(Path path) {
-    try {
-      path.chmod(0755);
-    } catch (IOException e) {
-      logger.atWarning().withCause(e).log("Failed to chmod 755 on %s", path);
-    }
-  }
-
-  private void deletePartialDownload(Path path) {
-    try {
-      path.delete();
-    } catch (IOException e) {
-      logger.atWarning().withCause(e).log(
-          "Failed to delete output file after incomplete download: %s", path);
+              @Override
+              public void onFailure(Throwable t) {
+                synchronized (lock) {
+                  downloadsInProgress.remove(path);
+                }
+                try {
+                  path.delete();
+                } catch (IOException e) {
+                  logger.atWarning().withCause(e).log(
+                      "Failed to delete output file after incomplete download: %s", path);
+                }
+              }
+            },
+            MoreExecutors.directExecutor());
+      }
+      return download;
     }
   }
 }

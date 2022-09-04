@@ -314,10 +314,7 @@ public class RemoteCache implements AutoCloseable {
       FileOutErr origOutErr,
       OutputFilesLocker outputFilesLocker)
       throws ExecException, IOException, InterruptedException {
-    // The input root for RBE is the parent directory of the exec root so that paths to files in
-    // external repositories don't start with an uplevel reference
-    Path inputRoot = execRoot.getParentDirectory();
-    ActionResultMetadata metadata = parseActionResultMetadata(context, result, inputRoot);
+    ActionResultMetadata metadata = parseActionResultMetadata(context, result, execRoot);
 
     List<ListenableFuture<FileMetadata>> downloads =
         Stream.concat(
@@ -352,12 +349,12 @@ public class RemoteCache implements AutoCloseable {
       try {
         // Delete any (partially) downloaded output files.
         for (OutputFile file : result.getOutputFilesList()) {
-          toTmpDownloadPath(inputRoot.getRelative(file.getPath())).delete();
+          toTmpDownloadPath(execRoot.getRelative(file.getPath())).delete();
         }
         for (OutputDirectory directory : result.getOutputDirectoriesList()) {
           // Only delete the directories below the output directories because the output
           // directories will not be re-created
-          inputRoot.getRelative(directory.getPath()).deleteTreesBelow();
+          execRoot.getRelative(directory.getPath()).deleteTreesBelow();
         }
         if (tmpOutErr != null) {
           tmpOutErr.clearOut();
@@ -592,11 +589,7 @@ public class RemoteCache implements AutoCloseable {
 
     ActionResultMetadata metadata;
     try (SilentCloseable c = Profiler.instance().profile("Remote.parseActionResultMetadata")) {
-      // We tell RBE that the input root of the action is the parent directory of what is locally
-      // the execroot. This is so that paths of artifacts in external repositories don't start with
-      // an uplevel reference.
-      Path inputRoot = execRoot.getParentDirectory();
-      metadata = parseActionResultMetadata(context, result, inputRoot);
+      metadata = parseActionResultMetadata(context, result, execRoot);
     }
 
     if (!metadata.symlinks().isEmpty()) {
@@ -727,14 +720,14 @@ public class RemoteCache implements AutoCloseable {
   }
 
   private ActionResultMetadata parseActionResultMetadata(
-      RemoteActionExecutionContext context, ActionResult actionResult, Path inputRoot)
+      RemoteActionExecutionContext context, ActionResult actionResult, Path execRoot)
       throws IOException, InterruptedException {
     Preconditions.checkNotNull(actionResult, "actionResult");
     Map<Path, ListenableFuture<Tree>> dirMetadataDownloads =
         Maps.newHashMapWithExpectedSize(actionResult.getOutputDirectoriesCount());
     for (OutputDirectory dir : actionResult.getOutputDirectoriesList()) {
       dirMetadataDownloads.put(
-          inputRoot.getRelative(dir.getPath()),
+          execRoot.getRelative(dir.getPath()),
           Futures.transform(
               downloadBlob(context, dir.getTreeDigest()),
               (treeBytes) -> {
@@ -765,9 +758,9 @@ public class RemoteCache implements AutoCloseable {
     ImmutableMap.Builder<Path, FileMetadata> files = ImmutableMap.builder();
     for (OutputFile outputFile : actionResult.getOutputFilesList()) {
       files.put(
-          inputRoot.getRelative(outputFile.getPath()),
+          execRoot.getRelative(outputFile.getPath()),
           new FileMetadata(
-              inputRoot.getRelative(outputFile.getPath()),
+              execRoot.getRelative(outputFile.getPath()),
               outputFile.getDigest(),
               outputFile.getIsExecutable()));
     }
@@ -779,9 +772,9 @@ public class RemoteCache implements AutoCloseable {
             actionResult.getOutputDirectorySymlinksList());
     for (OutputSymlink symlink : outputSymlinks) {
       symlinks.put(
-          inputRoot.getRelative(symlink.getPath()),
+          execRoot.getRelative(symlink.getPath()),
           new SymlinkMetadata(
-              inputRoot.getRelative(symlink.getPath()), PathFragment.create(symlink.getTarget())));
+              execRoot.getRelative(symlink.getPath()), PathFragment.create(symlink.getTarget())));
     }
 
     return new ActionResultMetadata(files.build(), symlinks.build(), directories.build());
