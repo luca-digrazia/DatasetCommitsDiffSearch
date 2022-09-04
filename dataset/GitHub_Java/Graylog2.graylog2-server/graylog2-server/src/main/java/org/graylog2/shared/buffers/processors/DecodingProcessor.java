@@ -38,7 +38,6 @@ import org.graylog2.shared.utilities.ExceptionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -86,11 +85,10 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         try {
             processMessage(event);
         } catch (Exception e) {
-            final RawMessage rawMessage = event.getRaw();
-            LOG.error("Error processing message " + rawMessage, ExceptionUtils.getRootCause(e));
+            LOG.error("Error processing message " + event.getRaw(), ExceptionUtils.getRootCause(e));
 
             // Mark message as processed to avoid keeping it in the journal.
-            journal.markJournalOffsetCommitted(rawMessage.getJournalOffset());
+            journal.markJournalOffsetCommitted(event.getRaw().getJournalOffset());
 
             // always clear the event fields, even if they are null, to avoid later stages to process old messages.
             // basically this will make sure old messages are cleared out early.
@@ -111,6 +109,14 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     private void processMessage(final MessageEvent event) throws ExecutionException {
         final RawMessage raw = event.getRaw();
 
+        final Codec.Factory<? extends Codec> factory = codecFactory.get(raw.getCodecName());
+        if (factory == null) {
+            LOG.warn("Couldn't find factory for codec {}, skipping message.", raw.getCodecName());
+            return;
+        }
+
+        final Codec codec = factory.create(raw.getCodecConfig());
+
         // for backwards compatibility: the last source node should contain the input we use.
         // this means that extractors etc defined on the prior inputs are silently ignored.
         // TODO fix the above
@@ -121,15 +127,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         } catch (NoSuchElementException e) {
             inputIdOnCurrentNode = null;
         }
-
-        final Codec.Factory<? extends Codec> factory = codecFactory.get(raw.getCodecName());
-        if (factory == null) {
-            LOG.warn("Couldn't find factory for codec <{}>, skipping message {} on input <{}>.",
-                    raw.getCodecName(), raw, inputIdOnCurrentNode);
-            return;
-        }
-
-        final Codec codec = factory.create(raw.getCodecConfig());
         final String baseMetricName = name(codec.getClass(), inputIdOnCurrentNode);
 
         Message message = null;
@@ -146,7 +143,13 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
                 message = codec.decode(raw);
             }
         } catch (RuntimeException e) {
-            LOG.error("Unable to decode raw message {} on input <{}>.", raw, inputIdOnCurrentNode);
+            String remote = "unknown source";
+            final ResolvableInetSocketAddress remoteAddress = raw.getRemoteAddress();
+            if (remoteAddress != null) {
+                remote = remoteAddress.getInetSocketAddress().toString();
+            }
+            LOG.error("Unable to decode raw message {} (journal offset {}) encoded as {} received from {}.",
+                      raw.getId(), raw.getJournalOffset(), raw.getCodecName(), remote);
             metricRegistry.meter(name(baseMetricName, "failures")).mark();
             throw e;
         } finally {
@@ -170,7 +173,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         }
     }
 
-    @Nullable
     private Message postProcessMessage(RawMessage raw, Codec codec, String inputIdOnCurrentNode, String baseMetricName, Message message, long decodeTime) {
         if (message == null) {
             metricRegistry.meter(name(baseMetricName, "failures")).mark();
@@ -179,8 +181,7 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         if (!message.isComplete()) {
             metricRegistry.meter(name(baseMetricName, "incomplete")).mark();
             if (LOG.isDebugEnabled()) {
-                LOG.debug("Dropping incomplete message {} on input <{}>. Parsed fields: [{}]",
-                        raw, inputIdOnCurrentNode, message.getFields());
+                LOG.debug("Dropping incomplete message. Parsed fields: [{}]", message.getFields());
             }
             return null;
         }
