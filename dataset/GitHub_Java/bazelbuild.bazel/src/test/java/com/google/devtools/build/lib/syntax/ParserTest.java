@@ -555,16 +555,6 @@ public class ParserTest extends EvaluationTestCase {
     assertExpressionLocationCorrect("not True");
   }
 
-  @Test
-  public void testLoadStatementPosition() throws Exception {
-    String input = "load(':foo.bzl', 'bar')";
-    LoadStatement stmt = (LoadStatement) parseFile(input).get(0);
-    assertThat(getText(input, stmt)).isEqualTo(input);
-    // Also try it with another token at the end (newline), which broke the location in the past.
-    stmt = (LoadStatement) parseFile(input + "\n").get(0);
-    assertThat(getText(input, stmt)).isEqualTo(input);
-  }
-
   private void assertExpressionLocationCorrect(String exprStr) {
     Expression expr = parseExpression(exprStr);
     assertThat(getText(exprStr, expr)).isEqualTo(exprStr);
@@ -982,8 +972,7 @@ public class ParserTest extends EvaluationTestCase {
   @Test
   public void testPass() throws Exception {
     List<Statement> statements = parseFileForSkylark("pass\n");
-    assertThat(statements).hasSize(1);
-    assertThat(statements.get(0)).isInstanceOf(PassStatement.class);
+    assertThat(statements).isEmpty();
   }
 
   @Test
@@ -994,7 +983,7 @@ public class ParserTest extends EvaluationTestCase {
 
     assertThat(statements).hasSize(1);
     FunctionDefStatement stmt = (FunctionDefStatement) statements.get(0);
-    assertThat(stmt.getStatements().get(0)).isInstanceOf(PassStatement.class);
+    assertThat(stmt.getStatements()).isEmpty();
   }
 
   @Test
