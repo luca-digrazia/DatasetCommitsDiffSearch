@@ -8,7 +8,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
-import io.vertx.core.Vertx;
 
 public class VertxProducerTest {
 
@@ -28,23 +27,24 @@ public class VertxProducerTest {
 
     @Test
     public void shouldNotFailWithoutConfig() {
-        verifyProducer(VertxCoreRecorder.initialize(null, null));
+        producer.vertx = VertxCoreRecorder.initialize(null, null);
+        verifyProducer();
     }
 
-    private void verifyProducer(Vertx v) {
-        assertThat(producer.eventbus(v)).isNotNull();
+    private void verifyProducer() {
+        assertThat(producer.eventbus()).isNotNull();
 
-        assertThat(producer.axle(v)).isNotNull();
-        assertFalse(producer.axle(v).isClustered());
-        assertThat(producer.axleEventBus(producer.axle(v))).isNotNull();
+        assertThat(producer.axle()).isNotNull();
+        assertFalse(producer.axle().isClustered());
+        assertThat(producer.axleEventBus(producer.axle())).isNotNull();
 
-        assertThat(producer.rx(v)).isNotNull();
-        assertFalse(producer.rx(v).isClustered());
-        assertThat(producer.rxEventBus(producer.rx(v))).isNotNull();
+        assertThat(producer.rx()).isNotNull();
+        assertFalse(producer.rx().isClustered());
+        assertThat(producer.rxEventBus(producer.rx())).isNotNull();
 
-        assertThat(producer.mutiny(v)).isNotNull();
-        assertFalse(producer.mutiny(v).isClustered());
-        assertThat(producer.mutinyEventBus(producer.mutiny(v))).isNotNull();
+        assertThat(producer.mutiny()).isNotNull();
+        assertFalse(producer.mutiny().isClustered());
+        assertThat(producer.mutinyEventBus(producer.mutiny())).isNotNull();
 
     }
 }
