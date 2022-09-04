@@ -80,7 +80,7 @@ public class QuarkusTestExtension
             CuratedApplication curatedApplication = runnerBuilder
                     .setTest(true)
                     .setProjectRoot(new File("").toPath())
-                    .build()
+                    .setLocalProjectDiscovery(true).build()
                     .bootstrap();
             Timing.staticInitStarted(curatedApplication.getBaseRuntimeClassLoader());
             AugmentAction augmentAction = curatedApplication.createAugmentor(TestBuildChainFunction.class.getName(),
