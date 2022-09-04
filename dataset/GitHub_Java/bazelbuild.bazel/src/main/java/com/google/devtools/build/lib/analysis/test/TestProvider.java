@@ -24,7 +24,9 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.TestTimeout;
 import java.util.List;
 
-/** A {@link TransitiveInfoProvider} for configured targets that implement test rules. */
+/**
+ * A {@link TransitiveInfoProvider} for configured targets that implement test rules.
+ */
 @Immutable
 public final class TestProvider implements TransitiveInfoProvider {
   private final TestParams testParams;
@@ -62,11 +64,12 @@ public final class TestProvider implements TransitiveInfoProvider {
     return target.getProvider(TestProvider.class).getTestParams().getTestStatusArtifacts();
   }
 
-  /** A value class describing the properties of a test. */
+  /**
+   * A value class describing the properties of a test.
+   */
   public static class TestParams {
     private final int runs;
     private final int shards;
-    private final boolean runsDetectsFlakes;
     private final TestTimeout timeout;
     private final String testRuleClass;
     private final ImmutableList<Artifact.DerivedArtifact> testStatusArtifacts;
@@ -81,7 +84,6 @@ public final class TestProvider implements TransitiveInfoProvider {
     TestParams(
         int runs,
         int shards,
-        boolean runsDetectsFlakes,
         TestTimeout timeout,
         String testRuleClass,
         ImmutableList<Artifact.DerivedArtifact> testStatusArtifacts,
@@ -90,7 +92,6 @@ public final class TestProvider implements TransitiveInfoProvider {
         ImmutableList<ActionInput> outputs) {
       this.runs = runs;
       this.shards = shards;
-      this.runsDetectsFlakes = runsDetectsFlakes;
       this.timeout = timeout;
       this.testRuleClass = testRuleClass;
       this.testStatusArtifacts = testStatusArtifacts;
@@ -99,27 +100,30 @@ public final class TestProvider implements TransitiveInfoProvider {
       this.outputs = outputs;
     }
 
-    /** Returns the number of times this test should be run. */
+    /**
+     * Returns the number of times this test should be run.
+     */
     public int getRuns() {
       return runs;
     }
 
-    /** Returns the number of shards for this test. */
+    /**
+     * Returns the number of shards for this test.
+     */
     public int getShards() {
       return shards;
     }
 
-    /** Returns true iff multiple runs per shard should be aggregated for flake detection. */
-    public boolean runsDetectsFlakes() {
-      return runsDetectsFlakes;
-    }
-
-    /** Returns the timeout of this test. */
+    /**
+     * Returns the timeout of this test.
+     */
     public TestTimeout getTimeout() {
       return timeout;
     }
 
-    /** Returns the test rule class. */
+    /**
+     * Returns the test rule class.
+     */
     public String getTestRuleClass() {
       return testRuleClass;
     }
@@ -132,12 +136,16 @@ public final class TestProvider implements TransitiveInfoProvider {
       return testStatusArtifacts;
     }
 
-    /** Returns the coverageArtifacts. */
+    /**
+     * Returns the coverageArtifacts
+     */
     public ImmutableList<Artifact> getCoverageArtifacts() {
       return coverageArtifacts;
     }
 
-    /** Returns the coverage report generator tool. */
+    /**
+     * Returns the coverage report generator tool.
+     */
     public FilesToRunProvider getCoverageReportGenerator() {
       return coverageReportGenerator;
     }
