@@ -34,6 +34,7 @@ import net.starlark.java.annot.Param;
 import net.starlark.java.annot.ParamType;
 import net.starlark.java.annot.StarlarkBuiltin;
 import net.starlark.java.annot.StarlarkMethod;
+import net.starlark.java.eval.ClassObject;
 import net.starlark.java.eval.Dict;
 import net.starlark.java.eval.EvalException;
 import net.starlark.java.eval.NoneType;
@@ -43,7 +44,6 @@ import net.starlark.java.eval.StarlarkFloat;
 import net.starlark.java.eval.StarlarkInt;
 import net.starlark.java.eval.StarlarkThread;
 import net.starlark.java.eval.StarlarkValue;
-import net.starlark.java.eval.Structure;
 import net.starlark.java.lib.json.Json;
 import net.starlark.java.syntax.Location;
 
@@ -139,7 +139,7 @@ public final class StarlarkLibrary {
                 + "# }\n"
                 + "</pre>",
         parameters = {@Param(name = "x")})
-    public String encodeText(Structure x) throws EvalException {
+    public String encodeText(ClassObject x) throws EvalException {
       TextEncoder enc = new TextEncoder();
       enc.message(x);
       return enc.out.toString();
@@ -150,8 +150,8 @@ public final class StarlarkLibrary {
       private final StringBuilder out = new StringBuilder();
       private int indent = 0;
 
-      // Encodes Structure x as a protocol message.
-      private void message(Structure x) throws EvalException {
+      // Encodes ClassObject x as a protocol message.
+      private void message(ClassObject x) throws EvalException {
         // For determinism, sort fields.
         String[] fields = x.getFieldNames().toArray(new String[0]);
         Arrays.sort(fields);
@@ -164,12 +164,12 @@ public final class StarlarkLibrary {
         }
       }
 
-      // Encodes Structure field (name, v) as a message field
+      // Encodes ClassObject field (name, v) as a message field
       // (a repeated field, if v is a dict or sequence.)
       private void field(String name, Object v) throws EvalException {
         // dict?
         if (v instanceof Dict) {
-          Dict<?, ?> dict = (Dict<?, ?>) v;
+          Dict<?, ?> dict = (Dict) v;
           for (Map.Entry<?, ?> entry : dict.entrySet()) {
             Object key = entry.getKey();
             if (!(key instanceof String || key instanceof StarlarkInt)) {
@@ -194,7 +194,7 @@ public final class StarlarkLibrary {
         // list or tuple?
         if (v instanceof Sequence) {
           int i = 0;
-          for (Object item : (Sequence<?>) v) {
+          for (Object item : (Sequence) v) {
             try {
               fieldElement(name, item);
             } catch (EvalException ex) {
@@ -210,12 +210,12 @@ public final class StarlarkLibrary {
       }
 
       // Emits field (name, v) as a message field, or one element of a repeated field.
-      // v must be an int, float, string, bool, or Structure.
+      // v must be an int, float, string, bool, or ClassObject.
       private void fieldElement(String name, Object v) throws EvalException {
-        if (v instanceof Structure) {
+        if (v instanceof ClassObject) {
           emitLine(name, " {");
           indent++;
-          message((Structure) v);
+          message((ClassObject) v);
           indent--;
           emitLine("}");
 
