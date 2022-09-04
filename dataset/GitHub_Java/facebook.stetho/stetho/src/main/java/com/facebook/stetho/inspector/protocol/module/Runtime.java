@@ -105,13 +105,6 @@ public class Runtime implements ChromeDevtoolsDomain {
     return session;
   }
 
-  /**
-   * Removes objects from peer's session previously added by {@link #mapObject}
-   */
-  public static void releaseObject(JsonRpcPeer peer, Integer id) throws JSONException {
-    getSession(peer).getObjects().removeObjectById(id);
-  }
-
   @ChromeDevtoolsMethod
   public void releaseObject(JsonRpcPeer peer, JSONObject params) throws JSONException {
     String objectId = params.getString("objectId");
@@ -124,7 +117,7 @@ public class Runtime implements ChromeDevtoolsDomain {
   }
 
   @ChromeDevtoolsMethod
-  public CallFunctionOnResponse callFunctionOn(JsonRpcPeer peer, JSONObject params)
+  public JsonRpcResult callFunctionOn(JsonRpcPeer peer, JSONObject params)
       throws JsonRpcException {
     CallFunctionOnRequest args = mObjectMapper.convertValue(params, CallFunctionOnRequest.class);
 
