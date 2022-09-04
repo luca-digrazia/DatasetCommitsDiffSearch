@@ -18,12 +18,13 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.AspectClass;
+import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.DependencyFilter;
+import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-
 import java.util.Set;
 
 /**
@@ -33,17 +34,18 @@ import java.util.Set;
  */
 public class ConservativeAspectResolver implements AspectResolver {
   @Override
-  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target)
-      throws InterruptedException {
+  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(
+      Target target, DependencyFilter dependencyFilter) {
     if (!(target instanceof Rule)) {
       return ImmutableMultimap.of();
     }
+    Rule rule = (Rule) target;
 
     Multimap<Attribute, Label> result = LinkedHashMultimap.create();
-    for (Attribute attribute : ((Rule) target).getAttributes()) {
-      for (AspectClass aspectFactory : attribute.getAspects()) {
+    for (Attribute attribute : rule.getAttributes()) {
+      for (Aspect aspect : attribute.getAspects(rule)) {
         AspectDefinition.addAllAttributesOfAspect(
-            (Rule) target, result, aspectFactory.getDefinition(), Rule.ALL_DEPS);
+            rule, result, aspect, dependencyFilter);
       }
     }
 
@@ -51,9 +53,8 @@ public class ConservativeAspectResolver implements AspectResolver {
   }
 
   @Override
-  public Set<Label> computeBuildFileDependencies(com.google.devtools.build.lib.packages.Package pkg,
-      BuildFileDependencyMode mode) throws InterruptedException {
+  public Set<Label> computeBuildFileDependencies(Package pkg) {
     // We do a conservative estimate precisely so that we don't depend on any other BUILD files.
-    return ImmutableSet.copyOf(mode.getDependencies(pkg));
+    return ImmutableSet.copyOf(pkg.getSkylarkFileDependencies());
   }
 }
