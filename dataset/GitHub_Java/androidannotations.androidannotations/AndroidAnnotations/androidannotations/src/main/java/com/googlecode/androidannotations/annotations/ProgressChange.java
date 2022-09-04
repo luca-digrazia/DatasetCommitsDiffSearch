@@ -50,7 +50,7 @@ import java.lang.annotation.Target;
  * 
  * </blockquote> <blockquote>
  * 
- * All these parameters are optional.
+ * All of those parameters are optional.
  * 
  * </blockquote> <blockquote>
  * 
