@@ -30,8 +30,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
-import com.google.devtools.common.options.OptionMetadataTag;
+import com.google.devtools.common.options.proto.OptionFilters;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 
 /**
  * Bazel-specific Python configuration.
@@ -67,7 +67,7 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
       category = "version",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
-      metadataTags = { OptionMetadataTag.DEPRECATED },
+      metadataTags = { OptionFilters.OptionMetadataTag.DEPRECATED },
       help = "Local path to the Python2 executable. "
                 + "Deprecated, please use python_path or python_top instead."
     )
@@ -80,7 +80,7 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
       category = "version",
       documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.AFFECTS_OUTPUTS},
-      metadataTags = { OptionMetadataTag.DEPRECATED },
+      metadataTags = { OptionFilters.OptionMetadataTag.DEPRECATED },
       help = "Local path to the Python3 executable. "
                 + "Deprecated, please use python_path or python_top instead."
     )
@@ -122,7 +122,7 @@ public class BazelPythonConfiguration extends BuildConfiguration.Fragment {
      * Make Python configuration options available for host configurations as well
      */
     @Override
-    public FragmentOptions getHost() {
+    public FragmentOptions getHost(boolean fallback) {
       return clone(); // host options are the same as target options
     }
   }

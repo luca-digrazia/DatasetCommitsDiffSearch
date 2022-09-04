@@ -17,7 +17,7 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 
 /**
  * Python-related command-line options.
@@ -63,7 +63,7 @@ public class PythonOptions extends FragmentOptions {
   }
 
   @Override
-  public FragmentOptions getHost() {
+  public FragmentOptions getHost(boolean fallback) {
     PythonOptions hostPythonOpts = (PythonOptions) getDefault();
     if (hostForcePython != null) {
       hostPythonOpts.forcePython = hostForcePython;
