@@ -17,6 +17,7 @@
 package org.graylog2.shared.buffers;
 
 import com.codahale.metrics.InstrumentedExecutorService;
+import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
@@ -108,8 +109,14 @@ public class InputBufferImpl implements InputBuffer {
     }
 
     private ExecutorService executorService(final MetricRegistry metricRegistry) {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("inputbufferprocessor-%d").build();
-        return new InstrumentedExecutorService(Executors.newCachedThreadPool(threadFactory), metricRegistry, name(this.getClass(), "executor-service"));
+        return new InstrumentedExecutorService(Executors.newCachedThreadPool(
+                threadFactory(metricRegistry)), metricRegistry, name(this.getClass(), "executor-service"));
+    }
+
+    private ThreadFactory threadFactory(MetricRegistry metricRegistry) {
+        return new InstrumentedThreadFactory(
+                new ThreadFactoryBuilder().setNameFormat("inputbufferprocessor-%d").build(),
+                metricRegistry);
     }
 
 }
