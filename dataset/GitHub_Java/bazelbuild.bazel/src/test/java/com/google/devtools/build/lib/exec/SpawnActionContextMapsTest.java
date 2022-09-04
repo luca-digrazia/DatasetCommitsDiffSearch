@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.RegexFilter.RegexFilterConverter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.view.test.TestStatus.TestResultData;
+import java.io.IOException;
 import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,15 +53,12 @@ public class SpawnActionContextMapsTest {
   private final EventBus bus = new EventBus();
   private final Reporter reporter = new Reporter(bus);
 
-  private static final AC1 ac1 = new AC1();
-  private static final AC2 ac2 = new AC2();
-
   private static final ImmutableList<ActionContextProvider> PROVIDERS =
       ImmutableList.of(
           new ActionContextProvider() {
             @Override
             public Iterable<? extends ActionContext> getActionContexts() {
-              return ImmutableList.of(ac1, ac2, new ACTest());
+              return ImmutableList.of(new AC1(), new AC2(), new ACTest());
             }
           });
 
@@ -70,48 +68,44 @@ public class SpawnActionContextMapsTest {
   }
 
   @Test
-  public void duplicateMnemonics_bothGetStored() throws Exception {
-    builder.strategyByMnemonicMap().put("Spawn1", "ac1");
-    builder.strategyByMnemonicMap().put("Spawn1", "ac2");
-    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest", true);
-    List<SpawnActionContext> result =
-        maps.getSpawnActionContexts(mockSpawn("Spawn1", null), reporter);
-    assertThat(result).containsExactly(ac1, ac2);
+  public void duplicateMnemonics_lastOneWins() throws Exception {
+    builder.strategyByMnemonicMap().put("Spawn1", "ac1").put("Spawn1", "ac2");
+    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest");
+    SpawnActionContext result = maps.getSpawnActionContext(mockSpawn("Spawn1", null), reporter);
+    assertThat(result).isInstanceOf(AC2.class);
   }
 
   @Test
   public void emptyStrategyFallsBackToEmptyMnemonicNotToDefault() throws Exception {
-    builder.strategyByMnemonicMap().put("Spawn1", "");
-    builder.strategyByMnemonicMap().put("", "ac2");
-    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest", false);
-    List<SpawnActionContext> result =
-        maps.getSpawnActionContexts(mockSpawn("Spawn1", null), reporter);
-    assertThat(result).containsExactly(ac2);
+    builder.strategyByMnemonicMap().put("Spawn1", "").put("", "ac2");
+    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest");
+    SpawnActionContext result = maps.getSpawnActionContext(mockSpawn("Spawn1", null), reporter);
+    assertThat(result).isInstanceOf(AC2.class);
   }
 
   @Test
   public void multipleRegexps_firstMatchWins() throws Exception {
-    builder.addStrategyByRegexp(converter.convert("foo"), ImmutableList.of("ac1"));
-    builder.addStrategyByRegexp(converter.convert("foo/bar"), ImmutableList.of("ac2"));
-    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest", false);
+    builder.addStrategyByRegexp(converter.convert("foo"), "ac1");
+    builder.addStrategyByRegexp(converter.convert("foo/bar"), "ac2");
+    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest");
 
-    List<SpawnActionContext> result =
-        maps.getSpawnActionContexts(mockSpawn(null, "Doing something with foo/bar/baz"), reporter);
+    SpawnActionContext result =
+        maps.getSpawnActionContext(mockSpawn(null, "Doing something with foo/bar/baz"), reporter);
 
-    assertThat(result).containsExactly(ac1);
+    assertThat(result).isInstanceOf(AC1.class);
   }
 
   @Test
   public void regexpAndMnemonic_regexpWins() throws Exception {
     builder.strategyByMnemonicMap().put("Spawn1", "ac1");
-    builder.addStrategyByRegexp(converter.convert("foo/bar"), ImmutableList.of("ac2"));
-    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest", false);
+    builder.addStrategyByRegexp(converter.convert("foo/bar"), "ac2");
+    SpawnActionContextMaps maps = builder.build(PROVIDERS, "actest");
 
-    List<SpawnActionContext> result =
-        maps.getSpawnActionContexts(
+    SpawnActionContext result =
+        maps.getSpawnActionContext(
             mockSpawn("Spawn1", "Doing something with foo/bar/baz"), reporter);
 
-    assertThat(result).containsExactly(ac2);
+    assertThat(result).isInstanceOf(AC2.class);
   }
 
   @Test
@@ -137,11 +131,6 @@ public class SpawnActionContextMapsTest {
         throws ExecException, InterruptedException {
       throw new UnsupportedOperationException();
     }
-
-    @Override
-    public boolean canExec(Spawn spawn) {
-      return true;
-    }
   }
 
   @ExecutionStrategy(contextType = SpawnActionContext.class, name = "ac2")
@@ -151,29 +140,20 @@ public class SpawnActionContextMapsTest {
         throws ExecException, InterruptedException {
       throw new UnsupportedOperationException();
     }
-
-    @Override
-    public boolean canExec(Spawn spawn) {
-      return true;
-    }
   }
 
   @ExecutionStrategy(contextType = TestActionContext.class, name = "actest")
   private static class ACTest implements TestActionContext {
     @Override
-    public TestRunnerSpawn createTestRunnerSpawn(
-        TestRunnerAction testRunnerAction, ActionExecutionContext actionExecutionContext) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean isTestKeepGoing() {
+    public List<SpawnResult> exec(
+        TestRunnerAction action, ActionExecutionContext actionExecutionContext)
+        throws ExecException, InterruptedException {
       throw new UnsupportedOperationException();
     }
 
     @Override
     public TestResult newCachedTestResult(
-        Path execRoot, TestRunnerAction action, TestResultData cached) {
+        Path execRoot, TestRunnerAction action, TestResultData cached) throws IOException {
       throw new UnsupportedOperationException();
     }
   }

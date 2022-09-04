@@ -56,14 +56,15 @@ public class BazelStrategyModule extends BlazeModule {
     public String spawnStrategy;
 
     @Option(
-        name = "genrule_strategy",
-        defaultValue = "",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "Specify how to execute genrules. This flag will be phased out. Instead, use "
-                + "--spawn_strategy=<value> to control all actions or --strategy=Genrule=<value> "
-                + "to control genrules only.")
+      name = "genrule_strategy",
+      defaultValue = "",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Specify how to execute genrules. "
+              + "'standalone' means run all of them locally. "
+              + "'sandboxed' means run them in namespaces based sandbox (available only on Linux)"
+    )
     public String genruleStrategy;
 
     @Option(
