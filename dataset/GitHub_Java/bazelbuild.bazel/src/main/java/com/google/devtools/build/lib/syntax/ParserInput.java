@@ -13,22 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.CharBuffer;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.charset.StandardCharsets;
 
 /**
  * The apparent name and contents of a source file, for consumption by the parser. The file name
  * appears in the location information in the syntax tree, and in error messages, but the Starlark
- * interpreter will not attempt to open the file. However, the default behavior of {@link
- * EvalException#getMessageWithStack} attempts to read the specified file when formatting a stack
- * trace.
+ * interpreter will not attempt to open the file.
  *
  * <p>The parser consumes a stream of chars (UTF-16 codes), and the syntax positions reported by
  * {@link Node#getStartOffset} and {@link Location.column} are effectively indices into a char
@@ -54,15 +46,6 @@ public final class ParserInput {
     return file;
   }
 
-  /**
-   * Returns an input source that uses the name and content of the specified UTF-8-encoded text
-   * file.
-   */
-  public static ParserInput readFile(String file) throws IOException {
-    byte[] utf8 = Files.readAllBytes(Paths.get(file));
-    return fromUTF8(utf8, file);
-  }
-
   /** Returns an unnamed input source that reads from a list of strings, joined by newlines. */
   public static ParserInput fromLines(String... lines) {
     return fromString(Joiner.on("\n").join(lines), "");
@@ -73,10 +56,8 @@ public final class ParserInput {
    * subsequently mutate the array.
    */
   public static ParserInput fromUTF8(byte[] bytes, String file) {
-    CharBuffer cb = UTF_8.decode(ByteBuffer.wrap(bytes));
-    char[] utf16 = new char[cb.length()];
-    cb.get(utf16);
-    return fromCharArray(utf16, file);
+    // TODO(adonovan): opt: avoid one of the two copies.
+    return fromString(new String(bytes, StandardCharsets.UTF_8), file);
   }
 
   /**
