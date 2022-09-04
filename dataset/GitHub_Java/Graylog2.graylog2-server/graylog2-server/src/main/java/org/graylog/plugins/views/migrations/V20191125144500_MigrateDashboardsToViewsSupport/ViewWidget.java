@@ -21,12 +21,11 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 import org.graylog.autovalue.WithBeanGetter;
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.AggregationConfig;
+import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.viewwidgets.ViewWidgetConfig;
 
 import javax.annotation.Nullable;
 import java.util.Collections;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @AutoValue
 @WithBeanGetter
@@ -61,7 +60,7 @@ public abstract class ViewWidget {
     abstract Set<String> streams();
 
     @JsonProperty(FIELD_CONFIG)
-    abstract AggregationConfig config();
+    abstract ViewWidgetConfig config();
 
     private static String newId() {
         return new UUID().toString();
@@ -81,11 +80,6 @@ public abstract class ViewWidget {
                         .query(query())
                         .streams(streams())
                         .timerange(timerange())
-                        .rollup(config().rollup())
-                        .rowGroups(config().rowPivots().stream().map(pivot -> pivot.toBucketSpec()).collect(Collectors.toList()))
-                        .columnGroups(config().columnPivots().stream().map(pivot -> pivot.toBucketSpec()).collect(Collectors.toList()))
-                        .series(config().series().stream().map(series -> series.toSeriesSpec()).collect(Collectors.toList()))
-                        .sort(config().sort().stream().map(sort -> sort.toSortSpec()).collect(Collectors.toList()))
                         .build()
         );
     }
@@ -112,7 +106,7 @@ public abstract class ViewWidget {
         public abstract Builder streams(Set<String> streams);
 
         @JsonProperty(FIELD_CONFIG)
-        public abstract Builder config(AggregationConfig config);
+        public abstract Builder config(ViewWidgetConfig config);
 
         public abstract ViewWidget build();
     }
