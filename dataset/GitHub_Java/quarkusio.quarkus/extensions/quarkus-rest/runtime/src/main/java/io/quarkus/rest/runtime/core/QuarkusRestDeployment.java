@@ -13,12 +13,11 @@ public class QuarkusRestDeployment {
     private final ClientProxies clientProxies;
     private final String prefix;
     private final GenericTypeMapping genericTypeMapping;
-    private final ParamConverterProviders paramConverterProviders;
 
     public QuarkusRestDeployment(ExceptionMapping exceptionMapping, ContextResolvers contextResolvers, Serialisers serialisers,
             RestHandler[] abortHandlerChain,
             EntityWriter dynamicEntityWriter, ClientProxies clientProxies, String prefix,
-            GenericTypeMapping genericTypeMapping, ParamConverterProviders paramConverterProviders) {
+            GenericTypeMapping genericTypeMapping) {
         this.exceptionMapping = exceptionMapping;
         this.contextResolvers = contextResolvers;
         this.serialisers = serialisers;
@@ -27,7 +26,6 @@ public class QuarkusRestDeployment {
         this.clientProxies = clientProxies;
         this.prefix = prefix;
         this.genericTypeMapping = genericTypeMapping;
-        this.paramConverterProviders = paramConverterProviders;
     }
 
     public ExceptionMapping getExceptionMapping() {
@@ -65,9 +63,5 @@ public class QuarkusRestDeployment {
 
     public GenericTypeMapping getGenericTypeMapping() {
         return genericTypeMapping;
-    }
-
-    public ParamConverterProviders getParamConverterProviders() {
-        return paramConverterProviders;
     }
 }

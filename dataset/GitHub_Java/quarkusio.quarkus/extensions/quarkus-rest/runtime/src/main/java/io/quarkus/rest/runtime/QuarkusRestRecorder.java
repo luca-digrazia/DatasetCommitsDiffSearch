@@ -784,8 +784,7 @@ public class QuarkusRestRecorder {
                             handlers.add(new FixedProducesHandler(mediaType, new FixedEntityWriter(
                                     buildTimeWriters.get(0).getInstance(), mediaType)));
                         } else {
-                            //multiple writers, we try them in the proper order
-                            buildTimeWriters.sort(ResourceWriter.ResourceWriterComparator.INSTANCE);
+                            //multiple writers, we try them in order
                             List<MessageBodyWriter<?>> list = new ArrayList<>();
                             for (ResourceWriter i : buildTimeWriters) {
                                 list.add(i.getInstance());

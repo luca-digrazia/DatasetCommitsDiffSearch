@@ -43,7 +43,6 @@ import io.quarkus.rest.runtime.jaxrs.QuarkusRestUriInfo;
 import io.quarkus.rest.runtime.mapping.RuntimeResource;
 import io.quarkus.rest.runtime.mapping.URITemplate;
 import io.quarkus.rest.runtime.util.EmptyInputStream;
-import io.quarkus.rest.runtime.util.Encode;
 import io.quarkus.rest.runtime.util.PathSegmentImpl;
 import io.quarkus.vertx.http.runtime.CurrentVertxRequest;
 import io.vertx.core.net.impl.ConnectionBase;
@@ -791,35 +790,19 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     }
 
     @Override
-    public Object getQueryParameter(String name, boolean single, boolean encoded) {
-        if (single) {
-            String val = context.queryParams().get(name);
-            if (encoded && val != null) {
-                val = Encode.encodeQueryParam(val);
-            }
-            return val;
-        }
+    public Object getQueryParameter(String name, boolean single) {
+        if (single)
+            return context.queryParams().get(name);
         // empty collections must not be turned to null
-        List<String> strings = context.queryParam(name);
-        if (encoded) {
-            List<String> newStrings = new ArrayList<>();
-            for (String i : strings) {
-                newStrings.add(Encode.encodeQueryParam(i));
-            }
-            return newStrings;
-        }
-        return strings;
+        return context.queryParam(name);
     }
 
     @Override
-    public Object getMatrixParameter(String name, boolean single, boolean encoded) {
+    public Object getMatrixParameter(String name, boolean single) {
         if (single) {
             for (PathSegment i : getPathSegments()) {
                 String res = i.getMatrixParameters().getFirst(name);
                 if (res != null) {
-                    if (encoded) {
-                        return Encode.encodeQueryParam(res);
-                    }
                     return res;
                 }
             }
@@ -829,13 +812,7 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
             for (PathSegment i : getPathSegments()) {
                 List<String> res = i.getMatrixParameters().get(name);
                 if (res != null) {
-                    if (encoded) {
-                        for (String j : res) {
-                            ret.add(Encode.encodeQueryParam(j));
-                        }
-                    } else {
-                        ret.addAll(res);
-                    }
+                    ret.addAll(res);
                 }
             }
             // empty collections must not be turned to null
@@ -858,17 +835,13 @@ public class QuarkusRestRequestContext implements Runnable, Closeable, QuarkusRe
     }
 
     @Override
-    public String getPathParameter(String name, boolean encoded) {
+    public String getPathParameter(String name) {
         // this is a slower version than getPathParam, but we can't actually bake path indices inside
         // BeanParam classes (which use thismethod ) because they can be used by multiple resources that would have different
         // indices
         Integer index = this.target.getPathParameterIndexes().get(name);
         // It's possible to inject a path param that's not defined, return null in this case
-        String value = index != null ? getPathParam(index) : null;
-        if (encoded && value != null) {
-            return Encode.encodeQueryParam(value);
-        }
-        return value;
+        return index != null ? getPathParam(index) : null;
     }
 
     public SecurityContext getSecurityContext() {

@@ -453,7 +453,7 @@ public class Encode {
      * @return decoded map
      */
     public static MultivaluedMap<String, String> decode(MultivaluedMap<String, String> map) {
-        MultivaluedMap<String, String> decoded = new QuarkusMultivaluedHashMap<String, String>();
+        MultivaluedMapImpl<String, String> decoded = new MultivaluedMapImpl<String, String>();
         for (Map.Entry<String, List<String>> entry : map.entrySet()) {
             List<String> values = entry.getValue();
             for (String value : values) {
@@ -478,7 +478,7 @@ public class Encode {
         if (charset == null) {
             charset = UTF_8;
         }
-        MultivaluedMap<String, String> decoded = new QuarkusMultivaluedHashMap<String, String>();
+        MultivaluedMapImpl<String, String> decoded = new MultivaluedMapImpl<String, String>();
         for (Map.Entry<String, List<String>> entry : map.entrySet()) {
             List<String> values = entry.getValue();
             for (String value : values) {
@@ -493,7 +493,7 @@ public class Encode {
     }
 
     public static MultivaluedMap<String, String> encode(MultivaluedMap<String, String> map) {
-        MultivaluedMap<String, String> decoded = new QuarkusMultivaluedHashMap<String, String>();
+        MultivaluedMapImpl<String, String> decoded = new MultivaluedMapImpl<String, String>();
         for (Map.Entry<String, List<String>> entry : map.entrySet()) {
             List<String> values = entry.getValue();
             for (String value : values) {
