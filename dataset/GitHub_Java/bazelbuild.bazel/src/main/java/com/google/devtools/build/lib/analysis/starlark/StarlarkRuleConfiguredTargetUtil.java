@@ -90,17 +90,11 @@ public final class StarlarkRuleConfiguredTargetUtil {
               + " should have been specified by the requesting rule.");
       return null;
     }
-    if (!ruleClass
-        .getRuleDefinitionEnvironmentLabel()
-        .getRepository()
-        .getName()
-        .equals("@_builtins")) {
-      if (ruleClass.hasFunctionTransitionAllowlist()
-          && !Allowlist.isAvailableBasedOnRuleLocation(
-              ruleContext, FunctionSplitTransitionAllowlist.NAME)) {
-        if (!Allowlist.isAvailable(ruleContext, FunctionSplitTransitionAllowlist.NAME)) {
-          ruleContext.ruleError("Non-allowlisted use of Starlark transition");
-        }
+    if (ruleClass.hasFunctionTransitionAllowlist()
+        && !Allowlist.isAvailableBasedOnRuleLocation(
+            ruleContext, FunctionSplitTransitionAllowlist.NAME)) {
+      if (!Allowlist.isAvailable(ruleContext, FunctionSplitTransitionAllowlist.NAME)) {
+        ruleContext.ruleError("Non-allowlisted use of Starlark transition");
       }
     }
 
