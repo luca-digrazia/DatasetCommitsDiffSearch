@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,20 +21,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Should be used on custom classes to enable usage of AndroidAnnotations
- * 
- * Any view related code should happen in an {@link AfterViews} annotated
- * method.<br>
- * <br>
- * 
- * Most annotations are supported in {@link OrmLiteDao} classes
- * 
+ * Injects an OrmLite Dao, configured with the provided mode and helper classes
  */
-@Retention(RetentionPolicy.SOURCE)
+@Retention(RetentionPolicy.CLASS)
 @Target(ElementType.FIELD)
 public @interface OrmLiteDao {
 
+	Class<?> helper();
+
 	Class<?> model();
 
-	Class<?> helper();
 }
