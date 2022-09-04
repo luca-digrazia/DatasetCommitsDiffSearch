@@ -109,12 +109,8 @@ public class Size implements Comparable<Size> {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) {
-            return true;
-        }
-        if ((obj == null) || (getClass() != obj.getClass())) {
-            return false;
-        }
+        if (this == obj) { return true; }
+        if ((obj == null) || (getClass() != obj.getClass())) { return false; }
         final Size size = (Size) obj;
         return (count == size.count) && (unit == size.unit);
     }
