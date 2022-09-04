@@ -289,20 +289,13 @@ public final class Module implements StarlarkThread.Frame, ValidationEnvironment
     return collectedBindings;
   }
 
-  /**
-   * Returns the value of the specified module variable, or null if not bound. Does not look in the
-   * universe.
-   */
-  public Object lookup(String varname) {
+  public Object getDirectBindings(String varname) {
     checkInitialized();
     return bindings.get(varname);
   }
 
   @Override
   public Object get(String varname) {
-    // TODO(adonovan): delete this whole function, and getTransitiveBindings.
-    // With proper resolution, the interpreter will know whether
-    // to look in the module or the predeclared/universal environment.
     checkInitialized();
     Object val = bindings.get(varname);
     if (val != null) {
@@ -316,7 +309,6 @@ public final class Module implements StarlarkThread.Frame, ValidationEnvironment
 
   @Override
   public void put(String varname, Object value) throws MutabilityException {
-    Preconditions.checkNotNull(value, "Module.put(%s, null)", varname);
     checkInitialized();
     Mutability.checkMutable(this, mutability());
     bindings.put(varname, value);
