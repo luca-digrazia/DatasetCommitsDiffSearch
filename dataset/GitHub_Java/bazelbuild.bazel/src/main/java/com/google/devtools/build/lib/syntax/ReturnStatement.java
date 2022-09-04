@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.build.lib.events.Location;
-import java.io.IOException;
 
 /**
  * A wrapper Statement class for return expressions.
@@ -25,14 +24,14 @@ public final class ReturnStatement extends Statement {
    * Exception sent by the return statement, to be caught by the function body.
    */
   public static class ReturnException extends EvalException {
-    private final Object value;
+    Object value;
 
     public ReturnException(Location location, Object value) {
       super(
           location,
           "return statements must be inside a function",
-          /*dueToIncompleteAST=*/false,
-          /*fillInJavaStackTrace=*/false);
+          /*dueToIncompleteAST=*/ false, /*fillInJavaStackTrace=*/
+          false);
       this.value = value;
     }
 
@@ -62,20 +61,20 @@ public final class ReturnStatement extends Statement {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    printIndent(buffer, indentLevel);
-    buffer.append("return");
-    // "return" with no arg is represented internally as returning the None identifier.
-    if (!(returnExpression instanceof Identifier
-          && ((Identifier) returnExpression).getName().equals("None"))) {
-      buffer.append(' ');
-      returnExpression.prettyPrint(buffer, indentLevel);
-    }
-    buffer.append('\n');
+  public String toString() {
+    return "return " + returnExpression;
   }
 
   @Override
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
+  }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    if (env.isTopLevel()) {
+      throw new EvalException(getLocation(), "Return statements must be inside a function");
+    }
+    returnExpression.validate(env);
   }
 }

@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import java.io.IOException;
-
 /** Syntax node for an augmented assignment statement. */
 public final class AugmentedAssignmentStatement extends Statement {
 
@@ -48,19 +46,13 @@ public final class AugmentedAssignmentStatement extends Statement {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    printIndent(buffer, indentLevel);
-    lvalue.prettyPrint(buffer);
-    buffer.append(' ');
-    buffer.append(operator.toString());
-    buffer.append("= ");
-    expression.prettyPrint(buffer);
-    buffer.append('\n');
+  public String toString() {
+    return String.format("%s %s= %s\n", lvalue, operator, expression);
   }
 
   @Override
   void doExec(Environment env) throws EvalException, InterruptedException {
-    lvalue.assignAugmented(operator, expression, env, getLocation());
+    lvalue.assign(env, getLocation(), expression, operator);
   }
 
   @Override

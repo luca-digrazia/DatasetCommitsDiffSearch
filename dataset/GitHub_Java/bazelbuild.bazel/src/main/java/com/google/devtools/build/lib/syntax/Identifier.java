@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.build.lib.util.SpellChecker;
-import java.io.IOException;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -53,8 +52,8 @@ public final class Identifier extends Expression {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    buffer.append(name);
+  public String toString() {
+    return name;
   }
 
   @Override
@@ -85,7 +84,14 @@ public final class Identifier extends Expression {
     visitor.visit(this);
   }
 
-  EvalException createInvalidIdentifierException(Set<String> symbols) {
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    if (!env.hasSymbolInEnvironment(name)) {
+      throw createInvalidIdentifierException(env.getAllSymbols());
+    }
+  }
+
+  private EvalException createInvalidIdentifierException(Set<String> symbols) {
     if (name.equals("$error$")) {
       return new EvalException(getLocation(), "contains syntax error(s)", true);
     }

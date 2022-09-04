@@ -13,9 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.devtools.build.lib.syntax.Parser.Dialect.BUILD;
-import static com.google.devtools.build.lib.syntax.Parser.Dialect.SKYLARK;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
@@ -263,12 +260,12 @@ public class BuildFileAST extends ASTNode {
   public static BuildFileAST parseBuildFile(ParserInputSource input,
                                             List<Statement> preludeStatements,
                                             EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, BUILD);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(preludeStatements, result, /*contentHashCode=*/ null, eventHandler);
   }
 
   public static BuildFileAST parseBuildFile(ParserInputSource input, EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, BUILD);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(ImmutableList.<Statement>of(), result, /*contentHashCode=*/ null, eventHandler);
   }
 
@@ -286,7 +283,7 @@ public class BuildFileAST extends ASTNode {
   public static BuildFileAST parseSkylarkFile(Path file, long fileSize, EventHandler eventHandler)
       throws IOException {
     ParserInputSource input = ParserInputSource.create(file, fileSize);
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, SKYLARK);
+    Parser.ParseResult result = Parser.parseFileForSkylark(input, eventHandler);
     return create(
         ImmutableList.<Statement>of(), result,
         HashCode.fromBytes(file.getDigest()).toString(), eventHandler);
@@ -301,7 +298,7 @@ public class BuildFileAST extends ASTNode {
    */
   public static BuildFileAST parseSkylarkFileWithoutImports(
       ParserInputSource input, EventHandler eventHandler) {
-    ParseResult result = Parser.parseFile(input, eventHandler, SKYLARK);
+    ParseResult result = Parser.parseFileForSkylark(input, eventHandler);
     return new BuildFileAST(
         ImmutableList.<Statement>builder()
             .addAll(ImmutableList.<Statement>of())
@@ -327,20 +324,19 @@ public class BuildFileAST extends ASTNode {
     return new BuildFileAST(stmts, true, contentHashCode, getLocation(), comments, imports);
   }
 
-  private static BuildFileAST parseString(
-      Parser.Dialect dialect, EventHandler eventHandler, String... content) {
+  public static BuildFileAST parseBuildString(EventHandler eventHandler, String... content) {
     String str = Joiner.on("\n").join(content);
     ParserInputSource input = ParserInputSource.create(str, PathFragment.EMPTY_FRAGMENT);
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, dialect);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return create(ImmutableList.<Statement>of(), result, null, eventHandler);
   }
 
-  public static BuildFileAST parseBuildString(EventHandler eventHandler, String... content) {
-    return parseString(BUILD, eventHandler, content);
-  }
-
+  // TODO(laurentlb): Merge parseSkylarkString and parseBuildString.
   public static BuildFileAST parseSkylarkString(EventHandler eventHandler, String... content) {
-    return parseString(SKYLARK, eventHandler, content);
+    String str = Joiner.on("\n").join(content);
+    ParserInputSource input = ParserInputSource.create(str, PathFragment.EMPTY_FRAGMENT);
+    Parser.ParseResult result = Parser.parseFileForSkylark(input, eventHandler);
+    return create(ImmutableList.<Statement>of(), result, null, eventHandler);
   }
 
   /**
@@ -349,7 +345,7 @@ public class BuildFileAST extends ASTNode {
    * @return true if the input file is syntactically valid
    */
   public static boolean checkSyntax(ParserInputSource input, EventHandler eventHandler) {
-    Parser.ParseResult result = Parser.parseFile(input, eventHandler, BUILD);
+    Parser.ParseResult result = Parser.parseFile(input, eventHandler);
     return !result.containsErrors;
   }
 

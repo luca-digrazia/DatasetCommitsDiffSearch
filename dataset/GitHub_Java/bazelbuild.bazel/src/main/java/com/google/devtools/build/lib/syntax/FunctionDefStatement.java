@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -23,16 +22,16 @@ import java.util.List;
  */
 public final class FunctionDefStatement extends Statement {
 
-  private final Identifier identifier;
+  private final Identifier ident;
   private final FunctionSignature.WithValues<Expression, Expression> signature;
   private final ImmutableList<Statement> statements;
   private final ImmutableList<Parameter<Expression, Expression>> parameters;
 
-  public FunctionDefStatement(Identifier identifier,
+  public FunctionDefStatement(Identifier ident,
       Iterable<Parameter<Expression, Expression>> parameters,
       FunctionSignature.WithValues<Expression, Expression> signature,
       Iterable<Statement> statements) {
-    this.identifier = identifier;
+    this.ident = ident;
     this.parameters = ImmutableList.copyOf(parameters);
     this.signature = signature;
     this.statements = ImmutableList.copyOf(statements);
@@ -42,6 +41,7 @@ public final class FunctionDefStatement extends Statement {
   void doExec(Environment env) throws EvalException, InterruptedException {
     List<Expression> defaultExpressions = signature.getDefaultValues();
     ArrayList<Object> defaultValues = null;
+    ArrayList<SkylarkType> types = null;
 
     if (defaultExpressions != null) {
       defaultValues = new ArrayList<>(defaultExpressions.size());
@@ -60,37 +60,21 @@ public final class FunctionDefStatement extends Statement {
     }
 
     env.update(
-        identifier.getName(),
+        ident.getName(),
         new UserDefinedFunction(
-            identifier,
-            FunctionSignature.WithValues.create(sig, defaultValues, /*types=*/null),
+            ident,
+            FunctionSignature.WithValues.<Object, SkylarkType>create(sig, defaultValues, types),
             statements,
             env.getGlobals()));
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    printIndent(buffer, indentLevel);
-    buffer.append("def ");
-    identifier.prettyPrint(buffer);
-    buffer.append('(');
-    String sep = "";
-    for (Parameter<?, ?> param : parameters) {
-      buffer.append(sep);
-      param.prettyPrint(buffer);
-      sep = ", ";
-    }
-    buffer.append("):\n");
-    printSuite(buffer, statements, indentLevel);
-  }
-
-  @Override
   public String toString() {
-    return "def " + identifier + "(" + signature + "): ...\n";
+    return "def " + ident + "(" + signature + "):\n";
   }
 
-  public Identifier getIdentifier() {
-    return identifier;
+  public Identifier getIdent() {
+    return ident;
   }
 
   public ImmutableList<Statement> getStatements() {
@@ -112,6 +96,7 @@ public final class FunctionDefStatement extends Statement {
 
   @Override
   void validate(final ValidationEnvironment env) throws EvalException {
+    ValidationEnvironment localEnv = new ValidationEnvironment(env);
     FunctionSignature sig = signature.getSignature();
     FunctionSignature.Shape shape = sig.getShape();
     ImmutableList<String> names = sig.getNames();
@@ -128,18 +113,16 @@ public final class FunctionDefStatement extends Statement {
     int startOptionals = mandatoryPositionals;
     int endOptionals = named - mandatoryNamedOnly;
 
-    env.openScope();
     int j = 0; // index for the defaultExpressions
     for (int i = 0; i < args; i++) {
       String name = names.get(i);
       if (startOptionals <= i && i < endOptionals) {
         defaultExpressions.get(j++).validate(env);
       }
-      env.declare(name, getLocation());
+      localEnv.declare(name, getLocation());
     }
     for (Statement stmts : statements) {
-      stmts.validate(env);
+      stmts.validate(localEnv);
     }
-    env.closeScope();
   }
 }

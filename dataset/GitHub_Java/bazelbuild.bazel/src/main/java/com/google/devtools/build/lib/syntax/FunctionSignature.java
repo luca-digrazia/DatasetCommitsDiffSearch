@@ -13,11 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Interner;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -160,8 +159,8 @@ public abstract class FunctionSignature implements Serializable {
 
   /** Intern a list of names */
   public static ImmutableList<String> names(List<String> names) {
-    return namesInterner.intern(
-        names.stream().map(StringCanonicalizer::intern).collect(toImmutableList()));
+    return namesInterner.intern(ImmutableList.<String>copyOf(
+        Lists.transform(names, StringCanonicalizer.INTERN)));
   }
 
   /** Intern a list of names */

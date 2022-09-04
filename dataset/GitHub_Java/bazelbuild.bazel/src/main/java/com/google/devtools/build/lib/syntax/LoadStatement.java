@@ -60,16 +60,6 @@ public final class LoadStatement extends Statement {
 
   @Override
   void doExec(Environment env) throws EvalException, InterruptedException {
-    if (env.getSemantics().incompatibleLoadArgumentIsLabel) {
-      String s = imp.getValue();
-      if (!s.startsWith("//") && !s.startsWith(":")) {
-        throw new EvalException(
-            getLocation(),
-            "First argument of 'load' must be a label and start with either '//' or ':'. "
-                + "Use --incompatibleLoadArgumentIsLabel=false to temporarily disable this check.");
-      }
-    }
-
     for (Map.Entry<Identifier, String> entry : symbolMap.entrySet()) {
       try {
         Identifier name = entry.getKey();

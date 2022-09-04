@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.util.Preconditions;
-import java.io.IOException;
 import java.util.List;
 
 /**
@@ -25,36 +24,27 @@ public final class IfStatement extends Statement {
 
   /**
    * Syntax node for an [el]if statement.
-   *
-   * <p>This extends Statement because it implements {@code doExec}, but it is not actually an
-   * independent statement in the grammar.
    */
   public static final class ConditionalStatements extends Statement {
 
     private final Expression condition;
-    private final ImmutableList<Statement> statements;
+    private final ImmutableList<Statement> stmts;
 
-    public ConditionalStatements(Expression condition, List<Statement> statements) {
+    public ConditionalStatements(Expression condition, List<Statement> stmts) {
       this.condition = Preconditions.checkNotNull(condition);
-      this.statements = ImmutableList.copyOf(statements);
+      this.stmts = ImmutableList.copyOf(stmts);
     }
 
     @Override
     void doExec(Environment env) throws EvalException, InterruptedException {
-      for (Statement stmt : statements) {
+      for (Statement stmt : stmts) {
         stmt.exec(env);
       }
     }
 
-    // No prettyPrint function; handled directly by IfStatement#prettyPrint.
-    @Override
-    public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-      throw new UnsupportedOperationException("Cannot pretty print ConditionalStatements node");
-    }
-
     @Override
     public String toString() {
-      return "[el]if " + condition + ": " + statements + "\n";
+      return "[el]if " + condition + ": " + stmts + "\n";
     }
 
     @Override
@@ -66,12 +56,17 @@ public final class IfStatement extends Statement {
       return condition;
     }
 
-    public ImmutableList<Statement> getStatements() {
-      return statements;
+    public ImmutableList<Statement> getStmts() {
+      return stmts;
+    }
+
+    @Override
+    void validate(ValidationEnvironment env) throws EvalException {
+      condition.validate(env);
+      validateStmts(env, stmts);
     }
   }
 
-  /** "if" or "elif" clauses. Must be non-empty. */
   private final ImmutableList<ConditionalStatements> thenBlocks;
   private final ImmutableList<Statement> elseBlock;
 
@@ -94,26 +89,11 @@ public final class IfStatement extends Statement {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    String clauseWord = "if ";
-    for (ConditionalStatements condStmt : thenBlocks) {
-      printIndent(buffer, indentLevel);
-      buffer.append(clauseWord);
-      condStmt.getCondition().prettyPrint(buffer);
-      buffer.append(":\n");
-      printSuite(buffer, condStmt.getStatements(), indentLevel);
-      clauseWord = "elif ";
-    }
-    if (!elseBlock.isEmpty()) {
-      printIndent(buffer, indentLevel);
-      buffer.append("else:\n");
-      printSuite(buffer, elseBlock, indentLevel);
-    }
-  }
-
-  @Override
   public String toString() {
-    return String.format("if %s: ...\n", thenBlocks.get(0).getCondition());
+    // TODO(bazel-team): if we want to print the complete statement, the function
+    // needs an extra argument to specify indentation level.
+    // As guaranteed by the constructor, there must be at least one element in thenBlocks.
+    return String.format("if %s:\n", thenBlocks.get(0).getCondition());
   }
 
   @Override
@@ -132,5 +112,23 @@ public final class IfStatement extends Statement {
   @Override
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
+  }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
+    env.startTemporarilyDisableReadonlyCheckSession();
+    for (ConditionalStatements stmts : thenBlocks) {
+      stmts.validate(env);
+    }
+    validateStmts(env, elseBlock);
+    env.finishTemporarilyDisableReadonlyCheckSession();
+  }
+
+  private static void validateStmts(ValidationEnvironment env, List<Statement> stmts)
+      throws EvalException {
+    for (Statement stmt : stmts) {
+      stmt.validate(env);
+    }
+    env.finishTemporarilyDisableReadonlyCheckBranch();
   }
 }

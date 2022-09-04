@@ -18,24 +18,16 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Objects;
 
 /**
  * Factory class for creating appropriate instances of {@link SkylarkImports}.
  */
-public class SkylarkImports {
-
-  private SkylarkImports() {
-    throw new IllegalStateException("This class should not be instantiated");
-  }
+public abstract class SkylarkImports {
 
   // Default implementation class for SkylarkImport.
-  @VisibleForSerialization
-  abstract static class SkylarkImportImpl implements SkylarkImport {
+  private abstract static class SkylarkImportImpl implements SkylarkImport {
     private final String importString;
 
     protected SkylarkImportImpl(String importString) {
@@ -83,16 +75,10 @@ public class SkylarkImports {
     }
   }
 
-  @VisibleForSerialization
-  @AutoCodec
-  static final class AbsolutePathImport extends SkylarkImportImpl {
-    static final ObjectCodec<AbsolutePathImport> CODEC =
-        new SkylarkImports_AbsolutePathImport_AutoCodec();
-
+  private static final class AbsolutePathImport extends SkylarkImportImpl {
     private final PathFragment importPath;
 
-    @VisibleForSerialization
-    AbsolutePathImport(String importString, PathFragment importPath) {
+    private AbsolutePathImport(String importString, PathFragment importPath) {
       super(importString);
       this.importPath = importPath;
     }
@@ -119,16 +105,10 @@ public class SkylarkImports {
 
   }
 
-  @VisibleForSerialization
-  @AutoCodec
-  static final class RelativePathImport extends SkylarkImportImpl {
-    static final ObjectCodec<RelativePathImport> CODEC =
-        new SkylarkImports_RelativePathImport_AutoCodec();
-
+  private static final class RelativePathImport extends SkylarkImportImpl {
     private final String importFile;
 
-    @VisibleForSerialization
-    RelativePathImport(String importString, String importFile) {
+    private RelativePathImport(String importString, String importFile) {
       super(importString);
       this.importFile = importFile;
     }
@@ -157,16 +137,10 @@ public class SkylarkImports {
 
   }
 
-  @VisibleForSerialization
-  @AutoCodec
-  static final class AbsoluteLabelImport extends SkylarkImportImpl {
-    static final ObjectCodec<AbsoluteLabelImport> CODEC =
-        new SkylarkImports_AbsoluteLabelImport_AutoCodec();
-
+  private static final class AbsoluteLabelImport extends SkylarkImportImpl {
     private final Label importLabel;
 
-    @VisibleForSerialization
-    AbsoluteLabelImport(String importString, Label importLabel) {
+    private AbsoluteLabelImport(String importString, Label importLabel) {
       super(importString);
       this.importLabel = importLabel;
     }
@@ -185,16 +159,10 @@ public class SkylarkImports {
 
   }
 
-  @VisibleForSerialization
-  @AutoCodec
-  static final class RelativeLabelImport extends SkylarkImportImpl {
-    static final ObjectCodec<RelativeLabelImport> CODEC =
-        new SkylarkImports_RelativeLabelImport_AutoCodec();
-
+  private static final class RelativeLabelImport extends SkylarkImportImpl {
     private final String importTarget;
 
-    @VisibleForSerialization
-    RelativeLabelImport(String importString, String importTarget) {
+    private RelativeLabelImport(String importString, String importTarget) {
       super(importString);
       this.importTarget = importTarget;
     }

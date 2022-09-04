@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import java.io.IOException;
 
 /**
  * Syntax node for an assignment statement.
@@ -48,18 +47,14 @@ public final class AssignmentStatement extends Statement {
   }
 
   @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    printIndent(buffer, indentLevel);
-    lvalue.prettyPrint(buffer, indentLevel);
-    buffer.append(" = ");
-    expression.prettyPrint(buffer, indentLevel);
-    buffer.append('\n');
+  public String toString() {
+    return lvalue + " = " + expression + '\n';
   }
 
   @Override
   void doExec(Environment env) throws EvalException, InterruptedException {
     Object rvalue = expression.eval(env);
-    lvalue.assign(rvalue, env, getLocation());
+    lvalue.assign(env, getLocation(), rvalue);
   }
 
   @Override
