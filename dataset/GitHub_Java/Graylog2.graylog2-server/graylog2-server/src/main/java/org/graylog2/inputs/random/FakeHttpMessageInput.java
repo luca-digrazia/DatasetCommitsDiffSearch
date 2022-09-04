@@ -151,7 +151,7 @@ public class FakeHttpMessageInput extends MessageInput {
     }
 
     private int calculateSleepTime() {
-        int deviationPercent = rand.nextInt(maxSleepDeviation);
+        int deviationPercent = rand.nextInt((maxSleepDeviation - 0) + 1) + 0;
 
         double x = sleepMs/100.0*deviationPercent;
 
