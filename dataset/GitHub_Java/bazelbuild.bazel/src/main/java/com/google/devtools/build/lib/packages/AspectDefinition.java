@@ -25,9 +25,10 @@ import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTr
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
-import com.google.devtools.build.lib.packages.Type.LabelClass;
-import com.google.devtools.build.lib.packages.Type.LabelVisitor;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Type.LabelClass;
+import com.google.devtools.build.lib.syntax.Type.LabelVisitor;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -75,7 +76,6 @@ public final class AspectDefinition {
   @Nullable private final ImmutableSet<String> restrictToAttributes;
   @Nullable private final ConfigurationFragmentPolicy configurationFragmentPolicy;
   private final boolean applyToFiles;
-  private final boolean applyToGeneratingRules;
 
   public AdvertisedProviderSet getAdvertisedProviders() {
     return advertisedProviders;
@@ -91,8 +91,7 @@ public final class AspectDefinition {
       ImmutableSet<Label> requiredToolchains,
       @Nullable ImmutableSet<String> restrictToAttributes,
       @Nullable ConfigurationFragmentPolicy configurationFragmentPolicy,
-      boolean applyToFiles,
-      boolean applyToGeneratingRules) {
+      boolean applyToFiles) {
     this.aspectClass = aspectClass;
     this.advertisedProviders = advertisedProviders;
     this.requiredProviders = requiredProviders;
@@ -103,7 +102,6 @@ public final class AspectDefinition {
     this.restrictToAttributes = restrictToAttributes;
     this.configurationFragmentPolicy = configurationFragmentPolicy;
     this.applyToFiles = applyToFiles;
-    this.applyToGeneratingRules = applyToGeneratingRules;
   }
 
   public String getName() {
@@ -172,14 +170,6 @@ public final class AspectDefinition {
     return applyToFiles;
   }
 
-  /**
-   * Returns whether this aspect should, when it would be applied to an output file, instead apply
-   * to the generating rule of that output file.
-   */
-  public boolean applyToGeneratingRules() {
-    return applyToGeneratingRules;
-  }
-
   public static boolean satisfies(Aspect aspect, AdvertisedProviderSet advertisedProviderSet) {
     return aspect.getDefinition().getRequiredProviders().isSatisfiedBy(advertisedProviderSet);
   }
@@ -245,7 +235,6 @@ public final class AspectDefinition {
     private final ConfigurationFragmentPolicy.Builder configurationFragmentPolicy =
         new ConfigurationFragmentPolicy.Builder();
     private boolean applyToFiles = false;
-    private boolean applyToGeneratingRules = false;
     private final List<Label> requiredToolchains = new ArrayList<>();
 
     public Builder(AspectClass aspectClass) {
@@ -271,7 +260,7 @@ public final class AspectDefinition {
       requiredProviders.addNativeSet(ImmutableSet.copyOf(providers));
       return this;
     }
-
+    
     /**
      * Asserts that this aspect can only be evaluated for rules that supply all of the specified
      * Skylark providers.
@@ -468,18 +457,6 @@ public final class AspectDefinition {
       return this;
     }
 
-    /**
-     * Sets whether this aspect should, when it would be applied to an output file, instead apply to
-     * the generating rule of that output file.
-     *
-     * <p>Default is <code>false</code>. Currently only supported for aspects which do not have a
-     * "required providers" list.
-     */
-    public Builder applyToGeneratingRules(boolean applyToGeneratingRules) {
-      this.applyToGeneratingRules = applyToGeneratingRules;
-      return this;
-    }
-
     /** Adds the given toolchains as requirements for this aspect. */
     public Builder addRequiredToolchains(Label... toolchainLabels) {
       Iterables.addAll(this.requiredToolchains, Lists.newArrayList(toolchainLabels));
@@ -497,24 +474,16 @@ public final class AspectDefinition {
      * <p>The builder object is reusable afterwards.
      */
     public AspectDefinition build() {
-      RequiredProviders requiredProviders = this.requiredProviders.build();
-      if (applyToGeneratingRules && !requiredProviders.acceptsAny()) {
-        throw new IllegalStateException(
-            "An aspect cannot simultaneously have required providers "
-                + "and apply to generating rules.");
-      }
-
       return new AspectDefinition(
           aspectClass,
           advertisedProviders.build(),
-          requiredProviders,
+          requiredProviders.build(),
           requiredAspectProviders.build(),
           ImmutableMap.copyOf(attributes),
           ImmutableSet.copyOf(requiredToolchains),
           propagateAlongAttributes == null ? null : ImmutableSet.copyOf(propagateAlongAttributes),
           configurationFragmentPolicy.build(),
-          applyToFiles,
-          applyToGeneratingRules);
+          applyToFiles);
     }
   }
 }

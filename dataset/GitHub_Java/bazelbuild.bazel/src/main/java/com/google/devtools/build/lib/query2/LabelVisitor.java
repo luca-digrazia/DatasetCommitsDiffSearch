@@ -14,15 +14,12 @@
 
 package com.google.devtools.build.lib.query2;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
-import com.google.devtools.build.lib.concurrent.BlockingStack;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
-import com.google.devtools.build.lib.concurrent.NamedForkJoinPool;
-import com.google.devtools.build.lib.concurrent.QuiescingExecutor;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
@@ -43,35 +40,39 @@ import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import java.util.Collection;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Visit the transitive closure of a label. Primarily used to "fault in" packages to the
- * packageProvider and ensure the necessary targets exists, in advance of the configuration step,
- * which is intolerant of missing packages/targets.
+ * <p>Visit the transitive closure of a label. Primarily used to "fault in"
+ * packages to the packageProvider and ensure the necessary targets exists, in
+ * advance of the configuration step, which is intolerant of missing
+ * packages/targets.
  *
- * <p>LabelVisitor loads packages concurrently where possible, to increase I/O parallelism. However,
- * the public interface is not thread-safe: calls to public methods should not be made concurrently.
+ * <p>LabelVisitor loads packages concurrently where possible, to increase I/O
+ * parallelism.  However, the public interface is not thread-safe: calls to
+ * public methods should not be made concurrently.
  *
- * <p>LabelVisitor is stateful: It remembers the previous visitation and can check its validity on
- * subsequent calls to sync() instead of doing the normal visitation.
+ * <p>LabelVisitor is stateful: It remembers the previous visitation and can
+ * check its validity on subsequent calls to sync() instead of doing the normal
+ * visitation.
  *
- * <p>TODO(bazel-team): (2009) a small further optimization could be achieved if we create tasks at
- * the package (not individual label) level, since package loading is the expensive step. This would
- * require additional bookkeeping to maintain the list of labels that we need to visit once a
- * package becomes available. Profiling suggests that there is still a potential benefit to be
- * gained: when the set of packages is known a-priori, loading a set of packages that took 20
- * seconds can be done under 5 in the sequential case or 7 in the current (parallel) case.
+ * <p>TODO(bazel-team): (2009) a small further optimization could be achieved if we
+ * create tasks at the package (not individual label) level, since package
+ * loading is the expensive step.  This would require additional bookkeeping to
+ * maintain the list of labels that we need to visit once a package becomes
+ * available.  Profiling suggests that there is still a potential benefit to be
+ * gained: when the set of packages is known a-priori, loading a set of packages
+ * that took 20 seconds can be done under 5 in the sequential case or 7 in the
+ * current (parallel) case.
  *
  * <h4>Concurrency</h4>
  *
- * <p>The sync() methods of this class is thread-compatible. The accessor ({@link #hasVisited} and
- * similar must not be called until the concurrent phase is over, i.e. all external calls to visit()
- * methods have completed.
+ * <p>The sync() methods of this class is thread-compatible. The accessor
+ * ({@link #hasVisited} and similar must not be called until the concurrent phase
+ * is over, i.e. all external calls to visit() methods have completed.
  */
-public final class LabelVisitor {
+final class LabelVisitor {
 
   /**
    * Attributes of a visitation which determine whether it is up-to-date or not.
@@ -144,7 +145,6 @@ public final class LabelVisitor {
   private final TargetProvider targetProvider;
   private final DependencyFilter edgeFilter;
   private final ConcurrentMap<Label, Integer> visitedTargets = new ConcurrentHashMap<>();
-  private final boolean useForkJoinPool;
 
   private VisitationAttributes lastVisitation;
 
@@ -159,15 +159,13 @@ public final class LabelVisitor {
    * @param targetProvider how to resolve labels to targets
    * @param edgeFilter which edges may be traversed
    */
-  public LabelVisitor(
-      TargetProvider targetProvider, DependencyFilter edgeFilter, boolean useForkJoinPool) {
+  public LabelVisitor(TargetProvider targetProvider, DependencyFilter edgeFilter) {
     this.targetProvider = targetProvider;
     this.lastVisitation = new VisitationAttributes();
     this.edgeFilter = edgeFilter;
-    this.useForkJoinPool = useForkJoinPool;
   }
 
-  public boolean syncWithVisitor(
+  boolean syncWithVisitor(
       ExtendedEventHandler eventHandler,
       Collection<Target> targetsToVisit,
       boolean keepGoing,
@@ -220,39 +218,37 @@ public final class LabelVisitor {
     return result;
   }
 
-  public boolean hasVisited(Label target) {
+  boolean hasVisited(Label target) {
     return visitedTargets.containsKey(target);
   }
 
-  private class Visitor {
+  @VisibleForTesting class Visitor extends AbstractQueueVisitor {
+
     private final static String THREAD_NAME = "LabelVisitor";
 
-    private final ExecutorService executorService;
-    private final QuiescingExecutor executor;
     private final ExtendedEventHandler eventHandler;
+    private final boolean keepGoing;
     private final int maxDepth;
     private final Iterable<TargetEdgeObserver> observers;
     private final TargetEdgeErrorObserver errorObserver;
+    private final AtomicBoolean stopNewActions = new AtomicBoolean(false);
 
-    Visitor(
+    public Visitor(
         ExtendedEventHandler eventHandler,
         boolean keepGoing,
         int parallelThreads,
         int maxDepth,
         TargetEdgeObserver... observers) {
-      this.executorService =
-          useForkJoinPool
-              ? NamedForkJoinPool.newNamedPool(THREAD_NAME, parallelThreads)
-              : new ThreadPoolExecutor(
-                  /*corePoolSize=*/ parallelThreads,
-                  /*maximumPoolSize=*/ parallelThreads,
-                  1L,
-                  TimeUnit.SECONDS,
-                  new BlockingStack<>(),
-                  new ThreadFactoryBuilder().setNameFormat(THREAD_NAME + " %d").build());
-      this.executor =
-          AbstractQueueVisitor.createWithExecutorService(
-              executorService, /*failFastOnException=*/ !keepGoing, ErrorClassifier.DEFAULT);
+      // Observing the loading phase of a typical large package (with all subpackages) shows
+      // maximum thread-level concurrency of ~20. Limiting the total number of threads to 200 is
+      // therefore conservative and should help us avoid hitting native limits.
+      super(
+          parallelThreads,
+          1L,
+          TimeUnit.SECONDS,
+          !keepGoing,
+          THREAD_NAME,
+          ErrorClassifier.DEFAULT);
       this.eventHandler = eventHandler;
       this.maxDepth = maxDepth;
       this.errorObserver = new TargetEdgeErrorObserver();
@@ -260,6 +256,7 @@ public final class LabelVisitor {
       builder.add(observers);
       builder.add(errorObserver);
       this.observers = builder.build();
+      this.keepGoing = keepGoing;
     }
 
     /**
@@ -276,12 +273,18 @@ public final class LabelVisitor {
 
     @ThreadSafe
     public boolean finish() throws InterruptedException {
-      executor.awaitQuiescence(/*interruptWorkers=*/ true);
+      awaitQuiescence(/*interruptWorkers=*/ true);
       return !errorObserver.hasErrors();
     }
 
+    @Override
+    protected boolean blockNewActions() {
+      return (!keepGoing && errorObserver.hasErrors()) || super.blockNewActions() ||
+          stopNewActions.get();
+    }
+
     public void stopNewActions() {
-      executorService.shutdownNow();
+      stopNewActions.set(true);
     }
 
     private void enqueueTarget(
@@ -294,12 +297,11 @@ public final class LabelVisitor {
 
       // Avoid thread-related overhead when not crossing packages.
       // Can start a new thread when count reaches 100, to prevent infinite recursion.
-      if (from != null
-          && from.getLabel().getPackageFragment().equals(label.getPackageFragment())
-          && count < RECURSION_LIMIT) {
+      if (from != null && from.getLabel().getPackageFragment().equals(label.getPackageFragment())
+          && !blockNewActions() && count < RECURSION_LIMIT) {
         newVisitRunnable(from, attr, label, depth, count + 1).run();
       } else {
-        executor.execute(newVisitRunnable(from, attr, label, depth, 0));
+        execute(newVisitRunnable(from, attr, label, depth, 0));
       }
     }
 

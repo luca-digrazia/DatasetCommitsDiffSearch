@@ -21,13 +21,13 @@ import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
+import com.google.devtools.build.lib.skyframe.TransitiveTraversalFunction.FirstErrorMessageAccumulator;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException2;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
@@ -35,13 +35,12 @@ import javax.annotation.Nullable;
 /**
  * This class is like {@link TransitiveTargetFunction}, but the values it returns do not contain
  * {@link NestedSet}s. It performs the side-effects of {@link TransitiveTargetFunction} (i.e.,
- * ensuring that transitive targets and their packages have been loaded). It evaluates to a {@link
- * TransitiveTraversalValue} that contains the first error message it encountered, and a set of
- * names of providers if the target is a rule.
+ * ensuring that transitive targets and their packages have been loaded). It evaluates to a
+ * {@link TransitiveTraversalValue} that contains the first error message it encountered, and a
+ * set of names of providers if the target is a rule.
  */
 public class TransitiveTraversalFunction
-    extends TransitiveBaseTraversalFunction<
-        TransitiveTraversalFunction.DeterministicErrorMessageAccumulator> {
+    extends TransitiveBaseTraversalFunction<FirstErrorMessageAccumulator> {
 
   @Override
   Label argumentFromKey(SkyKey key) {
@@ -54,16 +53,15 @@ public class TransitiveTraversalFunction
   }
 
   @Override
-  DeterministicErrorMessageAccumulator processTarget(
-      Label label, TargetAndErrorIfAny targetAndErrorIfAny) {
+  FirstErrorMessageAccumulator processTarget(Label label, TargetAndErrorIfAny targetAndErrorIfAny) {
     NoSuchTargetException errorIfAny = targetAndErrorIfAny.getErrorLoadingTarget();
     String errorMessageIfAny = errorIfAny == null ? null : errorIfAny.getMessage();
-    return DeterministicErrorMessageAccumulator.create(errorMessageIfAny);
+    return new FirstErrorMessageAccumulator(errorMessageIfAny);
   }
 
   @Override
   void processDeps(
-      DeterministicErrorMessageAccumulator accumulator,
+      FirstErrorMessageAccumulator accumulator,
       EventHandler eventHandler,
       TargetAndErrorIfAny targetAndErrorIfAny,
       Iterable<Map.Entry<SkyKey, ValueOrException2<NoSuchPackageException, NoSuchTargetException>>>
@@ -80,9 +78,9 @@ public class TransitiveTraversalFunction
         accumulator.maybeSet(e.getMessage());
         continue;
       }
-      String errorMessage = transitiveTraversalValue.getErrorMessage();
-      if (errorMessage != null) {
-        accumulator.maybeSet(errorMessage);
+      String firstErrorMessage = transitiveTraversalValue.getFirstErrorMessage();
+      if (firstErrorMessage != null) {
+        accumulator.maybeSet(firstErrorMessage);
       }
     }
   }
@@ -106,14 +104,14 @@ public class TransitiveTraversalFunction
   }
 
   @Override
-  SkyValue computeSkyValue(
-      TargetAndErrorIfAny targetAndErrorIfAny, DeterministicErrorMessageAccumulator accumulator) {
+  SkyValue computeSkyValue(TargetAndErrorIfAny targetAndErrorIfAny,
+      FirstErrorMessageAccumulator accumulator) {
     boolean targetLoadedSuccessfully = targetAndErrorIfAny.getErrorLoadingTarget() == null;
-    String errorMessage = accumulator.getErrorMessage();
+    String firstErrorMessage = accumulator.getFirstErrorMessage();
     return targetLoadedSuccessfully
-        ? TransitiveTraversalValue.forTarget(targetAndErrorIfAny.getTarget(), errorMessage)
+        ? TransitiveTraversalValue.forTarget(targetAndErrorIfAny.getTarget(), firstErrorMessage)
         : TransitiveTraversalValue.unsuccessfulTransitiveTraversal(
-            errorMessage, targetAndErrorIfAny.getTarget());
+            firstErrorMessage, targetAndErrorIfAny.getTarget());
   }
 
   @Override
@@ -180,47 +178,28 @@ public class TransitiveTraversalFunction
   }
 
   /**
-   * Keeps track of a deterministic error message encountered while traversing itself and its
-   * dependencies: either the error it was initialized with, or the shortest error it encounters,
-   * with ties broken alphabetically.
-   *
-   * <p>This preserves the behavior that the local target's error is the most important, and is
-   * cheap (constant-time) to compute the comparison between strings, unless they have the same
-   * length, which is unlikely.
+   * Keeps track of the first error message encountered while traversing itself and its
+   * dependencies.
    */
-  interface DeterministicErrorMessageAccumulator {
-    @Nullable
-    String getErrorMessage();
+  static class FirstErrorMessageAccumulator {
 
-    default void maybeSet(String errorMessage) {}
+    @Nullable private String firstErrorMessage;
 
-    static DeterministicErrorMessageAccumulator create(@Nullable String errorMessage) {
-      if (errorMessage != null) {
-        return () -> errorMessage;
-      }
-      return new UpdateableErrorMessageAccumulator();
+    public FirstErrorMessageAccumulator(@Nullable String firstErrorMessage) {
+      this.firstErrorMessage = firstErrorMessage;
     }
 
-    class UpdateableErrorMessageAccumulator implements DeterministicErrorMessageAccumulator {
-      private static final Comparator<String> LENGTH_THEN_ALPHABETICAL =
-          Comparator.nullsLast(
-              Comparator.comparingInt(String::length).thenComparing(Comparator.naturalOrder()));
-
-      @Nullable private String errorMessage;
-
-      @Override
-      public void maybeSet(String errorMessage) {
-        Preconditions.checkNotNull(errorMessage);
-        if (LENGTH_THEN_ALPHABETICAL.compare(this.errorMessage, errorMessage) > 0) {
-          this.errorMessage = errorMessage;
-        }
+    /** Remembers {@param errorMessage} if it is the first error message. */
+    void maybeSet(String errorMessage) {
+      Preconditions.checkNotNull(errorMessage);
+      if (firstErrorMessage == null) {
+        firstErrorMessage = errorMessage;
       }
+    }
 
-      @Nullable
-      @Override
-      public String getErrorMessage() {
-        return errorMessage;
-      }
+    @Nullable
+    String getFirstErrorMessage() {
+      return firstErrorMessage;
     }
   }
 }

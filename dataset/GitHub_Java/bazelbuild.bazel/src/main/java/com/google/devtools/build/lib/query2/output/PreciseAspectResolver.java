@@ -19,23 +19,19 @@ import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.AspectClass;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.DependencyFilter;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
-import com.google.devtools.build.lib.util.BinaryPredicate;
-
 import java.util.LinkedHashSet;
-import java.util.Map.Entry;
 import java.util.Set;
-
-import javax.annotation.Nullable;
 
 /**
  * An aspect resolver that returns only those aspects that are possibly active given the rule
@@ -45,44 +41,65 @@ import javax.annotation.Nullable;
  */
 public class PreciseAspectResolver implements AspectResolver {
   private final PackageProvider packageProvider;
-  private final EventHandler eventHandler;
+  private final ExtendedEventHandler eventHandler;
 
-  public PreciseAspectResolver(PackageProvider packageProvider, EventHandler eventHandler) {
+  public PreciseAspectResolver(PackageProvider packageProvider, ExtendedEventHandler eventHandler) {
     this.packageProvider = packageProvider;
     this.eventHandler = eventHandler;
   }
 
   @Override
-  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target)
-      throws InterruptedException {
+  public ImmutableMultimap<Attribute, Label> computeAspectDependencies(
+      Target target, DependencyFilter dependencyFilter) throws InterruptedException {
     Multimap<Attribute, Label> result = LinkedListMultimap.create();
     if (target instanceof Rule) {
+      Rule rule = (Rule) target;
       Multimap<Attribute, Label> transitions =
-          ((Rule) target).getTransitions(Rule.NO_NODEP_ATTRIBUTES);
-      for (Entry<Attribute, Label> entry : transitions.entries()) {
-        Target toTarget;
-        try {
-          toTarget = packageProvider.getTarget(eventHandler, entry.getValue());
-          result.putAll(AspectDefinition.visitAspectsIfRequired(target, entry.getKey(), toTarget));
-        } catch (NoSuchThingException e) {
-          // Do nothing. One of target direct deps has an error. The dependency on the BUILD file
-          // (or one of the files included in it) will be reported in the query result of :BUILD.
+          rule.getTransitions(DependencyFilter.NO_NODEP_ATTRIBUTES);
+      for (Attribute attribute : transitions.keySet()) {
+        for (Aspect aspect : attribute.getAspects(rule)) {
+          if (hasDepThatSatisfies(aspect, transitions.get(attribute))) {
+            AspectDefinition.forEachLabelDepFromAllAttributesOfAspect(
+                rule, aspect, dependencyFilter, result::put);
+          }
         }
       }
     }
     return ImmutableMultimap.copyOf(result);
   }
 
-  @Override
-  public Set<Label> computeBuildFileDependencies(Package pkg, BuildFileDependencyMode mode)
+  private boolean hasDepThatSatisfies(Aspect aspect, Iterable<Label> labelDeps)
       throws InterruptedException {
+    for (Label toLabel : labelDeps) {
+      Target toTarget;
+      try {
+        toTarget = packageProvider.getTarget(eventHandler, toLabel);
+      } catch (NoSuchThingException e) {
+        // Do nothing interesting. One of target direct deps has an error. The dependency on the
+        // BUILD file (or one of the files included in it) will be reported in the query result of
+        // :BUILD.
+        continue;
+      }
+      if (!(toTarget instanceof Rule)) {
+        continue;
+      }
+      if (AspectDefinition.satisfies(
+          aspect, ((Rule) toTarget).getRuleClassObject().getAdvertisedProviders())) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  @Override
+  public Set<Label> computeBuildFileDependencies(Package pkg) throws InterruptedException {
     Set<Label> result = new LinkedHashSet<>();
-    result.addAll(mode.getDependencies(pkg));
+    result.addAll(pkg.getSkylarkFileDependencies());
 
     Set<PackageIdentifier> dependentPackages = new LinkedHashSet<>();
     // First compute with packages can possibly affect the aspect attributes of this package:
     // Iterate over all rules...
-    for (Target target : pkg.getTargets()) {
+    for (Target target : pkg.getTargets().values()) {
 
       if (!(target instanceof Rule)) {
         continue;
@@ -92,17 +109,14 @@ public class PreciseAspectResolver implements AspectResolver {
       Multimap<Attribute, Label> depsWithPossibleAspects =
           ((Rule) target)
               .getTransitions(
-                  new BinaryPredicate<Rule, Attribute>() {
-                    @Override
-                    public boolean apply(@Nullable Rule rule, @Nullable Attribute attribute) {
-                      for (AspectClass aspectClass : attribute.getAspects()) {
-                        if (!aspectClass.getDefinition().getAttributes().isEmpty()) {
-                          return true;
-                        }
+                  (Rule rule, Attribute attribute) -> {
+                    for (Aspect aspectWithParameters : attribute.getAspects(rule)) {
+                      if (!aspectWithParameters.getDefinition().getAttributes().isEmpty()) {
+                        return true;
                       }
-
-                      return false;
                     }
+
+                    return false;
                   });
 
       // ...and add the package of the aspect.
@@ -111,12 +125,12 @@ public class PreciseAspectResolver implements AspectResolver {
       }
     }
 
-    // Then add all the subinclude labels of the packages thus found to the result.
+    // Then add all the labels of all the bzl files loaded by the packages found.
     for (PackageIdentifier packageIdentifier : dependentPackages) {
       try {
         result.add(Label.create(packageIdentifier, "BUILD"));
         Package dependentPackage = packageProvider.getPackage(eventHandler, packageIdentifier);
-        result.addAll(mode.getDependencies(dependentPackage));
+        result.addAll(dependentPackage.getSkylarkFileDependencies());
       } catch (NoSuchPackageException e) {
         // If the package is not found, just add its BUILD file, which is already done above.
         // Hopefully this error is not raised when there is a syntax error in a subincluded file
