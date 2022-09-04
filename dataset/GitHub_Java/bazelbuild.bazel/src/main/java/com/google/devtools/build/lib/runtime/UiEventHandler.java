@@ -17,7 +17,6 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.AllowConcurrentEvents;
 import com.google.common.eventbus.Subscribe;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.primitives.Bytes;
 import com.google.common.util.concurrent.Uninterruptibles;
 import com.google.devtools.build.lib.actions.ActionCompletionEvent;
@@ -42,11 +41,11 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.ExtendedEventHandler.FetchProgress;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.ConfigurationPhaseStartedEvent;
 import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.util.io.AnsiTerminal;
 import com.google.devtools.build.lib.util.io.AnsiTerminal.Color;
 import com.google.devtools.build.lib.util.io.AnsiTerminalWriter;
@@ -72,11 +71,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /** An experimental new output stream. */
 public class UiEventHandler implements EventHandler {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(UiEventHandler.class.getName());
   /** Latest refresh of the progress bar, if contents other than time changed */
   static final long MAXIMAL_UPDATE_DELAY_MILLIS = 200L;
   /** Minimal rate limiting (in ms), if the progress bar cannot be updated in place */
@@ -94,12 +94,9 @@ public class UiEventHandler implements EventHandler {
   /**
    * Even if the output is not limited, we restrict the message size to something we can still
    * handle internally. This is the maximal size specified here. Currently, it is the maximal length
-   * of a byte[] acceptable by {@code new String(message, 0, message.length,
-   * StandardCharsets.UTF_8}. (In JDK9+, if the message buffer contains a byte whose high bit is
-   * set, a UTF-8 decoding path is taken that allocates a new byte[] buffer twice as large as the
-   * message byte[] buffer)
+   * a byte[] can hold.
    */
-  static final int MAXIMAL_MESSAGE_LENGTH = (Integer.MAX_VALUE - 8) >> 1;
+  static final int MAXIMAL_MESSAGE_LENGTH = Integer.MAX_VALUE - 8;
 
   private static final DateTimeFormatter TIMESTAMP_FORMAT =
       DateTimeFormatter.ofPattern("(HH:mm:ss) ");
@@ -117,7 +114,6 @@ public class UiEventHandler implements EventHandler {
   private final boolean showTimestamp;
   private final boolean deduplicate;
   private final OutErr outErr;
-  private final ImmutableSet<EventKind> filteredEvents;
   private long minimalDelayMillis;
   private long minimalUpdateInterval;
   private long lastRefreshMillis;
@@ -295,7 +291,6 @@ public class UiEventHandler implements EventHandler {
     this.dateShown = false;
     this.updateThread = new AtomicReference<>();
     this.updateLock = new ReentrantLock();
-    this.filteredEvents = ImmutableSet.copyOf(options.eventFilters);
     // The progress bar has not been updated yet.
     ignoreRefreshLimitOnce();
   }
@@ -337,7 +332,7 @@ public class UiEventHandler implements EventHandler {
         didFlush = true;
       }
     } catch (IOException e) {
-      logger.atWarning().withCause(e).log("IO Error writing to output stream");
+      logger.warning("IO Error writing to output stream: " + e);
     }
     return didFlush;
   }
@@ -372,29 +367,27 @@ public class UiEventHandler implements EventHandler {
   }
 
   private synchronized void handleLocked(Event event, boolean isFollowUp) {
-    if (this.filteredEvents.contains(event.getKind())) {
-      return;
-    }
     try {
       if (debugAllEvents) {
         // Debugging only: show all events visible to the new UI.
         clearProgressBar();
         terminal.flush();
-        OutputStream stream = outErr.getOutputStream();
-        stream.write((event + "\n").getBytes(StandardCharsets.ISO_8859_1));
-        byte[] stdout = event.getStdOut();
-        if (stdout != null) {
-          stream.write("... with STDOUT: ".getBytes(StandardCharsets.ISO_8859_1));
-          stream.write(stdout);
-          stream.write("\n".getBytes(StandardCharsets.ISO_8859_1));
+        outErr.getOutputStream().write((event + "\n").getBytes(StandardCharsets.UTF_8));
+        if (event.getStdOut() != null) {
+          outErr
+              .getOutputStream()
+              .write(
+                  ("... with STDOUT: " + event.getStdOut() + "\n")
+                      .getBytes(StandardCharsets.UTF_8));
         }
-        byte[] stderr = event.getStdErr();
-        if (stderr != null) {
-          stream.write("... with STDERR: ".getBytes(StandardCharsets.ISO_8859_1));
-          stream.write(stderr);
-          stream.write("\n".getBytes(StandardCharsets.ISO_8859_1));
+        if (event.getStdErr() != null) {
+          outErr
+              .getOutputStream()
+              .write(
+                  ("... with STDERR: " + event.getStdErr() + "\n")
+                      .getBytes(StandardCharsets.UTF_8));
         }
-        stream.flush();
+        outErr.getOutputStream().flush();
         addProgressBar();
         terminal.flush();
       } else {
@@ -508,7 +501,7 @@ public class UiEventHandler implements EventHandler {
         }
       }
     } catch (IOException e) {
-      logger.atWarning().withCause(e).log("IO Error writing to output stream");
+      logger.warning("IO Error writing to output stream: " + e);
     }
   }
 
@@ -533,9 +526,6 @@ public class UiEventHandler implements EventHandler {
       }
     } else {
       message = reference.getFinalBytes(MAXIMAL_MESSAGE_LENGTH);
-      if (message.length == MAXIMAL_MESSAGE_LENGTH) {
-        logger.atWarning().log("truncated message longer than %d bytes", MAXIMAL_MESSAGE_LENGTH);
-      }
     }
     int eolIndex = Bytes.lastIndexOf(message, (byte) '\n');
     if (eolIndex >= 0) {
@@ -588,9 +578,6 @@ public class UiEventHandler implements EventHandler {
     }
   }
 
-  // TODO(jmmv): This feature needs to be removed. It has only caused confusion in the past
-  // (see cl/261885840 and https://github.com/bazelbuild/bazel/issues/7184) and would let us
-  // simplify the code here significantly.
   private boolean shouldDeduplicate(Event event) {
     if (!deduplicate) {
       // deduplication disabled
@@ -611,27 +598,23 @@ public class UiEventHandler implements EventHandler {
       // only deduplicate INFO messages
       return false;
     }
-    byte[] stdout = event.getStdOut();
-    byte[] stderr = event.getStdErr();
-    if (stdout == null && stderr == null) {
+    if (event.getStdOut() == null && event.getStdErr() == null) {
       // We deduplicate on the attached output (assuming the event itself only describes
       // the source of the output). If no output is attached it is a different kind of event
       // and should not be deduplicated.
       return false;
     }
     boolean allMessagesSeen = true;
-    if (stdout != null) {
-      String stdoutString = new String(stdout, StandardCharsets.ISO_8859_1);
-      for (String line : Splitter.on("\n").split(stdoutString)) {
+    if (event.getStdOut() != null) {
+      for (String line : Splitter.on("\n").split(event.getStdOut())) {
         if (!messagesSeen.contains(line)) {
           allMessagesSeen = false;
           messagesSeen.add(line);
         }
       }
     }
-    if (stderr != null) {
-      String stderrString = new String(stderr, StandardCharsets.ISO_8859_1);
-      for (String line : Splitter.on("\n").split(stderrString)) {
+    if (event.getStdErr() != null) {
+      for (String line : Splitter.on("\n").split(event.getStdErr())) {
         if (!messagesSeen.contains(line)) {
           allMessagesSeen = false;
           messagesSeen.add(line);
@@ -760,7 +743,7 @@ public class UiEventHandler implements EventHandler {
         }
         terminal.flush();
       } catch (IOException e) {
-        logger.atWarning().withCause(e).log("IO Error writing to output stream");
+        logger.warning("IO Error writing to output stream: " + e);
       }
     }
   }
@@ -796,7 +779,7 @@ public class UiEventHandler implements EventHandler {
       terminal.resetTerminal();
       terminal.flush();
     } catch (IOException e) {
-      logger.atWarning().withCause(e).log("IO Error writing to user terminal");
+      logger.warning("IO Error writing to user terminal: " + e);
     }
   }
 
@@ -907,7 +890,7 @@ public class UiEventHandler implements EventHandler {
         }
         terminal.flush();
       } catch (IOException e) {
-        logger.atWarning().withCause(e).log("IO Error writing to output stream");
+        logger.warning("IO Error writing to output stream: " + e);
       }
     } else {
       refresh();
@@ -986,7 +969,7 @@ public class UiEventHandler implements EventHandler {
             }
           }
         } catch (IOException e) {
-          logger.atWarning().withCause(e).log("IO Error writing to output stream");
+          logger.warning("IO Error writing to output stream: " + e);
         } finally {
           updateLock.unlock();
         }
