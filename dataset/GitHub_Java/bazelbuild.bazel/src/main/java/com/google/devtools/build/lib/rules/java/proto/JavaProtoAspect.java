@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -87,12 +88,12 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
     this.javaToolchainAttribute = JavaSemantics.javaToolchainAttribute(env);
   }
 
-  protected ConfiguredAspect createWithProtocOpts(
+  @Override
+  public ConfiguredAspect create(
       ConfiguredTargetAndData ctadBase,
       RuleContext ruleContext,
       AspectParameters parameters,
-      String toolsRepository,
-      Iterable<String> additionalProtocOpts)
+      String toolsRepository)
       throws InterruptedException, ActionConflictException {
     ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(ruleContext);
 
@@ -104,20 +105,9 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
     JavaProtoAspectCommon aspectCommon =
         JavaProtoAspectCommon.getSpeedInstance(ruleContext, javaSemantics, rpcSupport);
-    Impl impl = new Impl(ruleContext, protoInfo, aspectCommon, rpcSupport, additionalProtocOpts);
+    Impl impl = new Impl(ruleContext, protoInfo, aspectCommon, rpcSupport);
     impl.addProviders(aspect);
     return aspect.build();
-  }
-
-  @Override
-  public ConfiguredAspect create(
-      ConfiguredTargetAndData ctadBase,
-      RuleContext ruleContext,
-      AspectParameters parameters,
-      String toolsRepository)
-      throws InterruptedException, ActionConflictException {
-    return createWithProtocOpts(
-        ctadBase, ruleContext, parameters, toolsRepository, ImmutableList.of());
   }
 
   @Override
@@ -174,29 +164,28 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
     private final Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders;
 
-    private final ImmutableList<String> additionalProtocOpts;
-
     Impl(
         RuleContext ruleContext,
         ProtoInfo protoInfo,
         JavaProtoAspectCommon aspectCommon,
-        RpcSupport rpcSupport,
-        Iterable<String> additionalProtocOpts) {
+        RpcSupport rpcSupport) {
       this.ruleContext = ruleContext;
       this.protoInfo = protoInfo;
       this.rpcSupport = rpcSupport;
       this.aspectCommon = aspectCommon;
-      this.additionalProtocOpts = ImmutableList.copyOf(additionalProtocOpts);
       this.javaProtoLibraryAspectProviders =
-          ruleContext.getPrerequisites("deps", JavaProtoLibraryAspectProvider.class);
+          ruleContext.getPrerequisites(
+              "deps", TransitionMode.TARGET, JavaProtoLibraryAspectProvider.class);
 
       this.dependencyCompilationArgs =
           JavaCompilationArgsProvider.merge(
-              ruleContext.getPrerequisites("deps", JavaCompilationArgsProvider.class));
+              ruleContext.getPrerequisites(
+                  "deps", TransitionMode.TARGET, JavaCompilationArgsProvider.class));
 
       this.exportsCompilationArgs =
           JavaCompilationArgsProvider.merge(
-              ruleContext.getPrerequisites("exports", JavaCompilationArgsProvider.class));
+              ruleContext.getPrerequisites(
+                  "exports", TransitionMode.TARGET, JavaCompilationArgsProvider.class));
     }
 
     void addProviders(ConfiguredAspect.Builder aspect) throws InterruptedException {
@@ -295,10 +284,7 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
       ImmutableList.Builder<ToolchainInvocation> invocations = ImmutableList.builder();
       invocations.add(
           new ToolchainInvocation(
-              "java",
-              aspectCommon.getProtoToolchainProvider(),
-              sourceJar.getExecPathString(),
-              additionalProtocOpts));
+              "java", aspectCommon.getProtoToolchainProvider(), sourceJar.getExecPathString()));
       invocations.addAll(rpcSupport.getToolchainInvocation(ruleContext, sourceJar));
       ProtoCompileActionBuilder.registerActions(
           ruleContext,
