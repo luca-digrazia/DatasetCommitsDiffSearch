@@ -801,7 +801,7 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
   @Test
   public void testInstrumentedFilesInfo_coverageEnabled() throws Exception {
     scratch.file(
-        "test/starlark/extension.bzl",
+        "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
         "  return [coverage_common.instrumented_files_info(ctx,",
         "      extensions = ['txt'],",
@@ -814,28 +814,20 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
         "      'attr2': attr.label_list(mandatory = True)})");
 
     scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:extension.bzl', 'custom_rule')",
+        "test/skylark/BUILD",
+        "load('//test/skylark:extension.bzl', 'custom_rule')",
         "",
-        "cc_library(name='cl', srcs = [':A.cc'])",
-        "custom_rule(name = 'cr', attr1 = [':a.txt', ':a.random'], attr2 = [':cl'])");
+        "java_library(name='jl', srcs = [':A.java'])",
+        "custom_rule(name = 'cr', attr1 = [':a.txt', ':a.random'], attr2 = [':jl'])");
 
     useConfiguration("--collect_code_coverage");
 
-    ConfiguredTarget target = getConfiguredTarget("//test/starlark:cr");
+    ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
 
     InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
     assertWithMessage("InstrumentedFilesInfo should be set.").that(provider).isNotNull();
     assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles()))
-        .containsExactly("a.txt", "A.cc");
-    assertThat(
-            ActionsTestUtil.baseArtifactNames(
-                ((Depset) provider.getValue("instrumented_files")).getSet(Artifact.class)))
-        .containsExactly("a.txt", "A.cc");
-    assertThat(
-            ActionsTestUtil.baseArtifactNames(
-                ((Depset) provider.getValue("metadata_files")).getSet(Artifact.class)))
-        .containsExactly("A.gcno");
+        .containsExactly("a.txt", "A.java");
   }
 
   @Test
