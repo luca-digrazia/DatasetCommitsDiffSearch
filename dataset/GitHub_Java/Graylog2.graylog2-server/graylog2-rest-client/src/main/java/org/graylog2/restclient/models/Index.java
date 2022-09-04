@@ -1,28 +1,25 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.restclient.models;
 
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
+import org.graylog2.rest.models.system.indexer.responses.IndexRangeSummary;
 import org.graylog2.restclient.lib.ApiClient;
-import org.graylog2.restclient.models.api.responses.system.indices.IndexRangeSummary;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexShardsResponse;
 import org.graylog2.restclient.models.api.responses.system.indices.IndexSummaryResponse;
 import org.graylog2.restclient.models.api.responses.system.indices.ShardDocumentsResponse;
@@ -53,7 +50,7 @@ public class Index {
         this.api = api;
 
         this.range = new Range(ir);
-        this.name = ir.index;
+        this.name = ir.indexName();
     }
 
     public Range getRange() {
@@ -89,7 +86,7 @@ public class Index {
         }
     }
 
-    public class Info {
+    public static class Info {
 
         private final int openSearchContexts;
         private final long storeSizeBytes;
@@ -149,7 +146,7 @@ public class Index {
             return isReopened;
         }
 
-        public class ShardMeter {
+        public static class ShardMeter {
 
             private final ShardMeterResponse indexMeter;
             private final ShardMeterResponse flushMeter;
@@ -198,35 +195,32 @@ public class Index {
             }
 
         }
-
     }
 
-    public class Range {
+    public static class Range {
 
-        private final DateTime starts;
-        private final boolean providesCalculationInfo;
-
-        private long calculationTookMs = 0;
-        private DateTime calculatedAt = null;
+        private final DateTime begin;
+        private final DateTime end;
+        private final long calculationTookMs;
+        private final DateTime calculatedAt;
 
         public Range(IndexRangeSummary ir) {
-            this.starts = new DateTime(ir.starts);
-
-            if (ir.calculatedAt != null && !ir.calculatedAt.isEmpty() && ir.calculationTookMs >= 0) {
-                this.providesCalculationInfo = true;
-                this.calculationTookMs = ir.calculationTookMs;
-                this.calculatedAt = new DateTime(ir.calculatedAt);
-            } else {
-                this.providesCalculationInfo = false;
-            }
+            this.begin = ir.begin();
+            this.end = ir.end();
+                this.calculationTookMs = ir.calculationTookMs();
+                this.calculatedAt = ir.calculatedAt();
         }
 
-        public DateTime getStarts() {
-            return starts;
+        public DateTime getBegin() {
+            return begin;
+        }
+
+        public DateTime getEnd() {
+            return end;
         }
 
         public boolean isProvidesCalculationInfo() {
-            return providesCalculationInfo;
+            return true;
         }
 
         public long getCalculationTookMs() {
@@ -237,5 +231,4 @@ public class Index {
             return calculatedAt;
         }
     }
-
 }
