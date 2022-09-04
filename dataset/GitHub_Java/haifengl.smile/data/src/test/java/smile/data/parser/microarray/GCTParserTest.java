@@ -57,14 +57,14 @@ public class GCTParserTest {
         System.out.println("parse");
         GCTParser parser = new GCTParser();
         try {
-            AttributeDataset data = parser.parse("GCT", this.getClass().getResourceAsStream("/smile/data/microarray/allaml.dataset.gct"));
+            AttributeDataset data = parser.parse("GCT", smile.data.parser.IOUtils.getDataFile("microarray/allaml.dataset.gct"));
             
             double[][] x = data.toArray(new double[data.size()][]);
             String[] id = data.toArray(new String[data.size()]);
             
             for (Attribute attribute : data.attributes()) {
-                assertEquals(Attribute.Type.NUMERIC, attribute.type);
-                System.out.println(attribute.name);
+                assertEquals(Attribute.Type.NUMERIC, attribute.getType());
+                System.out.println(attribute.getName());
             }
 
             assertEquals(12564, data.size());

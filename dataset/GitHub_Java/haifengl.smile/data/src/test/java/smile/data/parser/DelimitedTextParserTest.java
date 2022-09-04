@@ -15,12 +15,8 @@
  *******************************************************************************/
 package smile.data.parser;
 
-import java.io.File;
-import java.util.ArrayList;
-import java.util.List;
 import org.junit.After;
 import org.junit.AfterClass;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -63,11 +59,11 @@ public class DelimitedTextParserTest {
         try {
             DelimitedTextParser parser = new DelimitedTextParser();
             parser.setResponseIndex(new NominalAttribute("class"), 0);
-            AttributeDataset usps = parser.parse("USPS Train", smile.data.parser.IOUtils.getTestDataFile("usps/zip.train"));
+            AttributeDataset usps = parser.parse("USPS Train", smile.data.parser.IOUtils.getDataFile("usps/zip.train"));
             double[][] x = usps.toArray(new double[usps.size()][]);
             int[] y = usps.toArray(new int[usps.size()]);
             
-            assertEquals(Attribute.Type.NOMINAL, usps.responseAttribute().getType());
+            assertEquals(Attribute.Type.NOMINAL, usps.response().getType());
             for (Attribute attribute : usps.attributes()) {
                 assertEquals(Attribute.Type.NUMERIC, attribute.getType());
             }
@@ -75,62 +71,19 @@ public class DelimitedTextParserTest {
             assertEquals(7291, usps.size());
             assertEquals(256, usps.attributes().length);
 
-            assertEquals("6", usps.responseAttribute().toString(y[0]));
-            assertEquals("5", usps.responseAttribute().toString(y[1]));
-            assertEquals("4", usps.responseAttribute().toString(y[2]));
+            assertEquals("6", usps.response().toString(y[0]));
+            assertEquals("5", usps.response().toString(y[1]));
+            assertEquals("4", usps.response().toString(y[2]));
             assertEquals(-1.0000, x[0][6], 1E-7);
             assertEquals(-0.6310, x[0][7], 1E-7);
             assertEquals(0.8620, x[0][8], 1E-7);
 
-            assertEquals("1", usps.responseAttribute().toString(y[7290]));
+            assertEquals("1", usps.response().toString(y[7290]));            
             assertEquals(-1.0000, x[7290][4], 1E-7);
             assertEquals(-0.1080, x[7290][5], 1E-7);
             assertEquals(1.0000, x[7290][6], 1E-7);
         } catch (Exception ex) {
             System.err.println(ex);
-            Assert.fail();
-        }
-    }
-
-    /**
-     * Test of parse method, of class DelimitedTextParser, with some ignored columns.
-     */
-    @Test
-    public void testParseWithIgnoredColumns() throws Exception {
-        System.out.println("parse");
-        try {
-            List<Integer> ignoredColumns = new ArrayList<>();
-            ignoredColumns.add(6);
-            ignoredColumns.add(8);
-            DelimitedTextParser parser = new DelimitedTextParser();
-            parser.setResponseIndex(new NominalAttribute("class"), 0);
-            parser.setIgnoredColumns(ignoredColumns);
-            AttributeDataset usps = parser.parse("USPS Train", new File("C:\\Utilisateurs\\A665760\\projects\\smile\\shell\\src\\universal\\data\\usps\\zip.train"));
-            double[][] x = usps.toArray(new double[usps.size()][]);
-            int[] y = usps.toArray(new int[usps.size()]);
-
-            assertEquals(Attribute.Type.NOMINAL, usps.responseAttribute().getType());
-            for (Attribute attribute : usps.attributes()) {
-                assertEquals(Attribute.Type.NUMERIC, attribute.getType());
-            }
-
-            assertEquals(7291, usps.size());
-            assertEquals(256 - ignoredColumns.size(), usps.attributes().length);
-
-            assertEquals("6", usps.responseAttribute().toString(y[0]));
-            assertEquals("5", usps.responseAttribute().toString(y[1]));
-            assertEquals("4", usps.responseAttribute().toString(y[2]));
-            assertEquals(0.8620, x[0][6], 1E-7);
-            assertEquals(-0.1670, x[0][7], 1E-7);
-            assertEquals(-1.0000, x[0][8], 1E-7);
-
-            assertEquals("1", usps.responseAttribute().toString(y[7290]));
-            assertEquals(-1.0000, x[7290][4], 1E-7);
-            assertEquals(1.0000, x[7290][5], 1E-7);
-            assertEquals(-0.8670, x[7290][6], 1E-7);
-        } catch (Exception ex) {
-            System.err.println(ex);
-            Assert.fail();
         }
     }
 }

@@ -58,13 +58,13 @@ public class ArffParserTest {
         try {
             ArffParser arffParser = new ArffParser();
             arffParser.setResponseIndex(4);
-            AttributeDataset weather = arffParser.parse(this.getClass().getResourceAsStream("/smile/data/weka/weather.nominal.arff"));
+            AttributeDataset weather = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/weather.nominal.arff"));
             double[][] x = weather.toArray(new double[weather.size()][]);
             int[] y = weather.toArray(new int[weather.size()]);
             
-            assertEquals(Attribute.Type.NOMINAL, weather.response().type);
+            assertEquals(Attribute.Type.NOMINAL, weather.response().getType());
             for (Attribute attribute : weather.attributes()) {
-                assertEquals(Attribute.Type.NOMINAL, attribute.type);
+                assertEquals(Attribute.Type.NOMINAL, attribute.getType());
             }
             
             assertEquals(14, weather.size());
@@ -96,13 +96,13 @@ public class ArffParserTest {
         try {
             ArffParser arffParser = new ArffParser();
             arffParser.setResponseIndex(4);
-            AttributeDataset iris = arffParser.parse(this.getClass().getResourceAsStream("/smile/data/weka/iris.arff"));
+            AttributeDataset iris = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/iris.arff"));
             double[][] x = iris.toArray(new double[iris.size()][]);
             int[] y = iris.toArray(new int[iris.size()]);
             
-            assertEquals(Attribute.Type.NOMINAL, iris.response().type);
+            assertEquals(Attribute.Type.NOMINAL, iris.response().getType());
             for (Attribute attribute : iris.attributes()) {
-                assertEquals(Attribute.Type.NUMERIC, attribute.type);
+                assertEquals(Attribute.Type.NUMERIC, attribute.getType());
             }
             
             assertEquals(150, iris.size());
@@ -133,11 +133,11 @@ public class ArffParserTest {
         System.out.println("string");
         try {
             ArffParser arffParser = new ArffParser();
-            AttributeDataset string = arffParser.parse(this.getClass().getResourceAsStream("/smile/data/weka/string.arff"));
+            AttributeDataset string = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/string.arff"));
             double[][] x = string.toArray(new double[string.size()][]);
             
             for (Attribute attribute : string.attributes()) {
-                assertEquals(Attribute.Type.STRING, attribute.type);
+                assertEquals(Attribute.Type.STRING, attribute.getType());
             }
             
             Attribute[] attributes = string.attributes();
@@ -160,7 +160,7 @@ public class ArffParserTest {
         System.out.println("sparse");
         try {
             ArffParser arffParser = new ArffParser();
-            AttributeDataset sparse = arffParser.parse(this.getClass().getResourceAsStream("/smile/data/weka/sparse.arff"));
+            AttributeDataset sparse = arffParser.parse(smile.data.parser.IOUtils.getDataFile("weka/sparse.arff"));
             double[][] x = sparse.toArray(new double[sparse.size()][]);
                         
             assertEquals(2, sparse.size());

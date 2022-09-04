@@ -57,14 +57,14 @@ public class RESParserTest {
         System.out.println("parse");
         RESParser parser = new RESParser();
         try {
-            AttributeDataset data = parser.parse("RES", this.getClass().getResourceAsStream("/smile/data/microarray/all_aml_test.res"));
+            AttributeDataset data = parser.parse("RES", smile.data.parser.IOUtils.getDataFile("microarray/all_aml_test.res"));
             
             double[][] x = data.toArray(new double[data.size()][]);
             String[] id = data.toArray(new String[data.size()]);
             
             for (Attribute attribute : data.attributes()) {
-                assertEquals(Attribute.Type.NUMERIC, attribute.type);
-                System.out.println(attribute.name + "\t" + attribute.description);
+                assertEquals(Attribute.Type.NUMERIC, attribute.getType());
+                System.out.println(attribute.getName() + "\t" + attribute.getDescription());
             }
 
             assertEquals(7129, data.size());

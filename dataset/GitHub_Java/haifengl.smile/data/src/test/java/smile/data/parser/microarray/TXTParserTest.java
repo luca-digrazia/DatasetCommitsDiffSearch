@@ -57,14 +57,14 @@ public class TXTParserTest {
         System.out.println("parse");
         TXTParser parser = new TXTParser();
         try {
-            AttributeDataset data = parser.parse("PCL", this.getClass().getResourceAsStream("/smile/data/microarray/Dunham2002.txt"));
+            AttributeDataset data = parser.parse("PCL", smile.data.parser.IOUtils.getDataFile("microarray/Dunham2002.txt"));
             
             double[][] x = data.toArray(new double[data.size()][]);
             String[] id = data.toArray(new String[data.size()]);
             
             for (Attribute attribute : data.attributes()) {
-                assertEquals(Attribute.Type.NUMERIC, attribute.type);
-                System.out.println(attribute.name);
+                assertEquals(Attribute.Type.NUMERIC, attribute.getType());
+                System.out.println(attribute.getName());
             }
 
             assertEquals(6694, data.size());
