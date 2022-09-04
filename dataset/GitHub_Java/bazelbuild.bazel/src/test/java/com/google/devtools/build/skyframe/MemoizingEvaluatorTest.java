@@ -1645,7 +1645,8 @@ public class MemoizingEvaluatorTest {
   /**
    * Regression test: tests that pass before other build actions fail yield crash in non -k builds.
    */
-  private void passThenFailToBuild(boolean successFirst) throws Exception {
+  @Test
+  public void passThenFailToBuild() throws Exception {
     CountDownLatch blocker = new CountDownLatch(1);
     SkyKey successKey = GraphTester.toSkyKey("success");
     tester.getOrCreate(successKey).setBuilder(
@@ -1658,26 +1659,30 @@ public class MemoizingEvaluatorTest {
             /*notifyFinish=*/null, /*waitForException=*/false, /*value=*/null,
             /*deps=*/ImmutableList.<SkyKey>of()));
 
-    EvaluationResult<StringValue> result;
-    if (successFirst) {
-      result = tester.eval(/*keepGoing=*/ false, successKey, slowFailKey);
-    } else {
-      result = tester.eval(/*keepGoing=*/ false, slowFailKey, successKey);
-    }
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(slowFailKey)
-        .rootCauseOfExceptionIs(slowFailKey);
+    EvaluationResult<StringValue> result = tester.eval(
+        /*keepGoing=*/false, successKey, slowFailKey);
+    assertThat(result.getError().getRootCauses()).containsExactly(slowFailKey);
     assertThat(result.values()).containsExactly(new StringValue("yippee"));
   }
 
   @Test
-  public void passThenFailToBuild() throws Exception {
-    passThenFailToBuild(true);
-  }
-
-  @Test
   public void passThenFailToBuildAlternateOrder() throws Exception {
-    passThenFailToBuild(false);
+    CountDownLatch blocker = new CountDownLatch(1);
+    SkyKey successKey = GraphTester.toSkyKey("success");
+    tester.getOrCreate(successKey).setBuilder(
+        new ChainedFunction(/*notifyStart=*/null, /*waitToFinish=*/null,
+            /*notifyFinish=*/blocker, /*waitForException=*/false, new StringValue("yippee"),
+            /*deps=*/ImmutableList.<SkyKey>of()));
+    SkyKey slowFailKey = GraphTester.toSkyKey("slow_then_fail");
+    tester.getOrCreate(slowFailKey).setBuilder(
+        new ChainedFunction(/*notifyStart=*/null, /*waitToFinish=*/blocker,
+            /*notifyFinish=*/null, /*waitForException=*/false, /*value=*/null,
+            /*deps=*/ImmutableList.<SkyKey>of()));
+
+    EvaluationResult<StringValue> result = tester.eval(
+        /*keepGoing=*/false, slowFailKey, successKey);
+    assertThat(result.getError().getRootCauses()).containsExactly(slowFailKey);
+    assertThat(result.values()).containsExactly(new StringValue("yippee"));
   }
 
   @Test
