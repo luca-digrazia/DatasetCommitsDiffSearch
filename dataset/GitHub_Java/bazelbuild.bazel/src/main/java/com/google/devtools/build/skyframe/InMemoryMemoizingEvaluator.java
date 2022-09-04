@@ -228,7 +228,7 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       if (prevEntry != null && prevEntry.isDone()) {
         if (keepEdges) {
           try {
-            if (!prevEntry.hasAtLeastOneDep()) {
+            if (prevEntry.getNumberOfDirectDepGroups() == 0) {
               if (newValue.equals(prevEntry.getValue())
                   && !valuesToDirty.contains(key)
                   && !valuesToDelete.contains(key)) {
