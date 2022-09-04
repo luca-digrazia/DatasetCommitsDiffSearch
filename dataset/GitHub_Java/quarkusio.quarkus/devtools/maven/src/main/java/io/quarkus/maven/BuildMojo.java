@@ -18,11 +18,11 @@
 package io.quarkus.maven;
 
 import java.io.File;
-import java.util.Arrays;
-import java.util.Collections;
+import java.nio.file.Path;
 import java.util.List;
 
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.artifact.DefaultArtifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Component;
@@ -49,10 +49,7 @@ import io.quarkus.creator.phase.runnerjar.RunnerJarOutcome;
 import io.quarkus.creator.phase.runnerjar.RunnerJarPhase;
 
 /**
- * Build the application.
- * <p>
- * You can build a native application runner with {@code native-image}
- * 
+ *
  * @author Alexey Loubyansky
  */
 @Mojo(name = "build", defaultPhase = LifecyclePhase.PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
@@ -138,25 +135,6 @@ public class BuildMojo extends AbstractMojo {
     @Parameter(property = "uberJar", defaultValue = "false")
     private boolean uberJar;
 
-    /**
-     * When using the uberJar option, this array specifies entries that should
-     * be excluded from the final jar. The entries are relative to the root of
-     * the file. An example of this configuration could be:
-     * <code><pre>
-     * &#x3C;configuration&#x3E; 
-     *   &#x3C;uberJar&#x3E;true&#x3C;/uberJar&#x3E;
-     *   &#x3C;ignoredEntries&#x3E;
-     *     &#x3C;ignoredEntry&#x3E;META-INF/BC2048KE.SF&#x3C;/ignoredEntry&#x3E;
-     *     &#x3C;ignoredEntry&#x3E;META-INF/BC2048KE.DSA&#x3C;/ignoredEntry&#x3E;
-     *     &#x3C;ignoredEntry&#x3E;META-INF/BC1024KE.SF&#x3C;/ignoredEntry&#x3E;
-     *     &#x3C;ignoredEntry&#x3E;META-INF/BC1024KE.DSA&#x3C;/ignoredEntry&#x3E;
-     *   &#x3C;/ignoredEntries&#x3E; 
-     * &#x3C;/configuration&#x3E;
-     * </pre></code>
-     */
-    @Parameter(property = "ignoredEntries")
-    private String[] ignoredEntries;
-
     public BuildMojo() {
         MojoLogger.logSupplier = this::getLog;
     }
@@ -188,9 +166,7 @@ public class BuildMojo extends AbstractMojo {
                         .setLibDir(libDir.toPath())
                         .setFinalName(finalName)
                         .setMainClass(mainClass)
-                        .setUberJar(uberJar)
-                        .setUserConfiguredIgnoredEntries(
-                                this.ignoredEntries == null ? Collections.EMPTY_SET : Arrays.asList(this.ignoredEntries)))
+                        .setUberJar(uberJar))
                 .setWorkDir(buildDir.toPath())
                 .build()) {
 
