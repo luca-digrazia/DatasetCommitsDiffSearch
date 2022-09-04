@@ -84,7 +84,7 @@ public class Cli {
             return false;
         } catch (Throwable t) {
             // Unexpected exceptions should result in non-zero exit status of the process
-            t.printStackTrace(stdErr);
+            stdErr.println(t.getMessage());
             return false;
         }
     }
