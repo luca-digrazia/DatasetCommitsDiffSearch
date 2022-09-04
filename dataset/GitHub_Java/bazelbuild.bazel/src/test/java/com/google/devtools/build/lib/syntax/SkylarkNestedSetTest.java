@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -25,6 +24,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -48,9 +48,9 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
     env = newEnvironmentWithSkylarkOptions("--incompatible_disallow_set_constructor=true");
     try {
       eval("s = set([1, 2, 3], order='postorder')");
-      fail("`set` should have failed");
+      Assert.fail("`set` should have failed");
     } catch (EvalException e) {
-      assertThat(e).hasMessageThat().contains("The `set` constructor for depsets is deprecated");
+      assertThat(e.getMessage()).contains("The `set` constructor for depsets is deprecated");
     }
   }
 
@@ -67,7 +67,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
     assertThat(get("s").getSet(Object.class)).containsExactly("a", "b").inOrder();
     try {
       get("s").getSet(Integer.class);
-      fail("getSet() with wrong type should have raised IllegalArgumentException");
+      Assert.fail("getSet() with wrong type should have raised IllegalArgumentException");
     } catch (IllegalArgumentException expected) {
     }
   }
@@ -80,7 +80,7 @@ public class SkylarkNestedSetTest extends EvaluationTestCase {
     assertThat(get("s").toCollection()).containsExactly("a", "b").inOrder();
     try {
       get("s").toCollection(Integer.class);
-      fail("toCollection() with wrong type should have raised IllegalArgumentException");
+      Assert.fail("toCollection() with wrong type should have raised IllegalArgumentException");
     } catch (IllegalArgumentException expected) {
     }
   }
