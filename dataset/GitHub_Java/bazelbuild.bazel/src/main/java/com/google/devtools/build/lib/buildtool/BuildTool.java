@@ -424,20 +424,17 @@ public class BuildTool {
     } catch (InterruptedException e) {
       // We may have been interrupted by an error, or the user's interruption may have raced with
       // an error, so check to see if we should report that error code instead.
-      detailedExitCode = env.getRuntime().getCrashExitCode();
       AbruptExitException environmentPendingAbruptExitException = env.getPendingException();
-      if (detailedExitCode == null && environmentPendingAbruptExitException != null) {
-        detailedExitCode = environmentPendingAbruptExitException.getDetailedExitCode();
-        // Report the exception from the environment - the exception we're handling here is just an
-        // interruption.
-        reportExceptionError(environmentPendingAbruptExitException);
-      }
-      if (detailedExitCode == null) {
+      if (environmentPendingAbruptExitException == null) {
         String message = "build interrupted";
         detailedExitCode = InterruptedFailureDetails.detailedExitCode(message);
         env.getReporter().handle(Event.error(message));
         env.getEventBus().post(new BuildInterruptedEvent());
       } else {
+        // Report the exception from the environment - the exception we're handling here is just an
+        // interruption.
+        detailedExitCode = environmentPendingAbruptExitException.getDetailedExitCode();
+        reportExceptionError(environmentPendingAbruptExitException);
         result.setCatastrophe();
       }
     } catch (TargetParsingException | LoadingFailedException e) {
