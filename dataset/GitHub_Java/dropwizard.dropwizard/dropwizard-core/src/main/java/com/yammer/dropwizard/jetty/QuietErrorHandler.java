@@ -2,6 +2,7 @@ package com.yammer.dropwizard.jetty;
 
 import com.google.common.base.Charsets;
 import com.google.common.collect.ImmutableSet;
+import com.yammer.dropwizard.logging.Log;
 import org.eclipse.jetty.http.HttpGenerator;
 import org.eclipse.jetty.http.HttpHeaders;
 import org.eclipse.jetty.http.HttpMethods;
@@ -10,8 +11,6 @@ import org.eclipse.jetty.server.AbstractHttpConnection;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.server.handler.ErrorHandler;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletOutputStream;
 import javax.servlet.http.HttpServletRequest;
@@ -25,7 +24,8 @@ import java.util.ResourceBundle;
  * An {@link ErrorHandler} subclass which returns concise, {@code text/plain} error messages.
  */
 public class QuietErrorHandler extends ErrorHandler {
-    private static final Logger LOGGER = LoggerFactory.getLogger(QuietErrorHandler.class);
+    private static final Log LOG = Log.forClass(QuietErrorHandler.class);
+    private static final int RESPONSE_BUFFER_SIZE = 4096;
 
     /*
      * Sadly, this class is basically untestable.
@@ -40,30 +40,35 @@ public class QuietErrorHandler extends ErrorHandler {
                        HttpServletRequest request,
                        HttpServletResponse response) throws IOException {
         final AbstractHttpConnection connection = AbstractHttpConnection.getCurrentConnection();
-        final Response jettyResponse = connection.getResponse();
-        jettyResponse.setStatus(jettyResponse.getStatus());
+        if (connection != null) {
+            connection.getRequest().setHandled(true);
+            final Response jettyResponse = connection.getResponse();
+            jettyResponse.setStatus(jettyResponse.getStatus());
 
-        connection.getRequest().setHandled(true);
-        final String method = request.getMethod();
-        
-        if (!ALLOWED_METHODS.contains(method)) {
-            return;
-        }
+            connection.getRequest().setHandled(true);
+            final String method = request.getMethod();
 
-        response.setContentType(MimeTypes.TEXT_PLAIN_UTF_8);
-        if (getCacheControl() != null) {
-            response.setHeader(HttpHeaders.CACHE_CONTROL, getCacheControl());
-        }
+            if (!ALLOWED_METHODS.contains(method)) {
+                return;
+            }
 
-        final StringBuilder builder = new StringBuilder(4096);
-        builder.append(errorMessage(request, jettyResponse.getStatus())).append('\n').append('\n');
-        final byte[] bytes = builder.toString().getBytes(Charsets.UTF_8);
-        response.setContentLength(bytes.length);
-        final ServletOutputStream output = response.getOutputStream();
-        try {
-            output.write(bytes);
-        } finally {
-            output.close();
+            response.setContentType(MimeTypes.TEXT_PLAIN_UTF_8);
+            if (getCacheControl() != null) {
+                response.setHeader(HttpHeaders.CACHE_CONTROL, getCacheControl());
+            }
+
+            final StringBuilder builder = new StringBuilder(RESPONSE_BUFFER_SIZE);
+            builder.append(errorMessage(request, jettyResponse.getStatus()))
+                   .append('\n')
+                   .append('\n');
+            final byte[] bytes = builder.toString().getBytes(Charsets.UTF_8);
+            response.setContentLength(bytes.length);
+            final ServletOutputStream output = response.getOutputStream();
+            try {
+                output.write(bytes);
+            } finally {
+                output.close();
+            }
         }
     }
 
@@ -77,7 +82,7 @@ public class QuietErrorHandler extends ErrorHandler {
                 return format.format(new Object[]{request.getMethod()});
             }
         } catch (MissingResourceException e) {
-            LOGGER.error("Unable to load HttpErrorMessages.properties", e);
+            LOG.error(e, "Unable to load HttpErrorMessages.properties");
         }
         return "Your request could not be processed: " + HttpGenerator.getReasonBuffer(status);
     }

@@ -9,17 +9,15 @@ import com.yammer.dropwizard.tasks.TaskServlet;
 import com.yammer.dropwizard.util.Duration;
 import com.yammer.dropwizard.util.Size;
 import com.yammer.metrics.HealthChecks;
+import com.yammer.metrics.core.DeadlockHealthCheck;
 import com.yammer.metrics.core.HealthCheck;
-import com.yammer.metrics.jetty.InstrumentedBlockingChannelConnector;
 import com.yammer.metrics.jetty.InstrumentedHandler;
-import com.yammer.metrics.jetty.InstrumentedSelectChannelConnector;
-import com.yammer.metrics.jetty.InstrumentedSocketConnector;
 import com.yammer.metrics.reporting.MetricsServlet;
-import com.yammer.metrics.util.DeadlockHealthCheck;
 import org.eclipse.jetty.server.*;
 import org.eclipse.jetty.server.bio.SocketConnector;
 import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.nio.AbstractNIOConnector;
+import org.eclipse.jetty.server.nio.BlockingChannelConnector;
 import org.eclipse.jetty.server.nio.SelectChannelConnector;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -95,7 +93,7 @@ public class ServerFactory {
     }
 
     private Connector createExternalConnector() {
-        final AbstractConnector connector = createConnector(config.getPort());
+        final AbstractConnector connector = createConnector();
 
         connector.setHost(config.getBindHost().orNull());
 
@@ -136,17 +134,17 @@ public class ServerFactory {
         return connector;
     }
 
-    private AbstractConnector createConnector(int port) {
+    private AbstractConnector createConnector() {
         final AbstractConnector connector;
         switch (config.getConnectorType()) {
             case BLOCKING_CHANNEL:
-                connector = new InstrumentedBlockingChannelConnector(port);
+                connector = new BlockingChannelConnector();
                 break;
             case SOCKET:
-                connector = new InstrumentedSocketConnector(port);
+                connector = new SocketConnector();
                 break;
             case SELECT_CHANNEL:
-                connector = new InstrumentedSelectChannelConnector(port);
+                connector = new SelectChannelConnector();
                 ((SelectChannelConnector) connector).setLowResourcesConnections(config.getLowResourcesConnectionThreshold());
                 break;
             default:

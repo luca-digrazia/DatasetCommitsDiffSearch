@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableList;
 import com.yammer.dropwizard.json.Json;
 import com.yammer.dropwizard.logging.Log;
 import com.yammer.dropwizard.validation.Validator;
-import org.codehaus.jackson.map.Module;
 import org.eclipse.jetty.io.EofException;
 
 import javax.validation.Valid;
@@ -50,18 +49,12 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
         }
     };
 
-    private final Json json;
-
-    public JacksonMessageBodyProvider(Json json) {
-        this.json = json;
-    }
-
     @Override
     public boolean isReadable(Class<?> type,
                               Type genericType,
                               Annotation[] annotations,
                               MediaType mediaType) {
-        return json.canDeserialize(type);
+        return Json.canDeserialize(type);
     }
 
     @Override
@@ -76,7 +69,7 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
             validating = validating || (annotation.annotationType() == Valid.class);
         }
 
-        final Object value = json.readValue(entityStream, genericType);
+        final Object value = Json.read(entityStream, genericType);
         if (validating) {
             final ImmutableList<String> errors = VALIDATOR.validate(value);
             if (!errors.isEmpty()) {
@@ -98,7 +91,7 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
                                Type genericType,
                                Annotation[] annotations,
                                MediaType mediaType) {
-        return json.canSerialize(type);
+        return Json.canSerialize(type);
     }
 
     @Override
@@ -119,7 +112,7 @@ public class JacksonMessageBodyProvider implements MessageBodyReader<Object>,
                         MultivaluedMap<String, Object> httpHeaders,
                         OutputStream entityStream) throws IOException, WebApplicationException {
         try {
-            json.writeValue(entityStream, t);
+            Json.write(entityStream, t);
         } catch (EofException ignored) {
             // we don't care about these
         } catch (IOException e) {
