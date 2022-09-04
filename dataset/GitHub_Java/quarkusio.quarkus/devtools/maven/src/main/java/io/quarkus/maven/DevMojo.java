@@ -333,9 +333,6 @@ public class DevMojo extends AbstractMojo {
                 if (System.currentTimeMillis() > nextCheck) {
                     nextCheck = System.currentTimeMillis() + 100;
                     if (!runner.process.isAlive()) {
-                        if (runner.process.exitValue() != 0) {
-                            throw new MojoExecutionException("Dev mode process did not complete successfully");
-                        }
                         return;
                     }
                     final Set<Path> changed = new HashSet<>();
@@ -410,25 +407,21 @@ public class DevMojo extends AbstractMojo {
      */
     private void handleResources() throws MojoExecutionException {
         List<Resource> resources = project.getResources();
-        if (resources.isEmpty()) {
-            return;
+        if (!resources.isEmpty()) {
+            Plugin resourcesPlugin = project.getPlugin(ORG_APACHE_MAVEN_PLUGINS + ":" + MAVEN_RESOURCES_PLUGIN);
+            MojoExecutor.executeMojo(
+                    MojoExecutor.plugin(
+                            MojoExecutor.groupId(ORG_APACHE_MAVEN_PLUGINS),
+                            MojoExecutor.artifactId(MAVEN_RESOURCES_PLUGIN),
+                            MojoExecutor.version(resourcesPlugin.getVersion()),
+                            resourcesPlugin.getDependencies()),
+                    MojoExecutor.goal("resources"),
+                    getPluginConfig(resourcesPlugin),
+                    MojoExecutor.executionEnvironment(
+                            project,
+                            session,
+                            pluginManager));
         }
-        Plugin resourcesPlugin = project.getPlugin(ORG_APACHE_MAVEN_PLUGINS + ":" + MAVEN_RESOURCES_PLUGIN);
-        if (resourcesPlugin == null) {
-            return;
-        }
-        MojoExecutor.executeMojo(
-                MojoExecutor.plugin(
-                        MojoExecutor.groupId(ORG_APACHE_MAVEN_PLUGINS),
-                        MojoExecutor.artifactId(MAVEN_RESOURCES_PLUGIN),
-                        MojoExecutor.version(resourcesPlugin.getVersion()),
-                        resourcesPlugin.getDependencies()),
-                MojoExecutor.goal("resources"),
-                getPluginConfig(resourcesPlugin),
-                MojoExecutor.executionEnvironment(
-                        project,
-                        session,
-                        pluginManager));
     }
 
     private void executeCompileGoal(Plugin plugin, String groupId, String artifactId) throws MojoExecutionException {
@@ -664,12 +657,7 @@ public class DevMojo extends AbstractMojo {
             //in most cases these are not used, however they need to be present for some
             //parent-first cases such as logging
             for (Artifact appDep : project.getArtifacts()) {
-                // only add the artifact if it's present in the dev mode context
-                // we need this to avoid having jars on the classpath multiple times
-                if (!devModeContext.getLocalArtifacts().contains(new AppArtifactKey(appDep.getGroupId(), appDep.getArtifactId(),
-                        appDep.getClassifier(), appDep.getArtifactHandler().getExtension()))) {
-                    addToClassPaths(classPathManifest, appDep.getFile());
-                }
+                addToClassPaths(classPathManifest, appDep.getFile());
             }
 
             //now we need to build a temporary jar to actually run

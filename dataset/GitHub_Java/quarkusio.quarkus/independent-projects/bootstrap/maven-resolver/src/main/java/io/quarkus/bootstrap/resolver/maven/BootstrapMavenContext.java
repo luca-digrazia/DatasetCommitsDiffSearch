@@ -20,9 +20,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.function.Supplier;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.maven.cli.transfer.BatchModeMavenTransferListener;
 import org.apache.maven.cli.transfer.ConsoleMavenTransferListener;
-import org.apache.maven.cli.transfer.QuietMavenTransferListener;
 import org.apache.maven.model.Model;
 import org.apache.maven.model.building.ModelBuilder;
 import org.apache.maven.model.building.ModelProblemCollector;
@@ -70,7 +68,6 @@ import org.eclipse.aether.resolution.ArtifactDescriptorException;
 import org.eclipse.aether.resolution.ArtifactDescriptorRequest;
 import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
 import org.eclipse.aether.spi.connector.transport.TransporterFactory;
-import org.eclipse.aether.transfer.TransferListener;
 import org.eclipse.aether.transport.wagon.WagonConfigurator;
 import org.eclipse.aether.transport.wagon.WagonProvider;
 import org.eclipse.aether.transport.wagon.WagonTransporterFactory;
@@ -90,7 +87,6 @@ public class BootstrapMavenContext {
     private static final String MAVEN_DOT_HOME = "maven.home";
     private static final String MAVEN_HOME = "MAVEN_HOME";
     private static final String MAVEN_PROJECTBASEDIR = "MAVEN_PROJECTBASEDIR";
-    private static final String MAVEN_SETTINGS = "maven.settings";
     private static final String SETTINGS_XML = "settings.xml";
 
     private static final String userHome = PropertyUtils.getUserHome();
@@ -149,11 +145,7 @@ public class BootstrapMavenContext {
         }
         userSettings = config.userSettings == null
                 ? resolveSettingsFile(getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_USER_SETTINGS),
-                        () -> {
-                            final String quarkusMavenSettings = PropertyUtils.getProperty(MAVEN_SETTINGS);
-                            return quarkusMavenSettings == null ? new File(userMavenConfigurationHome, SETTINGS_XML)
-                                    : new File(quarkusMavenSettings);
-                        })
+                        () -> new File(userMavenConfigurationHome, SETTINGS_XML))
                 : config.userSettings;
         globalSettings = resolveSettingsFile(getCliOptions().getOptionValue(BootstrapMavenOptions.ALTERNATE_GLOBAL_SETTINGS),
                 () -> {
@@ -389,16 +381,7 @@ public class BootstrapMavenContext {
         }
 
         if (session.getTransferListener() == null && artifactTransferLogging) {
-            TransferListener transferListener;
-            if (mvnArgs.hasOption(BootstrapMavenOptions.NO_TRANSFER_PROGRESS)) {
-                transferListener = new QuietMavenTransferListener();
-            } else if (mvnArgs.hasOption(BootstrapMavenOptions.BATCH_MODE)) {
-                transferListener = new BatchModeMavenTransferListener(System.out);
-            } else {
-                transferListener = new ConsoleMavenTransferListener(System.out, true);
-            }
-
-            session.setTransferListener(transferListener);
+            session.setTransferListener(new ConsoleMavenTransferListener(System.out, true));
         }
 
         return session;

@@ -236,15 +236,13 @@ public class BootstrapAppModelFactory {
             }
         }
 
-        // Massive hack to dected zipped/jar
-        if (projectRoot != null
-                && (!Files.isDirectory(projectRoot) || projectRoot.getFileSystem().getClass().getName().contains("Zip"))) {
+        if (projectRoot != null && !Files.isDirectory(projectRoot)) {
             return createAppModelForJar(projectRoot);
         }
 
-        AppArtifact appArtifact = this.appArtifact;
         try {
             LocalProject localProject = null;
+            AppArtifact appArtifact = this.appArtifact;
             if (appArtifact == null) {
                 if (projectRoot == null) {
                     throw new IllegalArgumentException(
@@ -383,7 +381,6 @@ public class BootstrapAppModelFactory {
                     initialDepsList = modelResolver.resolveModel(appArtifact);
                 }
             } else {
-                //we need some way to figure out dependencies here
                 initialDepsList = modelResolver.resolveManagedModel(appArtifact, Collections.emptyList(), managingProject,
                         localArtifacts);
             }
