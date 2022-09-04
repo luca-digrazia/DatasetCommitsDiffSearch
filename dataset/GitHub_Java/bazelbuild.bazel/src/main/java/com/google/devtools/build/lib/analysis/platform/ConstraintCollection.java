@@ -37,8 +37,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkList;
+import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Collection;
 import java.util.Map;
@@ -186,26 +185,12 @@ public abstract class ConstraintCollection
       return true;
     }
 
-    // Then, check the parent.
+    // Then, check the parent, directly to ignore defaults.
     if (parent() != null) {
       return parent().has(constraint);
     }
 
     return constraint.hasDefaultConstraintValue();
-  }
-
-  public boolean hasWithoutDefault(ConstraintSettingInfo constraint) {
-    // First, check locally.
-    if (constraints().containsKey(constraint)) {
-      return true;
-    }
-
-    // Then, check the parent, directly to ignore defaults.
-    if (parent() != null) {
-      return parent().hasWithoutDefault(constraint);
-    }
-
-    return false;
   }
 
   /**
@@ -230,8 +215,8 @@ public abstract class ConstraintCollection
   }
 
   @Override
-  public Sequence<ConstraintSettingInfo> constraintSettings() {
-    return StarlarkList.immutableCopyOf(constraints().keySet());
+  public SkylarkList<ConstraintSettingInfo> constraintSettings() {
+    return SkylarkList.createImmutable(constraints().keySet());
   }
 
   @Override

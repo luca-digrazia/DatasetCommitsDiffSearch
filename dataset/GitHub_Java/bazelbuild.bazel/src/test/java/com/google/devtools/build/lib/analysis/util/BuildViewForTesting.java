@@ -463,7 +463,7 @@ public class BuildViewForTesting {
             targetConfig.extendedSanityChecks(),
             targetConfig.allowAnalysisFailures(),
             eventHandler,
-            skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler));
+            /*env=*/ null);
     return getRuleContextForTesting(eventHandler, target, env, configurations);
   }
 

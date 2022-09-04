@@ -73,6 +73,7 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
             ImmutableList.of(toolchain));
     assertThat(toolchainContext).isNotNull();
     assertThat(toolchainContext.forToolchainType(testToolchainType)).isNotNull();
+    assertThat(toolchainContext.forToolchainType(testToolchainType).hasField("data")).isTrue();
     assertThat(toolchainContext.forToolchainType(testToolchainType).getValue("data"))
         .isEqualTo("baz");
   }
@@ -115,6 +116,7 @@ public class ResolvedToolchainContextTest extends ToolchainTestCase {
             ImmutableList.of(toolchain));
     assertThat(toolchainContext).isNotNull();
     assertThat(toolchainContext.forToolchainType(testToolchainType)).isNotNull();
+    assertThat(toolchainContext.forToolchainType(testToolchainType).hasField("data")).isTrue();
     assertThat(toolchainContext.forToolchainType(testToolchainType).getValue("data"))
         .isEqualTo("baz");
   }

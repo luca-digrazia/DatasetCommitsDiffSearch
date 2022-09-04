@@ -38,9 +38,10 @@ import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.SkylarkClassObject;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -141,9 +142,12 @@ public abstract class AbstractConfiguredTarget
         return getLabel();
       case RuleConfiguredTarget.ACTIONS_FIELD_NAME:
         // Depending on subclass, the 'actions' field will either be unsupported or of type
-        // java.util.List, which needs to be converted to Sequence before being returned.
+        // java.util.List, which needs to be converted to SkylarkList before being returned.
         Object result = get(name);
-        return result != null ? Starlark.fromJava(result, null) : null;
+        if (result != null) {
+          result = SkylarkType.convertToSkylark(result, (Mutability) null);
+        }
+        return result;
       default:
         return get(name);
     }
