@@ -192,8 +192,7 @@ public interface SpawnResult {
 
   /**
    * SpawnResults can optionally support returning outputs in-memory. Such outputs can be obtained
-   * from this method if so. This behavior is optional, and can be triggered with
-   * {@link ExecutionRequirements#REMOTE_EXECUTION_INLINE_OUTPUTS}.
+   * from this method if so.
    *
    * @param output
    */
@@ -361,7 +360,6 @@ public interface SpawnResult {
     private String failureMessage = "";
 
     public SpawnResult build() {
-      Preconditions.checkArgument(!runnerName.isEmpty());
       if (status == Status.SUCCESS) {
         Preconditions.checkArgument(exitCode == 0);
       }

@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.actions;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.devtools.build.lib.actions.SpawnResult.Status;
-import com.google.protobuf.ByteString;
 import java.time.Duration;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -35,7 +33,6 @@ public final class SpawnResultTest {
             .setStatus(SpawnResult.Status.TIMEOUT)
             .setWallTime(Duration.ofSeconds(5))
             .setExitCode(1)
-            .setRunnerName("test")
             .build();
     assertThat(r.getDetailMessage("", "", false, false))
         .contains("(failed due to timeout after 5.00 seconds.)");
@@ -44,30 +41,8 @@ public final class SpawnResultTest {
   @Test
   public void getTimeoutMessageNoTime() {
     SpawnResult r =
-        new SpawnResult.Builder()
-            .setStatus(SpawnResult.Status.TIMEOUT)
-            .setExitCode(1)
-            .setRunnerName("test")
-            .build();
+        new SpawnResult.Builder().setStatus(SpawnResult.Status.TIMEOUT).setExitCode(1).build();
     assertThat(r.getDetailMessage("", "", false, false))
         .contains("(failed due to timeout.)");
-  }
-
-  @Test
-  public void inMemoryContents() throws Exception {
-    ActionInput output = ActionInputHelper.fromPath("/foo/bar");
-    ByteString contents = ByteString.copyFromUtf8("hello world");
-
-    SpawnResult r =
-        new SpawnResult.Builder()
-            .setStatus(Status.SUCCESS)
-            .setExitCode(0)
-            .setRunnerName("test")
-            .setInMemoryOutput(output, contents)
-            .build();
-
-    assertThat(ByteString.readFrom(r.getInMemoryOutput(output))).isEqualTo(contents);
-    assertThat(r.getInMemoryOutput(null)).isEqualTo(null);
-    assertThat(r.getInMemoryOutput(ActionInputHelper.fromPath("/does/not/exist"))).isEqualTo(null);
   }
 }
