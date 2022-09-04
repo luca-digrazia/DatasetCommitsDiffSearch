@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.server.FailureDetails;
 import com.google.devtools.build.lib.server.FailureDetails.FailAction.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
 import javax.annotation.Nullable;
@@ -29,6 +30,7 @@ import javax.annotation.Nullable;
  * FailAction is an Action that always fails to execute. (Used as scaffolding for rules we haven't
  * yet implemented. Also useful for testing.)
  */
+@AutoCodec
 @Immutable
 public final class FailAction extends AbstractAction {
 
@@ -59,11 +61,7 @@ public final class FailAction extends AbstractAction {
         false,
         DetailedExitCode.of(
             FailureDetail.newBuilder()
-                .setMessage(
-                    "FailAction intentional failure: "
-                        + errorMessage
-                        + " caused by "
-                        + getOwner().getLabel())
+                .setMessage("FailAction intentional failure: " + errorMessage)
                 .setFailAction(
                     FailureDetails.FailAction.newBuilder().setCode(Code.INTENTIONAL_FAILURE))
                 .build()));
@@ -75,8 +73,6 @@ public final class FailAction extends AbstractAction {
       @Nullable ArtifactExpander artifactExpander,
       Fingerprint fp) {
     fp.addString(GUID);
-    // Should never be cached, but just be safe.
-    fp.addString(getErrorMessage());
   }
 
   @Override
