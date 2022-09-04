@@ -13,7 +13,6 @@ public enum Capability {
      * JSR 365 compatible contexts and dependency injection
      */
     CDI,
-    CONFIG_YAML,
     /**
      * Java Servlet API
      */
@@ -65,8 +64,7 @@ public enum Capability {
      */
     SMALLRYE_OPENTRACING,
     SPRING_WEB,
-    SMALLRYE_OPENAPI,
-    OPENSHIFT_CLIENT;
+    SMALLRYE_OPENAPI;
 
     /**
      *

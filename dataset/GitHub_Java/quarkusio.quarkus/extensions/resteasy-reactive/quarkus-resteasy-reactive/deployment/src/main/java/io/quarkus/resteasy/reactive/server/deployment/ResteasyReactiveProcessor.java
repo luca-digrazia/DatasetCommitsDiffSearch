@@ -44,7 +44,6 @@ import org.jboss.resteasy.reactive.common.model.ResourceWriter;
 import org.jboss.resteasy.reactive.common.processor.AdditionalReaderWriter;
 import org.jboss.resteasy.reactive.common.processor.AdditionalReaders;
 import org.jboss.resteasy.reactive.common.processor.AdditionalWriters;
-import org.jboss.resteasy.reactive.common.processor.DefaultProducesHandler;
 import org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames;
 import org.jboss.resteasy.reactive.common.processor.scanning.ApplicationScanningResult;
 import org.jboss.resteasy.reactive.common.processor.scanning.ResourceScanningResult;
@@ -89,7 +88,6 @@ import io.quarkus.resteasy.reactive.common.deployment.QuarkusFactoryCreator;
 import io.quarkus.resteasy.reactive.common.deployment.ResourceInterceptorsBuildItem;
 import io.quarkus.resteasy.reactive.common.deployment.ResourceScanningResultBuildItem;
 import io.quarkus.resteasy.reactive.common.deployment.SerializersUtil;
-import io.quarkus.resteasy.reactive.common.deployment.ServerDefaultProducesHandlerBuildItem;
 import io.quarkus.resteasy.reactive.common.runtime.ResteasyReactiveConfig;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveInitialiser;
 import io.quarkus.resteasy.reactive.server.runtime.ResteasyReactiveRecorder;
@@ -213,7 +211,6 @@ public class ResteasyReactiveProcessor {
             List<MessageBodyReaderBuildItem> additionalMessageBodyReaders,
             List<MessageBodyWriterBuildItem> additionalMessageBodyWriters,
             List<JaxrsFeatureBuildItem> features,
-            List<ServerDefaultProducesHandlerBuildItem> serverDefaultProducesHandlers,
             Optional<RequestContextFactoryBuildItem> requestContextFactoryBuildItem,
             Optional<ClassLevelExceptionMappersBuildItem> classLevelExceptionMappers,
             BuildProducer<ResteasyReactiveDeploymentBuildItem> quarkusRestDeploymentBuildItemBuildProducer,
@@ -280,7 +277,7 @@ public class ResteasyReactiveProcessor {
                 QUARKUS_INIT_CLASS, null, Object.class.getName(), ResteasyReactiveInitialiser.class.getName());
                 MethodCreator initConverters = c.getMethodCreator("init", void.class, Deployment.class)) {
 
-            QuarkusServerEndpointIndexer.Builder serverEndpointIndexerBuilder = new QuarkusServerEndpointIndexer.Builder()
+            serverEndpointIndexer = new QuarkusServerEndpointIndexer.Builder()
                     .setIndex(index)
                     .setFactoryCreator(new QuarkusFactoryCreator(recorder, beanContainerBuildItem.getValue()))
                     .setEndpointInvokerFactory(new QuarkusInvokerFactory(generatedClassBuildItemBuildProducer, recorder))
@@ -288,11 +285,10 @@ public class ResteasyReactiveProcessor {
                     .setBytecodeTransformerBuildProducer(bytecodeTransformerBuildItemBuildProducer)
                     .setExistingConverters(existingConverters).setScannedResourcePaths(scannedResourcePaths)
                     .setConfig(new org.jboss.resteasy.reactive.common.ResteasyReactiveConfig(
-                            config.inputBufferSize.asLongValue(), config.singleDefaultProduces, config.defaultProduces))
+                            config.inputBufferSize.asLongValue(), config.singleDefaultProduces))
                     .setAdditionalReaders(additionalReaders)
                     .setHttpAnnotationToMethod(result.getHttpAnnotationToMethod())
-                    .setInjectableBeans(injectableBeans)
-                    .setAdditionalWriters(additionalWriters)
+                    .setInjectableBeans(injectableBeans).setAdditionalWriters(additionalWriters)
                     .setDefaultBlocking(appResult.isBlocking())
                     .setHasRuntimeConverters(!paramConverterProviders.getParamConverterProviders().isEmpty())
                     .setClassLevelExceptionMappers(
@@ -345,17 +341,7 @@ public class ResteasyReactiveProcessor {
                             return false;
                         }
                     })
-                    .setInitConverters(initConverters);
-
-            if (!serverDefaultProducesHandlers.isEmpty()) {
-                List<DefaultProducesHandler> handlers = new ArrayList<>(serverDefaultProducesHandlers.size());
-                for (ServerDefaultProducesHandlerBuildItem bi : serverDefaultProducesHandlers) {
-                    handlers.add(bi.getDefaultProducesHandler());
-                }
-                serverEndpointIndexerBuilder
-                        .setDefaultProducesHandler(new DefaultProducesHandler.DelegatingDefaultProducesHandler(handlers));
-            }
-            serverEndpointIndexer = serverEndpointIndexerBuilder.build();
+                    .setInitConverters(initConverters).build();
 
             for (ClassInfo i : scannedResources.values()) {
                 if (filterClasses && !allowedClasses.contains(i.name().toString())) {
@@ -465,7 +451,7 @@ public class ResteasyReactiveProcessor {
             RuntimeValue<Deployment> deployment = recorder.createDeployment(new DeploymentInfo()
                     .setInterceptors(interceptors.sort())
                     .setConfig(new org.jboss.resteasy.reactive.common.ResteasyReactiveConfig(
-                            config.inputBufferSize.asLongValue(), config.singleDefaultProduces, config.defaultProduces))
+                            config.inputBufferSize.asLongValue(), config.singleDefaultProduces))
                     .setExceptionMapping(exceptionMapping)
                     .setCtxResolvers(contextResolvers)
                     .setFeatures(feats)
