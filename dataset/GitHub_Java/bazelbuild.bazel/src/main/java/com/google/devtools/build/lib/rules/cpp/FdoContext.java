@@ -94,11 +94,7 @@ public class FdoContext implements TransitiveInfoProvider {
     return prefetchHintsArtifact;
   }
 
-  boolean hasArtifacts(CppConfiguration cppConfiguration) {
-    if (cppConfiguration.isThisHostConfigurationDoNotUseWillBeRemovedFor129045294()) {
-      // We don't want FDO for host configuration
-      return false;
-    }
+  boolean hasArtifacts() {
     return getBranchFdoProfile() != null || getPrefetchHintsArtifact() != null;
   }
 }

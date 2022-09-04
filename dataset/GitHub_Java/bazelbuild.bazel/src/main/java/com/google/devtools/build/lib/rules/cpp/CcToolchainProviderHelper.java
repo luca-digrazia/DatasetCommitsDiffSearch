@@ -400,28 +400,17 @@ public class CcToolchainProviderHelper {
       protoProfileArtifact = fdoInputs.getSecond();
     }
 
+    // Is there a toolchain proto available on the target directly?
+    CToolchain toolchain = parseToolchainFromAttributes(ruleContext, attributes);
+    PackageIdentifier packageWithCrosstoolInIt = null;
+    if (toolchain == null && crosstoolFromCcToolchainSuiteProtoAttribute == null) {
+      packageWithCrosstoolInIt = ruleContext.getLabel().getPackageIdentifier();
+    }
 
     CcSkyframeSupportValue ccSkyframeSupportValue = null;
-    SkyKey ccSupportKey = null;
-    CToolchain toolchain = null;
+    if (packageWithCrosstoolInIt != null || fdoZip != null) {
+      SkyKey ccSupportKey = CcSkyframeSupportValue.key(fdoZip, packageWithCrosstoolInIt);
 
-    if (cppConfiguration.enableCcToolchainConfigInfoFromSkylark()
-        && attributes.getCcToolchainConfigInfo() != null) {
-      if (fdoZip != null) {
-        ccSupportKey = CcSkyframeSupportValue.key(fdoZip, /* packageWithCrosstoolInIt= */ null);
-      }
-    } else {
-      // Is there a toolchain proto available on the target directly?
-      toolchain = parseToolchainFromAttributes(ruleContext, attributes);
-      PackageIdentifier packageWithCrosstoolInIt = null;
-      if (toolchain == null && crosstoolFromCcToolchainSuiteProtoAttribute == null) {
-        packageWithCrosstoolInIt = ruleContext.getLabel().getPackageIdentifier();
-      }
-      if (packageWithCrosstoolInIt != null || fdoZip != null) {
-        ccSupportKey = CcSkyframeSupportValue.key(fdoZip, packageWithCrosstoolInIt);
-      }
-    }
-    if (ccSupportKey != null) {
       SkyFunction.Environment skyframeEnv = ruleContext.getAnalysisEnvironment().getSkyframeEnv();
       try {
         ccSkyframeSupportValue =

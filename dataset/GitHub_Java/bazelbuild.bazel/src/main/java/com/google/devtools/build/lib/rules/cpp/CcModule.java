@@ -399,26 +399,22 @@ public class CcModule
                 /* prefixConsumer= */ true,
                 /* configuration= */ null);
       }
+
+      return LibraryToLinkWrapper.builder()
+          .setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(notNullArtifactForIdentifier))
+          .setStaticLibrary(staticLibrary)
+          .setPicStaticLibrary(picStaticLibrary)
+          .setDynamicLibrary(dynamicLibrary)
+          .setResolvedSymlinkDynamicLibrary(resolvedSymlinkDynamicLibrary)
+          .setInterfaceLibrary(interfaceLibrary)
+          .setResolvedSymlinkInterfaceLibrary(resolvedSymlinkInterfaceLibrary)
+          .setAlwayslink(alwayslink)
+          .build();
     }
-    if (staticLibrary == null
-        && picStaticLibrary == null
-        && dynamicLibrary == null
-        && interfaceLibrary == null) {
-      throw new EvalException(
-          location,
-          "Must pass at least one of the following parameters: static_library, pic_static_library, "
-              + "dynamic_library and interface_library.");
-    }
-    return LibraryToLinkWrapper.builder()
-        .setLibraryIdentifier(CcLinkingOutputs.libraryIdentifierOf(notNullArtifactForIdentifier))
-        .setStaticLibrary(staticLibrary)
-        .setPicStaticLibrary(picStaticLibrary)
-        .setDynamicLibrary(dynamicLibrary)
-        .setResolvedSymlinkDynamicLibrary(resolvedSymlinkDynamicLibrary)
-        .setInterfaceLibrary(interfaceLibrary)
-        .setResolvedSymlinkInterfaceLibrary(resolvedSymlinkInterfaceLibrary)
-        .setAlwayslink(alwayslink)
-        .build();
+    throw new EvalException(
+        location,
+        "Must pass parameters: static_library, pic_static_library, dynamic_library, "
+            + "interface_library and alwayslink.");
   }
 
   @Override
@@ -610,7 +606,7 @@ public class CcModule
       Object skylarkLinkopts,
       boolean shouldCreateStaticLibraries,
       Object dynamicLibrary,
-      SkylarkList<CcLinkingContext> skylarkCcLinkingContexts,
+      SkylarkList<CcLinkingInfo> skylarkCcLinkingInfos,
       boolean neverLink)
       throws InterruptedException, EvalException, InterruptedException {
     CcCommon.checkRuleWhitelisted(skylarkRuleContext);
@@ -632,7 +628,7 @@ public class CcModule
             .addLinkopts(linkopts)
             .setShouldCreateStaticLibraries(shouldCreateStaticLibraries)
             .setLinkerOutputArtifact(convertFromNoneable(dynamicLibrary, null))
-            .addCcLinkingContexts(skylarkCcLinkingContexts)
+            .addCcLinkingInfos(skylarkCcLinkingInfos)
             .setNeverLink(neverLink);
     try {
       CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
@@ -645,10 +641,10 @@ public class CcModule
               LibraryToLinkWrapper.convertLinkOutputsToLibraryToLinkWrapper(ccLinkingOutputs));
         }
       }
-      CcLinkingContext ccLinkingContext =
-          helper.buildCcLinkingContextFromLibraryToLinkWrappers(
+      CcLinkingInfo ccLinkingInfo =
+          helper.buildCcLinkingInfoFromLibraryToLinkWrappers(
               libraryToLinkWrapperBuilder.build(), CcCompilationContext.EMPTY);
-      return new LinkingInfo(ccLinkingContext, ccLinkingOutputs);
+      return new LinkingInfo(ccLinkingInfo, ccLinkingOutputs);
     } catch (RuleErrorException e) {
       throw new EvalException(ruleContext.getRule().getLocation(), e);
     }
@@ -891,24 +887,11 @@ public class CcModule
       // compile command line. 'legacy_compile_flags' feature contains all these flags, and so it
       // needs to appear before other features from {@link CppActionConfigs}.
       if (featureNames.contains(CppRuleClasses.LEGACY_COMPILE_FLAGS)) {
-        Feature legacyCompileFlags =
+        legacyFeaturesBuilder.add(
             featureList.stream()
                 .filter(feature -> feature.getName().equals(CppRuleClasses.LEGACY_COMPILE_FLAGS))
                 .findFirst()
-                .get();
-        if (legacyCompileFlags != null) {
-          legacyFeaturesBuilder.add(legacyCompileFlags);
-        }
-      }
-      if (featureNames.contains(CppRuleClasses.DEFAULT_COMPILE_FLAGS)) {
-        Feature defaultCompileFlags =
-            featureList.stream()
-                .filter(feature -> feature.getName().equals(CppRuleClasses.DEFAULT_COMPILE_FLAGS))
-                .findFirst()
-                .get();
-        if (defaultCompileFlags != null) {
-          legacyFeaturesBuilder.add(defaultCompileFlags);
-        }
+                .get());
       }
 
       CppPlatform platform = targetLibc.equals("macos") ? CppPlatform.MAC : CppPlatform.LINUX;
@@ -924,7 +907,6 @@ public class CcModule
       legacyFeaturesBuilder.addAll(
           featureList.stream()
               .filter(feature -> !feature.getName().equals(CppRuleClasses.LEGACY_COMPILE_FLAGS))
-              .filter(feature -> !feature.getName().equals(CppRuleClasses.DEFAULT_COMPILE_FLAGS))
               .collect(ImmutableList.toImmutableList()));
       for (CToolchain.Feature feature :
           CppActionConfigs.getFeaturesToAppearLastInFeaturesList(featureNames)) {
