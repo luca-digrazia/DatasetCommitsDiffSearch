@@ -29,31 +29,35 @@ import io.quarkus.creator.phase.augment.AugmentTask;
  */
 public class QuarkusNative extends QuarkusTask {
 
-    private Boolean reportErrorsAtRuntime = false;
+    private boolean reportErrorsAtRuntime = false;
 
-    private Boolean debugSymbols = false;
+    private boolean debugSymbols = false;
 
-    private Boolean debugBuildProcess;
+    private boolean debugBuildProcess;
 
-    private Boolean cleanupServer;
+    private boolean cleanupServer;
 
-    private Boolean enableHttpUrlHandler;
+    private boolean enableHttpUrlHandler;
 
-    private Boolean enableHttpsUrlHandler;
+    private boolean enableHttpsUrlHandler;
 
-    private Boolean enableAllSecurityServices;
+    private boolean enableAllSecurityServices;
 
-    private Boolean enableIsolates;
+    private boolean enableRetainedHeapReporting;
+
+    private boolean enableIsolates;
+
+    private boolean enableCodeSizeReporting;
 
     private String graalvmHome = System.getenv("GRAALVM_HOME");
 
-    private Boolean enableServer = false;
+    private boolean enableServer = false;
 
-    private Boolean enableJni = false;
+    private boolean enableJni = false;
 
-    private Boolean autoServiceLoaderRegistration = false;
+    private boolean autoServiceLoaderRegistration = false;
 
-    private Boolean dumpProxies = false;
+    private boolean dumpProxies = false;
 
     private String nativeImageXmx;
 
@@ -63,19 +67,19 @@ public class QuarkusNative extends QuarkusTask {
 
     private String dockerBuild;
 
-    private Boolean enableVMInspection = false;
+    private boolean enableVMInspection = false;
 
-    private Boolean enableFallbackImages = false;
+    private boolean enableFallbackImages = false;
 
-    private Boolean fullStackTraces = true;
+    private boolean fullStackTraces = true;
 
-    private Boolean enableReports;
+    private boolean enableReports;
 
     private List<String> additionalBuildArgs;
 
-    private Boolean addAllCharsets = false;
+    private boolean addAllCharsets = false;
 
-    private Boolean reportExceptionStackTraces = true;
+    private boolean reportExceptionStackTraces = true;
 
     public QuarkusNative() {
         super("Building a native image");
@@ -83,114 +87,136 @@ public class QuarkusNative extends QuarkusTask {
 
     @Optional
     @Input
-    public Boolean isAddAllCharsets() {
+    public boolean isAddAllCharsets() {
         return addAllCharsets;
     }
 
     @Option(description = "Should all Charsets supported by the host environment be included in the native image", option = "add-all-charsets")
-    public void setAddAllCharsets(final Boolean addAllCharsets) {
+    public void setAddAllCharsets(final boolean addAllCharsets) {
         this.addAllCharsets = addAllCharsets;
     }
 
     @Optional
     @Input
-    public Boolean isReportErrorsAtRuntime() {
+    public boolean isReportErrorsAtRuntime() {
         return reportErrorsAtRuntime;
     }
 
     @Option(description = "Report errors at runtime", option = "report-errors-runtime")
-    public void setReportErrorsAtRuntime(Boolean reportErrorsAtRuntime) {
+    public void setReportErrorsAtRuntime(boolean reportErrorsAtRuntime) {
         this.reportErrorsAtRuntime = reportErrorsAtRuntime;
     }
 
     @Optional
     @Input
-    public Boolean isDebugSymbols() {
+    public boolean isDebugSymbols() {
         return debugSymbols;
     }
 
     @Option(description = "Specify if debug symbols should be set", option = "debug-symbols")
-    public void setDebugSymbols(Boolean debugSymbols) {
+    public void setDebugSymbols(boolean debugSymbols) {
         this.debugSymbols = debugSymbols;
     }
 
     @Optional
     @Input
-    public Boolean isDebugBuildProcess() {
+    public boolean isDebugBuildProcess() {
         return debugBuildProcess;
     }
 
     @Option(description = "Specify if debug is set during build process", option = "debug-build-process")
-    public void setDebugBuildProcess(Boolean debugBuildProcess) {
+    public void setDebugBuildProcess(boolean debugBuildProcess) {
         this.debugBuildProcess = debugBuildProcess;
     }
 
     @Optional
     @Input
-    public Boolean isCleanupServer() {
+    public boolean isCleanupServer() {
         return cleanupServer;
     }
 
     @Option(description = "Cleanup server", option = "cleanup-server")
-    public void setCleanupServer(Boolean cleanupServer) {
+    public void setCleanupServer(boolean cleanupServer) {
         this.cleanupServer = cleanupServer;
     }
 
     @Optional
     @Input
-    public Boolean isEnableHttpUrlHandler() {
+    public boolean isEnableHttpUrlHandler() {
         return enableHttpUrlHandler;
     }
 
     @Optional
     @Input
-    public Boolean isEnableFallbackImages() {
+    private boolean isEnableFallbackImages() {
         return enableFallbackImages;
     }
 
     @Option(description = "Enable the GraalVM native image compiler to generate Fallback Images in case of compilation error. "
             +
             "Careful: these are not as efficient as normal native images.", option = "enable-fallback-images")
-    public void setEnableFallbackImages(Boolean enableFallbackImages) {
+    public void setEnableFallbackImages(boolean enableFallbackImages) {
         this.enableFallbackImages = enableFallbackImages;
     }
 
     @Option(description = "Specify if http url handler is enabled", option = "enable-http-url-handler")
-    public void setEnableHttpUrlHandler(Boolean enableHttpUrlHandler) {
+    public void setEnableHttpUrlHandler(boolean enableHttpUrlHandler) {
         this.enableHttpUrlHandler = enableHttpUrlHandler;
     }
 
     @Optional
     @Input
-    public Boolean isEnableHttpsUrlHandler() {
+    public boolean isEnableHttpsUrlHandler() {
         return enableHttpsUrlHandler;
     }
 
     @Option(description = "Specify if https url handler is enabled", option = "enable-https-url-handler")
-    public void setEnableHttpsUrlHandler(Boolean enableHttpsUrlHandler) {
+    public void setEnableHttpsUrlHandler(boolean enableHttpsUrlHandler) {
         this.enableHttpsUrlHandler = enableHttpsUrlHandler;
     }
 
     @Optional
     @Input
-    public Boolean isEnableAllSecurityServices() {
+    public boolean isEnableAllSecurityServices() {
         return enableAllSecurityServices;
     }
 
     @Option(description = "Enable all security services", option = "enable-all-security-services")
-    public void setEnableAllSecurityServices(Boolean enableAllSecurityServices) {
+    public void setEnableAllSecurityServices(boolean enableAllSecurityServices) {
         this.enableAllSecurityServices = enableAllSecurityServices;
     }
 
     @Optional
     @Input
-    public Boolean isEnableIsolates() {
+    public boolean isEnableRetainedHeapReporting() {
+        return enableRetainedHeapReporting;
+    }
+
+    @Option(description = "Specify if retained heap reporting should be enabled", option = "enable-retained-heap-reporting")
+    public void setEnableRetainedHeapReporting(boolean enableRetainedHeapReporting) {
+        this.enableRetainedHeapReporting = enableRetainedHeapReporting;
+    }
+
+    @Optional
+    @Input
+    public boolean isEnableIsolates() {
         return enableIsolates;
     }
 
     @Option(description = "Report errors at runtime", option = "enable-isolates")
-    public void setEnableIsolates(Boolean enableIsolates) {
+    public void setEnableIsolates(boolean enableIsolates) {
         this.enableIsolates = enableIsolates;
+    }
+
+    @Optional
+    @Input
+    public boolean isEnableCodeSizeReporting() {
+        return enableCodeSizeReporting;
+    }
+
+    @Option(description = "Report errors at runtime", option = "enable-code-size-reporting")
+    public void setEnableCodeSizeReporting(boolean enableCodeSizeReporting) {
+        this.enableCodeSizeReporting = enableCodeSizeReporting;
     }
 
     @Optional
@@ -206,45 +232,45 @@ public class QuarkusNative extends QuarkusTask {
 
     @Optional
     @Input
-    public Boolean isEnableServer() {
+    public boolean isEnableServer() {
         return enableServer;
     }
 
     @Option(description = "Enable server", option = "enable-server")
-    public void setEnableServer(Boolean enableServer) {
+    public void setEnableServer(boolean enableServer) {
         this.enableServer = enableServer;
     }
 
     @Optional
     @Input
-    public Boolean isEnableJni() {
+    public boolean isEnableJni() {
         return enableJni;
     }
 
     @Option(description = "Enable jni", option = "enable-jni")
-    public void setEnableJni(Boolean enableJni) {
+    public void setEnableJni(boolean enableJni) {
         this.enableJni = enableJni;
     }
 
     @Optional
     @Input
-    public Boolean getAutoServiceLoaderRegistration() {
+    public boolean isAutoServiceLoaderRegistration() {
         return autoServiceLoaderRegistration;
     }
 
     @Option(description = "Auto ServiceLoader registration", option = "auto-service-loader-registration")
-    public void setAutoServiceLoaderRegistration(Boolean autoServiceLoaderRegistration) {
+    public void setAutoServiceLoaderRegistration(boolean autoServiceLoaderRegistration) {
         this.autoServiceLoaderRegistration = autoServiceLoaderRegistration;
     }
 
     @Optional
     @Input
-    public Boolean isDumpProxies() {
+    public boolean isDumpProxies() {
         return dumpProxies;
     }
 
     @Option(description = "Dump proxies", option = "dump-proxies")
-    public void setDumpProxies(Boolean dumpProxies) {
+    public void setDumpProxies(boolean dumpProxies) {
         this.dumpProxies = dumpProxies;
     }
 
@@ -278,11 +304,13 @@ public class QuarkusNative extends QuarkusTask {
     }
 
     @Option(description = "Container runtime", option = "container-runtime")
+    @Optional
     public void setContainerRuntime(String containerRuntime) {
         this.containerRuntime = containerRuntime;
     }
 
     @Option(description = "Container runtime options", option = "container-runtime-options")
+    @Optional
     public void setContainerRuntimeOptions(String containerRuntimeOptions) {
         this.containerRuntimeOptions = containerRuntimeOptions;
     }
@@ -294,29 +322,29 @@ public class QuarkusNative extends QuarkusTask {
 
     @Optional
     @Input
-    public Boolean isEnableVMInspection() {
+    public boolean isEnableVMInspection() {
         return enableVMInspection;
     }
 
     @Option(description = "Enable VM inspection", option = "enable-vm-inspection")
-    public void setEnableVMInspection(Boolean enableVMInspection) {
+    public void setEnableVMInspection(boolean enableVMInspection) {
         this.enableVMInspection = enableVMInspection;
     }
 
     @Optional
     @Input
-    public Boolean isFullStackTraces() {
+    public boolean isFullStackTraces() {
         return fullStackTraces;
     }
 
     @Option(description = "Specify full stacktraces", option = "full-stacktraces")
-    public void setFullStackTraces(Boolean fullStackTraces) {
+    public void setFullStackTraces(boolean fullStackTraces) {
         this.fullStackTraces = fullStackTraces;
     }
 
     @Optional
     @Input
-    public Boolean isEnableReports() {
+    public boolean isEnableReports() {
         return enableReports;
     }
 
@@ -327,7 +355,7 @@ public class QuarkusNative extends QuarkusTask {
     }
 
     @Option(description = "Enable reports", option = "enable-reports")
-    public void setEnableReports(Boolean enableReports) {
+    public void setEnableReports(boolean enableReports) {
         this.enableReports = enableReports;
     }
 
@@ -344,12 +372,12 @@ public class QuarkusNative extends QuarkusTask {
 
     @Optional
     @Input
-    public Boolean isReportExceptionStackTraces() {
+    public boolean isReportExceptionStackTraces() {
         return reportExceptionStackTraces;
     }
 
     @Option(description = "Show exception stack traces for exceptions during image building", option = "report-exception-stack-traces")
-    public void setReportExceptionStackTraces(Boolean reportExceptionStackTraces) {
+    public void setReportExceptionStackTraces(boolean reportExceptionStackTraces) {
         this.reportExceptionStackTraces = reportExceptionStackTraces;
     }
 
@@ -434,12 +462,14 @@ public class QuarkusNative extends QuarkusTask {
                 }
                 configs.add("quarkus.native.dump-proxies", dumpProxies);
                 configs.add("quarkus.native.enable-all-security-services", enableAllSecurityServices);
+                configs.add("quarkus.native.enable-code-size-reporting", enableCodeSizeReporting);
                 configs.add("quarkus.native.enable-fallback-images", enableFallbackImages);
                 configs.add("quarkus.native.enable-https-url-handler", enableHttpsUrlHandler);
 
                 configs.add("quarkus.native.enable-http-url-handler", enableHttpUrlHandler);
                 configs.add("quarkus.native.enable-isolates", enableIsolates);
                 configs.add("quarkus.native.enable-jni", enableJni);
+                configs.add("quarkus.native.enable-retained-heap-reporting", enableRetainedHeapReporting);
 
                 configs.add("quarkus.native.enable-server", enableServer);
 
