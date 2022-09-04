@@ -120,10 +120,10 @@ public class DevMojo extends AbstractMojo {
                 classPath.append(" ");
             }
             args.add("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
-            File wiringClassesDirectory = new File(buildDir, "wiring-classes");
-            wiringClassesDirectory.mkdirs();
+            File wiringClassesDirectory = Files.createTempDirectory("wiring-classes").toFile();
+            wiringClassesDirectory.deleteOnExit();
 
-            classPath.append(wiringClassesDirectory.getAbsolutePath()).append("/");
+            classPath.append(wiringClassesDirectory.getAbsolutePath() + "/");
             classPath.append(' ');
 
             if (fakereplace) {
