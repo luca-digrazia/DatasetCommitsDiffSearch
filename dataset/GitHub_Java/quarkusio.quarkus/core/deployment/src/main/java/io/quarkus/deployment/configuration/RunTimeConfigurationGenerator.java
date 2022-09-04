@@ -285,7 +285,6 @@ public final class RunTimeConfigurationGenerator {
             // create <clinit>
             clinit = cc.getMethodCreator(MethodDescriptor.ofMethod(CONFIG_CLASS_NAME, "<clinit>", void.class));
             clinit.setModifiers(Opcodes.ACC_STATIC);
-
             clinit.invokeStaticMethod(PM_SET_RUNTIME_DEFAULT_PROFILE, clinit.load(ProfileManager.getActiveProfile()));
             clinitNameBuilder = clinit.newInstance(SB_NEW);
             clinit.invokeVirtualMethod(SB_APPEND_STRING, clinitNameBuilder, clinit.load("quarkus"));
@@ -316,7 +315,7 @@ public final class RunTimeConfigurationGenerator {
 
             // the build time config, which is for user use only (not used by us other than for loading converters)
             final ResultHandle buildTimeBuilder = clinit.invokeStaticMethod(CU_CONFIG_BUILDER, clinit.load(true));
-            final ResultHandle array = clinit.newArray(ConfigSource[].class, 2);
+            final ResultHandle array = clinit.newArray(ConfigSource[].class, clinit.load(2));
             // build time values
             clinit.writeArrayValue(array, 0, buildTimeConfigSource);
             // build time defaults
@@ -338,6 +337,7 @@ public final class RunTimeConfigurationGenerator {
 
         public void run() {
             // in clinit, load the build-time config
+
             // make the build time config global until we read the run time config -
             // at run time (when we're ready) we update the factory and then release the build time config
             clinit.invokeStaticMethod(QCF_SET_CONFIG, clinitConfig);
@@ -400,7 +400,7 @@ public final class RunTimeConfigurationGenerator {
             clinit.writeStaticField(C_SPECIFIED_RUN_TIME_CONFIG_SOURCE, specifiedRunTimeSource);
 
             // add in our custom sources
-            final ResultHandle array = readConfig.newArray(ConfigSource[].class, 4);
+            final ResultHandle array = readConfig.newArray(ConfigSource[].class, readConfig.load(4));
             // build time config (expanded values)
             readConfig.writeArrayValue(array, 0, readConfig.readStaticField(C_BUILD_TIME_CONFIG_SOURCE));
             // specified run time config default values
@@ -589,7 +589,7 @@ public final class RunTimeConfigurationGenerator {
             final ResultHandle finalErrorMessage = isError.invokeVirtualMethod(OBJ_TO_STRING, finalErrorMessageBuilder);
             final ResultHandle configurationException = isError
                     .newInstance(MethodDescriptor.ofConstructor(ConfigurationException.class, String.class), finalErrorMessage);
-            final ResultHandle emptyStackTraceElement = isError.newArray(StackTraceElement.class, 0);
+            final ResultHandle emptyStackTraceElement = isError.newArray(StackTraceElement.class, isError.load(0));
             // empty out the stack trace in order to not make the configuration errors more visible (the stack trace contains generated classes anyway that don't provide any value)
             isError.invokeVirtualMethod(
                     MethodDescriptor.ofMethod(ConfigurationException.class, "setStackTrace", void.class,
@@ -599,7 +599,6 @@ public final class RunTimeConfigurationGenerator {
 
             readConfig.returnValue(null);
             readConfig.close();
-
             clinit.returnValue(null);
             clinit.close();
             cc.close();
