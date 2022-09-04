@@ -23,6 +23,7 @@ import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
 
 import io.quarkus.deployment.bean.JavaBeanUtil;
+import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.FieldDescriptor;
@@ -33,7 +34,6 @@ import io.quarkus.hibernate.orm.panache.PanacheQuery;
 import io.quarkus.hibernate.orm.panache.runtime.AdditionalJpaOperations;
 import io.quarkus.hibernate.orm.panache.runtime.JpaOperations;
 import io.quarkus.panache.common.Parameters;
-import io.quarkus.runtime.util.HashUtil;
 import io.quarkus.spring.data.deployment.DotNames;
 import io.quarkus.spring.data.deployment.MethodNameParser;
 import io.quarkus.spring.data.runtime.TypesConverter;
@@ -248,7 +248,8 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                     DotName customResultTypeName = resultType.name();
 
                     if (customResultTypeName.equals(entityClassInfo.name())
-                            || isSupportedJavaLangType(customResultTypeName)) {
+                            || customResultTypeName.equals(DotNames.OBJECT)
+                            || isIntLongOrBoolean(customResultTypeName)) {
                         // no special handling needed
                         customResultTypeName = null;
                     } else {
@@ -367,7 +368,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
     // Unless it is some kind of collection containing multiple types, 
     // return the type used in the query result.
     private Type verifyQueryResultType(Type t) {
-        if (isSupportedJavaLangType(t.name())) {
+        if (isIntLongOrBoolean(t.name())) {
             return t;
         }
         if (t.kind() == Kind.ARRAY) {
@@ -382,7 +383,7 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                 }
                 return t;
             }
-        } else {
+        } else if (!DotNames.OBJECT.equals(t.name())) {
             ClassInfo typeClassInfo = index.getClassByName(t.name());
             if (typeClassInfo == null) {
                 throw new IllegalStateException(t.name() + " was not part of the Quarkus index");
@@ -493,10 +494,6 @@ public class CustomQueryMethodsAdder extends AbstractMethodsAdder {
                 }
             }
         }
-    }
-
-    private boolean isSupportedJavaLangType(DotName dotName) {
-        return isIntLongOrBoolean(dotName) || dotName.equals(DotNames.OBJECT) || dotName.equals(DotNames.STRING);
     }
 
     private ResultHandle castReturnValue(MethodCreator methodCreator, ResultHandle resultHandle, String type) {
