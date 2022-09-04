@@ -56,22 +56,15 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi {
    */
   private final ImmutableList<LibraryToLink> dynamicLibrariesForRuntime;
 
-  private final ImmutableList<LtoBackendArtifacts> allLtoArtifacts;
-  private final ImmutableList<Artifact> linkActionInputs;
-
   private CcLinkingOutputs(
       ImmutableList<LibraryToLink> staticLibraries,
       ImmutableList<LibraryToLink> picStaticLibraries,
       ImmutableList<LibraryToLink> dynamicLibrariesForLinking,
-      ImmutableList<LibraryToLink> dynamicLibrariesForRuntime,
-      ImmutableList<LtoBackendArtifacts> allLtoArtifacts,
-      ImmutableList<Artifact> linkActionInputs) {
+      ImmutableList<LibraryToLink> dynamicLibrariesForRuntime) {
     this.staticLibraries = staticLibraries;
     this.picStaticLibraries = picStaticLibraries;
     this.dynamicLibrariesForLinking = dynamicLibrariesForLinking;
     this.dynamicLibrariesForRuntime = dynamicLibrariesForRuntime;
-    this.allLtoArtifacts = allLtoArtifacts;
-    this.linkActionInputs = linkActionInputs;
   }
 
   @Override
@@ -103,14 +96,6 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi {
 
   public ImmutableList<LibraryToLink> getDynamicLibrariesForRuntime() {
     return dynamicLibrariesForRuntime;
-  }
-
-  public ImmutableList<LtoBackendArtifacts> getAllLtoArtifacts() {
-    return allLtoArtifacts;
-  }
-
-  public ImmutableList<Artifact> getLinkActionInputs() {
-    return linkActionInputs;
   }
 
   public boolean isEmpty() {
@@ -265,20 +250,13 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi {
     private final Set<LibraryToLink> picStaticLibraries = new LinkedHashSet<>();
     private final Set<LibraryToLink> dynamicLibrariesForLinking = new LinkedHashSet<>();
     private final Set<LibraryToLink> dynamicLibrariesForRuntime = new LinkedHashSet<>();
-    // TODO(plf): Return a list of debug artifacts instead of lto back end artifacts and in that
-    // same list return the .pdb file for Windows.
-    private final ImmutableList.Builder<LtoBackendArtifacts> allLtoArtifacts =
-        ImmutableList.builder();
-    private final ImmutableList.Builder<Artifact> linkActionInputs = ImmutableList.builder();
 
     public CcLinkingOutputs build() {
       return new CcLinkingOutputs(
           ImmutableList.copyOf(staticLibraries),
           ImmutableList.copyOf(picStaticLibraries),
           ImmutableList.copyOf(dynamicLibrariesForLinking),
-          ImmutableList.copyOf(dynamicLibrariesForRuntime),
-          allLtoArtifacts.build(),
-          linkActionInputs.build());
+          ImmutableList.copyOf(dynamicLibrariesForRuntime));
     }
 
     public Builder merge(CcLinkingOutputs outputs) {
@@ -286,8 +264,6 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi {
       picStaticLibraries.addAll(outputs.getPicStaticLibraries());
       dynamicLibrariesForLinking.addAll(outputs.getDynamicLibrariesForLinking());
       dynamicLibrariesForRuntime.addAll(outputs.getDynamicLibrariesForRuntime());
-      allLtoArtifacts.addAll(outputs.getAllLtoArtifacts());
-      linkActionInputs.addAll(outputs.getLinkActionInputs());
       return this;
     }
 
@@ -328,16 +304,6 @@ public class CcLinkingOutputs implements CcLinkingOutputsApi {
 
     public Builder addDynamicLibrariesForRuntime(Iterable<LibraryToLink> libraries) {
       Iterables.addAll(dynamicLibrariesForRuntime, libraries);
-      return this;
-    }
-
-    public Builder addAllLtoArtifacts(Iterable<LtoBackendArtifacts> allLtoArtifacts) {
-      this.allLtoArtifacts.addAll(allLtoArtifacts);
-      return this;
-    }
-
-    public Builder addLinkActionInputs(Iterable<Artifact> linkActionInputs) {
-      this.linkActionInputs.addAll(linkActionInputs);
       return this;
     }
   }

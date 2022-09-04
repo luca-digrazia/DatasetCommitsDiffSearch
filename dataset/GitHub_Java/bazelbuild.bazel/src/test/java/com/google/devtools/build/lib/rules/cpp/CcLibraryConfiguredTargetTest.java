@@ -22,7 +22,6 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.actions.extra.CppLinkInfo;
@@ -113,13 +112,14 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
   private CppModuleMapAction getCppModuleMapAction(String label) throws Exception {
     ConfiguredTarget target = getConfiguredTarget(label);
     CppModuleMap cppModuleMap =
-        target.get(CcInfo.PROVIDER).getCcCompilationContext().getCppModuleMap();
+        target.get(CcCompilationInfo.PROVIDER).getCcCompilationContext().getCppModuleMap();
     return (CppModuleMapAction) getGeneratingAction(cppModuleMap.getArtifact());
   }
 
   private void assertNoCppModuleMapAction(String label) throws Exception {
     ConfiguredTarget target = getConfiguredTarget(label);
-    assertThat(target.get(CcInfo.PROVIDER).getCcCompilationContext().getCppModuleMap()).isNull();
+    assertThat(target.get(CcCompilationInfo.PROVIDER).getCcCompilationContext().getCppModuleMap())
+        .isNull();
   }
 
   public void checkWrongExtensionInArtifactNamePattern(
@@ -159,7 +159,8 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget l = scratchConfiguredTarget("a", "l",
         "cc_library(name='l', srcs=['l.cc'], defines=['V=$(FOO)'], toolchains=[':v'])",
         "make_variable_tester(name='v', variables={'FOO': 'BAR'})");
-    assertThat(l.get(CcInfo.PROVIDER).getCcCompilationContext().getDefines()).contains("V=BAR");
+    assertThat(l.get(CcCompilationInfo.PROVIDER).getCcCompilationContext().getDefines())
+        .contains("V=BAR");
   }
 
   @Test
@@ -217,8 +218,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         .containsExactly(implInterfaceSharedObjectLink);
     assertThat(
             hello
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getDynamicModeParamsForExecutable()
                 .getDynamicLibrariesForRuntime())
         .containsExactly(implSharedObjectLink);
@@ -283,8 +283,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         .containsExactly(sharedObjectLink);
     assertThat(
             hello
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getDynamicModeParamsForExecutable()
                 .getDynamicLibrariesForRuntime())
         .containsExactly(implSharedObjectLink);
@@ -295,8 +294,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     ConfiguredTarget hello = getConfiguredTarget("//hello:hello");
     assertThat(
             hello
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getDynamicModeParamsForExecutable()
                 .getLinkopts()
                 .isEmpty())
@@ -1279,69 +1277,38 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
 
   @Test
   public void testIncludePathsOutsideExecutionRoot() throws Exception {
-    scratchRule(
+    checkError(
         "root",
         "a",
+        "The include path '../somewhere' references a path outside of the execution root.",
         "cc_library(name='a', srcs=['a.cc'], copts=['-Id/../../somewhere'])");
-    CppCompileAction compileAction = getCppCompileAction("//root:a");
-    try {
-      compileAction.verifyActionIncludePaths();
-    } catch (ActionExecutionException exception) {
-      assertThat(exception)
-          .hasMessageThat()
-          .isEqualTo(
-              "The include path '../somewhere' references a path outside of the execution root.");
-    }
   }
 
   @Test
   public void testAbsoluteIncludePathsOutsideExecutionRoot() throws Exception {
-    scratchRule(
+    checkError(
         "root",
         "a",
+        "The include path '/somewhere' references a path outside of the execution root.",
         "cc_library(name='a', srcs=['a.cc'], copts=['-I/somewhere'])");
-    CppCompileAction compileAction = getCppCompileAction("//root:a");
-    try {
-      compileAction.verifyActionIncludePaths();
-    } catch (ActionExecutionException exception) {
-      assertThat(exception)
-          .hasMessageThat()
-          .isEqualTo(
-              "The include path '/somewhere' references a path outside of the execution root.");
-    }
   }
 
   @Test
   public void testSystemIncludePathsOutsideExecutionRoot() throws Exception {
-    scratchRule(
+    checkError(
         "root",
         "a",
+        "The include path '../system' references a path outside of the execution root.",
         "cc_library(name='a', srcs=['a.cc'], copts=['-isystem../system'])");
-    CppCompileAction compileAction = getCppCompileAction("//root:a");
-    try {
-      compileAction.verifyActionIncludePaths();
-    } catch (ActionExecutionException exception) {
-      assertThat(exception)
-          .hasMessageThat()
-          .isEqualTo(
-              "The include path '../system' references a path outside of the execution root.");
-    }
   }
 
   @Test
   public void testAbsoluteSystemIncludePathsOutsideExecutionRoot() throws Exception {
-    scratchRule(
+    checkError(
         "root",
         "a",
+        "The include path '/system' references a path outside of the execution root.",
         "cc_library(name='a', srcs=['a.cc'], copts=['-isystem/system'])");
-    CppCompileAction compileAction = getCppCompileAction("//root:a");
-    try {
-      compileAction.verifyActionIncludePaths();
-    } catch (ActionExecutionException exception) {
-      assertThat(exception)
-          .hasMessageThat()
-          .isEqualTo("The include path '/system' references a path outside of the execution root.");
-    }
   }
 
   /**
@@ -1394,8 +1361,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         LinkerInputs.toNonSolibArtifacts(
             target
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getStaticModeParamsForDynamicLibrary()
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).contains("bin a/libfoo.a");
@@ -1410,8 +1376,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         LinkerInputs.toNonSolibArtifacts(
             target
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getStaticModeParamsForDynamicLibrary()
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.a");
@@ -1427,8 +1392,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
     Iterable<Artifact> libraries =
         LinkerInputs.toNonSolibArtifacts(
             target
-                .get(CcInfo.PROVIDER)
-                .getCcLinkingInfo()
+                .get(CcLinkingInfo.PROVIDER)
                 .getStaticModeParamsForDynamicLibrary()
                 .getLibraries());
     assertThat(artifactsToStrings(libraries)).doesNotContain("src a/libfoo.so");
@@ -1446,8 +1410,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         scratchConfiguredTarget("a", "foo", "cc_library(name = 'foo', srcs = ['foo.cc'])");
     Iterable<Artifact> libraries =
         target
-            .get(CcInfo.PROVIDER)
-            .getCcLinkingInfo()
+            .get(CcLinkingInfo.PROVIDER)
             .getDynamicModeParamsForDynamicLibrary()
             .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin a/libfoo.ifso");
@@ -1461,8 +1424,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
         scratchConfiguredTarget("a", "foo", "cc_library(name = 'foo', srcs = ['foo.cc'])");
     Iterable<Artifact> libraries =
         target
-            .get(CcInfo.PROVIDER)
-            .getCcLinkingInfo()
+            .get(CcLinkingInfo.PROVIDER)
             .getDynamicModeParamsForDynamicLibrary()
             .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).doesNotContain("bin _solib_k8/liba_Slibfoo.ifso");
@@ -1477,8 +1439,7 @@ public class CcLibraryConfiguredTargetTest extends BuildViewTestCase {
             "a", "foo", "cc_library(name = 'foo', srcs = ['foo.cc'], linkstatic=1)");
     Iterable<Artifact> libraries =
         target
-            .get(CcInfo.PROVIDER)
-            .getCcLinkingInfo()
+            .get(CcLinkingInfo.PROVIDER)
             .getDynamicModeParamsForDynamicLibrary()
             .getDynamicLibrariesForRuntime();
     assertThat(artifactsToStrings(libraries)).isEmpty();

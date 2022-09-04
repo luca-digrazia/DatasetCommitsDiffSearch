@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingHelper.LinkingInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -153,7 +154,13 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 ruleContext.getConfiguration())
             .fromCommon(common)
             .addLinkopts(common.getLinkopts())
+            .enableCcNativeLibrariesProvider()
             .enableInterfaceSharedObjects()
+            // Generate .a and .so outputs even without object files to fulfill the rule class
+            // contract wrt. implicit output files, if the contract says so. Behavior here differs
+            // between Bazel and Blaze.
+            .setGenerateLinkActionsIfEmpty(
+                ruleContext.getRule().getImplicitOutputsFunction() != ImplicitOutputsFunction.NONE)
             .setAlwayslink(alwaysLink)
             .setNeverLink(neverLink)
             .addLinkstamps(ruleContext.getPrerequisites("linkstamp", Mode.TARGET));
@@ -255,11 +262,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     // Generate .a and .so outputs even without object files to fulfill the rule class
     // contract wrt. implicit output files, if the contract says so. Behavior here differs
     // between Bazel and Blaze.
-    CcLinkingOutputs ccLinkingOutputs = CcLinkingOutputs.EMPTY;
-    if (ruleContext.getRule().getImplicitOutputsFunction() != ImplicitOutputsFunction.NONE
-        || !ccCompilationOutputs.isEmpty()) {
-      ccLinkingOutputs = linkingHelper.link(ccCompilationOutputs);
-    }
+    CcLinkingOutputs ccLinkingOutputs = linkingHelper.link(ccCompilationOutputs);
 
     /*
      * Add the libraries from srcs, if any. For static/mostly static
@@ -307,12 +310,11 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                         library,
                         CcLinkingOutputs.libraryIdentifierOf(library))));
 
-    ImmutableSortedMap.Builder<String, NestedSet<Artifact>> outputGroups =
-        ImmutableSortedMap.naturalOrder();
+    Map<String, NestedSet<Artifact>> outputGroups = ImmutableSortedMap.of();
     if (!ccLinkingOutputs.isEmpty()) {
-      outputGroups.putAll(
+      outputGroups =
           addLinkerOutputArtifacts(
-              ruleContext, ccToolchain, ruleContext.getConfiguration(), ccCompilationOutputs));
+              ruleContext, ccToolchain, ruleContext.getConfiguration(), ccCompilationOutputs);
     }
     CcLinkingOutputs ccLinkingOutputsWithPrecompiledLibraries =
         addPrecompiledLibrariesToLinkingOutputs(
@@ -324,13 +326,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             /* dynamicLibrariesForRuntime= */ dynamicLibraries,
             ccCompilationOutputs);
 
-    CcLinkingInfo ccLinkingInfo =
-        linkingHelper.buildCcLinkingInfo(
+    LinkingInfo linkingInfo =
+        linkingHelper.buildLinkingProviders(
             ccLinkingOutputsWithPrecompiledLibraries, compilationInfo.getCcCompilationContext());
-    CcNativeLibraryProvider ccNativeLibraryProvider =
-        CppHelper.collectNativeCcLibraries(
-            ruleContext.getPrerequisites("deps", Mode.TARGET),
-            ccLinkingOutputsWithPrecompiledLibraries);
 
     /*
      * We always generate a static library, even if there aren't any source files.
@@ -386,12 +384,11 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     targetBuilder
         .setFilesToBuild(filesToBuild)
         .addProviders(compilationInfo.getProviders())
-        .addProvider(ccNativeLibraryProvider)
-        .addNativeDeclaredProvider(ccLinkingInfo)
+        .addProviders(linkingInfo.getProviders())
         .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .addOutputGroups(
             CcCommon.mergeOutputGroups(
-                ImmutableList.of(compilationInfo.getOutputGroups(), outputGroups.build())))
+                ImmutableList.of(compilationInfo.getOutputGroups(), outputGroups)))
         .addProvider(InstrumentedFilesProvider.class, instrumentedFilesProvider)
         .addProvider(RunfilesProvider.withData(defaultRunfiles.build(), dataRunfiles.build()))
         .addOutputGroup(
