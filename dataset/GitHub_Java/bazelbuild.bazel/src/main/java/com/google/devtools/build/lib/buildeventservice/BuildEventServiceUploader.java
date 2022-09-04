@@ -739,4 +739,3 @@ public final class BuildEventServiceUploader implements Runnable {
     }
   }
 }
-
