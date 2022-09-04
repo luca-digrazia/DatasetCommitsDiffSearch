@@ -188,9 +188,10 @@ class RemoteActionInputFetcher implements ActionInputPrefetcher {
                   }
 
                   try {
-                    path.chmod(0755);
+                    path.setReadable(true);
+                    path.setExecutable(true);
                   } catch (IOException e) {
-                    logger.log(Level.WARNING, "Failed to chmod 755 on " + path, e);
+                    logger.log(Level.WARNING, "Failed to chmod +xr on " + path, e);
                   }
                 }
 

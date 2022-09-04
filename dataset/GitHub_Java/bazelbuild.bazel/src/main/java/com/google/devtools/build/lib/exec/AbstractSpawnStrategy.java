@@ -54,17 +54,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /** Abstract common ancestor for spawn strategies implementing the common parts. */
 public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionContext {
-
-  /**
-   * Last unique identifier assigned to a spawn by this strategy.
-   *
-   * <p>These identifiers must be unique per strategy within the context of a Bazel server instance
-   * to avoid cross-contamination across actions in case we perform asynchronous deletions.
-   */
-  private static final AtomicInteger execCount = new AtomicInteger();
-
   private final SpawnInputExpander spawnInputExpander;
   private final SpawnRunner spawnRunner;
+  private final AtomicInteger execCount = new AtomicInteger();
 
   public AbstractSpawnStrategy(Path execRoot, SpawnRunner spawnRunner) {
     this.spawnInputExpander = new SpawnInputExpander(execRoot, false);
@@ -126,7 +118,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
         }
       }
     } catch (IOException e) {
-      throw new EnvironmentalExecException(e);
+      throw new EnvironmentalExecException("Unexpected IO error", e);
     } catch (SpawnExecException e) {
       ex = e;
       spawnResult = e.getSpawnResult();
