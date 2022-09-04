@@ -363,21 +363,16 @@ public class LASVM<T> implements Serializable {
             if (v.x == x) return false;
         }
 
-        double[] cache = new double[K.length];
-        Arrays.fill(cache, Double.NaN);
-
         // Compute gradient
         double g = y;
-        for (SupportVector<T> v : sv) {
-            // Parallel stream may cause unreproducible results due to
-            // different numeric round-off because of different data
-            // partitions (i.e. different number of cores/threads).
-            // The speed up of parallel stream is also limited as
-            // the number of support vectors is often small.
+
+        double[] cache = new double[K.length];
+        Arrays.fill(cache, Double.NaN);
+        g -= sv.stream().parallel().mapToDouble(v -> {
             double k = kernel.k(v.x, x);
             cache[v.i] = k;
-            g -= v.alpha * k;
-        }
+            return v.alpha * k;
+        }).sum();
 
         // Decide insertion
         minmax();
