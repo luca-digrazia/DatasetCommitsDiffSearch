@@ -112,7 +112,6 @@ public class StandaloneSpawnStrategyTest {
         new BlazeDirectories(
             new ServerDirectories(outputBase, outputBase, outputBase),
             workspaceDir,
-            /* defaultSystemJavabase= */ null,
             "mock-product-name");
     // This call implicitly symlinks the integration bin tools into the exec root.
     IntegrationMock.get()
@@ -172,14 +171,14 @@ public class StandaloneSpawnStrategyTest {
   @Test
   public void testBinTrueExecutesFine() throws Exception {
     Spawn spawn = createSpawn(getTrueCommand());
-    executor.getContext(SpawnActionContext.class).exec(spawn, createContext());
+    executor.getSpawnActionContext(spawn).exec(spawn, createContext());
 
     assertThat(out()).isEmpty();
     assertThat(err()).isEmpty();
   }
 
   private List<SpawnResult> run(Spawn spawn) throws Exception {
-    return executor.getContext(SpawnActionContext.class).exec(spawn, createContext());
+    return executor.getSpawnActionContext(spawn).exec(spawn, createContext());
   }
 
   private ActionExecutionContext createContext() {
@@ -193,8 +192,7 @@ public class StandaloneSpawnStrategyTest {
         outErr,
         ImmutableMap.<String, String>of(),
         ImmutableMap.of(),
-        SIMPLE_ARTIFACT_EXPANDER,
-        /*actionFileSystem=*/ null);
+        SIMPLE_ARTIFACT_EXPANDER);
   }
 
   @Test

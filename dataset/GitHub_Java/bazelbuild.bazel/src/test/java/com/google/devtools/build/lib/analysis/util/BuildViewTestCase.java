@@ -221,7 +221,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         new BlazeDirectories(
             new ServerDirectories(outputBase, outputBase, outputBase),
             rootDirectory,
-            /* defaultSystemJavabase= */ null,
             analysisMock.getProductName());
     actionKeyContext = new ActionKeyContext();
     mockToolsConfig = new MockToolsConfig(rootDirectory, false);
@@ -1633,7 +1632,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       return null;
     } else {
       return skyframeExecutor.getConfigurationForTesting(
-          reporter, fromConfig.fragmentClasses(), transition.patch(fromConfig.getOptions()));
+          reporter, fromConfig.fragmentClasses(), transition.apply(fromConfig.getOptions()));
     }
   }
 
@@ -2092,8 +2091,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
           actionLogBufferPathGenerator.generate(),
           clientEnv,
           ImmutableMap.of(),
-          artifactExpander,
-          /*actionFileSystem=*/ null);
+          artifactExpander);
     }
   }
 }

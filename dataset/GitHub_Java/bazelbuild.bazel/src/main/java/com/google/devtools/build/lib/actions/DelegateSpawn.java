@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.actions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import javax.annotation.Nullable;
 
@@ -53,7 +54,7 @@ public class DelegateSpawn implements Spawn {
   }
 
   @Override
-  public ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> getFilesetMappings() {
+  public ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> getFilesetMappings() {
     return spawn.getFilesetMappings();
   }
 

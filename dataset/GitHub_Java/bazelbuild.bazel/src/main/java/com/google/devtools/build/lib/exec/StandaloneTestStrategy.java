@@ -165,7 +165,7 @@ public class StandaloneTestStrategy extends TestStrategy {
       actionExecutionContext
           .getEventHandler()
           .post(
-              TestAttempt.forExecutedTestResult(
+              new TestAttempt(
                   action,
                   standaloneTestResult.executionInfo(),
                   attempt,
@@ -242,7 +242,7 @@ public class StandaloneTestStrategy extends TestStrategy {
     actionExecutionContext
         .getEventHandler()
         .post(
-            TestAttempt.forExecutedTestResult(
+            new TestAttempt(
                 action,
                 result.executionInfo(),
                 attempt,

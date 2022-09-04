@@ -20,12 +20,11 @@ import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
@@ -42,6 +41,7 @@ import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.SortedMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -95,7 +95,8 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
           // Actual execution.
           spawnResult = spawnRunner.exec(spawn, context);
           if (cacheHandle.willStore()) {
-            cacheHandle.store(spawnResult);
+            cacheHandle.store(
+                spawnResult, listExistingOutputFiles(spawn, actionExecutionContext.getExecRoot()));
           }
         }
       }
@@ -112,7 +113,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       try {
         spawnLogContext.logSpawn(
             spawn,
-            actionExecutionContext.getMetadataProvider(),
+            actionExecutionContext.getActionInputFileCache(),
             context.getInputMapping(),
             context.getTimeout(),
             spawnResult);
@@ -141,6 +142,19 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       throw new SpawnExecException(message, spawnResult, /*forciblyRunRemotely=*/false);
     }
     return ImmutableList.of(spawnResult);
+  }
+
+  private List<Path> listExistingOutputFiles(Spawn spawn, Path execRoot) {
+    ArrayList<Path> outputFiles = new ArrayList<>();
+    for (ActionInput output : spawn.getOutputFiles()) {
+      Path outputPath = execRoot.getRelative(output.getExecPathString());
+      // TODO(ulfjack): Store the actual list of output files in SpawnResult and use that instead
+      // of statting the files here again.
+      if (outputPath.exists()) {
+        outputFiles.add(outputPath);
+      }
+    }
+    return outputFiles;
   }
 
   private final class SpawnExecutionContextImpl implements SpawnExecutionContext {
@@ -181,18 +195,13 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
     }
 
     @Override
-    public MetadataProvider getMetadataProvider() {
-      return actionExecutionContext.getMetadataProvider();
+    public ActionInputFileCache getActionInputFileCache() {
+      return actionExecutionContext.getActionInputFileCache();
     }
 
     @Override
     public ArtifactExpander getArtifactExpander() {
       return actionExecutionContext.getArtifactExpander();
-    }
-
-    @Override
-    public ArtifactPathResolver getPathResolver() {
-      return actionExecutionContext.getPathResolver();
     }
 
     @Override
@@ -227,7 +236,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
             spawnInputExpander.getInputMapping(
                 spawn,
                 actionExecutionContext.getArtifactExpander(),
-                actionExecutionContext.getMetadataProvider());
+                actionExecutionContext.getActionInputFileCache());
       }
       return lazyInputMapping;
     }
@@ -243,7 +252,6 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       EventBus eventBus = actionExecutionContext.getEventBus();
       switch (state) {
         case EXECUTING:
-        case CHECKING_CACHE:
           eventBus.post(ActionStatusMessage.runningStrategy(action, name));
           break;
         case SCHEDULING:

@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.Before;
@@ -89,8 +88,7 @@ public class LtoBackendActionTest extends BuildViewTestCase {
             new FileOutErr(),
             ImmutableMap.<String, String>of(),
             ImmutableMap.of(),
-            null,
-            /*actionFileSystem=*/ null);
+            null);
   }
 
   @Test
@@ -158,8 +156,7 @@ public class LtoBackendActionTest extends BuildViewTestCase {
     MNEMONIC,
     RUNFILES_SUPPLIER,
     INPUT,
-    FIXED_ENVIRONMENT,
-    VARIABLE_ENVIRONMENT
+    ENVIRONMENT
   }
 
   @Test
@@ -206,13 +203,10 @@ public class LtoBackendActionTest extends BuildViewTestCase {
             }
 
             Map<String, String> env = new HashMap<>();
-            if (attributesToFlip.contains(KeyAttributes.FIXED_ENVIRONMENT)) {
+            if (attributesToFlip.contains(KeyAttributes.ENVIRONMENT)) {
               env.put("foo", "bar");
             }
             builder.setEnvironment(env);
-            if (attributesToFlip.contains(KeyAttributes.VARIABLE_ENVIRONMENT)) {
-              builder.setInheritedEnvironment(Arrays.asList("baz"));
-            }
 
             Action[] actions =
                 builder.build(

@@ -28,6 +28,8 @@ import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
+import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
+import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
@@ -75,7 +77,6 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
                 scratch.resolve("/base"),
                 scratch.resolve("/userRoot")),
             scratch.resolve("/workspace"),
-            /* defaultSystemJavabase= */ null,
             "mock-product-name");
     binTools = BinTools.empty(directories);
   }
@@ -191,8 +192,7 @@ public class TemplateExpansionActionTest extends FoundationTestCase {
         new FileOutErr(),
         ImmutableMap.<String, String>of(),
         ImmutableMap.of(),
-        null,
-        /*actionFileSystem=*/ null);
+        null);
   }
 
   private void executeTemplateExpansion(String expected) throws Exception {

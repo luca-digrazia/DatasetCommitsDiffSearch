@@ -146,8 +146,7 @@ public final class ActionsTestUtil {
         ImmutableMap.of(),
         actionGraph == null
             ? createDummyArtifactExpander()
-            : ActionInputHelper.actionGraphArtifactExpander(actionGraph),
-        /*actionFileSystem=*/ null);
+            : ActionInputHelper.actionGraphArtifactExpander(actionGraph));
   }
 
   public static ActionExecutionContext createContextForInputDiscovery(
@@ -166,8 +165,7 @@ public final class ActionsTestUtil {
         fileOutErr,
         ImmutableMap.of(),
         new BlockingSkyFunctionEnvironment(
-            buildDriver, executor == null ? null : executor.getEventHandler()),
-        /*actionFileSystem=*/ null);
+            buildDriver, executor == null ? null : executor.getEventHandler()));
   }
 
   public static ActionExecutionContext createContext(ExtendedEventHandler eventHandler) {
@@ -181,8 +179,7 @@ public final class ActionsTestUtil {
         null,
         ImmutableMap.of(),
         ImmutableMap.of(),
-        createDummyArtifactExpander(),
-        /*actionFileSystem=*/ null);
+        createDummyArtifactExpander());
   }
 
   private static ArtifactExpander createDummyArtifactExpander() {
@@ -734,7 +731,8 @@ public final class ActionsTestUtil {
     }
 
     @Override
-    public void injectRemoteFile(Artifact output, byte[] digest, long size, int locationIndex) {
+    public void injectRemoteFile(
+        Artifact output, byte[] digest, long size, long modifiedTime, int locationIndex) {
       throw new UnsupportedOperationException();
     }
 

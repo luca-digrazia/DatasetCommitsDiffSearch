@@ -26,14 +26,12 @@ import com.google.bytestream.ByteStreamProto.WriteResponse;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.util.concurrent.ListeningScheduledExecutorService;
-import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
@@ -41,7 +39,6 @@ import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.authandtls.AuthAndTLSOptions;
 import com.google.devtools.build.lib.authandtls.GoogleAuthUtils;
 import com.google.devtools.build.lib.clock.JavaClock;
-import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnExecException;
 import com.google.devtools.build.lib.exec.SpawnInputExpander;
 import com.google.devtools.build.lib.exec.SpawnRunner.ProgressStatus;
@@ -50,8 +47,8 @@ import com.google.devtools.build.lib.exec.util.FakeOwner;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.util.io.FileOutErr;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.vfs.FileSystem.HashFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -97,11 +94,8 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.Set;
 import java.util.SortedMap;
-import java.util.concurrent.Executors;
 import org.junit.After;
-import org.junit.AfterClass;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -113,7 +107,7 @@ import org.mockito.stubbing.Answer;
 @RunWith(JUnit4.class)
 public class GrpcRemoteExecutionClientTest {
 
-  private static final DigestUtil DIGEST_UTIL = new DigestUtil(DigestHashFunction.SHA256);
+  private static final DigestUtil DIGEST_UTIL = new DigestUtil(HashFunction.SHA256);
 
   private static final ArtifactExpander SIMPLE_ARTIFACT_EXPANDER =
       new ArtifactExpander() {
@@ -133,7 +127,6 @@ public class GrpcRemoteExecutionClientTest {
   private RemoteSpawnRunner client;
   private FileOutErr outErr;
   private Server fakeServer;
-  private static ListeningScheduledExecutorService retryService;
 
   private final SpawnExecutionContext simplePolicy =
       new SpawnExecutionContext() {
@@ -158,7 +151,7 @@ public class GrpcRemoteExecutionClientTest {
         }
 
         @Override
-        public MetadataProvider getMetadataProvider() {
+        public ActionInputFileCache getActionInputFileCache() {
           return fakeFileCache;
         }
 
@@ -189,11 +182,6 @@ public class GrpcRemoteExecutionClientTest {
         }
       };
 
-  @BeforeClass
-  public static void beforeEverything() {
-    retryService = MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
-  }
-
   @Before
   public final void setUp() throws Exception {
     String fakeServerName = "fake server for " + getClass();
@@ -206,7 +194,7 @@ public class GrpcRemoteExecutionClientTest {
             .start();
 
     Chunker.setDefaultChunkSizeForTesting(1000); // Enough for everything to be one chunk.
-    fs = new InMemoryFileSystem(new JavaClock(), DigestHashFunction.SHA256);
+    fs = new InMemoryFileSystem(new JavaClock(), HashFunction.SHA256);
     execRoot = fs.getPath("/exec/root");
     logDir = fs.getPath("/server-logs");
     FileSystemUtils.createDirectoryAndParents(execRoot);
@@ -248,25 +236,20 @@ public class GrpcRemoteExecutionClientTest {
     FileSystemUtils.createDirectoryAndParents(stdout.getParentDirectory());
     FileSystemUtils.createDirectoryAndParents(stderr.getParentDirectory());
     outErr = new FileOutErr(stdout, stderr);
-    RemoteOptions remoteOptions = Options.getDefaults(RemoteOptions.class);
+    RemoteOptions options = Options.getDefaults(RemoteOptions.class);
     RemoteRetrier retrier =
-        new RemoteRetrier(
-            remoteOptions,
-            RemoteRetrier.RETRIABLE_GRPC_ERRORS,
-            retryService,
-            Retrier.ALLOW_ALL_CALLS);
+        new RemoteRetrier(options, RemoteRetrier.RETRIABLE_GRPC_ERRORS, Retrier.ALLOW_ALL_CALLS);
     Channel channel = InProcessChannelBuilder.forName(fakeServerName).directExecutor().build();
     GrpcRemoteExecutor executor =
-        new GrpcRemoteExecutor(channel, null, remoteOptions.remoteTimeout, retrier);
+        new GrpcRemoteExecutor(channel, null, options.remoteTimeout, retrier);
     CallCredentials creds =
         GoogleAuthUtils.newCallCredentials(Options.getDefaults(AuthAndTLSOptions.class));
     GrpcRemoteCache remoteCache =
-        new GrpcRemoteCache(channel, creds, remoteOptions, retrier, DIGEST_UTIL);
+        new GrpcRemoteCache(channel, creds, options, retrier, DIGEST_UTIL);
     client =
         new RemoteSpawnRunner(
             execRoot,
-            remoteOptions,
-            Options.getDefaults(ExecutionOptions.class),
+            options,
             null,
             true,
             /*cmdlineReporter=*/ null,
@@ -283,11 +266,6 @@ public class GrpcRemoteExecutionClientTest {
   public void tearDown() throws Exception {
     fakeServer.shutdownNow();
     fakeServer.awaitTermination();
-  }
-
-  @AfterClass
-  public static void afterEverything() {
-    retryService.shutdownNow();
   }
 
   @Test
@@ -931,10 +909,10 @@ public class GrpcRemoteExecutionClientTest {
 
           @Override
           public void read(ReadRequest request, StreamObserver<ReadResponse> responseObserver) {
-            // First read is a retriable error, next read succeeds.
+            // First read is a cache miss, next read succeeds.
             if (first) {
               first = false;
-              responseObserver.onError(Status.UNAVAILABLE.asRuntimeException());
+              responseObserver.onError(Status.NOT_FOUND.asRuntimeException());
             } else {
               responseObserver.onNext(
                   ReadResponse.newBuilder().setData(ByteString.copyFromUtf8("stdout")).build());
@@ -990,7 +968,7 @@ public class GrpcRemoteExecutionClientTest {
     SpawnResult result = client.exec(simpleSpawn, simplePolicy);
     assertThat(result.setupSuccess()).isTrue();
     assertThat(result.exitCode()).isEqualTo(0);
-    assertThat(result.isCacheHit()).isTrue();
+    assertThat(result.isCacheHit()).isFalse();
     assertThat(outErr.outAsLatin1()).isEqualTo("stdout");
   }
 }

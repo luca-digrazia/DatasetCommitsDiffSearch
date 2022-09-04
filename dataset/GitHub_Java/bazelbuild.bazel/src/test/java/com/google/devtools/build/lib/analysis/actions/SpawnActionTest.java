@@ -489,7 +489,7 @@ public class SpawnActionTest extends BuildViewTestCase {
 
     assertThat(spawnInfo.getInputFileList()).containsExactlyElementsIn(inputPaths);
     assertThat(spawnInfo.getOutputFileList()).containsExactlyElementsIn(outputPaths);
-    Map<String, String> environment = action.getIncompleteEnvironmentForTesting();
+    Map<String, String> environment = action.getEnvironment();
     assertThat(spawnInfo.getVariableCount()).isEqualTo(environment.size());
 
     for (EnvironmentVariable variable : spawnInfo.getVariableList()) {

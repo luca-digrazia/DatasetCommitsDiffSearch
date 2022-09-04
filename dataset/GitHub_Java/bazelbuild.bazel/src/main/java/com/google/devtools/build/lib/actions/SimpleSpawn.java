@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Map;
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.Immutable;
@@ -35,7 +36,7 @@ public final class SimpleSpawn implements Spawn {
   private final ImmutableList<? extends ActionInput> inputs;
   private final ImmutableList<? extends ActionInput> tools;
   private final RunfilesSupplier runfilesSupplier;
-  private final Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings;
+  private final Map<PathFragment, ImmutableList<FilesetOutputSymlink>> filesetMappings;
   private final ImmutableList<? extends ActionInput> outputs;
   private final ResourceSet localResources;
 
@@ -45,7 +46,7 @@ public final class SimpleSpawn implements Spawn {
       ImmutableMap<String, String> environment,
       ImmutableMap<String, String> executionInfo,
       RunfilesSupplier runfilesSupplier,
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings,
+      Map<PathFragment, ImmutableList<FilesetOutputSymlink>> filesetMappings,
       ImmutableList<? extends ActionInput> inputs,
       ImmutableList<? extends ActionInput> tools,
       ImmutableList<? extends ActionInput> outputs,
@@ -105,7 +106,7 @@ public final class SimpleSpawn implements Spawn {
   }
 
   @Override
-  public ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> getFilesetMappings() {
+  public ImmutableMap<PathFragment, ImmutableList<FilesetOutputSymlink>> getFilesetMappings() {
     return ImmutableMap.copyOf(filesetMappings);
   }
 
