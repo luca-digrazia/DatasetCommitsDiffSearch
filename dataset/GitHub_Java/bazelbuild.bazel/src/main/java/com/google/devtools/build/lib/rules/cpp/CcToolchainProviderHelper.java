@@ -734,13 +734,6 @@ public class CcToolchainProviderHelper {
               + "dwp for the test executable, use '--fission=yes' with a toolchain that supports "
               + "Fission to build statically.");
     }
-
-    if (config.getLibcTopLabel() != null && toolchain.getDefaultSysroot() == null) {
-      ruleContext.ruleError(
-          "The selected toolchain "
-              + toolchain.getToolchainIdentifier()
-              + " does not support setting --grte_top (it doesn't specify builtin_sysroot).");
-    }
   }
 
   @Nullable

@@ -628,7 +628,10 @@ public class CcToolchainTest extends BuildViewTestCase {
             mockToolsConfig,
             CrosstoolConfig.CToolchain.newBuilder().setAbiVersion("orange").buildPartial());
 
-    useConfiguration("--cpu=k8", "--experimental_enable_cc_toolchain_config_info");
+    useConfiguration(
+        "--cpu=k8",
+        "--experimental_enable_cc_toolchain_config_info",
+        "--incompatible_disable_cc_configuration_make_variables");
 
     ConfiguredTarget target = getConfiguredTarget("//a:b");
     CcToolchainProvider toolchainProvider =
@@ -646,7 +649,10 @@ public class CcToolchainTest extends BuildViewTestCase {
 
     getAnalysisMock().ccSupport();
 
-    useConfiguration("--cpu=k8", "--experimental_enable_cc_toolchain_config_info");
+    useConfiguration(
+        "--cpu=k8",
+        "--experimental_enable_cc_toolchain_config_info",
+        "--incompatible_disable_cc_configuration_make_variables");
 
     ConfiguredTarget target = getConfiguredTarget("//a:b");
     CcToolchainProvider toolchainProvider =
@@ -655,6 +661,28 @@ public class CcToolchainTest extends BuildViewTestCase {
         .isEqualTo("/absolute/path");
     assertThat(toolchainProvider.getToolPathFragment(Tool.CPP).toString())
         .isEqualTo("a/relative/path");
+  }
+
+  @Test
+  public void testToolchainFromStarlarkRuleWithoutIncompatibleFlagsFlipped() throws Exception {
+    writeStarlarkRule();
+
+    getAnalysisMock()
+        .ccSupport()
+        .setupCrosstool(
+            mockToolsConfig,
+            CrosstoolConfig.CToolchain.newBuilder().setAbiVersion("orange").buildPartial());
+
+    useConfiguration("--experimental_enable_cc_toolchain_config_info");
+    try {
+      getConfiguredTarget("//a:b");
+    } catch (AssertionError e) {
+      assertThat(e)
+          .hasMessageThat()
+          .contains(
+              "--incompatible_disable_cc_configuration_make_variables must be set to true in "
+                  + "order to configure the C++ toolchain from Starlark.");
+    }
   }
 
   private void writeStarlarkRule() throws IOException {
