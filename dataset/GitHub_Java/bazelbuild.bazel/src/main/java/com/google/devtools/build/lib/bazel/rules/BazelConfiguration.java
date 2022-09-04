@@ -24,8 +24,6 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactor
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OptionsUtils.PathFragmentConverter;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -35,17 +33,13 @@ import com.google.devtools.common.options.OptionEffectTag;
 import java.util.Map;
 import javax.annotation.Nullable;
 
-/** Bazel-specific configuration fragment. */
-@AutoCodec
+/**
+ * Bazel-specific configuration fragment.
+ */
 @Immutable
 public class BazelConfiguration extends Fragment {
-  public static final ObjectCodec<BazelConfiguration> CODEC = new BazelConfiguration_AutoCodec();
-
   /** Command-line options. */
-  @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
   public static class Options extends FragmentOptions {
-    public static final ObjectCodec<Options> CODEC = new BazelConfiguration_Options_AutoCodec();
-
     @Option(
       name = "experimental_strict_action_env",
       defaultValue = "false",
@@ -120,14 +114,9 @@ public class BazelConfiguration extends Fragment {
   private final PathFragment shellExecutable;
 
   public BazelConfiguration(OS os, Options options) {
-    this(os, options.useStrictActionEnv, determineShellExecutable(os, options.shellExecutable));
-  }
-
-  @AutoCodec.Constructor
-  BazelConfiguration(OS os, boolean useStrictActionEnv, PathFragment shellExecutable) {
     this.os = os;
-    this.useStrictActionEnv = useStrictActionEnv;
-    this.shellExecutable = shellExecutable;
+    this.useStrictActionEnv = options.useStrictActionEnv;
+    this.shellExecutable = determineShellExecutable(os, options.shellExecutable);
   }
 
   @Override
