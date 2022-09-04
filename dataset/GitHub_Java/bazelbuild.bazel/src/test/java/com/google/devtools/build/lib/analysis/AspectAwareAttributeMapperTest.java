@@ -17,13 +17,11 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import org.junit.Before;
 import org.junit.Test;
@@ -41,22 +39,17 @@ public class AspectAwareAttributeMapperTest extends BuildViewTestCase {
 
   @Before
   public final void createMapper() throws Exception {
-    ConfiguredTargetAndTarget ctat =
-        scratchConfiguredTargetAndTarget(
-            "foo",
-            "myrule",
-            "cc_binary(",
-            "    name = 'myrule',",
-            "    srcs = [':a.cc'],",
-            "    linkstatic = select({'//conditions:default': 1}))");
-
-    RuleConfiguredTarget ct = (RuleConfiguredTarget) ctat.getConfiguredTarget();
-    rule = (Rule) ctat.getTarget();
+    RuleConfiguredTarget ct = (RuleConfiguredTarget) scratchConfiguredTarget("foo", "myrule",
+        "cc_binary(",
+        "    name = 'myrule',",
+        "    srcs = [':a.cc'],",
+        "    linkstatic = select({'//conditions:default': 1}))");
+    rule = ct.getTarget();
     Attribute aspectAttr = new Attribute.Builder<Label>("fromaspect", BuildType.LABEL)
         .allowedFileTypes(FileTypeSet.ANY_FILE)
         .build();
     aspectAttributes = ImmutableMap.<String, Attribute>of(aspectAttr.getName(), aspectAttr);
-    mapper = new AspectAwareAttributeMapper(ct.getAttributeMapper(), aspectAttributes);
+    mapper = new AspectAwareAttributeMapper(ConfiguredAttributeMapper.of(ct), aspectAttributes);
   }
 
   @Test
@@ -91,8 +84,7 @@ public class AspectAwareAttributeMapperTest extends BuildViewTestCase {
       mapper.get("fromaspect", BuildType.LABEL_LIST);
       fail("Expected failure on wrong-typed attribute");
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .isEqualTo("attribute fromaspect has type label, not expected type list(label)");
     }
   }
@@ -103,8 +95,7 @@ public class AspectAwareAttributeMapperTest extends BuildViewTestCase {
       mapper.get("noexist", BuildType.LABEL);
       fail("Expected failure on non-existent attribute");
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .isEqualTo("no attribute 'noexist' in either //foo:myrule or its aspects");
     }
   }

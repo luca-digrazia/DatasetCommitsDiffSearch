@@ -13,13 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute.ComputedDefault;
 import com.google.devtools.build.lib.packages.BuildType.Selector;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Collection;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -32,12 +33,17 @@ import javax.annotation.Nullable;
  */
 public class RawAttributeMapper extends AbstractAttributeMapper {
 
-  RawAttributeMapper(Rule rule) {
-    super(rule);
+  RawAttributeMapper(
+      Package pkg, RuleClass ruleClass, Label ruleLabel, AttributeContainer attributes) {
+    super(pkg, ruleClass, ruleLabel, attributes);
   }
 
   public static RawAttributeMapper of(Rule rule) {
-    return new RawAttributeMapper(rule);
+    return new RawAttributeMapper(
+        rule.getPackage(),
+        rule.getRuleClassObject(),
+        rule.getLabel(),
+        rule.getAttributeContainer());
   }
 
   /**

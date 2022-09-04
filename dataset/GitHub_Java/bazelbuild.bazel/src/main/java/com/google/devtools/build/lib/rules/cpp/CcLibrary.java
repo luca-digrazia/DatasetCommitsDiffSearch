@@ -144,13 +144,8 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     Artifact soImplArtifact = null;
     boolean supportsDynamicLinker =
         ruleContext.getFragment(CppConfiguration.class).supportsDynamicLinker();
-    // TODO(djasper): This is hacky. We should actually try to figure out whether we generate
-    // ccOutputs.
     boolean createDynamicLibrary =
-        !linkStatic
-            && supportsDynamicLinker
-            && (appearsToHaveObjectFiles(ruleContext.attributes())
-                || featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_CODEGEN));
+        !linkStatic && appearsToHaveObjectFiles(ruleContext.attributes()) && supportsDynamicLinker;
     if (ruleContext.getRule().isAttrDefined("outs", Type.STRING_LIST)) {
       List<String> outs = ruleContext.attributes().get("outs", Type.STRING_LIST);
       if (outs.size() > 1) {
@@ -263,10 +258,8 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         LinkerInputs.toNonSolibArtifacts(linkedLibraries.getExecutionDynamicLibraries()));
 
     CcLinkingOutputs linkingOutputs = info.getCcLinkingOutputs();
-    if (!featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_CODEGEN)) {
-      warnAboutEmptyLibraries(
-          ruleContext, info.getCcCompilationOutputs(), linkStatic);
-    }
+    warnAboutEmptyLibraries(
+        ruleContext, info.getCcCompilationOutputs(), linkStatic);
     NestedSet<Artifact> filesToBuild = filesBuilder.build();
 
     Runfiles staticRunfiles = collectRunfiles(ruleContext, linkingOutputs, ccToolchain,

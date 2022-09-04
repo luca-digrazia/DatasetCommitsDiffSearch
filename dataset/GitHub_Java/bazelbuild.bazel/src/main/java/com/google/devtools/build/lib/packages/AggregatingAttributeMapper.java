@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.packages.Attribute.ComputationLimiter;
 import com.google.devtools.build.lib.packages.BuildType.Selector;
 import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.syntax.Type.LabelVisitor;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -72,13 +71,13 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
    * path whenever actual value iteration isn't specifically needed.
    */
   @Override
-  protected void visitLabels(Attribute attribute, Type.LabelVisitor<Attribute> visitor)
+  protected void visitLabels(Attribute attribute, AcceptsLabelAttribute observer)
       throws InterruptedException {
-    visitLabels(attribute, true, visitor);
+    visitLabels(attribute, true, observer);
   }
 
   private void visitLabels(
-      Attribute attribute, boolean includeSelectKeys, Type.LabelVisitor<Attribute> visitor)
+      final Attribute attribute, boolean includeSelectKeys, final AcceptsLabelAttribute observer)
       throws InterruptedException {
     Type<?> type = attribute.getType();
     SelectorList<?> selectorList = getSelectorList(attribute.getName(), type);
@@ -88,22 +87,39 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         // (computed) values and look for labels.
         for (Object value : visitAttribute(attribute.getName(), attribute.getType())) {
           if (value != null) {
-            type.visitLabels(visitor, value, attribute);
+            type.visitLabels(new Type.LabelVisitor() {
+              @Override
+              public void visit(@Nullable Label label) throws InterruptedException {
+                if (label != null) {
+                  observer.acceptLabelAttribute(
+                      getLabel().resolveRepositoryRelative(label), attribute);
+                }
+              }
+            }, value);
           }
         }
       } else {
-        super.visitLabels(attribute, visitor);
+        super.visitLabels(attribute, observer);
       }
     } else {
       for (Selector<?> selector : selectorList.getSelectors()) {
         for (Map.Entry<Label, ?> selectorEntry : selector.getEntries().entrySet()) {
           if (includeSelectKeys && !BuildType.Selector.isReservedLabel(selectorEntry.getKey())) {
-            visitor.visit(selectorEntry.getKey(), attribute);
+            observer.acceptLabelAttribute(
+                getLabel().resolveRepositoryRelative(selectorEntry.getKey()), attribute);
           }
           Object value = selector.isValueSet(selectorEntry.getKey())
               ? selectorEntry.getValue()
               : attribute.getDefaultValue(null);
-          type.visitLabels(visitor, value, attribute);
+          type.visitLabels(new Type.LabelVisitor() {
+            @Override
+            public void visit(@Nullable Label label) throws InterruptedException {
+              if (label != null) {
+                observer.acceptLabelAttribute(
+                    getLabel().resolveRepositoryRelative(label), attribute);
+              }
+            }
+          }, value);
         }
       }
     }
@@ -117,12 +133,10 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
   public Set<Label> getReachableLabels(String attributeName, boolean includeSelectKeys)
       throws InterruptedException {
     final ImmutableSet.Builder<Label> builder = ImmutableSet.<Label>builder();
-    visitLabels(
-        getAttributeDefinition(attributeName),
-        includeSelectKeys,
-        new LabelVisitor<Attribute>() {
+    visitLabels(getAttributeDefinition(attributeName), includeSelectKeys,
+        new AcceptsLabelAttribute() {
           @Override
-          public void visit(Label label, Attribute attribute) {
+          public void acceptLabelAttribute(Label label, Attribute attribute) {
             builder.add(label);
           }
         });
@@ -524,17 +538,14 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
   private static ImmutableList<Label> extractLabels(Type<?> type, Object value) {
     try {
       final ImmutableList.Builder<Label> result = ImmutableList.builder();
-      type.visitLabels(
-          new Type.LabelVisitor<Object>() {
-            @Override
-            public void visit(@Nullable Label label, Object dummy) {
-              if (label != null) {
-                result.add(label);
-              }
-            }
-          },
-          value,
-          /*context=*/ null);
+      type.visitLabels(new Type.LabelVisitor() {
+        @Override
+        public void visit(@Nullable Label label) {
+          if (label != null) {
+            result.add(label);
+          }
+        }
+      }, value);
       return result.build();
     } catch (InterruptedException e) {
       throw new IllegalStateException("Unexpected InterruptedException", e);

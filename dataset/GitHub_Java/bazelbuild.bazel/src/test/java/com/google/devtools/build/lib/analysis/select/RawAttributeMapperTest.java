@@ -14,8 +14,13 @@
 package com.google.devtools.build.lib.analysis.select;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
@@ -56,7 +61,7 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
   public void testGetAttribute() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
     List<Label> value = rawMapper.get("data", BuildType.LABEL_LIST);
-    assertThat(value).isNotNull();
+    assertNotNull(value);
     assertThat(value).containsExactly(
         Label.create("@//x", "data_a"), Label.create("@//x", "data_b"));
 
@@ -66,10 +71,8 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
       rawMapper.get("srcs", BuildType.LABEL_LIST);
       fail("Expected srcs lookup to fail since the returned type is a SelectorList and not a list");
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasCauseThat()
-          .hasMessageThat()
-          .containsMatch(".*SelectorList cannot be cast to .*java\\.util\\.List");
+      assertThat(e.getCause().getMessage())
+          .contains("SelectorList cannot be cast to java.util.List");
     }
   }
 
@@ -77,16 +80,15 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
   @Test
   public void testGetAttributeType() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
-    assertThat(rawMapper.getAttributeType("data"))
-        .isEqualTo(BuildType.LABEL_LIST); // not configurable
-    assertThat(rawMapper.getAttributeType("srcs")).isEqualTo(BuildType.LABEL_LIST); // configurable
+    assertEquals(BuildType.LABEL_LIST, rawMapper.getAttributeType("data")); // not configurable
+    assertEquals(BuildType.LABEL_LIST, rawMapper.getAttributeType("srcs")); // configurable
   }
 
   @Test
   public void testConfigurabilityCheck() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
-    assertThat(rawMapper.isConfigurable("data")).isFalse();
-    assertThat(rawMapper.isConfigurable("srcs")).isTrue();
+    assertFalse(rawMapper.isConfigurable("data"));
+    assertTrue(rawMapper.isConfigurable("srcs"));
   }
 
   /**
@@ -104,10 +106,8 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
       });
       fail("Expected label visitation to fail since one attribute is configurable");
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasCauseThat()
-          .hasMessageThat()
-          .containsMatch(".*SelectorList cannot be cast to .*java\\.util\\.List");
+      assertThat(e.getCause().getMessage())
+          .contains("SelectorList cannot be cast to java.util.List");
     }
   }
 
@@ -115,10 +115,11 @@ public class RawAttributeMapperTest extends AbstractAttributeMapperTest {
   public void testGetConfigurabilityKeys() throws Exception {
     RawAttributeMapper rawMapper = RawAttributeMapper.of(setupGenRule());
     assertThat(rawMapper.getConfigurabilityKeys("srcs", BuildType.LABEL_LIST))
-        .containsExactly(
-            Label.parseAbsolute("//conditions:a"),
-            Label.parseAbsolute("//conditions:b"),
-            Label.parseAbsolute("//conditions:default"));
+        .containsExactlyElementsIn(
+            ImmutableSet.of(
+                Label.parseAbsolute("//conditions:a"),
+                Label.parseAbsolute("//conditions:b"),
+                Label.parseAbsolute("//conditions:default")));
     assertThat(rawMapper.getConfigurabilityKeys("data", BuildType.LABEL_LIST)).isEmpty();
   }
 
