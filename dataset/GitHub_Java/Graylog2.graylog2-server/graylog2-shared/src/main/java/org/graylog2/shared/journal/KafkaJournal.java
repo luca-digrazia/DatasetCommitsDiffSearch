@@ -41,8 +41,6 @@ import kafka.message.MessageSet;
 import kafka.utils.KafkaScheduler;
 import kafka.utils.SystemTime$;
 import kafka.utils.Utils;
-import org.graylog2.shared.metrics.HdrTimer;
-import org.joda.time.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Option;
@@ -73,10 +71,8 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     private final ScheduledExecutorService scheduler;
     private final MetricRegistry metricRegistry;
     private final OffsetFileFlusher offsetFlusher;
-
     private final Timer writeTime;
     private final Timer readTime;
-
     private long nextReadOffset = 0L;
     private final KafkaScheduler kafkaScheduler;
 
@@ -87,34 +83,32 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     public KafkaJournal(@Named("journalDirectory") String journalDirName,
                         @Named("scheduler") ScheduledExecutorService scheduler,
                         @Named("journalSegmentSize") int segmentSize,
-                        @Named("journalMaxRetentionSize") long retentionSize,
-                        @Named("journalMaxRetentionAge") Duration retentionAge,
                         MetricRegistry metricRegistry) {
         this.scheduler = scheduler;
         this.metricRegistry = metricRegistry;
 
         this.messagesWritten = metricRegistry.meter(name(this.getClass(), "messagesWritten"));
         this.messagesRead = metricRegistry.meter(name(this.getClass(), "messagesRead"));
+        writeTime = metricRegistry.timer(name(this.getClass(), "writeTime"));
+        readTime = metricRegistry.timer(name(this.getClass(), "readTime"));
 
-        writeTime = metricRegistry.register(name(this.getClass(), "writeTime"), new HdrTimer(1, TimeUnit.MINUTES, 1));
-        readTime = metricRegistry.register(name(this.getClass(), "readTime"), new HdrTimer(1, TimeUnit.MINUTES, 1));
-
+        // TODO all of these configuration values need tweaking
         // these are the default values as per kafka 0.8.1.1
         final LogConfig defaultConfig =
                 new LogConfig(
-                        segmentSize,            // segmentSize: The soft maximum for the size of a segment file in the log
-                        Long.MAX_VALUE,         // segmentMs: The soft maximum on the amount of time before a new log segment is rolled
-                        Long.MAX_VALUE,         // flushInterval: The number of messages that can be written to the log before a flush is forced
-                        Long.MAX_VALUE,         // flushMs: The amount of time the log can have dirty data before a flush is forced
-                        retentionSize,          // retentionSize: The approximate total number of bytes this log can use
-                        retentionAge.getMillis(), // retentionMs: The age approximate maximum age of the last segment that is retained
-                        Integer.MAX_VALUE,      // maxMessageSize: The maximum size of a message in the log
-                        1024 * 1024,            // maxIndexSize: The maximum size of an index file
-                        4096,                   // indexInterval: The approximate number of bytes between index entries
-                        60 * 1000,              // fileDeleteDelayMs: The time to wait before deleting a file from the filesystem
-                        24 * 60 * 60 * 1000L,   // deleteRetentionMs: The time to retain delete markers in the log. Only applicable for logs that are being compacted.
-                        0.5,                    // minCleanableRatio: The ratio of bytes that are available for cleaning to the bytes already cleaned
-                        false                   // compact: Should old segments in this log be deleted or deduplicated?
+                        segmentSize,
+                        Long.MAX_VALUE,
+                        Long.MAX_VALUE,
+                        Long.MAX_VALUE,
+                        Long.MAX_VALUE,
+                        Long.MAX_VALUE,
+                        Integer.MAX_VALUE,
+                        1024 * 1024,
+                        4096,
+                        60 * 1000,
+                        24 * 60 * 60 * 1000L,
+                        0.5,
+                        false
                 );
         // these are the default values as per kafka 0.8.1.1, except we don't turn on the cleaner
         // Cleaner really is log compaction with respect to "deletes" in the log.
@@ -160,7 +154,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
                     cleanerConfig,
                     TimeUnit.SECONDS.toMillis(60),
                     TimeUnit.SECONDS.toMillis(60),
-                    TimeUnit.SECONDS.toMillis(20),
+                    TimeUnit.SECONDS.toMillis(60),
                     kafkaScheduler, // TODO use our own scheduler here?
                     SystemTime$.MODULE$);
 
@@ -241,14 +235,14 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
     @Override
     public long write(List<Entry> entries) {
         try (Timer.Context ignored = writeTime.time()) {
-            long payloadSize = 0L;
+            final long[] payloadSize = {0L};
 
             final List<Message> messages = Lists.newArrayList();
             for (final Entry entry : entries) {
                 final byte[] messageBytes = entry.getMessageBytes();
                 final byte[] idBytes = entry.getIdBytes();
 
-                payloadSize += messageBytes.length;
+                payloadSize[0] += messageBytes.length;
                 messages.add(new Message(messageBytes, idBytes));
 
                 if (log.isTraceEnabled()) {
@@ -260,7 +254,7 @@ public class KafkaJournal extends AbstractIdleService implements Journal {
 
             final Log.LogAppendInfo appendInfo = kafkaLog.append(messageSet, true);
             log.debug("Wrote {} messages to journal: {} bytes, log position {} to {}",
-                      entries.size(), payloadSize, appendInfo.firstOffset(), appendInfo.lastOffset());
+                      entries.size(), payloadSize[0], appendInfo.firstOffset(), appendInfo.lastOffset());
             messagesWritten.mark(entries.size());
             return appendInfo.lastOffset();
         }
