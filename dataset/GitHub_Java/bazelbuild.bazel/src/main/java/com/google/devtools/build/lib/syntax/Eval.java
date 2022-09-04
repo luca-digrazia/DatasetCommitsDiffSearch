@@ -505,8 +505,11 @@ final class Eval {
     Object object = eval(fr, dot.getObject());
     String name = dot.getField().getName();
     try {
-      return Starlark.getattr(
-          fr.thread.mutability(), fr.thread.getSemantics(), object, name, /*defaultValue=*/ null);
+      Object result = EvalUtils.getAttr(fr.thread, object, name);
+      if (result == null) {
+        throw EvalUtils.getMissingAttrException(object, name, fr.thread.getSemantics());
+      }
+      return result;
     } catch (EvalException ex) {
       throw ex.ensureLocation(dot.getDotLocation());
     }

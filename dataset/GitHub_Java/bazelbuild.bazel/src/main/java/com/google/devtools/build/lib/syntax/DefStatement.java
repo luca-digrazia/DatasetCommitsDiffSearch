@@ -13,63 +13,75 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import java.io.IOException;
+import javax.annotation.Nullable;
 
 /** Syntax node for a 'def' statement, which defines a function. */
 public final class DefStatement extends Statement {
 
+  private final int defOffset;
   private final Identifier identifier;
-  private final FunctionSignature.WithValues<Expression, Expression> signature;
-  private final ImmutableList<Statement> statements;
-  private final ImmutableList<Parameter<Expression, Expression>> parameters;
+  private final ImmutableList<Statement> body; // non-empty if well formed
+  private final ImmutableList<Parameter> parameters;
+
+  // set by resolver
+  @Nullable private Resolver.Function resolved;
 
   DefStatement(
+      FileLocations locs,
+      int defOffset,
       Identifier identifier,
-      Iterable<Parameter<Expression, Expression>> parameters,
-      FunctionSignature.WithValues<Expression, Expression> signature,
-      Iterable<Statement> statements) {
+      ImmutableList<Parameter> parameters,
+      ImmutableList<Statement> body) {
+    super(locs);
+    this.defOffset = defOffset;
     this.identifier = identifier;
-    this.parameters = ImmutableList.copyOf(parameters);
-    this.signature = signature;
-    this.statements = ImmutableList.copyOf(statements);
-  }
-
-  @Override
-  public void prettyPrint(Appendable buffer, int indentLevel) throws IOException {
-    printIndent(buffer, indentLevel);
-    buffer.append("def ");
-    identifier.prettyPrint(buffer);
-    buffer.append('(');
-    String sep = "";
-    for (Parameter<?, ?> param : parameters) {
-      buffer.append(sep);
-      param.prettyPrint(buffer);
-      sep = ", ";
-    }
-    buffer.append("):\n");
-    printSuite(buffer, statements, indentLevel);
+    this.parameters = Preconditions.checkNotNull(parameters);
+    this.body = Preconditions.checkNotNull(body);
   }
 
   @Override
   public String toString() {
-    return "def " + identifier + "(" + signature + "): ...\n";
+    // "def f(...): \n"
+    StringBuilder buf = new StringBuilder();
+    new NodePrinter(buf).printDefSignature(this);
+    buf.append(" ...\n");
+    return buf.toString();
   }
 
   public Identifier getIdentifier() {
     return identifier;
   }
 
-  public ImmutableList<Statement> getStatements() {
-    return statements;
+  public ImmutableList<Statement> getBody() {
+    return body;
   }
 
-  public ImmutableList<Parameter<Expression, Expression>> getParameters() {
+  public ImmutableList<Parameter> getParameters() {
     return parameters;
   }
 
-  public FunctionSignature.WithValues<Expression, Expression> getSignature() {
-    return signature;
+  void setResolvedFunction(Resolver.Function resolved) {
+    this.resolved = resolved;
+  }
+
+  /** Returns information about the resolved function. Set by the resolver. */
+  @Nullable
+  public Resolver.Function getResolvedFunction() {
+    return resolved;
+  }
+
+  @Override
+  public int getStartOffset() {
+    return defOffset;
+  }
+
+  @Override
+  public int getEndOffset() {
+    return body.isEmpty()
+        ? identifier.getEndOffset() // wrong, but tree is ill formed
+        : body.get(body.size() - 1).getEndOffset();
   }
 
   @Override
@@ -79,6 +91,6 @@ public final class DefStatement extends Statement {
 
   @Override
   public Kind kind() {
-    return Kind.FUNCTION_DEF;
+    return Kind.DEF;
   }
 }
