@@ -45,7 +45,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @RequiresAuthentication
 @Api(value = "Cluster/Jobs", description = "Cluster-wide System Jobs")
@@ -53,19 +52,40 @@ import java.util.Optional;
 public class ClusterSystemJobResource extends ProxiedResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterSystemJobResource.class);
 
+    private final NodeService nodeService;
+    private final RemoteInterfaceProvider remoteInterfaceProvider;
+
     @Inject
     public ClusterSystemJobResource(NodeService nodeService,
                                     RemoteInterfaceProvider remoteInterfaceProvider,
                                     @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders, nodeService, remoteInterfaceProvider);
+        super(httpHeaders);
+        this.nodeService = nodeService;
+        this.remoteInterfaceProvider = remoteInterfaceProvider;
     }
 
     @GET
     @Timed
     @ApiOperation(value = "List currently running jobs")
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Optional<Map<String, List<SystemJobSummary>>>> list() throws IOException {
-        return getForAllNodes(RemoteSystemJobResource::list, createRemoteInterfaceProvider(RemoteSystemJobResource.class));
+    public Map<String, Map<String, List<SystemJobSummary>>> list() throws IOException {
+        final Map<String, Node> nodes = nodeService.allActive();
+        final Map<String, Map<String, List<SystemJobSummary>>> result = new HashMap<>(nodes.size());
+        nodes.entrySet().stream().forEach(entry -> {
+            final RemoteSystemJobResource remoteSystemJobResource = remoteInterfaceProvider.get(entry.getValue(), this.authenticationToken, RemoteSystemJobResource.class);
+            try {
+                final Response<Map<String, List<SystemJobSummary>>> response = remoteSystemJobResource.list().execute();
+                if (response.isSuccess()) {
+                    result.put(entry.getKey(), response.body());
+                } else {
+                    LOG.warn("Unable to fetch system jobs from node {}: {}", entry.getKey(), response);
+                }
+            } catch (IOException e) {
+                LOG.warn("Unable to fetch system jobs from node {}:", entry.getKey(), e);
+            }
+        });
+
+        return result;
     }
 
     @GET

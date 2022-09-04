@@ -17,6 +17,7 @@
 package org.graylog2.rest.resources.cluster;
 
 import com.codahale.metrics.annotation.Timed;
+import com.google.common.base.Optional;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
@@ -50,8 +51,8 @@ import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
 import javax.ws.rs.core.MediaType;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -62,19 +63,43 @@ import java.util.stream.Collectors;
 public class ClusterInputStatesResource extends ProxiedResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterInputStatesResource.class);
 
+    private final NodeService nodeService;
+    private final RemoteInterfaceProvider remoteInterfaceProvider;
+
     @Inject
     public ClusterInputStatesResource(NodeService nodeService,
                                       RemoteInterfaceProvider remoteInterfaceProvider,
                                       @Context HttpHeaders httpHeaders) throws NodeNotFoundException {
-        super(httpHeaders, nodeService, remoteInterfaceProvider);
+        super(httpHeaders);
+        this.nodeService = nodeService;
+        this.remoteInterfaceProvider = remoteInterfaceProvider;
     }
 
     @GET
     @Timed
     @ApiOperation(value = "Get all input states")
     @RequiresPermissions(RestPermissions.INPUTS_READ)
-    public Map<String, Optional<Set<InputStateSummary>>> get() {
-        return getForAllNodes(RemoteInputStatesResource::list, createRemoteInterfaceProvider(RemoteInputStatesResource.class), InputStatesList::states);
+    public Map<String, Set<InputStateSummary>> get() {
+        final Map<String, Node> nodes = nodeService.allActive();
+        return nodes.entrySet()
+                .stream()
+                .parallel()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                    final RemoteInputStatesResource remoteInputStatesResource = remoteInterfaceProvider.get(entry.getValue(),
+                            this.authenticationToken,
+                            RemoteInputStatesResource.class);
+                    try {
+                        final Response<InputStatesList> response = remoteInputStatesResource.list().execute();
+                        if (response.isSuccess()) {
+                            return response.body().states();
+                        } else {
+                            LOG.warn("Unable to fetch input states from node {}: {}", entry.getKey(), response.message());
+                        }
+                    } catch (IOException e) {
+                        LOG.warn("Unable to fetch input states from node {}:", entry.getKey(), e);
+                    }
+                    return Collections.emptySet();
+                }));
     }
 
     @PUT
@@ -103,7 +128,7 @@ public class ClusterInputStatesResource extends ProxiedResource {
                     } catch (IOException e) {
                         LOG.warn("Unable to start input on node {}:",entry.getKey(), e);
                     }
-                    return Optional.empty();
+                    return Optional.absent();
                 }));
     }
 
@@ -133,7 +158,7 @@ public class ClusterInputStatesResource extends ProxiedResource {
                     } catch (IOException e) {
                         LOG.warn("Unable to stop input on node {}:", entry.getKey(), e);
                     }
-                    return Optional.empty();
+                    return Optional.absent();
                 }));
     }
 }
