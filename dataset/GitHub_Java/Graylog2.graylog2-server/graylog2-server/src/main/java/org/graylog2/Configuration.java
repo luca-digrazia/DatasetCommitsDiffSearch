@@ -120,7 +120,7 @@ public class Configuration extends BaseConfiguration {
     private int alertCheckInterval = 60;
 
     @Parameter(value = "gc_warning_threshold")
-    private Duration gcWarningThreshold = Duration.seconds(1L);
+    private Duration gcWarningThreshold = Duration.seconds(1l);
 
     @Parameter(value = "default_message_output_class")
     private String defaultMessageOutputClass = "";
@@ -132,7 +132,7 @@ public class Configuration extends BaseConfiguration {
     private Duration collectorInactiveThreshold = Duration.minutes(1);
 
     @Parameter(value = "dashboard_widget_default_cache_time", validator = PositiveDurationValidator.class)
-    private Duration dashboardWidgetDefaultCacheTime = Duration.seconds(10L);
+    private Duration dashboardWidgetDefaultCacheTime = Duration.seconds(10l);
 
     public boolean isMaster() {
         return isMaster;
