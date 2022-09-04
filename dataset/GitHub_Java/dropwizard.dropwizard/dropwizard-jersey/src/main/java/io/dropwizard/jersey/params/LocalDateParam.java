@@ -11,10 +11,6 @@ public class LocalDateParam extends AbstractParam<LocalDate> {
         super(input);
     }
 
-    public LocalDateParam(String input, String parameterName) {
-        super(input, parameterName);
-    }
-
     @Override
     protected LocalDate parse(String input) throws Exception {
         return new LocalDate(input);
