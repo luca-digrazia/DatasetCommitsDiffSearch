@@ -105,7 +105,7 @@ public final class SymlinkTreeStrategy implements SymlinkTreeActionContext {
             throw new EnvironmentalExecException(
                 "Failed to link output manifest '" + outputManifest.getPathString() + "'", e);
           }
-        } else if (!action.isRunfilesEnabled()) {
+        } else if (!action.enableRunfiles()) {
           createSymlinkTreeHelper(action, actionExecutionContext).copyManifest();
         } else {
           Map<String, String> resolvedEnv = new LinkedHashMap<>();
