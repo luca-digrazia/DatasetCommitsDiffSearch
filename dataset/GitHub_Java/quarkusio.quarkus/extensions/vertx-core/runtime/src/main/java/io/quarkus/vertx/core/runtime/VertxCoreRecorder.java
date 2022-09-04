@@ -38,7 +38,6 @@ import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.PemKeyCertOptions;
 import io.vertx.core.net.PemTrustOptions;
 import io.vertx.core.net.PfxOptions;
-import io.vertx.core.spi.resolver.ResolverProvider;
 
 @Recorder
 public class VertxCoreRecorder {
@@ -114,6 +113,10 @@ public class VertxCoreRecorder {
 
         VertxOptions options = convertToVertxOptions(conf, true);
 
+        if (!conf.useAsyncDNS) {
+            System.setProperty("vertx.disableDnsResolver", "true");
+        }
+
         if (options.getEventBusOptions().isClustered()) {
             CompletableFuture<Vertx> latch = new CompletableFuture<>();
             Vertx.clusteredVertx(options, ar -> {
@@ -130,10 +133,6 @@ public class VertxCoreRecorder {
     }
 
     private static VertxOptions convertToVertxOptions(VertxConfiguration conf, boolean allowClustering) {
-        if (!conf.useAsyncDNS) {
-            System.setProperty(ResolverProvider.DISABLE_DNS_RESOLVER_PROP_NAME, "true");
-        }
-
         VertxOptions options = new VertxOptions();
 
         if (allowClustering) {
