@@ -33,7 +33,6 @@ import java.util.Set;
  * <p>Most users of the linter library should only need to use this class.
  */
 public class Linter {
-  private static final String PARSE_ERROR_CATEGORY = "parse-error";
   /** Map of all checks and their names. */
   private static final ImmutableMap<String, Check> nameToCheck =
       ImmutableMap.<String, Check>builder()
@@ -78,8 +77,7 @@ public class Linter {
         BuildFileAST.parseString(
             event -> {
               if (event.getKind() == EventKind.ERROR || event.getKind() == EventKind.WARNING) {
-                issues.add(
-                    Issue.create(PARSE_ERROR_CATEGORY, event.getMessage(), event.getLocation()));
+                issues.add(new Issue(event.getMessage(), event.getLocation()));
               }
             },
             content);
