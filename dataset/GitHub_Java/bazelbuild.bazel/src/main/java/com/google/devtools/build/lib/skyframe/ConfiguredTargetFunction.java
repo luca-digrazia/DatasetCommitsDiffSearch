@@ -37,6 +37,8 @@ import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAsp
 import com.google.devtools.build.lib.analysis.EmptyConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
+import com.google.devtools.build.lib.analysis.ToolchainResolver;
+import com.google.devtools.build.lib.analysis.UnloadedToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -308,16 +310,10 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           // Collect local (target, rule) constraints for filtering out execution platforms.
           ImmutableSet<Label> execConstraintLabels = getExecutionPlatformConstraints(rule);
           unloadedToolchainContext =
-              (UnloadedToolchainContext)
-                  env.getValueOrThrow(
-                      UnloadedToolchainContext.key()
-                          .configurationKey(configuredTargetKey.getConfigurationKey())
-                          .requiredToolchainTypeLabels(requiredToolchains)
-                          .execConstraintLabels(execConstraintLabels)
-                          .shouldSanityCheckConfiguration(
-                              configuration.trimConfigurationsRetroactively())
-                          .build(),
-                      ToolchainException.class);
+              new ToolchainResolver(env, configuredTargetKey.getConfigurationKey())
+                  .setRequiredToolchainTypes(requiredToolchains)
+                  .setExecConstraintLabels(execConstraintLabels)
+                  .resolve();
           if (env.valuesMissing()) {
             return null;
           }
@@ -429,8 +425,10 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               e.getCauses()));
     } catch (ToolchainException e) {
       // We need to throw a ConfiguredValueCreationException, so either find one or make one.
-      ConfiguredValueCreationException cvce = e.asConfiguredValueCreationException();
-      if (cvce == null) {
+      ConfiguredValueCreationException cvce;
+      if (e.getCause() instanceof ConfiguredValueCreationException) {
+        cvce = (ConfiguredValueCreationException) e.getCause();
+      } else {
         cvce =
             new ConfiguredValueCreationException(e.getMessage(), target.getLabel(), configuration);
       }
@@ -608,15 +606,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
             .collect(Collectors.toList());
     if (configLabels.isEmpty()) {
       return NO_CONFIG_CONDITIONS;
-    } else if (ctgValue.getConfiguration().trimConfigurationsRetroactively()) {
-      String message =
-          target.getLabel()
-              + " has configurable attributes, but these are not supported in retroactive trimming "
-              + "mode.";
-      env.getListener().handle(Event.error(TargetUtils.getLocationMaybe(target), message));
-      throw new DependencyEvaluationException(
-          new ConfiguredValueCreationException(
-              message, ctgValue.getLabel(), ctgValue.getConfiguration()));
     }
 
     // Collect the actual deps without a configuration transition (since by definition config

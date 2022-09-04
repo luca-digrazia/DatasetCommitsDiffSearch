@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
+import com.google.devtools.build.lib.analysis.ToolchainResolver;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -291,9 +292,6 @@ public final class AspectFunction implements SkyFunction {
         throw new IllegalStateException("Unexpected exception from BuildConfigurationFunction when "
             + "computing " + key.getAspectConfigurationKey(), e);
       }
-      if (aspectConfiguration.trimConfigurationsRetroactively()) {
-        throw new AssertionError("Aspects should NEVER be evaluated in retroactive trimming mode.");
-      }
     }
 
     ConfiguredTarget associatedTarget = baseConfiguredTargetValue.getConfiguredTarget();
@@ -323,9 +321,6 @@ public final class AspectFunction implements SkyFunction {
       configuration =
           ((BuildConfigurationValue) result.get(associatedTarget.getConfigurationKey()))
               .getConfiguration();
-      if (configuration.trimConfigurationsRetroactively()) {
-        throw new AssertionError("Aspects should NEVER be evaluated in retroactive trimming mode.");
-      }
     }
     try {
       associatedConfiguredTargetAndData =
@@ -418,15 +413,9 @@ public final class AspectFunction implements SkyFunction {
         try {
           ImmutableSet<Label> requiredToolchains = aspect.getDefinition().getRequiredToolchains();
           unloadedToolchainContext =
-              (UnloadedToolchainContext)
-                  env.getValueOrThrow(
-                      UnloadedToolchainContext.key()
-                          .configurationKey(BuildConfigurationValue.key(configuration))
-                          .requiredToolchainTypeLabels(requiredToolchains)
-                          .shouldSanityCheckConfiguration(
-                              configuration.trimConfigurationsRetroactively())
-                          .build(),
-                      ToolchainException.class);
+              new ToolchainResolver(env, BuildConfigurationValue.key(configuration))
+                  .setRequiredToolchainTypes(requiredToolchains)
+                  .resolve();
         } catch (ToolchainException e) {
           // TODO(katre): better error handling
           throw new AspectCreationException(

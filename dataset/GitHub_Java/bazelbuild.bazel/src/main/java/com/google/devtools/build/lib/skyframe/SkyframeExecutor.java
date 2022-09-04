@@ -67,7 +67,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
-import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
@@ -75,7 +74,6 @@ import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory.BuildIn
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsDiffForReconstruction;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -143,7 +141,6 @@ import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossReposit
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.skyframe.trimming.TrimmedConfigurationCache;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ResourceUsage;
@@ -179,7 +176,6 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.WalkableGraph.WalkableGraphFactory;
-import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.PrintStream;
 import java.math.BigInteger;
@@ -330,11 +326,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   private final PathResolverFactory pathResolverFactory = new PathResolverFactoryImpl();
   @Nullable private final NonexistentFileReceiver nonexistentFileReceiver;
   private final MutableSupplier<BigInteger> nonceVersion = new MutableSupplier<>();
-
-  private final TrimmedConfigurationCache<SkyKey, Label, OptionsDiffForReconstruction>
-      trimmingCache = TrimmedConfigurationProgressReceiver.buildCache();
-  private final TrimmedConfigurationProgressReceiver trimmingListener =
-      new TrimmedConfigurationProgressReceiver(trimmingCache);
 
   /** An {@link ArtifactResolverSupplier} that supports setting of an {@link ArtifactFactory}. */
   public static class MutableArtifactFactorySupplier implements ArtifactResolverSupplier {
@@ -541,8 +532,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
             shouldUnblockCpuWorkWhenFetchingDeps,
             defaultBuildOptions,
             configuredTargetProgress,
-            nonceVersion,
-            trimmingCache));
+            nonceVersion));
     map.put(
         SkyFunctions.ASPECT,
         new AspectFunction(
@@ -603,7 +593,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         SkyFunctions.REGISTERED_EXECUTION_PLATFORMS, new RegisteredExecutionPlatformsFunction());
     map.put(SkyFunctions.REGISTERED_TOOLCHAINS, new RegisteredToolchainsFunction());
     map.put(SkyFunctions.SINGLE_TOOLCHAIN_RESOLUTION, new SingleToolchainResolutionFunction());
-    map.put(SkyFunctions.TOOLCHAIN_RESOLUTION, new ToolchainResolutionFunction());
     map.put(SkyFunctions.REPOSITORY_MAPPING, new RepositoryMappingFunction());
     map.put(SkyFunctions.RESOLVED_HASH_VALUES, new ResolvedHashesFunction());
     map.put(SkyFunctions.RESOLVED_FILE, new ResolvedFileFunction());
@@ -805,7 +794,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   public void resetEvaluator() {
     init();
     emittedEventState.clear();
-    clearTrimmingCache();
     skyframeBuildView.reset();
   }
 
@@ -826,23 +814,8 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   public void handleAnalysisInvalidatingChange() {
     logger.info("Dropping configured target data");
     analysisCacheDiscarded = true;
-    clearTrimmingCache();
     skyframeBuildView.clearInvalidatedConfiguredTargets();
     skyframeBuildView.clearLegacyData();
-  }
-
-  /** Activates retroactive trimming (idempotently, so has no effect if already active). */
-  void activateRetroactiveTrimming() {
-    trimmingListener.activate();
-  }
-
-  /** Deactivates retroactive trimming (idempotently, so has no effect if already inactive). */
-  void deactivateRetroactiveTrimming() {
-    trimmingListener.deactivate();
-  }
-
-  protected void clearTrimmingCache() {
-    trimmingCache.clear();
   }
 
   /** Used with dump --rules. */
@@ -1477,7 +1450,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         getConfigurations(
             eventHandler,
             PrepareAnalysisPhaseFunction.getTopLevelBuildOptions(buildOptions, multiCpu),
-            buildOptions,
             keepGoing);
 
     BuildConfiguration firstTargetConfig = topLevelTargetConfigs.get(0);
@@ -1630,8 +1602,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   public ImmutableList<ConfiguredTargetAndData> getConfiguredTargetsForTesting(
       ExtendedEventHandler eventHandler,
       BuildConfiguration originalConfig,
-      Iterable<Dependency> keys)
-      throws TransitionException, InvalidConfigurationException {
+      Iterable<Dependency> keys) {
     return getConfiguredTargetMapForTesting(eventHandler, originalConfig, keys).values().asList();
   }
 
@@ -1647,8 +1618,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   public ImmutableList<ConfiguredTargetAndData> getConfiguredTargetsForTesting(
       ExtendedEventHandler eventHandler,
       BuildConfigurationValue.Key originalConfig,
-      Iterable<Dependency> keys)
-      throws TransitionException, InvalidConfigurationException {
+      Iterable<Dependency> keys) {
     return getConfiguredTargetMapForTesting(eventHandler, originalConfig, keys).values().asList();
   }
 
@@ -1665,8 +1635,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   public ImmutableMultimap<Dependency, ConfiguredTargetAndData> getConfiguredTargetMapForTesting(
       ExtendedEventHandler eventHandler,
       BuildConfigurationValue.Key originalConfig,
-      Iterable<Dependency> keys)
-      throws TransitionException, InvalidConfigurationException {
+      Iterable<Dependency> keys) {
     return getConfiguredTargetMapForTesting(
         eventHandler, getConfiguration(eventHandler, originalConfig), keys);
   }
@@ -1684,8 +1653,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   private ImmutableMultimap<Dependency, ConfiguredTargetAndData> getConfiguredTargetMapForTesting(
       ExtendedEventHandler eventHandler,
       BuildConfiguration originalConfig,
-      Iterable<Dependency> keys)
-      throws TransitionException, InvalidConfigurationException {
+      Iterable<Dependency> keys) {
     checkActive();
 
     Multimap<Dependency, BuildConfiguration> configs;
@@ -1841,7 +1809,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       ExtendedEventHandler eventHandler, BuildOptions options, boolean keepGoing)
       throws InvalidConfigurationException {
     return Iterables.getOnlyElement(
-        getConfigurations(eventHandler, ImmutableList.of(options), options, keepGoing));
+        getConfigurations(eventHandler, ImmutableList.of(options), keepGoing));
   }
 
   @VisibleForTesting
@@ -1871,11 +1839,8 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
    * @throws InvalidConfigurationException if any build options produces an invalid configuration
    */
   // TODO(ulfjack): Remove this legacy method after switching to the Skyframe-based implementation.
-  private List<BuildConfiguration> getConfigurations(
-      ExtendedEventHandler eventHandler,
-      List<BuildOptions> optionsList,
-      BuildOptions referenceBuildOptions,
-      boolean keepGoing)
+  public List<BuildConfiguration> getConfigurations(
+      ExtendedEventHandler eventHandler, List<BuildOptions> optionsList, boolean keepGoing)
       throws InvalidConfigurationException {
     Preconditions.checkArgument(!Iterables.isEmpty(optionsList));
 
@@ -1886,16 +1851,14 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
             .map(factory -> factory.creates())
             .collect(
                 ImmutableSortedSet.toImmutableSortedSet(BuildConfiguration.lexicalFragmentSorter));
-
-    PlatformMappingValue platformMappingValue =
-        getPlatformMappingValue(eventHandler, referenceBuildOptions);
-
-    ImmutableList.Builder<SkyKey> configSkyKeysBuilder = ImmutableList.builder();
-    for (BuildOptions options : optionsList) {
-      configSkyKeysBuilder.add(toConfigurationKey(platformMappingValue, allFragments, options));
-    }
-
-    ImmutableList<SkyKey> configSkyKeys = configSkyKeysBuilder.build();
+    final ImmutableList<SkyKey> configSkyKeys =
+        optionsList.stream()
+            .map(
+                elem ->
+                    BuildConfigurationValue.key(
+                        allFragments,
+                        BuildOptions.diffForReconstruction(defaultBuildOptions, elem)))
+            .collect(ImmutableList.toImmutableList());
 
     // Skyframe-evaluate the configurations and throw errors if any.
     EvaluationResult<SkyValue> evalResult = evaluateSkyKeys(eventHandler, configSkyKeys, keepGoing);
@@ -1934,15 +1897,14 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   // Keep this in sync with {@link PrepareAnalysisPhaseFunction#getConfigurations}.
   // TODO(ulfjack): Remove this legacy method after switching to the Skyframe-based implementation.
   public Multimap<Dependency, BuildConfiguration> getConfigurations(
-      ExtendedEventHandler eventHandler, BuildOptions fromOptions, Iterable<Dependency> keys)
-      throws InvalidConfigurationException {
+      ExtendedEventHandler eventHandler, BuildOptions fromOptions, Iterable<Dependency> keys) {
     Multimap<Dependency, BuildConfiguration> builder =
         ArrayListMultimap.<Dependency, BuildConfiguration>create();
     Set<Dependency> depsToEvaluate = new HashSet<>();
 
     ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> allFragments = null;
     if (useUntrimmedConfigs(fromOptions)) {
-      allFragments = ruleClassProvider.getAllFragments();
+      allFragments = ((ConfiguredRuleClassProvider) ruleClassProvider).getAllFragments();
     }
 
     // Get the fragments needed for dynamic configuration nodes.
@@ -1981,8 +1943,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       }
     }
 
-    PlatformMappingValue platformMappingValue = getPlatformMappingValue(eventHandler, fromOptions);
-
     // Now get the configurations.
     final List<SkyKey> configSkyKeys = new ArrayList<>();
     for (Dependency key : keys) {
@@ -2018,7 +1978,9 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
           eventHandler.handle(Event.error(e.getMessage()));
         }
         for (BuildOptions toOption : toOptions) {
-          configSkyKeys.add(toConfigurationKey(platformMappingValue, depFragments, toOption));
+          configSkyKeys.add(
+              BuildConfigurationValue.key(
+                  depFragments, BuildOptions.diffForReconstruction(defaultBuildOptions, toOption)));
         }
       }
     }
@@ -2055,8 +2017,9 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
           eventHandler.handle(Event.error(e.getMessage()));
         }
         for (BuildOptions toOption : toOptions) {
-          BuildConfigurationValue.Key configKey =
-              toConfigurationKey(platformMappingValue, depFragments, toOption);
+          SkyKey configKey =
+              BuildConfigurationValue.key(
+                  depFragments, BuildOptions.diffForReconstruction(defaultBuildOptions, toOption));
           BuildConfigurationValue configValue =
               ((BuildConfigurationValue) configsResult.get(configKey));
           // configValue will be null here if there was an exception thrown during configuration
@@ -2068,38 +2031,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       }
     }
     return builder;
-  }
-
-  private PlatformMappingValue getPlatformMappingValue(
-      ExtendedEventHandler eventHandler, BuildOptions referenceBuildOptions)
-      throws InvalidConfigurationException {
-    PathFragment platformMappingPath =
-        referenceBuildOptions.get(PlatformOptions.class).platformMappings;
-
-    PlatformMappingValue.Key platformMappingKey =
-        PlatformMappingValue.Key.create(platformMappingPath);
-    EvaluationResult<SkyValue> evaluationResult =
-        evaluateSkyKeys(eventHandler, ImmutableSet.of(platformMappingKey));
-    if (evaluationResult.hasError()) {
-      throw new InvalidConfigurationException(evaluationResult.getError().getException());
-    }
-    return (PlatformMappingValue) evaluationResult.get(platformMappingKey);
-  }
-
-  private BuildConfigurationValue.Key toConfigurationKey(
-      PlatformMappingValue platformMappingValue,
-      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments,
-      BuildOptions toOption)
-      throws InvalidConfigurationException {
-    try {
-      return BuildConfigurationValue.keyWithPlatformMapping(
-          platformMappingValue,
-          defaultBuildOptions,
-          depFragments,
-          BuildOptions.diffForReconstruction(defaultBuildOptions, toOption));
-    } catch (OptionsParsingException e) {
-      throw new InvalidConfigurationException(e);
-    }
   }
 
   private Map<SkyKey, SkyValue> collectBuildSettingValues(
@@ -2172,13 +2103,10 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   @VisibleForTesting
   public BuildConfiguration getConfigurationForTesting(
       ExtendedEventHandler eventHandler, FragmentClassSet fragments, BuildOptions options)
-      throws InterruptedException, OptionsParsingException, InvalidConfigurationException {
+      throws InterruptedException {
     SkyKey key =
-        BuildConfigurationValue.keyWithPlatformMapping(
-            getPlatformMappingValue(eventHandler, options),
-            defaultBuildOptions,
-            fragments,
-            BuildOptions.diffForReconstruction(defaultBuildOptions, options));
+        BuildConfigurationValue.key(
+            fragments, BuildOptions.diffForReconstruction(defaultBuildOptions, options));
     BuildConfigurationValue result =
         (BuildConfigurationValue)
             evaluate(
@@ -2194,8 +2122,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   @VisibleForTesting
   @Nullable
   public ConfiguredTarget getConfiguredTargetForTesting(
-      ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration)
-      throws TransitionException, InvalidConfigurationException {
+      ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration) {
     return getConfiguredTargetForTesting(eventHandler, label, configuration, NoTransition.INSTANCE);
   }
 
@@ -2206,8 +2133,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       ExtendedEventHandler eventHandler,
       Label label,
       BuildConfiguration configuration,
-      ConfigurationTransition transition)
-      throws TransitionException, InvalidConfigurationException {
+      ConfigurationTransition transition) {
     ConfiguredTargetAndData configuredTargetAndData =
         getConfiguredTargetAndDataForTesting(eventHandler, label, configuration, transition);
     return configuredTargetAndData == null ? null : configuredTargetAndData.getConfiguredTarget();
@@ -2219,8 +2145,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       ExtendedEventHandler eventHandler,
       Label label,
       BuildConfiguration configuration,
-      ConfigurationTransition transition)
-      throws TransitionException, InvalidConfigurationException {
+      ConfigurationTransition transition) {
     return Iterables.getFirst(
         getConfiguredTargetsForTesting(
             eventHandler,
@@ -2236,8 +2161,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   @VisibleForTesting
   @Nullable
   public ConfiguredTargetAndData getConfiguredTargetAndDataForTesting(
-      ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration)
-      throws TransitionException, InvalidConfigurationException {
+      ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration) {
     return getConfiguredTargetAndDataForTesting(
         eventHandler, label, configuration, NoTransition.INSTANCE);
   }
@@ -2822,7 +2746,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     /** This receiver is only needed for loading, so it is null otherwise. */
     @Override
     public void invalidated(SkyKey skyKey, InvalidationState state) {
-      trimmingListener.invalidated(skyKey, state);
       if (ignoreInvalidations) {
         return;
       }
@@ -2831,7 +2754,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
 
     @Override
     public void enqueueing(SkyKey skyKey) {
-      trimmingListener.enqueueing(skyKey);
       if (ignoreInvalidations) {
         return;
       }
@@ -2847,7 +2769,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         @Nullable SkyValue value,
         Supplier<EvaluationSuccessState> evaluationSuccessState,
         EvaluationState state) {
-      trimmingListener.evaluated(skyKey, value, evaluationSuccessState, state);
       if (ignoreInvalidations) {
         return;
       }
