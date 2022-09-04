@@ -37,10 +37,8 @@ import org.graylog2.initializers.*;
 import org.graylog2.inputs.gelf.tcp.GELFTCPInput;
 import org.graylog2.inputs.gelf.http.GELFHttpInput;
 import org.graylog2.inputs.gelf.udp.GELFUDPInput;
-import org.graylog2.inputs.kafka.KafkaInput;
 import org.graylog2.inputs.misc.jsonpath.JsonPathInput;
 import org.graylog2.inputs.misc.metrics.LocalMetricsInput;
-import org.graylog2.inputs.radio.RadioInput;
 import org.graylog2.inputs.random.FakeHttpMessageInput;
 import org.graylog2.inputs.raw.tcp.RawTCPInput;
 import org.graylog2.inputs.raw.udp.RawUDPInput;
@@ -101,7 +99,7 @@ public final class Main {
         try {
             jadConfig.process();
         } catch (RepositoryException e) {
-            LOG.error("Couldn't load configuration file: [{}]", configFile, e);
+            LOG.error("Couldn't load configuration file " + configFile, e);
             System.exit(1);
         } catch (ValidationException e) {
             LOG.error("Invalid configuration", e);
@@ -173,8 +171,8 @@ public final class Main {
         Core server = new Core();
         server.initialize(configuration, metrics);
 
-        // Register this node.
-        Node.registerServer(server, configuration.isMaster(), configuration.getRestTransportUri());
+        // Could it be that there is another master instance already?
+        Node.register(server, configuration.isMaster(), configuration.getRestTransportUri());
 
         Node thisNode = null;
         try {
@@ -231,8 +229,6 @@ public final class Main {
         server.inputs().register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
         server.inputs().register(LocalMetricsInput.class, LocalMetricsInput.NAME);
         server.inputs().register(JsonPathInput.class, JsonPathInput.NAME);
-        server.inputs().register(KafkaInput.class, KafkaInput.NAME);
-        server.inputs().register(RadioInput.class, RadioInput.NAME);
 
         // Register initializers.
         server.initializers().register(new DroolsInitializer());

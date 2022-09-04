@@ -112,9 +112,6 @@ public class StreamRuleImpl extends Persisted implements StreamRule {
 	}
 
     public Boolean getInverted() {
-        if (fields.get("inverted") == null) {
-            return false;
-        }
         return (Boolean) fields.get("inverted");
     }
 

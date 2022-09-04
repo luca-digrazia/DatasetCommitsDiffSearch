@@ -39,8 +39,6 @@ public class StreamRuleMock implements StreamRule {
     }
 
     public Boolean getInverted() {
-        if (inverted == null)
-            return false;
         return inverted;
     }
 }

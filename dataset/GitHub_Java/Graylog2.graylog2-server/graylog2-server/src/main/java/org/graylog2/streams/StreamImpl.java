@@ -29,7 +29,6 @@ import org.graylog2.database.validators.DateValidator;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.Validator;
 import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlarmReceiver;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
@@ -39,7 +38,6 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBObject;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -80,32 +78,22 @@ public class StreamImpl extends Persisted implements Stream {
     
     @SuppressWarnings("unchecked")
 	public static List<Stream> loadAllEnabled(Core core, Map<String, Object> additionalQueryOpts) {
-        additionalQueryOpts.put("disabled", new BasicDBObject("$ne", true));
-
-    	return loadAll(core, additionalQueryOpts);
-    }
-
-    public static List<Stream> loadAll(Core core) {
-        return loadAll(core, new HashMap<String, Object>());
-    }
-
-    @SuppressWarnings("unchecked")
-    public static List<Stream> loadAll(Core core, Map<String, Object> additionalQueryOpts) {
-        List<Stream> streams = Lists.newArrayList();
-
-        DBObject query = new BasicDBObject();
-
+    	List<Stream> streams = Lists.newArrayList();
+    	
+    	DBObject query = new BasicDBObject();
+        query.put("disabled", new BasicDBObject("$ne", true));
+    	
         // putAll() is not working with BasicDBObject.
         for (Map.Entry<String, Object> o : additionalQueryOpts.entrySet()) {
-            query.put(o.getKey(), o.getValue());
+        	query.put(o.getKey(), o.getValue());
         }
-
+        
         List<DBObject> results = query(query, core, COLLECTION);
         for (DBObject o : results) {
             streams.add(new StreamImpl((ObjectId) o.get("_id"), o.toMap(), core));
         }
 
-        return streams;
+    	return streams;
     }
 
     public void pause() {
@@ -221,8 +209,6 @@ public class StreamImpl extends Persisted implements Stream {
 		Map<String, Object> result = Maps.newHashMap(fields);
 		result.remove("_id");
 		result.put("id", ((ObjectId) fields.get("_id")).toStringMongod());
-        result.remove("created_at");
-        result.put("created_at", (Tools.getISO8601String((DateTime) fields.get("created_at"))));
 
         List<Map<String, Object>> streamRules = Lists.newArrayList();
 
