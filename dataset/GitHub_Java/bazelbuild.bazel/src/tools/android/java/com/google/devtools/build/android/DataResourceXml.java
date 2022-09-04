@@ -238,7 +238,6 @@ public class DataResourceXml implements DataResource {
       case INTERPOLATOR:
       case MENU:
       case MIPMAP:
-      case NAVIGATION:
       case RAW:
       case TRANSITION:
       case FONT:
