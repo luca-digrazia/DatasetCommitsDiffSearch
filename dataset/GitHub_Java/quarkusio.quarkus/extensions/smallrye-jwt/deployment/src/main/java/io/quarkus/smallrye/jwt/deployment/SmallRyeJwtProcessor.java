@@ -24,7 +24,6 @@ import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.QuarkusConfig;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
 import io.quarkus.security.deployment.JCAProviderBuildItem;
@@ -50,17 +49,12 @@ class SmallRyeJwtProcessor {
 
     SmallryeJWTConfig config;
 
-    @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capabilities.JWT);
-    }
-
     /**
      * Register the CDI beans that are needed by the MP-JWT extension
      *
      * @param additionalBeans - producer for additional bean items
      */
-    @BuildStep
+    @BuildStep(providesCapabilities = Capabilities.JWT)
     void registerAdditionalBeans(BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
         if (config.enabled) {
             AdditionalBeanBuildItem.Builder unremovable = AdditionalBeanBuildItem.builder().setUnremovable();
