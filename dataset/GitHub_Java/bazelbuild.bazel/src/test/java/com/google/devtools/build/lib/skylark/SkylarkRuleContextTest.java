@@ -613,7 +613,6 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat(result).containsExactly(
         "name",
         "visibility",
-        "transitive_configs",
         "tags",
         "generator_name",
         "generator_function",
@@ -1078,7 +1077,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     invalidatePackages();
     getConfiguredTarget("//:r");
     assertContainsEvent("in label_dict attribute of my_rule rule //:r: "
-        + "source file '//:myfile.cpp' is misplaced here (expected no files)");
+        + "file '//:myfile.cpp' is misplaced here (expected no files)");
   }
 
   @Test
@@ -1405,7 +1404,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     invalidatePackages(/*alsoConfigs=*/false); // Repository shuffling messes with toolchain labels.
     assertThat(
             (List<Label>)
-                getConfiguredTargetAndData("@foo//:baz")
+                getConfiguredTargetAndTarget("@foo//:baz")
                     .getTarget()
                     .getAssociatedRule()
                     .getAttributeContainer()
