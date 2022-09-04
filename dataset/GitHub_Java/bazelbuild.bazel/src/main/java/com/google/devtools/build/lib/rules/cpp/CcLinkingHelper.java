@@ -100,7 +100,7 @@ public final class CcLinkingHelper {
     }
 
     @Override
-    public CcLinkingInfo getCcLinkingInfo() {
+    public CcLinkingInfo getCcLinkParamsInfo() {
       return (CcLinkingInfo) providers.getProvider(CcLinkingInfo.PROVIDER.getKey());
     }
 
@@ -152,7 +152,6 @@ public final class CcLinkingHelper {
   private final List<Artifact> nonCodeLinkerInputs = new ArrayList<>();
   private final List<String> linkopts = new ArrayList<>();
   private final List<TransitiveInfoCollection> deps = new ArrayList<>();
-  private final List<CcLinkingInfo> ccLinkingInfos = new ArrayList<>();
   private final NestedSetBuilder<Artifact> linkstamps = NestedSetBuilder.stableOrder();
   private final List<Artifact> linkActionInputs = new ArrayList<>();
 
@@ -171,7 +170,6 @@ public final class CcLinkingHelper {
   private boolean emitInterfaceSharedObjects;
   private boolean shouldCreateDynamicLibrary = true;
   private boolean shouldCreateStaticLibraries = true;
-  private boolean willOnlyBeLinkedIntoDynamicLibraries;
   private final List<VariablesExtension> variablesExtensions = new ArrayList<>();
 
   private final FeatureConfiguration featureConfiguration;
@@ -269,17 +267,9 @@ public final class CcLinkingHelper {
    * (like from a "deps" attribute) and also implicit dependencies on runtime libraries.
    */
   public CcLinkingHelper addDeps(Iterable<? extends TransitiveInfoCollection> deps) {
-    Iterables.addAll(this.ccLinkingInfos, AnalysisUtils.getProviders(deps, CcLinkingInfo.PROVIDER));
-    Iterables.addAll(this.deps, deps);
-    return this;
-  }
-
-  /**
-   * Adds additional {@link CcLinkingInfo} that will be used everywhere where CcLinkingInfos were
-   * obtained from deps.
-   */
-  public CcLinkingHelper addCcLinkingInfos(Iterable<CcLinkingInfo> ccLinkingInfos) {
-    Iterables.addAll(this.ccLinkingInfos, ccLinkingInfos);
+    for (TransitiveInfoCollection dep : deps) {
+      this.deps.add(dep);
+    }
     return this;
   }
 
@@ -335,10 +325,8 @@ public final class CcLinkingHelper {
 
   /**
    * Directly set the link type. This can be used instead of {@link #setAlwayslink}. Setting
-   * anything other than a static link causes this class to skip the link action creation. This
-   * exists only for Objective-C.
+   * anything other than a static link causes this class to skip the link action creation.
    */
-  @Deprecated
   public CcLinkingHelper setStaticLinkType(LinkTargetType linkType) {
     Preconditions.checkNotNull(linkType);
     Preconditions.checkState(linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER);
@@ -460,7 +448,7 @@ public final class CcLinkingHelper {
       // generate any link actions, effectively disabling header checking in some cases.
       if (linkType.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER) {
         // TODO(bazel-team): This can't create the link action for a cc_binary yet.
-        ccLinkingOutputs = createCcLinkActions(ccOutputs);
+        ccLinkingOutputs = createCcLinkActions(ccOutputs, nonCodeLinkerInputs);
       }
     }
     CcLinkingOutputs originalLinkingOutputs = ccLinkingOutputs;
@@ -636,9 +624,7 @@ public final class CcLinkingHelper {
       protected void collect(
           CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
         builder.addLinkstamps(linkstamps.build(), ccCompilationContext);
-        for (CcLinkingInfo ccLinkingInfo : ccLinkingInfos) {
-          builder.add(ccLinkingInfo.getCcLinkParamsStore());
-        }
+        builder.addTransitiveTargets(deps, CcLinkParamsStore.TO_LINK_PARAMS);
         if (!neverlink) {
           builder.addLibraries(
               ccLinkingOutputs.getPreferredLibraries(
@@ -675,7 +661,7 @@ public final class CcLinkingHelper {
     }
 
     NestedSetBuilder<Artifact> builder = NestedSetBuilder.stableOrder();
-    for (CcLinkingInfo dep : ccLinkingInfos) {
+    for (CcLinkingInfo dep : AnalysisUtils.getProviders(deps, CcLinkingInfo.PROVIDER)) {
       CcExecutionDynamicLibraries ccExecutionDynamicLibraries =
           dep.getCcExecutionDynamicLibraries();
       if (ccExecutionDynamicLibraries != null) {
@@ -700,7 +686,8 @@ public final class CcLinkingHelper {
    *
    * @throws RuleErrorException
    */
-  private CcLinkingOutputs createCcLinkActions(CcCompilationOutputs ccOutputs)
+  private CcLinkingOutputs createCcLinkActions(
+      CcCompilationOutputs ccOutputs, Iterable<Artifact> nonCodeLinkerInputs)
       throws RuleErrorException, InterruptedException {
     // For now only handle static links. Note that the dynamic library link below ignores linkType.
     // TODO(bazel-team): Either support non-static links or move this check to setStaticLinkType().
@@ -726,7 +713,13 @@ public final class CcLinkingHelper {
 
     if (shouldCreateStaticLibraries) {
       createStaticLibraries(
-          result, env, usePicForBinaries, usePicForDynamicLibs, libraryIdentifier, ccOutputs);
+          result,
+          env,
+          usePicForBinaries,
+          usePicForDynamicLibs,
+          libraryIdentifier,
+          ccOutputs,
+          nonCodeLinkerInputs);
     }
 
     if (shouldCreateDynamicLibrary) {
@@ -736,100 +729,80 @@ public final class CcLinkingHelper {
     return result.build();
   }
 
-  public CcLinkingHelper setWillOnlyBeLinkedIntoDynamicLibraries(
-      boolean willOnlyBeLinkedIntoDynamicLibraries) {
-    this.willOnlyBeLinkedIntoDynamicLibraries = willOnlyBeLinkedIntoDynamicLibraries;
-    return this;
-  }
-
   private void createStaticLibraries(
       CcLinkingOutputs.Builder result,
       AnalysisEnvironment env,
       boolean usePicForBinaries,
       boolean usePicForDynamicLibs,
       String libraryIdentifier,
-      CcCompilationOutputs ccOutputs)
+      CcCompilationOutputs ccOutputs,
+      Iterable<Artifact> nonCodeLinkerInputs)
       throws RuleErrorException, InterruptedException {
     // Create static library (.a). The linkType only reflects whether the library is alwayslink or
-    // not. The PIC-ness is determined by whether we need to use PIC or not. There are four cases
+    // not. The PIC-ness is determined by whether we need to use PIC or not. There are three cases
     // for (usePicForDynamicLibs usePicForBinaries):
     //
-    // (1) (false false) -> no pic code is when toolchain and cppOptions don't need pic code for
-    //  dynamic libraries or binaries
+    // (1) (false false) -> no pic code
     // (2) (true false)  -> shared libraries as pic, but not binaries
     // (3) (true true)   -> both shared libraries and binaries as pic
-    // (4) (false true) -> only pic files generated when toolchain needs pic for shared libraries
-    //  and {@link #willOnlyBeLinkedIntoDynamicLibraries} is set to true.
-
+    //
     // In case (3), we always need PIC, so only create one static library containing the PIC
-    // object files. The name therefore does not match the content.
+    // object
+    // files. The name therefore does not match the content.
     //
     // Presumably, it is done this way because the .a file is an implicit output of every
-    // cc_library rule, so we can't use ".pic.a" that in the always-PIC case.
+    // cc_library
+    // rule, so we can't use ".pic.a" that in the always-PIC case.
 
     // If the crosstool is configured to select an output artifact, we use that selection.
     // Otherwise, we use linux defaults.
-    boolean createPicAction;
-    boolean createNoPicAction;
-    if (willOnlyBeLinkedIntoDynamicLibraries) {
-      createPicAction = usePicForDynamicLibs;
-      createNoPicAction = !usePicForDynamicLibs;
-    } else {
-      createPicAction = usePicForBinaries || usePicForDynamicLibs;
-      createNoPicAction = !usePicForBinaries;
-    }
+    Artifact linkedArtifact = getLinkedArtifact(linkType);
 
-    if (createPicAction) {
-      LinkTargetType linkTargetTypeUsedForNaming;
-      if (!createNoPicAction) {
-        // Only PIC library created, name does not match content.
-        linkTargetTypeUsedForNaming = linkType;
-      } else {
-        linkTargetTypeUsedForNaming =
-            (linkType == LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY)
-                ? LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY
-                : LinkTargetType.PIC_STATIC_LIBRARY;
-      }
-      result.addPicStaticLibrary(
-          registerActionForStaticLibrary(
-                  linkTargetTypeUsedForNaming,
-                  ccOutputs,
-                  /* usePic= */ true,
-                  libraryIdentifier,
-                  env)
-              .getOutputLibrary());
-    }
-
-    if (createNoPicAction) {
-      result.addStaticLibrary(
-          registerActionForStaticLibrary(
-                  linkType, ccOutputs, /* usePic */ false, libraryIdentifier, env)
-              .getOutputLibrary());
-    }
-  }
-
-  private CppLinkAction registerActionForStaticLibrary(
-      LinkTargetType linkTargetTypeUsedForNaming,
-      CcCompilationOutputs ccOutputs,
-      boolean usePic,
-      String libraryIdentifier,
-      AnalysisEnvironment env)
-      throws RuleErrorException, InterruptedException {
-    Artifact linkedArtifact = getLinkedArtifact(linkTargetTypeUsedForNaming);
-    CppLinkAction action =
+    CppLinkAction maybePicAction =
         newLinkActionBuilder(linkedArtifact)
-            .addObjectFiles(ccOutputs.getObjectFiles(usePic))
+            .addObjectFiles(ccOutputs.getObjectFiles(usePicForBinaries))
             .addNonCodeInputs(nonCodeLinkerInputs)
             .addLtoBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
-            .setUsePicForLtoBackendActions(usePic)
-            .setLinkType(linkTargetTypeUsedForNaming)
+            .setUsePicForLtoBackendActions(usePicForBinaries)
+            .setLinkType(linkType)
             .setLinkingMode(LinkingMode.LEGACY_FULLY_STATIC)
             .addActionInputs(linkActionInputs)
             .setLibraryIdentifier(libraryIdentifier)
             .addVariablesExtensions(variablesExtensions)
             .build();
-    env.registerAction(action);
-    return action;
+    env.registerAction(maybePicAction);
+    if (usePicForBinaries) {
+      result.addPicStaticLibrary(maybePicAction.getOutputLibrary());
+    } else {
+      result.addStaticLibrary(maybePicAction.getOutputLibrary());
+      // Create a second static library (.pic.a). Only in case (2) do we need both PIC and non-PIC
+      // static libraries. In that case, the first static library contains the non-PIC code, and
+      // this
+      // one contains the PIC code, so the names match the content.
+      if (usePicForDynamicLibs) {
+        LinkTargetType picLinkType =
+            (linkType == LinkTargetType.ALWAYS_LINK_STATIC_LIBRARY)
+                ? LinkTargetType.ALWAYS_LINK_PIC_STATIC_LIBRARY
+                : LinkTargetType.PIC_STATIC_LIBRARY;
+
+        // If the crosstool is configured to select an output artifact, we use that selection.
+        // Otherwise, we use linux defaults.
+        Artifact picArtifact = getLinkedArtifact(picLinkType);
+        CppLinkAction picAction =
+            newLinkActionBuilder(picArtifact)
+                .addObjectFiles(ccOutputs.getObjectFiles(/* usePic= */ true))
+                .addLtoBitcodeFiles(ccOutputs.getLtoBitcodeFiles())
+                .setUsePicForLtoBackendActions(true)
+                .setLinkType(picLinkType)
+                .setLinkingMode(LinkingMode.LEGACY_FULLY_STATIC)
+                .addActionInputs(linkActionInputs)
+                .setLibraryIdentifier(libraryIdentifier)
+                .addVariablesExtensions(variablesExtensions)
+                .build();
+        env.registerAction(picAction);
+        result.addPicStaticLibrary(picAction.getOutputLibrary());
+      }
+    }
   }
 
   private void createDynamicLibrary(
