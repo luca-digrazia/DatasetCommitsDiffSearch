@@ -46,24 +46,20 @@ public class DesugarRuleTest {
           .build();
 
   @LoadClass(
-      "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar")
-  private Class<?> interfaceSubjectToDesugarClassRound1;
+      value =
+          "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar",
+      round = 1)
+  private Class<?> interfaceSubjectToDesugarClass;
 
   @LoadClass(
       value =
           "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar",
       round = 2)
-  private Class<?> interfaceSubjectToDesugarClassRound2;
+  private Class<?> interfaceSubjectToDesugarClassTwice;
 
   @LoadClass(
       "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC")
-  private Class<?> interfaceSubjectToDesugarCompanionClassRound1;
-
-  @LoadClass(
-      value =
-          "com.google.devtools.build.android.desugar.DesugarRuleTestTarget$InterfaceSubjectToDesugar$$CC",
-      round = 2)
-  private Class<?> interfaceSubjectToDesugarCompanionClassRound2;
+  private Class<?> interfaceSubjectToDesugarCompanionClass;
 
   @LoadZipEntry(
       value =
@@ -84,20 +80,20 @@ public class DesugarRuleTest {
   public void staticMethodsAreMovedFromOriginatingClass() {
     assertThrows(
         NoSuchMethodException.class,
-        () -> interfaceSubjectToDesugarClassRound1.getDeclaredMethod("staticMethod"));
+        () -> interfaceSubjectToDesugarClass.getDeclaredMethod("staticMethod"));
   }
 
   @Test
   public void staticMethodsAreMovedFromOriginatingClass_desugarTwice() {
     assertThrows(
         NoSuchMethodException.class,
-        () -> interfaceSubjectToDesugarClassRound2.getDeclaredMethod("staticMethod"));
+        () -> interfaceSubjectToDesugarClassTwice.getDeclaredMethod("staticMethod"));
   }
 
   @Test
   public void staticMethodsAreMovedToCompanionClass() {
     assertThat(
-            Arrays.stream(interfaceSubjectToDesugarCompanionClassRound1.getDeclaredMethods())
+            Arrays.stream(interfaceSubjectToDesugarCompanionClass.getDeclaredMethods())
                 .map(Method::getName))
         .contains("staticMethod$$STATIC$$");
   }
@@ -113,13 +109,5 @@ public class DesugarRuleTest {
   public void idempotencyOperation() {
     assertThat(interfaceSubjectToDesugarZipEntryRound1.getCrc())
         .isEqualTo(interfaceSubjectToDesugarZipEntryRound2.getCrc());
-  }
-
-  @Test
-  public void classLoaders_sameInstanceInSameRound() {
-    assertThat(interfaceSubjectToDesugarClassRound1.getClassLoader())
-        .isSameInstanceAs(interfaceSubjectToDesugarCompanionClassRound1.getClassLoader());
-    assertThat(interfaceSubjectToDesugarClassRound2.getClassLoader())
-        .isSameInstanceAs(interfaceSubjectToDesugarCompanionClassRound2.getClassLoader());
   }
 }
