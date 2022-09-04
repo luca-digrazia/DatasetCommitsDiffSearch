@@ -42,7 +42,9 @@ final class ExpressionImpl implements Expression {
         }
         return new ExpressionImpl(id, null,
                 Collections.singletonList(new PartImpl(literal,
-                        value != null ? Expressions.typeInfoFrom(value.getClass().getName()) : null)),
+                        value != null
+                                ? Expressions.TYPE_INFO_SEPARATOR + value.getClass().getName() + Expressions.TYPE_INFO_SEPARATOR
+                                : null)),
                 value, origin);
     }
 
