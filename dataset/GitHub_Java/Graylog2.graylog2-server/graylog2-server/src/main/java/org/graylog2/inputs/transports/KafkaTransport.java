@@ -20,6 +20,7 @@ import com.codahale.metrics.Gauge;
 import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.MetricSet;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -40,6 +41,7 @@ import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
+import org.graylog2.plugin.configuration.fields.DropdownField;
 import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.inputs.MessageInput;
@@ -57,6 +59,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Named;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -69,12 +72,22 @@ import java.util.concurrent.atomic.AtomicLong;
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class KafkaTransport extends ThrottleableTransport {
-    public static final String GROUP_ID = "graylog2";
     public static final String CK_FETCH_MIN_BYTES = "fetch_min_bytes";
     public static final String CK_FETCH_WAIT_MAX = "fetch_wait_max";
     public static final String CK_ZOOKEEPER = "zookeeper";
     public static final String CK_TOPIC_FILTER = "topic_filter";
     public static final String CK_THREADS = "threads";
+    public static final String CK_OFFSET_RESET = "offset_reset";
+    public static final String CK_GROUP_ID = "group_id";
+
+    // See https://kafka.apache.org/090/documentation.html for available values for "auto.offset.reset".
+    private static final ImmutableMap<String, String> OFFSET_RESET_VALUES = ImmutableMap.of(
+            "largest", "Automatically reset the offset to the largest offset",
+            "smallest", "Automatically reset the offset to the smallest offset"
+    );
+
+    private static final String DEFAULT_OFFSET_RESET = "largest";
+    private static final String DEFAULT_GROUP_ID = "graylog2";
 
     private static final Logger LOG = LoggerFactory.getLogger(KafkaTransport.class);
 
@@ -173,12 +186,13 @@ public class KafkaTransport extends ThrottleableTransport {
 
         final Properties props = new Properties();
 
-        props.put("group.id", GROUP_ID);
+        props.put("group.id", configuration.getString(CK_GROUP_ID, DEFAULT_GROUP_ID));
         props.put("client.id", "gl2-" + nodeId + "-" + input.getId());
 
         props.put("fetch.min.bytes", String.valueOf(configuration.getInt(CK_FETCH_MIN_BYTES)));
         props.put("fetch.wait.max.ms", String.valueOf(configuration.getInt(CK_FETCH_WAIT_MAX)));
         props.put("zookeeper.connect", configuration.getString(CK_ZOOKEEPER));
+        props.put("auto.offset.reset", configuration.getString(CK_OFFSET_RESET, DEFAULT_OFFSET_RESET));
         // Default auto commit interval is 60 seconds. Reduce to 1 second to minimize message duplication
         // if something breaks.
         props.put("auto.commit.interval.ms", "1000");
@@ -232,6 +246,12 @@ public class KafkaTransport extends ThrottleableTransport {
                                 final MessageAndMetadata<byte[], byte[]> message = consumerIterator.next();
 
                                 final byte[] bytes = message.message();
+
+                                // it is possible that the message is null
+                                if (bytes == null) {
+                                    continue;
+                                }
+
                                 totalBytesRead.addAndGet(bytes.length);
                                 lastSecBytesReadTmp.addAndGet(bytes.length);
 
@@ -354,6 +374,21 @@ public class KafkaTransport extends ThrottleableTransport {
                     2,
                     "Number of processor threads to spawn. Use one thread per Kafka topic partition.",
                     ConfigurationField.Optional.NOT_OPTIONAL));
+
+            cr.addField(new DropdownField(
+                    CK_OFFSET_RESET,
+                    "Auto offset reset",
+                    DEFAULT_OFFSET_RESET,
+                    OFFSET_RESET_VALUES,
+                    "What to do when there is no initial offset in ZooKeeper or if an offset is out of range",
+                    ConfigurationField.Optional.OPTIONAL));
+
+            cr.addField(new TextField(
+                    CK_GROUP_ID,
+                    "Consumer group id",
+                    DEFAULT_GROUP_ID,
+                    "Name of the consumer group the Kafka input belongs to",
+                    ConfigurationField.Optional.OPTIONAL));
 
             return cr;
         }
