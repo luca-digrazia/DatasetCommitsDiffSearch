@@ -48,7 +48,7 @@ final class Parser {
     final List<Comment> comments;
 
     /** Represents every statement in the file. */
-    final Lexer.LexerLocation location;
+    final Location location;
 
     // Errors encountered during scanning or parsing.
     // These lists are ultimately owned by StarlarkFile.
@@ -58,7 +58,7 @@ final class Parser {
     ParseResult(
         List<Statement> statements,
         List<Comment> comments,
-        Lexer.LexerLocation location,
+        Location location,
         List<Event> errors,
         List<Event> stringEscapeEvents) {
       // No need to copy here; when the object is created, the parser instance is just about to go
@@ -112,7 +112,7 @@ final class Parser {
   private final List<Event> errors;
 
   // TODO(adonovan): opt: compute this by subtraction.
-  private static final Map<TokenKind, TokenKind> augmentedAssignments =
+  private static final Map<TokenKind, TokenKind> augmentedAssignmentMethods =
       new ImmutableMap.Builder<TokenKind, TokenKind>()
           .put(TokenKind.PLUS_EQUALS, TokenKind.PLUS)
           .put(TokenKind.MINUS_EQUALS, TokenKind.MINUS)
@@ -169,15 +169,14 @@ final class Parser {
     return prev != null ? prev : s;
   }
 
-  private static Lexer.LexerLocation locationFromStatements(
-      Lexer lexer, List<Statement> statements) {
-    int start = 0;
-    int end = 0;
+  private static Location locationFromStatements(Lexer lexer, List<Statement> statements) {
     if (!statements.isEmpty()) {
-      start = statements.get(0).getStartOffset();
-      end = Iterables.getLast(statements).getEndOffset();
+      return lexer.createLocation(
+          statements.get(0).getLocation().getStartOffset(),
+          Iterables.getLast(statements).getLocation().getEndOffset());
+    } else {
+      return Location.fromPathFragment(lexer.getFilename());
     }
-    return lexer.createLocation(start, end);
   }
 
   // Main entry point for parsing a file.
@@ -187,7 +186,8 @@ final class Parser {
     Parser parser = new Parser(lexer, errors);
     List<Statement> statements;
     try (SilentCloseable c =
-        Profiler.instance().profile(ProfilerTask.STARLARK_PARSER, input.getFile())) {
+        Profiler.instance()
+            .profile(ProfilerTask.STARLARK_PARSER, input.getPath().getPathString())) {
       statements = parser.parseFileInput();
     }
     return new ParseResult(
@@ -404,7 +404,8 @@ final class Parser {
   // Convenience method that uses end offset from the last node.
   private <NodeT extends Node> NodeT setLocation(NodeT node, int startOffset, Node lastNode) {
     Preconditions.checkNotNull(lastNode, "can't extract end offset from a null node");
-    return setLocation(node, startOffset, lastNode.getEndOffset());
+    Preconditions.checkNotNull(lastNode.getLocation(), "lastNode doesn't have a location");
+    return setLocation(node, startOffset, lastNode.getLocation().getEndOffset());
   }
 
   // arg ::= IDENTIFIER '=' nontupleexpr
@@ -470,8 +471,8 @@ final class Parser {
     }
   }
 
-  // call_suffix ::= '(' arg_list? ')'
-  private Expression parseCallSuffix(int start, Expression function) {
+  // funcall_suffix ::= '(' arg_list? ')'
+  private Expression parseFuncallSuffix(int start, Expression function) {
     ImmutableList<Argument> args = ImmutableList.of();
     expect(TokenKind.LPAREN);
     int end;
@@ -483,7 +484,7 @@ final class Parser {
       end = token.right;
       expect(TokenKind.RPAREN);
     }
-    return setLocation(new CallExpression(function, args), start, end);
+    return setLocation(new FuncallExpression(function, args), start, end);
   }
 
   // Parse a list of call arguments.
@@ -548,7 +549,7 @@ final class Parser {
     }
 
     Argument arg = arguments.get(i);
-    Location loc = arg.getStartLocation();
+    Location loc = arg.getLocation();
     if (arg instanceof Argument.Positional) {
       reportError(loc, "positional argument is misplaced (positional arguments come first)");
       return;
@@ -724,7 +725,7 @@ final class Parser {
     }
   }
 
-  // primary_with_suffix ::= primary (selector_suffix | substring_suffix | call_suffix)*
+  // primary_with_suffix ::= primary (selector_suffix | substring_suffix | funcall_suffix)*
   private Expression parsePrimaryWithSuffix() {
     int start = token.left;
     Expression receiver = parsePrimary();
@@ -734,7 +735,7 @@ final class Parser {
       } else if (token.kind == TokenKind.LBRACKET) {
         receiver = parseSubstringSuffix(start, receiver);
       } else if (token.kind == TokenKind.LPAREN) {
-        receiver = parseCallSuffix(start, receiver);
+        receiver = parseFuncallSuffix(start, receiver);
       } else {
         break;
       }
@@ -1152,7 +1153,9 @@ final class Parser {
   //                  | return_stmt
   //                  | BREAK | CONTINUE | PASS
   //     assign_stmt ::= expr ('=' | augassign) expr
-  //     augassign ::= '+=' | '-=' | '*=' | '/=' | '%=' | '//=' | '&=' | '|=' | '^=' |'<<=' | '>>='
+  //     augassign ::= ('+=' | '-=' | '*=' | '/=' | '%=' | '//=' )
+  // Note that these are in Python, but not implemented here (at least for now):
+  // '&=' | '|=' | '^=' |'<<=' | '>>=' | '**='
   private Statement parseSmallStatement() {
     int start = token.left;
     if (token.kind == TokenKind.RETURN) {
@@ -1165,17 +1168,18 @@ final class Parser {
       expect(kind);
       return setLocation(new FlowStatement(kind), start, end);
     }
-    Expression lhs = parseExpression();
-
-    // lhs = rhs  or  lhs += rhs
-    TokenKind op = augmentedAssignments.get(token.kind);
-    if (token.kind == TokenKind.EQUALS || op != null) {
+    Expression expression = parseExpression();
+    if (token.kind == TokenKind.EQUALS) {
       nextToken();
       Expression rhs = parseExpression();
-      // op == null for ordinary assignment.
-      return setLocation(new AssignmentStatement(lhs, op, rhs), start, rhs);
+      return setLocation(new AssignmentStatement(expression, rhs), start, rhs);
+    } else if (augmentedAssignmentMethods.containsKey(token.kind)) {
+      TokenKind op = augmentedAssignmentMethods.get(token.kind);
+      nextToken();
+      Expression operand = parseExpression();
+      return setLocation(new AugmentedAssignmentStatement(op, expression, operand), start, operand);
     } else {
-      return setLocation(new ExpressionStatement(lhs), start, lhs);
+      return setLocation(new ExpressionStatement(expression), start, expression);
     }
   }
 
@@ -1211,7 +1215,10 @@ final class Parser {
     // wait till the end of the chain, after all setElseBlock calls,
     // before setting the end location of each IfStatement.
     // Body may be empty after a parse error.
-    int end = (body.isEmpty() ? tail.getCondition() : Iterables.getLast(body)).getEndOffset();
+    int end =
+        (body.isEmpty() ? tail.getCondition() : Iterables.getLast(body))
+            .getLocation()
+            .getEndOffset();
     IfStatement s = ifStmt;
     setLocation(s, startOffsets.get(0), end);
     for (int i = 1; i < startOffsets.size(); i++) {
@@ -1232,7 +1239,7 @@ final class Parser {
     expect(TokenKind.COLON);
     List<Statement> block = parseSuite();
     ForStatement stmt = new ForStatement(lhs, collection, block);
-    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getEndOffset();
+    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getLocation().getEndOffset();
     return setLocation(stmt, start, end);
   }
 
@@ -1242,22 +1249,22 @@ final class Parser {
     expect(TokenKind.DEF);
     Identifier ident = parseIdent();
     expect(TokenKind.LPAREN);
-    ImmutableList<Parameter> params = parseParameters();
+    List<Parameter> params = parseParameters();
 
     FunctionSignature signature;
     try {
       signature = FunctionSignature.fromParameters(params);
     } catch (FunctionSignature.SignatureException e) {
-      reportError(e.getParameter().getStartLocation(), e.getMessage());
+      reportError(e.getParameter().getLocation(), e.getMessage());
       // bogus empty signature
       signature = FunctionSignature.of();
     }
 
     expect(TokenKind.RPAREN);
     expect(TokenKind.COLON);
-    ImmutableList<Statement> block = ImmutableList.copyOf(parseSuite());
+    List<Statement> block = parseSuite();
     DefStatement stmt = new DefStatement(ident, params, signature, block);
-    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getEndOffset();
+    int end = block.isEmpty() ? token.left : Iterables.getLast(block).getLocation().getEndOffset();
     return setLocation(stmt, start, end);
   }
 
@@ -1327,7 +1334,7 @@ final class Parser {
     Expression expression = null;
     if (!STATEMENT_TERMINATOR_SET.contains(token.kind)) {
       expression = parseExpression();
-      end = expression.getEndOffset();
+      end = expression.getLocation().getEndOffset();
     }
     return setLocation(new ReturnStatement(expression), start, end);
   }

@@ -15,18 +15,17 @@
 package com.google.devtools.build.lib.syntax;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.syntax.Parser.ParsingLevel.LOCAL_LEVEL;
-import static com.google.devtools.build.lib.syntax.Parser.ParsingLevel.TOP_LEVEL;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.syntax.util.EvaluationTestCase;
 import java.io.IOException;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/** Tests the {@code toString} and pretty printing methods for {@link ASTNode} subclasses. */
+/** Tests the {@code toString} and pretty printing methods for {@link Node} subclasses. */
 @RunWith(JUnit4.class)
 public class ASTPrettyPrintTest extends EvaluationTestCase {
 
@@ -37,7 +36,7 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   /**
    * Asserts that the given node's pretty print at a given indent level matches the given string.
    */
-  private void assertPrettyMatches(ASTNode node, int indentLevel, String expected) {
+  private void assertPrettyMatches(Node node, int indentLevel, String expected) {
     StringBuilder prettyBuilder = new StringBuilder();
     try {
       node.prettyPrint(prettyBuilder, indentLevel);
@@ -49,17 +48,17 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   }
 
   /** Asserts that the given node's pretty print with no indent matches the given string. */
-  private void assertPrettyMatches(ASTNode node, String expected) {
+  private void assertPrettyMatches(Node node, String expected) {
     assertPrettyMatches(node, 0, expected);
   }
 
   /** Asserts that the given node's pretty print with one indent matches the given string. */
-  private void assertIndentedPrettyMatches(ASTNode node, String expected) {
+  private void assertIndentedPrettyMatches(Node node, String expected) {
     assertPrettyMatches(node, 1, expected);
   }
 
   /** Asserts that the given node's {@code toString} matches the given string. */
-  private void assertTostringMatches(ASTNode node, String expected) {
+  private void assertTostringMatches(Node node, String expected) {
     assertThat(node.toString()).isEqualTo(expected);
   }
 
@@ -68,8 +67,12 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
    * string.
    */
   private void assertExprPrettyMatches(String source, String expected) {
-    Expression node = parseExpression(source);
-    assertPrettyMatches(node, expected);
+    try {
+      Expression node = parseExpression(source);
+      assertPrettyMatches(node, expected);
+    } catch (SyntaxError ex) {
+      Event.replayEventsOn(getEventHandler(), ex.errors());
+    }
   }
 
   /**
@@ -77,8 +80,12 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
    * given string.
    */
   private void assertExprTostringMatches(String source, String expected) {
-    Expression node = parseExpression(source);
-    assertThat(node.toString()).isEqualTo(expected);
+    try {
+      Expression node = parseExpression(source);
+      assertThat(node.toString()).isEqualTo(expected);
+    } catch (SyntaxError ex) {
+      Event.replayEventsOn(getEventHandler(), ex.errors());
+    }
   }
 
   /**
@@ -94,9 +101,8 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
    * Parses the given string as a statement, and asserts that its pretty print with one indent
    * matches the given string.
    */
-  private void assertStmtIndentedPrettyMatches(
-      Parser.ParsingLevel parsingLevel, String source, String expected) {
-    Statement node = parseStatement(parsingLevel, source);
+  private void assertStmtIndentedPrettyMatches(String source, String expected) {
+    Statement node = parseStatement(source);
     assertIndentedPrettyMatches(node, expected);
   }
 
@@ -104,9 +110,8 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
    * Parses the given string as an statement, and asserts that its {@code toString} matches the
    * given string.
    */
-  private void assertStmtTostringMatches(
-      Parser.ParsingLevel parsingLevel, String source, String expected) {
-    Statement node = parseStatement(parsingLevel, source);
+  private void assertStmtTostringMatches(String source, String expected) {
+    Statement node = parseStatement(source);
     assertThat(node.toString()).isEqualTo(expected);
   }
 
@@ -134,7 +139,7 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   }
 
   @Test
-  public void dictionaryLiteral() {
+  public void dictExpression() {
     assertExprBothRoundTrip("{1: \"a\", 2: \"b\"}");
   }
 
@@ -147,7 +152,7 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   public void funcallExpression() {
     assertExprBothRoundTrip("f()");
     assertExprBothRoundTrip("f(a)");
-    assertExprBothRoundTrip("f(a, b = B, *c, d = D, **e)");
+    assertExprBothRoundTrip("f(a, b = B, c = C, *d, **e)");
     assertExprBothRoundTrip("o.f()");
   }
 
@@ -193,12 +198,9 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
     assertExprPrettyMatches(
         "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]",
         "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]");
-    // It doesn't matter as much what toString does. This case demonstrates an apparent bug in how
-    // Printer#printList abbreviates the nested contents. We can keep this test around to help
-    // monitor changes in the buggy behavior or eventually fix it.
+    // It doesn't matter as much what toString does.
     assertExprTostringMatches(
-        "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]",
-        "[1, 2, 3, [10, 20, 30, 40, <2 more argu...<2 more arguments>], <3 more arguments>]");
+        "[1, 2, 3, [10, 20, 30, 40, 50, 60], 4, 5, 6]", "[1, 2, 3, <4 more arguments>]");
   }
 
   @Test
@@ -230,59 +232,54 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
 
   @Test
   public void assignmentStatement() {
-    assertStmtIndentedPrettyMatches(LOCAL_LEVEL, "x = y", "  x = y\n");
-    assertStmtTostringMatches(LOCAL_LEVEL, "x = y", "x = y\n");
+    assertStmtIndentedPrettyMatches("x = y", "  x = y\n");
+    assertStmtTostringMatches("x = y", "x = y\n");
   }
 
   @Test
   public void augmentedAssignmentStatement() {
-    assertStmtIndentedPrettyMatches(LOCAL_LEVEL, "x += y", "  x += y\n");
-    assertStmtTostringMatches(LOCAL_LEVEL, "x += y", "x += y\n");
+    assertStmtIndentedPrettyMatches("x += y", "  x += y\n");
+    assertStmtTostringMatches("x += y", "x += y\n");
   }
 
   @Test
   public void expressionStatement() {
-    assertStmtIndentedPrettyMatches(LOCAL_LEVEL, "5", "  5\n");
-    assertStmtTostringMatches(LOCAL_LEVEL, "5", "5\n");
+    assertStmtIndentedPrettyMatches("5", "  5\n");
+    assertStmtTostringMatches("5", "5\n");
   }
 
   @Test
-  public void functionDefStatement() {
+  public void defStatement() {
     assertStmtIndentedPrettyMatches(
-        TOP_LEVEL,
         join("def f(x):",
              "  print(x)"),
         join("  def f(x):",
              "    print(x)",
              ""));
     assertStmtTostringMatches(
-        TOP_LEVEL,
         join("def f(x):",
              "  print(x)"),
         "def f(x): ...\n");
 
     assertStmtIndentedPrettyMatches(
-        TOP_LEVEL,
         join("def f(a, b=B, *c, d=D, **e):",
              "  print(x)"),
         join("  def f(a, b=B, *c, d=D, **e):",
              "    print(x)",
              ""));
     assertStmtTostringMatches(
-        TOP_LEVEL,
-        join("def f(a, b=B, *c, d=D, **e):",
-             "  print(x)"),
-        "def f(a, b = B, *c, d = D, **e): ...\n");
+        join(
+            "def f(a, b=B, *c, d=D, **e):", //
+            "  print(x)"),
+        "def f(a, b=B, *c, d=D, **e): ...\n");
 
     assertStmtIndentedPrettyMatches(
-        TOP_LEVEL,
         join("def f():",
              "  pass"),
         join("  def f():",
              "    pass",
              ""));
     assertStmtTostringMatches(
-        TOP_LEVEL,
         join("def f():",
              "  pass"),
         "def f(): ...\n");
@@ -291,11 +288,11 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   @Test
   public void flowStatement() {
     // The parser would complain if we tried to construct them from source.
-    ASTNode breakNode = new FlowStatement(FlowStatement.Kind.BREAK);
+    Node breakNode = new FlowStatement(TokenKind.BREAK);
     assertIndentedPrettyMatches(breakNode, "  break\n");
     assertTostringMatches(breakNode, "break\n");
 
-    ASTNode continueNode = new FlowStatement(FlowStatement.Kind.CONTINUE);
+    Node continueNode = new FlowStatement(TokenKind.CONTINUE);
     assertIndentedPrettyMatches(continueNode, "  continue\n");
     assertTostringMatches(continueNode, "continue\n");
   }
@@ -303,27 +300,23 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   @Test
   public void forStatement() {
     assertStmtIndentedPrettyMatches(
-        LOCAL_LEVEL,
         join("for x in y:",
              "  print(x)"),
         join("  for x in y:",
              "    print(x)",
              ""));
     assertStmtTostringMatches(
-        LOCAL_LEVEL,
         join("for x in y:",
              "  print(x)"),
         "for x in y: ...\n");
 
     assertStmtIndentedPrettyMatches(
-        LOCAL_LEVEL,
         join("for x in y:",
              "  pass"),
         join("  for x in y:",
              "    pass",
              ""));
     assertStmtTostringMatches(
-        LOCAL_LEVEL,
         join("for x in y:",
              "  pass"),
         "for x in y: ...\n");
@@ -332,20 +325,17 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   @Test
   public void ifStatement() {
     assertStmtIndentedPrettyMatches(
-        LOCAL_LEVEL,
         join("if True:",
              "  print(x)"),
         join("  if True:",
              "    print(x)",
              ""));
     assertStmtTostringMatches(
-        LOCAL_LEVEL,
         join("if True:",
              "  print(x)"),
         "if True: ...\n");
 
     assertStmtIndentedPrettyMatches(
-        LOCAL_LEVEL,
         join("if True:",
              "  print(x)",
              "elif False:",
@@ -360,7 +350,6 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
              "    print(z)",
              ""));
     assertStmtTostringMatches(
-        LOCAL_LEVEL,
         join("if True:",
             "  print(x)",
             "elif False:",
@@ -373,9 +362,12 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
   @Test
   public void loadStatement() {
     // load("foo.bzl", a="A", "B")
-    ASTNode loadStatement = new LoadStatement(
-        new StringLiteral("foo.bzl"),
-        ImmutableMap.of(new Identifier("a"), "A", new Identifier("B"), "B"));
+    Node loadStatement =
+        new LoadStatement(
+            new StringLiteral("foo.bzl"),
+            ImmutableList.of(
+                new LoadStatement.Binding(Identifier.of("a"), Identifier.of("A")),
+                new LoadStatement.Binding(Identifier.of("B"), Identifier.of("B"))));
     assertIndentedPrettyMatches(
         loadStatement,
         "  load(\"foo.bzl\", a=\"A\", \"B\")\n");
@@ -393,27 +385,24 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
         new ReturnStatement(new StringLiteral("foo")),
         "return \"foo\"\n");
 
-    assertIndentedPrettyMatches(
-        new ReturnStatement(new Identifier("None")),
-        "  return\n");
-    assertTostringMatches(
-        new ReturnStatement(new Identifier("None")),
-        "return\n");
+    assertIndentedPrettyMatches(new ReturnStatement(Identifier.of("None")), "  return None\n");
+    assertTostringMatches(new ReturnStatement(Identifier.of("None")), "return None\n");
+
+    assertIndentedPrettyMatches(new ReturnStatement(null), "  return\n");
+    assertTostringMatches(new ReturnStatement(null), "return\n");
   }
 
   // Miscellaneous.
 
   @Test
   public void buildFileAST() {
-    ASTNode node = parseBuildFileASTWithoutValidation("print(x)\nprint(y)");
+    Node node = parseStarlarkFileWithoutValidation("print(x)\nprint(y)");
     assertIndentedPrettyMatches(
         node,
         join("  print(x)",
              "  print(y)",
              ""));
-    assertTostringMatches(
-        node,
-        "<BuildFileAST with 2 statements>");
+    assertTostringMatches(node, "<StarlarkFile with 2 statements>");
   }
 
   @Test
@@ -425,7 +414,7 @@ public class ASTPrettyPrintTest extends EvaluationTestCase {
 
   /* Not tested explicitly because they're covered implicitly by tests for other nodes:
    * - LValue
-   * - DictionaryEntryLiteral
+   * - DictExpression.Entry
    * - passed arguments / formal parameters
    * - ConditionalStatements
    */
