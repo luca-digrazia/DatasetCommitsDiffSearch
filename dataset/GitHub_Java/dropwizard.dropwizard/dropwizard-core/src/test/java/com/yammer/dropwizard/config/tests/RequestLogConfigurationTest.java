@@ -10,16 +10,15 @@ import org.junit.Test;
 import java.io.File;
 import java.util.TimeZone;
 
-import static org.fest.assertions.api.Assertions.*;
+import static org.fest.assertions.api.Assertions.assertThat;
 
 public class RequestLogConfigurationTest {
     private RequestLogConfiguration requestLog;
 
     @Before
     public void setUp() throws Exception {
-        this.requestLog = ConfigurationFactory
-                .forClass(RequestLogConfiguration.class, new Validator())
-                .build(new File(Resources.getResource("yaml/requestLog.yml").getFile()));
+        this.requestLog = ConfigurationFactory.forClass(RequestLogConfiguration.class, new Validator())
+                                              .build(new File(Resources.getResource("yaml/requestLog.yml").toURI()));
     }
 
     @Test
@@ -27,11 +26,4 @@ public class RequestLogConfigurationTest {
         assertThat(requestLog.getTimeZone())
             .isEqualTo(TimeZone.getTimeZone("UTC"));
     }
-
-    @Test
-    public void fileConfigurationCanBeEnabled() throws Exception {
-        assertThat(requestLog.getFileConfiguration().isEnabled())
-            .isTrue();
-    }
-
 }
