@@ -1,6 +1,6 @@
 package org.graylog2.database;
 
-import com.google.common.collect.Maps;
+import com.beust.jcommander.internal.Maps;
 import org.bson.types.ObjectId;
 import org.graylog2.plugin.database.Persisted;
 import org.graylog2.plugin.database.validators.Validator;
@@ -8,9 +8,7 @@ import org.testng.annotations.Test;
 
 import java.util.Map;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertFalse;
-import static org.testng.Assert.assertNotNull;
+import static org.testng.Assert.*;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>

@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.rest.resources.system.ldap;
 
 import com.codahale.metrics.annotation.Timed;
@@ -24,6 +27,7 @@ import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.ldap.client.api.LdapNetworkConnection;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
+import org.graylog2.Core;
 import org.graylog2.database.ValidationException;
 import org.graylog2.rest.documentation.annotations.Api;
 import org.graylog2.rest.documentation.annotations.ApiOperation;
@@ -56,7 +60,7 @@ import static javax.ws.rs.core.Response.ok;
 @Path("/system/ldap")
 public class LdapResource extends RestResource {
 
-    private static final Logger LOG = LoggerFactory.getLogger(LdapResource.class);
+    private static final Logger log = LoggerFactory.getLogger(LdapResource.class);
 
     @Inject
     private LdapSettingsService ldapSettingsService;
@@ -168,7 +172,7 @@ public class LdapResource extends RestResource {
                 try {
                     connection.close();
                 } catch (IOException e) {
-                    LOG.warn("Unable to close LDAP connection.", e);
+                    log.warn("Unable to close LDAP connection.", e);
                 }
             }
         }
@@ -184,7 +188,7 @@ public class LdapResource extends RestResource {
         try {
             request = objectMapper.readValue(body, LdapSettingsRequest.class);
         } catch (IOException e) {
-            LOG.error("Error while parsing JSON", e);
+            log.error("Error while parsing JSON", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
         // load the existing config, or create a new one. we only support having one, currently
@@ -207,7 +211,7 @@ public class LdapResource extends RestResource {
         try {
             ldapSettingsService.save(ldapSettings);
         } catch (ValidationException e) {
-            LOG.error("Invalid LDAP settings, not updated!", e);
+            log.error("Invalid LDAP settings, not updated!", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
         ldapAuthenticator.applySettings(ldapSettings);

@@ -58,15 +58,10 @@ import static javax.ws.rs.core.Response.noContent;
 public class SessionsResource extends RestResource {
     private static final Logger log = LoggerFactory.getLogger(SessionsResource.class);
 
-    private final UserService userService;
-    private final DefaultSecurityManager securityManager;
-
     @Inject
-    public SessionsResource(UserService userService,
-                            DefaultSecurityManager securityManager) {
-        this.userService = userService;
-        this.securityManager = securityManager;
-    }
+    private UserService userService;
+    @Inject
+    private DefaultSecurityManager securityManager;
 
     @POST
     @ApiOperation(value = "Create a new session", notes = "This request creates a new session for a user or reactivates an existing session: the equivalent of logging in.")
