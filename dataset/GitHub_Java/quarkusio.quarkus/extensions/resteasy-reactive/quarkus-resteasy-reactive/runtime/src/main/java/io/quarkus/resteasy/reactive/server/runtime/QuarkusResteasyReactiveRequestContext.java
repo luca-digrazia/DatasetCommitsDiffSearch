@@ -21,8 +21,9 @@ public class QuarkusResteasyReactiveRequestContext extends VertxResteasyReactive
 
     public QuarkusResteasyReactiveRequestContext(Deployment deployment, ProvidersImpl providers,
             RoutingContext context, ThreadSetupAction requestContext, ServerRestHandler[] handlerChain,
-            ServerRestHandler[] abortHandlerChain, CurrentIdentityAssociation currentIdentityAssociation) {
-        super(deployment, providers, context, requestContext, handlerChain, abortHandlerChain);
+            ServerRestHandler[] abortHandlerChain, ClassLoader devModeTccl,
+            CurrentIdentityAssociation currentIdentityAssociation) {
+        super(deployment, providers, context, requestContext, handlerChain, abortHandlerChain, devModeTccl);
         this.association = currentIdentityAssociation;
     }
 
@@ -51,6 +52,11 @@ public class QuarkusResteasyReactiveRequestContext extends VertxResteasyReactive
     protected void handleUnrecoverableError(Throwable throwable) {
         context.fail(throwable);
         super.handleUnrecoverableError(throwable);
+    }
+
+    @Override
+    public boolean handlesUnmappedException() {
+        return false; // false because handleUnmappedException just throws and lets QuarkusErrorHandler return the final response
     }
 
     @Override

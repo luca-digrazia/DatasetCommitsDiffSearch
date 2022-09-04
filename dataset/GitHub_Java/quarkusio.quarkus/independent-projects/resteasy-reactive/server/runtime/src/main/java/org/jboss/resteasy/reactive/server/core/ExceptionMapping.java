@@ -2,22 +2,20 @@ package org.jboss.resteasy.reactive.server.core;
 
 import io.smallrye.common.annotation.Blocking;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
 import org.jboss.logging.Logger;
+import org.jboss.resteasy.reactive.common.core.BlockingNotAllowedException;
 import org.jboss.resteasy.reactive.common.model.ResourceExceptionMapper;
 import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveAsyncExceptionMapper;
 import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveExceptionMapper;
@@ -34,7 +32,8 @@ public class ExceptionMapping {
      * <p>
      * We have a special log message for this.
      */
-    private final List<Predicate<Throwable>> blockingProblemPredicates = new ArrayList<>();
+    private final Set<Class<? extends Throwable>> blockingProblemExceptionClasses = new HashSet<>(
+            Arrays.asList(BlockingNotAllowedException.class));
 
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public void mapException(Throwable throwable, ResteasyReactiveRequestContext context) {
@@ -106,10 +105,8 @@ public class ExceptionMapping {
                 return false;
             }
             seen.add(e);
-            for (Predicate<Throwable> predicate : blockingProblemPredicates) {
-                if (predicate.test(e)) {
-                    return true;
-                }
+            if (blockingProblemExceptionClasses.contains(e.getClass())) {
+                return true;
             }
             e = e.getCause();
         }
@@ -157,12 +154,8 @@ public class ExceptionMapping {
         return null;
     }
 
-    public void addBlockingProblem(Class<? extends Throwable> throwable) {
-        blockingProblemPredicates.add(new ExceptionTypePredicate(throwable));
-    }
-
-    public void addBlockingProblem(Predicate<Throwable> predicate) {
-        blockingProblemPredicates.add(predicate);
+    public void addBlockingProblem(Class<? extends Throwable> clazz) {
+        blockingProblemExceptionClasses.add(clazz);
     }
 
     public <T extends Throwable> void addExceptionMapper(Class<T> exceptionClass, ResourceExceptionMapper<T> mapper) {
@@ -180,8 +173,8 @@ public class ExceptionMapping {
         return mappers;
     }
 
-    public List<Predicate<Throwable>> getBlockingProblemPredicates() {
-        return blockingProblemPredicates;
+    public Set<Class<? extends Throwable>> getBlockingProblemExceptionClasses() {
+        return blockingProblemExceptionClasses;
     }
 
     public void initializeDefaultFactories(Function<String, BeanFactory<?>> factoryCreator) {
@@ -189,32 +182,6 @@ public class ExceptionMapping {
             if (entry.getValue().getFactory() == null) {
                 entry.getValue().setFactory((BeanFactory) factoryCreator.apply(entry.getValue().getClassName()));
             }
-        }
-    }
-
-    public static class ExceptionTypePredicate implements Predicate<Throwable> {
-
-        private Class<? extends Throwable> throwable;
-
-        // needed for bytecode recording
-        public ExceptionTypePredicate() {
-        }
-
-        public ExceptionTypePredicate(Class<? extends Throwable> throwable) {
-            this.throwable = throwable;
-        }
-
-        public Class<? extends Throwable> getThrowable() {
-            return throwable;
-        }
-
-        public void setThrowable(Class<? extends Throwable> throwable) {
-            this.throwable = throwable;
-        }
-
-        @Override
-        public boolean test(Throwable t) {
-            return t.getClass().equals(throwable);
         }
     }
 }
