@@ -1,11 +1,12 @@
 package io.quarkus.arc.deployment;
 
+import java.util.function.Predicate;
+
 import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.DotName;
 import org.jboss.logging.Logger;
@@ -76,7 +77,19 @@ public class StartupBuildSteps {
     @BuildStep
     UnremovableBeanBuildItem unremovableBeans() {
         // Make all classes annotated with @Startup unremovable
-        return UnremovableBeanBuildItem.targetWithAnnotation(STARTUP_NAME);
+        return new UnremovableBeanBuildItem(new Predicate<BeanInfo>() {
+            @Override
+            public boolean test(BeanInfo bean) {
+                if (bean.isClassBean()) {
+                    return bean.getTarget().get().asClass().annotations().containsKey(STARTUP_NAME);
+                } else if (bean.isProducerMethod()) {
+                    return bean.getTarget().get().asMethod().hasAnnotation(STARTUP_NAME);
+                } else if (bean.isProducerField()) {
+                    return bean.getTarget().get().asField().hasAnnotation(STARTUP_NAME);
+                }
+                return false;
+            }
+        });
     }
 
     @BuildStep
@@ -98,11 +111,6 @@ public class StartupBuildSteps {
         ObserverConfigurator configurator = observerRegistrationPhase.getContext().configure()
                 .beanClass(bean.getBeanClass())
                 .observedType(StartupEvent.class);
-        if (startup.target().kind() == Kind.METHOD) {
-            configurator.id(startup.target().asMethod().toString());
-        } else if (startup.target().kind() == Kind.FIELD) {
-            configurator.id(startup.target().asField().name());
-        }
         AnnotationValue priority = startup.value();
         if (priority != null) {
             configurator.priority(priority.asInt());

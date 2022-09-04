@@ -177,8 +177,7 @@ public class ResteasyServerCommonProcessor {
             JaxrsProvidersToRegisterBuildItem jaxrsProvidersToRegisterBuildItem,
             CombinedIndexBuildItem combinedIndexBuildItem,
             BeanArchiveIndexBuildItem beanArchiveIndexBuildItem,
-            Optional<ResteasyServletMappingBuildItem> resteasyServletMappingBuildItem,
-            CustomScopeAnnotationsBuildItem scopes) throws Exception {
+            Optional<ResteasyServletMappingBuildItem> resteasyServletMappingBuildItem) throws Exception {
         IndexView index = combinedIndexBuildItem.getIndex();
 
         resource.produce(new NativeImageResourceBuildItem("META-INF/services/javax.ws.rs.client.ClientBuilder"));
@@ -329,17 +328,17 @@ public class ResteasyServerCommonProcessor {
             }
 
             @Override
-            public void transform(TransformationContext context) {
-                ClassInfo clazz = context.getTarget().asClass();
+            public void transform(TransformationContext transformationContext) {
+                ClassInfo clazz = transformationContext.getTarget().asClass();
                 if (clazz.classAnnotation(ResteasyDotNames.PATH) != null) {
                     // Root resources - no need to add scope, @Path is a bean defining annotation
                     if (clazz.classAnnotation(DotNames.TYPED) == null) {
                         // Add @Typed(MyResource.class)
-                        context.transform().add(createTypedAnnotationInstance(clazz)).done();
+                        transformationContext.transform().add(createTypedAnnotationInstance(clazz)).done();
                     }
                     return;
                 }
-                if (scopes.isScopeIn(context.getAnnotations())) {
+                if (BuiltinScope.isIn(clazz.classAnnotations())) {
                     // Skip classes annotated with built-in scope
                     return;
                 }
@@ -348,12 +347,12 @@ public class ResteasyServerCommonProcessor {
                     if (clazz.annotations().containsKey(DotNames.INJECT)
                             || hasAutoInjectAnnotation(autoInjectAnnotationNames, clazz)) {
                         // A provider with an injection point but no built-in scope is @Singleton
-                        transformation = context.transform().add(BuiltinScope.SINGLETON.getName());
+                        transformation = transformationContext.transform().add(BuiltinScope.SINGLETON.getName());
                     }
                     if (clazz.classAnnotation(DotNames.TYPED) == null) {
                         // Add @Typed(MyProvider.class)
                         if (transformation == null) {
-                            transformation = context.transform();
+                            transformation = transformationContext.transform();
                         }
                         transformation.add(createTypedAnnotationInstance(clazz));
                     }
@@ -362,7 +361,7 @@ public class ResteasyServerCommonProcessor {
                     }
                 } else if (subresources.contains(clazz.name())) {
                     // Transform a class annotated with a request method designator
-                    Transformation transformation = context.transform()
+                    Transformation transformation = transformationContext.transform()
                             .add(resteasyConfig.singletonResources ? BuiltinScope.SINGLETON.getName()
                                     : BuiltinScope.DEPENDENT.getName());
                     if (clazz.classAnnotation(DotNames.TYPED) == null) {
@@ -571,9 +570,6 @@ public class ResteasyServerCommonProcessor {
         final Set<String> allowedAnnotationPrefixes = new HashSet<>(1 + additionalJaxRsResourceDefiningAnnotations.size());
         allowedAnnotationPrefixes.add(packageName(ResteasyDotNames.PATH));
         allowedAnnotationPrefixes.add("kotlin"); // make sure the annotation that the Kotlin compiler adds don't interfere with creating a default constructor
-        allowedAnnotationPrefixes.add("io.quarkus.security"); // same for the security annotations
-        allowedAnnotationPrefixes.add("javax.annotation.security");
-        allowedAnnotationPrefixes.add("jakarta.annotation.security");
         for (AdditionalJaxRsResourceDefiningAnnotationBuildItem additionalJaxRsResourceDefiningAnnotation : additionalJaxRsResourceDefiningAnnotations) {
             final String packageName = packageName(additionalJaxRsResourceDefiningAnnotation.getAnnotationClass());
             if (packageName != null) {
@@ -756,6 +752,18 @@ public class ResteasyServerCommonProcessor {
                             ResteasyDotNames.IGNORE_FOR_REFLECTION_PREDICATE));
                 }
             }
+        }
+    }
+
+    private static DotName getClassName(Type type) {
+        switch (type.kind()) {
+            case CLASS:
+            case PARAMETERIZED_TYPE:
+                return type.name();
+            case ARRAY:
+                return getClassName(type.asArrayType().component());
+            default:
+                return null;
         }
     }
 
