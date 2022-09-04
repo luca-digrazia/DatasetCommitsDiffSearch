@@ -16,7 +16,8 @@ package com.google.devtools.build.lib.skyframe.packages;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertContainsEvent;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertNoEvents;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
@@ -59,7 +60,7 @@ public abstract class AbstractPackageLoaderTest {
   protected abstract AbstractPackageLoader.Builder newPackageLoaderBuilder(Root workspaceDir);
 
   private AbstractPackageLoader.Builder newPackageLoaderBuilder() {
-    return newPackageLoaderBuilder(root).useDefaultStarlarkSemantics().setReporter(reporter);
+    return newPackageLoaderBuilder(root).useDefaultSkylarkSemantics().setReporter(reporter);
   }
 
   protected PackageLoader newPackageLoader() {
@@ -70,11 +71,14 @@ public abstract class AbstractPackageLoaderTest {
   public void simpleNoPackage() throws Exception {
     PackageLoader pkgLoader = newPackageLoader();
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("nope"));
-    NoSuchPackageException expected =
-        assertThrows(NoSuchPackageException.class, () -> pkgLoader.loadPackage(pkgId));
-    assertThat(expected)
-        .hasMessageThat()
-        .startsWith("no such package 'nope': BUILD file not found");
+    try {
+      pkgLoader.loadPackage(pkgId);
+      fail();
+    } catch (NoSuchPackageException expected) {
+      assertThat(expected)
+          .hasMessageThat()
+          .isEqualTo("no such package 'nope': BUILD file not found on package path");
+    }
     assertNoEvents(handler.getEvents());
   }
 
@@ -179,7 +183,9 @@ public abstract class AbstractPackageLoaderTest {
     PackageIdentifier pkgId = PackageIdentifier.createInMainRepo(PathFragment.create("foo"));
     NoSuchPackageException expected =
         assertThrows(NoSuchPackageException.class, () -> pkgLoader.loadPackage(pkgId));
-    assertThat(expected).hasMessageThat().contains("no such package 'foo': BUILD file not found");
+    assertThat(expected)
+        .hasMessageThat()
+        .contains("no such package 'foo': BUILD file not found on package path");
   }
 
   protected Path path(String rootRelativePath) {
