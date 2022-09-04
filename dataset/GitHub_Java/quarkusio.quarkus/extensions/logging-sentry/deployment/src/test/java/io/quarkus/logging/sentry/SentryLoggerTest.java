@@ -1,21 +1,24 @@
 package io.quarkus.logging.sentry;
 
+import static io.sentry.jvmti.ResetFrameCache.resetFrameCache;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogManager;
 import java.util.logging.Logger;
 
 import org.jboss.logmanager.handlers.DelayedHandler;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.bootstrap.logging.InitialConfigurator;
+import io.quarkus.runtime.logging.InitialConfigurator;
 import io.quarkus.test.QuarkusUnitTest;
 import io.sentry.Sentry;
+import io.sentry.jul.SentryHandler;
+import io.sentry.jvmti.FrameCache;
 
 public class SentryLoggerTest {
 
@@ -26,19 +29,15 @@ public class SentryLoggerTest {
 
     @Test
     public void sentryLoggerDefaultTest() {
-        final Handler sentryHandler = getSentryHandler();
+        final SentryHandler sentryHandler = getSentryHandler();
         assertThat(sentryHandler).isNotNull();
-        assertThat(sentryHandler).extracting("options").extracting("InAppIncludes").satisfies(o -> {
-            assertThat(o).isInstanceOfSatisfying(Collection.class, c -> {
-                assertThat(c).isEmpty();
-            });
-        });
-        assertThat(sentryHandler).extracting("options").extracting("dsn").isEqualTo("https://123@default.com/22222");
         assertThat(sentryHandler.getLevel()).isEqualTo(org.jboss.logmanager.Level.WARN);
-        assertThat(Sentry.isEnabled()).isTrue();
+        assertThat(FrameCache.shouldCacheThrowable(new IllegalStateException("Test frame"), 1)).isFalse();
+        assertThat(Sentry.getStoredClient()).isNotNull();
+        assertThat(Sentry.isInitialized()).isTrue();
     }
 
-    public static Handler getSentryHandler() {
+    public static SentryHandler getSentryHandler() {
         LogManager logManager = LogManager.getLogManager();
         assertThat(logManager).isInstanceOf(org.jboss.logmanager.LogManager.class);
 
@@ -47,9 +46,13 @@ public class SentryLoggerTest {
         assertThat(delayedHandler.getLevel()).isEqualTo(Level.ALL);
 
         Handler handler = Arrays.stream(delayedHandler.getHandlers())
-                .filter(h -> SentryHandler.class.getName().equals(h.getClass().getName()))
+                .filter(h -> (h instanceof SentryHandler))
                 .findFirst().orElse(null);
-        return handler;
+        return (SentryHandler) handler;
     }
 
+    @AfterAll
+    public static void reset() {
+        resetFrameCache();
+    }
 }
