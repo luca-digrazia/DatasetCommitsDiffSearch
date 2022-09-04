@@ -1139,13 +1139,6 @@ public class CppCompileAction extends AbstractAction
 
     Executor executor = actionExecutionContext.getExecutor();
     CppCompileActionContext.Reply reply;
-    ShowIncludesFilter showIncludesFilter = null;
-    // If parse_showincludes feature is enabled, instead of parsing dotD file we parse the output of
-    // cl.exe caused by /showIncludes option.
-    if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
-      showIncludesFilter = new ShowIncludesFilter(getSourceFile().getFilename());
-      actionExecutionContext.getFileOutErr().setOutputFilter(showIncludesFilter);
-    }
     try {
       reply = executor.getContext(actionContext).execWithReply(this, actionExecutionContext);
     } catch (ExecException e) {
@@ -1158,15 +1151,8 @@ public class CppCompileAction extends AbstractAction
     IncludeScanningContext scanningContext = executor.getContext(IncludeScanningContext.class);
     Path execRoot = executor.getExecRoot();
 
-    NestedSet<Artifact> discoveredInputs;
-    if (showIncludesFilter != null) {
-      discoveredInputs =
-          discoverInputsFromShowIncludesFilter(
-              execRoot, scanningContext.getArtifactResolver(), showIncludesFilter);
-    } else {
-      discoveredInputs =
-          discoverInputsFromDotdFiles(execRoot, scanningContext.getArtifactResolver(), reply);
-    }
+    NestedSet<Artifact> discoveredInputs =
+        discoverInputsFromDotdFiles(execRoot, scanningContext.getArtifactResolver(), reply);
     reply = null; // Clear in-memory .d files early.
 
     // Post-execute "include scanning", which modifies the action inputs to match what the compile
@@ -1185,29 +1171,6 @@ public class CppCompileAction extends AbstractAction
   }
 
   @VisibleForTesting
-  public NestedSet<Artifact> discoverInputsFromShowIncludesFilter(
-      Path execRoot, ArtifactResolver artifactResolver, ShowIncludesFilter showIncludesFilter)
-      throws ActionExecutionException {
-    if (!cppSemantics.needsDotdInputPruning()) {
-      return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
-    }
-    HeaderDiscovery.Builder discoveryBuilder =
-        new HeaderDiscovery.Builder()
-            .setAction(this)
-            .setSourceFile(getSourceFile())
-            .setSpecialInputsHandler(specialInputsHandler)
-            .setDependencies(showIncludesFilter.getDependencies(execRoot))
-            .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
-            .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
-
-    if (cppSemantics.needsIncludeValidation()) {
-      discoveryBuilder.shouldValidateInclusions();
-    }
-
-    return discoveryBuilder.build().discoverInputsFromDependencies(execRoot, artifactResolver);
-  }
-
-  @VisibleForTesting
   public NestedSet<Artifact> discoverInputsFromDotdFiles(
       Path execRoot, ArtifactResolver artifactResolver, Reply reply)
       throws ActionExecutionException {
@@ -1217,9 +1180,10 @@ public class CppCompileAction extends AbstractAction
     HeaderDiscovery.Builder discoveryBuilder =
         new HeaderDiscovery.Builder()
             .setAction(this)
+            .setDotdFile(getDotdFile())
             .setSourceFile(getSourceFile())
             .setSpecialInputsHandler(specialInputsHandler)
-            .setDependencies(processDepset(execRoot, reply).getDependencies())
+            .setDependencySet(processDepset(execRoot, reply))
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
             .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
 
@@ -1227,7 +1191,7 @@ public class CppCompileAction extends AbstractAction
       discoveryBuilder.shouldValidateInclusions();
     }
 
-    return discoveryBuilder.build().discoverInputsFromDependencies(execRoot, artifactResolver);
+    return discoveryBuilder.build().discoverInputsFromDotdFiles(execRoot, artifactResolver);
   }
 
   public DependencySet processDepset(Path execRoot, Reply reply) throws ActionExecutionException {
@@ -1367,18 +1331,13 @@ public class CppCompileAction extends AbstractAction
         CcToolchainFeatures.Variables variables,
         String actionName) {
       this.sourceFile = Preconditions.checkNotNull(sourceFile);
-      this.dotdFile = isGenerateDotdFile(sourceFile) ? Preconditions.checkNotNull(dotdFile) : null;
+      this.dotdFile = CppFileTypes.mustProduceDotdFile(sourceFile)
+                      ? Preconditions.checkNotNull(dotdFile) : null;
       this.copts = Preconditions.checkNotNull(copts);
       this.coptsFilter = coptsFilter;
       this.features = Preconditions.checkNotNull(features);
       this.variables = variables;
       this.actionName = actionName;
-    }
-
-    /** Returns true if Dotd file should be generated. */
-    private boolean isGenerateDotdFile(Artifact sourceArtifact) {
-      return CppFileTypes.headerDiscoveryRequired(sourceArtifact)
-          && !featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES);
     }
 
     /**
@@ -1393,14 +1352,15 @@ public class CppCompileAction extends AbstractAction
       List<String> commandLine = new ArrayList<>();
 
       // first: The command name.
-      Preconditions.checkArgument(
-          featureConfiguration.actionIsConfigured(actionName),
-          String.format("Expected action_config for '%s' to be configured", actionName));
-      commandLine.add(
-          featureConfiguration
-              .getToolForAction(actionName)
-              .getToolPath(cppConfiguration.getCrosstoolTopPathFragment())
-              .getPathString());
+      if (!featureConfiguration.actionIsConfigured(actionName)) {
+        commandLine.add(cppConfiguration.getToolPathFragment(Tool.GCC).getPathString());
+      } else {
+        commandLine.add(
+            featureConfiguration
+                .getToolForAction(actionName)
+                .getToolPath(cppConfiguration.getCrosstoolTopPathFragment())
+                .getPathString());
+      }
 
       // second: The compiler options.
       commandLine.addAll(getCompilerOptions(overwrittenVariables));

@@ -27,6 +27,7 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -79,8 +80,8 @@ public class FakeCppCompileAction extends CppCompileAction {
       ImmutableList<String> copts,
       Predicate<String> nocopts,
       Iterable<IncludeScannable> lipoScannables,
+      Iterable<Artifact> builtinIncludeFiles,
       CppSemantics cppSemantics,
-      CcToolchainProvider cppProvider,
       ImmutableMap<String, String> executionInfo) {
     super(
         owner,
@@ -122,8 +123,8 @@ public class FakeCppCompileAction extends CppCompileAction {
         executionInfo,
         ImmutableMap.<String, String>of(),
         CppCompileAction.CPP_COMPILE,
-        cppSemantics,
-        cppProvider);
+        builtinIncludeFiles,
+        cppSemantics);
     this.tempOutputFile = Preconditions.checkNotNull(tempOutputFile);
   }
 
@@ -132,22 +133,21 @@ public class FakeCppCompileAction extends CppCompileAction {
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     setModuleFileFlags();
+    Executor executor = actionExecutionContext.getExecutor();
+
     // First, do a normal compilation, to generate the ".d" file. The generated object file is built
     // to a temporary location (tempOutputFile) and ignored afterwards.
     LOG.info("Generating " + getDotdFile());
-    CppCompileActionContext context = actionExecutionContext.getContext(actionContext);
+    CppCompileActionContext context = executor.getContext(actionContext);
     CppCompileActionContext.Reply reply = null;
     try {
       reply = context.execWithReply(this, actionExecutionContext);
     } catch (ExecException e) {
-      throw e.toActionExecutionException(
-          "C++ compilation of rule '" + getOwner().getLabel() + "'",
-          actionExecutionContext.getVerboseFailures(),
-          this);
+      throw e.toActionExecutionException("C++ compilation of rule '" + getOwner().getLabel() + "'",
+          executor.getVerboseFailures(), this);
     }
-    IncludeScanningContext scanningContext =
-        actionExecutionContext.getContext(IncludeScanningContext.class);
-    Path execRoot = actionExecutionContext.getExecRoot();
+    IncludeScanningContext scanningContext = executor.getContext(IncludeScanningContext.class);
+    Path execRoot = executor.getExecRoot();
 
     NestedSet<Artifact> discoveredInputs;
     if (getDotdFile() == null) {
@@ -156,9 +156,10 @@ public class FakeCppCompileAction extends CppCompileAction {
       HeaderDiscovery.Builder discoveryBuilder =
           new HeaderDiscovery.Builder()
               .setAction(this)
+              .setDotdFile(getDotdFile())
               .setSourceFile(getSourceFile())
               .setSpecialInputsHandler(specialInputsHandler)
-              .setDependencies(processDepset(execRoot, reply).getDependencies())
+              .setDependencySet(processDepset(execRoot, reply))
               .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
               .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
 
@@ -169,7 +170,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       discoveredInputs =
           discoveryBuilder
               .build()
-              .discoverInputsFromDependencies(execRoot, scanningContext.getArtifactResolver());
+              .discoverInputsFromDotdFiles(execRoot, scanningContext.getArtifactResolver());
     }
      
     reply = null; // Clear in-memory .d files early.
@@ -184,11 +185,11 @@ public class FakeCppCompileAction extends CppCompileAction {
       validateInclusions(
           discoveredInputs,
           actionExecutionContext.getArtifactExpander(),
-          actionExecutionContext.getEventHandler());
+          executor.getEventHandler());
     } catch (ActionExecutionException e) {
       // TODO(bazel-team): (2009) make this into an error, once most of the current warnings
       // are fixed.
-      actionExecutionContext.getEventHandler().handle(Event.warn(
+      executor.getEventHandler().handle(Event.warn(
           getOwner().getLocation(),
           e.getMessage() + ";\n  this warning may eventually become an error"));
     }
