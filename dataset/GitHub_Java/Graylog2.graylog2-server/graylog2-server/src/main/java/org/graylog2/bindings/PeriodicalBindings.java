@@ -27,12 +27,17 @@ import org.graylog2.periodical.GarbageCollectionWarningThread;
 import org.graylog2.periodical.IndexRetentionThread;
 import org.graylog2.periodical.IndexRotationThread;
 import org.graylog2.periodical.IndexerClusterCheckerThread;
+import org.graylog2.periodical.MasterCacheWorkerThread;
 import org.graylog2.periodical.NodePingThread;
+import org.graylog2.periodical.OutputCacheWorkerThread;
 import org.graylog2.periodical.StreamThroughputCounterManagerThread;
-import org.graylog2.periodical.ThrottleStateUpdaterThread;
+import org.graylog2.periodical.TelemetryReporterThread;
 import org.graylog2.periodical.VersionCheckThread;
 import org.graylog2.plugin.periodical.Periodical;
 
+/**
+ * @author Dennis Oelkers <dennis@torch.sh>
+ */
 public class PeriodicalBindings extends AbstractModule {
     @Override
     protected void configure() {
@@ -46,9 +51,11 @@ public class PeriodicalBindings extends AbstractModule {
         periodicalBinder.addBinding().to(IndexerClusterCheckerThread.class);
         periodicalBinder.addBinding().to(IndexRetentionThread.class);
         periodicalBinder.addBinding().to(IndexRotationThread.class);
+        periodicalBinder.addBinding().to(MasterCacheWorkerThread.class);
         periodicalBinder.addBinding().to(NodePingThread.class);
+        periodicalBinder.addBinding().to(OutputCacheWorkerThread.class);
         periodicalBinder.addBinding().to(StreamThroughputCounterManagerThread.class);
+        periodicalBinder.addBinding().to(TelemetryReporterThread.class);
         periodicalBinder.addBinding().to(VersionCheckThread.class);
-        periodicalBinder.addBinding().to(ThrottleStateUpdaterThread.class);
     }
 }
