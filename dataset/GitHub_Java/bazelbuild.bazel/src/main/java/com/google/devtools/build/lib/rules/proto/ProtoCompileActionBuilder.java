@@ -296,7 +296,7 @@ public class ProtoCompileActionBuilder {
       Preconditions.checkArgument(langPluginParameter1 != null);
       // We pass a separate langPluginName as there are plugins that cannot be overridden
       // and thus we have to deal with "$xx_plugin" and "xx_plugin".
-      result.addFormatted(
+      result.addFormat(
           "--plugin=protoc-gen-%s=%s", langPrefix, langPluginTarget.getExecutable().getExecPath());
       result.add(new LazyLangPluginFlag(langPrefix, langPluginParameter1));
     }
@@ -314,11 +314,11 @@ public class ProtoCompileActionBuilder {
     if (areDepsStrict) {
       // Note: the %s in the line below is used by proto-compiler. That is, the string we create
       // here should have a literal %s in it.
-      result.addFormatted(STRICT_DEPS_FLAG_TEMPLATE, ruleContext.getLabel());
+      result.addFormat(STRICT_DEPS_FLAG_TEMPLATE, ruleContext.getLabel());
     }
 
     for (Artifact src : supportData.getDirectProtoSources()) {
-      result.add(src.getRootRelativePath());
+      result.addPath(src.getRootRelativePath());
     }
 
     if (!hasServices) {
@@ -580,7 +580,7 @@ public class ProtoCompileActionBuilder {
                   String.format("PLUGIN_%s_out", invocation.name))));
 
       if (toolchain.pluginExecutable() != null) {
-        cmdLine.addFormatted(
+        cmdLine.addFormat(
             "--plugin=protoc-gen-PLUGIN_%s=%s",
             invocation.name, toolchain.pluginExecutable().getExecutable().getExecPath());
       }
@@ -592,11 +592,11 @@ public class ProtoCompileActionBuilder {
     cmdLine.add(new ProtoCommandLineArgv(protosInDirectDeps, transitiveSources));
 
     if (protosInDirectDeps != null) {
-      cmdLine.addFormatted(STRICT_DEPS_FLAG_TEMPLATE, ruleLabel);
+      cmdLine.addFormat(STRICT_DEPS_FLAG_TEMPLATE, ruleLabel);
     }
 
     for (Artifact src : protosToCompile) {
-      cmdLine.add(src.getExecPath());
+      cmdLine.addPath(src.getExecPath());
     }
 
     if (!allowServices) {

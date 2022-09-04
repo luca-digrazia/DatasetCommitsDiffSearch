@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.getOnlyElement;
-import static com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode.TARGET;
+import static com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.cmdline.Label.parseAbsoluteUnchecked;
 import static com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition.HOST;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
@@ -29,14 +29,15 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMap;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.analysis.WrappingProvider;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -44,8 +45,10 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
+import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
@@ -69,24 +72,28 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
 
   public static final String PROTO_TOOLCHAIN_ATTR = ":aspect_proto_toolchain_for_javalite";
 
-  public static LateBoundDefault<?, Label> getProtoToolchainLabel(String defaultValue) {
-    return LateBoundDefault.fromTargetConfiguration(
-        ProtoConfiguration.class,
-        Label.parseAbsoluteUnchecked(defaultValue),
-        (rule, attributes, protoConfig) -> protoConfig.protoToolchainForJavaLite());
+  public static Attribute.LateBoundLabel<BuildConfiguration> getProtoToolchainLabel(
+      String defaultValue) {
+    return new Attribute.LateBoundLabel<BuildConfiguration>(
+        defaultValue, ProtoConfiguration.class) {
+      @Override
+      public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
+        return configuration.getFragment(ProtoConfiguration.class).protoToolchainForJavaLite();
+      }
+    };
   }
 
   private final JavaSemantics javaSemantics;
 
   @Nullable private final String jacocoLabel;
   private final String defaultProtoToolchainLabel;
-  private final LateBoundDefault<?, Label> hostJdkAttribute;
+  private final LateBoundLabel<BuildConfiguration> hostJdkAttribute;
 
   public JavaLiteProtoAspect(
       JavaSemantics javaSemantics,
       @Nullable String jacocoLabel,
       String defaultProtoToolchainLabel,
-      LateBoundDefault<?, Label> hostJdkAttribute) {
+      LateBoundLabel<BuildConfiguration> hostJdkAttribute) {
     this.javaSemantics = javaSemantics;
     this.jacocoLabel = jacocoLabel;
     this.defaultProtoToolchainLabel = defaultProtoToolchainLabel;
@@ -267,8 +274,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
               javaSemantics,
               JavaCompilationHelper.getJavaToolchainProvider(ruleContext),
               JavaHelper.getHostJavabaseInputs(ruleContext),
-              JavaCompilationHelper.getInstrumentationJars(ruleContext),
-              JavaRuleOutputJarsProvider.builder());
+              JavaCompilationHelper.getInstrumentationJars(ruleContext));
       return helper.buildCompilationArgsProvider(artifacts, true /* isReportedAsStrict */);
     }
 

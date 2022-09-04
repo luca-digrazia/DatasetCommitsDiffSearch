@@ -52,7 +52,6 @@ import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.FeatureSpecification;
-import com.google.devtools.build.lib.rules.cpp.transitions.LipoContextCollectorTransition;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.ToolchainInvocation;
@@ -126,7 +125,7 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
                     .value(ccToolchainAttrValue))
             .add(
                 attr(":lipo_context_collector", LABEL)
-                    .cfg(LipoContextCollectorTransition.INSTANCE)
+                    .cfg(CppRuleClasses.LipoTransition.LIPO_COLLECTOR)
                     .value(CppRuleClasses.LIPO_CONTEXT_COLLECTOR)
                     .skipPrereqValidatorCheck());
 

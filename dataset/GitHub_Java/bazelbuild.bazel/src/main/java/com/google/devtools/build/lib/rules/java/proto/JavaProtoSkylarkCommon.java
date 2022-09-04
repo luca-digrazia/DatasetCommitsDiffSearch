@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
+import com.google.devtools.build.lib.rules.java.JavaProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaToolchainProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
@@ -113,15 +113,15 @@ public class JavaProtoSkylarkCommon {
       @Param(name = "proto_toolchain_attr", positional = false, named = true, type = String.class)
     }
   )
-  public static JavaInfo getRuntimeToolchainProvider(
+  public static JavaProvider getRuntimeToolchainProvider(
       SkylarkRuleContext skylarkRuleContext, String protoToolchainAttr) throws EvalException {
     TransitiveInfoCollection runtime =
         getProtoToolchainProvider(skylarkRuleContext, protoToolchainAttr).runtime();
     return
-        JavaInfo.Builder.create()
+        JavaProvider.Builder.create()
             .addProvider(
                 JavaCompilationArgsProvider.class,
-                JavaInfo.getProvider(JavaCompilationArgsProvider.class, runtime))
+                runtime.getProvider(JavaCompilationArgsProvider.class))
             .build();
   }
 
