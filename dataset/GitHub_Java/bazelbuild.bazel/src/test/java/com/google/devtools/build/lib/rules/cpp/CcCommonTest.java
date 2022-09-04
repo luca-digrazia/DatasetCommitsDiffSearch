@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.ConfigurationFactory;
 import com.google.devtools.build.lib.analysis.mock.BazelAnalysisMock;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -42,7 +43,7 @@ import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.ToolchainType;
-import com.google.devtools.build.lib.rules.core.CoreRules;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.OsUtils;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -148,7 +149,7 @@ public class CcCommonTest extends BuildViewTestCase {
         "cc_library(name = 'c_lib',",
         "    srcs = ['foo.cc'],",
         "    copts = [ '-Wmy-warning', '-frun-faster' ])");
-    assertThat(getCopts("//copts:c_lib")).containsAllOf("-Wmy-warning", "-frun-faster");
+    MoreAsserts.assertContainsSublist(getCopts("//copts:c_lib"), "-Wmy-warning", "-frun-faster");
   }
 
   @Test
@@ -159,7 +160,8 @@ public class CcCommonTest extends BuildViewTestCase {
         "    srcs = ['foo.cc'],",
         "    copts = ['-Wmy-warning -frun-faster'])");
     List<String> copts = getCopts("//copts:c_lib");
-    assertThat(copts).containsAllOf("-Wmy-warning", "-frun-faster");
+    MoreAsserts.assertContainsSublist(copts, "-Wmy-warning", "-frun-faster");
+    assertContainsEvent("each item in the list should contain only one option");
   }
 
   @Test
@@ -171,7 +173,7 @@ public class CcCommonTest extends BuildViewTestCase {
         "    srcs = ['foo.cc'],",
         "    copts = ['-Wmy-warning -frun-faster'])");
     List<String> copts = getCopts("//copts:c_lib");
-    assertThat(copts).contains("-Wmy-warning -frun-faster");
+    MoreAsserts.assertContainsSublist(copts, "-Wmy-warning -frun-faster");
   }
 
   /**
@@ -189,8 +191,7 @@ public class CcCommonTest extends BuildViewTestCase {
             "archive_in_srcs_test",
             "cc_test(name = 'archive_in_srcs_test',",
             "           srcs = ['archive_in_srcs_test.cc'],",
-            "           deps = [':archive_in_srcs_lib'],",
-            "           linkstatic = 0,)",
+            "           deps = [':archive_in_srcs_lib'])",
             "cc_library(name = 'archive_in_srcs_lib',",
             "           srcs = ['libstatic.a', 'libboth.a', 'libboth.so'])");
     List<String> artifactNames = baseArtifactNames(getLinkerInputs(archiveInSrcsTest));
@@ -825,22 +826,6 @@ public class CcCommonTest extends BuildViewTestCase {
   }
 
   @Test
-  public void testProvidesLinkerScriptToLinkAction() throws Exception {
-    scratch.file(
-        "a/BUILD",
-        "cc_binary(",
-        "    name='bin',",
-        "    srcs=['b.cc'],",
-        "    linkopts=['-Wl,@$(location a.lds)'],",
-        "    deps=['a.lds'])");
-    ConfiguredTarget target = getConfiguredTarget("//a:bin");
-    CppLinkAction action =
-        (CppLinkAction) getGeneratingAction(getOnlyElement(getFilesToBuild(target)));
-    Iterable<Artifact> linkInputs = action.getInputs();
-    assertThat(ActionsTestUtil.baseArtifactNames(linkInputs)).contains("a.lds");
-  }
-
-  @Test
   public void testIncludeManglingSmoke() throws Exception {
     scratch.file(
         "third_party/a/BUILD",
@@ -987,13 +972,19 @@ public class CcCommonTest extends BuildViewTestCase {
       final AnalysisMock original = BazelAnalysisMock.INSTANCE;
       return new AnalysisMock.Delegate(original) {
         @Override
+        public ConfigurationFactory createConfigurationFactory() {
+          return new ConfigurationFactory(
+              createRuleClassProvider().getConfigurationCollectionFactory(),
+              createRuleClassProvider().getConfigurationFragments());
+        }
+
+        @Override
         public ConfiguredRuleClassProvider createRuleClassProvider() {
           ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
           builder.setToolsRepository("@bazel_tools");
           BazelRuleClassProvider.BAZEL_SETUP.init(builder);
-          CoreRules.INSTANCE.init(builder);
+          BazelRuleClassProvider.CORE_RULES.init(builder);
           BazelRuleClassProvider.CORE_WORKSPACE_RULES.init(builder);
-          BazelRuleClassProvider.PLATFORM_RULES.init(builder);
           BazelRuleClassProvider.GENERIC_RULES.init(builder);
           BazelRuleClassProvider.CPP_RULES.init(builder);
           builder.addRuleDefinition(new OnlyCppToolchainTypeRule());

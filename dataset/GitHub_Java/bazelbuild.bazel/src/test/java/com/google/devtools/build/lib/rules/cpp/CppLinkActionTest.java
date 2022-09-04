@@ -106,7 +106,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testToolchainFeatureFlags() throws Exception {
     FeatureConfiguration featureConfiguration =
         CcToolchainFeaturesTest.buildFeatures(
-                MockCcSupport.EMPTY_EXECUTABLE_ACTION_CONFIG,
+                MockCcSupport.INCOMPLETE_EXECUTABLE_ACTION_CONFIG,
                 "feature {",
                 "   name: 'a'",
                 "   flag_set {",
@@ -228,7 +228,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testToolchainFeatureEnv() throws Exception {
     FeatureConfiguration featureConfiguration =
         CcToolchainFeaturesTest.buildFeatures(
-                MockCcSupport.EMPTY_EXECUTABLE_ACTION_CONFIG,
+                MockCcSupport.INCOMPLETE_EXECUTABLE_ACTION_CONFIG,
                 "feature {",
                 "   name: 'a'",
                 "   env_set {",
