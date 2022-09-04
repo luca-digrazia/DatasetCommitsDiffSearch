@@ -91,10 +91,10 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
       thread =
           StarlarkThread.builder(mut)
               .useDefaultSemantics()
-              .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
-              .build();
-      thread.getGlobals().put("foo", "bar");
-      thread.getGlobals().put("wiz", 3);
+              .setGlobals(StarlarkThread.DEFAULT_GLOBALS)
+              .build()
+              .update("foo", "bar")
+              .update("wiz", 3);
     }
 
     assertThat(thread.getVariableNames())
@@ -137,51 +137,52 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
   public void testBindToNullThrowsException() throws Exception {
     NullPointerException e =
         assertThrows(NullPointerException.class, () -> update("some_name", null));
-    assertThat(e).hasMessageThat().isEqualTo("Module.put(some_name, null)");
+    assertThat(e).hasMessageThat().isEqualTo("trying to assign null to 'some_name'");
   }
 
   @Test
   public void testFrozen() throws Exception {
-    Module module;
+    StarlarkThread thread;
     try (Mutability mutability = Mutability.create("testFrozen")) {
-      // TODO(adonovan): make it simpler to construct a module without a thread,
-      // and move this test to ModuleTest.
-      StarlarkThread thread =
+      thread =
           StarlarkThread.builder(mutability)
               .useDefaultSemantics()
-              .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
+              .setGlobals(StarlarkThread.DEFAULT_GLOBALS)
               .build();
-      module = thread.getGlobals();
-      module.put("x", 1);
-      assertThat(module.lookup("x")).isEqualTo(1);
-      module.put("y", 2);
-      assertThat(module.lookup("y")).isEqualTo(2);
-      assertThat(module.lookup("x")).isEqualTo(1);
-      module.put("x", 3);
-      assertThat(module.lookup("x")).isEqualTo(3);
+      thread.update("x", 1);
+      assertThat(thread.moduleLookup("x")).isEqualTo(1);
+      thread.update("y", 2);
+      assertThat(thread.moduleLookup("y")).isEqualTo(2);
+      assertThat(thread.moduleLookup("x")).isEqualTo(1);
+      thread.update("x", 3);
+      assertThat(thread.moduleLookup("x")).isEqualTo(3);
     }
-
-    // This update to an existing variable should fail because the environment was frozen.
-    Mutability.MutabilityException ex =
-        assertThrows(Mutability.MutabilityException.class, () -> module.put("x", 4));
-    assertThat(ex).hasMessageThat().isEqualTo("trying to mutate a frozen object");
-
-    // This update to a new variable should also fail because the environment was frozen.
-    ex = assertThrows(Mutability.MutabilityException.class, () -> module.put("newvar", 5));
-    assertThat(ex).hasMessageThat().isEqualTo("trying to mutate a frozen object");
+    try {
+      // This update to an existing variable should fail because the environment was frozen.
+      thread.update("x", 4);
+      throw new Exception("failed to fail"); // not an AssertionError like fail()
+    } catch (AssertionError e) {
+      assertThat(e).hasMessageThat().isEqualTo("Can't update x to 4 in frozen environment");
+    }
+    try {
+      // This update to a new variable should also fail because the environment was frozen.
+      thread.update("newvar", 5);
+      throw new Exception("failed to fail"); // not an AssertionError like fail()
+    } catch (AssertionError e) {
+      assertThat(e).hasMessageThat().isEqualTo("Can't update newvar to 5 in frozen environment");
+    }
   }
 
   @Test
   public void testBuiltinsCanBeShadowed() throws Exception {
     StarlarkThread thread = newStarlarkThreadWithSkylarkOptions();
     EvalUtils.exec(ParserInput.fromLines("True = 123"), thread);
-    assertThat(thread.getGlobals().lookup("True")).isEqualTo(123);
+    assertThat(thread.moduleLookup("True")).isEqualTo(123);
   }
 
   @Test
   public void testVariableIsReferencedBeforeAssignment() throws Exception {
-    StarlarkThread thread = newStarlarkThread();
-    thread.getGlobals().put("global_var", 666);
+    StarlarkThread thread = newStarlarkThread().update("global_var", 666);
     try {
       EvalUtils.exec(
           ParserInput.fromLines(
@@ -201,17 +202,17 @@ public final class StarlarkThreadTest extends EvaluationTestCase {
     Mutability parentMutability = Mutability.create("parent env");
     StarlarkThread parentThread =
         StarlarkThread.builder(parentMutability).useDefaultSemantics().build();
-    parentThread.getGlobals().put("a", 1);
-    parentThread.getGlobals().put("c", 2);
-    parentThread.getGlobals().put("b", 3);
+    parentThread.update("a", 1);
+    parentThread.update("c", 2);
+    parentThread.update("b", 3);
     Module parentFrame = parentThread.getGlobals();
     parentMutability.freeze();
     Mutability mutability = Mutability.create("testing");
     StarlarkThread thread =
         StarlarkThread.builder(mutability).useDefaultSemantics().setGlobals(parentFrame).build();
-    thread.getGlobals().put("x", 4);
-    thread.getGlobals().put("z", 5);
-    thread.getGlobals().put("y", 6);
+    thread.update("x", 4);
+    thread.update("z", 5);
+    thread.update("y", 6);
     // The order just has to be deterministic, but for definiteness this test spells out the exact
     // order returned by the implementation: parent frame before current environment, and bindings
     // within a frame ordered by when they were added.
