@@ -16,6 +16,7 @@ import javax.ws.rs.ext.Provider;
 import io.quarkus.rest.runtime.core.LazyMethod;
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
 import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyWriter;
+import io.vertx.core.http.HttpServerResponse;
 
 @Provider
 public class StringMessageBodyHandler extends PrimitiveBodyHandler
@@ -41,7 +42,8 @@ public class StringMessageBodyHandler extends PrimitiveBodyHandler
     @Override
     public void writeResponse(Object o, QuarkusRestRequestContext context) throws WebApplicationException {
         // FIXME: use response encoding
-        context.getHttpServerResponse().end(o.toString());
+        HttpServerResponse vertxResponse = context.getContext().response();
+        vertxResponse.end(o.toString());
     }
 
     @Override
