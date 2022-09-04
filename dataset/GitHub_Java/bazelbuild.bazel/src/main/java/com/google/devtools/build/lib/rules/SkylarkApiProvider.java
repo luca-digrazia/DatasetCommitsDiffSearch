@@ -28,9 +28,16 @@ public abstract class SkylarkApiProvider {
     return info;
   }
 
-  /** Must be called once (and only once). */
-  public void init(TransitiveInfoCollection info) {
-    Preconditions.checkState(this.info == null);
+  public final void init(TransitiveInfoCollection info) {
+    if (this.info != null) {
+      // todo(dslomov): nuke this weird initialization mechanism.
+
+      // Allow multiple calls.
+      // It is possible for the Skylark rule to get a SkylarkApiProvider such as `target.java`
+      // from its dependency and pass it on. It does not make a whole lot of sense, but we
+      // shouldn't crash.
+      return;
+    }
     this.info = Preconditions.checkNotNull(info);
   }
 }

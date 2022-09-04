@@ -512,7 +512,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         myRuleTarget.get(myProviderKey);
     Object javaProvider = declaredProvider.getValue("p");
     assertThat(javaProvider).isInstanceOf(JavaProvider.class);
-    assertThat(javaLibraryTarget.get(JavaProvider.JAVA_PROVIDER)).isEqualTo(javaProvider);
+    assertThat(javaLibraryTarget.getProvider(JavaProvider.class)).isEqualTo(javaProvider);
   }
 
   @Test
@@ -537,11 +537,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     Object javaProvider = myRuleTarget.get(JavaProvider.JAVA_PROVIDER.getKey());
     assertThat(javaProvider).isInstanceOf(JavaProvider.class);
 
-    JavaProvider jlJavaProvider = javaLibraryTarget.get(JavaProvider.JAVA_PROVIDER);
+    JavaProvider jlJavaProvider = javaLibraryTarget.getProvider(JavaProvider.class);
 
     assertThat(jlJavaProvider == javaProvider).isTrue();
 
-    JavaProvider jlTopJavaProvider = topJavaLibraryTarget.get(JavaProvider.JAVA_PROVIDER);
+    JavaProvider jlTopJavaProvider = topJavaLibraryTarget.getProvider(JavaProvider.class);
 
     javaCompilationArgsHaveTheSameParent(
         jlJavaProvider.getProvider(JavaCompilationArgsProvider.class).getJavaCompilationArgs(),
