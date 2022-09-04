@@ -38,8 +38,6 @@ public class ListNormalAdapter extends BaseAdapter {
 
     protected boolean isPlay;
 
-    protected boolean isFull;
-
     public ListNormalAdapter(Context context) {
         super();
         this.context = context;
@@ -79,9 +77,8 @@ public class ListNormalAdapter extends BaseAdapter {
 
 
         //final String url = "https://res.exexm.com/cw_145225549855002";
-        final String urlH = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
-        final String urlV = "http://7xse1z.com1.z0.glb.clouddn.com/1491813192";
-        final String url = (position % 2 == 0) ? urlH : urlV;
+        final String url = "http://9890.vod.myqcloud.com/9890_4e292f9a3dd011e6b4078980237cc3d3.f20.mp4";
+        //final String url = "http://7xse1z.com1.z0.glb.clouddn.com/1491813192";
         //final String url = "http://111.198.24.133:83/yyy_login_server/pic/YB059284/97778276040859/1.mp4";
 
 
@@ -96,7 +93,7 @@ public class ListNormalAdapter extends BaseAdapter {
 
         //默认缓存路径
         //使用lazy的set可以避免滑动卡的情况存在
-        holder.gsyVideoPlayer.setUpLazy(url, false, null, null, "这是title");
+        holder.gsyVideoPlayer.setUpLazy(url, true, null, null, "这是title");
 
         //holder.gsyVideoPlayer.setNeedShowWifiTip(false);
 
@@ -186,7 +183,6 @@ public class ListNormalAdapter extends BaseAdapter {
             @Override
             public void onQuitFullscreen(String url, Object... objects) {
                 super.onQuitFullscreen(url, objects);
-                isFull = false;
                 GSYVideoManager.instance().setNeedMute(true);
                 if (getListNeedAutoLand()) {
                     ListNormalAdapter.this.onQuitFullscreen();
@@ -197,7 +193,6 @@ public class ListNormalAdapter extends BaseAdapter {
             public void onEnterFullscreen(String url, Object... objects) {
                 super.onEnterFullscreen(url, objects);
                 GSYVideoManager.instance().setNeedMute(false);
-                isFull = true;
                 holder.gsyVideoPlayer.getCurrentPlayer().getTitleTextView().setText((String) objects[0]);
             }
 
@@ -206,7 +201,6 @@ public class ListNormalAdapter extends BaseAdapter {
                 super.onAutoComplete(url, objects);
                 curPlayer = null;
                 isPlay = false;
-                isFull = false;
                 if (getListNeedAutoLand()) {
                     ListNormalAdapter.this.onAutoComplete();
                 }
@@ -236,9 +230,6 @@ public class ListNormalAdapter extends BaseAdapter {
         }
     }
 
-    public boolean isFull() {
-        return isFull;
-    }
 
     /**************************支持全屏重力全屏的部分**************************/
 
@@ -248,7 +239,7 @@ public class ListNormalAdapter extends BaseAdapter {
      * @return 返回true为支持列表重力全屏
      */
     public boolean getListNeedAutoLand() {
-        return false;
+        return true;
     }
 
     private void initOrientationUtils(StandardGSYVideoPlayer standardGSYVideoPlayer, boolean full) {
@@ -316,7 +307,5 @@ public class ListNormalAdapter extends BaseAdapter {
             orientationUtils = null;
         }
     }
-
-
 
 }

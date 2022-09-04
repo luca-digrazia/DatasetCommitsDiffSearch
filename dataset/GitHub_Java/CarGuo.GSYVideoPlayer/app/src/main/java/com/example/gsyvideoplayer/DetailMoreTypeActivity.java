@@ -1,10 +1,12 @@
 package com.example.gsyvideoplayer;
 
+import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.media.MediaMetadataRetriever;
 import android.os.Bundle;
-import androidx.core.widget.NestedScrollView;
-import androidx.appcompat.app.AppCompatActivity;
+import android.support.v4.widget.NestedScrollView;
+import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -116,7 +118,7 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
                 super.onPrepared(url, objects);
                 //开始播放了才能旋转和全屏
                 //orientationUtils.setEnable(true);
-                orientationUtils.setEnable(detailPlayer.isRotateWithSystem());
+                orientationUtils.setEnable(false);
                 isPlay = true;
             }
 
@@ -198,9 +200,6 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * orientationUtils 和  detailPlayer.onConfigurationChanged 方法是用于触发屏幕旋转的
-     */
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
