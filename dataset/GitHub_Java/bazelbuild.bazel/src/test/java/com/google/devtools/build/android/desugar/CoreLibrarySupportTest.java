@@ -14,6 +14,7 @@
 package com.google.devtools.build.android.desugar;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter;
@@ -27,7 +28,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 import org.objectweb.asm.Opcodes;
 
-/** Tests for {@link CoreLibrarySupport}. */
 @RunWith(JUnit4.class)
 public class CoreLibrarySupportTest {
 
@@ -38,6 +38,7 @@ public class CoreLibrarySupportTest {
             new CoreLibraryRewriter(""),
             null,
             ImmutableList.of("java/time/"),
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
@@ -60,6 +61,7 @@ public class CoreLibrarySupportTest {
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
+            ImmutableList.of(),
             ImmutableList.of());
     assertThat(support.isRenamedCoreLibrary("__/java/time/X")).isTrue();
     assertThat(support.isRenamedCoreLibrary("__/java/time/y/X")).isTrue();
@@ -79,6 +81,7 @@ public class CoreLibrarySupportTest {
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
+            ImmutableList.of(),
             ImmutableList.of());
     assertThat(support.renameCoreLibrary("java/time/X")).isEqualTo("j$/time/X");
     assertThat(support.renameCoreLibrary("com/google/X")).isEqualTo("com/google/X");
@@ -90,6 +93,7 @@ public class CoreLibrarySupportTest {
         new CoreLibrarySupport(
             new CoreLibraryRewriter("__/"),
             null,
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
@@ -111,12 +115,38 @@ public class CoreLibrarySupportTest {
                 "java/util/Existing#match -> java/util/Helper",
                 "java/util/Existing#unused -> com/google/Unused"),
             ImmutableList.of(),
+            ImmutableList.of(),
             ImmutableList.of());
     assertThat(support.getMoveTarget("__/java/util/Existing", "match")).isEqualTo("j$/util/Helper");
     assertThat(support.getMoveTarget("java/util/Existing", "match")).isEqualTo("j$/util/Helper");
     assertThat(support.getMoveTarget("__/java/util/Existing", "matchesnot")).isNull();
     assertThat(support.getMoveTarget("__/java/util/ExistingOther", "match")).isNull();
     assertThat(support.usedRuntimeHelpers()).containsExactly("j$/util/Helper");
+  }
+
+  @Test
+  public void testGetFromCoreLibraryConverter() throws Exception {
+    CoreLibrarySupport support =
+        new CoreLibrarySupport(
+            new CoreLibraryRewriter("__/"),
+            null,
+            ImmutableList.of("java/util/Existing"),
+            ImmutableList.of(),
+            ImmutableList.of(),
+            ImmutableList.of(),
+            ImmutableList.of("java/util/Existing=com/google/Helper"),
+            ImmutableList.of());
+    assertThat(support.getFromCoreLibraryConverter("__/java/util/Existing"))
+        .isEqualTo("com/google/Helper");
+    assertThat(support.getFromCoreLibraryConverter("java/util/Existing"))
+        .isEqualTo("com/google/Helper");
+    assertThrows(
+        NullPointerException.class,
+        () -> support.getFromCoreLibraryConverter("__/java/util/Existing2"));
+    assertThrows(
+        NullPointerException.class,
+        () -> support.getFromCoreLibraryConverter("java/util/Existing2"));
+    assertThat(support.usedRuntimeHelpers()).containsExactly("com/google/Helper");
   }
 
   @Test
@@ -127,6 +157,7 @@ public class CoreLibrarySupportTest {
             Thread.currentThread().getContextClassLoader(),
             ImmutableList.of("java/util/concurrent/"),
             ImmutableList.of("java/util/Map"),
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of());
@@ -147,6 +178,7 @@ public class CoreLibrarySupportTest {
             Thread.currentThread().getContextClassLoader(),
             ImmutableList.of(),
             ImmutableList.of("java/util/Collection"),
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of());
@@ -185,6 +217,7 @@ public class CoreLibrarySupportTest {
             ImmutableList.of("java/util/Moved"),
             ImmutableList.of("java/util/Map"),
             ImmutableList.of("java/util/LinkedHashMap#forEach->java/util/Moved"),
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of());
     assertThat(
@@ -239,6 +272,7 @@ public class CoreLibrarySupportTest {
             ImmutableList.of("java/util/Collection"),
             ImmutableList.of(),
             ImmutableList.of(),
+            ImmutableList.of(),
             ImmutableList.of());
     assertThat(
             support.getCoreInterfaceRewritingTarget(
@@ -258,6 +292,7 @@ public class CoreLibrarySupportTest {
             Thread.currentThread().getContextClassLoader(),
             ImmutableList.of(),
             ImmutableList.of("java/util/Map"),
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of());
@@ -297,6 +332,7 @@ public class CoreLibrarySupportTest {
             ImmutableList.of("java/util/Comparator"),
             ImmutableList.of(),
             ImmutableList.of(),
+            ImmutableList.of(),
             ImmutableList.of());
     assertThat(
             support.getCoreInterfaceRewritingTarget(
@@ -319,6 +355,7 @@ public class CoreLibrarySupportTest {
             new CoreLibraryRewriter(""),
             Thread.currentThread().getContextClassLoader(),
             ImmutableList.of("java/util/"),
+            ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
             ImmutableList.of(),
@@ -388,6 +425,7 @@ public class CoreLibrarySupportTest {
             ImmutableList.of("java/util/Map"),
             ImmutableList.of(),
             ImmutableList.of(),
+            ImmutableList.of(),
             ImmutableList.of());
     assertThat(
             support.getCoreInterfaceRewritingTarget(
@@ -417,6 +455,7 @@ public class CoreLibrarySupportTest {
             ImmutableList.of("java/util/Collection"),
             ImmutableList.of(),
             ImmutableList.of("java/util/Collection#removeIf"),
+            ImmutableList.of(),
             ImmutableList.of());
     assertThat(
             support.getCoreInterfaceRewritingTarget(

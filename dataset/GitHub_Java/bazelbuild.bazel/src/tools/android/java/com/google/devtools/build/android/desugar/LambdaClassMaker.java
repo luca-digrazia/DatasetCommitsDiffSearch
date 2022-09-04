@@ -14,19 +14,19 @@
 package com.google.devtools.build.android.desugar;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.Iterables.getOnlyElement;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Iterators;
 import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.function.Function;
-import java.util.function.Predicate;
+import java.util.Set;
 import java.util.stream.Stream;
 
 class LambdaClassMaker {
@@ -35,61 +35,68 @@ class LambdaClassMaker {
 
   private final Path rootDirectory;
   private final Map<Path, LambdaInfo> generatedClasses = new LinkedHashMap<>();
+  private final Set<Path> existingPaths = new LinkedHashSet<>();
 
   public LambdaClassMaker(Path rootDirectory) {
-    checkArgument(Files.isDirectory(rootDirectory));
+    checkArgument(
+        Files.isDirectory(rootDirectory), "The argument '%s' is not a directory.", rootDirectory);
     this.rootDirectory = rootDirectory;
   }
 
-  public String generateLambdaClass(String invokerInternalName, LambdaInfo lambdaInfo,
-      MethodHandle bootstrapMethod, ArrayList<Object> bsmArgs) throws IOException {
-    // Invoking the bootstrap method will dump the generated class
+  public void generateLambdaClass(
+      String invokerInternalName,
+      LambdaInfo lambdaInfo,
+      MethodHandle bootstrapMethod,
+      ArrayList<Object> bsmArgs)
+      throws IOException {
+    // Invoking the bootstrap method will dump the generated class.  Ignore any pre-existing
+    // matching files, which can come from desugar's implementation using classes being desugared.
+    existingPaths.addAll(findUnprocessed(invokerInternalName + "$$Lambda$"));
     try {
       bootstrapMethod.invokeWithArguments(bsmArgs);
     } catch (Throwable e) {
-      throw new IllegalStateException("Failed to generate lambda class for class "
-          + invokerInternalName + " using " + bootstrapMethod + " with arguments " + bsmArgs, e);
+      throw new IllegalStateException(
+          "Failed to generate lambda class for class "
+              + invokerInternalName
+              + " using "
+              + bootstrapMethod
+              + " with arguments "
+              + bsmArgs,
+          e);
     }
 
-    Path generatedClassFile = findOnlyUnprocessed(invokerInternalName + "$$Lambda$");
-    String lambdaClassName = generatedClassFile.toString();
-    checkState(lambdaClassName.endsWith(".class"), "Unexpected filename %s", lambdaClassName);
-    lambdaClassName = lambdaClassName.substring(0, lambdaClassName.length() - ".class".length());
+    Path generatedClassFile = getOnlyElement(findUnprocessed(invokerInternalName + "$$Lambda$"));
     generatedClasses.put(generatedClassFile, lambdaInfo);
-    return lambdaClassName;
+    existingPaths.add(generatedClassFile);
   }
 
   /**
-   * Returns relative paths to .class files generated since the last call to this method together
+   * Returns absolute paths to .class files generated since the last call to this method together
    * with a string descriptor of the factory method.
    */
-  public Map<Path, LambdaInfo> drain() {
+  public ImmutableMap<Path, LambdaInfo> drain() {
     ImmutableMap<Path, LambdaInfo> result = ImmutableMap.copyOf(generatedClasses);
     generatedClasses.clear();
     return result;
   }
 
-  private Path findOnlyUnprocessed(final String pathPrefix) throws IOException {
-    // TODO(kmb): Investigate making this faster in the case of many lambdas
-    // TODO(bazel-team): This could be much nicer with lambdas
-    try (Stream<Path> results =
-        Files.walk(rootDirectory)
-            .map(
-                new Function<Path, Path>() {
-                  @Override
-                  public Path apply(Path path) {
-                    return rootDirectory.relativize(path);
-                  }
-                })
-            .filter(
-                new Predicate<Path>() {
-                  @Override
-                  public boolean test(Path path) {
-                    return path.toString().startsWith(pathPrefix)
-                        && !generatedClasses.containsKey(path);
-                  }
-                })) {
-      return Iterators.getOnlyElement(results.iterator());
+  private ImmutableList<Path> findUnprocessed(String pathPrefix) throws IOException {
+    // pathPrefix is an internal class name prefix containing '/', but paths obtained on Windows
+    // will not contain '/' and searches will fail.  So, construct an absolute path from the given
+    // string and use its string representation to find the file we need regardless of host
+    // system's file system
+    Path rootPathPrefix = rootDirectory.resolve(pathPrefix);
+    final String rootPathPrefixStr = rootPathPrefix.toString();
+
+    if (!Files.exists(rootPathPrefix.getParent())) {
+      return ImmutableList.of();
+    }
+    try (Stream<Path> paths = Files.list(rootPathPrefix.getParent())) {
+      return paths
+          .filter(
+              path ->
+                  path.toString().startsWith(rootPathPrefixStr) && !existingPaths.contains(path))
+          .collect(ImmutableList.toImmutableList());
     }
   }
 }

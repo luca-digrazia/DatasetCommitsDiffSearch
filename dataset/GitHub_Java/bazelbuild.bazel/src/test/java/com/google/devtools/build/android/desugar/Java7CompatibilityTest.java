@@ -14,7 +14,7 @@
 package com.google.devtools.build.android.desugar;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.android.desugar.io.BitFlags;
 import org.junit.Test;
@@ -68,7 +68,7 @@ public class Java7CompatibilityTest {
     int clinitMethods;
 
     private ClassTester() {
-      super(Opcodes.ASM8, null);
+      super(Opcodes.ASM5, null);
     }
 
     @Override

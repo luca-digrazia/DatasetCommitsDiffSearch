@@ -27,11 +27,8 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
-import com.google.devtools.build.android.desugar.corelibadapter.ShadowedApiAdapterHelper;
 import com.google.devtools.build.android.desugar.io.BitFlags;
 import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter;
-import com.google.devtools.build.android.desugar.langmodel.ClassName;
-import com.google.devtools.build.android.desugar.langmodel.MethodInvocationSite;
 import com.google.errorprone.annotations.Immutable;
 import java.lang.reflect.Method;
 import java.util.Collection;
@@ -65,7 +62,8 @@ class CoreLibrarySupport {
   private final ImmutableSet<Class<?>> emulatedInterfaces;
   /** Map from {@code owner#name} core library members to their new owners. */
   private final ImmutableMap<String, String> memberMoves;
-
+  /** Map from core library types to the classes that convert to desugared types. */
+  private final ImmutableMap<String, String> fromConversions;
   /** Map from preserved method names to the base classes that define them. */
   private final ImmutableMultimap<String, String> preserveOverrides;
 
@@ -81,11 +79,8 @@ class CoreLibrarySupport {
   /** For the collection of definitions of emulated default methods (deterministic iteration). */
   private final Multimap<String, EmulatedMethod> emulatedDefaultMethods =
       LinkedHashMultimap.create();
-  /** Collect targets queried in {@link #getMoveTarget}. */
+  /** Collect targets queried in {@link #getMoveTarget} and {@link #getFromCoreLibraryConverter}. */
   private final Set<String> usedRuntimeHelpers = new LinkedHashSet<>();
-
-  /** Collect targets queried in {@link #getTypeConverterSite(ClassName)}. */
-  private final Set<ClassName> usedTypeConverters = new LinkedHashSet<>();
 
   public CoreLibrarySupport(
       CoreLibraryRewriter rewriter,
@@ -94,14 +89,12 @@ class CoreLibrarySupport {
       List<String> emulatedInterfaces,
       List<String> memberMoves,
       List<String> excludeFromEmulation,
+      List<String> fromOriginalConversions,
       List<String> preserveOverrides) {
     this.rewriter = rewriter;
     this.targetLoader = targetLoader;
     checkArgument(
-        renamedPrefixes.stream()
-            .allMatch(prefix -> prefix.startsWith("java/") || prefix.startsWith("javadesugar/")),
-        "Unexpected renamedPrefixes: Actual (%s).",
-        renamedPrefixes);
+        renamedPrefixes.stream().allMatch(prefix -> prefix.startsWith("java/")), renamedPrefixes);
     this.renamedPrefixes = ImmutableSet.copyOf(renamedPrefixes);
     this.excludeFromEmulation = ImmutableSet.copyOf(excludeFromEmulation);
 
@@ -129,8 +122,7 @@ class CoreLibrarySupport {
           "Original renamed, no need to move it: %s",
           move);
       checkArgument(
-          !(pair.get(1).startsWith("java/") || pair.get(1).startsWith("javadesugar/"))
-              || isRenamedCoreLibrary(pair.get(1)),
+          !pair.get(1).startsWith("java/") || isRenamedCoreLibrary(pair.get(1)),
           "Core library target not renamed: %s",
           move);
       checkArgument(
@@ -148,6 +140,25 @@ class CoreLibrarySupport {
           pair.get(0));
     }
     this.memberMoves = ImmutableMap.copyOf(mapBuilder);
+
+    splitter = Splitter.on("=").trimResults().omitEmptyStrings();
+    mapBuilder = new LinkedHashMap<>();
+    for (String fromConversion : fromOriginalConversions) {
+      List<String> pair = splitter.splitToList(fromConversion);
+      checkArgument(pair.size() == 2, "Doesn't split as expected: %s", fromConversion);
+      String key = pair.get(0);
+      String value = pair.get(1);
+      checkArgument(isRenamedCoreLibrary(key), "Conversion subject not renamed: %s", key);
+      checkArgument(!isRenamedCoreLibrary(value), "Renamed converters not supported: %s", value);
+      String existing = mapBuilder.put(key, value);
+      checkArgument(
+          existing == null || existing.equals(value),
+          "Two conversions %s and %s configured for %s",
+          existing,
+          value,
+          key);
+    }
+    this.fromConversions = ImmutableMap.copyOf(mapBuilder);
 
     splitter = Splitter.on("#").trimResults().omitEmptyStrings();
     ImmutableMultimap.Builder<String, String> multimapBuilder = ImmutableMultimap.builder();
@@ -167,26 +178,20 @@ class CoreLibrarySupport {
 
   public boolean isRenamedCoreLibrary(String internalName) {
     String unprefixedName = rewriter.unprefix(internalName);
-    if (!(unprefixedName.startsWith("java/") || unprefixedName.startsWith("javadesugar/"))
-        || renamedPrefixes.isEmpty()) {
+    if (!unprefixedName.startsWith("java/") || renamedPrefixes.isEmpty()) {
       return false; // shortcut
     }
     // Rename any classes desugar might generate under java/ (for emulated interfaces) as well as
     // configured prefixes
     return looksGenerated(unprefixedName)
-        || renamedPrefixes.stream().anyMatch(unprefixedName::startsWith);
+        || renamedPrefixes.stream().anyMatch(prefix -> unprefixedName.startsWith(prefix));
   }
 
   public String renameCoreLibrary(String internalName) {
     internalName = rewriter.unprefix(internalName);
-    if (internalName.startsWith("java/")) {
-      return "j$/" + internalName.substring(/* cut away "java/" prefix */ 5);
-    }
-    if (internalName.startsWith("javadesugar/")) {
-      return "jd$/" + internalName.substring(/* cut away "javadesugar/" prefix */ 12);
-    }
-
-    return internalName;
+    return (internalName.startsWith("java/"))
+        ? "j$/" + internalName.substring(/* cut away "java/" prefix */ 5)
+        : internalName;
   }
 
   public Remapper getRemapper() {
@@ -203,11 +208,15 @@ class CoreLibrarySupport {
     return result;
   }
 
-  public MethodInvocationSite getTypeConverterSite(ClassName classname) {
-    MethodInvocationSite typeConverterSite =
-        ShadowedApiAdapterHelper.shadowedToMirroredTypeConversionSite(classname);
-    usedTypeConverters.add(typeConverterSite.owner());
-    return typeConverterSite;
+  public String getFromCoreLibraryConverter(String internalName) {
+    String result =
+        checkNotNull(
+            fromConversions.get(rewriter.unprefix(internalName)),
+            "No from converter for %s",
+            internalName);
+    // Remember that we need this conversion so we can include it in the output later
+    usedRuntimeHelpers.add(result);
+    return result;
   }
 
   /**
@@ -409,13 +418,9 @@ class CoreLibrarySupport {
     return null;
   }
 
-  /** Returns targets queried in {@link #getMoveTarget}. */
+  /** Returns targets queried in {@link #getMoveTarget} and {@link #getFromCoreLibraryConverter}. */
   public Set<String> usedRuntimeHelpers() {
     return unmodifiableSet(usedRuntimeHelpers);
-  }
-
-  public ImmutableSet<ClassName> usedTypeConverters() {
-    return ImmutableSet.copyOf(usedTypeConverters);
   }
 
   public void makeDispatchHelpers(GeneratedClassStore store) {

@@ -14,10 +14,10 @@
 package com.google.devtools.build.android.desugar;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -25,7 +25,6 @@ import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 
-/** Tests for {@link CorePackageRenamer}. */
 // TODO(b/134636762): Test override preservation logic somehow (needs to class-load test input)
 @RunWith(JUnit4.class)
 public class CorePackageRenamerTest {
@@ -42,6 +41,7 @@ public class CorePackageRenamerTest {
                 ImmutableList.of("java/time/"),
                 ImmutableList.of(),
                 ImmutableList.of("java/util/A#m->java/time/B"),
+                ImmutableList.of(),
                 ImmutableList.of(),
                 ImmutableList.of()));
     MethodVisitor mv = renamer.visitMethod(0, "test", "()V", null, null);
@@ -80,6 +80,7 @@ public class CorePackageRenamerTest {
                 ImmutableList.of(),
                 ImmutableList.of(),
                 ImmutableList.of(),
+                ImmutableList.of(),
                 ImmutableList.of()));
     MethodVisitor mv = renamer.visitMethod(0, "test", "()V", null, null);
 
@@ -93,19 +94,20 @@ public class CorePackageRenamerTest {
     assertThat(out.mv.owner).isEqualTo("android/arch/Instant");
     assertThat(out.mv.desc).isEqualTo("()Lj$/time/Instant;");
 
-    try {
-      mv.visitMethodInsn(
-          Opcodes.INVOKESTATIC, "android/time/Instant", "now", "()Ljava/time/Instant;", false);
-      Assert.fail("expected failure");
-    } catch (IllegalStateException e) {
-      // expected
-    }
-    try {
-      mv.visitFieldInsn(Opcodes.GETFIELD, "android/time/Instant", "now", "Ljava/time/Instant;");
-      Assert.fail("expected failure");
-    } catch (IllegalStateException e) {
-      // expected
-    }
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            mv.visitMethodInsn(
+                Opcodes.INVOKESTATIC,
+                "android/time/Instant",
+                "now",
+                "()Ljava/time/Instant;",
+                false));
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            mv.visitFieldInsn(
+                Opcodes.GETFIELD, "android/time/Instant", "now", "Ljava/time/Instant;"));
   }
 
   private static class MockClassVisitor extends ClassVisitor {
