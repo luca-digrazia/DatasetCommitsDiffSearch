@@ -70,13 +70,14 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
   public static final NonexistentFileStateValue NONEXISTENT_FILE_STATE_NODE =
       new NonexistentFileStateValue();
 
-  private FileStateValue() {}
+  protected FileStateValue() {
+  }
 
   public static FileStateValue create(
       RootedPath rootedPath,
       FilesystemCalls syscallCache,
       @Nullable TimestampGranularityMonitor tsgm)
-      throws IOException {
+      throws InconsistentFilesystemException, IOException {
     Path path = rootedPath.asPath();
     Dirent.Type type = syscallCache.getType(path, Symlinks.NOFOLLOW);
     if (type == null) {
@@ -90,21 +91,20 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
       case FILE:
       case UNKNOWN:
         FileStatus stat = syscallCache.statIfFound(path, Symlinks.NOFOLLOW);
-        if (stat == null) {
-          throw new InconsistentFilesystemException(
-              "File " + rootedPath + " found in directory, but stat failed");
-        }
+        Preconditions.checkNotNull(stat, "File %s found in directory, but stat failed", rootedPath);
         return createWithStatNoFollow(
             rootedPath,
             FileStatusWithDigestAdapter.adapt(stat),
             /*digestWillBeInjected=*/ false,
             tsgm);
+      default:
+        throw new IllegalStateException(type.toString());
     }
-    throw new AssertionError(type);
   }
 
-  public static FileStateValue create(
-      RootedPath rootedPath, @Nullable TimestampGranularityMonitor tsgm) throws IOException {
+  public static FileStateValue create(RootedPath rootedPath,
+      @Nullable TimestampGranularityMonitor tsgm) throws InconsistentFilesystemException,
+      IOException {
     Path path = rootedPath.asPath();
     // Stat, but don't throw an exception for the common case of a nonexistent file. This still
     // throws an IOException in case any other IO error is encountered.
@@ -121,7 +121,7 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
       FileStatusWithDigest statNoFollow,
       boolean digestWillBeInjected,
       @Nullable TimestampGranularityMonitor tsgm)
-      throws IOException {
+      throws InconsistentFilesystemException, IOException {
     Path path = rootedPath.asPath();
     if (statNoFollow.isFile()) {
       return statNoFollow.isSpecialFile()
@@ -410,7 +410,8 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
     private static final BigInteger FINGERPRINT =
         new BigInteger(1, "DirectoryFileStateValue".getBytes(UTF_8));
 
-    private DirectoryFileStateValue() {}
+    private DirectoryFileStateValue() {
+    }
 
     @Override
     public FileStateType getType() {
@@ -500,7 +501,8 @@ public abstract class FileStateValue implements HasDigest, SkyValue {
     private static final BigInteger FINGERPRINT =
         new BigInteger(1, "NonexistentFileStateValue".getBytes(UTF_8));
 
-    private NonexistentFileStateValue() {}
+    private NonexistentFileStateValue() {
+    }
 
     @Override
     public FileStateType getType() {
