@@ -73,10 +73,6 @@ public class ExecutorRecorder {
         return devModeExecutor;
     }
 
-    static void shutdownDevMode() {
-        devModeExecutor.shutdown();
-    }
-
     private static Runnable createShutdownTask(ThreadPoolConfig threadPoolConfig, EnhancedQueueExecutor executor) {
         return new Runnable() {
             @Override
@@ -162,7 +158,7 @@ public class ExecutorRecorder {
         final int cpus = ProcessorInfo.availableProcessors();
         // run time config variables
         builder.setCorePoolSize(threadPoolConfig.coreThreads);
-        builder.setMaximumPoolSize(threadPoolConfig.maxThreads.orElse(Math.max(8 * cpus, 200)));
+        builder.setMaximumPoolSize(threadPoolConfig.maxThreads.orElse(8 * cpus));
         if (threadPoolConfig.queueSize.isPresent()) {
             if (threadPoolConfig.queueSize.getAsInt() < 0) {
                 builder.setMaximumQueueSize(Integer.MAX_VALUE);
