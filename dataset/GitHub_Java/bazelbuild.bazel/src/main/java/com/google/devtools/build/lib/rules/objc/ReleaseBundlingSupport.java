@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.objc.BundleSupport.ExtraActoolArgs;
 import com.google.devtools.build.lib.rules.objc.Bundling.Builder;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -371,6 +370,7 @@ public final class ReleaseBundlingSupport {
   }
 
   private void registerEnvironmentPlistAction() {
+    AppleConfiguration configuration = ruleContext.getFragment(AppleConfiguration.class);
     // Generates a .plist that contains environment values (such as the SDK used to build, the Xcode
     // version, etc), which are parsed from various .plist files of the OS, namely Xcodes' and
     // Platforms' plists.
@@ -381,8 +381,7 @@ public final class ReleaseBundlingSupport {
             platform.getLowerCaseNameInPlist(),
             XcodeConfig.getSdkVersionForPlatform(ruleContext, platform));
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(configuration, platform)
             .setMnemonic("EnvironmentPlist")
             .setExecutable(attributes.environmentPlist())
             .addOutput(getGeneratedEnvironmentPlist())
@@ -473,11 +472,10 @@ public final class ReleaseBundlingSupport {
 
     actionCommandLine += "cd ${t} && /usr/bin/zip -q -r \"${signed_ipa}\" .";
 
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
     SpawnAction.Builder processAction =
         ObjcRuleClasses.spawnBashOnDarwinActionBuilder(actionCommandLine)
-            .setEnvironment(
-                ObjcRuleClasses.appleToolchainEnvironment(
-                    XcodeConfigProvider.fromRuleContext(ruleContext), platform))
+            .setEnvironment(ObjcRuleClasses.appleToolchainEnvironment(appleConfiguration, platform))
             .setMnemonic("ObjcProcessIpa")
             .setProgressMessage("Processing iOS IPA: %s", ruleContext.getLabel())
             .disableSandboxing()
@@ -676,6 +674,40 @@ public final class ReleaseBundlingSupport {
               ObjcProvider.EXPORTED_DEBUG_ARTIFACTS,
               intermediateArtifacts.dsymPlist(dsymOutputType));
     }
+  }
+
+  /**
+   * Creates the {@link XcTestAppProvider} that can be used if this application is used as an
+   * {@code xctest_app}.
+   */
+  XcTestAppProvider xcTestAppProvider() {
+    // We want access to #import-able things from our test rig's dependency graph, but we don't
+    // want to link anything since that stuff is shared automatically by way of the
+    // -bundle_loader linker flag.
+    // TODO(bazel-team): Handle the FRAMEWORK_DIR key properly. We probably want to add it to
+    // framework search paths, but not actually link it with the -framework flag.
+    ObjcProvider partialObjcProvider =
+        new ObjcProvider.Builder()
+            .addTransitiveAndPropagate(ObjcProvider.HEADER, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.INCLUDE, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.DEFINE, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.SDK_DYLIB, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.SDK_FRAMEWORK, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.SOURCE, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.WEAK_SDK_FRAMEWORK, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.STATIC_FRAMEWORK_FILE, objcProvider)
+            .addTransitiveAndPropagate(ObjcProvider.DYNAMIC_FRAMEWORK_FILE, objcProvider)
+            .addTransitiveAndPropagate(
+                ObjcProvider.FRAMEWORK_SEARCH_PATH_ONLY,
+                objcProvider.get(ObjcProvider.STATIC_FRAMEWORK_DIR))
+            .addTransitiveAndPropagate(
+                ObjcProvider.FRAMEWORK_SEARCH_PATH_ONLY,
+                objcProvider.get(ObjcProvider.DYNAMIC_FRAMEWORK_DIR))
+            .build();
+    return new XcTestAppProvider(
+        intermediateArtifacts.combinedArchitectureBinary(),
+        releaseBundling.getIpaArtifact(),
+        partialObjcProvider);
   }
 
   /**
@@ -991,8 +1023,12 @@ public final class ReleaseBundlingSupport {
       return;
     }
 
+    AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
+    if (appleConfiguration.getXcodeToolchain() != null) {
+      commandLine.add("--toolchain", appleConfiguration.getXcodeToolchain());
+    }
 
     commandLine
         .add("--output_zip_path")
@@ -1004,8 +1040,7 @@ public final class ReleaseBundlingSupport {
         .addExecPath("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(appleConfiguration, platform)
             .setMnemonic("SwiftStdlibCopy")
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .addCommandLine(commandLine.build())
@@ -1020,8 +1055,13 @@ public final class ReleaseBundlingSupport {
       return;
     }
 
+    AppleConfiguration configuration = ruleContext.getFragment(AppleConfiguration.class);
 
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
+    if (configuration.getXcodeToolchain() != null) {
+      commandLine.add("--toolchain", configuration.getXcodeToolchain());
+    }
+
     commandLine
         .add("--output_zip_path")
         .addPath(intermediateArtifacts.swiftSupportZip().getExecPath())
@@ -1032,8 +1072,7 @@ public final class ReleaseBundlingSupport {
         .addExecPath("--scan-executable", combinedArchBinary);
 
     ruleContext.registerAction(
-        ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+        ObjcRuleClasses.spawnAppleEnvActionBuilder(configuration, platform)
             .setMnemonic("SwiftCopySwiftSupport")
             .setExecutable(attributes.swiftStdlibToolWrapper())
             .addCommandLine(commandLine.build())
