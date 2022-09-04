@@ -258,5 +258,10 @@ public class MultiArchSplitTransitionProvider implements SplitTransitionProvider
       }
       return splitBuildOptions.build();
     }
+
+    @Override
+    public boolean defaultsToSelf() {
+      return true;
+    }
   }
 }
