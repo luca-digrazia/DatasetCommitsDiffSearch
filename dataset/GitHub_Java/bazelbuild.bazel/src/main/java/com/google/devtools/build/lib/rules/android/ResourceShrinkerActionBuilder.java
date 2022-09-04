@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
@@ -171,11 +170,10 @@ public class ResourceShrinkerActionBuilder {
     inputs.add(sdk.getAndroidJar());
 
     if (!uncompressedExtensions.isEmpty()) {
-      commandLine.addAll(
-          "--uncompressedExtensions", VectorArg.join(",").each(uncompressedExtensions));
+      commandLine.addJoined("--uncompressedExtensions", ",", uncompressedExtensions);
     }
     if (!assetsToIgnore.isEmpty()) {
-      commandLine.addAll("--assetsToIgnore", VectorArg.join(",").each(assetsToIgnore));
+      commandLine.addJoined("--assetsToIgnore", ",", assetsToIgnore);
     }
     if (ruleContext.getConfiguration().getCompilationMode() != CompilationMode.OPT) {
       commandLine.add("--debug");
@@ -215,7 +213,7 @@ public class ResourceShrinkerActionBuilder {
 
     ImmutableList<String> resourcePackages =
         getResourcePackages(primaryResources, dependencyResources);
-    commandLine.addAll("--resourcePackages", VectorArg.join(",").each(resourcePackages));
+    commandLine.addJoined("--resourcePackages", ",", resourcePackages);
 
     commandLine.addExecPath("--shrunkResourceApk", resourceApkOut);
     outputs.add(resourceApkOut);

@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.common.base.Function;
+import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
@@ -27,11 +28,8 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.collect.IterablesChain;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.Preconditions;
 import java.util.HashSet;
 import java.util.List;
@@ -63,7 +61,7 @@ public class DeployArchiveBuilder {
   @Nullable private String javaStartClass;
   private ImmutableList<String> deployManifestLines = ImmutableList.of();
   @Nullable private Artifact launcher;
-  @Nullable private Function<Artifact, Artifact> derivedJars = null;
+  private Function<Artifact, Artifact> derivedJars = Functions.identity();
 
   /**
    * Type of compression to apply to output archive.
@@ -164,16 +162,12 @@ public class DeployArchiveBuilder {
     return this;
   }
 
-  public static CustomCommandLine.Builder defaultSingleJarCommandLine(
-      Artifact outputJar,
+  public static CustomCommandLine.Builder defaultSingleJarCommandLine(Artifact outputJar,
       String javaMainClass,
-      ImmutableList<String> deployManifestLines,
-      Iterable<Artifact> buildInfoFiles,
+      ImmutableList<String> deployManifestLines, Iterable<Artifact> buildInfoFiles,
       ImmutableList<Artifact> classpathResources,
-      NestedSet<Artifact> runtimeClasspath,
-      boolean includeBuildData,
-      Compression compress,
-      Artifact launcher) {
+      Iterable<Artifact> runtimeClasspath, boolean includeBuildData,
+      Compression compress, Artifact launcher) {
 
     CustomCommandLine.Builder args = CustomCommandLine.builder();
     args.addExecPath("--output", outputJar);
@@ -204,30 +198,26 @@ public class DeployArchiveBuilder {
 
     args.addExecPaths("--classpath_resources", classpathResources);
     if (runtimeClasspath != null) {
-      args.addExecPaths("--sources", runtimeClasspath);
+      args.addExecPaths("--sources", ImmutableList.copyOf(runtimeClasspath));
     }
     return args;
   }
 
   /** Computes input artifacts for a deploy archive based on the given attributes. */
-  public static NestedSet<Artifact> getArchiveInputs(JavaTargetAttributes attributes) {
-    return getArchiveInputs(attributes, null);
+  public static IterablesChain<Artifact> getArchiveInputs(JavaTargetAttributes attributes) {
+    return getArchiveInputs(attributes, Functions.<Artifact>identity());
   }
 
-  private static NestedSet<Artifact> getArchiveInputs(
-      JavaTargetAttributes attributes, @Nullable Function<Artifact, Artifact> derivedJarFunction) {
-    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
-    if (derivedJarFunction != null) {
-      inputs.addAll(
-          Streams.stream(attributes.getRuntimeClassPathForArchive())
-              .map(derivedJarFunction)
-              .collect(toImmutableList()));
-    } else {
-      attributes.addRuntimeClassPathForArchiveToNestedSet(inputs);
-    }
+  private static IterablesChain<Artifact> getArchiveInputs(JavaTargetAttributes attributes,
+      Function<Artifact, Artifact> derivedJarFunction) {
+    IterablesChain.Builder<Artifact> inputs = IterablesChain.builder();
+    inputs.add(
+        Streams.stream(attributes.getRuntimeClassPathForArchive())
+            .map(derivedJarFunction)
+            .collect(toImmutableList()));
     // TODO(bazel-team): Remove?  Resources not used as input to singlejar action
-    inputs.addAll(attributes.getResources().values());
-    inputs.addAll(attributes.getClassPathResources());
+    inputs.add(ImmutableList.copyOf(attributes.getResources().values()));
+    inputs.add(attributes.getClassPathResources());
     return inputs.build();
   }
 
@@ -248,48 +238,29 @@ public class DeployArchiveBuilder {
 
     // TODO(kmb): Consider not using getArchiveInputs, specifically because we don't want/need to
     // transform anything but the runtimeClasspath and b/c we currently do it twice here and below
-    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.stableOrder();
-    inputs.addTransitive(getArchiveInputs(attributes, derivedJars));
+    IterablesChain.Builder<Artifact> inputs = IterablesChain.builder();
+    inputs.add(getArchiveInputs(attributes, derivedJars));
 
-    if (derivedJars != null) {
-      inputs.addAll(Streams.stream(runtimeJars).map(derivedJars).collect(toImmutableList()));
-    } else {
-      inputs.addAll(runtimeJars);
-    }
+    inputs.add(Streams.stream(runtimeJars).map(derivedJars).collect(toImmutableList()));
     if (runfilesMiddleman != null) {
-      inputs.add(runfilesMiddleman);
+      inputs.addElement(runfilesMiddleman);
     }
 
     ImmutableList<Artifact> buildInfoArtifacts = ruleContext.getBuildInfo(JavaBuildInfoFactory.KEY);
-    inputs.addAll(buildInfoArtifacts);
+    inputs.add(buildInfoArtifacts);
 
-    NestedSetBuilder<Artifact> runtimeClasspath = NestedSetBuilder.stableOrder();
-    if (derivedJars != null) {
-      runtimeClasspath.addAll(
-          Iterables.transform(
-              Iterables.concat(runtimeJars, attributes.getRuntimeClassPathForArchive()),
-              derivedJars));
-    } else {
-      runtimeClasspath.addAll(runtimeJars);
-      attributes.addRuntimeClassPathForArchiveToNestedSet(runtimeClasspath);
-    }
+    Iterable<Artifact> runtimeClasspath =
+        Iterables.transform(
+            Iterables.concat(runtimeJars, attributes.getRuntimeClassPathForArchive()),
+            derivedJars);
 
     if (launcher != null) {
-      inputs.add(launcher);
+      inputs.addElement(launcher);
     }
 
-    CommandLine commandLine =
-        semantics.buildSingleJarCommandLine(
-            ruleContext.getConfiguration(),
-            outputJar,
-            javaStartClass,
-            deployManifestLines,
-            buildInfoArtifacts,
-            classpathResources,
-            runtimeClasspath.build(),
-            includeBuildData,
-            compression,
-            launcher);
+    CommandLine commandLine =  semantics.buildSingleJarCommandLine(ruleContext.getConfiguration(),
+        outputJar, javaStartClass, deployManifestLines, buildInfoArtifacts, classpathResources,
+        runtimeClasspath, includeBuildData, compression, launcher);
 
     List<String> jvmArgs = ImmutableList.of(SINGLEJAR_MAX_MEMORY);
     ResourceSet resourceSet =
@@ -302,14 +273,13 @@ public class DeployArchiveBuilder {
     if (singlejar.getFilename().endsWith(".jar")) {
       ruleContext.registerAction(
           new SpawnAction.Builder()
-              .addTransitiveInputs(inputs.build())
+              .addInputs(inputs.build())
               .addTransitiveInputs(JavaHelper.getHostJavabaseInputs(ruleContext))
               .addOutput(outputJar)
               .setResources(resourceSet)
               .setJarExecutable(JavaCommon.getHostJavaExecutable(ruleContext), singlejar, jvmArgs)
-              .addCommandLine(
-                  commandLine,
-                  ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).setUseAlways(true).build())
+              .setCommandLine(commandLine)
+              .alwaysUseParameterFile(ParameterFileType.SHELL_QUOTED)
               .setProgressMessage("Building deploy jar %s", outputJar.prettyPrint())
               .setMnemonic("JavaDeployJar")
               .setExecutionInfo(ExecutionRequirements.WORKER_MODE_ENABLED)
@@ -317,13 +287,12 @@ public class DeployArchiveBuilder {
     } else {
       ruleContext.registerAction(
           new SpawnAction.Builder()
-              .addTransitiveInputs(inputs.build())
+              .addInputs(inputs.build())
               .addOutput(outputJar)
               .setResources(resourceSet)
               .setExecutable(singlejar)
-              .addCommandLine(
-                  commandLine,
-                  ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).setUseAlways(true).build())
+              .setCommandLine(commandLine)
+              .alwaysUseParameterFile(ParameterFileType.SHELL_QUOTED)
               .setProgressMessage("Building deploy jar %s", outputJar.prettyPrint())
               .setMnemonic("JavaDeployJar")
               .build(ruleContext));

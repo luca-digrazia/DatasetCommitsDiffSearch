@@ -44,7 +44,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
@@ -149,7 +148,6 @@ public class LegacyCompilationSupport extends CompilationSupport {
       CompilationAttributes compilationAttributes,
       boolean useDeps,
       Map<String, NestedSet<Artifact>> outputGroupCollector,
-      CcToolchainProvider toolchain,
       boolean isTestRule,
       boolean usePch) {
     super(
@@ -159,7 +157,6 @@ public class LegacyCompilationSupport extends CompilationSupport {
         compilationAttributes,
         useDeps,
         outputGroupCollector,
-        toolchain,
         isTestRule,
         usePch);
   }
@@ -593,17 +590,9 @@ public class LegacyCompilationSupport extends CompilationSupport {
   }
 
   private StrippingType getStrippingType(CommandLine commandLine) {
-    try {
-      return Iterables.contains(commandLine.arguments(), "-dynamiclib")
-          ? StrippingType.DYNAMIC_LIB
-          : StrippingType.DEFAULT;
-    } catch (CommandLineExpansionException e) {
-      // TODO(b/64941219): This code should be rewritten to not expand the command line
-      // in the analysis phase
-      // This can't actually happen, because the command lines used by this class do
-      // not throw.
-      throw new AssertionError("Cannot fail to expand command line but did.", e);
-    }
+    return Iterables.contains(commandLine.arguments(), "-dynamiclib")
+        ? StrippingType.DYNAMIC_LIB
+        : StrippingType.DEFAULT;
   }
 
   private void registerLinkAction(
@@ -800,7 +789,7 @@ public class LegacyCompilationSupport extends CompilationSupport {
     }
 
     @Override
-    public Iterable<String> arguments() throws CommandLineExpansionException {
+    public Iterable<String> arguments() {
       return ImmutableList.of(Joiner.on(' ').join(original.arguments()));
     }
   }

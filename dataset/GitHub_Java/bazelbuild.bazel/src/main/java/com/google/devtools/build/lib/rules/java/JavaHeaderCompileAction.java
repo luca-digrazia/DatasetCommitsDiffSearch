@@ -29,14 +29,12 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -123,14 +121,11 @@ public class JavaHeaderCompileAction extends SpawnAction {
 
   @Override
   protected String computeKey() {
-    Fingerprint f = new Fingerprint().addString(GUID);
-    try {
-      f.addString(super.computeKey());
-      f.addStrings(directCommandLine.arguments());
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("JavaHeaderCompileAction command line expansion cannot fail");
-    }
-    return f.hexDigestAndReset();
+    return new Fingerprint()
+        .addString(GUID)
+        .addString(super.computeKey())
+        .addStrings(directCommandLine.arguments())
+        .hexDigestAndReset();
   }
 
   @Override
@@ -142,11 +137,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
     } catch (ExecException e) {
       // if the direct input spawn failed, try again with transitive inputs to produce better
       // better messages
-      try {
-        context.exec(getSpawn(actionExecutionContext.getClientEnv()), actionExecutionContext);
-      } catch (CommandLineExpansionException commandLineExpansionException) {
-        throw new UserExecException(commandLineExpansionException);
-      }
+      context.exec(getSpawn(actionExecutionContext.getClientEnv()), actionExecutionContext);
       // The compilation should never fail with direct deps but succeed with transitive inputs
       // unless it failed due to a strict deps error, in which case fall back to the transitive
       // classpath may allow it to succeed (Strict Java Deps errors are reported by javac,
@@ -155,21 +146,17 @@ public class JavaHeaderCompileAction extends SpawnAction {
   }
 
   private final Spawn getDirectSpawn() {
-    try {
-      return new BaseSpawn(
-          ImmutableList.copyOf(directCommandLine.arguments()),
-          ImmutableMap.<String, String>of() /*environment*/,
-          ImmutableMap.<String, String>of() /*executionInfo*/,
-          this,
-          LOCAL_RESOURCES) {
-        @Override
-        public Iterable<? extends ActionInput> getInputFiles() {
-          return directInputs;
-        }
-      };
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("JavaHeaderCompileAction command line expansion cannot fail");
-    }
+    return new BaseSpawn(
+        ImmutableList.copyOf(directCommandLine.arguments()),
+        ImmutableMap.<String, String>of() /*environment*/,
+        ImmutableMap.<String, String>of() /*executionInfo*/,
+        this,
+        LOCAL_RESOURCES) {
+      @Override
+      public Iterable<? extends ActionInput> getInputFiles() {
+        return directInputs;
+      }
+    };
   }
 
   /** Builder class to construct Java header compilation actions. */
@@ -195,6 +182,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
     private ImmutableList<String> javacOpts;
     private NestedSet<Artifact> processorPath = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     private final List<String> processorNames = new ArrayList<>();
+    private final List<String> processorFlags = new ArrayList<>();
 
     private NestedSet<Artifact> javabaseInputs;
     private Artifact javacJar;
@@ -277,6 +265,13 @@ public class JavaHeaderCompileAction extends SpawnAction {
     public Builder addProcessorNames(Collection<String> processorNames) {
       checkNotNull(processorNames, "processorNames must not be null");
       this.processorNames.addAll(processorNames);
+      return this;
+    }
+
+    /** Sets annotation processor flags to pass to javac. */
+    public Builder addProcessorFlags(Collection<String> processorFlags) {
+      checkNotNull(processorFlags, "processorFlags must not be null");
+      this.processorFlags.addAll(processorFlags);
       return this;
     }
 
@@ -562,6 +557,9 @@ public class JavaHeaderCompileAction extends SpawnAction {
       baseCommandLine(result, classpathEntries);
       if (!processorNames.isEmpty()) {
         result.addAll("--processors", ImmutableList.copyOf(processorNames));
+      }
+      if (!processorFlags.isEmpty()) {
+        result.addAll("--javacopts", ImmutableList.copyOf(processorFlags));
       }
       if (!processorPath.isEmpty()) {
         result.addExecPaths("--processorpath", processorPath);

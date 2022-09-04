@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
@@ -44,7 +43,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.CustomMultiArgv;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -322,38 +320,28 @@ public final class JavaCompileAction extends SpawnAction {
   }
 
   /**
-   * Constructs a command line that can be used to invoke the JavaBuilder.
+   * Constructs a command line that can be used to invoke the
+   * JavaBuilder.
    *
-   * <p>Do not use this method, except for testing (and for the in-process strategy).
+   * <p>Do not use this method, except for testing (and for the in-process
+   * strategy).
    */
   @VisibleForTesting
   public Iterable<String> buildCommandLine() {
-    try {
-      return javaCompileCommandLine.arguments();
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("JavaCompileAction command line expansion cannot fail");
-    }
+    return javaCompileCommandLine.arguments();
   }
 
   /** Returns the command and arguments for a java compile action. */
   public List<String> getCommand() {
-    try {
-      return ImmutableList.copyOf(commandLine.arguments());
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("JavaCompileAction command line expansion cannot fail");
-    }
+    return ImmutableList.copyOf(commandLine.arguments());
   }
 
   @Override
   public String toString() {
-    try {
-      StringBuilder result = new StringBuilder();
-      result.append("JavaBuilder ");
-      Joiner.on(' ').appendTo(result, commandLine.arguments());
-      return result.toString();
-    } catch (CommandLineExpansionException e) {
-      return "Error expanding command line";
-    }
+    StringBuilder result = new StringBuilder();
+    result.append("JavaBuilder ");
+    Joiner.on(' ').appendTo(result, commandLine.arguments());
+    return result.toString();
   }
 
   @Override
@@ -368,11 +356,8 @@ public final class JavaCompileAction extends SpawnAction {
     info.addAllProcessorpath(Artifact.toExecPaths(getProcessorpath()));
     info.setOutputjar(getOutputJar().getExecPathString());
 
-    try {
-      return super.getExtraActionInfo().setExtension(JavaCompileInfo.javaCompileInfo, info.build());
-    } catch (CommandLineExpansionException e) {
-      throw new AssertionError("JavaCompileAction command line expansion cannot fail");
-    }
+    return super.getExtraActionInfo()
+        .setExtension(JavaCompileInfo.javaCompileInfo, info.build());
   }
 
   /**
@@ -442,14 +427,13 @@ public final class JavaCompileAction extends SpawnAction {
             CustomCommandLine.builder().addPath(javaExecutable).addAll(javaBuilderJvmFlags);
         if (!instrumentationJars.isEmpty()) {
           builder
-              .addExecPaths(
+              .addJoinedExecPaths(
                   "-cp",
-                  VectorArg.join(pathDelimiter)
-                      .each(
-                          ImmutableList.<Artifact>builder()
-                              .addAll(instrumentationJars)
-                              .add(javaBuilderJar)
-                              .build()))
+                  pathDelimiter,
+                  ImmutableList.<Artifact>builder()
+                      .addAll(instrumentationJars)
+                      .add(javaBuilderJar)
+                      .build())
               .addDynamicString(javaBuilderMainClass);
         } else {
           // If there are no instrumentation jars, use simpler '-jar' option to launch JavaBuilder.

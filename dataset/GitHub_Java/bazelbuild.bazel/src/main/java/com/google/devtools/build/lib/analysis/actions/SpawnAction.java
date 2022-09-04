@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.CommandAction;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecException;
@@ -204,17 +203,13 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
   @Override
   @VisibleForTesting
-  public List<String> getArguments() throws CommandLineExpansionException {
+  public List<String> getArguments() {
     return ImmutableList.copyOf(argv.arguments());
   }
 
   @Override
-  public SkylarkList<String> getSkylarkArgv() throws CommandLineExpansionException {
+  public SkylarkList<String> getSkylarkArgv() {
     return SkylarkList.createImmutable(getArguments());
-  }
-
-  protected CommandLine getCommandLine() {
-    return argv;
   }
 
   @Override
@@ -225,13 +220,16 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
   /** Returns command argument, argv[0]. */
   @VisibleForTesting
-  public String getCommandFilename() throws CommandLineExpansionException {
+  public String getCommandFilename() {
     return Iterables.getFirst(argv.arguments(), null);
   }
 
-  /** Returns the (immutable) list of arguments, excluding the command name, argv[0]. */
+  /**
+   * Returns the (immutable) list of arguments, excluding the command name,
+   * argv[0].
+   */
   @VisibleForTesting
-  public List<String> getRemainingArguments() throws CommandLineExpansionException {
+  public List<String> getRemainingArguments() {
     return ImmutableList.copyOf(Iterables.skip(argv.arguments(), 1));
   }
 
@@ -255,8 +253,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    *
    * <p>Called by {@link #execute}.
    */
-  protected void internalExecute(ActionExecutionContext actionExecutionContext)
-      throws ExecException, InterruptedException, CommandLineExpansionException {
+  protected void internalExecute(
+      ActionExecutionContext actionExecutionContext) throws ExecException, InterruptedException {
     getContext(actionExecutionContext)
         .exec(getSpawn(actionExecutionContext.getClientEnv()), actionExecutionContext);
   }
@@ -267,7 +265,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     try {
       internalExecute(actionExecutionContext);
     } catch (ExecException e) {
-      String failMessage;
+      final String failMessage;
       if (isShellCommand()) {
         // The possible reasons it could fail are: shell executable not found, shell
         // exited non-zero, or shell died from signal.  The first is impossible
@@ -276,24 +274,13 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         // command that failed.
         //
         // 0=shell executable, 1=shell command switch, 2=command
-        try {
-          failMessage =
-              "error executing shell command: "
-                  + "'"
-                  + truncate(Iterables.get(argv.arguments(), 2), 200)
-                  + "'";
-        } catch (CommandLineExpansionException commandLineExpansionException) {
-          failMessage =
-              "error executing shell command, and error expanding command line: "
-                  + commandLineExpansionException;
-        }
+        failMessage = "error executing shell command: " + "'"
+            + truncate(Iterables.get(argv.arguments(), 2), 200) + "'";
       } else {
         failMessage = getRawProgressMessage();
       }
       throw e.toActionExecutionException(
           failMessage, actionExecutionContext.getVerboseFailures(), this);
-    } catch (CommandLineExpansionException e) {
-      throw new ActionExecutionException(e, this, false);
     }
   }
 
@@ -308,14 +295,14 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   /**
-   * Returns a Spawn that is representative of the command that this Action will execute. This
-   * function must not modify any state.
+   * Returns a Spawn that is representative of the command that this Action
+   * will execute. This function must not modify any state.
    *
-   * <p>This method is final, as it is merely a shorthand use of the generic way to obtain a spawn,
+   * This method is final, as it is merely a shorthand use of the generic way to obtain a spawn,
    * which also depends on the client environment. Subclasses that which to override the way to get
    * a spawn should override {@link #getSpawn(Map)} instead.
    */
-  public final Spawn getSpawn() throws CommandLineExpansionException {
+  public final Spawn getSpawn() {
     return getSpawn(null);
   }
 
@@ -323,12 +310,12 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    * Return a spawn that is representative of the command that this Action will execute in the given
    * client environment.
    */
-  public Spawn getSpawn(Map<String, String> clientEnv) throws CommandLineExpansionException {
-    return new ActionSpawn(ImmutableList.copyOf(argv.arguments()), clientEnv);
+  public Spawn getSpawn(Map<String, String> clientEnv) {
+    return new ActionSpawn(clientEnv);
   }
 
   @Override
-  protected String computeKey() throws CommandLineExpansionException {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     f.addStrings(argv.arguments());
@@ -365,15 +352,9 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       message.append(ShellEscaper.escapeString(var));
       message.append('\n');
     }
-    try {
-      for (String argument : ShellEscaper.escapeAll(argv.arguments())) {
-        message.append("  Argument: ");
-        message.append(argument);
-        message.append('\n');
-      }
-    } catch (CommandLineExpansionException e) {
-      message.append("Could not expand command line: ");
-      message.append(e);
+    for (String argument : ShellEscaper.escapeAll(argv.arguments())) {
+      message.append("  Argument: ");
+      message.append(argument);
       message.append('\n');
     }
     return message.toString();
@@ -393,7 +374,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo() throws CommandLineExpansionException {
+  public ExtraActionInfo.Builder getExtraActionInfo() {
     ExtraActionInfo.Builder builder = super.getExtraActionInfo();
     if (extraActionInfoSupplier == null) {
       SpawnInfo spawnInfo = getExtraActionSpawnInfo();
@@ -411,7 +392,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    * <p>Subclasses of SpawnAction may override this in order to provide action-specific behaviour.
    * This can be necessary, for example, when the action discovers inputs.
    */
-  protected SpawnInfo getExtraActionSpawnInfo() throws CommandLineExpansionException {
+  protected SpawnInfo getExtraActionSpawnInfo() {
     SpawnInfo.Builder info = SpawnInfo.newBuilder();
     Spawn spawn = getSpawn();
     info.addAllArgument(spawn.getArguments());
@@ -468,9 +449,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      * <p>Subclasses of ActionSpawn may subclass in order to provide action-specific values for
      * environment variables or action inputs.
      */
-    protected ActionSpawn(ImmutableList<String> arguments, Map<String, String> clientEnv) {
-      super(
-          arguments,
+    protected ActionSpawn(Map<String, String> clientEnv) {
+      super(ImmutableList.copyOf(argv.arguments()),
           ImmutableMap.<String, String>of(),
           executionInfo,
           SpawnAction.this.getRunfilesSupplier(),
@@ -535,6 +515,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     private PathFragment executable;
     // executableArgs does not include the executable itself.
     private List<String> executableArgs;
+    private CustomCommandLine.Builder commandLineBuilder = CustomCommandLine.builder();
     @Nullable private CommandLine commandLine;
 
     private CharSequence progressMessage;
@@ -566,6 +547,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       this.executableArgs = (other.executableArgs != null)
           ? Lists.newArrayList(other.executableArgs)
           : null;
+      this.commandLineBuilder = CustomCommandLine.builder(other.commandLineBuilder);
       this.commandLine = other.commandLine;
       this.progressMessage = other.progressMessage;
       this.paramFileInfo = other.paramFileInfo;
@@ -598,7 +580,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     @VisibleForTesting @CheckReturnValue
     public Action[] build(ActionOwner owner, AnalysisEnvironment analysisEnvironment,
         BuildConfiguration configuration) {
-      CommandLine commandLine = this.commandLine != null ? this.commandLine : CommandLine.EMPTY;
+      CommandLine commandLine =
+          this.commandLine != null ? this.commandLine : this.commandLineBuilder.build();
       // Check to see if we need to use param file.
       Artifact paramsFile = ParamFileHelper.getParamsFileMaybe(
           buildExecutableArgs(configuration.getShellExecutable()),
@@ -1062,14 +1045,83 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     }
 
     /**
-     * Sets a delegate to compute the command line at a later time.
+     * Appends the argument to the list of command-line arguments.
+     */
+    public Builder addArgument(String argument) {
+      Preconditions.checkState(commandLine == null);
+      commandLineBuilder.addDynamicString(argument);
+      return this;
+    }
+
+    /**
+     * Appends the arguments to the list of command-line arguments.
+     */
+    public Builder addArguments(String... arguments) {
+      Preconditions.checkState(commandLine == null);
+      commandLineBuilder.addAll(ImmutableList.copyOf(arguments));
+      return this;
+    }
+
+    /**
+     * Add multiple arguments in the order they are returned by the collection.
+     */
+    public Builder addArguments(Iterable<String> arguments) {
+      Preconditions.checkState(commandLine == null);
+      if (arguments instanceof NestedSet) {
+        commandLineBuilder.addExecPaths((NestedSet) arguments);
+      } else {
+        commandLineBuilder.addAll(ImmutableList.copyOf(arguments));
+      }
+      return this;
+    }
+
+    /**
+     * Appends the argument both to the inputs and to the list of command-line
+     * arguments.
+     */
+    public Builder addInputArgument(Artifact argument) {
+      Preconditions.checkState(commandLine == null);
+      addInput(argument);
+      commandLineBuilder.addExecPath(argument);
+      return this;
+    }
+
+    /**
+     * Appends the arguments both to the inputs and to the list of command-line
+     * arguments.
+     */
+    public Builder addInputArguments(Iterable<Artifact> arguments) {
+      addInputs(arguments);
+      if (arguments instanceof NestedSet) {
+        commandLineBuilder.addExecPaths((NestedSet) arguments);
+      } else {
+        commandLineBuilder.addExecPaths(ImmutableList.copyOf(arguments));
+      }
+      return this;
+    }
+
+    /**
+     * Appends the argument both to the outputs and to the list of command-line
+     * arguments.
+     */
+    public Builder addOutputArgument(Artifact argument) {
+      Preconditions.checkState(commandLine == null);
+      outputs.add(argument);
+      commandLineBuilder.addExecPath(argument);
+      return this;
+    }
+
+    /**
+     * Sets a delegate to compute the command line at a later time. This method
+     * cannot be used in conjunction with the {@link #addArgument} or {@link
+     * #addArguments} methods.
      *
-     * <p>The main intention of this method is to save memory by allowing client-controlled sharing
-     * between actions and configured targets. Objects passed to this method MUST be immutable.
-     *
-     * <p>See also {@link CustomCommandLine}.
+     * <p>The main intention of this method is to save memory by allowing
+     * client-controlled sharing between actions and configured targets.
+     * Objects passed to this method MUST be immutable.
      */
     public Builder setCommandLine(CommandLine commandLine) {
+      Preconditions.checkState(commandLineBuilder.isEmpty());
       this.commandLine = commandLine;
       return this;
     }

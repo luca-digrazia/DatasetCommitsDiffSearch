@@ -35,13 +35,13 @@ import com.google.devtools.build.lib.analysis.MakeVariableExpander;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.util.LazyString;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -306,10 +306,10 @@ public class ProtoCompileActionBuilder {
     boolean areDepsStrict = areDepsStrict(ruleContext);
 
     // Add include maps
-    addIncludeMapArguments(
-        result,
-        areDepsStrict ? supportData.getProtosInDirectDeps() : null,
-        supportData.getTransitiveImports());
+    result.addCustomMultiArgv(
+        new ProtoCommandLineArgv(
+            areDepsStrict ? supportData.getProtosInDirectDeps() : null,
+            supportData.getTransitiveImports()));
 
     if (areDepsStrict) {
       // Note: the %s in the line below is used by proto-compiler. That is, the string we create
@@ -332,8 +332,58 @@ public class ProtoCompileActionBuilder {
     return result;
   }
 
+  /**
+   * Static inner class since these objects live into the execution phase and so they must not keep
+   * alive references to the surrounding analysis-phase objects.
+   */
   @VisibleForTesting
-  static class ProtoCommandLineArgv {}
+  static class ProtoCommandLineArgv extends CustomCommandLine.CustomMultiArgv {
+    @Nullable private final Iterable<Artifact> protosInDirectDependencies;
+    private final Iterable<Artifact> transitiveImports;
+
+    ProtoCommandLineArgv(
+        @Nullable Iterable<Artifact> protosInDirectDependencies,
+        Iterable<Artifact> transitiveImports) {
+      this.protosInDirectDependencies = protosInDirectDependencies;
+      this.transitiveImports = transitiveImports;
+    }
+
+    @Override
+    public Iterable<String> argv() {
+      ImmutableList.Builder<String> builder = ImmutableList.builder();
+      for (Artifact artifact : transitiveImports) {
+        builder.add(
+            "-I" + getPathIgnoringRepository(artifact) + "=" + artifact.getExecPathString());
+      }
+      if (protosInDirectDependencies != null) {
+        ArrayList<String> rootRelativePaths = new ArrayList<>();
+        for (Artifact directDependency : protosInDirectDependencies) {
+          rootRelativePaths.add(getPathIgnoringRepository(directDependency));
+        }
+        builder.add("--direct_dependencies=" + Joiner.on(":").join(rootRelativePaths));
+      }
+      return builder.build();
+    }
+
+    /**
+     * Gets the artifact's path relative to the root, ignoring the external repository the artifact
+     * is at. For example, <code>
+     * //a:b.proto --> a/b.proto
+     * {@literal @}foo//a:b.proto --> a/b.proto
+     * </code>
+     */
+    private static String getPathIgnoringRepository(Artifact artifact) {
+      return artifact
+          .getRootRelativePath()
+          .relativeTo(
+              artifact
+                  .getOwnerLabel()
+                  .getPackageIdentifier()
+                  .getRepository()
+                  .getPathUnderExecRoot())
+          .toString();
+    }
+  }
 
   /** Signifies that a prerequisite could not be satisfied. */
   private static class MissingPrerequisiteException extends Exception {}
@@ -539,7 +589,7 @@ public class ProtoCompileActionBuilder {
     cmdLine.addAll(protocOpts);
 
     // Add include maps
-    addIncludeMapArguments(cmdLine, protosInDirectDeps, transitiveSources);
+    cmdLine.addCustomMultiArgv(new ProtoCommandLineArgv(protosInDirectDeps, transitiveSources));
 
     if (protosInDirectDeps != null) {
       cmdLine.addFormatted(STRICT_DEPS_FLAG_TEMPLATE, ruleLabel);
@@ -554,46 +604,6 @@ public class ProtoCompileActionBuilder {
     }
 
     return cmdLine.build();
-  }
-
-  @VisibleForTesting
-  static void addIncludeMapArguments(
-      CustomCommandLine.Builder commandLine,
-      @Nullable NestedSet<Artifact> protosInDirectDependencies,
-      NestedSet<Artifact> transitiveImports) {
-    commandLine.addAll(
-        VectorArg.of(transitiveImports).mapped(ProtoCompileActionBuilder::transitiveImportArg));
-    if (protosInDirectDependencies != null) {
-      if (!protosInDirectDependencies.isEmpty()) {
-        commandLine.addAll(
-            "--direct_dependencies",
-            VectorArg.join(":")
-                .each(protosInDirectDependencies)
-                .mapped(ProtoCompileActionBuilder::getPathIgnoringRepository));
-      } else {
-        // The proto compiler requires an empty list to turn on strict deps checking
-        commandLine.add("--direct_dependencies=");
-      }
-    }
-  }
-
-  private static String transitiveImportArg(Artifact artifact) {
-    return "-I" + getPathIgnoringRepository(artifact) + "=" + artifact.getExecPathString();
-  }
-
-  /**
-   * Gets the artifact's path relative to the root, ignoring the external repository the artifact is
-   * at. For example, <code>
-   * //a:b.proto --> a/b.proto
-   * {@literal @}foo//a:b.proto --> a/b.proto
-   * </code>
-   */
-  private static String getPathIgnoringRepository(Artifact artifact) {
-    return artifact
-        .getRootRelativePath()
-        .relativeTo(
-            artifact.getOwnerLabel().getPackageIdentifier().getRepository().getPathUnderExecRoot())
-        .toString();
   }
 
   /**

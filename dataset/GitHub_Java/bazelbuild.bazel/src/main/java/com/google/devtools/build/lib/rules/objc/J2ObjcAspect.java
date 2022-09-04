@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -493,8 +492,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     ImmutableList.Builder<Artifact> sourceJarOutputFiles = ImmutableList.builder();
     if (!Iterables.isEmpty(sourceJars)) {
       sourceJarOutputFiles.addAll(sourceJarOutputs(ruleContext));
-      argBuilder.addExecPaths(
-          "--src_jars", VectorArg.join(",").each(ImmutableList.copyOf(sourceJars)));
+      argBuilder.addJoinedExecPaths("--src_jars", ",", ImmutableList.copyOf(sourceJars));
       argBuilder.addAll(sourceJarFlags(ruleContext));
     }
 
@@ -506,7 +504,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     NestedSet<Artifact> depsHeaderMappingFiles =
         depJ2ObjcMappingFileProvider.getHeaderMappingFiles();
     if (!depsHeaderMappingFiles.isEmpty()) {
-      argBuilder.addExecPaths("--header-mapping", VectorArg.join(",").each(depsHeaderMappingFiles));
+      argBuilder.addJoinedExecPaths("--header-mapping", ",", depsHeaderMappingFiles);
     }
 
     boolean experimentalJ2ObjcHeaderMap =
@@ -518,7 +516,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
     NestedSet<Artifact> depsClassMappingFiles = depJ2ObjcMappingFileProvider.getClassMappingFiles();
     if (!depsClassMappingFiles.isEmpty()) {
-      argBuilder.addExecPaths("--mapping", VectorArg.join(",").each(depsClassMappingFiles));
+      argBuilder.addJoinedExecPaths("--mapping", ",", depsClassMappingFiles);
     }
 
     Artifact archiveSourceMappingFile = j2ObjcOutputArchiveSourceMappingFile(ruleContext);
@@ -540,7 +538,7 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     NestedSet<Artifact> compileTimeJars =
         compArgsProvider.getRecursiveJavaCompilationArgs().getCompileTimeJars();
     if (!compileTimeJars.isEmpty()) {
-      argBuilder.addExecPaths("-classpath", VectorArg.join(":").each(compileTimeJars));
+      argBuilder.addJoinedExecPaths("-classpath", ":", compileTimeJars);
     }
 
     argBuilder.addExecPaths(ImmutableList.copyOf(sources));
@@ -586,12 +584,12 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
     if (experimentalJ2ObjcHeaderMap) {
       CustomCommandLine.Builder headerMapCommandLine = CustomCommandLine.builder();
       if (!Iterables.isEmpty(sources)) {
-        headerMapCommandLine.addExecPaths(
-            "--source_files", VectorArg.join(",").each(ImmutableList.copyOf(sources)));
+        headerMapCommandLine.addJoinedExecPaths(
+            "--source_files", ",", ImmutableList.copyOf(sources));
       }
       if (!Iterables.isEmpty(sourceJars)) {
-        headerMapCommandLine.addExecPaths(
-            "--source_jars", VectorArg.join(",").each(ImmutableList.copyOf(sourceJars)));
+        headerMapCommandLine.addJoinedExecPaths(
+            "--source_jars", ",", ImmutableList.copyOf(sourceJars));
       }
       headerMapCommandLine.addExecPath("--output_mapping_file", outputHeaderMappingFile);
       ruleContext.registerAction(new SpawnAction.Builder()
