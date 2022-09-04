@@ -1,6 +1,9 @@
 package com.yammer.dropwizard.config;
 
-import com.google.common.collect.*;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Ordering;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.sun.jersey.api.core.ResourceConfig;
 import com.sun.jersey.core.reflection.AnnotatedMethod;
@@ -51,7 +54,7 @@ public class Environment extends AbstractLifeCycle {
     private final ResourceConfig config;
     private final ImmutableSet.Builder<HealthCheck> healthChecks;
     private final ImmutableMap.Builder<String, ServletHolder> servlets;
-    private final ImmutableMultimap.Builder<String, FilterHolder> filters;
+    private final ImmutableMap.Builder<String, FilterHolder> filters;
     private final ImmutableSet.Builder<EventListener> servletListeners;
     private final ImmutableSet.Builder<Task> tasks;
     private final AggregateLifeCycle lifeCycle;
@@ -77,7 +80,7 @@ public class Environment extends AbstractLifeCycle {
         };
         this.healthChecks = ImmutableSet.builder();
         this.servlets = ImmutableMap.builder();
-        this.filters = ImmutableMultimap.builder();
+        this.filters = ImmutableMap.builder();
         this.servletListeners = ImmutableSet.builder();
         this.tasks = ImmutableSet.builder();
         this.lifeCycle = new AggregateLifeCycle();
@@ -350,7 +353,7 @@ public class Environment extends AbstractLifeCycle {
         return servlets.build();
     }
 
-    ImmutableMultimap<String, FilterHolder> getFilters() {
+    ImmutableMap<String, FilterHolder> getFilters() {
         return filters.build();
     }
 

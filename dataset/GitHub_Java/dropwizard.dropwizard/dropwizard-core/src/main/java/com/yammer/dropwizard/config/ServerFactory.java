@@ -191,9 +191,8 @@ public class ServerFactory {
             handler.addFilter(entry.getValue(), entry.getKey(), EnumSet.of(DispatcherType.REQUEST));
         }
 
-        for (EventListener listener : listeners) {
-            handler.addEventListener(listener);
-        }
+        final EventListener[] eventListeners = new EventListener[listeners.size()];
+        handler.setEventListeners(listeners.toArray(eventListeners));
 
         handler.setConnectorNames(new String[]{"main"});
 
