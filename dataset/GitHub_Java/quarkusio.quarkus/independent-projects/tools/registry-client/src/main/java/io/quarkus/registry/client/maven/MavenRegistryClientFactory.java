@@ -198,7 +198,7 @@ public class MavenRegistryClientFactory implements RegistryClientFactory {
         if (original.getNonPlatformExtensions() == null) {
             complete.setNonPlatformExtensions(descriptor.getNonPlatformExtensions());
         } else {
-            complete.setNonPlatformExtensions(original.getNonPlatformExtensions());
+            complete.setNonPlatformExtensions(descriptor.getNonPlatformExtensions());
         }
 
         if (original.getUpdatePolicy() == null) {
