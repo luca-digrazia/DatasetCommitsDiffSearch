@@ -43,7 +43,6 @@ import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
-import javax.tools.Diagnostic;
 import javax.tools.StandardLocation;
 
 /**
@@ -130,7 +129,7 @@ public class BlazeJavacMain {
     }
     errWriter.flush();
     return new BlazeJavacResult(
-        ok, filterDiagnostics(ok, diagnostics.build()), errOutput.toString(), compiler);
+        ok, filterDiagnostics(diagnostics.build()), errOutput.toString(), compiler);
   }
 
   private static final ImmutableSet<String> IGNORED_DIAGNOSTIC_CODES =
@@ -148,22 +147,14 @@ public class BlazeJavacMain {
           "compiler.warn.sun.proprietary");
 
   private static ImmutableList<FormattedDiagnostic> filterDiagnostics(
-      boolean ok, ImmutableList<FormattedDiagnostic> diagnostics) {
-    return diagnostics
+      ImmutableList<FormattedDiagnostic> diagnostics) {
+    // TODO(cushon): toImmutableList
+    ImmutableList.Builder<FormattedDiagnostic> result = ImmutableList.builder();
+    diagnostics
         .stream()
-        .filter(d -> shouldReportDiagnostic(ok, d))
-        .collect(toImmutableList());
-  }
-
-  private static boolean shouldReportDiagnostic(boolean ok, FormattedDiagnostic diagnostic) {
-    if (!IGNORED_DIAGNOSTIC_CODES.contains(diagnostic.getCode())) {
-      return true;
-    }
-    if (!ok && diagnostic.getKind() != Diagnostic.Kind.NOTE) {
-      // show compiler.warn.sun.proprietary in case we're running with -Werror
-      return true;
-    }
-    return false;
+        .filter(d -> !IGNORED_DIAGNOSTIC_CODES.contains(d.getCode()))
+        .forEach(result::add);
+    return result.build();
   }
 
   /** Processes Plugin-specific arguments and removes them from the args array. */
