@@ -19,8 +19,8 @@ public class FilterConfiguration {
     /**
      * Creates a new {@link FilterConfiguration}.
      *
-     * @param holder   the {@link FilterHolder} containing the {@link javax.servlet.Filter}
-     * @param mappings the mappings of URL patterns to {@link javax.servlet.Filter}s
+     * @param holder      the {@link FilterHolder} containing the {@link javax.servlet.Filter}
+     * @param mappings    the mappings of URL patterns to {@link javax.servlet.Filter}s
      */
     public FilterConfiguration(FilterHolder holder,
                                ImmutableMultimap.Builder<String, FilterHolder> mappings) {
@@ -30,21 +30,26 @@ public class FilterConfiguration {
 
     /**
      * Sets the filter's name.
-     *
-     * @param name the name of the filter
+     * 
+     * @param name    the name of the filter
      * @return {@code this}
      */
     public FilterConfiguration setName(String name) {
-        checkArgument(!isNullOrEmpty(name), "name must be non-empty");
-        holder.setName(name);
+        checkArgument( !isNullOrEmpty( name ), "name must be non-empty" );
+        /*
+         * We are warned against ordering setting the held class (which 
+         * has already happened by the time this configuration is instantiated) 
+         * before the name, but it seems harmless to do so.
+         */
+        holder.setName( name );
         return this;
     }
-
+    
     /**
      * Sets the given filter initialization parameter.
      *
-     * @param name  the name of the initialization parameter
-     * @param value the value of the parameter
+     * @param name     the name of the initialization parameter
+     * @param value    the value of the parameter
      * @return {@code this}
      */
     public FilterConfiguration setInitParam(String name, String value) {
@@ -55,7 +60,7 @@ public class FilterConfiguration {
     /**
      * Sets the given filter initialization parameters.
      *
-     * @param params the initialization parameters
+     * @param params    the initialization parameters
      * @return {@code this}
      */
     public FilterConfiguration addInitParams(Map<String, String> params) {
@@ -68,7 +73,7 @@ public class FilterConfiguration {
     /**
      * Adds the given URL pattern as a filter mapping.
      *
-     * @param urlPattern the URL pattern
+     * @param urlPattern    the URL pattern
      * @return {@code this}
      */
     public FilterConfiguration addUrlPattern(String urlPattern) {
@@ -79,8 +84,8 @@ public class FilterConfiguration {
     /**
      * Adds the given URL patterns as a filter mappings.
      *
-     * @param urlPattern  the URL pattern
-     * @param urlPatterns additional URL patterns
+     * @param urlPattern    the URL pattern
+     * @param urlPatterns   additional URL patterns
      * @return {@code this}
      */
     public FilterConfiguration addUrlPatterns(String urlPattern, String... urlPatterns) {
