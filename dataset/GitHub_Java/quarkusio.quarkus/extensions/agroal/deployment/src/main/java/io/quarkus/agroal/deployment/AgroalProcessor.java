@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.agroal.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
@@ -22,8 +38,8 @@ import io.agroal.api.AgroalDataSource;
 import io.quarkus.agroal.DataSource;
 import io.quarkus.agroal.runtime.AbstractDataSourceProducer;
 import io.quarkus.agroal.runtime.AgroalBuildTimeConfig;
-import io.quarkus.agroal.runtime.AgroalRecorder;
 import io.quarkus.agroal.runtime.AgroalRuntimeConfig;
+import io.quarkus.agroal.runtime.AgroalTemplate;
 import io.quarkus.agroal.runtime.DataSourceBuildTimeConfig;
 import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
@@ -63,8 +79,8 @@ class AgroalProcessor {
     @Record(STATIC_INIT)
     @BuildStep
     BeanContainerListenerBuildItem build(
-            RecorderContext recorderContext,
-            AgroalRecorder recorder,
+            RecorderContext recorder,
+            AgroalTemplate template,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<SubstrateResourceBuildItem> resource,
@@ -120,15 +136,15 @@ class AgroalProcessor {
 
         createDataSourceProducerBean(generatedBean, dataSourceProducerClassName);
 
-        return new BeanContainerListenerBuildItem(recorder.addDataSource(
-                (Class<? extends AbstractDataSourceProducer>) recorderContext.classProxy(dataSourceProducerClassName),
+        return new BeanContainerListenerBuildItem(template.addDataSource(
+                (Class<? extends AbstractDataSourceProducer>) recorder.classProxy(dataSourceProducerClassName),
                 agroalBuildTimeConfig,
                 sslNativeConfig.isExplicitlyDisabled()));
     }
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    void configureRuntimeProperties(AgroalRecorder recorder,
+    void configureRuntimeProperties(AgroalTemplate template,
             BuildProducer<DataSourceInitializedBuildItem> dataSourceInitialized,
             AgroalRuntimeConfig agroalRuntimeConfig) {
         if (!agroalBuildTimeConfig.defaultDataSource.driver.isPresent() && agroalBuildTimeConfig.namedDataSources.isEmpty()) {
@@ -136,7 +152,7 @@ class AgroalProcessor {
             return;
         }
 
-        recorder.configureRuntimeProperties(agroalRuntimeConfig);
+        template.configureRuntimeProperties(agroalRuntimeConfig);
 
         dataSourceInitialized.produce(new DataSourceInitializedBuildItem());
     }
@@ -182,7 +198,7 @@ class AgroalProcessor {
             defaultDataSourceMethodCreator.addAnnotation(Produces.class);
             defaultDataSourceMethodCreator.addAnnotation(Default.class);
 
-            ResultHandle dataSourceName = defaultDataSourceMethodCreator.load(AgroalRecorder.DEFAULT_DATASOURCE_NAME);
+            ResultHandle dataSourceName = defaultDataSourceMethodCreator.load(AgroalTemplate.DEFAULT_DATASOURCE_NAME);
             ResultHandle dataSourceBuildTimeConfig = defaultDataSourceMethodCreator.invokeVirtualMethod(
                     MethodDescriptor.ofMethod(AbstractDataSourceProducer.class, "getDefaultBuildTimeConfig",
                             DataSourceBuildTimeConfig.class),
