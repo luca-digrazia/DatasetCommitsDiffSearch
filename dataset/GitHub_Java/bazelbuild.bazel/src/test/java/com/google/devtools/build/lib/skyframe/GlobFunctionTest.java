@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Functions;
@@ -331,9 +333,21 @@ public abstract class GlobFunctionTest {
   private void assertGlobsEqual(String pattern1, String pattern2) throws Exception {
     GlobValue value1 = runGlob(false, pattern1);
     GlobValue value2 = runGlob(false, pattern2);
-    new EqualsTester()
-        .addEqualityGroup(value1, value2)
-        .testEquals();
+    assertEquals(
+        "GlobValues "
+            + value1.getMatches()
+            + " and "
+            + value2.getMatches()
+            + " should be equal. "
+            + "Patterns: "
+            + pattern1
+            + ","
+            + pattern2,
+        value1,
+        value2);
+    // Just to be paranoid:
+    assertEquals(value1, value1);
+    assertEquals(value2, value2);
   }
 
   private GlobValue runGlob(boolean excludeDirs, String pattern) throws Exception {
@@ -393,6 +407,8 @@ public abstract class GlobFunctionTest {
 
   @Test
   public void testIllegalPatterns() throws Exception {
+    assertIllegalPattern("[illegal pattern");
+    assertIllegalPattern("}illegal pattern");
     assertIllegalPattern("foo**bar");
     assertIllegalPattern("?");
     assertIllegalPattern("");
@@ -441,7 +457,7 @@ public abstract class GlobFunctionTest {
 
   @Test
   public void testMatchesCallWithNoCache() {
-    assertThat(UnixGlob.matches("*a*b", "CaCb", null)).isTrue();
+    assertTrue(UnixGlob.matches("*a*b", "CaCb", null));
   }
 
   @Test
@@ -569,10 +585,10 @@ public abstract class GlobFunctionTest {
             false,
             SkyframeExecutor.DEFAULT_THREAD_COUNT,
             NullEventHandler.INSTANCE);
-    assertThat(result.hasError()).isTrue();
+    assertTrue(result.hasError());
     ErrorInfo errorInfo = result.getError(skyKey);
     assertThat(errorInfo.getException()).isInstanceOf(InconsistentFilesystemException.class);
-    assertThat(errorInfo.getException()).hasMessageThat().contains(expectedMessage);
+    assertThat(errorInfo.getException().getMessage()).contains(expectedMessage);
   }
 
   @Test
@@ -596,10 +612,10 @@ public abstract class GlobFunctionTest {
             false,
             SkyframeExecutor.DEFAULT_THREAD_COUNT,
             NullEventHandler.INSTANCE);
-    assertThat(result.hasError()).isTrue();
+    assertTrue(result.hasError());
     ErrorInfo errorInfo = result.getError(skyKey);
     assertThat(errorInfo.getException()).isInstanceOf(InconsistentFilesystemException.class);
-    assertThat(errorInfo.getException()).hasMessageThat().contains(expectedMessage);
+    assertThat(errorInfo.getException().getMessage()).contains(expectedMessage);
   }
 
   @Test
@@ -669,10 +685,10 @@ public abstract class GlobFunctionTest {
             false,
             SkyframeExecutor.DEFAULT_THREAD_COUNT,
             NullEventHandler.INSTANCE);
-    assertThat(result.hasError()).isTrue();
+    assertTrue(result.hasError());
     ErrorInfo errorInfo = result.getError(skyKey);
     assertThat(errorInfo.getException()).isInstanceOf(InconsistentFilesystemException.class);
-    assertThat(errorInfo.getException()).hasMessageThat().contains(expectedMessage);
+    assertThat(errorInfo.getException().getMessage()).contains(expectedMessage);
   }
 
   @Test
