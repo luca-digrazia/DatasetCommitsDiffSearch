@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
-import com.google.devtools.build.lib.analysis.fileset.FilesetProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyListMultimap;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -78,6 +77,9 @@ import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.rules.AliasProvider;
+import com.google.devtools.build.lib.rules.MakeVariableProvider;
+import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
@@ -108,7 +110,7 @@ import javax.annotation.Nullable;
  * are not persisted that check the name of this class, so update those tests if you change this
  * class's name.
  *
- * @see com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory
+ * @see com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory
  */
 public final class RuleContext extends TargetContext
     implements ActionConstructionContext, ActionRegistry, RuleErrorConsumer {
@@ -1521,7 +1523,25 @@ public final class RuleContext extends TargetContext
    * false if it should just create the manifest.
    */
   public boolean shouldCreateRunfilesSymlinks() {
-    return getConfiguration().buildRunfiles();
+    // TODO(bazel-team): Ideally we wouldn't need such logic, and we'd
+    // always use the BuildConfiguration#buildRunfiles() to determine
+    // whether to build the runfiles. The problem is that certain build
+    // steps actually consume their runfiles. These include:
+    //  a. par files consumes the runfiles directory
+    //     We should modify autopar to take a list of files instead.
+    //     of the runfiles directory.
+    //  b. host tools could potentially use data files, but currently don't
+    //     (they're run from the execution root, not a runfiles tree).
+    //     Currently hostConfiguration.buildRunfiles() returns true.
+    if (isTestTarget()) {
+      // Tests are only executed during testing (duh),
+      // and their runfiles are generated lazily on local
+      // execution (see LocalTestStrategy). Therefore, it
+      // is safe not to build their runfiles.
+      return getConfiguration().buildRunfiles();
+    } else {
+      return true;
+    }
   }
 
   /**

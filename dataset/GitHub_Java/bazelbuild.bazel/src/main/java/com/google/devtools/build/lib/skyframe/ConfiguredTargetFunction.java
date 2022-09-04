@@ -985,10 +985,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     if (!aspect.getDefinition().applyToFiles() && !(dep.getTarget() instanceof Rule)) {
       return false;
     }
-    if (dep.getTarget().getAssociatedRule() == null) {
-      // even aspects that 'apply to files' cannot apply to input files.
-      return false;
-    }
     return dep.satisfies(aspect.getDefinition().getRequiredProviders());
   }
 

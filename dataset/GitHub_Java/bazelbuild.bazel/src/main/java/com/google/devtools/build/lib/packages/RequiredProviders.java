@@ -14,32 +14,31 @@
 package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import javax.annotation.Nullable;
 
 /**
- * Represents a constraint on a set of providers required by a dependency (of a rule or an aspect).
+ * Represents a constraint on a set of providers required by a dependency (of a rule
+ * or an aspect).
  *
- * <p>Currently we support three kinds of constraints:
- *
+ * Currently we support three kinds of constraints:
  * <ul>
- *   <li>accept any dependency.
- *   <li>accept no dependency (used for aspects-on-aspects to indicate that an aspect never wants to
- *       see any other aspect applied to a target.
- *   <li>accept a dependency that provides all providers from one of several sets of providers. It
- *       just so happens that in all current usages these sets are either all native providers or
- *       all Skylark providers, so this is the only use case this class currently supports.
+ *   <li>accept any dependency.</li>
+ *   <li>accept no dependency (used for aspects-on-aspects to indicate
+ *   that an aspect never wants to see any other aspect applied to a target.</li>
+ *   <li>accept a dependency that provides all providers from one of several sets of providers.
+ *       It just so happens that in all current usages these sets are either all
+ *       native providers or all Skylark providers, so this is the only use case this
+ *       class currently supports.
+ *   </li>
  * </ul>
  */
 @Immutable
-@AutoCodec
 public final class RequiredProviders {
   /** A constraint: either ANY, NONE, or RESTRICTED */
   private final Constraint constraint;
@@ -58,14 +57,10 @@ public final class RequiredProviders {
     return constraint.getDescription(this);
   }
 
-  @Override
-  public String toString() {
-    return getDescription();
-  }
-
-  /** Represents one of the constraints as desctibed in {@link RequiredProviders} */
-  @VisibleForSerialization
-  enum Constraint {
+  /**
+   * Represents one of the constraints as desctibed in {@link RequiredProviders}
+   */
+  private enum Constraint {
     /** Accept any dependency */
     ANY {
       @Override
@@ -272,8 +267,8 @@ public final class RequiredProviders {
     return constraint.equals(Constraint.ANY);
   }
 
-  @VisibleForSerialization
-  RequiredProviders(
+
+  private RequiredProviders(
       Constraint constraint,
       ImmutableList<ImmutableSet<Class<?>>> nativeProviders,
       ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> skylarkProviders) {

@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -37,6 +36,7 @@ import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.SkylarkProvider;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction;
@@ -1314,17 +1314,16 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "test/skylark/macro.bzl",
         "x = 5");
 
-    scratch.file(
-        "test/skylark/BUILD",
+    scratch.file("test/skylark/BUILD",
         "load('//test/skylark:macro.bzl', 'x')",
-        "pass", // syntax error
+        "if 0: pass", // syntax error
         "print(1 / (5 - x)"); // division by 0
 
     // Make sure that evaluation continues and load() succeeds, despite a syntax
     // error in the file.
     // We can get the division by 0 only if x was correctly loaded.
     getConfiguredTarget("//test/skylark:a");
-    assertContainsEvent("syntax error");
+    assertContainsEvent("syntax error at 'if'");
     assertContainsEvent("integer division by zero");
   }
 
