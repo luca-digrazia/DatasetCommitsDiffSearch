@@ -18,6 +18,7 @@ import static com.google.common.collect.Iterables.transform;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.Artifact.ROOT_RELATIVE_PATH_STRING;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyArtifactNames;
+import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.prettyJarNames;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
@@ -247,10 +248,9 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
         .inOrder();
 
     List<String> directJars =
-        prettyArtifactNames(
+        prettyJarNames(
             getProvider(JavaCompilationArgsProvider.class, litepb2)
-                .getJavaCompilationArgs()
-                .getRuntimeJars());
+                .getJavaCompilationArgs().getRuntimeJars());
     assertThat(directJars)
         .containsExactly("cross/libbravo-lite.jar", "protobuf/libjavalite_runtime.jar");
   }
@@ -301,7 +301,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
 
     JavaSourceJarsProvider sourceJarsProvider = getProvider(JavaSourceJarsProvider.class, rule);
     assertThat(sourceJarsProvider).isNotNull();
-    assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
+    assertThat(prettyJarNames(sourceJarsProvider.getSourceJars()))
         .containsExactly("x/proto_lib-lite-src.jar");
 
     ImmutableListMultimap<String, Artifact> runtimeJars =
@@ -370,7 +370,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
         ")");
     scratch.file(
         "proto/BUILD",
-        "load('//proto:extensions.bzl', 'custom_rule')",
+        "load('/proto/extensions', 'custom_rule')",
         "load('//tools/build_rules/java_lite_proto_library:java_lite_proto_library.bzl',",
         "      'java_lite_proto_library')",
         "proto_library(",
@@ -444,15 +444,14 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
           getProvider(JavaCompilationArgsProvider.class, getConfiguredTarget("//x:foo_lite_pb2"));
 
       Iterable<String> directJars =
-          prettyArtifactNames(
-              compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
+          prettyJarNames(compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
 
       assertThat(directJars).containsExactly("x/libfoo-lite-hjar.jar");
 
       JavaSourceJarsProvider sourceJarsProvider =
           getProvider(JavaSourceJarsProvider.class, getConfiguredTarget("//x:foo_lite_pb2"));
       assertThat(sourceJarsProvider).isNotNull();
-      assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
+      assertThat(prettyJarNames(sourceJarsProvider.getSourceJars()))
           .containsExactly("x/foo-lite-src.jar");
     }
 
@@ -461,15 +460,14 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
           getProvider(JavaCompilationArgsProvider.class, getConfiguredTarget("//x:bar_lite_pb2"));
 
       Iterable<String> directJars =
-          prettyArtifactNames(
-              compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
+          prettyJarNames(compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
 
       assertThat(directJars).containsExactly("x/libbar-lite-hjar.jar");
 
       JavaSourceJarsProvider sourceJarsProvider =
           getProvider(JavaSourceJarsProvider.class, getConfiguredTarget("//x:bar_lite_pb2"));
       assertThat(sourceJarsProvider).isNotNull();
-      assertThat(prettyArtifactNames(sourceJarsProvider.getSourceJars()))
+      assertThat(prettyJarNames(sourceJarsProvider.getSourceJars()))
           .containsExactly("x/bar-lite-src.jar");
     }
   }
@@ -504,7 +502,7 @@ public class SkylarkJavaLiteProtoLibraryTest extends BuildViewTestCase {
         JavaCompilationArgsProvider.class, getConfiguredTarget("//x:foo_java_proto_lite"));
 
     Iterable<String> directJars =
-        prettyArtifactNames(compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
+        prettyJarNames(compilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars());
 
     assertThat(directJars).containsExactly("x/libbar_proto-lite-hjar.jar");
   }

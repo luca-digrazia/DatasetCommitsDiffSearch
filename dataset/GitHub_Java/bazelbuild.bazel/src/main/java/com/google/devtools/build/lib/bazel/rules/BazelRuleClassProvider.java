@@ -154,7 +154,6 @@ import com.google.devtools.build.lib.rules.objc.ObjcProtoLibraryRule;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses;
 import com.google.devtools.build.lib.rules.platform.ConstraintSettingRule;
 import com.google.devtools.build.lib.rules.platform.ConstraintValueRule;
-import com.google.devtools.build.lib.rules.platform.PlatformBaseRule;
 import com.google.devtools.build.lib.rules.platform.PlatformCommon;
 import com.google.devtools.build.lib.rules.platform.PlatformRule;
 import com.google.devtools.build.lib.rules.platform.ToolchainRule;
@@ -210,6 +209,7 @@ public class BazelRuleClassProvider {
         @Override
         public void init(Builder builder) {
           builder
+              .setProductName("bazel")
               .setPrelude("//tools/build_rules:prelude_bazel")
               .setNativeLauncherLabel("//tools/launcher:launcher")
               .setRunfilesPrefix(Label.DEFAULT_REPOSITORY_DIRECTORY)
@@ -234,7 +234,6 @@ public class BazelRuleClassProvider {
           builder.addConfigurationOptions(PlatformOptions.class);
           builder.addConfigurationFragment(new PlatformConfigurationLoader());
 
-          builder.addRuleDefinition(new PlatformBaseRule());
           builder.addRuleDefinition(new ConstraintSettingRule());
           builder.addRuleDefinition(new ConstraintValueRule());
           builder.addRuleDefinition(new PlatformRule());
@@ -616,6 +615,14 @@ public class BazelRuleClassProvider {
           builder.addNativeAspectClass(j2ObjcAspect);
           builder.addRuleDefinition(new J2ObjcLibraryBaseRule());
           builder.addRuleDefinition(new J2ObjcLibraryRule(j2ObjcAspect));
+
+          try {
+            builder.addWorkspaceFilePrefix(
+                ResourceFileLoader.loadResource(
+                    BazelRuleClassProvider.class, "objc/j2objc.WORKSPACE"));
+          } catch (IOException e) {
+            throw new IllegalStateException(e);
+          }
         }
 
         @Override
