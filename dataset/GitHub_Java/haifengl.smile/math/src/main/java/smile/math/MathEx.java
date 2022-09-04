@@ -31,17 +31,11 @@ import smile.sort.QuickSort;
 import smile.sort.Sort;
 import smile.util.SparseArray;
 
-import static java.lang.Math.abs;
-import static java.lang.Math.exp;
-import static java.lang.Math.floor;
-import static java.lang.Math.log;
-import static java.lang.Math.sqrt;
-
 /**
  * Extra basic numeric functions. The following functions are
  * included:
  * <ul>
- * <li> scalar functions: sqr, factorial, lfactorial, choose, lchoose, log2 are
+ * <li> scalar functions: sqr, factorial, logFractorial, choose, logChoose, log2 are
  * provided.
  * <li> vector functions: min, max, mean, sum, var, sd, cov, L<sub>1</sub> norm,
  * L<sub>2</sub> norm, L<sub>&infin;</sub> norm, normalize, unitize, cor, Spearman
@@ -238,13 +232,13 @@ public class MathEx {
     /**
      * log(2), used in log2().
      */
-    private static final double LOG2 = log(2);
+    private static final double LOG2 = Math.log(2);
 
     /**
      * Log of base 2.
      */
     public static double log2(double x) {
-        return log(x) / LOG2;
+        return Math.log(x) / LOG2;
     }
 
     /**
@@ -258,9 +252,9 @@ public class MathEx {
             return true;
         }
         
-        double absa = abs(a);
-        double absb = abs(b);
-        return abs(a - b) <= Math.min(absa, absb) * 2.2204460492503131e-16;
+        double absa = Math.abs(a);
+        double absb = Math.abs(b);
+        return Math.abs(a - b) <= Math.min(absa, absb) * 2.2204460492503131e-16;
     }
         
     /**
@@ -273,7 +267,7 @@ public class MathEx {
         } else if (x > 40) {
             y = 1.0 + 4.248354e-18;
         } else {
-            y = 1.0 + exp(-x);
+            y = 1.0 + Math.exp(-x);
         }
 
         return 1.0 / y;
@@ -383,14 +377,14 @@ public class MathEx {
     }
 
     /**
-     * The factorial of n.
+     * factorial of n
      *
      * @return factorial returned as double but is, numerically, an integer.
-     * Numerical rounding may make this an approximation after n = 21.
+     * Numerical rounding may makes this an approximation after n = 21
      */
     public static double factorial(int n) {
         if (n < 0) {
-            throw new IllegalArgumentException("n has to be non-negative.");
+            throw new IllegalArgumentException("n has to be nonnegative.");
         }
 
         double f = 1.0;
@@ -402,23 +396,23 @@ public class MathEx {
     }
 
     /**
-     * The log of factorial of n.
+     * log of factorial of n
      */
-    public static double lfactorial(int n) {
+    public static double logFactorial(int n) {
         if (n < 0) {
-            throw new IllegalArgumentException(String.format("n has to be non-negative: %d", n));
+            throw new IllegalArgumentException(String.format("n has to be nonnegative: %d", n));
         }
 
         double f = 0.0;
         for (int i = 2; i <= n; i++) {
-            f += log(i);
+            f += Math.log(i);
         }
 
         return f;
     }
 
     /**
-     * The n choose k. Returns 0 if n is less than k.
+     * n choose k. Returns 0 if n is less than k.
      */
     public static double choose(int n, int k) {
         if (n < 0 || k < 0) {
@@ -429,18 +423,18 @@ public class MathEx {
             return 0.0;
         }
 
-        return floor(0.5 + exp(lchoose(n, k)));
+        return Math.floor(0.5 + Math.exp(logChoose(n, k)));
     }
 
     /**
-     * The log of n choose k.
+     * log of n choose k
      */
-    public static double lchoose(int n, int k) {
+    public static double logChoose(int n, int k) {
         if (n < 0 || k < 0 || k > n) {
             throw new IllegalArgumentException(String.format("Invalid n = %d, k = %d", n, k));
         }
 
-        return lfactorial(n) - lfactorial(k) - lfactorial(n - k);
+        return logFactorial(n) - logFactorial(k) - logFactorial(n - k);
     }
 
     /**
@@ -507,7 +501,7 @@ public class MathEx {
      * Given a set of n probabilities, generate a random number in [0, n).
      * @param prob probabilities of size n. The prob argument can be used to
      * give a vector of weights for obtaining the elements of the vector being
-     * sampled. They need not sum to one, but they should be non-negative and
+     * sampled. They need not sum to one, but they should be nonnegative and
      * not all zero.
      * @return a random integer in [0, n).
      */
@@ -521,7 +515,7 @@ public class MathEx {
      * number in [0, m).
      * @param prob probabilities of size n. The prob argument can be used to
      * give a vector of weights for obtaining the elements of the vector being
-     * sampled. They need not sum to one, but they should be non-negative and
+     * sampled. They need not sum to one, but they should be nonnegative and
      * not all zero.
      * @return an random array of length n in range of [0, m).
      */
@@ -724,7 +718,7 @@ public class MathEx {
 
         double Z = 0.0;
         for (int i = 0; i < k; i++) {
-            double out = exp(x[i] - max);
+            double out = Math.exp(x[i] - max);
             x[i] = out;
             Z += out;
         }
@@ -1633,7 +1627,7 @@ public class MathEx {
 
         int n = data.length - 1;
         for (int i = 0; i < p; i++) {
-            sumsq[i] = sqrt(sumsq[i] / n - (sum[i] / data.length) * (sum[i] / n));
+            sumsq[i] = Math.sqrt(sumsq[i] / n - (sum[i] / data.length) * (sum[i] / n));
         }
 
         return sumsq;
@@ -1869,21 +1863,21 @@ public class MathEx {
      * Returns the standard deviation of an array.
      */
     public static double sd(int[] x) {
-        return sqrt(var(x));
+        return Math.sqrt(var(x));
     }
 
     /**
      * Returns the standard deviation of an array.
      */
     public static double sd(float[] x) {
-        return sqrt(var(x));
+        return Math.sqrt(var(x));
     }
 
     /**
      * Returns the standard deviation of an array.
      */
     public static double sd(double[] x) {
-        return sqrt(var(x));
+        return Math.sqrt(var(x));
     }
 
     /**
@@ -1913,7 +1907,7 @@ public class MathEx {
     public static double mad(int[] x) {
         int m = median(x);
         for (int i = 0; i < x.length; i++) {
-            x[i] = abs(x[i] - m);
+            x[i] = Math.abs(x[i] - m);
         }
 
         return median(x);
@@ -1946,7 +1940,7 @@ public class MathEx {
     public static double mad(float[] x) {
         float m = median(x);
         for (int i = 0; i < x.length; i++) {
-            x[i] = abs(x[i] - m);
+            x[i] = Math.abs(x[i] - m);
         }
 
         return median(x);
@@ -1979,7 +1973,7 @@ public class MathEx {
     public static double mad(double[] x) {
         double m = median(x);
         for (int i = 0; i < x.length; i++) {
-            x[i] = abs(x[i] - m);
+            x[i] = Math.abs(x[i] - m);
         }
 
         return median(x);
@@ -2015,28 +2009,28 @@ public class MathEx {
      * The Euclidean distance.
      */
     public static double distance(int[] x, int[] y) {
-        return sqrt(squaredDistance(x, y));
+        return Math.sqrt(squaredDistance(x, y));
     }
 
     /**
      * The Euclidean distance.
      */
     public static double distance(float[] x, float[] y) {
-        return sqrt(squaredDistance(x, y));
+        return Math.sqrt(squaredDistance(x, y));
     }
 
     /**
      * The Euclidean distance.
      */
     public static double distance(double[] x, double[] y) {
-        return sqrt(squaredDistance(x, y));
+        return Math.sqrt(squaredDistance(x, y));
     }
 
     /**
      * The Euclidean distance.
      */
     public static double distance(SparseArray x, SparseArray y) {
-        return sqrt(squaredDistance(x, y));
+        return Math.sqrt(squaredDistance(x, y));
     }
 
     private static class PdistTask implements Callable<Void> {
@@ -2196,45 +2190,6 @@ public class MathEx {
     }
 
     /**
-     * The squared Euclidean distance with handling missing values (represented as NaN).
-     */
-    public static double squaredDistanceWithMissingValues(double[] x, double[] y) {
-        int n = x.length;
-        int m = 0;
-        double dist = 0.0;
-
-        for (int i = 0; i < n; i++) {
-            if (!Double.isNaN(x[i]) && !Double.isNaN(y[i])) {
-                m++;
-                double d = x[i] - y[i];
-                dist += d * d;
-            }
-        }
-
-        if (m == 0) {
-            dist = Double.MAX_VALUE;
-        } else {
-            dist = n * dist / m;
-        }
-
-        return dist;
-    }
-
-    /**
-     * Shannon's entropy.
-     * @param p the probabilities.
-     */
-    public static double entropy(double[] p) {
-        double h = 0.0;
-        for (double pi : p) {
-            if (pi > 0) {
-                h -= pi * log(pi);
-            }
-        }
-        return h;
-    }
-
-    /**
      * Kullback-Leibler divergence. The Kullback-Leibler divergence (also
      * information divergence, information gain, relative entropy, or KLIC)
      * is a non-symmetric measure of the difference between two probability
@@ -2256,7 +2211,7 @@ public class MathEx {
         for (int i = 0; i < x.length; i++) {
             if (x[i] != 0.0 && y[i] != 0.0) {
                 intersection = true;
-                kl += x[i] * log(x[i] / y[i]);
+                kl += x[i] * Math.log(x[i] / y[i]);
             }
         }
 
@@ -2307,7 +2262,7 @@ public class MathEx {
                 b = iterY.hasNext() ? iterY.next() : null;
             } else {
                 intersection = true;
-                kl += a.x * log(a.x / b.x);
+                kl += a.x * Math.log(a.x / b.x);
 
                 a = iterX.hasNext() ? iterX.next() : null;
                 b = iterY.hasNext() ? iterY.next() : null;
@@ -2369,7 +2324,7 @@ public class MathEx {
             int i = b.i;
             if (y[i] > 0) {
                 intersection = true;
-                kl += b.x * log(b.x / y[i]);
+                kl += b.x * Math.log(b.x / y[i]);
             }
         }
 
@@ -2427,15 +2382,15 @@ public class MathEx {
         while (a != null && b != null) {
             if (a.i < b.i) {
                 double mi = a.x / 2;
-                js += a.x * log(a.x / mi);
+                js += a.x * Math.log(a.x / mi);
                 a = iterX.hasNext() ? iterX.next() : null;
             } else if (a.i > b.i) {
                 double mi = b.x / 2;
-                js += b.x * log(b.x / mi);
+                js += b.x * Math.log(b.x / mi);
                 b = iterY.hasNext() ? iterY.next() : null;
             } else {
                 double mi = (a.x + b.x) / 2;
-                js += a.x * log(a.x / mi) + b.x * log(b.x / mi);
+                js += a.x * Math.log(a.x / mi) + b.x * Math.log(b.x / mi);
 
                 a = iterX.hasNext() ? iterX.next() : null;
                 b = iterY.hasNext() ? iterY.next() : null;
@@ -2479,9 +2434,9 @@ public class MathEx {
             SparseArray.Entry b = iter.next();
             int i = b.i;
             double mi = (b.x + y[i]) / 2;
-            js += b.x * log(b.x / mi);
+            js += b.x * Math.log(b.x / mi);
             if (y[i] > 0) {
-                js += y[i] * log(y[i] / mi);
+                js += y[i] * Math.log(y[i] / mi);
             }
         }
 
@@ -2688,7 +2643,7 @@ public class MathEx {
             return Double.NaN;
         }
 
-        return Sxy / sqrt(Sxx * Syy);
+        return Sxy / Math.sqrt(Sxx * Syy);
     }
 
     /**
@@ -2711,7 +2666,7 @@ public class MathEx {
             return Double.NaN;
         }
 
-        return Sxy / sqrt(Sxx * Syy);
+        return Sxy / Math.sqrt(Sxx * Syy);
     }
 
     /**
@@ -2734,7 +2689,7 @@ public class MathEx {
             return Double.NaN;
         }
 
-        return Sxy / sqrt(Sxx * Syy);
+        return Sxy / Math.sqrt(Sxx * Syy);
     }
 
     /**
@@ -2754,7 +2709,7 @@ public class MathEx {
         int n = data[0].length;
         double[] sd = new double[n];
         for (int i = 0; i < n; i++) {
-            sd[i] = sqrt(sigma[i][i]);
+            sd[i] = Math.sqrt(sigma[i][i]);
         }
 
         for (int i = 0; i < n; i++) {
@@ -2917,7 +2872,7 @@ public class MathEx {
             }
         }
 
-        double tau = is / (sqrt(n1) * sqrt(n2));
+        double tau = is / (Math.sqrt(n1) * Math.sqrt(n2));
         return tau;
     }
 
@@ -2958,7 +2913,7 @@ public class MathEx {
             }
         }
 
-        double tau = is / (sqrt(n1) * sqrt(n2));
+        double tau = is / (Math.sqrt(n1) * Math.sqrt(n2));
         return tau;
     }
 
@@ -2999,7 +2954,7 @@ public class MathEx {
             }
         }
 
-        double tau = is / (sqrt(n1) * sqrt(n2));
+        double tau = is / (Math.sqrt(n1) * Math.sqrt(n2));
         return tau;
     }
 
@@ -3010,7 +2965,7 @@ public class MathEx {
         double norm = 0.0;
 
         for (double n : x) {
-            norm += abs(n);
+            norm += Math.abs(n);
         }
 
         return norm;
@@ -3026,7 +2981,7 @@ public class MathEx {
             norm += n * n;
         }
 
-        norm = sqrt(norm);
+        norm = Math.sqrt(norm);
 
         return norm;
     }
@@ -3037,9 +2992,9 @@ public class MathEx {
     public static double normInf(double[] x) {
         int n = x.length;
 
-        double f = abs(x[0]);
+        double f = Math.abs(x[0]);
         for (int i = 1; i < n; i++) {
-            f = Math.max(f, abs(x[i]));
+            f = Math.max(f, Math.abs(x[i]));
         }
 
         return f;
@@ -3121,7 +3076,7 @@ public class MathEx {
             for (int i = 0; i < n; i++) {
                 scale[j] += sqr(x[i][j]);
             }
-            scale[j] = sqrt(scale[j] / (n-1));
+            scale[j] = Math.sqrt(scale[j] / (n-1));
 
             if (!isZero(scale[j])) {
                 for (int i = 0; i < n; i++) {
@@ -3160,7 +3115,7 @@ public class MathEx {
             for (int i = 0; i < n; i++) {
                 scale[j] += sqr(x[i][j]);
             }
-            scale[j] = sqrt(scale[j]);
+            scale[j] = Math.sqrt(scale[j]);
         }
 
         for (int i = 0; i < n; i++) {
@@ -3184,7 +3139,7 @@ public class MathEx {
     /**
      * Unitize an array so that L1 norm of x is 1.
      *
-     * @param x an array of non-negative double
+     * @param x an array of nonnegative double
      */
     public static void unitize1(double[] x) {
         double n = norm1(x);
@@ -3223,7 +3178,7 @@ public class MathEx {
         }
 
         for (int i = 0; i < x.length; i++) {
-            if (abs(x[i] - y[i]) > epsilon) {
+            if (Math.abs(x[i] - y[i]) > epsilon) {
                 return false;
             }
         }
@@ -3251,7 +3206,7 @@ public class MathEx {
         }
         
         for (int i = 0; i < x.length; i++) {
-            if (abs(x[i] - y[i]) > eps) {
+            if (Math.abs(x[i] - y[i]) > eps) {
                 return false;
             }
         }
@@ -3276,7 +3231,7 @@ public class MathEx {
 
         for (int i = 0; i < x.length; i++) {
             for (int j = 0; j < x[i].length; j++) {
-                if (abs(x[i][j] - y[i][j]) > epsilon) {
+                if (Math.abs(x[i][j] - y[i][j]) > epsilon) {
                     return false;
                 }
             }
@@ -3305,7 +3260,7 @@ public class MathEx {
         
         for (int i = 0; i < x.length; i++) {
             for (int j = 0; j < x[i].length; j++) {
-                if (abs(x[i][j] - y[i][j]) > eps) {
+                if (Math.abs(x[i][j] - y[i][j]) > eps) {
                     return false;
                 }
             }
@@ -3320,7 +3275,7 @@ public class MathEx {
 
     /** Tests if a floating number is zero with given epsilon. */
     public static boolean isZero(float x, float epsilon) {
-        return abs(x) < epsilon;
+        return Math.abs(x) < epsilon;
     }
 
     /** Tests if a floating number is zero. */
@@ -3330,7 +3285,7 @@ public class MathEx {
 
     /** Tests if a floating number is zero with given epsilon. */
     public static boolean isZero(double x, double epsilon) {
-        return abs(x) < epsilon;
+        return Math.abs(x) < epsilon;
     }
 
     /**
