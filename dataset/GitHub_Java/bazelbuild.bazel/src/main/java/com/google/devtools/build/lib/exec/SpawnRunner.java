@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -170,12 +169,6 @@ public interface SpawnRunner {
      */
     void lockOutputFiles() throws InterruptedException;
 
-    /**
-     * Returns whether this spawn may be executing concurrently under multiple spawn runners. If so,
-     * {@link #lockOutputFiles} may raise {@link InterruptedException}.
-     */
-    boolean speculating();
-
     /** Returns the timeout that should be applied for the given {@link Spawn} instance. */
     Duration getTimeout();
 
@@ -203,7 +196,4 @@ public interface SpawnRunner {
       Spawn spawn,
       SpawnExecutionPolicy policy)
           throws InterruptedException, IOException, ExecException;
-
-  /* Name of the SpawnRunner. */
-  String getName();
 }

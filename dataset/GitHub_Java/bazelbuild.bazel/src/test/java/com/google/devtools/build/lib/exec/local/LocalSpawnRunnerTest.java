@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.exec.util.SpawnBuilder;
 import com.google.devtools.build.lib.shell.JavaSubprocessFactory;
 import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
-import com.google.devtools.build.lib.shell.SubprocessFactory;
 import com.google.devtools.build.lib.util.NetUtil;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.io.FileOutErr;
@@ -132,7 +131,7 @@ public class LocalSpawnRunnerTest {
   private static final Spawn SIMPLE_SPAWN =
       new SpawnBuilder("/bin/echo", "Hi!").withEnvironment("VARIABLE", "value").build();
 
-  private static final class SubprocessInterceptor implements SubprocessFactory {
+  private static final class SubprocessInterceptor implements Subprocess.Factory {
     @Override
     public Subprocess create(SubprocessBuilder params) throws IOException {
       throw new UnsupportedOperationException();
@@ -160,11 +159,6 @@ public class LocalSpawnRunnerTest {
     @Override
     public void lockOutputFiles() throws InterruptedException {
       lockOutputFilesCalled = true;
-    }
-
-    @Override
-    public boolean speculating() {
-      return false;
     }
 
     @Override
@@ -234,13 +228,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void vanillaZeroExit() throws Exception {
-    if (OS.getCurrent() == OS.WINDOWS) {
-      // TODO(#3536): Make this test work on Windows.
-      // The Command API implicitly absolutizes the path, and we get weird paths on Windows:
-      // T:\execroot\execroot\_bin\process-wrapper
-      return;
-    }
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     ArgumentCaptor<SubprocessBuilder> captor = ArgumentCaptor.forClass(SubprocessBuilder.class);
     when(factory.create(captor.capture())).thenReturn(new FinishedSubprocess(0));
     SubprocessBuilder.setSubprocessFactory(factory);
@@ -280,13 +268,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void noProcessWrapper() throws Exception {
-    if (OS.getCurrent() == OS.WINDOWS) {
-      // TODO(#3536): Make this test work on Windows.
-      // The Command API implicitly absolutizes the path, and we get weird paths on Windows:
-      // T:\execroot\bin\echo
-      return;
-    }
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     ArgumentCaptor<SubprocessBuilder> captor = ArgumentCaptor.forClass(SubprocessBuilder.class);
     when(factory.create(captor.capture())).thenReturn(new FinishedSubprocess(0));
     SubprocessBuilder.setSubprocessFactory(factory);
@@ -317,13 +299,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void nonZeroExit() throws Exception {
-    if (OS.getCurrent() == OS.WINDOWS) {
-      // TODO(#3536): Make this test work on Windows.
-      // The Command API implicitly absolutizes the path, and we get weird paths on Windows:
-      // T:\execroot\execroot\_bin\process-wrapper
-      return;
-    }
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     ArgumentCaptor<SubprocessBuilder> captor = ArgumentCaptor.forClass(SubprocessBuilder.class);
     when(factory.create(captor.capture())).thenReturn(new FinishedSubprocess(3));
     SubprocessBuilder.setSubprocessFactory(factory);
@@ -359,7 +335,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void processStartupThrows() throws Exception {
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     ArgumentCaptor<SubprocessBuilder> captor = ArgumentCaptor.forClass(SubprocessBuilder.class);
     when(factory.create(captor.capture())).thenThrow(new IOException("I'm sorry, Dave"));
     SubprocessBuilder.setSubprocessFactory(factory);
@@ -407,7 +383,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void interruptedException() throws Exception {
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     ArgumentCaptor<SubprocessBuilder> captor = ArgumentCaptor.forClass(SubprocessBuilder.class);
     when(factory.create(captor.capture())).thenReturn(new FinishedSubprocess(3) {
       private boolean destroyed;
@@ -445,7 +421,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void checkPrefetchCalled() throws Exception {
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     when(factory.create(any())).thenReturn(new FinishedSubprocess(0));
     SubprocessBuilder.setSubprocessFactory(factory);
 
@@ -462,7 +438,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void checkNoPrefetchCalled() throws Exception {
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     when(factory.create(any())).thenReturn(new FinishedSubprocess(0));
     SubprocessBuilder.setSubprocessFactory(factory);
 
@@ -482,7 +458,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void checkLocalEnvProviderCalled() throws Exception {
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     when(factory.create(any())).thenReturn(new FinishedSubprocess(0));
     SubprocessBuilder.setSubprocessFactory(factory);
     LocalEnvProvider localEnvProvider = mock(LocalEnvProvider.class);
@@ -502,13 +478,7 @@ public class LocalSpawnRunnerTest {
 
   @Test
   public void useCorrectExtensionOnWindows() throws Exception {
-    if (OS.getCurrent() == OS.WINDOWS) {
-      // TODO(#3536): Make this test work on Windows.
-      // The Command API implicitly absolutizes the path, and we get weird paths on Windows:
-      // T:\execroot\execroot\_bin\process-wrapper.exe
-      return;
-    }
-    SubprocessFactory factory = mock(SubprocessFactory.class);
+    Subprocess.Factory factory = mock(Subprocess.Factory.class);
     ArgumentCaptor<SubprocessBuilder> captor = ArgumentCaptor.forClass(SubprocessBuilder.class);
     when(factory.create(captor.capture())).thenReturn(new FinishedSubprocess(0));
     SubprocessBuilder.setSubprocessFactory(factory);

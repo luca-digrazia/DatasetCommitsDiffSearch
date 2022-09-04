@@ -22,11 +22,11 @@ import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnResult.Status;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.SpawnExecException;
+import com.google.devtools.build.lib.exec.SpawnResult;
+import com.google.devtools.build.lib.exec.SpawnResult.Status;
 import com.google.devtools.build.lib.exec.SpawnRunner;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
@@ -116,7 +116,8 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
                   originalSpawn.getEnvironment(),
                   execRoot.getPathString()) + SANDBOX_DEBUG_SUGGESTION;
         }
-        throw new SpawnExecException(message, result, /*forciblyRunRemotely=*/false);
+        throw new SpawnExecException(
+            message, result, /*forciblyRunRemotely=*/false, /*catastrophe=*/false);
       }
       return result;
     } finally {
