@@ -139,9 +139,13 @@ public class QuarkusPlugin implements Plugin<Project> {
                     compileJavaTask.dependsOn(quarkusGenerateCode);
                     quarkusGenerateCode.setSourceRegistrar(compileJavaTask::source);
 
-                    JavaCompile compileTestJavaTask = (JavaCompile) tasks.getByName(JavaPlugin.COMPILE_TEST_JAVA_TASK_NAME);
-                    compileTestJavaTask.dependsOn(quarkusGenerateCodeTests);
-                    quarkusGenerateCodeTests.setSourceRegistrar(compileTestJavaTask::source);
+                    Task compileKotlinTask = tasks.findByName("compileKotlin");
+                    // TODO: proper support of kotlin
+                    if (compileKotlinTask == null) {
+                        JavaCompile compileTestJavaTask = (JavaCompile) tasks.getByName(JavaPlugin.COMPILE_TEST_JAVA_TASK_NAME);
+                        compileTestJavaTask.dependsOn(quarkusGenerateCodeTests);
+                        quarkusGenerateCodeTests.setSourceRegistrar(compileTestJavaTask::source);
+                    }
 
                     Task classesTask = tasks.getByName(JavaPlugin.CLASSES_TASK_NAME);
                     Task resourcesTask = tasks.getByName(JavaPlugin.PROCESS_RESOURCES_TASK_NAME);
@@ -181,16 +185,10 @@ public class QuarkusPlugin implements Plugin<Project> {
 
                     tasks.withType(Test.class).forEach(configureTestTask);
                     tasks.withType(Test.class).whenTaskAdded(configureTestTask::accept);
-
-                    sourceSets.create(QuarkusGenerateCode.QUARKUS_GENERATED_SOURCES).getOutput()
-                            .dir(QuarkusGenerateCode.QUARKUS_GENERATED_SOURCES);
-                    sourceSets.create(QuarkusGenerateCode.QUARKUS_TEST_GENERATED_SOURCES).getOutput()
-                            .dir(QuarkusGenerateCode.QUARKUS_TEST_GENERATED_SOURCES);
                 });
-
         project.getPlugins().withId("org.jetbrains.kotlin.jvm", plugin -> {
-            tasks.getByName("compileKotlin").dependsOn(quarkusGenerateCode);
-            tasks.getByName("compileTestKotlin").dependsOn(quarkusGenerateCodeTests);
+            Task compileKotlinTask = tasks.findByName("compileKotlin");
+            compileKotlinTask.dependsOn(quarkusGenerateCode, quarkusGenerateCodeTests);
         });
     }
 
