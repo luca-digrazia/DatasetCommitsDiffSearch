@@ -19,16 +19,13 @@ package org.jboss.protean.arc.test.producer.disposer;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
-import java.math.BigDecimal;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import javax.annotation.PreDestroy;
-import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Disposes;
 import javax.enterprise.inject.Produces;
-import javax.enterprise.util.TypeLiteral;
 import javax.inject.Singleton;
 
 import org.jboss.protean.arc.Arc;
@@ -37,28 +34,11 @@ import org.jboss.protean.arc.test.ArcTestContainer;
 import org.jboss.protean.arc.test.MyQualifier;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.RuleChain;
-import org.junit.rules.TestRule;
-import org.junit.runner.Description;
-import org.junit.runners.model.Statement;
 
 public class DisposerTest {
 
     @Rule
-    public RuleChain chain = RuleChain.outerRule(new TestRule() {
-        @Override
-        public Statement apply(final Statement base, Description description) {
-            return new Statement() {
-
-                @Override
-                public void evaluate() throws Throwable {
-                    base.evaluate();
-                    assertNotNull(BigDecimalProducer.DISPOSED.get());
-                    assertEquals(1, BigDecimalProducer.DESTROYED.get());
-                }
-            };
-        }
-    }).around(new ArcTestContainer(StringProducer.class, LongProducer.class, BigDecimalProducer.class));
+    public ArcTestContainer container = new ArcTestContainer(StringProducer.class, LongProducer.class);
 
     @Test
     public void testDisposers() {
@@ -70,10 +50,6 @@ public class DisposerTest {
         assertNotNull(StringProducer.DISPOSED.get());
         // A new instance is created for produce and dispose
         assertEquals(2, StringProducer.DESTROYED.get());
-        // Both producer and produced bean are application scoped
-        Comparable<BigDecimal> bigDecimal = Arc.container().instance(new TypeLiteral<Comparable<BigDecimal>>() {
-        }).get();
-        assertEquals(0, bigDecimal.compareTo(BigDecimal.ONE));
     }
 
     @Singleton
@@ -106,30 +82,6 @@ public class DisposerTest {
         String produce = toString();
 
         void dipose(@Disposes @MyQualifier String value) {
-            DISPOSED.set(value);
-        }
-
-        @PreDestroy
-        void destroy() {
-            DESTROYED.incrementAndGet();
-        }
-
-    }
-
-    @ApplicationScoped
-    static class BigDecimalProducer {
-
-        static final AtomicInteger DESTROYED = new AtomicInteger();
-
-        static final AtomicReference<Object> DISPOSED = new AtomicReference<>();
-
-        @ApplicationScoped
-        @Produces
-        Comparable<BigDecimal> produce() {
-            return BigDecimal.ONE;
-        }
-
-        void dipose(@Disposes Comparable<BigDecimal> value) {
             DISPOSED.set(value);
         }
 
