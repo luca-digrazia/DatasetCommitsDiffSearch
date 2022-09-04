@@ -7,7 +7,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *     https://www.apache.org/licenses/LICENSE-2.0
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
  *  Unless required by applicable law or agreed to in writing, software
  *  distributed under the License is distributed on an "AS IS" BASIS,
@@ -66,6 +66,7 @@ public class BasicAuthenticationMechanism implements HttpAuthenticationMechanism
      */
     public static final String USER_AGENT_CHARSETS = "user-agent-charsets";
 
+    private final String name;
     private final String challenge;
 
     private static final String BASIC = "basic";
@@ -86,38 +87,30 @@ public class BasicAuthenticationMechanism implements HttpAuthenticationMechanism
     private final Map<Pattern, Charset> userAgentCharsets;
 
     public BasicAuthenticationMechanism(final String realmName) {
-        this(realmName, false);
+        this(realmName, "BASIC");
     }
 
-    public BasicAuthenticationMechanism(final String realmName, final boolean silent) {
-        this(realmName, silent, StandardCharsets.UTF_8, Collections.emptyMap());
-    }
-
-    public BasicAuthenticationMechanism(final String realmName, final boolean silent,
-            Charset charset, Map<Pattern, Charset> userAgentCharsets) {
-        this.challenge = BASIC_PREFIX + "realm=\"" + realmName + "\"";
-        this.silent = silent;
-        this.charset = charset;
-        this.userAgentCharsets = Collections.unmodifiableMap(new LinkedHashMap<>(userAgentCharsets));
-    }
-
-    @Deprecated
     public BasicAuthenticationMechanism(final String realmName, final String mechanismName) {
         this(realmName, mechanismName, false);
     }
 
-    @Deprecated
     public BasicAuthenticationMechanism(final String realmName, final String mechanismName, final boolean silent) {
         this(realmName, mechanismName, silent, StandardCharsets.UTF_8, Collections.emptyMap());
     }
 
-    @Deprecated
     public BasicAuthenticationMechanism(final String realmName, final String mechanismName, final boolean silent,
             Charset charset, Map<Pattern, Charset> userAgentCharsets) {
         this.challenge = BASIC_PREFIX + "realm=\"" + realmName + "\"";
+        this.name = mechanismName;
         this.silent = silent;
         this.charset = charset;
         this.userAgentCharsets = Collections.unmodifiableMap(new LinkedHashMap<>(userAgentCharsets));
+    }
+
+    private static void clear(final char[] array) {
+        for (int i = 0; i < array.length; i++) {
+            array[i] = 0x00;
+        }
     }
 
     @Override
