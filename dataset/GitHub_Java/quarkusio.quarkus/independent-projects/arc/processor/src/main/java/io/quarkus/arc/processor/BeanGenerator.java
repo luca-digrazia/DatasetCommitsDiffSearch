@@ -14,7 +14,6 @@ import io.quarkus.arc.InjectableReferenceProvider;
 import io.quarkus.arc.Subclass;
 import io.quarkus.arc.processor.BeanInfo.InterceptionInfo;
 import io.quarkus.arc.processor.BeanProcessor.PrivateMembersCollector;
-import io.quarkus.arc.processor.BuiltinBean.GeneratorContext;
 import io.quarkus.arc.processor.ResourceOutput.Resource;
 import io.quarkus.arc.processor.ResourceOutput.Resource.SpecialType;
 import io.quarkus.gizmo.AssignableResultHandle;
@@ -46,7 +45,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.literal.InjectLiteral;
 import javax.enterprise.inject.spi.InterceptionType;
@@ -569,10 +567,8 @@ public class BeanGenerator extends AbstractGenerator {
                 builtinBean = BuiltinBean.resolve(injectionPoint);
             }
             if (builtinBean != null) {
-                builtinBean.getGenerator()
-                        .generate(new GeneratorContext(classOutput, bean.getDeployment(), injectionPoint, beanCreator,
-                                constructor,
-                                injectionPointToProviderField.get(injectionPoint), annotationLiterals, bean));
+                builtinBean.getGenerator().generate(classOutput, bean.getDeployment(), injectionPoint, beanCreator, constructor,
+                        injectionPointToProviderField.get(injectionPoint), annotationLiterals);
             } else {
                 if (BuiltinScope.DEPENDENT.is(injectionPoint.getResolvedBean().getScope()) && (injectionPoint.getResolvedBean()
                         .getAllInjectionPoints().stream()
@@ -715,8 +711,7 @@ public class BeanGenerator extends AbstractGenerator {
                     FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_DECLARING_PROVIDER,
                             InjectableBean.class.getName()),
                     destroy.getThis());
-            ResultHandle ctxHandle = destroy.newInstance(
-                    MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class), destroy.loadNull());
+            ResultHandle ctxHandle = destroy.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
             ResultHandle declaringProviderInstanceHandle = destroy.invokeInterfaceMethod(
                     MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
                     ctxHandle);
@@ -735,8 +730,7 @@ public class BeanGenerator extends AbstractGenerator {
                 if (i == disposedParamPosition) {
                     referenceHandles[i] = destroy.getMethodParam(0);
                 } else {
-                    ResultHandle childCtxHandle = destroy.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD_CONTEXTUAL,
-                            declaringProviderHandle, ctxHandle);
+                    ResultHandle childCtxHandle = destroy.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD, ctxHandle);
                     ResultHandle providerHandle = destroy.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
                             injectionPointToProviderField.get(injectionPointsIterator.next()),
                             InjectableReferenceProvider.class.getName()), destroy.getThis());
@@ -959,11 +953,11 @@ public class BeanGenerator extends AbstractGenerator {
             // Perform field and initializer injections
             for (Injection fieldInjection : fieldInjections) {
                 InjectionPointInfo injectionPoint = fieldInjection.injectionPoints.get(0);
+                ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD,
+                        create.getMethodParam(0));
                 ResultHandle providerHandle = create.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
                         injectionPointToProviderField.get(injectionPoint), InjectableReferenceProvider.class.getName()),
                         create.getThis());
-                ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD_CONTEXTUAL,
-                        providerHandle, create.getMethodParam(0));
                 ResultHandle referenceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
                         providerHandle, childCtxHandle);
 
@@ -992,11 +986,11 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle[] referenceHandles = new ResultHandle[methodInjection.injectionPoints.size()];
                 int paramIdx = 0;
                 for (InjectionPointInfo injectionPoint : methodInjection.injectionPoints) {
+                    ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD,
+                            create.getMethodParam(0));
                     ResultHandle providerHandle = create.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
                             injectionPointToProviderField.get(injectionPoint), InjectableReferenceProvider.class.getName()),
                             create.getThis());
-                    ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD_CONTEXTUAL,
-                            providerHandle, create.getMethodParam(0));
                     ResultHandle referenceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
                             providerHandle, childCtxHandle);
                     referenceHandles[paramIdx++] = referenceHandle;
@@ -1085,8 +1079,7 @@ public class BeanGenerator extends AbstractGenerator {
                     FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_DECLARING_PROVIDER,
                             InjectableBean.class.getName()),
                     create.getThis());
-            ResultHandle ctxHandle = create.newInstance(
-                    MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class), create.getThis());
+            ResultHandle ctxHandle = create.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
             ResultHandle declaringProviderInstanceHandle = create.invokeInterfaceMethod(
                     MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
                     ctxHandle);
@@ -1102,11 +1095,11 @@ public class BeanGenerator extends AbstractGenerator {
             ResultHandle[] referenceHandles = new ResultHandle[injectionPoints.size()];
             int paramIdx = 0;
             for (InjectionPointInfo injectionPoint : injectionPoints) {
+                ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD,
+                        create.getMethodParam(0));
                 ResultHandle providerHandle = create.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
                         injectionPointToProviderField.get(injectionPoint), InjectableReferenceProvider.class.getName()),
                         create.getThis());
-                ResultHandle childCtxHandle = create.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD_CONTEXTUAL,
-                        providerHandle, create.getMethodParam(0));
                 ResultHandle referenceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
                         providerHandle, childCtxHandle);
                 referenceHandles[paramIdx++] = referenceHandle;
@@ -1150,8 +1143,7 @@ public class BeanGenerator extends AbstractGenerator {
                     FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_DECLARING_PROVIDER,
                             InjectableBean.class.getName()),
                     create.getThis());
-            ResultHandle ctxHandle = create.newInstance(
-                    MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class), create.getThis());
+            ResultHandle ctxHandle = create.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
             ResultHandle declaringProviderInstanceHandle = create.invokeInterfaceMethod(
                     MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
                     ctxHandle);
@@ -1206,8 +1198,8 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle providerHandle = createMethod.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
                         injectionPointToProviderField.get(injectionPoint), InjectableReferenceProvider.class.getName()),
                         createMethod.getThis());
-                ResultHandle childCtx = createMethod.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD_CONTEXTUAL,
-                        providerHandle, createMethod.getMethodParam(0));
+                ResultHandle childCtx = createMethod.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD,
+                        createMethod.getMethodParam(0));
                 providerHandles.add(createMethod.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
                         providerHandle, childCtx));
             }
@@ -1336,9 +1328,7 @@ public class BeanGenerator extends AbstractGenerator {
         } else if (BuiltinScope.SINGLETON.is(bean.getScope())) {
             // return Arc.container().getContext(getScope()).get(this, new CreationalContextImpl<>())
             ResultHandle container = get.invokeStaticMethod(MethodDescriptors.ARC_CONTAINER);
-            ResultHandle creationalContext = get.newInstance(
-                    MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class),
-                    get.getThis());
+            ResultHandle creationalContext = get.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
             ResultHandle scope = get.loadClass(bean.getScope().getDotName().toString());
             ResultHandle context = get.invokeInterfaceMethod(MethodDescriptors.ARC_CONTAINER_GET_ACTIVE_CONTEXT, container,
                     scope);
