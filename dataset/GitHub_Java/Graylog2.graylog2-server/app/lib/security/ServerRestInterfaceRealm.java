@@ -75,17 +75,16 @@ public class ServerRestInterfaceRealm extends AuthorizingRealm {
             final String passwordHash = sha2.toString();
 
             log.debug("Trying to log in {} via REST", token.getUsername());
-            final String passwordString = new String(token.getPassword());
             response = api.get(UserResponse.class)
                     .path("/users/{0}", token.getUsername())
-                    .credentials(token.getUsername(), passwordString)
+                    .credentials(token.getUsername(), passwordHash)
                     .execute();
             final User user = userFactory.fromResponse(response, passwordHash);
 
             UserService.setCurrent(user);
 
             // well, "sessiondid"
-            final String sessionid = Crypto.encryptAES(token.getUsername() + "\t" + passwordString);
+            final String sessionid = Crypto.encryptAES(token.getUsername() + "\t" + passwordHash);
             Http.Context.current().session().put("sessionid", sessionid);
             new Subject.Builder(SecurityUtils.getSecurityManager())
                     .authenticated(true)

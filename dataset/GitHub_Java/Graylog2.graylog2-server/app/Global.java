@@ -22,7 +22,6 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.name.Names;
-import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
 import lib.ApiClient;
 import lib.ServerNodesRefreshService;
@@ -61,6 +60,7 @@ public class Global extends GlobalSettings {
 
     @Override
 	public void onStart(Application app) {
+System.out.println("START");
         final String appSecret = app.configuration().getString("application.secret");
         if (appSecret == null || appSecret.isEmpty()) {
             log.error("Please configure application.secret in your conf/graylog2-web-interface.conf");
@@ -135,29 +135,9 @@ public class Global extends GlobalSettings {
 
     @Override
     public Configuration onLoadConfig(Configuration configuration, File file, ClassLoader classLoader) {
-        /*
-         *
-         * This is merging the standard bundled application.conf with our graylog2-web-interface.conf.
-         * The application.conf must always be empty when packaged so there is nothing hidden from the user.
-         * We are merging, because the Configuration object already contains some information the web-interface needs.
-         *
-         */
-        final File configFile = new File(file, "conf/graylog2-web-interface.conf");
-        if (!configFile.exists()) {
-            log.error("Your configuration should be at {} but does not exist, cannot continue without it.", configFile);
-            throw new IllegalStateException("Missing configuration file " + configFile.getAbsolutePath());
-        } else if (!configFile.canRead()) {
-            log.error("Your configuration at {} is not readable, cannot continue without it.", configFile);
-            throw new IllegalStateException("Unreadable configuration file " + configFile.getAbsolutePath());
-        }
-
-        final Config config = ConfigFactory.parseFileAnySyntax(configFile);
-        if (config.isEmpty()) {
-            log.error("Your configuration file at {} is empty, cannot continue without content.", configFile.getAbsolutePath());
-            throw new IllegalStateException("Empty configuration file " + configFile.getAbsolutePath());
-        }
         return new Configuration(
-                config.withFallback(configuration.getWrappedConfiguration().underlying())
+                ConfigFactory.parseFileAnySyntax(new File("conf/graylog2-web-interface.conf"))
+                        .withFallback(configuration.getWrappedConfiguration().underlying())
         );
     }
 
