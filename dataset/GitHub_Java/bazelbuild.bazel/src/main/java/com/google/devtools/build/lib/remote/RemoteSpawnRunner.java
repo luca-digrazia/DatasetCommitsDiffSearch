@@ -110,18 +110,13 @@ class RemoteSpawnRunner implements SpawnRunner {
   }
 
   @Override
-  public String getName() {
-    return "remote";
-  }
-
-  @Override
   public SpawnResult exec(Spawn spawn, SpawnExecutionPolicy policy)
       throws ExecException, InterruptedException, IOException {
     if (!Spawns.mayBeExecutedRemotely(spawn) || remoteCache == null) {
       return fallbackRunner.exec(spawn, policy);
     }
 
-    policy.report(ProgressStatus.EXECUTING, getName());
+    policy.report(ProgressStatus.EXECUTING, "remote");
     // Temporary hack: the TreeNodeRepository should be created and maintained upstream!
     ActionInputFileCache inputFileCache = policy.getActionInputFileCache();
     TreeNodeRepository repository = new TreeNodeRepository(execRoot, inputFileCache, digestUtil);
@@ -187,7 +182,6 @@ class RemoteSpawnRunner implements SpawnRunner {
       }
 
       final ActionResult result;
-      boolean remoteCacheHit = false;
       try {
         ExecuteRequest.Builder request =
             ExecuteRequest.newBuilder()
@@ -196,16 +190,12 @@ class RemoteSpawnRunner implements SpawnRunner {
                 .setSkipCacheLookup(!acceptCachedResult);
         ExecuteResponse reply = remoteExecutor.executeRemotely(request.build());
         result = reply.getResult();
-        remoteCacheHit = reply.getCachedResult();
       } catch (IOException e) {
         return execLocallyOrFail(spawn, policy, inputMap, actionKey, uploadLocalResults, e);
       }
 
       try {
-        return downloadRemoteResults(result, policy.getFileOutErr())
-            .setRunnerName(remoteCacheHit ? "" : getName())
-            .setCacheHit(remoteCacheHit)
-            .build();
+        return downloadRemoteResults(result, policy.getFileOutErr()).build();
       } catch (IOException e) {
         return execLocallyOrFail(spawn, policy, inputMap, actionKey, uploadLocalResults, e);
       }
@@ -248,7 +238,6 @@ class RemoteSpawnRunner implements SpawnRunner {
         out.write(msg.getBytes(StandardCharsets.UTF_8));
       }
       return new SpawnResult.Builder()
-          .setRunnerName(getName())
           .setStatus(Status.TIMEOUT)
           .setExitCode(POSIX_TIMEOUT_EXIT_CODE)
           .build();
@@ -266,7 +255,6 @@ class RemoteSpawnRunner implements SpawnRunner {
     throw new SpawnExecException(
         Throwables.getStackTraceAsString(exception),
         new SpawnResult.Builder()
-            .setRunnerName(getName())
             .setStatus(status)
             .setExitCode(ExitCode.REMOTE_ERROR.getNumericExitCode())
             .build(),
