@@ -17,7 +17,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelListConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelMapConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDepsMode;
@@ -233,8 +232,8 @@ public class JavaOptions extends FragmentOptions {
     defaultValue = "default",
     converter = StrictDepsConverter.class,
     category = "semantics",
-    documentationCategory = OptionDocumentationCategory.INPUT_STRICTNESS,
-    effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.EAGERNESS_TO_EXIT},
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "If true, checks that a Java target explicitly declares all directly used "
             + "targets as dependencies.",
@@ -462,7 +461,7 @@ public class JavaOptions extends FragmentOptions {
     name = "strict_deps_java_protos",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.EAGERNESS_TO_EXIT},
+    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "When 'strict-deps' is on, .java files that depend on classes not declared in their rule's "
             + "'deps' fail to build. In other words, it's forbidden to depend on classes obtained "
@@ -496,18 +495,6 @@ public class JavaOptions extends FragmentOptions {
   public OneVersionEnforcementLevel enforceOneVersion;
 
   @Option(
-    name = "experimental_allow_runtime_deps_on_neverlink",
-    defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = { OptionEffectTag.BUILD_FILE_SEMANTICS },
-    metadataTags = { OptionMetadataTag.EXPERIMENTAL },
-    help =
-        "Flag to help transition from allowing to disallowing runtime_deps on neverlink"
-            + " Java archives. The depot needs to be cleaned up to roll this out by default."
-  )
-  public boolean allowRuntimeDepsOnNeverLink;
-
-  @Option(
     name = "jplPropagateCcLinkParamsStore",
     defaultValue = "false",
     category = "rollout",
@@ -526,22 +513,6 @@ public class JavaOptions extends FragmentOptions {
       metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE}
   )
   public boolean disableAbsoluteJavabase;
-
-  // Plugins are built using the host config. To avoid cycles we just don't propagate
-  // this option to the host config. If one day we decide to use plugins when building
-  // host tools, we can improve this by (for example) creating a compiler configuration that is
-  // used only for building plugins.
-  @Option(
-    name = "plugin",
-    converter = LabelListConverter.class,
-    allowMultiple = true,
-    defaultValue = "",
-    category = "flags",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
-    help = "Plugins to use in the build. Currently works with java_plugin."
-  )
-  public List<Label> pluginList;
 
   @Override
   public FragmentOptions getHost() {
@@ -568,7 +539,6 @@ public class JavaOptions extends FragmentOptions {
     host.strictJavaDeps = strictJavaDeps;
 
     host.enforceOneVersion = enforceOneVersion;
-    host.allowRuntimeDepsOnNeverLink = allowRuntimeDepsOnNeverLink;
 
     host.jplPropagateCcLinkParamsStore = jplPropagateCcLinkParamsStore;
 
