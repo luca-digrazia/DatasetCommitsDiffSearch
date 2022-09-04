@@ -98,14 +98,7 @@ final class HttpConnectorMultiplexer {
   }
 
   public HttpStream connect(List<URL> urls, Optional<Checksum> checksum) throws IOException {
-    return connect(
-        urls, checksum, ImmutableMap.<URI, Map<String, String>>of(), Optional.<String>absent());
-  }
-
-  public HttpStream connect(
-      List<URL> urls, Optional<Checksum> checksum, Map<URI, Map<String, String>> authHeaders)
-      throws IOException {
-    return connect(urls, checksum, authHeaders, Optional.<String>absent());
+    return connect(urls, checksum, ImmutableMap.<URI, Map<String, String>>of());
   }
 
   /**
@@ -127,16 +120,12 @@ final class HttpConnectorMultiplexer {
    * @param urls mirrors by preference; each URL can be: file, http, or https
    * @param checksum checksum lazily checked on entire payload, or empty to disable
    * @return an {@link InputStream} of response payload
-   * @param type extension, e.g. "tar.gz" to force on downloaded filename, or empty to not do this
    * @throws IOException if all mirrors are down and contains suppressed exception of each attempt
    * @throws InterruptedIOException if current thread is being cast into oblivion
    * @throws IllegalArgumentException if {@code urls} is empty or has an unsupported protocol
    */
   public HttpStream connect(
-      List<URL> urls,
-      Optional<Checksum> checksum,
-      Map<URI, Map<String, String>> authHeaders,
-      Optional<String> type)
+      List<URL> urls, Optional<Checksum> checksum, Map<URI, Map<String, String>> authHeaders)
       throws IOException {
     HttpUtils.checkUrlsArgument(urls);
     if (Thread.interrupted()) {
@@ -144,7 +133,7 @@ final class HttpConnectorMultiplexer {
     }
     // If there's only one URL then there's no need for us to run all our fancy thread stuff.
     if (urls.size() == 1) {
-      return establishConnection(urls.get(0), checksum, authHeaders, type);
+      return establishConnection(urls.get(0), checksum, authHeaders);
     }
     MutexConditionSharedMemory context = new MutexConditionSharedMemory();
     // The parent thread always holds the lock except when released by wait().
@@ -280,9 +269,7 @@ final class HttpConnectorMultiplexer {
         // Now we're actually going to attempt to connect to the remote server.
         HttpStream result;
         try {
-          result =
-              establishConnection(
-                  work.url, work.checksum, work.authHeaders, Optional.<String>absent());
+          result = establishConnection(work.url, work.checksum, work.authHeaders);
         } catch (SocketTimeoutException e) {
           // SocketTimeoutException derives from InterruptedIOException, but its occurrence
           // is truly exceptional, so we handle it separately here. Failing to do so hides
@@ -357,10 +344,7 @@ final class HttpConnectorMultiplexer {
   }
 
   private HttpStream establishConnection(
-      final URL url,
-      Optional<Checksum> checksum,
-      Map<URI, Map<String, String>> additionalHeaders,
-      Optional<String> type)
+      final URL url, Optional<Checksum> checksum, Map<URI, Map<String, String>> additionalHeaders)
       throws IOException {
     final Function<URL, ImmutableMap<String, String>> headerFunction =
         getHeaderFunction(REQUEST_HEADERS, additionalHeaders);
@@ -387,8 +371,7 @@ final class HttpConnectorMultiplexer {
                   }
                 });
           }
-        },
-        type);
+        });
   }
 
   private static String describeErrors(Collection<Throwable> errors) {
