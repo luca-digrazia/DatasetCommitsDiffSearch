@@ -129,28 +129,29 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     }
   }
 
-  private String makeFailureMessage(Spawn originalSpawn, SandboxedSpawn sandbox) {
-    if (sandboxOptions.sandboxDebug) {
-      return CommandFailureUtils.describeCommandFailure(
-          true,
-          sandbox.getArguments(),
-          sandbox.getEnvironment(),
-          sandbox.getSandboxExecRoot().getPathString(),
-          null);
-    } else {
-      return CommandFailureUtils.describeCommandFailure(
-              verboseFailures,
-              originalSpawn.getArguments(),
-              originalSpawn.getEnvironment(),
-              sandbox.getSandboxExecRoot().getPathString(),
-              originalSpawn.getExecutionPlatform())
-          + SANDBOX_DEBUG_SUGGESTION;
-    }
-  }
-
   private final SpawnResult run(
       Spawn originalSpawn, SandboxedSpawn sandbox, Duration timeout, FileOutErr outErr)
       throws IOException, InterruptedException {
+    String failureMessage;
+    if (sandboxOptions.sandboxDebug) {
+      failureMessage =
+          CommandFailureUtils.describeCommandFailure(
+              true,
+              sandbox.getArguments(),
+              sandbox.getEnvironment(),
+              sandbox.getSandboxExecRoot().getPathString(),
+              null);
+    } else {
+      failureMessage =
+          CommandFailureUtils.describeCommandFailure(
+                  verboseFailures,
+                  originalSpawn.getArguments(),
+                  originalSpawn.getEnvironment(),
+                  sandbox.getSandboxExecRoot().getPathString(),
+                  originalSpawn.getExecutionPlatform())
+              + SANDBOX_DEBUG_SUGGESTION;
+    }
+
     SubprocessBuilder subprocessBuilder = new SubprocessBuilder();
     subprocessBuilder.setWorkingDirectory(sandbox.getSandboxExecRoot().getPathFile());
     subprocessBuilder.setStdout(outErr.getOutputPath().getPathFile());
@@ -183,7 +184,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
           .setRunnerName(getName())
           .setStatus(Status.EXECUTION_FAILED)
           .setExitCode(LOCAL_EXEC_ERROR)
-          .setFailureMessage(makeFailureMessage(originalSpawn, sandbox))
+          .setFailureMessage(failureMessage)
           .build();
     }
 
@@ -204,10 +205,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
             .setStatus(status)
             .setExitCode(exitCode)
             .setWallTime(wallTime)
-            .setFailureMessage(
-                status != Status.SUCCESS || exitCode != 0
-                    ? makeFailureMessage(originalSpawn, sandbox)
-                    : "");
+            .setFailureMessage(status != Status.SUCCESS || exitCode != 0 ? failureMessage : "");
 
     Path statisticsPath = sandbox.getStatisticsPath();
     if (statisticsPath != null) {
