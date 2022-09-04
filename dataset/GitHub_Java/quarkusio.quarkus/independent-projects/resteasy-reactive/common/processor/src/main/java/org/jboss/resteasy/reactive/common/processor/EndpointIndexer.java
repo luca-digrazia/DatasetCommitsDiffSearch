@@ -17,7 +17,6 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.HEADER_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.INTEGER;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.LIST;
-import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.LOCAL_DATE;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.LONG;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MATRIX_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MULTI;
@@ -628,7 +627,15 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
         if (annotation == null) {
             return null;
         }
-        String[] originalStrings = annotation.value().asStringArray();
+
+        String[] originalStrings;
+        AnnotationValue value = annotation.value();
+        if (value == null) {
+            originalStrings = new String[] { MediaType.WILDCARD };
+        } else {
+            originalStrings = value.asStringArray();
+        }
+
         if (originalStrings.length > 0) {
             List<String> result = new ArrayList<>(originalStrings.length);
             for (String s : originalStrings) {
@@ -894,10 +901,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
             elementType = paramType.name().toString();
             handlePathSegmentParam(builder);
             typeHandled = true;
-        } else if ((paramType.name().equals(LOCAL_DATE)) && (type == ParameterType.PATH || type == ParameterType.QUERY)) {
-            elementType = paramType.name().toString();
-            handleLocalDateParam(builder);
-            typeHandled = true;
         }
 
         if (!typeHandled) {
@@ -925,9 +928,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
     }
 
     protected void handlePathSegmentParam(PARAM builder) {
-    }
-
-    protected void handleLocalDateParam(PARAM builder) {
     }
 
     protected void handleOtherParam(Map<String, String> existingConverters, String errorLocation, boolean hasRuntimeConverters,
