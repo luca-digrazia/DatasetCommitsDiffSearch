@@ -19,9 +19,7 @@
  */
 package org.graylog2.inputs;
 
-import com.google.common.collect.Lists;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
+import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
 import org.graylog2.Core;
 import org.graylog2.database.Persisted;
@@ -29,13 +27,10 @@ import org.graylog2.database.validators.DateValidator;
 import org.graylog2.database.validators.FilledStringValidator;
 import org.graylog2.database.validators.MapValidator;
 import org.graylog2.database.validators.Validator;
-import org.graylog2.users.User;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -55,15 +50,6 @@ public class Input extends Persisted {
         super(core, id, fields);
     }
 
-    public static List<Input> allOfThisNode(Core core) {
-        List<Input> inputs = Lists.newArrayList();
-        for (DBObject o : query(new BasicDBObject("node_id", core.getNodeId()), core, COLLECTION)) {
-            inputs.add(new Input(core, (ObjectId) o.get("_id"), o.toMap()));
-        }
-
-        return inputs;
-    }
-
     @Override
     public String getCollectionName() {
         return COLLECTION;
@@ -72,37 +58,12 @@ public class Input extends Persisted {
     @Override
     protected Map<String, Validator> getValidations() {
         return new HashMap<String, Validator>() {{
-            put("input_id", new FilledStringValidator());
             put("title", new FilledStringValidator());
             put("type", new FilledStringValidator());
             put("configuration", new MapValidator());
             put("creator_user_id", new FilledStringValidator());
             put("created_at", new DateValidator());
         }};
-    }
-
-    public String getTitle() {
-        return (String) fields.get("title");
-    }
-
-    public DateTime getCreatedAt() {
-        return new DateTime(fields.get("created_at"));
-    }
-
-    public Map<String, Object> getConfiguration() {
-        return (Map<String, Object>) fields.get("configuration");
-    }
-
-    public String getType() {
-        return (String) fields.get("type");
-    }
-
-    public String getCreatorUserId() {
-        return (String) fields.get("creator_user_id");
-    }
-
-    public String getInputId() {
-        return (String) fields.get("input_id");
     }
 
 }

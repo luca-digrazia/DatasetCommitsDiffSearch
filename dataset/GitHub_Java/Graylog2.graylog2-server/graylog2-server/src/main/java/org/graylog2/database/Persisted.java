@@ -33,9 +33,7 @@ import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import org.graylog2.database.validators.Validator;
-import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,7 +50,10 @@ public abstract class Persisted {
     protected final Core core;
 
     protected Persisted(Core core, Map<String, Object> fields) {
-        this(core, new ObjectId(), fields);
+        this.id = new ObjectId();
+        this.fields = fields;
+
+        this.core = core;
     }
 
     protected Persisted(Core core, ObjectId id, Map<String, Object> fields) {
@@ -60,13 +61,6 @@ public abstract class Persisted {
         this.fields = fields;
 
         this.core = core;
-
-        // Transform all java.util.Date's to JodaTime because MongoDB gives back java.util.Date's. #lol
-        for(Map.Entry<String, Object> field : fields.entrySet()) {
-            if (field.getValue() instanceof Date) {
-                fields.put(field.getKey(), new DateTime((Date) field.getValue(), DateTimeZone.UTC));
-            }
-        }
     }
 
 	protected static DBObject get(ObjectId id, Core core, String collectionName) {
@@ -131,7 +125,7 @@ public abstract class Persisted {
     public static void destroy(DBObject query, Core core, String collectionName) {
         collection(core, collectionName).remove(query);
     }
-
+	
 	public ObjectId save() throws ValidationException {
         if(!validate(fields)) {
             throw new ValidationException();
@@ -177,15 +171,11 @@ public abstract class Persisted {
 	}
 
     public boolean validate(Map<String, Object> fields) {
-        return validate(getValidations(), fields);
-    }
-
-    public boolean validate(Map<String, Validator> validators, Map<String, Object> fields) {
-        if (validators == null || validators.isEmpty()) {
+        if (getValidations() == null || getValidations().isEmpty()) {
             return true;
         }
 
-        for(Map.Entry<String, Validator> validation : validators.entrySet()) {
+        for(Map.Entry<String, Validator> validation : getValidations().entrySet()) {
             Validator v = validation.getValue();
             String field = validation.getKey();
 
@@ -203,20 +193,10 @@ public abstract class Persisted {
         return true;
     }
 
-    public void embed(String key, EmbeddedPersistable o) throws ValidationException {
-        if (!validate(getEmbeddedValidations(key), o.getPersistedFields())) {
-            throw new ValidationException();
-        }
-
-        BasicDBObject dbo = new BasicDBObject(o.getPersistedFields());
-        collection().update(new BasicDBObject("_id", id), new BasicDBObject("$push", new BasicDBObject(key, dbo)));
-    }
-
     public ObjectId getId() {
         return this.id;
     }
 
     public abstract String getCollectionName();
     protected abstract Map<String, Validator> getValidations();
-    protected abstract Map<String, Validator> getEmbeddedValidations(String key);
 }

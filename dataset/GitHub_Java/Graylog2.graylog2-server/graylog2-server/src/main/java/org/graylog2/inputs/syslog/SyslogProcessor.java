@@ -22,7 +22,7 @@ package org.graylog2.inputs.syslog;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
-import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.inputs.MessageInputConfiguration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.graylog2.Core;
@@ -49,7 +49,7 @@ public class SyslogProcessor {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogProcessor.class);
     private final Core server;
-    private final Configuration config;
+    private final MessageInputConfiguration config;
 
     private static final Pattern STRUCTURED_SYSLOG_PATTERN = Pattern.compile("<\\d+>\\d.*", Pattern.DOTALL);
     
@@ -59,7 +59,7 @@ public class SyslogProcessor {
     private final Meter processedMessages;
     private final Timer syslogParsedTime;
 
-    public SyslogProcessor(Core server, Configuration config) {
+    public SyslogProcessor(Core server, MessageInputConfiguration config) {
         this.server = server;
         this.config = config;
 
@@ -133,12 +133,7 @@ public class SyslogProcessor {
         Message m = new Message(e.getMessage(), parseHost(e, remoteAddress), parseDate(e));
         m.addField("facility", Tools.syslogFacilityToReadable(e.getFacility()));
         m.addField("level", e.getLevel());
-
-        // Store full message if configured.
-        if (config.getBoolean(SyslogInputBase.CK_STORE_FULL_MESSAGE)) {
-            m.addField("full_message", new String(e.getRaw()));
-        }
-
+        m.addField("full_message", new String(e.getRaw()));
         m.addFields(parseAdditionalData(e));
         
         tcx.stop();

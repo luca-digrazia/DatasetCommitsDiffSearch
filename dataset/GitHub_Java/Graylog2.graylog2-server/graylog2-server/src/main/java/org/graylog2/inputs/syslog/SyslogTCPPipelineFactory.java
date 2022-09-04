@@ -21,7 +21,7 @@
 package org.graylog2.inputs.syslog;
 
 import org.graylog2.Core;
-import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.inputs.MessageInputConfiguration;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -35,9 +35,9 @@ import org.jboss.netty.handler.codec.frame.Delimiters;
 public class SyslogTCPPipelineFactory implements ChannelPipelineFactory {
     
     private final Core server;
-    private final Configuration config;
+    private final MessageInputConfiguration config;
 
-    public SyslogTCPPipelineFactory(Core server, Configuration config) {
+    public SyslogTCPPipelineFactory(Core server, MessageInputConfiguration config) {
         this.server = server;
         this.config = config;
     }
@@ -45,12 +45,12 @@ public class SyslogTCPPipelineFactory implements ChannelPipelineFactory {
     @Override
     public ChannelPipeline getPipeline() throws Exception {
         ChannelBuffer[] delimiter;
-
-        if (config.getBoolean(SyslogTCPInput.CK_USE_NULL_DELIMITER)) {
-            delimiter = Delimiters.nulDelimiter();
-        } else {
+        // TODO re-implement with new input structure
+        //if (this.server.getConfiguration().isSyslogUseNulDelimiterEnabled()) {
+        //    delimiter = Delimiters.nulDelimiter();
+        //} else {
             delimiter = Delimiters.lineDelimiter();
-        }
+        //}
                 
         ChannelPipeline p = Channels.pipeline();
         p.addLast("framer", new DelimiterBasedFrameDecoder(2 * 1024 * 1024, delimiter));

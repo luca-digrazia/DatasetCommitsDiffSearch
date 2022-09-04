@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,12 +15,10 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.database.validators;
-
-import org.graylog2.plugin.database.validators.ValidationResult;
-import org.graylog2.plugin.database.validators.Validator;
 
 import java.util.Map;
 
@@ -30,11 +28,8 @@ import java.util.Map;
 public class MapValidator implements Validator {
 
     @Override
-    public ValidationResult validate(Object value) {
-        if (value instanceof Map)
-            return new ValidationResult.ValidationPassed();
-        else
-            return new ValidationResult.ValidationFailed("Value is not a Map!");
+    public boolean validate(Object value) {
+        return value instanceof Map;
     }
 
 }

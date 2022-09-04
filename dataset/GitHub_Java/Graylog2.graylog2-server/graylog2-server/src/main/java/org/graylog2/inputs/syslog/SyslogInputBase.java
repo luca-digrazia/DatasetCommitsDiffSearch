@@ -19,11 +19,7 @@
  */
 package org.graylog2.inputs.syslog;
 
-import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.configuration.fields.BooleanField;
-import org.graylog2.plugin.configuration.fields.NumberField;
-import org.graylog2.plugin.configuration.fields.TextField;
+import org.graylog2.plugin.inputs.MessageInputConfiguration;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -34,61 +30,12 @@ public class SyslogInputBase {
     public static final String CK_PORT = "port";
     public static final String CK_FORCE_RDNS = "force_rdns";
     public static final String CK_ALLOW_OVERRIDE_DATE = "allow_override_date";
-    public static final String CK_STORE_FULL_MESSAGE = "store_full_message";
 
-    protected boolean checkConfig(Configuration config) {
+    protected boolean checkConfig(MessageInputConfiguration config) {
         return config.stringIsSet(CK_BIND_ADDRESS)
                 && config.intIsSet(CK_PORT)
                 && config.boolIsSet(CK_FORCE_RDNS)
                 && config.boolIsSet(CK_ALLOW_OVERRIDE_DATE);
-    }
-
-    public ConfigurationRequest getRequestedConfiguration() {
-        ConfigurationRequest r = new ConfigurationRequest();
-
-        r.addField(
-                new TextField(
-                        CK_BIND_ADDRESS,
-                        "0.0.0.0",
-                        "Address to listen on. For example 0.0.0.0 or 127.0.0.1.",
-                        TextField.Attribute.IS_SOCKET_ADDRESS
-                )
-        );
-
-        r.addField(
-                new NumberField(
-                        CK_PORT,
-                        514,
-                        "Port to listen on.",
-                        NumberField.Attribute.IS_PORT_NUMBER
-                )
-        );
-
-        r.addField(
-                new BooleanField(
-                        CK_FORCE_RDNS,
-                        false,
-                        "Force rDNS resolution of hostname? Use if hostname cannot be parsed."
-                )
-        );
-
-        r.addField(
-                new BooleanField(
-                        CK_ALLOW_OVERRIDE_DATE,
-                        true,
-                        "Allow to override with current date if date could not be parsed?"
-                )
-        );
-
-        r.addField(
-                new BooleanField(
-                        CK_STORE_FULL_MESSAGE,
-                        false,
-                        "Store the full original syslog message as full_message?"
-                )
-        );
-
-        return r;
     }
 
 }
