@@ -37,10 +37,8 @@ import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParsingException;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.util.List;
 import java.util.Set;
 
@@ -231,9 +229,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "Android configuration distinguisher",
       defaultValue = "MAIN",
       converter = ConfigurationDistinguisherConverter.class,
-      optionUsageRestrictions = OptionUsageRestrictions.INTERNAL,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN}
+      optionUsageRestrictions = OptionUsageRestrictions.INTERNAL
     )
     public ConfigurationDistinguisher configurationDistinguisher;
 
@@ -243,9 +239,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "android_incremental_native_libs",
       defaultValue = "false",
-      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN}
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
     )
     public boolean incrementalNativeLibs;
 
@@ -254,8 +248,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "//external:android/crosstool",
       category = "semantics",
       converter = EmptyToNullLabelConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "The location of the C++ compiler used for Android builds."
     )
     public Label androidCrosstoolTop;
@@ -264,8 +256,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "android_cpu",
       defaultValue = "armeabi",
       category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "The Android target CPU."
     )
     public String cpu;
@@ -274,8 +264,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "android_compiler",
       defaultValue = "null",
       category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "The Android target compiler."
     )
     public String cppCompiler;
@@ -285,8 +273,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "off",
       converter = DynamicModeConverter.class,
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Determines whether C++ deps of Android rules will be linked dynamically when a "
               + "cc_binary does not explicitly create a shared library. "
@@ -303,8 +289,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "@bazel_tools//tools/android:sdk",
       category = "version",
       converter = LabelConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Specifies Android SDK/platform that is used to build Android applications."
     )
     public Label sdk;
@@ -315,8 +299,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       converter = Converters.CommaSeparatedOptionListConverter.class,
       defaultValue = "armeabi-v7a",
       category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Setting this option enables fat APKs, which contain native binaries for all "
               + "specified target architectures, e.g., --fat_apk_cpu=x86,armeabi-v7a. If this "
@@ -332,18 +314,14 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_desugar_for_android",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Whether to desugar Java 8 bytecode before dexing."
     )
     public boolean desugarJava8;
 
     @Option(
       name = "incremental_dexing",
-      defaultValue = "true",
+      defaultValue = "false",
       category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Does most of the work for dexing separately for each Jar file."
     )
     public boolean incrementalDexing;
@@ -353,8 +331,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "host_incremental_dexing",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.HIDDEN,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "This flag is deprecated in favor of applying --incremental_dexing to both host "
               + "and target configuration.  This flag will be removed in a future release."
@@ -371,8 +347,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
       converter = AndroidBinaryTypesConverter.class,
       implicitRequirements = "--incremental_dexing",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Kinds of binaries to incrementally dex if --incremental_dexing is true."
     )
     public Set<AndroidBinaryType> incrementalDexingBinaries;
@@ -384,8 +358,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "true",
       category = "experimental",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Do not use."
     )
     public boolean incrementalDexingForLiteProtos;
@@ -399,8 +371,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "true",
       category = "experimental",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Do not use."
     )
     public boolean incrementalDexingErrorOnMissedJars;
@@ -410,8 +380,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       category = "experimental",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Use dex2oat in parallel to possibly speed up android_test."
     )
     public boolean useParallelDex2Oat;
@@ -424,8 +392,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "--positions",
       category = "semantics",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "dx flags that that prevent incremental dexing for binary targets that list any of "
               + "the flags listed here in their 'dexopts' attribute, which are ignored with "
@@ -443,8 +409,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       converter = Converters.CommaSeparatedOptionListConverter.class,
       defaultValue = "--no-optimize,--no-locals",
       optionUsageRestrictions = OptionUsageRestrictions.HIDDEN,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "dx flags supported when converting Jars to dex archives incrementally."
     )
     public List<String> dexoptsSupportedInIncrementalDexing;
@@ -457,8 +421,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       converter = Converters.CommaSeparatedOptionListConverter.class,
       defaultValue = "--no-optimize,--no-locals,--minimal-main-dex,--set-max-idx-number",
       optionUsageRestrictions = OptionUsageRestrictions.HIDDEN,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "dx flags supported in tool that merges dex archives into final classes.dex files."
     )
     public List<String> dexoptsSupportedInDexMerger;
@@ -467,8 +429,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_rewrite_dexes_with_rex",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "use rex tool to rewrite dex files"
     )
     public boolean useRexToCompressDexFiles;
@@ -477,8 +437,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_allow_android_library_deps_without_srcs",
       defaultValue = "true",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Flag to help transition from allowing to disallowing srcs-less android_library"
               + " rules with deps. The depot needs to be cleaned up to roll this out by default."
@@ -489,8 +447,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_resource_shrinking",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Enables resource shrinking for android_binary APKs that use ProGuard."
     )
     public boolean useExperimentalAndroidResourceShrinking;
@@ -499,8 +455,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "android_resource_shrinking",
       defaultValue = "false",
       category = "semantics",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Enables resource shrinking for android_binary APKs that use ProGuard."
     )
     public boolean useAndroidResourceShrinking;
@@ -510,8 +464,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "android",
       category = "semantics",
       converter = AndroidManifestMergerConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Selects the manifest merger to use for android_binary rules. Flag to help the"
               + "transition to the Android manifest merger from the legacy merger."
@@ -523,8 +475,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       defaultValue = "aapt",
       category = "semantics",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       converter = AndroidAaptConverter.class,
       help =
           "Selects the version of androidAaptVersion to use for android_binary rules."
@@ -537,8 +487,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_use_parallel_android_resource_processing",
       defaultValue = "true",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Process android_library resources with higher parallelism. Generates library "
               + "R classes from a merge action, separately from aapt."
@@ -550,8 +498,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       converter = ApkSigningMethodConverter.class,
       defaultValue = "v1_v2",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Implementation to use to sign APKs"
     )
     public ApkSigningMethod apkSigningMethod;
@@ -560,8 +506,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "use_singlejar_apkbuilder",
       defaultValue = "true",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Build Android APKs with SingleJar."
     )
     public boolean useSingleJarApkBuilder;
@@ -572,8 +516,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       optionUsageRestrictions = OptionUsageRestrictions.HIDDEN,
       deprecationWarning =
           "This flag is deprecated and is a no-op. It will be removed in a future release.",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "This flag is deprecated and is a no-op. It will be removed in a future release."
     )
     public boolean useSingleJarForMultidex;
@@ -583,8 +525,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       converter = ResourceFilter.Converter.class,
       defaultValue = "filter_in_execution",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Determines when resource filtering attributes, such as the android_binary "
               + "'resource_configuration_filters' and 'densities' attributes, are applied. "
@@ -605,8 +545,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_compress_java_resources",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "Compress Java resources in APKs"
     )
     public boolean compressJavaResources;
@@ -615,8 +553,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_include_library_resource_jars",
       defaultValue = "true",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Specifies whether resource JAR files for android_library targets should be included"
               + " as runtime dependencies. Defaults to the old behavior, including them. These JARs"
@@ -629,8 +565,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_use_nocompress_extensions_on_apk",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "Use the value of nocompress_extensions attribute with the SingleJar "
               + "--nocompress_suffixes flag when building the APK."
@@ -641,8 +575,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_library_exports_manifest_default",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.DOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help = "The default value of the exports_manifest attribute on android_library."
     )
     public boolean exportsManifestDefault;
@@ -651,8 +583,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_generate_robolectric_r_class",
       defaultValue = "false",
       optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "If passed, R classes will be generated for Robolectric tests. Otherwise, only inherited"
               + " R classes will be used."
