@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -40,8 +39,6 @@ import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -114,9 +111,6 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
     skyframeExecutor.setActionEnv(ImmutableMap.<String, String>of());
     skyframeExecutor.injectExtraPrecomputedValues(
         ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                Optional.<RootedPath>absent()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
                 ImmutableMap.<RepositoryName, PathFragment>of()),
@@ -219,14 +213,14 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
     ImmutableList<SkyKey> singletonTargetPattern = ImmutableList.of(independentTarget);
 
     // When PrepareDepsOfPatternsFunction completes evaluation,
-    EvaluationContext evaluationContext =
-        EvaluationContext.newBuilder()
-            .setKeepGoing(keepGoing)
-            .setNumThreads(100)
-            .setEventHander(new Reporter(new EventBus(), eventCollector))
-            .build();
     EvaluationResult<SkyValue> evaluationResult =
-        skyframeExecutor.getDriverForTesting().evaluate(singletonTargetPattern, evaluationContext);
+        skyframeExecutor
+            .getDriverForTesting()
+            .evaluate(
+                singletonTargetPattern,
+                keepGoing,
+                /*numThreads=*/ 100,
+                new Reporter(new EventBus(), eventCollector));
     // The evaluation has no errors if success was expected.
     assertThat(evaluationResult.hasError()).isNotEqualTo(successExpected);
     return Preconditions.checkNotNull(evaluationResult.getWalkableGraph());

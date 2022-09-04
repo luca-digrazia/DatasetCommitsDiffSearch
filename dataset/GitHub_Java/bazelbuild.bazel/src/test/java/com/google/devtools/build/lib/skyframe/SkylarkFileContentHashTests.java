@@ -22,7 +22,7 @@ import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -149,7 +149,7 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
     assertThat(getHash("pkg", "foo2")).isEqualTo(foo2);
   }
 
-  private static void assertNotEquals(String hash, String hash2) {
+  private void assertNotEquals(String hash, String hash2) {
     assertThat(hash.equals(hash2)).isFalse();
   }
 
@@ -169,7 +169,8 @@ public class SkylarkFileContentHashTests extends BuildViewTestCase {
                 ImmutableList.of(Root.fromPath(rootDirectory)),
                 BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
             packageCacheOptions,
-            Options.getDefaults(StarlarkSemanticsOptions.class),
+            Options.getDefaults(SkylarkSemanticsOptions.class),
+            "",
             UUID.randomUUID(),
             ImmutableMap.<String, String>of(),
             new TimestampGranularityMonitor(BlazeClock.instance()));

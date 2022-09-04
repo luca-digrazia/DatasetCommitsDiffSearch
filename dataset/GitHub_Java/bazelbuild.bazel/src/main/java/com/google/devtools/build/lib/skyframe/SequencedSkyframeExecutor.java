@@ -193,7 +193,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
       BuildOptions defaultBuildOptions) {
     return create(
-        InMemoryMemoizingEvaluator.SUPPLIER,
         pkgFactory,
         fileSystem,
         directories,
@@ -213,7 +212,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   }
 
   public static SequencedSkyframeExecutor create(
-      EvaluatorSupplier evaluatorSupplier,
       PackageFactory pkgFactory,
       FileSystem fileSystem,
       BlazeDirectories directories,
@@ -232,7 +230,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       MutableArtifactFactorySupplier mutableArtifactFactorySupplier) {
     SequencedSkyframeExecutor skyframeExecutor =
         new SequencedSkyframeExecutor(
-            evaluatorSupplier,
+            InMemoryMemoizingEvaluator.SUPPLIER,
             pkgFactory,
             fileSystem,
             directories,

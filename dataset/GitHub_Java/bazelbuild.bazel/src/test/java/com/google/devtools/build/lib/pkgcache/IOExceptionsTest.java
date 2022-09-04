@@ -28,6 +28,7 @@ import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.EvaluationResult;
@@ -46,6 +47,8 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class IOExceptionsTest extends PackageLoadingTestCase {
+
+  private static final String FS_ROOT = "/fsg";
 
   private static final Function<Path, String> NULL_FUNCTION = new Function<Path, String>() {
     @Override
@@ -79,7 +82,7 @@ public class IOExceptionsTest extends PackageLoadingTestCase {
 
   @Override
   protected FileSystem createFileSystem() {
-    return new InMemoryFileSystem(BlazeClock.instance()) {
+    return new InMemoryFileSystem(BlazeClock.instance(), PathFragment.create(FS_ROOT)) {
       @Override
       public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
         String crash = crashMessage.apply(path);

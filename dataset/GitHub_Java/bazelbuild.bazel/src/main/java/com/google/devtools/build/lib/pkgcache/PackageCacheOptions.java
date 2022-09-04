@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.pkgcache;
 
-
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
@@ -153,19 +152,15 @@ public class PackageCacheOptions extends OptionsBase {
   public boolean checkOutputFiles;
 
   @Option(
-      name = "incompatible_disable_tools_defaults_package",
-      defaultValue = "false",
+      name = "experimental_enable_tools_defaults_package",
+      defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.EXPERIMENTAL,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES,
-        OptionMetadataTag.INCOMPATIBLE_CHANGE
-      },
+      effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
       help =
-          "If false, Blaze constructs an in-memory //tools/defaults package based on the command"
-              + " line options. If true, //tools/defaults is resolved as a regular package.")
-  public boolean incompatibleDisableInMemoryToolsDefaultsPackage;
+          "If true, Blaze constructs an in-memory //tools/defaults package based on the command"
+              + " line options. If false, //tools/defaults is resolved as a regular package.")
+  public boolean experimentalInMemoryToolsDefaultsPackage;
 
   /**
    * A converter from strings containing comma-separated names of packages to lists of strings.

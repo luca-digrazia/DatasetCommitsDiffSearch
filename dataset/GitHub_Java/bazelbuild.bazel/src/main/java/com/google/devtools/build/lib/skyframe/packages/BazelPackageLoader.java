@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe.packages;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -42,8 +41,6 @@ import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossReposit
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -55,12 +52,12 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class BazelPackageLoader extends AbstractPackageLoader {
   /** Returns a fresh {@link Builder} instance. */
-  public static Builder builder(Root root, Path workspaceDir, Path installBase, Path outputBase) {
+  public static Builder builder(Path workspaceDir, Path installBase, Path outputBase) {
     // Prevent PackageLoader from fetching any remote repositories; these should only be fetched by
     // Bazel before calling PackageLoader.
     AtomicBoolean isFetch = new AtomicBoolean(false);
 
-    Builder builder = new Builder(root, workspaceDir, installBase, outputBase, isFetch);
+    Builder builder = new Builder(workspaceDir, installBase, outputBase, isFetch);
 
     RepositoryCache repositoryCache = new RepositoryCache();
     HttpDownloader httpDownloader = new HttpDownloader(repositoryCache);
@@ -99,9 +96,6 @@ public class BazelPackageLoader extends AbstractPackageLoader {
             RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
             Suppliers.ofInstance(ImmutableMap.of())),
         PrecomputedValue.injected(
-            RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-            Optional.<RootedPath>absent()),
-        PrecomputedValue.injected(
             RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
             RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY));
 
@@ -122,9 +116,8 @@ public class BazelPackageLoader extends AbstractPackageLoader {
       return classProvider.build();
     }
 
-    private Builder(
-        Root root, Path workspaceDir, Path installBase, Path outputBase, AtomicBoolean isFetch) {
-      super(root, workspaceDir, installBase, outputBase);
+    private Builder(Path workspaceDir, Path installBase, Path outputBase, AtomicBoolean isFetch) {
+      super(workspaceDir, installBase, outputBase);
       this.isFetch = isFetch;
     }
 

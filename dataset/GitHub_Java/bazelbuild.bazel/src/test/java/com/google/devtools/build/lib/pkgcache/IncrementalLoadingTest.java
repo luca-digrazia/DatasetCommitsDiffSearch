@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Joiner;
-import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -39,10 +38,8 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.LoadingMock;
-import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
-import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
@@ -57,7 +54,6 @@ import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -480,9 +476,7 @@ public class IncrementalLoadingTest {
       ConfiguredRuleClassProvider ruleClassProvider = loadingMock.createRuleClassProvider();
       skyframeExecutor =
           SequencedSkyframeExecutor.create(
-              loadingMock
-                  .getPackageFactoryBuilderForTesting(directories)
-                  .build(ruleClassProvider, fs),
+              loadingMock.getPackageFactoryBuilderForTesting(directories).build(ruleClassProvider),
               fs,
               directories,
               actionKeyContext,
@@ -502,11 +496,6 @@ public class IncrementalLoadingTest {
       packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
       packageCacheOptions.showLoadingProgress = true;
       packageCacheOptions.globbingThreads = 7;
-      skyframeExecutor.injectExtraPrecomputedValues(
-          ImmutableList.of(
-              PrecomputedValue.injected(
-                  RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                  Optional.<RootedPath>absent())));
       skyframeExecutor.preparePackageLoading(
           new PathPackageLocator(
               outputBase,

@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.query2.proto.proto2api.Build.BuildLanguage;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.RuleDefinition;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.LogHandlerQuerier;
 import com.google.devtools.build.lib.util.ProcessUtils;
 import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.Path;
@@ -51,9 +50,6 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
-import java.util.Optional;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
  * An item that is returned by <code>blaze info</code>.
@@ -271,44 +267,6 @@ public abstract class InfoItem {
         throws AbruptExitException {
       checkNotNull(configurationSupplier);
       return print(configurationSupplier.get().getTestLogsDirectory(RepositoryName.MAIN).getRoot());
-    }
-  }
-
-  /** Info item for server_log path. */
-  public static class ServerLogInfoItem extends InfoItem {
-    private static final Logger logger = Logger.getLogger(ServerLogInfoItem.class.getName());
-
-    /**
-     * Constructs an info item for the server log path.
-     *
-     * @param productName name of the tool whose server log path will be queried
-     */
-    public ServerLogInfoItem(String productName) {
-      super("server_log", productName + " server log path", false);
-    }
-
-    @Override
-    public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
-        throws AbruptExitException {
-      LogHandlerQuerier logHandlerQuerier;
-      try {
-        logHandlerQuerier = LogHandlerQuerier.getConfiguredInstance();
-      } catch (IllegalStateException e) {
-        // Non-fatal error: we don't want the "info" command to crash.
-        logger.log(Level.WARNING, "Could not find a querier for server log location", e);
-        return print("UNKNOWN LOG LOCATION");
-      }
-      Optional<java.nio.file.Path> loggerFilePath;
-      try {
-        loggerFilePath = logHandlerQuerier.getLoggerFilePath(logger);
-      } catch (IllegalArgumentException e) {
-        // Non-fatal error: we don't want the "info" command to crash.
-        logger.log(Level.WARNING, "Could not query for server log location", e);
-        return print("UNKNOWN LOG LOCATION");
-      }
-      // If loggerFilePath is empty, then no log file is currently open, so an empty string is the
-      // correct output.
-      return print(loggerFilePath.map(java.nio.file.Path::toString).orElse(""));
     }
   }
 
@@ -624,17 +582,13 @@ public abstract class InfoItem {
       info.setPolicy(AllowedRuleClassInfo.AllowedRuleClasses.SPECIFIED);
       Predicate<RuleClass> filter = attr.getAllowedRuleClassesPredicate();
       for (RuleClass otherClass : Iterables.filter(ruleClasses, filter)) {
-        if (!isAbstractRule(otherClass)) {
+        if (otherClass.isDocumented()) {
           info.addAllowedRuleClass(otherClass.getName());
         }
       }
     }
 
     return info.build();
-  }
-
-  private static boolean isAbstractRule(RuleClass c) {
-    return c.getName().startsWith("$");
   }
 
   /**
@@ -644,13 +598,17 @@ public abstract class InfoItem {
     BuildLanguage.Builder resultPb = BuildLanguage.newBuilder();
     Collection<RuleClass> ruleClasses = provider.getRuleClassMap().values();
     for (RuleClass ruleClass : ruleClasses) {
-      if (isAbstractRule(ruleClass)) {
+      if (!ruleClass.isDocumented()) {
         continue;
       }
 
       RuleDefinition.Builder rulePb = RuleDefinition.newBuilder();
       rulePb.setName(ruleClass.getName());
       for (Attribute attr : ruleClass.getAttributes()) {
+        if (!attr.isDocumented()) {
+          continue;
+        }
+
         AttributeDefinition.Builder attrPb = AttributeDefinition.newBuilder();
         attrPb.setName(attr.getName());
         // The protocol compiler, in its infinite wisdom, generates the field as one of the

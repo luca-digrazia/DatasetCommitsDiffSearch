@@ -58,6 +58,9 @@ import javax.annotation.Nullable;
 @ThreadSafe
 public final class Label
     implements Comparable<Label>, Serializable, SkylarkValue, SkyKey, CommandLineItem {
+  public static final PathFragment EXTERNAL_PACKAGE_NAME = PathFragment.create("external");
+  public static final PathFragment WORKSPACE_FILE_NAME = PathFragment.create("WORKSPACE");
+  public static final String DEFAULT_REPOSITORY_DIRECTORY = "__main__";
 
   /**
    * Package names that aren't made relative to the current repository because they mean special
@@ -72,8 +75,12 @@ public final class Label
           // Visibility is labels aren't actually targets
           PathFragment.create("visibility"),
           // There is only one //external package
-          LabelConstants.EXTERNAL_PACKAGE_NAME);
+          Label.EXTERNAL_PACKAGE_NAME);
 
+  public static final PackageIdentifier EXTERNAL_PACKAGE_IDENTIFIER =
+      PackageIdentifier.createInMainRepo(EXTERNAL_PACKAGE_NAME);
+
+  public static final PathFragment EXTERNAL_PATH_PREFIX = PathFragment.create("external");
   public static final SkyFunctionName TRANSITIVE_TRAVERSAL =
       SkyFunctionName.createHermetic("TRANSITIVE_TRAVERSAL");
 
@@ -630,23 +637,6 @@ public final class Label
    */
   public static String print(@Nullable Label label) {
     return label == null ? "(unknown)" : label.toString();
-  }
-
-  /**
-   * Returns a {@link PathFragment} corresponding to the directory in which {@code label} would
-   * reside, if it were interpreted to be a path.
-   */
-  public static PathFragment getContainingDirectory(Label label) {
-    PathFragment pkg = label.getPackageFragment();
-    String name = label.getName();
-    if (name.equals(".")) {
-      return pkg;
-    }
-    if (PathFragment.isNormalizedRelativePath(name) && !PathFragment.containsSeparator(name)) {
-      // Optimize for the common case of a label like '//pkg:target'.
-      return pkg;
-    }
-    return pkg.getRelative(name).getParentDirectory();
   }
 
   @Override

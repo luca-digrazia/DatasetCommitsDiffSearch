@@ -15,10 +15,8 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.assertThatEvaluationResult;
 import static org.junit.Assert.fail;
 
-import com.google.common.base.Optional;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -29,14 +27,12 @@ import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
@@ -105,15 +101,8 @@ public class PackageFunctionTest extends BuildViewTestCase {
   }
 
   private PackageValue validPackage(SkyKey skyKey) throws InterruptedException {
-    SkyframeExecutor skyframeExecutor = getSkyframeExecutor();
-    skyframeExecutor.injectExtraPrecomputedValues(
-        ImmutableList.of(
-            PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE,
-                Optional.<RootedPath>absent())));
-    EvaluationResult<PackageValue> result =
-        SkyframeExecutorTestUtils.evaluate(
-            skyframeExecutor, skyKey, /*keepGoing=*/ false, reporter);
+    EvaluationResult<PackageValue> result = SkyframeExecutorTestUtils.evaluate(
+        getSkyframeExecutor(), skyKey, /*keepGoing=*/false, reporter);
     if (result.hasError()) {
       fail(result.getError(skyKey).getException().getMessage());
     }
@@ -732,49 +721,6 @@ public class PackageFunctionTest extends BuildViewTestCase {
     assertThat(errorInfo.getException()).hasCauseThat().isInstanceOf(IOException.class);
   }
 
-  @Test
-  public void testLabelsCrossesSubpackageBoundaries() throws Exception {
-    reporter.removeHandler(failFastHandler);
-
-    scratch.file("pkg/BUILD", "exports_files(['sub/blah'])");
-    scratch.file("pkg/sub/BUILD");
-    invalidatePackages();
-
-    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//pkg"));
-    EvaluationResult<PackageValue> result = SkyframeExecutorTestUtils.evaluate(
-        getSkyframeExecutor(), skyKey, /*keepGoing=*/false, reporter);
-    assertThatEvaluationResult(result).hasNoError();
-    assertThat(result.get(skyKey).getPackage().containsErrors()).isTrue();
-    assertContainsEvent("Label '//pkg:sub/blah' crosses boundary of subpackage 'pkg/sub'");
-  }
-
-  @Test
-  public void testSymlinkCycleEncounteredWhileHandlingLabelCrossingSubpackageBoundaries()
-      throws Exception {
-    reporter.removeHandler(failFastHandler);
-
-    scratch.file("pkg/BUILD", "exports_files(['sub/blah'])");
-    Path subBuildFilePath = scratch.dir("pkg/sub").getChild("BUILD");
-    FileSystemUtils.ensureSymbolicLink(subBuildFilePath, subBuildFilePath);
-    invalidatePackages();
-
-    SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//pkg"));
-    EvaluationResult<PackageValue> result = SkyframeExecutorTestUtils.evaluate(
-        getSkyframeExecutor(), skyKey, /*keepGoing=*/false, reporter);
-    assertThatEvaluationResult(result).hasError();
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(skyKey)
-        .hasExceptionThat()
-        .isInstanceOf(BuildFileNotFoundException.class);
-    assertThatEvaluationResult(result)
-        .hasErrorEntryForKeyThat(skyKey)
-        .hasExceptionThat()
-        .hasMessageThat()
-        .contains(
-            "no such package 'pkg/sub': Symlink cycle detected while trying to find BUILD file");
-    assertContainsEvent("circular symlinks detected");
-  }
-
   private static class CustomInMemoryFs extends InMemoryFileSystem {
     private abstract static class FileStatusOrException {
       abstract FileStatus get() throws IOException;
@@ -826,11 +772,11 @@ public class PackageFunctionTest extends BuildViewTestCase {
     }
 
     @Override
-    public FileStatus statIfFound(Path path, boolean followSymlinks) throws IOException {
+    public FileStatus stat(Path path, boolean followSymlinks) throws IOException {
       if (stubbedStats.containsKey(path)) {
         return stubbedStats.get(path).get();
       }
-      return super.statIfFound(path, followSymlinks);
+      return super.stat(path, followSymlinks);
     }
 
     public void scheduleMakeUnreadableAfterReaddir(Path path) {

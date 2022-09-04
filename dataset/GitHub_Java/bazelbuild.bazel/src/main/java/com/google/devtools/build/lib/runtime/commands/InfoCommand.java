@@ -129,6 +129,8 @@ public class InfoCommand implements BlazeCommand {
                 // information is available here.
                 env.setupPackageCache(
                     optionsParsingResult, runtime.getDefaultsPackageContent(optionsParsingResult));
+                env.getSkyframeExecutor()
+                    .setConfigurationFragmentFactories(runtime.getConfigurationFragmentFactories());
                 // TODO(bazel-team): What if there are multiple configurations? [multi-config]
                 return env.getSkyframeExecutor()
                     .getConfiguration(
@@ -219,7 +221,6 @@ public class InfoCommand implements BlazeCommand {
             new InfoItem.BlazeTestlogsInfoItem(productName),
             new InfoItem.ReleaseInfoItem(productName),
             new InfoItem.ServerPidInfoItem(productName),
-            new InfoItem.ServerLogInfoItem(productName),
             new InfoItem.PackagePathInfoItem(commandOptions),
             new InfoItem.UsedHeapSizeInfoItem(),
             new InfoItem.UsedHeapSizeAfterGcInfoItem(),

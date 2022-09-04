@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.OutputService;
@@ -49,7 +48,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParsingResult;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -319,17 +317,6 @@ public final class CommandEnvironment {
 
   public PathFragment getRelativeWorkingDirectory() {
     return relativeWorkingDirectory;
-  }
-
-  List<OutErr> getOutputListeners() {
-    List<OutErr> result = new ArrayList<>();
-    for (BlazeModule module : runtime.getBlazeModules()) {
-      OutErr listener = module.getOutputListener();
-      if (listener != null) {
-        result.add(listener);
-      }
-    }
-    return result;
   }
 
   /**
