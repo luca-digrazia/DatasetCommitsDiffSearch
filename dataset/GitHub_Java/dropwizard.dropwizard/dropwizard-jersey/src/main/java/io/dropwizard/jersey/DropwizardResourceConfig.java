@@ -8,7 +8,6 @@ import io.dropwizard.jersey.caching.CacheControlledResponseFeature;
 import io.dropwizard.jersey.params.AbstractParamConverterProvider;
 import io.dropwizard.jersey.sessions.SessionFactoryProvider;
 import io.dropwizard.jersey.validation.FuzzyEnumParamConverterProvider;
-import io.dropwizard.util.JavaVersion;
 import io.dropwizard.util.Strings;
 import javassist.ClassPool;
 import javassist.CtClass;
@@ -150,16 +149,11 @@ public class DropwizardResourceConfig extends ResourceConfig {
             try {
                 // Need to create a new subclass dynamically here because Jersey
                 // doesn't add new bindings for the same class
-                final ClassPool pool = ClassPool.getDefault();
+                ClassPool pool = ClassPool.getDefault();
                 pool.insertClassPath(new LoaderClassPath(this.getClass().getClassLoader()));
-                final CtClass cc = pool.makeClass(SpecificBinder.class.getName() + UUID.randomUUID());
+                CtClass cc = pool.makeClass(SpecificBinder.class.getName() + UUID.randomUUID());
                 cc.setSuperclass(pool.get(SpecificBinder.class.getName()));
-                final Object binderProxy;
-                if (JavaVersion.isJava8()){
-                    binderProxy = cc.toClass().getConstructor(Object.class, Class.class).newInstance(object, clazz);
-                } else {
-                    binderProxy = cc.toClass(SpecificBinder.class).getConstructor(Object.class, Class.class).newInstance(object, clazz);
-                }
+                Object binderProxy = cc.toClass().getConstructor(Object.class, Class.class).newInstance(object, clazz);
                 super.register(binderProxy);
                 return super.register(clazz);
             } catch (Exception e) {
