@@ -61,16 +61,12 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
     String cpu = buildOptions.get(BuildConfiguration.Options.class).cpu;
 
     try {
-      return createFromJavaRuntimeSuite(env, javaHome, cpu);
+      return createDefault(env, javaHome, cpu);
     } catch (LabelSyntaxException e) {
       // Try again with legacy
     }
 
-    if (javaOptions.disableAbsoluteJavabase) {
-      throw new InvalidConfigurationException("Absolute --javabase is disabled");
-    }
-
-    return createFromAbsoluteJavabase(javaHome);
+    return createLegacy(javaHome);
   }
 
   @Override
@@ -84,8 +80,7 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
   }
 
   @Nullable
-  private static Jvm createFromJavaRuntimeSuite(
-      ConfigurationEnvironment lookup, String javaHome, String cpu)
+  private static Jvm createDefault(ConfigurationEnvironment lookup, String javaHome, String cpu)
       throws InvalidConfigurationException, LabelSyntaxException, InterruptedException {
     try {
       Label label = Label.parseAbsolute(javaHome);
@@ -112,7 +107,7 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
   }
 
   // TODO(b/34175492): eventually the Jvm fragement will containg only the label of a java_runtime
-  // rule, and all of the configuration will be accessed using JavaRuntimeInfo.
+  // rule, and all of the configuration will be accessed using JavaRuntimeProvider.
   private static Jvm createFromRuntimeSuite(
       ConfigurationEnvironment lookup, Rule javaRuntimeSuite, String cpu)
       throws InvalidConfigurationException, InterruptedException, NoSuchTargetException,
@@ -161,8 +156,7 @@ public final class JvmConfigurationLoader implements ConfigurationFragmentFactor
         "No JVM target found under " + javaRuntimeSuite + " that would work for " + cpu);
   }
 
-  private static Jvm createFromAbsoluteJavabase(String javaHome)
-      throws InvalidConfigurationException {
+  private static Jvm createLegacy(String javaHome) throws InvalidConfigurationException {
     PathFragment javaHomePathFrag = PathFragment.create(javaHome);
     if (!javaHomePathFrag.isAbsolute()) {
       throw new InvalidConfigurationException(
