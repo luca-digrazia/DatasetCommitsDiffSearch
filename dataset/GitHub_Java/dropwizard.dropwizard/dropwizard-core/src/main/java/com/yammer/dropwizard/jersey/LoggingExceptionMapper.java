@@ -1,6 +1,7 @@
 package com.yammer.dropwizard.jersey;
 
-import com.yammer.dropwizard.logging.Log;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
@@ -14,7 +15,7 @@ import java.util.Random;
 
 @Provider
 public class LoggingExceptionMapper<E extends Throwable> implements ExceptionMapper<E> {
-    private static final Log LOG = Log.forClass(LoggingExceptionMapper.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoggingExceptionMapper.class);
     private static final Random RANDOM = new Random();
 
     @Override
@@ -31,7 +32,7 @@ public class LoggingExceptionMapper<E extends Throwable> implements ExceptionMap
     }
 
     protected void logException(long id, E exception) {
-        LOG.error(exception, formatLogMessage(id, exception));
+        LOGGER.error(formatLogMessage(id, exception), exception);
     }
 
     protected String formatResponseEntity(long id, Throwable exception) {

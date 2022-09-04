@@ -1,6 +1,7 @@
 package com.yammer.dropwizard.jersey;
 
-import com.yammer.dropwizard.logging.Log;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.ext.Provider;
 import java.sql.SQLException;
@@ -10,13 +11,13 @@ import java.sql.SQLException;
  */
 @Provider
 public class LoggingSQLExceptionMapper extends LoggingExceptionMapper<SQLException> {
-    private static final Log LOG = Log.forClass(LoggingSQLExceptionMapper.class);
+    private static final Logger LOGGER = LoggerFactory.getLogger(LoggingSQLExceptionMapper.class);
 
     @Override
     protected void logException(long id, SQLException exception) {
         final String message = formatLogMessage(id, exception);
         for (Throwable throwable : exception) {
-            LOG.error(throwable, message);
+            LOGGER.error(message, throwable);
         }
     }
 }
