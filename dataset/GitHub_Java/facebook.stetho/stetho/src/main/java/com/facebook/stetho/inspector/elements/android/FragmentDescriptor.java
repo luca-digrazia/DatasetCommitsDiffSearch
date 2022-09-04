@@ -1,11 +1,4 @@
-/*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
- *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
- */
+// Copyright 2004-present Facebook. All Rights Reserved.
 
 package com.facebook.stetho.inspector.elements.android;
 
@@ -13,51 +6,50 @@ import android.view.View;
 
 import com.facebook.stetho.common.LogUtil;
 import com.facebook.stetho.common.android.FragmentAccessor;
-import com.facebook.stetho.common.android.FragmentCompat;
+import com.facebook.stetho.common.android.FragmentApi;
 import com.facebook.stetho.common.android.ResourcesUtil;
 import com.facebook.stetho.inspector.elements.AttributeAccumulator;
 import com.facebook.stetho.inspector.elements.ChainedDescriptor;
 import com.facebook.stetho.inspector.elements.DescriptorMap;
-
-import javax.annotation.Nullable;
 
 final class FragmentDescriptor
     extends ChainedDescriptor<Object> implements HighlightableDescriptor {
   private static final String ID_ATTRIBUTE_NAME = "id";
   private static final String TAG_ATTRIBUTE_NAME = "tag";
 
-  private final FragmentAccessor mAccessor;
-
   public static DescriptorMap register(DescriptorMap map) {
-    maybeRegister(map, FragmentCompat.getSupportLibInstance());
-    maybeRegister(map, FragmentCompat.getFrameworkInstance());
+    Class<?> supportFragmentClass = FragmentApi.tryGetSupportFragmentClass();
+    if (supportFragmentClass != null) {
+      LogUtil.d("Registering support Fragment descriptor");
+      map.register(supportFragmentClass, new FragmentDescriptor());
+    }
+
+    Class<?> fragmentClass = FragmentApi.tryGetFragmentClass();
+    if (fragmentClass != null) {
+      LogUtil.d("Registering Fragment descriptor");
+      map.register(fragmentClass, new FragmentDescriptor());
+    }
+
     return map;
   }
 
-  private static void maybeRegister(DescriptorMap map, @Nullable FragmentCompat compat) {
-    if (compat != null) {
-      Class<?> fragmentClass = compat.getFragmentClass();
-      LogUtil.d("Adding support for %s", fragmentClass.getName());
-      map.register(fragmentClass, new FragmentDescriptor(compat));
-    }
-  }
-
-  private FragmentDescriptor(FragmentCompat compat) {
-    mAccessor = compat.forFragment();
+  private FragmentDescriptor() {
   }
 
   @Override
   protected void onCopyAttributes(Object element, AttributeAccumulator attributes) {
-    int id = mAccessor.getId(element);
+    FragmentAccessor accessor = FragmentApi.getFragmentAccessorFor(element);
+
+    int id = accessor.getId(element);
     if (id != FragmentAccessor.NO_ID) {
       String value = ResourcesUtil.getIdStringQuietly(
           element,
-          mAccessor.getResources(element),
+          accessor.getResources(element),
           id);
       attributes.add(ID_ATTRIBUTE_NAME, value);
     }
 
-    String tag = mAccessor.getTag(element);
+    String tag = accessor.getTag(element);
     if (tag != null && tag.length() > 0) {
       attributes.add(TAG_ATTRIBUTE_NAME, tag);
     }
@@ -65,7 +57,8 @@ final class FragmentDescriptor
 
   @Override
   protected int onGetChildCount(Object element) {
-    View view = mAccessor.getView(element);
+    FragmentAccessor accessor = FragmentApi.getFragmentAccessorFor(element);
+    View view = accessor.getView(element);
     return (view == null) ? 0 : 1;
   }
 
@@ -75,7 +68,8 @@ final class FragmentDescriptor
       throw new IndexOutOfBoundsException();
     }
 
-    View view = mAccessor.getView(element);
+    FragmentAccessor accessor = FragmentApi.getFragmentAccessorFor(element);
+    View view = accessor.getView(element);
     if (view == null) {
       throw new IndexOutOfBoundsException();
     }
@@ -85,6 +79,7 @@ final class FragmentDescriptor
 
   @Override
   public View getViewForHighlighting(Object element) {
-    return mAccessor.getView(element);
+    FragmentAccessor accessor = FragmentApi.getFragmentAccessorFor(element);
+    return accessor.getView(element);
   }
 }
