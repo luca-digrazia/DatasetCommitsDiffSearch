@@ -2,20 +2,29 @@ package io.dropwizard.configuration;
 
 import com.fasterxml.jackson.core.JsonLocation;
 import com.fasterxml.jackson.databind.JsonMappingException;
-import com.fasterxml.jackson.dataformat.yaml.snakeyaml.error.Mark;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
-import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.text.similarity.LevenshteinDistance;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Iterator;
+import java.util.List;
+
+import static java.util.Objects.requireNonNull;
 
 /**
  * A {@link ConfigurationException} for errors parsing a configuration file.
  */
 public class ConfigurationParsingException extends ConfigurationException {
+    private static final long serialVersionUID = 1L;
 
     static class Builder {
         private static final int MAX_SUGGESTIONS = 5;
@@ -25,9 +34,13 @@ public class ConfigurationParsingException extends ConfigurationException {
         private List<JsonMappingException.Reference> fieldPath = Collections.emptyList();
         private int line = -1;
         private int column = -1;
-        private Exception cause = null;
+
+        @Nullable
+        private Exception cause;
         private List<String> suggestions = new ArrayList<>();
-        private String suggestionBase = null;
+
+        @Nullable
+        private String suggestionBase;
         private boolean suggestionsSorted = false;
 
         Builder(String summary) {
@@ -128,7 +141,7 @@ public class ConfigurationParsingException extends ConfigurationException {
                 return suggestions;
             }
 
-            Collections.sort(suggestions, new LevenshteinComparator(getSuggestionBase()));
+            suggestions.sort(new LevenshteinComparator(requireNonNull(getSuggestionBase())));
             suggestionsSorted = true;
 
             return suggestions;
@@ -150,6 +163,7 @@ public class ConfigurationParsingException extends ConfigurationException {
          *
          * @return the base for suggestions.
          */
+        @Nullable
         public String getSuggestionBase() {
             return suggestionBase;
         }
@@ -170,6 +184,7 @@ public class ConfigurationParsingException extends ConfigurationException {
          *
          * @return an Exception representing the cause of the problem, or null if there is none.
          */
+        @Nullable
         public Exception getCause() {
             return cause;
         }
@@ -188,8 +203,8 @@ public class ConfigurationParsingException extends ConfigurationException {
             return this;
         }
 
-        Builder setDetail(String detail) {
-            this.detail = detail;
+        Builder setDetail(@Nullable String detail) {
+            this.detail = Strings.nullToEmpty(detail);
             return this;
         }
 
@@ -202,12 +217,6 @@ public class ConfigurationParsingException extends ConfigurationException {
             return location == null
                     ? this
                     : setLocation(location.getLineNr(), location.getColumnNr());
-        }
-
-        Builder setLocation(Mark mark) {
-            return mark == null
-                    ? this
-                    : setLocation(mark.getLine(), mark.getColumn());
         }
 
         Builder setLocation(int line, int column) {
@@ -235,7 +244,7 @@ public class ConfigurationParsingException extends ConfigurationException {
         }
 
         ConfigurationParsingException build(String path) {
-            StringBuilder sb = new StringBuilder(getSummary());
+            final StringBuilder sb = new StringBuilder(getSummary());
             if (hasFieldPath()) {
                 sb.append(" at: ").append(buildPath(getFieldPath()));
             } else if (hasLocation()) {
@@ -248,9 +257,9 @@ public class ConfigurationParsingException extends ConfigurationException {
             }
 
             if (hasSuggestions()) {
-                List<String> suggestions = getSuggestions();
+                final List<String> suggestions = getSuggestions();
                 sb.append(NEWLINE).append("    Did you mean?:").append(NEWLINE);
-                Iterator<String> it = suggestions.iterator();
+                final Iterator<String> it = suggestions.iterator();
                 int i = 0;
                 while (it.hasNext() && i < MAX_SUGGESTIONS) {
                     sb.append("      - ").append(it.next());
@@ -260,24 +269,24 @@ public class ConfigurationParsingException extends ConfigurationException {
                     }
                 }
 
-                int total = suggestions.size();
+                final int total = suggestions.size();
                 if (i < total) {
                     sb.append("        [").append(total - i).append(" more]");
                 }
             }
 
             return hasCause()
-                    ? new ConfigurationParsingException(path, sb.toString(), getCause())
+                    ? new ConfigurationParsingException(path, sb.toString(), requireNonNull(getCause()))
                     : new ConfigurationParsingException(path, sb.toString());
         }
 
         private String buildPath(Iterable<JsonMappingException.Reference> path) {
-            StringBuilder sb = new StringBuilder();
+            final StringBuilder sb = new StringBuilder();
             if (path != null) {
-                Iterator<JsonMappingException.Reference> it = path.iterator();
+                final Iterator<JsonMappingException.Reference> it = path.iterator();
                 while (it.hasNext()) {
-                    JsonMappingException.Reference reference = it.next();
-                    String name = reference.getFieldName();
+                    final JsonMappingException.Reference reference = it.next();
+                    final String name = reference.getFieldName();
 
                     // append either the field name or list index
                     if (name == null) {
@@ -294,7 +303,9 @@ public class ConfigurationParsingException extends ConfigurationException {
             return sb.toString();
         }
 
-        private static class LevenshteinComparator implements Comparator<String>, Serializable {
+        protected static class LevenshteinComparator implements Comparator<String>, Serializable {
+            private static final long serialVersionUID = 1L;
+            private static final LevenshteinDistance LEVENSHTEIN_DISTANCE = new LevenshteinDistance();
 
             private String base;
 
@@ -327,7 +338,8 @@ public class ConfigurationParsingException extends ConfigurationException {
                 }
 
                 // determine which of the two is closer to the base and order it first
-                return Integer.compare(StringUtils.getLevenshteinDistance(a, base), StringUtils.getLevenshteinDistance(b, base));
+                return Integer.compare(LEVENSHTEIN_DISTANCE.apply(a, base),
+                    LEVENSHTEIN_DISTANCE.apply(b, base));
             }
 
             private void writeObject(ObjectOutputStream stream) throws IOException {
