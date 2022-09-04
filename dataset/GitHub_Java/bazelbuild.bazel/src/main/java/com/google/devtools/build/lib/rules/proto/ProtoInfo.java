@@ -52,7 +52,6 @@ public final class ProtoInfo extends NativeInfo implements ProtoInfoApi<Artifact
   public static final String LEGACY_SKYLARK_NAME = "proto";
 
   private final ImmutableList<Artifact> directProtoSources;
-  private final ImmutableList<Artifact> originalDirectProtoSources;
   private final String directProtoSourceRoot;
   private final NestedSet<Artifact> transitiveProtoSources;
   private final NestedSet<String> transitiveProtoSourceRoots;
@@ -69,7 +68,6 @@ public final class ProtoInfo extends NativeInfo implements ProtoInfoApi<Artifact
   @AutoCodec.Instantiator
   public ProtoInfo(
       ImmutableList<Artifact> directProtoSources,
-      ImmutableList<Artifact> originalDirectProtoSources,
       String directProtoSourceRoot,
       NestedSet<Artifact> transitiveProtoSources,
       NestedSet<String> transitiveProtoSourceRoots,
@@ -84,7 +82,6 @@ public final class ProtoInfo extends NativeInfo implements ProtoInfoApi<Artifact
       Location location) {
     super(PROVIDER, location);
     this.directProtoSources = directProtoSources;
-    this.originalDirectProtoSources = originalDirectProtoSources;
     this.directProtoSourceRoot = directProtoSourceRoot;
     this.transitiveProtoSources = transitiveProtoSources;
     this.transitiveProtoSourceRoots = transitiveProtoSourceRoots;
@@ -99,19 +96,10 @@ public final class ProtoInfo extends NativeInfo implements ProtoInfoApi<Artifact
     this.transitiveDescriptorSets = transitiveDescriptorSets;
   }
 
-  /**
-   * The proto source files that are used in compiling this {@code proto_library}.
-   *
-   * <p>Different from {@link #getOriginalDirectProtoSources()} when a virtual import root is used.
-   */
+  /** The proto sources of the {@code proto_library} declaring this provider. */
   @Override
   public ImmutableList<Artifact> getDirectProtoSources() {
     return directProtoSources;
-  }
-
-  /** The proto sources of the {@code proto_library} declaring this provider. */
-  public ImmutableList<Artifact> getOriginalDirectProtoSources() {
-    return originalDirectProtoSources;
   }
 
   /** The source root of the current library. */
