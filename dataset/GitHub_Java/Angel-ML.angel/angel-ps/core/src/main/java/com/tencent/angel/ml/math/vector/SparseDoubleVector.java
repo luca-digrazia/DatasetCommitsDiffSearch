@@ -16,23 +16,22 @@
 
 package com.tencent.angel.ml.math.vector;
 
-import com.tencent.angel.common.Serialize;
 import com.tencent.angel.ml.math.TAbstractVector;
 import com.tencent.angel.ml.math.TVector;
-import com.tencent.angel.ml.matrix.RowType;
-import io.netty.buffer.ByteBuf;
+import com.tencent.angel.ml.math.VectorType;
+import com.tencent.angel.protobuf.generated.MLProtos;
 import it.unimi.dsi.fastutil.ints.Int2DoubleMap;
 import it.unimi.dsi.fastutil.ints.Int2DoubleOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2FloatMap;
+import it.unimi.dsi.fastutil.longs.Long2DoubleMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
-import java.util.stream.IntStream;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 /**
  * SparseLong2DoubleVector using HashMap<Long, Double> as its backend storage
  */
-public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
+public class SparseDoubleVector extends TDoubleVector {
 
   private final static Log LOG = LogFactory.getLog(SparseDoubleVector.class);
 
@@ -44,7 +43,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   /**
    * store the value
    */
-  volatile Int2DoubleOpenHashMap hashMap;
+  final Int2DoubleOpenHashMap hashMap;
 
   /**
    * init the empty vector
@@ -112,10 +111,11 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   public SparseDoubleVector(SparseDoubleVector other) {
     super(other);
     this.hashMap = new Int2DoubleOpenHashMap(other.hashMap);
+
   }
 
   @Override
-  public TIntDoubleVector plusBy(int index, double delta) {
+  public TDoubleVector plusBy(int index, double delta) {
     hashMap.addTo(index, delta);
     return this;
   }
@@ -123,7 +123,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   @Override public double sum() {
     double ret = 0.0;
     ObjectIterator<Int2DoubleMap.Entry> iter = this.hashMap.int2DoubleEntrySet().fastIterator();
-    Int2DoubleMap.Entry entry;
+    Int2DoubleMap.Entry entry = null;
     while (iter.hasNext()) {
       entry = iter.next();
       ret += entry.getDoubleValue();
@@ -131,18 +131,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
     return ret;
   }
 
-  @Override
-  public TIntDoubleVector elemUpdate(IntDoubleElemUpdater updater, ElemUpdateParam param) {
-    ObjectIterator<Int2DoubleMap.Entry> iter = this.hashMap.int2DoubleEntrySet().fastIterator();
-    Int2DoubleMap.Entry entry;
-    while (iter.hasNext()) {
-      entry = iter.next();
-      entry.setValue(updater.action(entry.getIntKey(), entry.getDoubleValue(), param));
-    }
-    return this;
-  }
-
-  @Override public TIntDoubleVector clone() {
+  @Override public TDoubleVector clone() {
     return new SparseDoubleVector(this);
   }
 
@@ -250,7 +239,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   @Override
-  public TIntDoubleVector filter(double x) {
+  public TDoubleVector filter(double x) {
     Int2DoubleOpenHashMap newMap = new Int2DoubleOpenHashMap();
 
     ObjectIterator<Int2DoubleMap.Entry> iter = hashMap.int2DoubleEntrySet().fastIterator();
@@ -279,8 +268,8 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
     return hashMap.keySet().toIntArray();
   }
 
-  @Override public RowType getType() {
-    return RowType.T_DOUBLE_SPARSE;
+  @Override public MLProtos.RowType getType() {
+    return MLProtos.RowType.T_DOUBLE_SPARSE;
   }
 
   @Override public long nonZeroNumber() {
@@ -288,7 +277,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
     if (hashMap != null) {
       ObjectIterator<Int2DoubleMap.Entry> iter = this.hashMap.int2DoubleEntrySet().fastIterator();
       while (iter.hasNext()) {
-        if (iter.next().getDoubleValue() != 0.0) {
+        if (iter.next().getDoubleValue() != 0) {
           ret++;
         }
       }
@@ -298,7 +287,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   @Override
-  public TIntDoubleVector plus(TAbstractVector other, double x) {
+  public TDoubleVector plus(TAbstractVector other, double x) {
     assert (dim == other.getDimension());
     if (other instanceof SparseDoubleSortedVector)
       return plus((SparseDoubleSortedVector) other, x);
@@ -374,7 +363,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
     return vector;
   }
 
-  @Override public TIntDoubleVector plus(TAbstractVector other) {
+  @Override public TDoubleVector plus(TAbstractVector other) {
     assert (dim == other.getDimension());
     if (other instanceof SparseDoubleSortedVector)
       return plus((SparseDoubleSortedVector) other);
@@ -391,7 +380,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
       + this.getClass().getName() + " plus " + other.getClass().getName());
   }
 
-  public TIntDoubleVector plus(DenseDoubleVector other) {
+  public TDoubleVector plus(DenseDoubleVector other) {
     DenseDoubleVector vec = new DenseDoubleVector(other);
 
     ObjectIterator<Int2DoubleMap.Entry> iter = this.hashMap.int2DoubleEntrySet().fastIterator();
@@ -483,16 +472,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
     return this;
   }
 
-  private void resize(int newSize) {
-    if(hashMap.size() < newSize) {
-      Int2DoubleOpenHashMap oldMap = hashMap;
-      hashMap = new Int2DoubleOpenHashMap(newSize);
-      hashMap.putAll(oldMap);
-    }
-  }
-
   private SparseDoubleVector plusBy(SparseDoubleVector other, double x) {
-    resize(other.size());
     ObjectIterator<Int2DoubleMap.Entry> iter = other.hashMap.int2DoubleEntrySet().fastIterator();
     Int2DoubleMap.Entry entry = null;
     while (iter.hasNext()) {
@@ -503,7 +483,6 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   private SparseDoubleVector plusBy(SparseFloatVector other, double x) {
-    resize(other.size());
     ObjectIterator<Int2FloatMap.Entry> iter = other.hashMap.int2FloatEntrySet().fastIterator();
     Int2FloatMap.Entry entry = null;
     while (iter.hasNext()) {
@@ -518,7 +497,6 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   private SparseDoubleVector plusBy(DenseDoubleVector other, double x) {
-    resize(other.size());
     double[] delta = other.getValues();
     for (int i = 0; i < delta.length; i++) {
       hashMap.addTo(i, delta[i] * x);
@@ -527,7 +505,6 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   private SparseDoubleVector plusBy(DenseFloatVector other, double x) {
-    resize(other.size());
     float[] delta = other.getValues();
     for (int i = 0; i < delta.length; i++) {
       hashMap.addTo(i, delta[i] * x);
@@ -535,7 +512,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
     return this;
   }
 
-  @Override public TIntDoubleVector plusBy(TAbstractVector other) {
+  @Override public TDoubleVector plusBy(TAbstractVector other) {
     assert (dim == other.getDimension());
     if (other instanceof SparseDummyVector)
       return plusBy((SparseDummyVector) other);
@@ -555,7 +532,6 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   private SparseDoubleVector plusBy(DenseDoubleVector other) {
-    resize(other.size());
     double[] delta = other.getValues();
     for (int i = 0; i < delta.length; i++) {
       hashMap.addTo(i, delta[i]);
@@ -564,7 +540,6 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   private SparseDoubleVector plusBy(DenseFloatVector other) {
-    resize(other.size());
     float[] delta = other.getValues();
     for (int i = 0; i < delta.length; i++) {
       hashMap.addTo(i, delta[i]);
@@ -580,7 +555,6 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   public SparseDoubleVector plusBy(SparseDummyVector other) {
-    resize(other.size());
     int[] indexes = other.indices;
     for (int i = 0; i < other.nonzero; i++) {
       hashMap.addTo(indexes[i], 1.0);
@@ -589,31 +563,16 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   private SparseDoubleVector plusBy(SparseDoubleVector other) {
-    if(this.hashMap.isEmpty()) {
-      this.hashMap = other.hashMap.clone();
-    } else if(this.hashMap.size() < other.hashMap.size()) {
-      Int2DoubleOpenHashMap oldMap = hashMap;
-      hashMap = other.hashMap.clone();
-
-      ObjectIterator<Int2DoubleMap.Entry> iter = oldMap.int2DoubleEntrySet().fastIterator();
-      Int2DoubleMap.Entry entry = null;
-      while (iter.hasNext()) {
-        entry = iter.next();
-        hashMap.addTo(entry.getIntKey(), entry.getDoubleValue());
-      }
-    } else {
-      ObjectIterator<Int2DoubleMap.Entry> iter = other.hashMap.int2DoubleEntrySet().fastIterator();
-      Int2DoubleMap.Entry entry = null;
-      while (iter.hasNext()) {
-        entry = iter.next();
-        this.hashMap.addTo(entry.getIntKey(), entry.getDoubleValue());
-      }
+    ObjectIterator<Int2DoubleMap.Entry> iter = other.hashMap.int2DoubleEntrySet().fastIterator();
+    Int2DoubleMap.Entry entry = null;
+    while (iter.hasNext()) {
+      entry = iter.next();
+      this.hashMap.addTo(entry.getIntKey(), entry.getDoubleValue());
     }
     return this;
   }
 
   private SparseDoubleVector plusBy(SparseFloatVector other) {
-    resize(other.size());
     ObjectIterator<Int2FloatMap.Entry> iter = other.hashMap.int2FloatEntrySet().fastIterator();
     Int2FloatMap.Entry entry = null;
     while (iter.hasNext()) {
@@ -624,7 +583,6 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   private SparseDoubleVector plusBy(SparseDoubleSortedVector other) {
-    resize(other.size());
     return plusBy(other.getIndices(), other.getValues());
   }
 
@@ -637,11 +595,11 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   @Override public double sparsity() {
-    return ((double) nonZeroNumber()) / (double)dim;
+    return ((double) nonZeroNumber()) / dim;
   }
 
   @Override
-  public TIntDoubleVector times(double x) {
+  public TDoubleVector times(double x) {
     SparseDoubleVector vector = (SparseDoubleVector) this.clone();
 
     ObjectIterator<Int2DoubleMap.Entry> iter = vector.hashMap.int2DoubleEntrySet().fastIterator();
@@ -654,12 +612,12 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
   }
 
   @Override
-  public TIntDoubleVector timesBy(double x) {
+  public TDoubleVector timesBy(double x) {
     ObjectIterator<Int2DoubleMap.Entry> iter = this.hashMap.int2DoubleEntrySet().fastIterator();
     Int2DoubleMap.Entry entry = null;
     while (iter.hasNext()) {
       entry = iter.next();
-      entry.setValue(entry.getDoubleValue() * x);
+      this.hashMap.put(entry.getIntKey(), entry.getDoubleValue() * x);
     }
     return this;
   }
@@ -675,41 +633,7 @@ public class SparseDoubleVector extends TIntDoubleVector implements Serialize{
     return sum;
   }
 
-  @Override public double norm() {
-    ObjectIterator<Int2DoubleMap.Entry> iter = hashMap.int2DoubleEntrySet().iterator();
-    double sum = 0;
-    while (iter.hasNext()) {
-      sum += Math.abs(iter.next().getDoubleValue());
-    }
-    return sum;
-  }
-
   public Int2DoubleOpenHashMap getIndexToValueMap() {
     return hashMap;
-  }
-
-  @Override
-  public void serialize(ByteBuf buf) {
-    buf.writeInt(dim);
-    buf.writeInt(hashMap.size());
-    hashMap.forEach((key, value) -> {
-      buf.writeInt(key);
-      buf.writeDouble(value);
-    });
-  }
-
-  @Override
-  public void deserialize(ByteBuf buf) {
-    int dim = buf.readInt();
-    int length = buf.readInt();
-    Int2DoubleOpenHashMap data = new Int2DoubleOpenHashMap(length);
-    IntStream.range(0,length).forEach(i-> data.put(buf.readInt(), buf.readDouble()));
-    this.dim = dim;
-    this.hashMap = data;
-  }
-
-  @Override
-  public int bufferLen() {
-    return 4 + (4 + 8) * hashMap.size();
   }
 }
