@@ -14,6 +14,7 @@ import java.util.concurrent.Executors;
 
 import org.jboss.logging.Logger;
 
+import io.quarkus.deployment.pkg.steps.NativeImageBuildStep.GraalVM;
 import io.quarkus.deployment.util.ProcessUtil;
 
 public abstract class NativeImageBuildRunner {
@@ -40,6 +41,9 @@ public abstract class NativeImageBuildRunner {
     }
 
     public void setup(boolean processInheritIODisabled) {
+    }
+
+    public void cleanupServer(File outputDir) throws InterruptedException, IOException {
     }
 
     public int build(List<String> args, Path outputDir, boolean processInheritIODisabled)
