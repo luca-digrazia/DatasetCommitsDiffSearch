@@ -528,7 +528,7 @@ public class WorkerPool {
       runningContext.printToken();
     }
     result.setState(state);
-    LOG.debug("handle request " + seqId + " use time=" + (System.currentTimeMillis() - startTs));
+    LOG.info("handle request " + seqId + " use time=" + (System.currentTimeMillis() - startTs));
     return result;
   }
 
