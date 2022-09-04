@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Queue;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -188,28 +189,29 @@ public final class Profiler {
   @ThreadCompatible
   private final class TaskData {
     final long threadId;
-    final long startTimeNanos;
+    final long startTime;
+    long duration = 0L;
     final int id;
     final int parentId;
+    int[] counts; // number of invocations per ProfilerTask type
+    long[] durations; // time spend in the task per ProfilerTask type
     final ProfilerTask type;
     final String description;
 
-    long duration;
-    int[] counts; // number of invocations per ProfilerTask type
-    long[] durations; // time spend in the task per ProfilerTask type
-
-    TaskData(long startTimeNanos, TaskData parent, ProfilerTask eventType, String description) {
+    TaskData(long startTime, TaskData parent, ProfilerTask eventType, String description) {
       threadId = Thread.currentThread().getId();
       counts = null;
       durations = null;
       id = taskId.incrementAndGet();
       parentId = (parent == null  ? 0 : parent.id);
-      this.startTimeNanos = startTimeNanos;
+      this.startTime = startTime;
       this.type = eventType;
       this.description = Preconditions.checkNotNull(description);
     }
 
-    /** Aggregates information about an *immediate* subtask. */
+    /**
+     * Aggregates information about an *immediate* subtask.
+     */
     public void aggregateChild(ProfilerTask type, long duration) {
       int index = type.ordinal();
       if (counts == null) {
@@ -265,8 +267,8 @@ public final class Profiler {
       get().add(create(clock.nanoTime(), eventType, description));
     }
 
-    public TaskData create(long startTimeNanos, ProfilerTask eventType, String description) {
-      return new TaskData(startTimeNanos, peek(), eventType, description);
+    public TaskData create(long startTime, ProfilerTask eventType, String description) {
+      return new TaskData(startTime, peek(), eventType, description);
     }
 
     @Override
@@ -459,7 +461,7 @@ public final class Profiler {
         Map<String, ? extends Predicate<? super String>> vfsHeuristics =
             VfsHeuristics.vfsTypeHeuristics;
         List<RecorderAndPredicate> recorders = new ArrayList<>(vfsHeuristics.size());
-        for (Map.Entry<String, ? extends Predicate<? super String>> e : vfsHeuristics.entrySet()) {
+        for (Entry<String, ? extends Predicate<? super String>> e : vfsHeuristics.entrySet()) {
           recorders.add(new RecorderAndPredicate(
               new SingleStatRecorder(task + " " + e.getKey(), HISTOGRAM_BUCKETS), e.getValue()));
         }
@@ -505,14 +507,9 @@ public final class Profiler {
    * @param clock a {@code BlazeClock.instance()}
    * @param execStartTimeNanos execution start time in nanos obtained from {@code clock.nanoTime()}
    */
-  public synchronized void start(
-      ProfiledTaskKinds profiledTaskKinds,
-      OutputStream stream,
-      String comment,
-      boolean recordAllDurations,
-      Clock clock,
-      long execStartTimeNanos)
-          throws IOException {
+  public synchronized void start(ProfiledTaskKinds profiledTaskKinds, OutputStream stream,
+      String comment, boolean recordAllDurations, Clock clock, long execStartTimeNanos)
+      throws IOException {
     Preconditions.checkState(!isActive(), "Profiler already active");
     taskStack = new TaskStack();
     taskQueue = new ConcurrentLinkedQueue<>();
@@ -629,14 +626,14 @@ public final class Profiler {
     try {
       // Allocate the sink once to avoid GC
       ByteBuffer sink = ByteBuffer.allocate(1024);
-      TaskData data;
-      while ((data = taskQueue.poll()) != null) {
+      while (!taskQueue.isEmpty()) {
         sink.clear();
+        TaskData data = taskQueue.poll();
 
         VarInt.putVarLong(data.threadId, sink);
         VarInt.putVarInt(data.id, sink);
         VarInt.putVarInt(data.parentId, sink);
-        VarInt.putVarLong(data.startTimeNanos - profileStartTime, sink);
+        VarInt.putVarLong(data.startTime - profileStartTime, sink);
         VarInt.putVarLong(data.duration, sink);
 
         // To save space (and improve performance), convert all description
@@ -704,14 +701,14 @@ public final class Profiler {
    * Adds task directly to the main queue bypassing task stack. Used for simple tasks that are known
    * to not have any subtasks.
    *
-   * @param startTimeNanos task start time (obtained through {@link Profiler#nanoTimeMaybe()})
+   * @param startTime task start time (obtained through {@link Profiler#nanoTimeMaybe()})
    * @param duration task duration
    * @param type task type
    * @param description task description. May be stored until end of build.
    */
-  private void logTask(long startTimeNanos, long duration, ProfilerTask type, String description) {
+  private void logTask(long startTime, long duration, ProfilerTask type, String description) {
     Preconditions.checkNotNull(description);
-    Preconditions.checkState(startTimeNanos > 0, "startTime was %s", startTimeNanos);
+    Preconditions.checkState(startTime > 0, "startTime was %s", startTime);
     if (duration < 0) {
       // See note in Clock#nanoTime, which is used by Profiler#nanoTimeMaybe.
       duration = 0;
@@ -733,7 +730,7 @@ public final class Profiler {
       parent.aggregateChild(type, duration);
     }
     if (wasTaskSlowEnoughToRecord(type, duration)) {
-      TaskData data = localStack.create(startTimeNanos, type, description);
+      TaskData data = localStack.create(startTime, type, description);
       data.duration = duration;
       if (out != null) {
         localQueue.add(data);
@@ -799,7 +796,7 @@ public final class Profiler {
   }
 
   /** Used to log "events" - tasks with zero duration. */
-  void logEvent(ProfilerTask type, String description) {
+  public void logEvent(ProfilerTask type, String description) {
     if (isActive() && isProfiling(type)) {
       logTask(clock.nanoTime(), 0, type, description);
     }
@@ -846,7 +843,7 @@ public final class Profiler {
           type,
           data,
           taskStack);
-      data.duration = endTime - data.startTimeNanos;
+      data.duration = endTime - data.startTime;
       if (data.parentId > 0) {
         taskStack.peek().aggregateChild(data.type, data.duration);
       }
@@ -873,4 +870,19 @@ public final class Profiler {
       logEvent(ProfilerTask.PHASE, phase.description);
     }
   }
+
+  /**
+   * Convenience method to log spawn tasks.
+   *
+   * TODO(bazel-team): Right now method expects single string of the spawn action
+   * as task description (usually either argv[0] or a name of the main executable
+   * in case of complex shell commands). Maybe it should accept Command object
+   * and create more user friendly description.
+   */
+  public void logSpawn(long startTime, String arg0) {
+    if (isActive() && isProfiling(ProfilerTask.SPAWN)) {
+      logTask(startTime, clock.nanoTime() - startTime, ProfilerTask.SPAWN, arg0);
+    }
+  }
+
 }
