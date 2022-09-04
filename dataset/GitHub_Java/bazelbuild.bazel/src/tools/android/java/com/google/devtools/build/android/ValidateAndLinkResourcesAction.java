@@ -153,10 +153,9 @@ public class ValidateAndLinkResourcesAction {
 
   public static void main(String[] args) throws Exception {
     final OptionsParser optionsParser =
-        OptionsParser.newOptionsParser(
-            new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()),
-            Options.class,
-            Aapt2ConfigOptions.class);
+        OptionsParser.newOptionsParser(Options.class, Aapt2ConfigOptions.class);
+    optionsParser.enableParamsFileSupport(
+        new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()));
     optionsParser.parse(args);
 
     Options options = optionsParser.getOptions(Options.class);
