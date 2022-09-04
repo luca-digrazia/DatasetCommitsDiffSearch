@@ -22,9 +22,8 @@ import java.util.Properties;
 import smile.data.DataFrame;
 import smile.data.formula.Formula;
 import smile.math.MathEx;
-import smile.math.blas.Transpose;
-import smile.math.matrix.DMatrix;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.BiconjugateGradient;
 import smile.math.matrix.Preconditioner;
 
@@ -121,7 +120,7 @@ public class LASSO {
      * @param maxIter the maximum number of IPM (Newton) iterations.
      */
     public static LinearModel fit(Formula formula, DataFrame data, double lambda, double tol, int maxIter) {
-        Matrix X = formula.matrix(data, false);
+        DenseMatrix X = formula.matrix(data, false);
         double[] y = formula.y(data).toDoubleArray();
 
         double[] center = X.colMeans();
@@ -133,12 +132,11 @@ public class LASSO {
             }
         }
 
-        Matrix scaledX = X.scale(center, scale);
+        DenseMatrix scaledX = X.scale(center, scale);
 
         LinearModel model = train(scaledX, y, lambda, tol, maxIter);
         model.formula = formula;
         model.schema = formula.xschema();
-        model.predictors = X.colNames();
 
         for (int j = 0; j < model.p; j++) {
             model.w[j] /= scale[j];
@@ -149,7 +147,7 @@ public class LASSO {
 
         double[] fittedValues = new double[y.length];
         Arrays.fill(fittedValues, model.b);
-        X.mv(1.0, model.w, 1.0, fittedValues);
+        X.axpy(model.w, fittedValues);
         model.fitness(fittedValues, y, ym);
 
         return model;
@@ -238,14 +236,14 @@ public class LASSO {
         // MAIN LOOP
         int ntiter = 0;
         for (; ntiter <= maxIter; ntiter++) {
-            x.mv(w, z);
+            x.ax(w, z);
             for (int i = 0; i < n; i++) {
                 z[i] -= Y[i];
                 nu[i] = 2 * z[i];
             }
 
             // CALCULATE DUALITY GAP
-            x.tv(nu, xnu);
+            x.atx(nu, xnu);
             double maxXnu = MathEx.normInf(xnu);
             if (maxXnu > lambda) {
                 double lnu = lambda / maxXnu;
@@ -283,7 +281,7 @@ public class LASSO {
             }
 
             // calculate gradient
-            x.tv(z, gradphi[0]);
+            x.atx(z, gradphi[0]);
             for (int i = 0; i < p; i++) {
                 gradphi[0][i] = 2 * gradphi[0][i] - (q1[i] - q2[i]) / t;
                 gradphi[1][i] = lambda - (q1[i] + q2[i]) / t;
@@ -305,7 +303,8 @@ public class LASSO {
             }
 
             // preconditioned conjugate gradient
-            double error = BiconjugateGradient.solve(pcg, grad, dxu, pcg, pcgtol, 1, pcgmaxi);
+            BiconjugateGradient bfgs = new BiconjugateGradient(pcgtol, 1, pcgmaxi, pcg);
+            double error = bfgs.solve(pcg, grad, dxu);
             if (error > pcgtol) {
                 pitr = pcgmaxi;
             }
@@ -330,7 +329,7 @@ public class LASSO {
                 }
 
                 if (MathEx.max(newf) < 0.0) {
-                    x.mv(neww, newz);
+                    x.ax(neww, newz);
                     for (int i = 0; i < n; i++) {
                         newz[i] -= Y[i];
                     }
@@ -384,7 +383,7 @@ public class LASSO {
         return sum;
     }
 
-    static class PCGMatrix extends DMatrix implements Preconditioner {
+    static class PCGMatrix implements Matrix, Preconditioner {
 
         Matrix A;
         Matrix AtA;
@@ -408,9 +407,14 @@ public class LASSO {
             ax = new double[n];
             atax = new double[p];
 
-            if ((A.ncols() < 10000) && (A instanceof Matrix)) {
+            if ((A.ncols() < 10000) && (A instanceof DenseMatrix)) {
                 AtA = A.ata();
             }
+        }
+
+        @Override
+        public boolean isSymmetric() {
+            return true;
         }
 
         @Override
@@ -424,12 +428,7 @@ public class LASSO {
         }
 
         @Override
-        public long size() {
-            return A.size();
-        }
-
-        @Override
-        public void mv(double[] x, double[] y) {
+        public double[] ax(double[] x, double[] y) {
             // COMPUTE AX (PCG)
             // 
             // y = hessphi * x,
@@ -437,21 +436,23 @@ public class LASSO {
             // where hessphi = [A'*A*2+D1 , D2;
             //                  D2        , D1];
             if (AtA != null) {
-                AtA.mv(x, atax);
+                AtA.ax(x, atax);
             } else {
-                A.mv(x, ax);
-                A.tv(ax, atax);
+                A.ax(x, ax);
+                A.atx(ax, atax);
             }
 
             for (int i = 0; i < p; i++) {
                 y[i]     = 2 * atax[i] + d1[i] * x[i] + d2[i] * x[i + p];
                 y[i + p] =               d2[i] * x[i] + d1[i] * x[i + p];
             }
+
+            return y;
         }
 
         @Override
-        public void tv(double[] x, double[] y) {
-            mv(x, y);
+        public double[] atx(double[] x, double[] y) {
+            return ax(x, y);
         }
 
         @Override
@@ -466,28 +467,12 @@ public class LASSO {
         }
 
         @Override
-        public void mv(Transpose trans, double alpha, double[] x, double beta, double[] y) {
+        public Matrix clone() {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void mv(double[] work, int inputOffset, int outputOffset) {
-            throw new UnsupportedOperationException();
-        }
-
-
-        @Override
-        public void tv(double[] work, int inputOffset, int outputOffset) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public DMatrix set(int i, int j, double x) {
-            throw new UnsupportedOperationException();
-        }
-
-        @Override
-        public double get(int i, int j) {
+        public Matrix transpose() {
             throw new UnsupportedOperationException();
         }
     }
