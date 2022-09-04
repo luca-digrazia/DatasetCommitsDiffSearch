@@ -31,14 +31,12 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Type;
-import java.util.List;
 import javax.annotation.Nullable;
 
 /** A module that contains Skylark utilities for Java support. */
-public class JavaSkylarkCommon
-    implements JavaCommonApi<Artifact, JavaInfo, SkylarkRuleContext, SkylarkActionFactory> {
+public class JavaSkylarkCommon implements JavaCommonApi<Artifact, JavaInfo, SkylarkRuleContext,
+    ConfiguredTarget, SkylarkActionFactory> {
   private final JavaSemantics javaSemantics;
 
   @Override
@@ -55,10 +53,11 @@ public class JavaSkylarkCommon
       Environment environment)
       throws EvalException {
     if (environment.getSemantics().incompatibleDisallowLegacyJavaInfo()) {
-      checkCallPathInWhitelistedPackages(
-          environment.getSemantics(),
+      throw new EvalException(
           location,
-          environment.getCallerLabel().getPackageFragment().toString());
+          "create_provider is deprecated and cannot be used when "
+              + "--incompatible_disallow_legacy_javainfo is set. "
+              + "Please migrate to the JavaInfo constructor.");
     }
     return JavaInfoBuildHelper.getInstance()
         .create(
@@ -70,7 +69,6 @@ public class JavaSkylarkCommon
             asArtifactNestedSet(transitiveCompileTimeJars),
             asArtifactNestedSet(transitiveRuntimeJars),
             asArtifactNestedSet(sourceJars),
-            environment.getSemantics(),
             location);
   }
 
@@ -89,21 +87,18 @@ public class JavaSkylarkCommon
       SkylarkList<Artifact> sourceJars,
       SkylarkList<Artifact> sourceFiles,
       Artifact outputJar,
-      Object outputSourceJar,
       SkylarkList<String> javacOpts,
       SkylarkList<JavaInfo> deps,
       SkylarkList<JavaInfo> exports,
       SkylarkList<JavaInfo> plugins,
       SkylarkList<JavaInfo> exportedPlugins,
       String strictDepsMode,
-      Object javaToolchain,
-      Object hostJavabase,
+      ConfiguredTarget javaToolchain,
+      ConfiguredTarget hostJavabase,
       SkylarkList<Artifact> sourcepathEntries,
       SkylarkList<Artifact> resources,
       Boolean neverlink,
-      Location location,
-      Environment environment)
-      throws EvalException, InterruptedException {
+      Environment environment) throws EvalException, InterruptedException {
 
     return JavaInfoBuildHelper.getInstance()
         .createJavaCompileAction(
@@ -111,7 +106,6 @@ public class JavaSkylarkCommon
             sourceJars,
             sourceFiles,
             outputJar,
-            outputSourceJar == Runtime.NONE ? null : (Artifact) outputSourceJar,
             javacOpts,
             deps,
             exports,
@@ -124,7 +118,6 @@ public class JavaSkylarkCommon
             resources,
             neverlink,
             javaSemantics,
-            location,
             environment);
   }
 
@@ -133,9 +126,8 @@ public class JavaSkylarkCommon
       SkylarkActionFactory actions,
       Artifact jar,
       Object targetLabel,
-      Object javaToolchain,
-      Location location,
-      SkylarkSemantics semantics)
+      ConfiguredTarget javaToolchain,
+      Location location)
       throws EvalException {
     return JavaInfoBuildHelper.getInstance()
         .buildIjar(
@@ -143,7 +135,6 @@ public class JavaSkylarkCommon
             jar,
             targetLabel != Runtime.NONE ? (Label) targetLabel : null,
             javaToolchain,
-            semantics,
             location);
   }
 
@@ -152,12 +143,11 @@ public class JavaSkylarkCommon
       SkylarkActionFactory actions,
       Artifact jar,
       Label targetLabel,
-      Object javaToolchain,
-      Location location,
-      SkylarkSemantics semantics)
+      ConfiguredTarget javaToolchain,
+      Location location)
       throws EvalException {
     return JavaInfoBuildHelper.getInstance()
-        .stampJar(actions, jar, targetLabel, javaToolchain, semantics, location);
+        .stampJar(actions, jar, targetLabel, javaToolchain, location);
   }
 
   @Override
@@ -166,39 +156,25 @@ public class JavaSkylarkCommon
       Artifact outputJar,
       SkylarkList<Artifact> sourceFiles,
       SkylarkList<Artifact> sourceJars,
-      Object javaToolchain,
-      Object hostJavabase,
-      Location location,
-      SkylarkSemantics semantics)
+      ConfiguredTarget javaToolchain,
+      ConfiguredTarget hostJavabase,
+      Location location)
       throws EvalException {
     return JavaInfoBuildHelper.getInstance()
         .packSourceFiles(
-            actions,
-            outputJar,
-            /* outputSourceJar= */ null,
-            sourceFiles,
-            sourceJars,
-            javaToolchain,
-            hostJavabase,
-            semantics,
-            location);
+            actions, outputJar, sourceFiles, sourceJars, javaToolchain, hostJavabase, location);
   }
 
   @Override
   // TODO(b/78512644): migrate callers to passing explicit javacopts or using custom toolchains, and
   // delete
   public ImmutableList<String> getDefaultJavacOpts(
-      SkylarkRuleContext skylarkRuleContext,
-      String javaToolchainAttr,
-      Location location,
-      SkylarkSemantics skylarkSemantics)
-      throws EvalException {
+      SkylarkRuleContext skylarkRuleContext, String javaToolchainAttr) throws EvalException {
     RuleContext ruleContext = skylarkRuleContext.getRuleContext();
     ConfiguredTarget javaToolchainConfigTarget =
         (ConfiguredTarget) skylarkRuleContext.getAttr().getValue(javaToolchainAttr);
     JavaToolchainProvider toolchain =
-        JavaInfoBuildHelper.getInstance()
-            .getJavaToolchainProvider(skylarkSemantics, location, javaToolchainConfigTarget);
+        JavaInfoBuildHelper.getInstance().getJavaToolchainProvider(javaToolchainConfigTarget);
     ImmutableList<String> javacOptsFromAttr;
     if (ruleContext.getRule().isAttrDefined("javacopts", Type.STRING_LIST)) {
       javacOptsFromAttr = ruleContext.getExpander().withDataLocations().tokenized("javacopts");
@@ -207,7 +183,9 @@ public class JavaSkylarkCommon
       // javacopts attribute.
       javacOptsFromAttr = ImmutableList.of();
     }
-    return ImmutableList.copyOf(Iterables.concat(toolchain.getJavacOptions(), javacOptsFromAttr));
+    return ImmutableList.copyOf(Iterables.concat(
+        toolchain.getJavacOptions(),
+        javacOptsFromAttr));
   }
 
   @Override
@@ -227,10 +205,6 @@ public class JavaSkylarkCommon
         .build();
   }
 
-  @Override
-  public Provider getJavaToolchainProvider() {
-    return JavaToolchainProvider.PROVIDER;
-  }
 
   @Override
   public Provider getJavaRuntimeProvider() {
@@ -247,22 +221,5 @@ public class JavaSkylarkCommon
         : NestedSetBuilder.<Artifact>naiveLinkOrder()
             .addAll(((SkylarkList<?>) o).getContents(Artifact.class, /*description=*/ null))
             .build();
-  }
-
-  /**
-   * Throws an {@link EvalException} if the given {@code callPath} is not listed under the {@code
-   * --experimental_java_common_create_provider_enabled_packages} flag.
-   */
-  private static void checkCallPathInWhitelistedPackages(
-      SkylarkSemantics semantics, Location location, String callPath) throws EvalException {
-    List<String> whitelistedPackagesList =
-        semantics.experimentalJavaCommonCreateProviderEnabledPackages();
-    if (whitelistedPackagesList.stream().noneMatch(path -> callPath.startsWith(path))) {
-      throw new EvalException(
-          location,
-          "java_common.create_provider is deprecated and cannot be used when "
-              + "--incompatible_disallow_legacy_javainfo is set. "
-              + "Please migrate to the JavaInfo constructor.");
-    }
   }
 }

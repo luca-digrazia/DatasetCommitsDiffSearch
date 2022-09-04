@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skylarkbuildapi;
 
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkbuildapi.SkylarkConfigApi.BuildSettingApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -245,7 +244,7 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
                     + "<a href=\"ctx.html#created_actions\">ctx.created_actions()</a>."
                     + "<br/><br/>"
                     + "This should only be used for testing the analysis-time behavior of "
-                    + "Starlark rules. This flag may be removed in the future."),
+                    + "Skylark rules. This flag may be removed in the future."),
         @Param(
             name = "toolchains",
             type = SkylarkList.class,
@@ -308,20 +307,6 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
             doc =
                 "<b>Experimental: This parameter is experimental and subject to change at any "
                     + "time.</b><p> If true, then this rule is treated as an analysis test."),
-        @Param(
-            name = "build_setting",
-            type = BuildSettingApi.class,
-            noneable = true,
-            defaultValue = "None",
-            named = true,
-            positional = false,
-            // TODO(juliexxia): Link to in-build testing documentation when it is available.
-            doc =
-                "<b>Experimental: This parameter is experimental and subject to change at any "
-                    + "time.</b><p> If set, describes what kind of build setting this rule is. "
-                    + "See the <a href='config.html'><code>config</code></a> module. If this is "
-                    + "set, a mandatory attribute named \"build_setting_default\" is automatically"
-                    + "added to this rule, with a type corresponding to the value passed in here."),
       },
       useAst = true,
       useEnvironment = true)
@@ -341,7 +326,6 @@ public interface SkylarkRuleFunctionsApi<FileApiT extends FileApi> {
       Boolean executionPlatformConstraintsAllowed,
       SkylarkList<?> execCompatibleWith,
       Object analysisTest,
-      Object buildSetting,
       FuncallExpression ast,
       Environment funcallEnv)
       throws EvalException;

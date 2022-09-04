@@ -221,11 +221,6 @@ final class JavaInfoBuildHelper {
     javaInfoBuilder.addProvider(JavaExportsProvider.class, createJavaExportsProvider(exports));
 
     javaInfoBuilder.addProvider(
-        JavaPluginInfoProvider.class,
-        JavaPluginInfoProvider.merge(
-            JavaInfo.getProvidersFromListOfJavaProviders(JavaPluginInfoProvider.class, exports)));
-
-    javaInfoBuilder.addProvider(
         JavaSourceJarsProvider.class,
         createJavaSourceJarsProvider(sourceJars, concat(compileTimeDeps, runtimeDeps, exports)));
 
@@ -290,7 +285,8 @@ final class JavaInfoBuildHelper {
 
     transitiveSourceJars.addAll(sourceJars);
 
-    fetchSourceJars(transitiveDeps).forEach(transitiveSourceJars::addTransitive);
+    fetchSourceJars(transitiveDeps)
+        .forEach(transitiveSourceJars::addTransitive);
 
     return JavaSourceJarsProvider.create(transitiveSourceJars.build(), sourceJars);
   }
@@ -311,13 +307,13 @@ final class JavaInfoBuildHelper {
   /**
    * Returns Stream of not null Providers.
    *
-   * <p>Gets Stream from dependencies, transforms to Provider defined by providerClass param and
-   * filters nulls.
+   * Gets Stream from dependencies, transforms to Provider defined by providerClass param
+   * and filters nulls.
    *
    * @see JavaInfo#merge(List)
    */
-  private <P extends TransitiveInfoProvider> Stream<P> fetchProviders(
-      Iterable<JavaInfo> javaInfos, Class<P> providerClass) {
+  private <P extends TransitiveInfoProvider>Stream<P> fetchProviders(Iterable<JavaInfo> javaInfos,
+      Class<P> providerClass){
     return StreamSupport.stream(javaInfos.spliterator(), /*parallel=*/ false)
         .map(javaInfo -> javaInfo.getProvider(providerClass))
         .filter(Objects::nonNull);
@@ -331,7 +327,7 @@ final class JavaInfoBuildHelper {
     return new JavaExportsProvider(exportsNestedSet);
   }
 
-  private NestedSet<Label> fetchExports(Iterable<JavaInfo> javaInfos) {
+  private NestedSet<Label> fetchExports(Iterable<JavaInfo> javaInfos){
     NestedSetBuilder<Label> builder = NestedSetBuilder.stableOrder();
 
     fetchProviders(javaInfos, JavaExportsProvider.class)
@@ -474,9 +470,8 @@ final class JavaInfoBuildHelper {
       outputSourceJar = getSourceJar(skylarkRuleContext.getRuleContext(), outputJar);
       createOutputSourceJar = true;
     } else {
-      createOutputSourceJar =
-          (sourceJars.size() > 1 || !sourceFiles.isEmpty())
-              || (sourceJars.isEmpty() && sourceFiles.isEmpty() && !exports.isEmpty());
+      createOutputSourceJar = (sourceJars.size() > 1 || !sourceFiles.isEmpty())
+          || (sourceJars.isEmpty() && sourceFiles.isEmpty() && !exports.isEmpty());
       outputSourceJar =
           createOutputSourceJar
               ? getSourceJar(skylarkRuleContext.getRuleContext(), outputJar)

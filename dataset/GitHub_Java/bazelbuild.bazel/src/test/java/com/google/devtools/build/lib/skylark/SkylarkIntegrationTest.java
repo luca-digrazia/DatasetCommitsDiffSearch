@@ -2119,9 +2119,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:r");
-    assertContainsEvent(
-        "AnalysisTestResultInfo is experimental and thus unavailable with the current flags. "
-            + "It may be enabled by setting --experimental_analysis_testing_improvements");
+    assertContainsEvent("'Provider' object is not callable");
   }
 
   @Test
