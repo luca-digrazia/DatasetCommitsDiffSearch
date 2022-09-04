@@ -1,6 +1,5 @@
 /**
  * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2018 the AndroidAnnotations project
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -41,7 +40,6 @@ public class Options {
 		options = processingEnvironment.getOptions();
 		addSupportedOption(AndroidManifestFinder.OPTION_MANIFEST);
 		addSupportedOption(AndroidManifestFinder.OPTION_LIBRARY);
-		addSupportedOption(AndroidManifestFinder.OPTION_INSTANT_FEATURE);
 		addSupportedOption(ProjectRClassFinder.OPTION_RESOURCE_PACKAGE_NAME);
 		addSupportedOption(ProjectRClassFinder.OPTION_USE_R2);
 		addSupportedOption(ModelConstants.OPTION_CLASS_SUFFIX);
