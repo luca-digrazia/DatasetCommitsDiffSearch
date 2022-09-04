@@ -26,7 +26,6 @@ import static org.junit.Assert.fail;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -53,7 +52,6 @@ import com.google.devtools.build.skyframe.NotifyingHelper.Listener;
 import com.google.devtools.build.skyframe.NotifyingHelper.Order;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
-import com.google.devtools.build.skyframe.ThinNodeEntry.DirtyType;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -116,14 +114,12 @@ public class MemoizingEvaluatorTest {
       Differencer differencer,
       EvaluationProgressReceiver progressReceiver,
       GraphInconsistencyReceiver graphInconsistencyReceiver,
-      EventFilter eventFilter,
       boolean keepEdges) {
     return new InMemoryMemoizingEvaluator(
         functions,
         differencer,
         progressReceiver,
         graphInconsistencyReceiver,
-        eventFilter,
         emittedEventState,
         true);
   }
@@ -2733,13 +2729,13 @@ public class MemoizingEvaluatorTest {
             if (type == EventType.MARK_DIRTY) {
               TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
                   threadsStarted, "Both threads did not query if value isChanged in time");
-              DirtyType dirtyType = (DirtyType) context;
-              if (order == Order.BEFORE && dirtyType.equals(DirtyType.DIRTY)) {
+              boolean isChanged = (Boolean) context;
+              if (order == Order.BEFORE && !isChanged) {
                 TrackingAwaiter.INSTANCE.awaitLatchAndTrackExceptions(
                     waitForChanged, "'changed' thread did not mark value changed in time");
                 return;
               }
-              if (order == Order.AFTER && dirtyType.equals(DirtyType.CHANGE)) {
+              if (order == Order.AFTER && isChanged) {
                 waitForChanged.countDown();
               }
             }
@@ -4061,62 +4057,6 @@ public class MemoizingEvaluatorTest {
     assertThat(parentEvaluated.getCount()).isEqualTo(1);
   }
 
-  @Test
-  public void depEventPredicate() throws Exception {
-    if (!eventsStored()) {
-      return;
-    }
-    SkyKey parent = GraphTester.toSkyKey("parent");
-    SkyKey excludedDep = GraphTester.toSkyKey("excludedDep");
-    SkyKey includedDep = GraphTester.toSkyKey("includedDep");
-    tester.setEventFilter(
-        new EventFilter() {
-          @Override
-          public boolean storeEventsAndPosts() {
-            return true;
-          }
-
-          @Override
-          public boolean apply(Event input) {
-            return true;
-          }
-
-          @Override
-          public Predicate<SkyKey> depEdgeFilterForEventsAndPosts(SkyKey primaryKey) {
-            if (primaryKey.equals(parent)) {
-              return includedDep::equals;
-            } else {
-              return Predicates.alwaysTrue();
-            }
-          }
-        });
-    tester.initialize(/*keepEdges=*/ true);
-    tester
-        .getOrCreate(parent)
-        .addDependency(excludedDep)
-        .addDependency(includedDep)
-        .setComputedValue(CONCATENATE);
-    tester
-        .getOrCreate(excludedDep)
-        .setWarning("excludedDep warning")
-        .setConstantValue(new StringValue("excludedDep"));
-    tester
-        .getOrCreate(includedDep)
-        .setWarning("includedDep warning")
-        .setConstantValue(new StringValue("includedDep"));
-    tester.eval(/*keepGoing=*/ false, includedDep, excludedDep);
-    assertThatEvents(eventCollector).containsExactly("excludedDep warning", "includedDep warning");
-    eventCollector.clear();
-    emittedEventState.clear();
-    tester.eval(/*keepGoing=*/ true, parent);
-    assertThatEvents(eventCollector).containsExactly("includedDep warning");
-    assertThat(
-            ValueWithMetadata.getEvents(
-                tester.driver.getEntryForTesting(parent).getValueMaybeWithMetadata()))
-        .containsExactly(
-            new TaggedEvents(null, ImmutableList.of(Event.warn("includedDep warning"))));
-  }
-
   // Tests that we have a sane implementation of error transience.
   @Test
   public void errorTransienceBug() throws Exception {
@@ -5115,7 +5055,6 @@ public class MemoizingEvaluatorTest {
     private TrackingProgressReceiver progressReceiver = new TrackingProgressReceiver();
     private GraphInconsistencyReceiver graphInconsistencyReceiver =
         GraphInconsistencyReceiver.THROWING;
-    private EventFilter eventFilter = InMemoryMemoizingEvaluator.DEFAULT_STORED_EVENT_FILTER;
 
     public void initialize(boolean keepEdges) {
       this.differencer = getRecordingDifferencer();
@@ -5125,7 +5064,6 @@ public class MemoizingEvaluatorTest {
               differencer,
               progressReceiver,
               graphInconsistencyReceiver,
-              eventFilter,
               keepEdges);
       this.driver = getBuildDriver(evaluator);
     }
@@ -5136,14 +5074,6 @@ public class MemoizingEvaluatorTest {
      */
     public void setProgressReceiver(TrackingProgressReceiver progressReceiver) {
       this.progressReceiver = progressReceiver;
-    }
-
-    /**
-     * Sets the {@link #eventFilter}. {@link #initialize} must be called after this to have any
-     * effect.
-     */
-    public void setEventFilter(EventFilter eventFilter) {
-      this.eventFilter = eventFilter;
     }
 
     /**

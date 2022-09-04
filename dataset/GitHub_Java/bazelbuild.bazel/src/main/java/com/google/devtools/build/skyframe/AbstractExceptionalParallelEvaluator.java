@@ -14,7 +14,6 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -36,7 +35,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ForkJoinPool;
 import javax.annotation.Nullable;
 
 /**
@@ -85,9 +84,36 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
       EventFilter storedEventFilter,
       ErrorInfoManager errorInfoManager,
       boolean keepGoing,
+      int threadCount,
+      DirtyTrackingProgressReceiver progressReceiver,
+      GraphInconsistencyReceiver graphInconsistencyReceiver) {
+    super(
+        graph,
+        graphVersion,
+        skyFunctions,
+        reporter,
+        emittedEventState,
+        storedEventFilter,
+        errorInfoManager,
+        keepGoing,
+        threadCount,
+        progressReceiver,
+        graphInconsistencyReceiver,
+        new SimpleCycleDetector());
+  }
+
+  AbstractExceptionalParallelEvaluator(
+      ProcessableGraph graph,
+      Version graphVersion,
+      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
+      final ExtendedEventHandler reporter,
+      EmittedEventState emittedEventState,
+      EventFilter storedEventFilter,
+      ErrorInfoManager errorInfoManager,
+      boolean keepGoing,
       DirtyTrackingProgressReceiver progressReceiver,
       GraphInconsistencyReceiver graphInconsistencyReceiver,
-      Supplier<ExecutorService> executorService,
+      ForkJoinPool forkJoinPool,
       CycleDetector cycleDetector,
       EvaluationVersionBehavior evaluationVersionBehavior) {
     super(
@@ -101,7 +127,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         keepGoing,
         progressReceiver,
         graphInconsistencyReceiver,
-        executorService,
+        forkJoinPool,
         cycleDetector,
         evaluationVersionBehavior);
   }
@@ -223,9 +249,7 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
         // This must be equivalent to the code in enqueueChild above, in order to be thread-safe.
         switch (entry.addReverseDepAndCheckIfDone(null)) {
           case NEEDS_SCHEDULING:
-            // Low priority because this node is not needed by any other currently evaluating node.
-            // So keep it at the back of the queue as long as there's other useful work to be done.
-            evaluatorContext.getVisitor().enqueueEvaluation(skyKey, Integer.MIN_VALUE);
+            evaluatorContext.getVisitor().enqueueEvaluation(skyKey);
             break;
           case DONE:
             informProgressReceiverThatValueIsDone(skyKey, entry);
