@@ -19,8 +19,6 @@
  */
 package org.graylog2.rest.resources.users;
 
-import com.fasterxml.jackson.annotation.JsonAutoDetect;
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Objects;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -34,7 +32,6 @@ import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.users.requests.ChangePasswordRequest;
 import org.graylog2.rest.resources.users.requests.CreateRequest;
 import org.graylog2.rest.resources.users.requests.PermissionEditRequest;
-import org.graylog2.security.AccessToken;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.users.User;
 import org.joda.time.DateTimeZone;
@@ -45,7 +42,6 @@ import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -316,59 +312,6 @@ public class UsersResource extends RestResource {
         return status(FORBIDDEN).build();
     }
 
-    @GET
-    @Path("{username}/tokens")
-    @RequiresPermissions(RestPermissions.USERS_TOKENLIST)
-    @ApiOperation("Retrieves the list of access tokens for a user")
-    public TokenList listTokens(@ApiParam(title = "username", required = true) @PathParam("username") String username) {
-        final User user = _tokensCheckAndLoadUser(username);
-        final TokenList tokenList = new TokenList();
-        List<AccessToken>  tokens = AccessToken.loadAll(user.getName(), core);
-        for (AccessToken token : tokens) {
-            tokenList.addToken(new Token(token));
-        }
-        return tokenList;
-    }
-
-    @POST
-    @Path("{username}/tokens/{name}")
-    @RequiresPermissions(RestPermissions.USERS_TOKENCREATE)
-    @ApiOperation("Generates a new access token for a user")
-    public Token generateNewToken(
-            @ApiParam(title = "username", required = true) @PathParam("username") String username,
-            @ApiParam(title = "name", description = "Descriptive name for this token (e.g. 'cronjob') ", required = true) @PathParam("name") String name) {
-        final User user = _tokensCheckAndLoadUser(username);
-        final AccessToken accessToken = AccessToken.create(core, user.getName(), name);
-        return new Token(accessToken);
-    }
-
-    @DELETE
-    @RequiresPermissions(RestPermissions.USERS_TOKENREMOVE)
-    @Path("{username}/tokens/{token}")
-    @ApiOperation("Removes a token for a user")
-    public Response revokeToken(
-            @ApiParam(title = "username", required = true) @PathParam("username") String username,
-            @ApiParam(title = "access token", required = true) @PathParam("token") String token) {
-        final User user = _tokensCheckAndLoadUser(username);
-        final AccessToken accessToken = AccessToken.load(token, core);
-        if (accessToken != null) {
-            accessToken.destroy();
-            return noContent().build();
-        }
-        return Response.status(NOT_FOUND).build();
-    }
-
-    private User _tokensCheckAndLoadUser(String username) {
-        final User user = User.load(username, core);
-        if (user == null) {
-            throw new NotFoundException("Unknown user " + username);
-        }
-        if (!getSubject().getPrincipal().equals(username)) {
-            throw new ForbiddenException("Cannot access other people's tokens.");
-        }
-        return user;
-    }
-
     private HashMap<String, Object> toMap(User user) {
         return toMap(user, true);
     }
@@ -401,40 +344,5 @@ public class UsersResource extends RestResource {
         return cr;
     }
 
-
-    @JsonAutoDetect
-    private static class TokenList {
-        @JsonProperty
-        private final List<Token> tokens = Lists.newArrayList();
-
-        public void addToken(Token token) {
-            tokens.add(token);
-        }
-    }
-
-    @JsonAutoDetect
-    private static class Token {
-
-        private final AccessToken token;
-
-        public Token(AccessToken token) {
-            this.token = token;
-        }
-
-        @JsonProperty
-        public String getName() {
-            return token.getName();
-        }
-
-        @JsonProperty
-        public String getToken() {
-            return token.getToken();
-        }
-
-        @JsonProperty
-        public Date getLastAccess() {
-            return token.getLastAccess().toDate();
-        }
-    }
 
 }
