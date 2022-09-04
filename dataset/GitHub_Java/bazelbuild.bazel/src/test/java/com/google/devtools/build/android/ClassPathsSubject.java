@@ -13,10 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import static com.google.common.truth.Fact.fact;
-import static com.google.common.truth.Fact.simpleFact;
 import static com.google.common.truth.Truth.assertThat;
-import static java.util.Arrays.asList;
 
 import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
@@ -47,10 +44,10 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
 
   void exists() {
     if (getSubject() == null) {
-      failWithoutActual(simpleFact("expected not to be null"));
+      fail("should not be null.");
     }
     if (!Files.exists(getSubject())) {
-      failWithActual(simpleFact("expected to exist"));
+      fail("exists.");
     }
   }
 
@@ -62,7 +59,7 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
    */
   public void javaContentsIsEqualTo(String... contents) {
     if (getSubject() == null) {
-      failWithoutActual(simpleFact("expected not to be null"));
+      fail("should not be null.");
     }
     exists();
     try {
@@ -73,10 +70,7 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
           .containsExactly((Object[]) contents)
           .inOrder();
     } catch (IOException e) {
-      failWithoutActual(
-          fact("expected to have contents", asList(contents)),
-          fact("but failed to read file with", e),
-          fact("path was", actual()));
+      fail(e.toString());
     }
   }
 
@@ -116,7 +110,7 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
    */
   public ClassNameSubject withClass(String className) {
     if (getSubject() == null) {
-      failWithoutActual(simpleFact("expected not to be null"));
+      fail("should not be null.");
     }
     exists();
     return check("class(%s)", className)
