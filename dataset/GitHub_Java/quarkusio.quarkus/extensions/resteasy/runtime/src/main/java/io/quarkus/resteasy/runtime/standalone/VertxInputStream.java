@@ -109,7 +109,7 @@ public class VertxInputStream extends InputStream {
         }
     }
 
-    public static class VertxBlockingInput implements Handler<Buffer> {
+    public class VertxBlockingInput implements Handler<Buffer> {
         protected final HttpServerRequest request;
         protected Buffer input1;
         protected Deque<Buffer> inputOverflow;
