@@ -20,8 +20,8 @@ import static org.junit.Assert.fail;
 import static org.mockito.Matchers.any;
 import static org.mockito.Mockito.when;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.time.Duration;
 import java.util.List;
+import java.util.Set;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -123,12 +124,12 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
             .setStatus(Status.SUCCESS)
             .setWallTime(Duration.ofMillis(10))
             .build();
-    when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableList.of(expectedSpawnResult));
+    when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableSet.of(expectedSpawnResult));
 
     when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
-    List<SpawnResult> spawnResults =
+    Set<SpawnResult> spawnResults =
         standaloneTestStrategy.exec(testRunnerAction, actionExecutionContext);
 
     // check that the rigged SpawnResult was returned
@@ -205,7 +206,7 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
     when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
-    List<SpawnResult> spawnResults =
+    Set<SpawnResult> spawnResults =
         standaloneTestStrategy.exec(testRunnerAction, actionExecutionContext);
 
     // check that the rigged SpawnResult was returned
@@ -276,11 +277,11 @@ public final class StandaloneTestStrategyTest extends BuildViewTestCase {
     when(actionExecutionContext.getFileOutErr()).thenReturn(outErr);
 
     SpawnResult expectedSpawnResult = new SpawnResult.Builder().setStatus(Status.SUCCESS).build();
-    when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableList.of(expectedSpawnResult));
+    when(spawnActionContext.exec(any(), any())).thenReturn(ImmutableSet.of(expectedSpawnResult));
     when(actionExecutionContext.getSpawnActionContext(any())).thenReturn(spawnActionContext);
 
     // actual StandaloneTestStrategy execution
-    List<SpawnResult> spawnResults =
+    Set<SpawnResult> spawnResults =
         standaloneTestStrategy.exec(testRunnerAction, actionExecutionContext);
 
     // check that the rigged SpawnResult was returned

@@ -13,11 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
-import static com.google.common.truth.Truth8.assertThat;
+import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import java.time.Duration;
-import java.util.List;
+import java.util.Set;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -28,11 +28,11 @@ public final class ActionResultTest {
 
   @Test
   public void testCumulativeCommandExecutionTime_NoSpawnResults() {
-    List<SpawnResult> spawnResults = ImmutableList.of();
+    Set<SpawnResult> spawnResults = ImmutableSet.of();
     ActionResult actionResult = ActionResult.create(spawnResults);
-    assertThat(actionResult.cumulativeCommandExecutionWallTime()).isEmpty();
-    assertThat(actionResult.cumulativeCommandExecutionUserTime()).isEmpty();
-    assertThat(actionResult.cumulativeCommandExecutionSystemTime()).isEmpty();
+    assertThat(actionResult.cumulativeCommandExecutionWallTime().isPresent()).isFalse();
+    assertThat(actionResult.cumulativeCommandExecutionUserTime().isPresent()).isFalse();
+    assertThat(actionResult.cumulativeCommandExecutionSystemTime().isPresent()).isFalse();
   }
 
   @Test
@@ -44,14 +44,17 @@ public final class ActionResultTest {
             .setSystemTime(Duration.ofMillis(42))
             .setStatus(SpawnResult.Status.SUCCESS)
             .build();
-    List<SpawnResult> spawnResults = ImmutableList.of(spawnResult);
+    Set<SpawnResult> spawnResults = ImmutableSet.of(spawnResult);
     ActionResult actionResult = ActionResult.create(spawnResults);
-    assertThat(actionResult.cumulativeCommandExecutionWallTime()).isPresent();
-    assertThat(actionResult.cumulativeCommandExecutionWallTime()).hasValue(Duration.ofMillis(1984));
-    assertThat(actionResult.cumulativeCommandExecutionUserTime()).isPresent();
-    assertThat(actionResult.cumulativeCommandExecutionUserTime()).hasValue(Duration.ofMillis(225));
-    assertThat(actionResult.cumulativeCommandExecutionSystemTime()).isPresent();
-    assertThat(actionResult.cumulativeCommandExecutionSystemTime()).hasValue(Duration.ofMillis(42));
+    assertThat(actionResult.cumulativeCommandExecutionWallTime().isPresent()).isTrue();
+    assertThat(actionResult.cumulativeCommandExecutionUserTime().isPresent()).isTrue();
+    assertThat(actionResult.cumulativeCommandExecutionSystemTime().isPresent()).isTrue();
+    assertThat(actionResult.cumulativeCommandExecutionWallTime().get())
+        .isEqualTo(Duration.ofMillis(1984));
+    assertThat(actionResult.cumulativeCommandExecutionUserTime().get())
+        .isEqualTo(Duration.ofMillis(225));
+    assertThat(actionResult.cumulativeCommandExecutionSystemTime().get())
+        .isEqualTo(Duration.ofMillis(42));
   }
 
   @Test
@@ -77,14 +80,17 @@ public final class ActionResultTest {
             .setSystemTime(Duration.ofMillis(2))
             .setStatus(SpawnResult.Status.SUCCESS)
             .build();
-    List<SpawnResult> spawnResults = ImmutableList.of(spawnResult1, spawnResult2, spawnResult3);
+    Set<SpawnResult> spawnResults = ImmutableSet.of(spawnResult1, spawnResult2, spawnResult3);
     ActionResult actionResult = ActionResult.create(spawnResults);
-    assertThat(actionResult.cumulativeCommandExecutionWallTime()).isPresent();
-    assertThat(actionResult.cumulativeCommandExecutionWallTime()).hasValue(Duration.ofMillis(1984));
-    assertThat(actionResult.cumulativeCommandExecutionUserTime()).isPresent();
-    assertThat(actionResult.cumulativeCommandExecutionUserTime()).hasValue(Duration.ofMillis(4));
-    assertThat(actionResult.cumulativeCommandExecutionSystemTime()).isPresent();
-    assertThat(actionResult.cumulativeCommandExecutionSystemTime()).hasValue(Duration.ofMillis(42));
+    assertThat(actionResult.cumulativeCommandExecutionWallTime().isPresent()).isTrue();
+    assertThat(actionResult.cumulativeCommandExecutionUserTime().isPresent()).isTrue();
+    assertThat(actionResult.cumulativeCommandExecutionSystemTime().isPresent()).isTrue();
+    assertThat(actionResult.cumulativeCommandExecutionWallTime().get())
+        .isEqualTo(Duration.ofMillis(1984));
+    assertThat(actionResult.cumulativeCommandExecutionUserTime().get())
+        .isEqualTo(Duration.ofMillis(4));
+    assertThat(actionResult.cumulativeCommandExecutionSystemTime().get())
+        .isEqualTo(Duration.ofMillis(42));
   }
 
   @Test
@@ -95,10 +101,10 @@ public final class ActionResultTest {
         new SpawnResult.Builder().setStatus(SpawnResult.Status.SUCCESS).build();
     SpawnResult spawnResult3 =
         new SpawnResult.Builder().setStatus(SpawnResult.Status.SUCCESS).build();
-    List<SpawnResult> spawnResults = ImmutableList.of(spawnResult1, spawnResult2, spawnResult3);
+    Set<SpawnResult> spawnResults = ImmutableSet.of(spawnResult1, spawnResult2, spawnResult3);
     ActionResult actionResult = ActionResult.create(spawnResults);
-    assertThat(actionResult.cumulativeCommandExecutionWallTime()).isEmpty();
-    assertThat(actionResult.cumulativeCommandExecutionUserTime()).isEmpty();
-    assertThat(actionResult.cumulativeCommandExecutionSystemTime()).isEmpty();
+    assertThat(actionResult.cumulativeCommandExecutionWallTime().isPresent()).isFalse();
+    assertThat(actionResult.cumulativeCommandExecutionUserTime().isPresent()).isFalse();
+    assertThat(actionResult.cumulativeCommandExecutionSystemTime().isPresent()).isFalse();
   }
 }
