@@ -7,6 +7,7 @@ import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
 import com.shuyu.gsyvideoplayer.render.view.GSYVideoGLView;
 import com.shuyu.gsyvideoplayer.render.effect.NoEffect;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
+import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
 import com.shuyu.gsyvideoplayer.listener.VideoAllCallBack;
 import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
@@ -98,18 +99,6 @@ public class GSYVideoOptionBuilder {
     //是否需要lazy的setup
     protected boolean mSetUpLazy = false;
 
-    //Prepared之后是否自动开始播放
-    protected boolean mStartAfterPrepared = true;
-
-    //是否播放器当失去音频焦点
-    protected boolean mReleaseWhenLossAudio = true;
-
-    //是否需要在利用window实现全屏幕的时候隐藏actionbar
-    protected boolean mActionBar = false;
-
-    //是否需要在利用window实现全屏幕的时候隐藏statusbar
-    protected boolean mStatusBar = false;
-
     //播放的tag，防止错误，因为普通的url也可能重复
     protected String mPlayTag = "";
 
@@ -127,6 +116,9 @@ public class GSYVideoOptionBuilder {
 
     //视频状体回调
     protected VideoAllCallBack mVideoAllCallBack;
+
+    //标准播放器的回调
+    protected StandardVideoAllCallBack mStandardVideoAllCallBack;
 
     //点击锁屏的回调
     protected LockClickListener mLockClickListener;
@@ -369,27 +361,6 @@ public class GSYVideoOptionBuilder {
     }
 
     /**
-     * 准备成功之后立即播放
-     *
-     * @param startAfterPrepared 默认true，false的时候需要在prepared后调用startAfterPrepared()
-     */
-    public GSYVideoOptionBuilder setStartAfterPrepared(boolean startAfterPrepared) {
-        this.mStartAfterPrepared = startAfterPrepared;
-        return this;
-    }
-
-
-    /**
-     * 长时间失去音频焦点，暂停播放器
-     *
-     * @param releaseWhenLossAudio 默认true，false的时候只会暂停
-     */
-    public GSYVideoOptionBuilder setReleaseWhenLossAudio(boolean releaseWhenLossAudio) {
-        this.mReleaseWhenLossAudio = releaseWhenLossAudio;
-        return this;
-    }
-
-    /**
      * 自定指定缓存路径，推荐不设置，使用默认路径
      *
      * @param cachePath
@@ -409,6 +380,11 @@ public class GSYVideoOptionBuilder {
         return this;
     }
 
+
+    public GSYVideoOptionBuilder setStandardVideoAllCallBack(StandardVideoAllCallBack standardVideoAllCallBack) {
+        this.mStandardVideoAllCallBack = standardVideoAllCallBack;
+        return this;
+    }
 
     /**
      * 进度回调
@@ -522,17 +498,11 @@ public class GSYVideoOptionBuilder {
         return this;
     }
 
-    public GSYVideoOptionBuilder setFullHideActionBar(boolean actionBar) {
-        this.mActionBar = actionBar;
-        return this;
-    }
-
-    public GSYVideoOptionBuilder setFullHideStatusBar(boolean statusBar) {
-        this.mStatusBar = statusBar;
-        return this;
-    }
-
     public void build(StandardGSYVideoPlayer gsyVideoPlayer) {
+        if (mStandardVideoAllCallBack != null) {
+            gsyVideoPlayer.setStandardVideoAllCallBack(mStandardVideoAllCallBack);
+        }
+
         if (mBottomShowProgressDrawable != null && mBottomShowProgressThumbDrawable != null) {
             gsyVideoPlayer.setBottomShowProgressBarDrawable(mBottomShowProgressDrawable, mBottomShowProgressThumbDrawable);
         }
@@ -579,7 +549,7 @@ public class GSYVideoOptionBuilder {
 
         gsyVideoPlayer.setShowFullAnimation(mShowFullAnimation);
         gsyVideoPlayer.setLooping(mLooping);
-        if (mVideoAllCallBack != null) {
+        if (mStandardVideoAllCallBack == null) {
             gsyVideoPlayer.setVideoAllCallBack(mVideoAllCallBack);
         }
         if (mGSYVideoProgressListener != null) {
@@ -593,10 +563,6 @@ public class GSYVideoOptionBuilder {
         gsyVideoPlayer.setIsTouchWigetFull(mIsTouchWigetFull);
         gsyVideoPlayer.setNeedShowWifiTip(mNeedShowWifiTip);
         gsyVideoPlayer.setEffectFilter(mEffectFilter);
-        gsyVideoPlayer.setStartAfterPrepared(mStartAfterPrepared);
-        gsyVideoPlayer.setReleaseWhenLossAudio(mReleaseWhenLossAudio);
-        gsyVideoPlayer.setFullHideActionBar(mActionBar);
-        gsyVideoPlayer.setFullHideStatusBar(mStatusBar);
         if (mEnlargeImageRes > 0) {
             gsyVideoPlayer.setEnlargeImageRes(mEnlargeImageRes);
         }
@@ -606,7 +572,7 @@ public class GSYVideoOptionBuilder {
         gsyVideoPlayer.setShowPauseCover(mShowPauseCover);
         gsyVideoPlayer.setSeekRatio(mSeekRatio);
         gsyVideoPlayer.setRotateWithSystem(mRotateWithSystem);
-        if (mSetUpLazy) {
+        if(mSetUpLazy) {
             gsyVideoPlayer.setUpLazy(mUrl, mCacheWithPlay, mCachePath, mMapHeadData, mVideoTitle);
         } else {
             gsyVideoPlayer.setUp(mUrl, mCacheWithPlay, mCachePath, mMapHeadData, mVideoTitle);
