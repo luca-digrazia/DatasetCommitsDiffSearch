@@ -209,11 +209,6 @@ public class RemoteSpawnCacheTest {
         }
 
         @Override
-        public boolean isRewindingEnabled() {
-          return false;
-        }
-
-        @Override
         public void checkForLostInputs() {}
 
         @Override

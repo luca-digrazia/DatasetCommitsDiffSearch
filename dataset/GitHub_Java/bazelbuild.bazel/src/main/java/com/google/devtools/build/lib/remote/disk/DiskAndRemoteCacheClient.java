@@ -107,7 +107,7 @@ public final class DiskAndRemoteCacheClient implements RemoteCacheClient {
   }
 
   private Path newTempPath() {
-    return diskCache.toPathNoSplit(UUID.randomUUID().toString());
+    return diskCache.toPath(UUID.randomUUID().toString(), /* actionResult= */ false);
   }
 
   private static ListenableFuture<Void> closeStreamOnError(

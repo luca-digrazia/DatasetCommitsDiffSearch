@@ -14,8 +14,8 @@
 package com.google.devtools.build.lib.remote;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
-import static org.junit.Assert.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.eq;
@@ -941,7 +941,7 @@ public class RemoteSpawnRunnerTest {
     RemoteOptions options = Options.getDefaults(RemoteOptions.class);
     options.remoteOutputsMode = RemoteOutputsMode.TOPLEVEL;
 
-    ArtifactRoot outputRoot = ArtifactRoot.asDerivedRoot(execRoot, "outs");
+    ArtifactRoot outputRoot = ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("outs"));
     Artifact topLevelOutput =
         ActionsTestUtil.createArtifact(outputRoot, outputRoot.getRoot().getRelative("foo.bin"));
 

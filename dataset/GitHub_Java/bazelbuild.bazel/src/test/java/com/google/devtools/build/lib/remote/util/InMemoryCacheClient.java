@@ -20,7 +20,6 @@ import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.ByteString;
@@ -91,7 +90,7 @@ public class InMemoryCacheClient implements RemoteCacheClient {
 
   @Override
   public ListenableFuture<ActionResult> downloadActionResult(
-      RemoteActionExecutionContext context, ActionKey actionKey, boolean inlineOutErr) {
+      ActionKey actionKey, boolean inlineOutErr) {
     ActionResult actionResult = ac.get(actionKey);
     if (actionResult == null) {
       return Futures.immediateFailedFuture(new CacheNotFoundException(actionKey.getDigest()));
@@ -100,8 +99,7 @@ public class InMemoryCacheClient implements RemoteCacheClient {
   }
 
   @Override
-  public void uploadActionResult(
-      RemoteActionExecutionContext context, ActionKey actionKey, ActionResult actionResult) {
+  public void uploadActionResult(ActionKey actionKey, ActionResult actionResult) {
     ac.put(actionKey, actionResult);
   }
 

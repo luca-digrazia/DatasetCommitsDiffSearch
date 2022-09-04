@@ -72,8 +72,7 @@ public interface RemoteCacheClient extends MissingDigestsFinder {
    * @return A Future representing pending download of an action result. If an action result for
    *     {@code actionKey} cannot be found the result of the Future is {@code null}.
    */
-  ListenableFuture<ActionResult> downloadActionResult(
-      RemoteActionExecutionContext context, ActionKey actionKey, boolean inlineOutErr);
+  ListenableFuture<ActionResult> downloadActionResult(ActionKey actionKey, boolean inlineOutErr);
 
   /**
    * Uploads an action result for the {@code actionKey}.
@@ -83,8 +82,7 @@ public interface RemoteCacheClient extends MissingDigestsFinder {
    * @throws IOException If there is an error uploading the action result.
    * @throws InterruptedException In case the thread
    */
-  void uploadActionResult(
-      RemoteActionExecutionContext context, ActionKey actionKey, ActionResult actionResult)
+  void uploadActionResult(ActionKey actionKey, ActionResult actionResult)
       throws IOException, InterruptedException;
 
   /**

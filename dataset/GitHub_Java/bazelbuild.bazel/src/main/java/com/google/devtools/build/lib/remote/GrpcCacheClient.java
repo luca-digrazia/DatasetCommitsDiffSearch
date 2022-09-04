@@ -38,6 +38,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.hash.HashCode;
 import com.google.common.hash.HashingOutputStream;
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -245,6 +246,10 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
         () -> ctx.call(() -> handleStatus(acFutureStub().getActionResult(request))));
   }
 
+  private static String digestToString(Digest digest) {
+    return digest.getHash() + "/" + digest.getSizeBytes();
+  }
+
   @Override
   public void uploadActionResult(ActionKey actionKey, ActionResult actionResult)
       throws IOException, InterruptedException {
@@ -268,6 +273,11 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
     if (digest.getSizeBytes() == 0) {
       return Futures.immediateFuture(null);
     }
+    String resourceName = "";
+    if (!options.remoteInstanceName.isEmpty()) {
+      resourceName += options.remoteInstanceName + "/";
+    }
+    resourceName += "blobs/" + digestToString(digest);
 
     @Nullable Supplier<HashCode> hashSupplier = null;
     if (options.remoteVerifyDownloads) {
@@ -276,10 +286,29 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
       out = hashOut;
     }
 
-    return downloadBlob(digest, out, hashSupplier);
+    SettableFuture<Void> outerF = SettableFuture.create();
+    Futures.addCallback(
+        downloadBlob(resourceName, digest, out, hashSupplier),
+        new FutureCallback<Void>() {
+          @Override
+          public void onSuccess(Void result) {
+            outerF.set(null);
+          }
+
+          @Override
+          public void onFailure(Throwable t) {
+            if (t instanceof StatusRuntimeException) {
+              t = new IOException(t);
+            }
+            outerF.setException(t);
+          }
+        },
+        Context.current().fixedContextExecutor(MoreExecutors.directExecutor()));
+    return outerF;
   }
 
   private ListenableFuture<Void> downloadBlob(
+      String resourceName,
       Digest digest,
       OutputStream out,
       @Nullable Supplier<HashCode> hashSupplier) {
@@ -289,28 +318,23 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
     return Futures.catchingAsync(
         retrier.executeAsync(
             () ->
-                ctx.call(() -> requestRead(offset, progressiveBackoff, digest, out, hashSupplier)),
+                ctx.call(
+                    () ->
+                        requestRead(
+                            resourceName, offset, progressiveBackoff, digest, out, hashSupplier)),
             progressiveBackoff),
         StatusRuntimeException.class,
         (e) -> Futures.immediateFailedFuture(new IOException(e)),
         MoreExecutors.directExecutor());
   }
 
-  public static String getResourceName(String instanceName, Digest digest) {
-    String resourceName = "";
-    if (!instanceName.isEmpty()) {
-      resourceName += instanceName + "/";
-    }
-    return resourceName + "blobs/" + DigestUtil.toString(digest);
-  }
-
   private ListenableFuture<Void> requestRead(
+      String resourceName,
       AtomicLong offset,
       ProgressiveBackoff progressiveBackoff,
       Digest digest,
       OutputStream out,
       @Nullable Supplier<HashCode> hashSupplier) {
-    String resourceName = getResourceName(options.remoteInstanceName, digest);
     SettableFuture<Void> future = SettableFuture.create();
     bsAsyncStub()
         .read(

@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.remote;
 
 import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
-import static com.google.devtools.build.lib.remote.util.Utils.getFromFuture;
 
 import build.bazel.remote.execution.v2.Action;
 import build.bazel.remote.execution.v2.ActionResult;
@@ -28,7 +27,9 @@ import build.bazel.remote.execution.v2.OutputFile;
 import build.bazel.remote.execution.v2.OutputSymlink;
 import build.bazel.remote.execution.v2.SymlinkNode;
 import build.bazel.remote.execution.v2.Tree;
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -56,6 +57,7 @@ import com.google.devtools.build.lib.remote.common.RemoteCacheClient;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
+import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.remote.util.Utils.InMemoryOutput;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -78,6 +80,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -113,7 +116,7 @@ public class RemoteCache implements AutoCloseable {
 
   public ActionResult downloadActionResult(ActionKey actionKey, boolean inlineOutErr)
       throws IOException, InterruptedException {
-    return getFromFuture(cacheProtocol.downloadActionResult(actionKey, inlineOutErr));
+    return Utils.getFromFuture(cacheProtocol.downloadActionResult(actionKey, inlineOutErr));
   }
 
   /**
@@ -178,7 +181,8 @@ public class RemoteCache implements AutoCloseable {
     digests.addAll(digestToFile.keySet());
     digests.addAll(digestToBlobs.keySet());
 
-    ImmutableSet<Digest> digestsToUpload = getFromFuture(cacheProtocol.findMissingDigests(digests));
+    ImmutableSet<Digest> digestsToUpload =
+        Utils.getFromFuture(cacheProtocol.findMissingDigests(digests));
     ImmutableList.Builder<ListenableFuture<Void>> uploads = ImmutableList.builder();
     for (Digest digest : digestsToUpload) {
       Path file = digestToFile.get(digest);
@@ -194,7 +198,7 @@ public class RemoteCache implements AutoCloseable {
       }
     }
 
-    waitForBulkTransfer(uploads.build(), /* cancelRemainingOnInterrupt=*/ false);
+    waitForUploads(uploads.build());
 
     if (manifest.getStderrDigest() != null) {
       result.setStderrDigest(manifest.getStderrDigest());
@@ -204,45 +208,22 @@ public class RemoteCache implements AutoCloseable {
     }
   }
 
-  protected static <T> void waitForBulkTransfer(
-      Iterable<ListenableFuture<T>> transfers, boolean cancelRemainingOnInterrupt)
-      throws BulkTransferException, InterruptedException {
-    BulkTransferException bulkTransferException = null;
-    InterruptedException interruptedException = null;
-    boolean interrupted = Thread.currentThread().isInterrupted();
-    for (ListenableFuture<T> transfer : transfers) {
-      try {
-        if (interruptedException == null) {
-          // Wait for all downloads to finish.
-          getFromFuture(transfer);
-        } else {
-          transfer.cancel(true);
-        }
-      } catch (IOException e) {
-        if (bulkTransferException == null) {
-          bulkTransferException = new BulkTransferException();
-        }
-        bulkTransferException.add(e);
-      } catch (InterruptedException e) {
-        interrupted = Thread.interrupted() || interrupted;
-        interruptedException = e;
-        if (!cancelRemainingOnInterrupt) {
-          // leave the rest of the transfers alone
-          break;
-        }
+  private static void waitForUploads(List<ListenableFuture<Void>> uploads)
+      throws IOException, InterruptedException {
+    try {
+      for (ListenableFuture<Void> upload : uploads) {
+        upload.get();
       }
-    }
-    if (interrupted) {
-      Thread.currentThread().interrupt();
-    }
-    if (interruptedException != null) {
-      if (bulkTransferException != null) {
-        interruptedException.addSuppressed(bulkTransferException);
+    } catch (ExecutionException e) {
+      // TODO(buchgr): Add support for cancellation and factor this method out to be shared
+      // between ByteStreamUploader as well.
+      Throwable cause = e.getCause();
+      Throwables.throwIfInstanceOf(cause, IOException.class);
+      Throwables.throwIfInstanceOf(cause, InterruptedException.class);
+      if (cause != null) {
+        throw new IOException(cause);
       }
-      throw interruptedException;
-    }
-    if (bulkTransferException != null) {
-      throw bulkTransferException;
+      throw new IOException(e);
     }
   }
 
@@ -318,16 +299,40 @@ public class RemoteCache implements AutoCloseable {
     // Subsequently we need to wait for *every* download to finish, even if we already know that
     // one failed. That's so that when exiting this method we can be sure that all downloads have
     // finished and don't race with the cleanup routine.
+    // TODO(buchgr): Look into cancellation.
 
+    IOException downloadException = null;
+    InterruptedException interruptedException = null;
     FileOutErr tmpOutErr = null;
-    if (origOutErr != null) {
-      tmpOutErr = origOutErr.childOutErr();
-    }
-    downloads.addAll(downloadOutErr(result, tmpOutErr));
-
     try {
-      waitForBulkTransfer(downloads, /* cancelRemainingOnInterrupt=*/ true);
-    } catch (Exception e) {
+      if (origOutErr != null) {
+        tmpOutErr = origOutErr.childOutErr();
+      }
+      downloads.addAll(downloadOutErr(result, tmpOutErr));
+    } catch (IOException e) {
+      downloadException = e;
+    }
+
+    for (ListenableFuture<FileMetadata> download : downloads) {
+      try {
+        // Wait for all downloads to finish.
+        getFromFuture(download);
+      } catch (IOException e) {
+        if (downloadException == null) {
+          downloadException = e;
+        } else if (e != downloadException) {
+          downloadException.addSuppressed(e);
+        }
+      } catch (InterruptedException e) {
+        if (interruptedException == null) {
+          interruptedException = e;
+        } else if (e != interruptedException) {
+          interruptedException.addSuppressed(e);
+        }
+      }
+    }
+
+    if (downloadException != null || interruptedException != null) {
       try {
         // Delete any (partially) downloaded output files.
         for (OutputFile file : result.getOutputFilesList()) {
@@ -342,18 +347,27 @@ public class RemoteCache implements AutoCloseable {
           tmpOutErr.clearOut();
           tmpOutErr.clearErr();
         }
-      } catch (IOException ioEx) {
-        ioEx.addSuppressed(e);
+      } catch (IOException e) {
+        if (downloadException != null && e != downloadException) {
+          e.addSuppressed(downloadException);
+        }
+        if (interruptedException != null) {
+          e.addSuppressed(interruptedException);
+        }
 
         // If deleting of output files failed, we abort the build with a decent error message as
         // any subsequent local execution failure would likely be incomprehensible.
-        ExecException execEx =
-            new EnvironmentalExecException(
-                "Failed to delete output files after incomplete download", ioEx);
-        execEx.addSuppressed(e);
-        throw execEx;
+        throw new EnvironmentalExecException(
+            "Failed to delete output files after incomplete download", e);
       }
-      throw e;
+    }
+
+    if (interruptedException != null) {
+      throw interruptedException;
+    }
+
+    if (downloadException != null) {
+      throw downloadException;
     }
 
     if (tmpOutErr != null) {
@@ -473,15 +487,12 @@ public class RemoteCache implements AutoCloseable {
     return outerF;
   }
 
-  private List<ListenableFuture<FileMetadata>> downloadOutErr(ActionResult result, OutErr outErr) {
+  private List<ListenableFuture<FileMetadata>> downloadOutErr(ActionResult result, OutErr outErr)
+      throws IOException {
     List<ListenableFuture<FileMetadata>> downloads = new ArrayList<>();
     if (!result.getStdoutRaw().isEmpty()) {
-      try {
-        result.getStdoutRaw().writeTo(outErr.getOutputStream());
-        outErr.getOutputStream().flush();
-      } catch (IOException e) {
-        downloads.add(Futures.immediateFailedFuture(e));
-      }
+      result.getStdoutRaw().writeTo(outErr.getOutputStream());
+      outErr.getOutputStream().flush();
     } else if (result.hasStdoutDigest()) {
       downloads.add(
           Futures.transform(
@@ -490,12 +501,8 @@ public class RemoteCache implements AutoCloseable {
               directExecutor()));
     }
     if (!result.getStderrRaw().isEmpty()) {
-      try {
-        result.getStderrRaw().writeTo(outErr.getErrorStream());
-        outErr.getErrorStream().flush();
-      } catch (IOException e) {
-        downloads.add(Futures.immediateFailedFuture(e));
-      }
+      result.getStderrRaw().writeTo(outErr.getErrorStream());
+      outErr.getErrorStream().flush();
     } else if (result.hasStderrDigest()) {
       downloads.add(
           Futures.transform(
@@ -1107,5 +1114,10 @@ public class RemoteCache implements AutoCloseable {
     public Collection<SymlinkMetadata> symlinks() {
       return symlinks.values();
     }
+  }
+
+  @VisibleForTesting
+  protected <T> T getFromFuture(ListenableFuture<T> f) throws IOException, InterruptedException {
+    return Utils.getFromFuture(f);
   }
 }

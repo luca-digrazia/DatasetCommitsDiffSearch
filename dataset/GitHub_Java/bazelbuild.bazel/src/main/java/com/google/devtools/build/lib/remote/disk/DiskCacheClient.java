@@ -36,8 +36,7 @@ import javax.annotation.Nullable;
 /** A on-disk store for the remote action cache. */
 public class DiskCacheClient implements RemoteCacheClient {
 
-  private static final String AC_DIRECTORY = "ac";
-  private static final String CAS_DIRECTORY = "cas";
+  private static final String ACTION_KEY_PREFIX = "ac_";
 
   private final Path root;
   private final boolean verifyDownloads;
@@ -61,7 +60,6 @@ public class DiskCacheClient implements RemoteCacheClient {
 
   public void captureFile(Path src, Digest digest, boolean isActionCache) throws IOException {
     Path target = toPath(digest.getHash(), isActionCache);
-    target.getParentDirectory().createDirectoryAndParents();
     src.renameTo(target);
   }
 
@@ -111,7 +109,7 @@ public class DiskCacheClient implements RemoteCacheClient {
   public void uploadActionResult(ActionKey actionKey, ActionResult actionResult)
       throws IOException {
     try (InputStream data = actionResult.toByteString().newInput()) {
-      saveFile(actionKey.getDigest().getHash(), data, /* actionResult= */ true);
+      saveFile(getDiskKey(actionKey.getDigest().getHash(), /* actionResult= */ true), data);
     }
   }
 
@@ -121,7 +119,7 @@ public class DiskCacheClient implements RemoteCacheClient {
   @Override
   public ListenableFuture<Void> uploadFile(Digest digest, Path file) {
     try (InputStream in = file.getInputStream()) {
-      saveFile(digest.getHash(), in, /* actionResult= */ false);
+      saveFile(digest.getHash(), in);
     } catch (IOException e) {
       return Futures.immediateFailedFuture(e);
     }
@@ -131,7 +129,7 @@ public class DiskCacheClient implements RemoteCacheClient {
   @Override
   public ListenableFuture<Void> uploadBlob(Digest digest, ByteString data) {
     try (InputStream in = data.newInput()) {
-      saveFile(digest.getHash(), in, /* actionResult= */ false);
+      saveFile(digest.getHash(), in);
     } catch (IOException e) {
       return Futures.immediateFailedFuture(e);
     }
@@ -145,25 +143,22 @@ public class DiskCacheClient implements RemoteCacheClient {
     return Futures.immediateFuture(ImmutableSet.copyOf(digests));
   }
 
-  protected Path toPathNoSplit(String key) {
-    return root.getChild(key);
-  }
-
   protected Path toPath(String key, boolean actionResult) {
-    String cacheFolder = actionResult ? AC_DIRECTORY : CAS_DIRECTORY;
-    // Create the file in a subfolder to bypass possible folder file count limits
-    return root.getChild(cacheFolder).getChild(key.substring(0, 2)).getChild(key);
+    return root.getChild(getDiskKey(key, actionResult));
   }
 
-  private void saveFile(String key, InputStream in, boolean actionResult) throws IOException {
-    Path target = toPath(key, actionResult);
+  private static String getDiskKey(String key, boolean actionResult) {
+    return actionResult ? ACTION_KEY_PREFIX + key : key;
+  }
+
+  private void saveFile(String key, InputStream in) throws IOException {
+    Path target = toPath(key, /* actionResult= */ false);
     if (target.exists()) {
       return;
     }
-    target.getParentDirectory().createDirectoryAndParents();
 
     // Write a temporary file first, and then rename, to avoid data corruption in case of a crash.
-    Path temp = toPathNoSplit(UUID.randomUUID().toString());
+    Path temp = toPath(UUID.randomUUID().toString(), /* actionResult= */ false);
     try (OutputStream out = temp.getOutputStream()) {
       ByteStreams.copy(in, out);
     }

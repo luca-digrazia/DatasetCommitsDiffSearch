@@ -20,27 +20,18 @@ import build.bazel.remote.execution.v2.Digest;
 import build.bazel.remote.execution.v2.ExecuteRequest;
 import build.bazel.remote.execution.v2.ExecuteResponse;
 import build.bazel.remote.execution.v2.Platform;
-import build.bazel.remote.execution.v2.RequestMetadata;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.platform.PlatformUtils;
-import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.remote.common.OperationObserver;
-import com.google.devtools.build.lib.remote.common.RemoteActionExecutionContext;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient.ActionKey;
-import com.google.devtools.build.lib.remote.common.RemoteExecutionClient;
 import com.google.devtools.build.lib.remote.merkletree.MerkleTree;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
-import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
-import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.protobuf.Message;
+import io.grpc.Context;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Map;
@@ -49,94 +40,85 @@ import java.util.Map;
 public class RemoteRepositoryRemoteExecutor implements RepositoryRemoteExecutor {
 
   private final RemoteExecutionCache remoteCache;
-  private final RemoteExecutionClient remoteExecutor;
+  private final GrpcRemoteExecutor remoteExecutor;
   private final DigestUtil digestUtil;
-  private final String buildRequestId;
-  private final String commandId;
+  private final Context requestCtx;
 
   private final String remoteInstanceName;
   private final boolean acceptCached;
 
   public RemoteRepositoryRemoteExecutor(
       RemoteExecutionCache remoteCache,
-      RemoteExecutionClient remoteExecutor,
+      GrpcRemoteExecutor remoteExecutor,
       DigestUtil digestUtil,
-      String buildRequestId,
-      String commandId,
+      Context requestCtx,
       String remoteInstanceName,
       boolean acceptCached) {
     this.remoteCache = remoteCache;
     this.remoteExecutor = remoteExecutor;
     this.digestUtil = digestUtil;
-    this.buildRequestId = buildRequestId;
-    this.commandId = commandId;
+    this.requestCtx = requestCtx;
     this.remoteInstanceName = remoteInstanceName;
     this.acceptCached = acceptCached;
   }
 
-  private ExecutionResult downloadOutErr(RemoteActionExecutionContext context, ActionResult result)
+  private ExecutionResult downloadOutErr(ActionResult result)
       throws IOException, InterruptedException {
-    try (SilentCloseable c =
-        Profiler.instance().profile(ProfilerTask.REMOTE_DOWNLOAD, "download stdout/stderr")) {
-      byte[] stdout = new byte[0];
-      if (!result.getStdoutRaw().isEmpty()) {
-        stdout = result.getStdoutRaw().toByteArray();
-      } else if (result.hasStdoutDigest()) {
-        stdout = Utils.getFromFuture(remoteCache.downloadBlob(context, result.getStdoutDigest()));
-      }
-
-      byte[] stderr = new byte[0];
-      if (!result.getStderrRaw().isEmpty()) {
-        stderr = result.getStderrRaw().toByteArray();
-      } else if (result.hasStderrDigest()) {
-        stderr = Utils.getFromFuture(remoteCache.downloadBlob(context, result.getStderrDigest()));
-      }
-
-      return new ExecutionResult(result.getExitCode(), stdout, stderr);
+    byte[] stdout = new byte[0];
+    if (!result.getStdoutRaw().isEmpty()) {
+      stdout = result.getStdoutRaw().toByteArray();
+    } else if (result.hasStdoutDigest()) {
+      stdout = Utils.getFromFuture(remoteCache.downloadBlob(result.getStdoutDigest()));
     }
+
+    byte[] stderr = new byte[0];
+    if (!result.getStderrRaw().isEmpty()) {
+      stderr = result.getStderrRaw().toByteArray();
+    } else if (result.hasStderrDigest()) {
+      stderr = Utils.getFromFuture(remoteCache.downloadBlob(result.getStderrDigest()));
+    }
+
+    return new ExecutionResult(result.getExitCode(), stdout, stderr);
   }
 
   @Override
   public ExecutionResult execute(
       ImmutableList<String> arguments,
-      ImmutableSortedMap<PathFragment, Path> inputFiles,
       ImmutableMap<String, String> executionProperties,
       ImmutableMap<String, String> environment,
       String workingDirectory,
       Duration timeout)
       throws IOException, InterruptedException {
-    RequestMetadata metadata =
-        TracingMetadataUtils.buildMetadata(buildRequestId, commandId, "repository_rule");
-    RemoteActionExecutionContext context = RemoteActionExecutionContext.create(metadata);
-
-    Platform platform = PlatformUtils.buildPlatformProto(executionProperties);
-    Command command =
-        RemoteSpawnRunner.buildCommand(
-            /* outputs= */ ImmutableList.of(), arguments, environment, platform, workingDirectory);
-    Digest commandHash = digestUtil.compute(command);
-    MerkleTree merkleTree = MerkleTree.build(inputFiles, digestUtil);
-    Action action =
-        RemoteSpawnRunner.buildAction(
-            commandHash, merkleTree.getRootDigest(), timeout, acceptCached);
-    Digest actionDigest = digestUtil.compute(action);
-    ActionKey actionKey = new ActionKey(actionDigest);
-    ActionResult actionResult;
-    try (SilentCloseable c =
-        Profiler.instance().profile(ProfilerTask.REMOTE_CACHE_CHECK, "check cache hit")) {
-      actionResult = remoteCache.downloadActionResult(context, actionKey, /* inlineOutErr= */ true);
-    }
-    if (actionResult == null || actionResult.getExitCode() != 0) {
-      try (SilentCloseable c =
-          Profiler.instance().profile(ProfilerTask.UPLOAD_TIME, "upload missing inputs")) {
+    Context prev = requestCtx.attach();
+    try {
+      Platform platform = PlatformUtils.buildPlatformProto(executionProperties);
+      Command command =
+          RemoteSpawnRunner.buildCommand(
+              /* outputs= */ ImmutableList.of(),
+              arguments,
+              environment,
+              platform,
+              workingDirectory);
+      Digest commandHash = digestUtil.compute(command);
+      MerkleTree merkleTree =
+          MerkleTree.build(
+              ImmutableSortedMap.of(),
+              /* metadataProvider= */ null,
+              /* execRoot= */ null,
+              digestUtil);
+      Action action =
+          RemoteSpawnRunner.buildAction(
+              commandHash, merkleTree.getRootDigest(), timeout, acceptCached);
+      Digest actionDigest = digestUtil.compute(action);
+      ActionKey actionKey = new ActionKey(actionDigest);
+      ActionResult actionResult =
+          remoteCache.downloadActionResult(actionKey, /* inlineOutErr= */ true);
+      if (actionResult == null || actionResult.getExitCode() != 0) {
         Map<Digest, Message> additionalInputs = Maps.newHashMapWithExpectedSize(2);
         additionalInputs.put(actionDigest, action);
         additionalInputs.put(commandHash, command);
+        remoteCache.ensureInputsPresent(merkleTree, additionalInputs);
 
-        remoteCache.ensureInputsPresent(context, merkleTree, additionalInputs);
-      }
-
-      try (SilentCloseable c =
-          Profiler.instance().profile(ProfilerTask.REMOTE_EXECUTION, "execute remotely")) {
         ExecuteRequest executeRequest =
             ExecuteRequest.newBuilder()
                 .setActionDigest(actionDigest)
@@ -144,11 +126,12 @@ public class RemoteRepositoryRemoteExecutor implements RepositoryRemoteExecutor 
                 .setSkipCacheLookup(!acceptCached)
                 .build();
 
-        ExecuteResponse response =
-            remoteExecutor.executeRemotely(context, executeRequest, OperationObserver.NO_OP);
+        ExecuteResponse response = remoteExecutor.executeRemotely(executeRequest);
         actionResult = response.getResult();
       }
+      return downloadOutErr(actionResult);
+    } finally {
+      requestCtx.detach(prev);
     }
-    return downloadOutErr(context, actionResult);
   }
 }
