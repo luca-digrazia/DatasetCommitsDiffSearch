@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
@@ -33,6 +34,7 @@ import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.concurrent.ExecutorUtil;
 import com.google.devtools.build.lib.concurrent.Sharder;
+import com.google.devtools.build.lib.concurrent.ThrowableRecordingRunnableWrapper;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.AutoProfiler.ElapsedTimeReceiver;
 import com.google.devtools.build.lib.profiler.Profiler;
@@ -68,6 +70,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import javax.annotation.Nullable;
@@ -206,6 +209,8 @@ public class FilesystemValueChecker {
         new ThreadFactoryBuilder().setNameFormat("FileSystem Output File Invalidator %d").build());
 
     Collection<SkyKey> dirtyKeys = Sets.newConcurrentHashSet();
+    ThrowableRecordingRunnableWrapper wrapper =
+        new ThrowableRecordingRunnableWrapper("FileSystemValueChecker#getDirtyActionValues");
 
     modifiedOutputFilesCounter.set(0);
     modifiedOutputFilesIntraBuildCounter.set(0);
@@ -246,11 +251,12 @@ public class FilesystemValueChecker {
                     knownModifiedOutputFiles,
                     sortedKnownModifiedOutputFiles,
                     trustRemoteArtifacts);
-        executor.execute(job);
+        Future<?> unused = executor.submit(wrapper.wrap(job));
       }
 
       interrupted = ExecutorUtil.interruptibleShutdown(executor);
     }
+    Throwables.propagateIfPossible(wrapper.getFirstThrownError());
     if (dirtyKeys.isEmpty()) {
       logger.atInfo().log("Completed output file stat checks, no modified outputs found");
     } else {
@@ -583,6 +589,8 @@ public class FilesystemValueChecker {
             numThreads,
             new ThreadFactoryBuilder().setNameFormat("FileSystem Value Invalidator %d").build());
 
+    ThrowableRecordingRunnableWrapper wrapper =
+        new ThrowableRecordingRunnableWrapper("FilesystemValueChecker#getDirtyValues");
     final AtomicInteger numKeysChecked = new AtomicInteger(0);
     MutableBatchDirtyResult batchResult = new MutableBatchDirtyResult(numKeysChecked);
     ElapsedTimeReceiver elapsedTimeReceiver =
@@ -603,29 +611,30 @@ public class FilesystemValueChecker {
             "Only non-hermetic keys can be dirty roots: %s",
             key);
         executor.execute(
-            () -> {
-              SkyValue value;
-              try {
-                value = fetcher.get(key);
-              } catch (InterruptedException e) {
-                // Exit fast. Interrupt is handled below on the main thread.
-                return;
-              }
-              if (!checkMissingValues && value == null) {
-                return;
-              }
+            wrapper.wrap(
+                () -> {
+                  SkyValue value;
+                  try {
+                    value = fetcher.get(key);
+                  } catch (InterruptedException e) {
+                    // Exit fast. Interrupt is handled below on the main thread.
+                    return;
+                  }
+                  if (!checkMissingValues && value == null) {
+                    return;
+                  }
 
-              numKeysChecked.incrementAndGet();
-              DirtyResult result = checker.check(key, value, tsgm);
-              if (result.isDirty()) {
-                batchResult.add(key, value, result.getNewValue());
-              }
-            });
+                  numKeysChecked.incrementAndGet();
+                  DirtyResult result = checker.check(key, value, tsgm);
+                  if (result.isDirty()) {
+                    batchResult.add(key, value, result.getNewValue());
+                  }
+                }));
       }
 
-      // If a Runnable above crashes, this shutdown can still succeed but the whole server will come
-      // down shortly.
-      if (ExecutorUtil.interruptibleShutdown(executor)) {
+      boolean interrupted = ExecutorUtil.interruptibleShutdown(executor);
+      Throwables.propagateIfPossible(wrapper.getFirstThrownError());
+      if (interrupted) {
         throw new InterruptedException();
       }
     }
