@@ -33,19 +33,15 @@ final public class Constants {
     public static final Pattern CONFIG_ROOT_PATTERN = Pattern.compile("^(\\w+)Config(uration)?");
     public static final Pattern PKG_PATTERN = Pattern.compile("^io\\.quarkus\\.(\\w+)\\.?(\\w+)?\\.?(\\w+)?");
 
-    public static final String INSTANCE_SYM = "__instance";
-    public static final String QUARKUS = "quarkus";
-
+    public static final String MEMORY_SIZE_TYPE = "io.quarkus.runtime.configuration.MemorySize";
+    public static final String ANNOTATION_BUILD_STEP = "io.quarkus.deployment.annotations.BuildStep";
+    public static final String ANNOTATION_CONFIG_GROUP = "io.quarkus.runtime.annotations.ConfigGroup";
+    public static final String ANNOTATION_CONFIG_ITEM = "io.quarkus.runtime.annotations.ConfigItem";
+    public static final String ANNOTATION_CONFIG_ROOT = "io.quarkus.runtime.annotations.ConfigRoot";
     public static final String ANNOTATION_TEMPLATE = "io.quarkus.runtime.annotations.Template";
     public static final String ANNOTATION_RECORDER = "io.quarkus.runtime.annotations.Recorder";
-
-    public static final String MEMORY_SIZE_TYPE = "io.quarkus.runtime.configuration.MemorySize";
-    public static final String ANNOTATION_CONFIG_ITEM = "io.quarkus.runtime.annotations.ConfigItem";
-    public static final String ANNOTATION_BUILD_STEP = "io.quarkus.deployment.annotations.BuildStep";
-    public static final String ANNOTATION_CONFIG_ROOT = "io.quarkus.runtime.annotations.ConfigRoot";
-    public static final String ANNOTATION_CONFIG_GROUP = "io.quarkus.runtime.annotations.ConfigGroup";
-    public static final String ANNOTATION_CONFIG_DOC_MAP_KEY = "io.quarkus.runtime.annotations.ConfigDocMapKey";
-    public static final String ANNOTATION_CONFIG_DOC_SECTION = "io.quarkus.runtime.annotations.ConfigDocSection";
+    public static final String INSTANCE_SYM = "__instance";
+    public static final String QUARKUS = "quarkus";
 
     public static final Set<String> SUPPORTED_ANNOTATIONS_TYPES = new HashSet<>();
     public static final Map<String, String> ALIASED_TYPES = new HashMap<>();
@@ -54,18 +50,8 @@ final public class Constants {
             .get(System.getProperties().getProperty("maven.multiModuleProjectDirectory")
                     + Constants.DOCS_SRC_MAIN_ASCIIDOC_GENERATED);
     public static final File GENERATED_DOCS_DIR = GENERATED_DOCS_PATH.toFile();
-
-    /**
-     * Holds the list of configuration items / configuration sections of each configuration roots.
-     */
     public static final File ALL_CR_GENERATED_DOC = GENERATED_DOCS_PATH
             .resolve("all-configuration-roots-generated-doc.properties").toFile();
-
-    /**
-     * Holds the list of computed file names and the list of configuration roots of this extension
-     */
-    public static final File EXTENSION_CONFIGURATION_ROOT_LIST = GENERATED_DOCS_PATH
-            .resolve("extensions-configuration-roots-list.properties").toFile();
 
     public static final String DURATION_NOTE_ANCHOR = "duration-note-anchor";
     public static final String MEMORY_SIZE_NOTE_ANCHOR = "memory-size-note-anchor";
