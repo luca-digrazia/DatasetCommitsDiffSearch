@@ -47,18 +47,10 @@ public abstract class MessageInput {
     protected String persistId;
     protected DateTime createdAt;
 
-    protected Configuration configuration;
-    protected InputHost graylogServer;
-
     private Map<String, Extractor> extractors = Maps.newConcurrentMap();
     private Map<String, String> staticFields = Maps.newConcurrentMap();
 
-    public void initialize(Configuration configuration, InputHost graylogServer) {
-        this.configuration = configuration;
-        this.graylogServer = graylogServer;
-    }
-
-    public abstract void checkConfiguration() throws ConfigurationException;
+    public abstract void configure(Configuration config, InputHost graylogServer) throws ConfigurationException;
 
     public abstract void launch() throws MisfireException;
     public abstract void stop();
@@ -108,10 +100,6 @@ public abstract class MessageInput {
 
     public DateTime getCreatedAt() {
         return createdAt;
-    }
-
-    public Configuration getConfiguration() {
-        return configuration;
     }
 
     public Object getAttributesWithMaskedPasswords() {
