@@ -2,7 +2,7 @@ package io.quarkus.kubernetes.deployment;
 
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 
-public final class ResourceNameUtil {
+final class ResourceNameUtil {
 
     private ResourceNameUtil() {
     }
@@ -12,8 +12,7 @@ public final class ResourceNameUtil {
      * Uses the value from the configuration object if it exists, otherwise falls back to
      * the application name
      */
-    public static String getResourceName(PlatformConfiguration platformConfiguration,
-            ApplicationInfoBuildItem applicationInfo) {
+    static String getResourceName(PlatformConfiguration platformConfiguration, ApplicationInfoBuildItem applicationInfo) {
         return platformConfiguration.getName().orElse(applicationInfo.getName());
     }
 }
