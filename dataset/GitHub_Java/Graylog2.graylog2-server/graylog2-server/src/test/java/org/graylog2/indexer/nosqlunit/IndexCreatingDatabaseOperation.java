@@ -22,18 +22,13 @@ import com.lordofthejars.nosqlunit.core.DatabaseOperation;
 import org.elasticsearch.action.admin.indices.exists.indices.IndicesExistsResponse;
 import org.elasticsearch.client.Client;
 import org.elasticsearch.client.IndicesAdminClient;
-import org.elasticsearch.common.unit.TimeValue;
-import org.graylog2.audit.NullAuditEventSender;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.messages.Messages;
-import org.graylog2.plugin.system.NodeId;
 
 import java.io.InputStream;
 import java.util.Set;
-
-import static org.mockito.Mockito.mock;
 
 public class IndexCreatingDatabaseOperation implements DatabaseOperation<Client> {
     private final DatabaseOperation<Client> databaseOperation;
@@ -50,7 +45,6 @@ public class IndexCreatingDatabaseOperation implements DatabaseOperation<Client>
 
     @Override
     public void insert(InputStream dataScript) {
-        waitForGreenStatus();
         final IndicesAdminClient indicesAdminClient = client.admin().indices();
         for (String index : indexes) {
             final IndicesExistsResponse indicesExistsResponse = indicesAdminClient.prepareExists(index)
@@ -62,7 +56,7 @@ public class IndexCreatingDatabaseOperation implements DatabaseOperation<Client>
             }
 
             final Messages messages = new Messages(client, config, new MetricRegistry());
-            final Indices indices = new Indices(client, config, new IndexMapping(), messages, mock(NodeId.class), new NullAuditEventSender());
+            final Indices indices = new Indices(client, config, new IndexMapping(), messages);
 
             if (!indices.create(index)) {
                 throw new IllegalStateException("Couldn't create index " + index);
@@ -74,15 +68,7 @@ public class IndexCreatingDatabaseOperation implements DatabaseOperation<Client>
 
     @Override
     public void deleteAll() {
-        waitForGreenStatus();
         databaseOperation.deleteAll();
-    }
-
-    private void waitForGreenStatus() {
-        client.admin().cluster().prepareHealth()
-                .setTimeout(TimeValue.timeValueSeconds(15L))
-                .setWaitForGreenStatus()
-                .get();
     }
 
     @Override
