@@ -89,7 +89,6 @@ import org.graylog2.streams.StreamImpl;
 import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJobManager;
-import org.graylog2.system.shutdown.GracefulShutdown;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -275,16 +274,14 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
         indexer = new Indexer(this);
         indexer.start();
 
-        final Core core = this;
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
-                String msg = "SIGNAL received. Shutting down.";
-                LOG.info(msg);
-                activityWriter.write(new Activity(msg, Core.class));
-
-                GracefulShutdown gs = new GracefulShutdown(core);
-                gs.run();
+                LOG.info("Shutting down.");
+                activityWriter.write(new Activity("Shutting down.", GraylogServer.class));
+                if (Core.this.configuration.isMetricsCollectionEnabled() && metricsReporter != null) {
+                    metricsReporter.stop();
+                }
             }
         });
     }
@@ -457,7 +454,12 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
                 configuration.getRestListenUri().getHost(),
                 configuration.getRestListenUri().getPort()
         ));
-
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            @Override
+            public void run() {
+                bootstrap.releaseExternalResources();
+            }
+        });
         LOG.info("Started REST API at <{}>", configuration.getRestListenUri());
     }
 
