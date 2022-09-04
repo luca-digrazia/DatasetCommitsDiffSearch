@@ -13,10 +13,16 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
+import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.rules.android.databinding.DataBinding;
+import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
+import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -42,6 +48,212 @@ public class ProcessedAndroidData {
   private final Artifact apk;
   @Nullable private final Artifact dataBindingInfoZip;
   private final ResourceDependencies resourceDeps;
+  private final Artifact resourceProguardConfig;
+  @Nullable private final Artifact mainDexProguardConfig;
+
+  /** Processes Android data (assets, resources, and manifest) for android_binary targets. */
+  public static ProcessedAndroidData processBinaryDataFrom(
+      AndroidDataContext dataContext,
+      RuleErrorConsumer errorConsumer,
+      StampedAndroidManifest manifest,
+      boolean conditionalKeepRules,
+      Map<String, String> manifestValues,
+      AndroidResources resources,
+      AndroidAssets assets,
+      ResourceDependencies resourceDeps,
+      AssetDependencies assetDeps,
+      ResourceFilterFactory resourceFilterFactory,
+      List<String> noCompressExtensions,
+      boolean crunchPng,
+      DataBindingContext dataBindingContext)
+      throws RuleErrorException, InterruptedException {
+    AndroidResourcesProcessorBuilder builder =
+        builderForNonIncrementalTopLevelTarget(dataContext, manifest, manifestValues)
+            .setManifestOut(
+                dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
+            .setMergedResourcesOut(
+                dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
+            .setMainDexProguardOut(
+                AndroidBinary.createMainDexProguardSpec(
+                    dataContext.getLabel(), dataContext.getActionConstructionContext()))
+            .conditionalKeepRules(conditionalKeepRules);
+    dataBindingContext.supplyLayoutInfo(builder::setDataBindingInfoZip);
+    return buildActionForBinary(
+        dataContext,
+        dataBindingContext,
+        errorConsumer,
+        builder,
+        manifest,
+        resources,
+        assets,
+        resourceDeps,
+        assetDeps,
+        resourceFilterFactory,
+        noCompressExtensions,
+        crunchPng);
+  }
+
+  public static ProcessedAndroidData processIncrementalBinaryDataFrom(
+      RuleContext ruleContext,
+      AndroidDataContext dataContext,
+      StampedAndroidManifest manifest,
+      Artifact apkOut,
+      Artifact mergedResourcesOut,
+      String proguardPrefix,
+      Map<String, String> manifestValues)
+      throws RuleErrorException {
+
+    AndroidResourcesProcessorBuilder builder =
+        builderForTopLevelTarget(dataContext, manifest, proguardPrefix, manifestValues)
+            .setApkOut(apkOut)
+            .setMergedResourcesOut(mergedResourcesOut);
+
+    return buildActionForBinary(
+        dataContext,
+        DataBinding.contextFrom(ruleContext, dataContext.getAndroidConfig()),
+        ruleContext,
+        builder,
+        manifest,
+        AndroidResources.from(ruleContext, "resource_files"),
+        AndroidAssets.from(ruleContext),
+        ResourceDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
+        AssetDependencies.fromRuleDeps(ruleContext, /* neverlink = */ false),
+        ResourceFilterFactory.fromRuleContextAndAttrs(ruleContext),
+        ruleContext.getExpander().withDataLocations().tokenized("nocompress_extensions"),
+        ruleContext.attributes().get("crunch_png", Type.BOOLEAN));
+  }
+
+  private static ProcessedAndroidData buildActionForBinary(
+      AndroidDataContext dataContext,
+      DataBindingContext dataBindingContext,
+      RuleErrorConsumer errorConsumer,
+      AndroidResourcesProcessorBuilder builder,
+      StampedAndroidManifest manifest,
+      AndroidResources resources,
+      AndroidAssets assets,
+      ResourceDependencies resourceDeps,
+      AssetDependencies assetDeps,
+      ResourceFilterFactory resourceFilterFactory,
+      List<String> noCompressExtensions,
+      boolean crunchPng)
+      throws RuleErrorException {
+
+    ResourceFilter resourceFilter =
+        resourceFilterFactory.getResourceFilter(errorConsumer, resourceDeps, resources);
+
+    // Filter unwanted resources out
+    resources = resources.filterLocalResources(errorConsumer, resourceFilter);
+    resourceDeps = resourceDeps.filter(errorConsumer, resourceFilter);
+
+    return builder
+        .setResourceFilterFactory(resourceFilterFactory)
+        .setUncompressedExtensions(noCompressExtensions)
+        .setCrunchPng(crunchPng)
+        .withResourceDependencies(resourceDeps)
+        .withAssetDependencies(assetDeps)
+        .build(dataContext, resources, assets, manifest, dataBindingContext);
+  }
+
+  /** Processes Android data (assets, resources, and manifest) for android_local_test targets. */
+  public static ProcessedAndroidData processLocalTestDataFrom(
+      AndroidDataContext dataContext,
+      DataBindingContext dataBindingContext,
+      StampedAndroidManifest manifest,
+      Map<String, String> manifestValues,
+      AndroidResources resources,
+      AndroidAssets assets,
+      ResourceDependencies resourceDeps,
+      AssetDependencies assetDeps,
+      List<String> noCompressExtensions,
+      ResourceFilterFactory resourceFilterFactory)
+      throws InterruptedException {
+
+    return builderForNonIncrementalTopLevelTarget(dataContext, manifest, manifestValues)
+        .setManifestOut(
+            dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST))
+        .setMergedResourcesOut(
+            dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
+        .setCrunchPng(false)
+        .withResourceDependencies(resourceDeps)
+        .withAssetDependencies(assetDeps)
+        .setUncompressedExtensions(noCompressExtensions)
+        .setResourceFilterFactory(resourceFilterFactory)
+        .build(dataContext, resources, assets, manifest, dataBindingContext);
+  }
+
+  /** Processes Android data (assets, resources, and manifest) for android_test targets. */
+  public static ProcessedAndroidData processTestDataFrom(
+      AndroidDataContext dataContext,
+      DataBindingContext dataBindingContext,
+      StampedAndroidManifest manifest,
+      String packageUnderTest,
+      boolean hasLocalResourceFiles,
+      AndroidResources resources,
+      ResourceDependencies resourceDeps,
+      AndroidAssets assets,
+      AssetDependencies assetDeps)
+      throws InterruptedException {
+
+    AndroidResourcesProcessorBuilder builder =
+        builderForNonIncrementalTopLevelTarget(dataContext, manifest, ImmutableMap.of())
+            .setMergedResourcesOut(
+                dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_ZIP))
+            .setMainDexProguardOut(
+                AndroidBinary.createMainDexProguardSpec(
+                    dataContext.getLabel(), dataContext.getActionConstructionContext()))
+            .setPackageUnderTest(packageUnderTest)
+            .setIsTestWithResources(hasLocalResourceFiles)
+            .withResourceDependencies(resourceDeps)
+            .withAssetDependencies(assetDeps);
+
+    return builder.build(dataContext, resources, assets, manifest, dataBindingContext);
+  }
+
+  /**
+   * Common {@link AndroidResourcesProcessorBuilder} builder for non-incremental top-level targets.
+   *
+   * <p>The builder will be populated with commonly-used settings and outputs.
+   */
+  private static AndroidResourcesProcessorBuilder builderForNonIncrementalTopLevelTarget(
+      AndroidDataContext dataContext,
+      StampedAndroidManifest manifest,
+      Map<String, String> manifestValues)
+      throws InterruptedException {
+
+    return builderForTopLevelTarget(dataContext, manifest, "", manifestValues)
+        // Outputs
+        .setApkOut(dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK))
+        .setRTxtOut(dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT))
+        .setSourceJarOut(
+            dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR))
+        .setSymbols(dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS));
+  }
+
+  /**
+   * Common {@link AndroidResourcesProcessorBuilder} builder for top-level targets.
+   *
+   * <p>The builder will be populated with commonly-used settings and outputs.
+   */
+  private static AndroidResourcesProcessorBuilder builderForTopLevelTarget(
+      AndroidDataContext dataContext,
+      StampedAndroidManifest manifest,
+      String proguardPrefix,
+      Map<String, String> manifestValues) {
+    return new AndroidResourcesProcessorBuilder()
+        // Settings
+        .setDebug(dataContext.useDebug())
+        .setJavaPackage(manifest.getPackage())
+        .setApplicationId(manifestValues.get("applicationId"))
+        .setVersionCode(manifestValues.get("versionCode"))
+        .setVersionName(manifestValues.get("versionName"))
+        .setThrowOnResourceConflict(dataContext.throwOnResourceConflict())
+
+        // Output
+        .setProguardOut(
+            ProguardHelper.getProguardConfigArtifact(
+                dataContext.getLabel(), dataContext.getActionConstructionContext(), proguardPrefix))
+        .setIncludeProguardLocationReferences(dataContext.includeProguardLocationReferences());
+  }
 
   static ProcessedAndroidData of(
       ParsedAndroidResources resources,
@@ -51,9 +263,20 @@ public class ProcessedAndroidData {
       Artifact sourceJar,
       Artifact apk,
       @Nullable Artifact dataBindingInfoZip,
-      ResourceDependencies resourceDeps) {
+      ResourceDependencies resourceDeps,
+      Artifact resourceProguardConfig,
+      @Nullable Artifact mainDexProguardConfig) {
     return new ProcessedAndroidData(
-        resources, assets, manifest, rTxt, sourceJar, apk, dataBindingInfoZip, resourceDeps);
+        resources,
+        assets,
+        manifest,
+        rTxt,
+        sourceJar,
+        apk,
+        dataBindingInfoZip,
+        resourceDeps,
+        resourceProguardConfig,
+        mainDexProguardConfig);
   }
 
   private ProcessedAndroidData(
@@ -64,7 +287,9 @@ public class ProcessedAndroidData {
       Artifact sourceJar,
       Artifact apk,
       @Nullable Artifact dataBindingInfoZip,
-      ResourceDependencies resourceDeps) {
+      ResourceDependencies resourceDeps,
+      Artifact resourceProguardConfig,
+      @Nullable Artifact mainDexProguardConfig) {
     this.resources = resources;
     this.assets = assets;
     this.manifest = manifest;
@@ -73,22 +298,22 @@ public class ProcessedAndroidData {
     this.apk = apk;
     this.dataBindingInfoZip = dataBindingInfoZip;
     this.resourceDeps = resourceDeps;
+    this.resourceProguardConfig = resourceProguardConfig;
+    this.mainDexProguardConfig = mainDexProguardConfig;
   }
 
   /**
-   * Gets the fully processed resources from this class.
+   * Gets the fully processed data from this class.
    *
    * <p>Registers an action to run R class generation, the last step needed in resource processing.
-   * Returns the fully processed resources.
+   * Returns the fully processed data, including validated resources, wrapped in a ResourceApk.
    */
-  public ValidatedAndroidResources generateRClass(RuleContext ruleContext)
-      throws RuleErrorException, InterruptedException {
-    return new RClassGeneratorActionBuilder(ruleContext)
-        .targetAaptVersion(AndroidAaptVersion.chooseTargetAaptVersion(ruleContext))
+  public ResourceApk generateRClass(AndroidDataContext dataContext) throws InterruptedException {
+    return new RClassGeneratorActionBuilder()
         .withDependencies(resourceDeps)
         .setClassJarOut(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
-        .build(this);
+            dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR))
+        .build(dataContext, this);
   }
 
   /**
@@ -97,7 +322,7 @@ public class ProcessedAndroidData {
    * @param rClassJar an artifact containing the resource class jar for these resources. An action
    *     to generate it must be registered elsewhere.
    */
-  ValidatedAndroidResources toValidatedResources(Artifact rClassJar) {
+  ResourceApk withValidatedResources(Artifact rClassJar) {
     // When assets and resources are processed together, they are both merged into the same zip
     Artifact mergedResources = assets.getMergedAssets();
 
@@ -105,10 +330,26 @@ public class ProcessedAndroidData {
     // we need to build containers for both here.
     MergedAndroidResources merged =
         MergedAndroidResources.of(
-            resources, mergedResources, rClassJar, dataBindingInfoZip, resourceDeps, manifest);
+            resources,
+            mergedResources,
+            rClassJar,
+            /*aapt2RTxt=*/ null,
+            dataBindingInfoZip,
+            resourceDeps,
+            manifest);
 
     // Combined resource processing does not produce aapt2 artifacts; they're nulled out
-    return ValidatedAndroidResources.of(merged, rTxt, sourceJar, apk, null, null, null);
+    ValidatedAndroidResources validated =
+        ValidatedAndroidResources.of(
+            merged,
+            rTxt,
+            sourceJar,
+            apk,
+            /*aapt2ValidationArtifact=*/ (Artifact) null,
+            /*aapt2SourceJar*/ (Artifact) null,
+            /*staticLibrary*/ (Artifact) null,
+            /*useRTxtFromMergedResources=*/ true);
+    return ResourceApk.of(validated, assets, resourceProguardConfig, mainDexProguardConfig);
   }
 
   public MergedAndroidAssets getAssets() {
