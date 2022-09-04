@@ -218,7 +218,7 @@ public abstract class StarlarkSemantics {
   public static final StarlarkSemantics DEFAULT_SEMANTICS =
       builder()
           // <== Add new options here in alphabetic order ==>
-          .experimentalBuildSettingApi(true)
+          .experimentalBuildSettingApi(false)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
           .experimentalAllowIncrementalRepositoryUpdates(false)
           .experimentalEnableAndroidMigrationApis(false)
@@ -259,7 +259,7 @@ public abstract class StarlarkSemantics {
           .incompatibleStringJoinRequiresStrings(true)
           .internalSkylarkFlagTestCanary(false)
           .incompatibleDoNotSplitLinkingCmdline(true)
-          .incompatibleDepsetForLibrariesToLinkGetter(true)
+          .incompatibleDepsetForLibrariesToLinkGetter(false)
           .build();
 
   /** Builder for {@link StarlarkSemantics}. All fields are mandatory. */
