@@ -19,7 +19,6 @@
 
 package org.graylog2.shared.initializers;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
@@ -31,11 +30,12 @@ import org.glassfish.jersey.server.filter.EncodingFilter;
 import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
-import org.graylog2.plugin.rest.WebApplicationExceptionMapper;
 import org.graylog2.shared.BaseConfiguration;
+import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
 import org.graylog2.shared.rest.CORSFilter;
+import org.graylog2.shared.rest.ObjectMapperProvider;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -48,10 +48,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.inject.Singleton;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
-import javax.ws.rs.ext.ExceptionMapper;
 import java.net.InetSocketAddress;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -60,30 +58,23 @@ import java.util.concurrent.Executors;
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-@Singleton
 public class RestApiService extends AbstractIdleService {
     private final Logger LOG = LoggerFactory.getLogger(RestApiService.class);
     private final BaseConfiguration configuration;
     private final SecurityContextFactory securityContextFactory;
     private final Set<Class<? extends DynamicFeature>> dynamicFeatures;
     private final Set<Class<? extends ContainerResponseFilter>> containerResponseFilters;
-    private final Set<Class<? extends ExceptionMapper>> exceptionMappers;
-    private final ObjectMapper objectMapper;
     private ServerBootstrap bootstrap;
 
     @Inject
     public RestApiService(BaseConfiguration configuration,
                           @$Nullable SecurityContextFactory securityContextFactory,
                           Set<Class<? extends DynamicFeature>> dynamicFeatures,
-                          Set<Class<? extends ContainerResponseFilter>> containerResponseFilters,
-                          Set<Class<? extends ExceptionMapper>> exceptionMappers,
-                          ObjectMapper objectMapper) {
+                          Set<Class<? extends ContainerResponseFilter>> containerResponseFilters) {
         this.configuration = configuration;
         this.securityContextFactory = securityContextFactory;
         this.dynamicFeatures = dynamicFeatures;
         this.containerResponseFilters = containerResponseFilters;
-        this.exceptionMappers = exceptionMappers;
-        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -106,10 +97,7 @@ public class RestApiService extends AbstractIdleService {
         ResourceConfig rc = new ResourceConfig()
                 .property(NettyContainer.PROPERTY_BASE_URI, configuration.getRestListenUri())
                 .registerClasses(JacksonPropertyExceptionMapper.class,
-                        AnyExceptionClassMapper.class, WebApplicationExceptionMapper.class);
-
-        for (Class<? extends ExceptionMapper> exceptionMapper : exceptionMappers)
-            rc.registerClasses(exceptionMapper);
+                        AnyExceptionClassMapper.class);
 
         for (Class<? extends DynamicFeature> dynamicFeatureClass : dynamicFeatures)
             rc.registerClasses(dynamicFeatureClass);
@@ -117,8 +105,8 @@ public class RestApiService extends AbstractIdleService {
         for (Class<? extends ContainerResponseFilter> responseFilter : containerResponseFilters)
             rc.registerClasses(responseFilter);
 
-        rc
-            .register(new JacksonJsonProvider(objectMapper))
+        rc.register(ObjectMapperProvider.class)
+            .register(JacksonJsonProvider.class)
             .registerFinder(new PackageNamesScanner(new String[]{"org.graylog2.rest.resources",
                     "org.graylog2.radio.rest.resources", "org.graylog2.shared.rest.resources"}, true));
 
