@@ -23,8 +23,8 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor.SkylarkKey;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
@@ -96,17 +96,19 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "my_rule = rule(impl, attrs = { 'dep' : attr.label() })");
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:my");
-    Info info =
+    SkylarkClassObject skylarkClassObject =
         configuredTarget.get(
             new SkylarkKey(Label.parseAbsolute("//java/test:extension.bzl"), "result"));
 
-    SkylarkNestedSet sourceJars = ((SkylarkNestedSet) info.getValue("source_jars"));
-    SkylarkNestedSet transitiveDeps = ((SkylarkNestedSet) info.getValue("transitive_deps"));
+    SkylarkNestedSet sourceJars = ((SkylarkNestedSet) skylarkClassObject.getValue("source_jars"));
+    SkylarkNestedSet transitiveDeps =
+        ((SkylarkNestedSet) skylarkClassObject.getValue("transitive_deps"));
     SkylarkNestedSet transitiveRuntimeDeps =
-        ((SkylarkNestedSet) info.getValue("transitive_runtime_deps"));
+        ((SkylarkNestedSet) skylarkClassObject.getValue("transitive_runtime_deps"));
     SkylarkNestedSet transitiveSourceJars =
-        ((SkylarkNestedSet) info.getValue("transitive_source_jars"));
-    SkylarkList<OutputJar> outputJars = ((SkylarkList<OutputJar>) info.getValue("outputs"));
+        ((SkylarkNestedSet) skylarkClassObject.getValue("transitive_source_jars"));
+    SkylarkList<OutputJar> outputJars =
+        ((SkylarkList<OutputJar>) skylarkClassObject.getValue("outputs"));
 
     assertThat(artifactFilesNames(sourceJars.toCollection(Artifact.class)))
         .containsExactly("libdep-src.jar");
@@ -155,15 +157,15 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
       "    srcs = ['ToBeProcessed.java'])",
       "my_rule(name = 'my', dep = ':to_be_processed')");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:my");
-    Info info =
-        configuredTarget.get(
-            new SkylarkKey(Label.parseAbsolute("//java/test:extension.bzl"), "result"));
+    SkylarkClassObject skylarkClassObject = configuredTarget.get(
+          new SkylarkKey(Label.parseAbsolute("//java/test:extension.bzl"), "result"));
 
-    assertThat((List<?>) info.getValue("processor_classnames"))
+    assertThat((List<?>) skylarkClassObject.getValue("processor_classnames"))
         .containsExactly("com.google.process.stuff");
     assertThat(
             Iterables.transform(
-                ((SkylarkNestedSet) info.getValue("processor_classpath")).toCollection(),
+                ((SkylarkNestedSet) skylarkClassObject.getValue("processor_classpath"))
+                    .toCollection(),
                 new Function<Object, String>() {
                   @Override
                   public String apply(Object o) {
@@ -171,6 +173,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
                   }
                 }))
         .containsExactly("libplugin.jar", "libplugin_dep.jar");
+
   }
 
   @Test
@@ -182,7 +185,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "java/test/extension.bzl",
         "result = provider()",
         "def impl(ctx):",
-        "   java_provider = ctx.attr.dep[JavaInfo]",
+        "   java_provider = ctx.attr.dep[java_common.provider]",
         "   return [result(",
         "             compile_jars = java_provider.compile_jars,",
         "             transitive_runtime_jars = java_provider.transitive_runtime_jars,",
@@ -208,15 +211,16 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     ConfiguredTarget javaLibraryTarget = getConfiguredTarget("//java/test:jl");
 
     // Extract out the information from skylark rule
-    Info info =
+    SkylarkClassObject skylarkClassObject =
         myConfiguredTarget.get(
             new SkylarkKey(Label.parseAbsolute("//java/test:extension.bzl"), "result"));
 
-    SkylarkNestedSet rawMyCompileJars = (SkylarkNestedSet) (info.getValue("compile_jars"));
+    SkylarkNestedSet rawMyCompileJars =
+        (SkylarkNestedSet) (skylarkClassObject.getValue("compile_jars"));
     SkylarkNestedSet rawMyTransitiveRuntimeJars =
-        (SkylarkNestedSet) (info.getValue("transitive_runtime_jars"));
+        (SkylarkNestedSet) (skylarkClassObject.getValue("transitive_runtime_jars"));
     SkylarkNestedSet rawMyTransitiveCompileTimeJars =
-        (SkylarkNestedSet) (info.getValue("transitive_compile_time_jars"));
+        (SkylarkNestedSet) (skylarkClassObject.getValue("transitive_compile_time_jars"));
 
     NestedSet<Artifact> myCompileJars = rawMyCompileJars.getSet(Artifact.class);
     NestedSet<Artifact> myTransitiveRuntimeJars = rawMyTransitiveRuntimeJars.getSet(Artifact.class);
@@ -225,7 +229,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     // Extract out information from native rule
     JavaCompilationArgsProvider jlJavaCompilationArgsProvider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, javaLibraryTarget);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, javaLibraryTarget);
     NestedSet<Artifact> jlCompileJars =
         jlJavaCompilationArgsProvider.getJavaCompilationArgs().getCompileTimeJars();
     NestedSet<Artifact> jlTransitiveRuntimeJars =
@@ -295,16 +299,18 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    transitive_runtime_jars = ['libd.jar'],",
         ")");
     ConfiguredTarget target = getConfiguredTarget("//foo:myrule");
-    JavaInfo info = target.get(JavaInfo.PROVIDER);
+    SkylarkClassObject skylarkClassObject = target.get(JavaProvider.JAVA_PROVIDER);
 
-    SkylarkNestedSet compileJars = info.getCompileTimeJars();
+    SkylarkNestedSet compileJars = (SkylarkNestedSet) skylarkClassObject.getValue("compile_jars");
     assertThat(prettyJarNames(compileJars.getSet(Artifact.class))).containsExactly("foo/liba.jar");
 
-    SkylarkNestedSet transitiveCompileTimeJars = info.getTransitiveCompileTimeJars();
+    SkylarkNestedSet transitiveCompileTimeJars =
+        (SkylarkNestedSet) skylarkClassObject.getValue("transitive_compile_time_jars");
     assertThat(prettyJarNames(
         transitiveCompileTimeJars.getSet(Artifact.class))).containsExactly("foo/libc.jar");
 
-    SkylarkNestedSet transitiveRuntimeJars = info.getTransitiveRuntimeJars();
+    SkylarkNestedSet transitiveRuntimeJars =
+        (SkylarkNestedSet) skylarkClassObject.getValue("transitive_runtime_jars");
     assertThat(prettyJarNames(
         transitiveRuntimeJars.getSet(Artifact.class))).containsExactly("foo/libd.jar");
   }
@@ -333,15 +339,17 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    transitive_runtime_jars = ['libd.jar'],",
         ")");
     ConfiguredTarget target = getConfiguredTarget("//foo:myrule");
-    JavaInfo info = target.get(JavaInfo.PROVIDER);
+    SkylarkClassObject skylarkClassObject = target.get(JavaProvider.JAVA_PROVIDER);
 
-    SkylarkNestedSet compileJars = info.getCompileTimeJars();
+    SkylarkNestedSet compileJars = (SkylarkNestedSet) skylarkClassObject.getValue("compile_jars");
     assertThat(prettyJarNames(compileJars.getSet(Artifact.class))).containsExactly("foo/liba.jar");
 
-    SkylarkNestedSet transitiveCompileTimeJars = info.getTransitiveCompileTimeJars();
+    SkylarkNestedSet transitiveCompileTimeJars =
+        (SkylarkNestedSet) skylarkClassObject.getValue("transitive_compile_time_jars");
     assertThat(prettyJarNames(transitiveCompileTimeJars.getSet(Artifact.class))).isEmpty();
 
-    SkylarkNestedSet transitiveRuntimeJars = info.getTransitiveRuntimeJars();
+    SkylarkNestedSet transitiveRuntimeJars =
+        (SkylarkNestedSet) skylarkClassObject.getValue("transitive_runtime_jars");
     assertThat(prettyJarNames(
         transitiveRuntimeJars.getSet(Artifact.class))).containsExactly("foo/libd.jar");
   }
@@ -378,7 +386,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         ")");
     ConfiguredTarget target = getConfiguredTarget("//foo:myrule");
     JavaCompilationArgsProvider provider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, target);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, target);
     assertThat(provider).isNotNull();
     List<String> compileTimeJars =
         prettyJarNames(provider.getJavaCompilationArgs().getCompileTimeJars());
@@ -395,7 +403,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertThat(transitiveRuntimeJars).containsExactly("foo/libd.jar");
 
     JavaSourceJarsProvider sourcesProvider =
-        JavaInfo.getProvider(JavaSourceJarsProvider.class, target);
+        JavaProvider.getProvider(JavaSourceJarsProvider.class, target);
     List<String> sourceJars = prettyJarNames(sourcesProvider.getSourceJars());
     assertThat(sourceJars).containsExactly("foo/liba-src.jar");
   }
@@ -406,7 +414,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "foo/extension.bzl",
         "def _impl(ctx):",
         "  transitive_provider = java_common.merge(",
-        "      [dep[JavaInfo] for dep in ctx.attr.deps])",
+        "      [dep[java_common.provider] for dep in ctx.attr.deps])",
         "  my_provider = java_common.create_provider(",
         "        compile_time_jars = depset(ctx.files.compile_time_jars),",
         "        runtime_jars = depset(ctx.files.runtime_jars))",
@@ -431,7 +439,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     );
     ConfiguredTarget target = getConfiguredTarget("//foo:myrule");
     JavaCompilationArgsProvider provider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, target);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, target);
     assertThat(provider).isNotNull();
     List<String> compileTimeJars =
         prettyJarNames(provider.getJavaCompilationArgs().getCompileTimeJars());
@@ -471,7 +479,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     );
     ConfiguredTarget target = getConfiguredTarget("//foo:java_lib");
     JavaCompilationArgsProvider provider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, target);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, target);
     List<String> compileTimeJars = prettyJarNames(
         provider.getRecursiveJavaCompilationArgs().getCompileTimeJars());
     assertThat(compileTimeJars).containsExactly("foo/libjava_lib-hjar.jar", "foo/liba.jar");
@@ -487,7 +495,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "foo/extension.bzl",
         "my_provider = provider()",
         "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[JavaInfo]",
+        "  dep_params = ctx.attr.dep[java_common.provider]",
         "  return [my_provider(p = dep_params)]",
         "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
     scratch.file(
@@ -500,10 +508,11 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     ConfiguredTarget javaLibraryTarget = getConfiguredTarget("//foo:jl");
     SkylarkKey myProviderKey =
         new SkylarkKey(Label.parseAbsolute("//foo:extension.bzl"), "my_provider");
-    Info declaredProvider = myRuleTarget.get(myProviderKey);
+    SkylarkClassObject declaredProvider =
+        myRuleTarget.get(myProviderKey);
     Object javaProvider = declaredProvider.getValue("p");
-    assertThat(javaProvider).isInstanceOf(JavaInfo.class);
-    assertThat(javaLibraryTarget.get(JavaInfo.PROVIDER)).isEqualTo(javaProvider);
+    assertThat(javaProvider).isInstanceOf(JavaProvider.class);
+    assertThat(javaLibraryTarget.get(JavaProvider.JAVA_PROVIDER)).isEqualTo(javaProvider);
   }
 
   @Test
@@ -511,7 +520,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[JavaInfo]",
+        "  dep_params = ctx.attr.dep[java_common.provider]",
         "  return [dep_params]",
         "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
     scratch.file(
@@ -525,18 +534,18 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     ConfiguredTarget javaLibraryTarget = getConfiguredTarget("//foo:jl");
     ConfiguredTarget topJavaLibraryTarget = getConfiguredTarget("//foo:jl_top");
 
-    Object javaProvider = myRuleTarget.get(JavaInfo.PROVIDER.getKey());
-    assertThat(javaProvider).isInstanceOf(JavaInfo.class);
+    Object javaProvider = myRuleTarget.get(JavaProvider.JAVA_PROVIDER.getKey());
+    assertThat(javaProvider).isInstanceOf(JavaProvider.class);
 
-    JavaInfo jlJavaInfo = javaLibraryTarget.get(JavaInfo.PROVIDER);
+    JavaProvider jlJavaProvider = javaLibraryTarget.get(JavaProvider.JAVA_PROVIDER);
 
-    assertThat(jlJavaInfo == javaProvider).isTrue();
+    assertThat(jlJavaProvider == javaProvider).isTrue();
 
-    JavaInfo jlTopJavaInfo = topJavaLibraryTarget.get(JavaInfo.PROVIDER);
+    JavaProvider jlTopJavaProvider = topJavaLibraryTarget.get(JavaProvider.JAVA_PROVIDER);
 
     javaCompilationArgsHaveTheSameParent(
-        jlJavaInfo.getProvider(JavaCompilationArgsProvider.class).getJavaCompilationArgs(),
-        jlTopJavaInfo.getProvider(JavaCompilationArgsProvider.class).getJavaCompilationArgs());
+        jlJavaProvider.getProvider(JavaCompilationArgsProvider.class).getJavaCompilationArgs(),
+        jlTopJavaProvider.getProvider(JavaCompilationArgsProvider.class).getJavaCompilationArgs());
   }
 
   @Test
@@ -544,7 +553,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[JavaInfo]",
+        "  dep_params = ctx.attr.dep[java_common.provider]",
         "  return struct(providers = [dep_params])",
         "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
     scratch.file(
@@ -565,7 +574,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     // Test that all bottom jars are on the runtime classpath of lib_exports.
     ConfiguredTarget jlExports = getConfiguredTarget("//foo:lib_exports");
     JavaCompilationArgsProvider jlExportsProvider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, jlExports);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, jlExports);
     assertThat(prettyJarNames(jlExportsProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()))
         .containsAllOf(
             "foo/libjl_bottom_for_deps.jar",
@@ -575,7 +584,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     // Test that libjl_bottom_for_exports.jar is in the recursive java compilation args of lib_top.
     ConfiguredTarget jlTop = getConfiguredTarget("//foo:lib_interm");
     JavaCompilationArgsProvider jlTopProvider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, jlTop);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, jlTop);
     assertThat(prettyJarNames(jlTopProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()))
         .contains("foo/libjl_bottom_for_exports.jar");
   }
@@ -585,7 +594,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[JavaInfo]",
+        "  dep_params = ctx.attr.dep[java_common.provider]",
         "  return struct(providers = [dep_params])",
         "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
     scratch.file(
@@ -612,7 +621,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/extension.bzl",
         "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[JavaInfo]",
+        "  dep_params = ctx.attr.dep[java_common.provider]",
         "  return struct(providers = [dep_params])",
         "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
     scratch.file(
@@ -628,7 +637,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     // Test that all bottom jars are on the runtime classpath.
     ConfiguredTarget importTarget = getConfiguredTarget("//foo:import");
     JavaCompilationArgsProvider compilationProvider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, importTarget);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, importTarget);
     assertThat(prettyJarNames(
         compilationProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()))
         .containsAllOf(
@@ -640,7 +649,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/custom_library.bzl",
         "def _impl(ctx):",
-        "  java_provider = java_common.merge([dep[JavaInfo] for dep in ctx.attr.deps])",
+        "  java_provider = java_common.merge([dep[java_common.provider] for dep in ctx.attr.deps])",
         "  if not ctx.attr.strict_deps:",
         "    java_provider = java_common.make_non_strict(java_provider)",
         "  return [java_provider]",
@@ -662,7 +671,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:custom");
     JavaCompilationArgsProvider javaCompilationArgsProvider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, myRuleTarget);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, myRuleTarget);
     List<String> directJars = prettyJarNames(
         javaCompilationArgsProvider.getJavaCompilationArgs().getRuntimeJars());
     assertThat(directJars).containsExactly("foo/liba.jar");
@@ -673,7 +682,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     scratch.file(
         "foo/custom_library.bzl",
         "def _impl(ctx):",
-        "  java_provider = java_common.merge([dep[JavaInfo] for dep in ctx.attr.deps])",
+        "  java_provider = java_common.merge([dep[java_common.provider] for dep in ctx.attr.deps])",
         "  if not ctx.attr.strict_deps:",
         "    java_provider = java_common.make_non_strict(java_provider)",
         "  return [java_provider]",
@@ -695,7 +704,7 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
 
     ConfiguredTarget myRuleTarget = getConfiguredTarget("//foo:custom");
     JavaCompilationArgsProvider javaCompilationArgsProvider =
-        JavaInfo.getProvider(JavaCompilationArgsProvider.class, myRuleTarget);
+        JavaProvider.getProvider(JavaCompilationArgsProvider.class, myRuleTarget);
     List<String> directJars = prettyJarNames(
         javaCompilationArgsProvider.getJavaCompilationArgs().getRuntimeJars());
     assertThat(directJars).containsExactly("foo/liba.jar", "foo/libb.jar");
@@ -719,9 +728,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "myrule(name='myrule')"
     );
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
-    Info info =
+    SkylarkClassObject skylarkClassObject =
         configuredTarget.get(new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl"), "result"));
-    assertThat(((String) info.getValue("strict_java_deps"))).isEqualTo("default");
+    assertThat(((String) skylarkClassObject.getValue("strict_java_deps"))).isEqualTo("default");
   }
 
   @Test
@@ -743,9 +752,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     );
     useConfiguration("--strict_java_deps=ERROR");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
-    Info info =
+    SkylarkClassObject skylarkClassObject =
         configuredTarget.get(new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl"), "result"));
-    assertThat(((String) info.getValue("strict_java_deps"))).isEqualTo("error");
+    assertThat(((String) skylarkClassObject.getValue("strict_java_deps"))).isEqualTo("error");
   }
 
   @Test
@@ -769,9 +778,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "myrule(name='myrule')"
     );
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
-    Info info =
+    SkylarkClassObject skylarkClassObject =
         configuredTarget.get(new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl"), "result"));
-    Label javaToolchainLabel = ((Label) info.getValue("java_toolchain_label"));
+    Label javaToolchainLabel = ((Label) skylarkClassObject.getValue("java_toolchain_label"));
     assertThat(javaToolchainLabel.toString()).endsWith("jdk:toolchain");
   }
 
@@ -797,9 +806,9 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     );
     useConfiguration("--java_toolchain=//java/com/google/test:toolchain");
     ConfiguredTarget configuredTarget = getConfiguredTarget("//foo:myrule");
-    Info info =
+    SkylarkClassObject skylarkClassObject =
         configuredTarget.get(new SkylarkKey(Label.parseAbsolute("//foo:rule.bzl"), "result"));
-    Label javaToolchainLabel = ((Label) info.getValue("java_toolchain_label"));
+    Label javaToolchainLabel = ((Label) skylarkClassObject.getValue("java_toolchain_label"));
     assertThat(javaToolchainLabel.toString()).isEqualTo("//java/com/google/test:toolchain");
   }
 

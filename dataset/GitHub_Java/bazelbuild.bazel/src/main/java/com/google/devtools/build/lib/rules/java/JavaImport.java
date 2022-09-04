@@ -23,15 +23,15 @@ import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.LinkerInput;
@@ -65,14 +65,8 @@ public class JavaImport implements RuleConfiguredTargetFactory {
             .addAll(ruleContext.getPrerequisites("deps", Mode.TARGET))
             .addAll(ruleContext.getPrerequisites("exports", Mode.TARGET))
             .build();
-    final JavaCommon common =
-        new JavaCommon(
-            ruleContext,
-            semantics,
-            /* sources= */ ImmutableList.<Artifact>of(),
-            targets,
-            targets,
-            targets);
+    final JavaCommon common = new JavaCommon(
+        ruleContext, semantics, /*srcs=*/ImmutableList.<Artifact>of(), targets, targets, targets);
     semantics.checkRule(ruleContext, common);
 
     // No need for javac options - no compilation happening here.
@@ -118,7 +112,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
       protected void collect(CcLinkParams.Builder builder, boolean linkingStatically,
                              boolean linkShared) {
         builder.addTransitiveTargets(common.targetsTreatedAsDeps(ClasspathType.BOTH),
-            JavaCcLinkParamsProvider.TO_LINK_PARAMS, CcLinkParamsInfo.TO_LINK_PARAMS);
+            JavaCcLinkParamsProvider.TO_LINK_PARAMS, CcLinkParamsProvider.TO_LINK_PARAMS);
       }
     };
     RuleConfiguredTargetBuilder ruleBuilder =
@@ -162,7 +156,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     JavaCompilationArgsProvider compilationArgsProvider =
         JavaCompilationArgsProvider.create(javaCompilationArgs, recursiveJavaCompilationArgs);
     common.addTransitiveInfoProviders(ruleBuilder, filesToBuild, null);
-    JavaInfo javaInfo = JavaInfo.Builder.create()
+    JavaProvider javaProvider = JavaProvider.Builder.create()
         .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
@@ -171,14 +165,14 @@ public class JavaImport implements RuleConfiguredTargetFactory {
         .setFilesToBuild(filesToBuild)
         .addSkylarkTransitiveInfo(
             JavaSkylarkApiProvider.NAME, JavaSkylarkApiProvider.fromRuleContext())
-        .addNativeDeclaredProvider(javaInfo)
+        .addNativeDeclaredProvider(javaProvider)
         .add(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
         .add(
             JavaRuntimeJarProvider.class,
             new JavaRuntimeJarProvider(javaArtifacts.getRuntimeJars()))
         .add(JavaNeverlinkInfoProvider.class, new JavaNeverlinkInfoProvider(neverLink))
         .add(RunfilesProvider.class, RunfilesProvider.simple(runfiles))
-        .addNativeDeclaredProvider(new CcLinkParamsInfo(ccLinkParamsStore))
+        .addNativeDeclaredProvider(new CcLinkParamsProvider(ccLinkParamsStore))
         .add(JavaCompilationArgsProvider.class, compilationArgsProvider)
         .add(
             JavaNativeLibraryProvider.class,
@@ -199,7 +193,7 @@ public class JavaImport implements RuleConfiguredTargetFactory {
     if (srcJar != null) {
       transitiveJavaSourceJarBuilder.add(srcJar);
     }
-    for (JavaSourceJarsProvider other : JavaInfo.getProvidersFromListOfTargets(
+    for (JavaSourceJarsProvider other : JavaProvider.getProvidersFromListOfTargets(
         JavaSourceJarsProvider.class, ruleContext.getPrerequisites("exports", Mode.TARGET))) {
       transitiveJavaSourceJarBuilder.addTransitive(other.getTransitiveSourceJars());
     }

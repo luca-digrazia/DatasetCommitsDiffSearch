@@ -17,25 +17,34 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.Map;
 import javax.annotation.Nullable;
 
-/** Information about a C++ compiler used by the <code>cc_*</code> rules. */
-@SkylarkModule(name = "CcToolchainInfo", doc = "Information about the C++ compiler being used.")
+/**
+ * Information about a C++ compiler used by the <code>cc_*</code> rules.
+ */
+@SkylarkModule(
+    name = "CcToolchainInfo",
+    doc = "Information about the C++ compiler being used."
+)
 @Immutable
-public final class CcToolchainProvider extends ToolchainInfo {
+public final class CcToolchainProvider extends SkylarkClassObject {
   public static final String SKYLARK_NAME = "CcToolchainInfo";
+
+  public static final NativeClassObjectConstructor<CcToolchainProvider> SKYLARK_CONSTRUCTOR =
+      new NativeClassObjectConstructor<CcToolchainProvider>(
+          CcToolchainProvider.class, SKYLARK_NAME) {};
 
   /** An empty toolchain to be returned in the error case (instead of null). */
   public static final CcToolchainProvider EMPTY_TOOLCHAIN_IS_ERROR =
@@ -59,10 +68,9 @@ public final class CcToolchainProvider extends ToolchainInfo {
           CppCompilationContext.EMPTY,
           false,
           false,
-          Variables.EMPTY,
+          ImmutableMap.<String, String>of(),
           ImmutableList.<Artifact>of(),
           NestedSetBuilder.<Pair<String, String>>emptySet(Order.COMPILE_ORDER),
-          null,
           null,
           ImmutableMap.<String, String>of(),
           ImmutableList.<PathFragment>of(),
@@ -87,11 +95,10 @@ public final class CcToolchainProvider extends ToolchainInfo {
   private final CppCompilationContext cppCompilationContext;
   private final boolean supportsParamFiles;
   private final boolean supportsHeaderParsing;
-  private final Variables buildVariables;
+  private final ImmutableMap<String, String> buildVariables;
   private final ImmutableList<Artifact> builtinIncludeFiles;
   private final NestedSet<Pair<String, String>> coverageEnvironment;
   @Nullable private final Artifact linkDynamicLibraryTool;
-  @Nullable private final Artifact defParser;
   private final ImmutableMap<String, String> environment;
   private final ImmutableList<PathFragment> builtInIncludeDirectories;
   @Nullable private final PathFragment sysroot;
@@ -116,15 +123,14 @@ public final class CcToolchainProvider extends ToolchainInfo {
       CppCompilationContext cppCompilationContext,
       boolean supportsParamFiles,
       boolean supportsHeaderParsing,
-      Variables buildVariables,
+      Map<String, String> buildVariables,
       ImmutableList<Artifact> builtinIncludeFiles,
       NestedSet<Pair<String, String>> coverageEnvironment,
       Artifact linkDynamicLibraryTool,
-      Artifact defParser,
       ImmutableMap<String, String> environment,
       ImmutableList<PathFragment> builtInIncludeDirectories,
       @Nullable PathFragment sysroot) {
-    super(ImmutableMap.<String, Object>of(), Location.BUILTIN);
+    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of());
     this.cppConfiguration = cppConfiguration;
     this.crosstool = Preconditions.checkNotNull(crosstool);
     this.crosstoolMiddleman = Preconditions.checkNotNull(crosstoolMiddleman);
@@ -144,11 +150,10 @@ public final class CcToolchainProvider extends ToolchainInfo {
     this.cppCompilationContext = Preconditions.checkNotNull(cppCompilationContext);
     this.supportsParamFiles = supportsParamFiles;
     this.supportsHeaderParsing = supportsHeaderParsing;
-    this.buildVariables = buildVariables;
+    this.buildVariables = ImmutableMap.copyOf(buildVariables);
     this.builtinIncludeFiles = builtinIncludeFiles;
     this.coverageEnvironment = coverageEnvironment;
     this.linkDynamicLibraryTool = linkDynamicLibraryTool;
-    this.defParser = defParser;
     this.environment = environment;
     this.builtInIncludeDirectories = builtInIncludeDirectories;
     this.sysroot = sysroot;
@@ -298,9 +303,11 @@ public final class CcToolchainProvider extends ToolchainInfo {
   public CppConfiguration getCppConfiguration() {
     return cppConfiguration;
   }
-
-  /** Returns build variables to be templated into the crosstool. */
-  public Variables getBuildVariables() {
+  
+  /**
+   * Returns build variables to be templated into the crosstool.
+   */
+  public ImmutableMap<String, String> getBuildVariables() {
     return buildVariables;
   }
 
@@ -332,14 +339,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
   }
 
   /**
-   * Returns the tool which should be used to parser object files for generating DEF file on
-   * Windows. The label of this tool is //third_party/def_parser:def_parser.
-   */
-  public Artifact getDefParserTool() {
-    return defParser;
-  }
-
-  /**
    * Returns the tool that builds interface libraries from dynamic libraries.
    */
   public Artifact getInterfaceSoBuilder() {
@@ -364,12 +363,8 @@ public final class CcToolchainProvider extends ToolchainInfo {
         "Returns the default list of options which cannot be filtered by BUILD "
             + "rules. These should be appended to the command line after filtering."
   )
-  public ImmutableList<String> getUnfilteredCompilerOptionsWithSysroot(Iterable<String> features) {
-    return cppConfiguration.getUnfilteredCompilerOptionsDoNotUse(features, sysroot);
-  }
-
   public ImmutableList<String> getUnfilteredCompilerOptions(Iterable<String> features) {
-    return cppConfiguration.getUnfilteredCompilerOptionsDoNotUse(features, /* sysroot= */ null);
+    return cppConfiguration.getUnfilteredCompilerOptions(features, sysroot);
   }
 
   @SkylarkCallable(
@@ -379,14 +374,9 @@ public final class CcToolchainProvider extends ToolchainInfo {
         "Returns the set of command-line linker options, including any flags "
             + "inferred from the command-line options."
   )
-  public ImmutableList<String> getLinkOptionsWithSysroot() {
-    return cppConfiguration.getLinkOptionsDoNotUse(sysroot);
-  }
-
   public ImmutableList<String> getLinkOptions() {
-    return cppConfiguration.getLinkOptionsDoNotUse(/* sysroot= */ null);
+    return cppConfiguration.getLinkOptions(sysroot);
   }
-
 
   // Not all of CcToolchainProvider is exposed to Skylark, which makes implementing deep equality
   // impossible: if Java-only parts are considered, the behavior is surprising in Skylark, if they

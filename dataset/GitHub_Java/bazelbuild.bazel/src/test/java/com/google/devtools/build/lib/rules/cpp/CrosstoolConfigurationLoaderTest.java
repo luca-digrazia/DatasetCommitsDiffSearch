@@ -21,16 +21,15 @@ import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
+import com.google.devtools.build.lib.rules.MakeVariableProvider;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -74,9 +73,9 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     return loader(
         "major_version: \"12\""
             + "minor_version: \"0\""
-            + "default_target_cpu: \"k8\""
+            + "default_target_cpu: \"cpu\""
             + "default_toolchain {"
-            + "  cpu: \"k8\""
+            + "  cpu: \"cpu\""
             + "  toolchain_identifier: \"toolchain-identifier\""
             + "}"
             + "toolchain {"
@@ -162,8 +161,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
 
   private CcToolchainProvider getCcToolchainProvider(CppConfiguration cppConfiguration)
       throws Exception {
-    return (CcToolchainProvider)
-        getCcToolchainTarget(cppConfiguration).get(ToolchainInfo.PROVIDER);
+    return getCcToolchainTarget(cppConfiguration).get(CcToolchainProvider.SKYLARK_CONSTRUCTOR);
   }
 
   /**
@@ -177,7 +175,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
 
     // Need to clear out the android cpu options to avoid this split transition in Bazel.
     CppConfiguration toolchain =
-        create(loader, "--cpu=k8", "--host_cpu=k8", "--android_cpu=", "--fat_apk_cpu=");
+        create(loader, "--cpu=cpu", "--host_cpu=cpu", "--android_cpu=", "--fat_apk_cpu=");
     CcToolchainProvider ccProvider = getCcToolchainProvider(toolchain);
     assertThat(toolchain.getToolchainIdentifier()).isEqualTo("toolchain-identifier");
 
@@ -490,9 +488,8 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     CppConfiguration toolchainA =
         create(loader, "--cpu=piii", "--host_cpu=piii", "--android_cpu=", "--fat_apk_cpu=");
     ConfiguredTarget ccToolchainA = getCcToolchainTarget(toolchainA);
-    CcToolchainProvider ccProviderA =
-        (CcToolchainProvider) ccToolchainA.get(ToolchainInfo.PROVIDER);
-    MakeVariableInfo makeProviderA = ccToolchainA.get(MakeVariableInfo.PROVIDER);
+    CcToolchainProvider ccProviderA = ccToolchainA.get(CcToolchainProvider.SKYLARK_CONSTRUCTOR);
+    MakeVariableProvider makeProviderA = ccToolchainA.get(MakeVariableProvider.SKYLARK_CONSTRUCTOR);
     assertThat(toolchainA.getToolchainIdentifier()).isEqualTo("toolchain-identifier-A");
     assertThat(toolchainA.getHostSystemName()).isEqualTo("host-system-name-A");
     assertThat(toolchainA.getTargetGnuSystemName()).isEqualTo("target-system-name-A");
@@ -527,7 +524,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
             "cxx-flag-A-1", "cxx-flag-A-2", "cxx-fastbuild-flag-A-1", "cxx-fastbuild-flag-A-2")
         .inOrder();
     assertThat(ccProviderA.getUnfilteredCompilerOptions(NO_FEATURES))
-        .containsExactly("unfiltered-flag-A-1", "unfiltered-flag-A-2")
+        .containsExactly("--sysroot=some", "unfiltered-flag-A-1", "unfiltered-flag-A-2")
         .inOrder();
     assertThat(toolchainA.getDynamicLinkOptions(NO_FEATURES, true))
         .containsExactly(
@@ -682,7 +679,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         PackageIdentifier.create(
             TestConstants.TOOLS_REPOSITORY,
             PathFragment.create(
-                PathFragment.create(TestConstants.MOCK_CC_CROSSTOOL_PATH),
+                PathFragment.create(TestConstants.TOOLS_REPOSITORY_PATH),
                 PathFragment.create(path)));
     return packageIdentifier.getPathUnderExecRoot();
   }
@@ -879,9 +876,9 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         new StringBuilder(
             "major_version: \"12\""
                 + "minor_version: \"0\""
-                + "default_target_cpu: \"k8\""
+                + "default_target_cpu: \"cpu\""
                 + "default_toolchain {"
-                + "  cpu: \"k8\""
+                + "  cpu: \"cpu\""
                 + "  toolchain_identifier: \"toolchain-identifier\""
                 + "}"
                 + "toolchain {"
@@ -911,7 +908,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
   public void testConfigWithMissingToolDefs() throws Exception {
     CppConfigurationLoader loader = loader(getConfigWithMissingToolDef(Tool.STRIP));
     try {
-      create(loader, "--cpu=k8");
+      create(loader, "--cpu=cpu");
       fail();
     } catch (IllegalArgumentException e) {
       assertThat(e).hasMessageThat().contains("Tool path for 'strip' is missing");
@@ -926,7 +923,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     CppConfigurationLoader loader =
         loader(getConfigWithMissingToolDef(Tool.DWP, "supports_fission: true"));
     try {
-      create(loader, "--cpu=k8");
+      create(loader, "--cpu=cpu");
       fail("Expected failed check on 'dwp' tool path");
     } catch (IllegalArgumentException e) {
       assertThat(e).hasMessageThat().contains("Tool path for 'dwp' is missing");
@@ -941,7 +938,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     CppConfigurationLoader loader =
         loader(getConfigWithMissingToolDef(Tool.DWP, "supports_fission: false"));
     // The following line throws an IllegalArgumentException if an expected tool path is missing.
-    create(loader, "--cpu=k8");
+    create(loader, "--cpu=cpu");
   }
 
   @Test
@@ -966,7 +963,7 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
         loader(
             "major_version: \"v17\""
                 + "minor_version: \"0\""
-                + "default_target_cpu: \"k8\""
+                + "default_target_cpu: \"cpu\""
                 + "default_toolchain {"
                 + "  cpu: \"piii\""
                 + "  toolchain_identifier: \"default-libs\""
@@ -1026,14 +1023,14 @@ public class CrosstoolConfigurationLoaderTest extends AnalysisTestCase {
     // Crosstool with gcov-tool
     CppConfigurationLoader loader =
         loaderWithOptionalTool("  tool_path { name: \"gcov-tool\" path: \"path-to-gcov-tool\" }");
-    CppConfiguration cppConfig = create(loader, "--cpu=k8");
+    CppConfiguration cppConfig = create(loader, "--cpu=cpu");
     ImmutableMap.Builder<String, String> builder = ImmutableMap.builder();
     cppConfig.addGlobalMakeVariables(builder);
     assertThat(builder.build().get("GCOVTOOL")).isNotNull();
 
     // Crosstool without gcov-tool
     loader = loaderWithOptionalTool("");
-    cppConfig = create(loader, "--cpu=k8");
+    cppConfig = create(loader, "--cpu=cpu");
     builder = ImmutableMap.builder();
     cppConfig.addGlobalMakeVariables(builder);
     assertThat(builder.build()).doesNotContainKey("GCOVTOOL");

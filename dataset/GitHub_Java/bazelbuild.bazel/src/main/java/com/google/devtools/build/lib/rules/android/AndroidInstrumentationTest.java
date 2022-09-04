@@ -21,8 +21,8 @@ import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -31,17 +31,16 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Template;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
-import com.google.devtools.build.lib.analysis.test.ExecutionInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.test.ExecutionInfoProvider;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import java.io.IOException;
 import javax.annotation.Nullable;
 
-/** An implementation of the {@code android_instrumentation_test} rule. */
+/** An implementation of the {@code android_instrumentation} rule. */
 public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
 
   private static final Template ANDROID_INSTRUMENTATION_TEST_STUB_SCRIPT =
@@ -49,29 +48,15 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
           AndroidInstrumentationTest.class, "android_instrumentation_test_template.txt");
   private static final String TEST_SUITE_PROPERTY_NAME_FILE = "test_suite_property_name.txt";
 
-  /** Checks expected rule invariants, throws rule errors if anything is set wrong. */
-  private static void validateRuleContext(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
-    if (getInstrumentationProvider(ruleContext) == null) {
-      ruleContext.throwWithAttributeError(
-          "instrumentation",
-          String.format(
-              "The android_binary target at %s is missing an 'instruments' attribute. Please set "
-                  + "it as the label of the android_binary under test.",
-              ruleContext.attributes().get("instrumentation", BuildType.LABEL)));
-    }
-  }
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    validateRuleContext(ruleContext);
-
     // The wrapper script that invokes the test entry point.
     Artifact testExecutable = createTestExecutable(ruleContext);
 
     ImmutableList<TransitiveInfoCollection> runfilesDeps =
         ImmutableList.<TransitiveInfoCollection>builder()
+            .addAll(ruleContext.getPrerequisites("instrumentations", Mode.TARGET))
             .addAll(ruleContext.getPrerequisites("fixtures", Mode.TARGET))
             .add(ruleContext.getPrerequisite("target_device", Mode.HOST))
             .add(ruleContext.getPrerequisite("$test_entry_point", Mode.HOST))
@@ -80,8 +65,6 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
     Runfiles runfiles =
         new Runfiles.Builder(ruleContext.getWorkspaceName())
             .addArtifact(testExecutable)
-            .addArtifact(getInstrumentationApk(ruleContext))
-            .addArtifact(getTargetApk(ruleContext))
             .addTargets(runfilesDeps, RunfilesProvider.DEFAULT_RUNFILES)
             .addTransitiveArtifacts(AndroidCommon.getSupportApks(ruleContext))
             .addTransitiveArtifacts(getAdb(ruleContext).getFilesToRun())
@@ -122,8 +105,9 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
         .add(executableSubstitution("%adb%", getAdb(ruleContext)))
         .add(executableSubstitution("%device_script%", getTargetDevice(ruleContext)))
         .add(executableSubstitution("%test_entry_point%", getTestEntryPoint(ruleContext)))
-        .add(artifactSubstitution("%target_apk%", getTargetApk(ruleContext)))
-        .add(artifactSubstitution("%instrumentation_apk%", getInstrumentationApk(ruleContext)))
+        .add(artifactListSubstitution("%target_apks%", getTargetApks(ruleContext)))
+        .add(
+            artifactListSubstitution("%instrumentation_apks%", getInstrumentationApks(ruleContext)))
         .add(artifactListSubstitution("%support_apks%", getAllSupportApks(ruleContext)))
         .add(Substitution.ofSpaceSeparatedMap("%test_args%", getTestArgs(ruleContext)))
         .add(Substitution.ofSpaceSeparatedMap("%fixture_args%", getFixtureArgs(ruleContext)))
@@ -183,10 +167,6 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
     return Substitution.of(key, filesToRunProvider.getExecutable().getRunfilesPathString());
   }
 
-  private static Substitution artifactSubstitution(String key, Artifact artifact) {
-    return Substitution.of(key, artifact.getRunfilesPathString());
-  }
-
   private static Substitution artifactListSubstitution(String key, Iterable<Artifact> artifacts) {
     return Substitution.ofSpaceSeparatedList(
         key,
@@ -195,25 +175,30 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
             .collect(ImmutableList.toImmutableList()));
   }
 
-  @Nullable
-  private static AndroidInstrumentationInfo getInstrumentationProvider(RuleContext ruleContext) {
-    return ruleContext.getPrerequisite(
-        "instrumentation", Mode.TARGET, AndroidInstrumentationInfo.PROVIDER);
-  }
-
-  /** The target APK from the {@code android_binary} in the {@code instrumentation} attribute. */
-  @Nullable
-  private static Artifact getTargetApk(RuleContext ruleContext) {
-    return getInstrumentationProvider(ruleContext).getTargetApk();
+  /**
+   * The target APKs from each {@code android_instrumentation} in the {@code instrumentations}
+   * attribute.
+   */
+  private static Iterable<Artifact> getTargetApks(RuleContext ruleContext) {
+    return Iterables.transform(
+        ruleContext.getPrerequisites(
+            "instrumentations",
+            Mode.TARGET,
+            AndroidInstrumentationInfoProvider.ANDROID_INSTRUMENTATION_INFO),
+        AndroidInstrumentationInfoProvider::getTargetApk);
   }
 
   /**
-   * The instrumentation APK from the {@code android_binary} in the {@code instrumentation}
-   * attribute.
+   * The instrumentation APKs from each {@code android_instrumentation} in the {@code
+   * instrumentations} attribute.
    */
-  @Nullable
-  private static Artifact getInstrumentationApk(RuleContext ruleContext) {
-    return getInstrumentationProvider(ruleContext).getInstrumentationApk();
+  private static Iterable<Artifact> getInstrumentationApks(RuleContext ruleContext) {
+    return Iterables.transform(
+        ruleContext.getPrerequisites(
+            "instrumentations",
+            Mode.TARGET,
+            AndroidInstrumentationInfoProvider.ANDROID_INSTRUMENTATION_INFO),
+        AndroidInstrumentationInfoProvider::getInstrumentationApk);
   }
 
   /** The support APKs from the {@code support_apks} and {@code fixtures} attributes. */
@@ -294,7 +279,9 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
   private static Iterable<AndroidDeviceScriptFixtureInfoProvider> getDeviceScriptFixtures(
       RuleContext ruleContext) {
     return ruleContext.getPrerequisites(
-        "fixtures", Mode.TARGET, AndroidDeviceScriptFixtureInfoProvider.SKYLARK_CONSTRUCTOR);
+        "fixtures",
+        Mode.TARGET,
+        AndroidDeviceScriptFixtureInfoProvider.SKYLARK_CONSTRUCTOR);
   }
 
   private static String getDeviceBrokerType(RuleContext ruleContext) {
@@ -314,8 +301,7 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
       throws RuleErrorException {
     try {
       return ResourceFileLoader.loadResource(
-              AndroidInstrumentationTest.class, TEST_SUITE_PROPERTY_NAME_FILE)
-          .trim();
+          AndroidInstrumentationTest.class, TEST_SUITE_PROPERTY_NAME_FILE);
     } catch (IOException e) {
       ruleContext.throwWithRuleError("Cannot load test suite property name: " + e.getMessage());
       return null;
@@ -323,17 +309,20 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
   }
 
   /**
-   * Propagates the {@link ExecutionInfo} from the {@code android_device} rule in the {@code
+   * Propagates the {@link ExecutionInfoProvider} from the {@code android_device} rule in the {@code
    * target_device} attribute.
    *
    * <p>This allows the dependent {@code android_device} rule to specify some requirements on the
    * machine that the {@code android_instrumentation_test} runs on.
    */
-  private static ExecutionInfo getExecutionInfoProvider(RuleContext ruleContext) {
-    ExecutionInfo executionInfo =
-        ruleContext.getPrerequisite("target_device", Mode.HOST, ExecutionInfo.PROVIDER);
+  private static ExecutionInfoProvider getExecutionInfoProvider(RuleContext ruleContext) {
+    ExecutionInfoProvider executionInfoProvider =
+            ruleContext.getPrerequisite(
+                "target_device", Mode.HOST, ExecutionInfoProvider.SKYLARK_CONSTRUCTOR);
     ImmutableMap<String, String> executionRequirements =
-        (executionInfo != null) ? executionInfo.getExecutionInfo() : ImmutableMap.of();
-    return new ExecutionInfo(executionRequirements);
+        (executionInfoProvider != null)
+            ? executionInfoProvider.getExecutionInfo()
+            : ImmutableMap.of();
+    return new ExecutionInfoProvider(executionRequirements);
   }
 }

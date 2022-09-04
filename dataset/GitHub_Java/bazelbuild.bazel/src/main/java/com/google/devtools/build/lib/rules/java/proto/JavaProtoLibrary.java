@@ -16,10 +16,7 @@ package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.rules.java.proto.JplCcLinkParams.createCcLinkParamsStore;
-import static com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils.constructJcapFromAspectDeps;
 
-import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
@@ -49,7 +46,13 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
         ruleContext.getPrerequisites("deps", TARGET, JavaProtoLibraryAspectProvider.class);
 
     JavaCompilationArgsProvider dependencyArgsProviders =
-        constructJcapFromAspectDeps(ruleContext, javaProtoLibraryAspectProviders);
+        JavaCompilationArgsProvider.merge(
+            WrappingProvider.Helper.unwrapProviders(
+                javaProtoLibraryAspectProviders, JavaCompilationArgsProvider.class));
+
+    if (!StrictDepsUtils.isStrictDepsJavaProtoLibrary(ruleContext)) {
+      dependencyArgsProviders = StrictDepsUtils.makeNonStrict(dependencyArgsProviders);
+    }
 
     Runfiles runfiles =
         new Runfiles.Builder(ruleContext.getWorkspaceName())
@@ -97,7 +100,6 @@ public class JavaProtoLibrary implements RuleConfiguredTargetFactory {
         .addProvider(sourceJarsProvider)
         .addProvider(javaRunfilesProvider)
         .addProvider(JavaRuleOutputJarsProvider.EMPTY)
-        .addProvider(createCcLinkParamsStore(ruleContext, ImmutableList.of()))
         .addNativeDeclaredProvider(javaProvider)
         .build();
   }
