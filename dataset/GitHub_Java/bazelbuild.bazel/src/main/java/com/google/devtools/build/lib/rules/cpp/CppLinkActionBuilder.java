@@ -882,7 +882,6 @@ public class CppLinkActionBuilder {
               thinltoMergedObjectFile != null ? thinltoMergedObjectFile.getExecPathString() : null,
               mustKeepDebug,
               toolchain,
-              cppConfiguration,
               featureConfiguration,
               useTestOnlyFlags,
               isLtoIndexing,
@@ -957,10 +956,6 @@ public class CppLinkActionBuilder {
     }
 
     linkCommandLineBuilder.setBuildVariables(buildVariables);
-    if (CppHelper.doNotSplitLinkingCmdLine(
-        actionConstructionContext.getAnalysisEnvironment().getSkylarkSemantics(), toolchain)) {
-      linkCommandLineBuilder.doNotSplitLinkingCmdLine();
-    }
     LinkCommandLine linkCommandLine = linkCommandLineBuilder.build();
 
     // Compute the set of inputs - we only need stable order here.

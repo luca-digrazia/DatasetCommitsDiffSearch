@@ -247,6 +247,9 @@ public final class LtoBackendArtifacts {
           CompileBuildVariables.IS_USING_FISSION.getVariableName(), "");
     }
     buildVariablesBuilder.addStringSequenceVariable(
+        CompileBuildVariables.LEGACY_COMPILE_FLAGS.getVariableName(),
+        ccToolchain.getLegacyCompileOptions());
+    buildVariablesBuilder.addStringSequenceVariable(
         CompileBuildVariables.USER_COMPILE_FLAGS.getVariableName(), userCompileFlags);
 
     List<String> execArgs = new ArrayList<>();
