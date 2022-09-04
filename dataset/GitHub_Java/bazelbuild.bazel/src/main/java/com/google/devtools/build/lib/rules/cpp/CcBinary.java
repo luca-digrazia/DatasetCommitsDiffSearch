@@ -894,13 +894,9 @@ public abstract class CcBinary implements RuleConfiguredTargetFactory {
             cppConfiguration.isLipoContextCollector(),
             cppConfiguration.processHeadersInDependencies(),
             CppHelper.usePicForDynamicLibraries(ruleContext, toolchain));
-
-    CcCompilationInfo.Builder ccCompilationInfoBuilder = CcCompilationInfo.Builder.create();
-    ccCompilationInfoBuilder.setCcCompilationContextInfo(ccCompilationContextInfo);
-
     builder
         .setFilesToBuild(filesToBuild)
-        .addNativeDeclaredProvider(ccCompilationInfoBuilder.build())
+        .addNativeDeclaredProvider(ccCompilationContextInfo)
         .addProvider(TransitiveLipoInfoProvider.class, transitiveLipoInfo)
         .addNativeDeclaredProvider(
             new CcExecutionDynamicLibrariesInfo(
