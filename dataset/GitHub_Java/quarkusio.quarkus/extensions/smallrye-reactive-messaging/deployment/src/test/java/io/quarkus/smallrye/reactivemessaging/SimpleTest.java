@@ -7,21 +7,25 @@ import java.util.List;
 
 import javax.inject.Inject;
 
-import io.quarkus.test.QuarkusUnitTest;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
+
+import io.quarkus.test.QuarkusUnitTest;
 
 public class SimpleTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(SimpleBean.class, StreamConsumer.class));
-    
+                    .addClasses(SimpleBean.class, StreamConsumer.class, StreamEmitter.class));
+
     @Inject
     StreamConsumer streamConsumer;
+
+    @Inject
+    StreamEmitter streamEmitter;
 
     @Test
     public void testSimpleBean() {
@@ -31,7 +35,7 @@ public class SimpleTest {
         assertTrue(SimpleBean.RESULT.contains("REACTIVE"));
         assertTrue(SimpleBean.RESULT.contains("MESSAGE"));
     }
-    
+
     @Test
     public void testStreamInject() {
         List<String> consumed = streamConsumer.consume();
@@ -42,4 +46,15 @@ public class SimpleTest {
         assertEquals("reactive", consumed.get(3));
         assertEquals("message", consumed.get(4));
     }
+
+    @Test
+    public void testStreamEmitter() {
+        streamEmitter.run();
+        List<String> list = streamEmitter.list();
+        assertEquals(3, list.size());
+        assertEquals("a", list.get(0));
+        assertEquals("b", list.get(1));
+        assertEquals("c", list.get(2));
+    }
+
 }
