@@ -19,7 +19,6 @@ package org.graylog2.bundles;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import org.bson.types.ObjectId;
 import org.graylog2.dashboards.DashboardImpl;
 import org.graylog2.dashboards.DashboardService;
@@ -54,8 +53,6 @@ import org.graylog2.streams.StreamImpl;
 import org.graylog2.streams.StreamRuleImpl;
 import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
-import org.graylog2.streams.events.StreamDeletedEvent;
-import org.graylog2.streams.events.StreamsChangedEvent;
 import org.graylog2.timeranges.TimeRangeFactory;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
@@ -79,7 +76,6 @@ public class BundleImporter {
     private final InputService inputService;
     private final InputRegistry inputRegistry;
     private final ExtractorFactory extractorFactory;
-    private final ConverterFactory converterFactory;
     private final StreamService streamService;
     private final StreamRuleService streamRuleService;
     private final IndexSetRegistry indexSetRegistry;
@@ -105,7 +101,6 @@ public class BundleImporter {
     public BundleImporter(final InputService inputService,
                           final InputRegistry inputRegistry,
                           final ExtractorFactory extractorFactory,
-                          final ConverterFactory converterFactory,
                           final StreamService streamService,
                           final StreamRuleService streamRuleService,
                           final IndexSetRegistry indexSetRegistry,
@@ -121,7 +116,6 @@ public class BundleImporter {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
-        this.converterFactory = converterFactory;
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
         this.indexSetRegistry = indexSetRegistry;
@@ -228,10 +222,8 @@ public class BundleImporter {
 
     private void deleteCreatedStreams() throws NotFoundException {
         for (Map.Entry<String, org.graylog2.plugin.streams.Stream> entry : createdStreams.entrySet()) {
-            final String streamId = entry.getKey();
-            LOG.debug("Deleting stream {} from database", streamId);
+            LOG.debug("Deleting stream {} from database", entry.getKey());
             streamService.destroy(entry.getValue());
-            clusterBus.post(streamId);
         }
     }
 
@@ -365,7 +357,7 @@ public class BundleImporter {
 
         for (final Converter converter : requestedConverters) {
             try {
-                converters.add(converterFactory.create(converter.getType(), converter.getConfiguration()));
+                converters.add(ConverterFactory.factory(converter.getType(), converter.getConfiguration()));
             } catch (ConverterFactory.NoSuchConverterException e) {
                 LOG.warn("No such converter [" + converter.getType() + "]. Skipping.", e);
             } catch (org.graylog2.ConfigurationException e) {
@@ -470,9 +462,6 @@ public class BundleImporter {
                 streamsByReferenceId.put(referenceId, stream);
             }
         }
-
-        final ImmutableSet<String> streamIds = ImmutableSet.copyOf(createdStreams.keySet());
-        clusterBus.post(StreamsChangedEvent.create(streamIds));
     }
 
     private org.graylog2.plugin.streams.Stream createStream(final String bundleId, final Stream streamDescription, final String userName)
