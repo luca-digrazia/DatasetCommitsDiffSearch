@@ -140,7 +140,7 @@ public class EvaluationTestCase {
   }
 
   protected BuildFileAST parseBuildFileASTWithoutValidation(String... input) {
-    return BuildFileAST.parseString(getEventHandler(), input);
+    return BuildFileAST.parseSkylarkString(getEventHandler(), input);
   }
 
   protected BuildFileAST parseBuildFileAST(String... input) {
