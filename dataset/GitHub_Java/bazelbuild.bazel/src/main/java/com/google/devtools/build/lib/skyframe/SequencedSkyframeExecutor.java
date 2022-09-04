@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
-import com.google.devtools.build.lib.analysis.AspectValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
@@ -63,9 +62,7 @@ import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.query2.aquery.AqueryActionFilter;
 import com.google.devtools.build.lib.repository.ExternalPackageHelper;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Workspaces;
+import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledge;
 import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import com.google.devtools.build.lib.skyframe.DiffAwarenessManager.ProcessableModifiedFileSet;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.BasicFilesystemDirtinessChecker;
@@ -80,7 +77,6 @@ import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptio
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.actiongraph.ActionGraphDump;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.ResourceUsage;
@@ -241,16 +237,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       TimestampGranularityMonitor tsgm,
       OptionsProvider options)
       throws InterruptedException, AbruptExitException {
-    // If the ArtifactNestedSetFunction options changed between builds, it's necessary to reset the
+    // If the nestedSetAsSkykeyThreshold changed between builds, it's necessary to reset the
     // evaluator to avoid dependency inconsistencies in Skyframe.
-    // Resetting the evaluator creates new instances of the SkyFunctions, hence also wiping
+    // Resetting the evaluator also creates new instances of the SkyFunctions, hence also wiping
     // various state maps in ActionExecutionFunction and ArtifactNestedSetFunction.
-    boolean nestedSetAsSkyKeyOptionsChanged = nestedSetAsSkyKeyOptionsChanged(options);
-    if (evaluatorNeedsReset || nestedSetAsSkyKeyOptionsChanged) {
-      if (nestedSetAsSkyKeyOptionsChanged) {
-        eventHandler.handle(
-            Event.info("ArtifactNestedSetFunction options changed. Resetting evaluator..."));
-      }
+    if (evaluatorNeedsReset || nestedSetAsSkyKeyThresholdUpdatedAndReset(options)) {
       // Recreate MemoizingEvaluator so that graph is recreated with correct edge-clearing status,
       // or if the graph doesn't have edges, so that a fresh graph can be used.
       resetEvaluator();
@@ -271,23 +262,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     Profiler.instance().logSimpleTask(startTime, stopTime, ProfilerTask.INFO, "handleDiffs");
     long duration = stopTime - startTime;
     sourceDiffCheckingDuration = duration > 0 ? Duration.ofNanos(duration) : Duration.ZERO;
-  }
-
-  /**
-   * Updates ArtifactNestedSetFunction options if the flags' values changed.
-   *
-   * @return whether an update was made.
-   */
-  private static boolean nestedSetAsSkyKeyOptionsChanged(OptionsProvider options) {
-    BuildRequestOptions buildRequestOptions = options.getOptions(BuildRequestOptions.class);
-    if (buildRequestOptions == null) {
-      return false;
-    }
-
-    return ArtifactNestedSetFunction.sizeThresholdUpdated(
-            buildRequestOptions.nestedSetAsSkyKeyThreshold)
-        || ArtifactNestedSetFunction.evalKeysAsOneGroupUpdated(
-            buildRequestOptions.nsosEvalKeysAsOneGroup);
   }
 
   /**
@@ -697,7 +671,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   @Override
   public void clearAnalysisCache(
-      Collection<ConfiguredTarget> topLevelTargets, ImmutableSet<AspectKey> topLevelAspects) {
+      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects) {
     discardPreExecutionCache(
         topLevelTargets,
         topLevelAspects,
@@ -836,7 +810,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             actionGraphDump.dumpConfiguredTarget((ConfiguredTargetValue) skyValue);
           } else if (functionName.equals(SkyFunctions.ASPECT)) {
             AspectValue aspectValue = (AspectValue) skyValue;
-            AspectKey aspectKey = (AspectKey) key;
+            AspectKey aspectKey = aspectValue.getKey();
             ConfiguredTargetValue configuredTargetValue =
                 (ConfiguredTargetValue)
                     memoizingEvaluator.getExistingValue(aspectKey.getBaseConfiguredTargetKey());
@@ -868,7 +842,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             actionGraphDump.dumpConfiguredTarget((ConfiguredTargetValue) skyValue);
           } else if (functionName.equals(SkyFunctions.ASPECT)) {
             AspectValue aspectValue = (AspectValue) skyValue;
-            AspectKey aspectKey = (AspectKey) key;
+            AspectKey aspectKey = aspectValue.getKey();
             ConfiguredTargetValue configuredTargetValue =
                 (ConfiguredTargetValue)
                     memoizingEvaluator.getExistingValue(aspectKey.getBaseConfiguredTargetKey());
@@ -989,18 +963,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         && !newValue.getManagedDirectories().isEmpty()
         && FileStateType.SYMLINK.equals(newFileStateValue.getType())) {
       throw new AbruptExitException(
-          DetailedExitCode.of(
-              ExitCode.PARSING_FAILURE,
-              FailureDetail.newBuilder()
-                  .setMessage(
-                      "WORKSPACE file can not be a symlink if incrementally updated directories"
-                          + " are used.")
-                  .setWorkspaces(
-                      Workspaces.newBuilder()
-                          .setCode(
-                              FailureDetails.Workspaces.Code
-                                  .ILLEGAL_WORKSPACE_FILE_SYMLINK_WITH_MANAGED_DIRECTORIES))
-                  .build()));
+          "WORKSPACE file can not be a symlink if incrementally updated directories are used.",
+          ExitCode.PARSING_FAILURE);
     }
     return managedDirectoriesKnowledge.workspaceHeaderReloaded(oldValue, newValue);
   }
@@ -1015,17 +979,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     try {
       newWorkspaceFileState = FileStateValue.create(workspacePath, tsgm.get());
     } catch (IOException e) {
-      throw new AbruptExitException(
-          DetailedExitCode.of(
-              ExitCode.PARSING_FAILURE,
-              FailureDetail.newBuilder()
-                  .setMessage("Can not read WORKSPACE file.")
-                  .setWorkspaces(
-                      Workspaces.newBuilder()
-                          .setCode(
-                              FailureDetails.Workspaces.Code
-                                  .WORKSPACE_FILE_READ_FAILURE_WITH_MANAGED_DIRECTORIES))
-                  .build()));
+      throw new AbruptExitException("Can not read WORKSPACE file.", ExitCode.PARSING_FAILURE, e);
     }
     if (oldWorkspaceFileState != null && !oldWorkspaceFileState.equals(newWorkspaceFileState)) {
       recordingDiffer.invalidate(ImmutableSet.of(workspaceFileStateKey));
@@ -1208,5 +1162,17 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       this.managedDirectoriesKnowledge = managedDirectoriesKnowledge;
       return this;
     }
+  }
+
+  /**
+   * Listener class to subscribe for WORKSPACE file header refreshes.
+   *
+   * <p>Changes to WORKSPACE file header are computed before the files difference is computed in
+   * {@link #handleDiffs(ExtendedEventHandler, boolean, OptionsProvider)}
+   */
+  public interface WorkspaceFileHeaderListener {
+    boolean workspaceHeaderReloaded(
+        @Nullable WorkspaceFileValue oldValue, @Nullable WorkspaceFileValue newValue)
+        throws AbruptExitException;
   }
 }
