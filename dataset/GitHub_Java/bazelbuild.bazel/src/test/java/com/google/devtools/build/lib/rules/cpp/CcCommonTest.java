@@ -242,7 +242,7 @@ public class CcCommonTest extends BuildViewTestCase {
             "cc_library(name = 'defineslib',",
             "           srcs = ['defines.cc'],",
             "           defines = ['FOO', 'BAR'])");
-    assertThat(isolatedDefines.get(CcInfo.PROVIDER).getCcCompilationContext().getDefines())
+    assertThat(isolatedDefines.get(CcInfo.PROVIDER).getCcCompilationContext().getDefines().toList())
         .containsExactly("FOO", "BAR")
         .inOrder();
   }
