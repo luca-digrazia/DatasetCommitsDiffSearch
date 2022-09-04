@@ -106,8 +106,7 @@ public class GrpcRemoteDownloader implements AutoCloseable, Downloader {
       String canonicalId,
       Path destination,
       ExtendedEventHandler eventHandler,
-      Map<String, String> clientEnv,
-      com.google.common.base.Optional<String> type)
+      Map<String, String> clientEnv)
       throws IOException, InterruptedException {
     final FetchBlobRequest request =
         newFetchBlobRequest(options.remoteInstanceName, urls, authHeaders, checksum, canonicalId);
