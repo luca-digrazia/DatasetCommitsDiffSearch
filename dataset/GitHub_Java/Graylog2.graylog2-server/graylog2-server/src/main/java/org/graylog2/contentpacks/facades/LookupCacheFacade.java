@@ -18,7 +18,6 @@ package org.graylog2.contentpacks.facades;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableSet;
 import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.contentpacks.model.ModelTypes;
@@ -65,7 +64,7 @@ public class LookupCacheFacade implements EntityFacade<CacheDto> {
     }
 
     @Override
-    public Entity exportNativeEntity(CacheDto cacheDto) {
+    public EntityWithConstraints exportNativeEntity(CacheDto cacheDto) {
         // TODO: Create independent representation of entity?
         final Map<String, Object> configuration = objectMapper.convertValue(cacheDto.config(), TypeReferences.MAP_STRING_OBJECT);
         final LookupCacheEntity lookupCacheEntity = LookupCacheEntity.create(
@@ -74,23 +73,22 @@ public class LookupCacheFacade implements EntityFacade<CacheDto> {
                 ValueReference.of(cacheDto.description()),
                 toReferenceMap(configuration));
         final JsonNode data = objectMapper.convertValue(lookupCacheEntity, JsonNode.class);
-        final Set<Constraint> constraints = versionConstraints(cacheDto);
-        return EntityV1.builder()
+        final EntityV1 entity = EntityV1.builder()
                 .type(ModelTypes.LOOKUP_CACHE_V1)
-                .constraints(ImmutableSet.copyOf(constraints))
                 .data(data)
                 .build();
+        final Set<Constraint> constraints = versionConstraints(cacheDto);
+
+        return EntityWithConstraints.create(entity, constraints);
     }
 
-    public Set<Constraint> versionConstraints(CacheDto cacheDto) {
-        Set<Constraint> result = EntityFacade.super.versionConstraints();
+    private Set<Constraint> versionConstraints(CacheDto cacheDto) {
         // TODO: Find more robust method of identifying the providing plugin
         final String packageName = cacheDto.config().getClass().getPackage().getName();
-
         return pluginMetaData.stream()
                 .filter(metaData -> packageName.startsWith(metaData.getClass().getPackage().getName()))
                 .map(PluginVersionConstraint::of)
-                .collect(Collectors.toCollection(() -> result));
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -165,7 +163,7 @@ public class LookupCacheFacade implements EntityFacade<CacheDto> {
     }
 
     @Override
-    public Optional<Entity> exportEntity(EntityDescriptor entityDescriptor) {
+    public Optional<EntityWithConstraints> exportEntity(EntityDescriptor entityDescriptor) {
         final ModelId modelId = entityDescriptor.id();
         return cacheService.get(modelId.id()).map(this::exportNativeEntity);
     }

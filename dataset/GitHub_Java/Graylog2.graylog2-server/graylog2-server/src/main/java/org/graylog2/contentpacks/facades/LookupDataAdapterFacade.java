@@ -18,7 +18,6 @@ package org.graylog2.contentpacks.facades;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.collect.ImmutableSet;
 import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.contentpacks.model.ModelTypes;
@@ -65,7 +64,7 @@ public class LookupDataAdapterFacade implements EntityFacade<DataAdapterDto> {
     }
 
     @Override
-    public Entity exportNativeEntity(DataAdapterDto dataAdapterDto) {
+    public EntityWithConstraints exportNativeEntity(DataAdapterDto dataAdapterDto) {
         // TODO: Create independent representation of entity?
         final Map<String, Object> configuration = objectMapper.convertValue(dataAdapterDto.config(), TypeReferences.MAP_STRING_OBJECT);
         final LookupDataAdapterEntity lookupDataAdapterEntity = LookupDataAdapterEntity.create(
@@ -74,23 +73,23 @@ public class LookupDataAdapterFacade implements EntityFacade<DataAdapterDto> {
                 ValueReference.of(dataAdapterDto.description()),
                 toReferenceMap(configuration));
         final JsonNode data = objectMapper.convertValue(lookupDataAdapterEntity, JsonNode.class);
-        final Set<Constraint> constraints = versionConstraints(dataAdapterDto);
-        return EntityV1.builder()
+        final EntityV1 entity = EntityV1.builder()
                 .type(ModelTypes.LOOKUP_ADAPTER_V1)
-                .constraints(ImmutableSet.copyOf(constraints))
                 .data(data)
                 .build();
+        final Set<Constraint> constraints = versionConstraints(dataAdapterDto);
+
+        return EntityWithConstraints.create(entity, constraints);
     }
 
 
     private Set<Constraint> versionConstraints(DataAdapterDto dataAdapterDto) {
-        Set<Constraint> result = EntityFacade.super.versionConstraints();
         // TODO: Find more robust method of identifying the providing plugin
         final String packageName = dataAdapterDto.config().getClass().getPackage().getName();
         return pluginMetaData.stream()
                 .filter(metaData -> packageName.startsWith(metaData.getClass().getPackage().getName()))
                 .map(PluginVersionConstraint::of)
-                .collect(Collectors.toCollection(() -> result));
+                .collect(Collectors.toSet());
     }
 
     @Override
@@ -165,7 +164,7 @@ public class LookupDataAdapterFacade implements EntityFacade<DataAdapterDto> {
     }
 
     @Override
-    public Optional<Entity> exportEntity(EntityDescriptor entityDescriptor) {
+    public Optional<EntityWithConstraints> exportEntity(EntityDescriptor entityDescriptor) {
         final ModelId modelId = entityDescriptor.id();
         return dataAdapterService.get(modelId.id()).map(this::exportNativeEntity);
     }

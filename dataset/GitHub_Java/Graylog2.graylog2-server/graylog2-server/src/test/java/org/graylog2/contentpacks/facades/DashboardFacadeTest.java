@@ -296,8 +296,6 @@ public class DashboardFacadeTest {
                         ValueReference.of(false),
                         ValueReference.of("AND"),
                         Collections.emptyList(),
-                        Collections.emptyList(),
-                        Collections.emptyList(),
                         Collections.emptySet(),
                         ValueReference.of(false),
                         ValueReference.of(false)), JsonNode.class))

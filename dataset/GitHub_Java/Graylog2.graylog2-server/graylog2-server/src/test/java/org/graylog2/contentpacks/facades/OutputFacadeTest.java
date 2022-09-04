@@ -24,13 +24,13 @@ import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
-import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelTypes;
 import org.graylog2.contentpacks.model.entities.Entity;
 import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.contentpacks.model.entities.EntityExcerpt;
 import org.graylog2.contentpacks.model.entities.EntityV1;
+import org.graylog2.contentpacks.model.entities.EntityWithConstraints;
 import org.graylog2.contentpacks.model.entities.NativeEntity;
 import org.graylog2.contentpacks.model.entities.OutputEntity;
 import org.graylog2.contentpacks.model.entities.references.ReferenceMapUtils;
@@ -89,20 +89,18 @@ public class OutputFacadeTest {
     private OutputService outputService;
     private OutputFacade facade;
     private Map<String, MessageOutput.Factory<? extends MessageOutput>> outputFactories;
-    private Map<String, MessageOutput.Factory2<? extends MessageOutput>> outputFactories2;
 
     @Before
     public void setUp() throws Exception {
         outputService = new OutputServiceImpl(mongoRule.getMongoConnection(), new MongoJackObjectMapperProvider(objectMapper), streamService, outputRegistry);
         pluginMetaData = new HashSet<>();
         outputFactories = new HashMap<>();
-        outputFactories2 = new HashMap<>();
         final LoggingOutput.Factory factory = mock(LoggingOutput.Factory.class);
         final LoggingOutput.Descriptor descriptor = mock(LoggingOutput.Descriptor.class);
         when(factory.getDescriptor()).thenReturn(descriptor);
         outputFactories.put("org.graylog2.outputs.LoggingOutput", factory);
 
-        facade = new OutputFacade(objectMapper, outputService, pluginMetaData, outputFactories, outputFactories2);
+        facade = new OutputFacade(objectMapper, outputService, pluginMetaData, outputFactories);
     }
 
     @Test
@@ -119,12 +117,11 @@ public class OutputFacadeTest {
                 new Date(0L),
                 null
         );
-        final EntityDescriptor descriptor = EntityDescriptor.create(output.getId(), ModelTypes.OUTPUT_V1);
-        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(descriptor);
-        final Entity entity = facade.exportNativeEntity(output, entityDescriptorIds);
+        final EntityWithConstraints entityWithConstraints = facade.exportNativeEntity(output);
+        final Entity entity = entityWithConstraints.entity();
 
         assertThat(entity).isInstanceOf(EntityV1.class);
-        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(descriptor).orElse(null)));
+        assertThat(entity.id()).isNotNull();
         assertThat(entity.type()).isEqualTo(ModelTypes.OUTPUT_V1);
 
         final EntityV1 entityV1 = (EntityV1) entity;
@@ -139,12 +136,11 @@ public class OutputFacadeTest {
     public void exportNativeEntity() throws NotFoundException {
         final Output output = outputService.load("5adf239e4b900a0fdb4e5197");
 
-        final EntityDescriptor descriptor = EntityDescriptor.create(output.getId(), ModelTypes.OUTPUT_V1);
-        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(descriptor);
-        final Entity entity = facade.exportNativeEntity(output, entityDescriptorIds);
+        final EntityWithConstraints entityWithConstraints = facade.exportNativeEntity(output);
+        final Entity entity = entityWithConstraints.entity();
 
         assertThat(entity).isInstanceOf(EntityV1.class);
-        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(descriptor).orElse(null)));
+        assertThat(entity.id()).isNotNull();
         assertThat(entity.type()).isEqualTo(ModelTypes.OUTPUT_V1);
 
         final EntityV1 entityV1 = (EntityV1) entity;
@@ -262,15 +258,14 @@ public class OutputFacadeTest {
     @Test
     @UsingDataSet(locations = "/org/graylog2/contentpacks/outputs.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void collectEntity() {
-        final EntityDescriptor descriptor = EntityDescriptor.create("5adf239e4b900a0fdb4e5197", ModelTypes.OUTPUT_V1);
-        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(descriptor);
-        final Optional<Entity> collectedEntity = facade.exportEntity(descriptor, entityDescriptorIds);
+        final Optional<EntityWithConstraints> collectedEntity = facade.exportEntity(EntityDescriptor.create("5adf239e4b900a0fdb4e5197", ModelTypes.OUTPUT_V1));
         assertThat(collectedEntity)
                 .isPresent()
+                .map(EntityWithConstraints::entity)
                 .containsInstanceOf(EntityV1.class);
 
-        final EntityV1 entity = (EntityV1) collectedEntity.orElseThrow(AssertionError::new);
-        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(descriptor).orElse(null)));
+        final EntityV1 entity = (EntityV1) collectedEntity.map(EntityWithConstraints::entity).orElseThrow(AssertionError::new);
+        assertThat(entity.id()).isNotNull();
         assertThat(entity.type()).isEqualTo(ModelTypes.OUTPUT_V1);
         final OutputEntity outputEntity = objectMapper.convertValue(entity.data(), OutputEntity.class);
         assertThat(outputEntity.title()).isEqualTo(ValueReference.of("STDOUT"));
