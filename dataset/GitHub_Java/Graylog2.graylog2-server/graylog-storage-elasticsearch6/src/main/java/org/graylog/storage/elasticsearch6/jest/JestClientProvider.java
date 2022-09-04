@@ -42,12 +42,14 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Singleton
 public class JestClientProvider implements Provider<JestClient> {
     private final JestClientFactory factory;
     private final CredentialsProvider credentialsProvider;
+    private final AtomicReference<JestClient> instance = new AtomicReference<>();
 
     @Inject
     public JestClientProvider(@Named("elasticsearch_hosts") List<URI> elasticsearchHosts,
@@ -62,6 +64,8 @@ public class JestClientProvider implements Provider<JestClient> {
                               @Named("elasticsearch_discovery_frequency") Duration discoveryFrequency,
                               @Named("elasticsearch_discovery_default_scheme") String defaultSchemeForDiscoveredNodes,
                               @Named("elasticsearch_compression_enabled") boolean compressionEnabled,
+                              @Named("elasticsearch_discovery_default_user") @Nullable String defaultUserForDiscoveredNodes,
+                              @Named("elasticsearch_discovery_default_password") @Nullable String defaultPasswordForDiscoveredNodes,
                               ObjectMapper objectMapper) {
         this.factory = new JestClientFactory() {
             @Override
@@ -96,6 +100,13 @@ public class JestClientProvider implements Provider<JestClient> {
             })
             .collect(Collectors.toList());
 
+        if (discoveryEnabled && !Strings.isNullOrEmpty(defaultUserForDiscoveredNodes) && !Strings.isNullOrEmpty(defaultPasswordForDiscoveredNodes)) {
+            credentialsProvider.setCredentials(
+                    new AuthScope(AuthScope.ANY_HOST, AuthScope.ANY_PORT, AuthScope.ANY_REALM, defaultSchemeForDiscoveredNodes),
+                    new UsernamePasswordCredentials(defaultUserForDiscoveredNodes, defaultPasswordForDiscoveredNodes)
+            );
+        }
+
         final HttpClientConfig.Builder httpClientConfigBuilder = new HttpClientConfig
                 .Builder(hosts)
                 .credentialsProvider(credentialsProvider)
@@ -119,6 +130,6 @@ public class JestClientProvider implements Provider<JestClient> {
 
     @Override
     public JestClient get() {
-        return factory.getObject();
+        return this.instance.updateAndGet(instance -> instance == null ? factory.getObject() : instance);
     }
 }
