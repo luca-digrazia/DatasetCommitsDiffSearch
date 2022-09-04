@@ -3521,9 +3521,7 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
     BuildFileContainsErrorsException e =
         assertThrows(
             BuildFileContainsErrorsException.class, () -> getTarget("//test/starlark:BUILD"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("compilation of module 'test/starlark/error.bzl' failed");
+    assertThat(e).hasMessageThat().contains("Extension 'test/starlark/error.bzl' has errors");
   }
 
   // Test for an interesting situation for the inlining implementation's attempt to process
@@ -3547,8 +3545,6 @@ public class StarlarkIntegrationTest extends BuildViewTestCase {
     BuildFileContainsErrorsException e =
         assertThrows(
             BuildFileContainsErrorsException.class, () -> getTarget("//test/starlark:BUILD"));
-    assertThat(e)
-        .hasMessageThat()
-        .contains("compilation of module 'test/starlark/error.bzl' failed");
+    assertThat(e).hasMessageThat().contains("Extension 'test/starlark/error.bzl' has errors");
   }
 }

@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Package.Builder.DefaultPackageSettings;
-import com.google.devtools.build.lib.packages.Package.ConfigSettingVisibilityPolicy;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
 import com.google.devtools.build.lib.packages.PackageLoadingListener;
@@ -318,8 +317,6 @@ public abstract class AbstractPackageLoader implements PackageLoader {
     }
     PrecomputedValue.PATH_PACKAGE_LOCATOR.set(injectable, pkgLocator);
     PrecomputedValue.DEFAULT_VISIBILITY.set(injectable, ConstantRuleVisibility.PRIVATE);
-    PrecomputedValue.CONFIG_SETTING_VISIBILITY_POLICY
-        .set(injectable, ConfigSettingVisibilityPolicy.LEGACY_OFF);
     PrecomputedValue.STARLARK_SEMANTICS.set(injectable, starlarkSemantics);
     return new ImmutableDiff(ImmutableList.of(), valuesToInject);
   }
@@ -420,7 +417,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         InMemoryMemoizingEvaluator.SUPPLIER.create(
             makeFreshSkyFunctions(),
             preinjectedDifferencer,
-            EvaluationProgressReceiver.NULL,
+            new EvaluationProgressReceiver.NullEvaluationProgressReceiver(),
             GraphInconsistencyReceiver.THROWING,
             InMemoryMemoizingEvaluator.DEFAULT_STORED_EVENT_FILTER,
             new MemoizingEvaluator.EmittedEventState(),

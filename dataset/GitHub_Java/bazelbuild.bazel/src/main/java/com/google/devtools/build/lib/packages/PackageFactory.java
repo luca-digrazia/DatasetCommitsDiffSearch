@@ -75,7 +75,6 @@ import net.starlark.java.syntax.ForStatement;
 import net.starlark.java.syntax.Identifier;
 import net.starlark.java.syntax.IfStatement;
 import net.starlark.java.syntax.IntLiteral;
-import net.starlark.java.syntax.LambdaExpression;
 import net.starlark.java.syntax.ListExpression;
 import net.starlark.java.syntax.Location;
 import net.starlark.java.syntax.NodeVisitor;
@@ -853,7 +852,6 @@ public final class PackageFactory {
               ruleClassProvider.getToolsRepository(),
               /*fragmentNameToClass=*/ null,
               pkgBuilder.getRepositoryMapping(),
-              pkgBuilder.getConvertedLabelsInPackage(),
               new SymbolGenerator<>(pkgBuilder.getPackageIdentifier()),
               /*analysisRuleLabel=*/ null)
           .storeInThread(thread);
@@ -1005,15 +1003,7 @@ public final class PackageFactory {
           public void visit(DefStatement node) {
             error(
                 node.getStartLocation(),
-                "functions may not be defined in BUILD files. You may move the function to "
-                    + "a .bzl file and load it.");
-          }
-
-          @Override
-          public void visit(LambdaExpression node) {
-            error(
-                node.getStartLocation(),
-                "functions may not be defined in BUILD files. You may move the function to "
+                "function definitions are not allowed in BUILD files. You may move the function to "
                     + "a .bzl file and load it.");
           }
 

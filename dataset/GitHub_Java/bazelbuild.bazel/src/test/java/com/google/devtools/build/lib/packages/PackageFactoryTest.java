@@ -741,14 +741,13 @@ public final class PackageFactoryTest extends PackageLoadingTestCase {
   public void testGlobWithIOErrors() throws Exception {
     reporter.removeHandler(failFastHandler);
     scratch.file("pkg/BUILD", "glob(['globs/**'])");
-    Path dir = scratch.dir("pkg/globs/unreadable");
-    dir.setReadable(false);
+    scratch.dir("pkg/globs/unreadable").setReadable(false);
 
     NoSuchPackageException ex =
         assertThrows(NoSuchPackageException.class, () -> loadPackage("pkg"));
     assertThat(ex)
         .hasMessageThat()
-        .contains("error globbing [globs/**]: " + dir + " (Permission denied)");
+        .contains("error globbing [globs/**]: Directory is not readable");
   }
 
   @Test
@@ -1155,14 +1154,7 @@ public final class PackageFactoryTest extends PackageLoadingTestCase {
   public void testDefInBuild() throws Exception {
     checkBuildDialectError(
         "def func(): pass", //
-        "functions may not be defined in BUILD files");
-  }
-
-  @Test
-  public void testLambdaInBuild() throws Exception {
-    checkBuildDialectError(
-        "lambda: None", //
-        "functions may not be defined in BUILD files");
+        "function definitions are not allowed in BUILD files");
   }
 
   @Test

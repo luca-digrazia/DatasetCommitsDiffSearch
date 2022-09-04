@@ -47,6 +47,8 @@ import net.starlark.java.syntax.StarlarkFile;
 import net.starlark.java.syntax.SyntaxError;
 
 /** Parser for WORKSPACE files. Fills in an ExternalPackage.Builder */
+// TODO(adonovan): make a simpler API around a single static function of this form:
+//  nextState = Workspace.executeChunk(environment, previousState).
 public class WorkspaceFactory {
 
   private final Package.Builder builder;
@@ -140,7 +142,6 @@ public class WorkspaceFactory {
               /*toolsRepository=*/ null,
               /*fragmentNameToClass=*/ null,
               /*repoMapping=*/ ImmutableMap.of(),
-              /*convertedLabelsInPackage=*/ new HashMap<>(),
               new SymbolGenerator<>(workspaceFileKey),
               /*analysisRuleLabel=*/ null)
           .storeInThread(thread);

@@ -1128,13 +1128,13 @@ public class RuleClassTest extends PackageLoadingTestCase {
         new RuleClass.Builder("label_flag", RuleClassType.NORMAL, false)
             .factory(DUMMY_CONFIGURED_TARGET_FACTORY)
             .add(attr("tags", STRING_LIST))
-            .setBuildSetting(BuildSetting.create(true, LABEL))
+            .setBuildSetting(new BuildSetting(true, LABEL))
             .build();
     RuleClass stringSetting =
         new RuleClass.Builder("string_setting", RuleClassType.NORMAL, false)
             .factory(DUMMY_CONFIGURED_TARGET_FACTORY)
             .add(attr("tags", STRING_LIST))
-            .setBuildSetting(BuildSetting.create(false, STRING))
+            .setBuildSetting(new BuildSetting(false, STRING))
             .build();
 
     assertThat(labelFlag.hasAttr(STARLARK_BUILD_SETTING_DEFAULT_ATTR_NAME, LABEL)).isTrue();
@@ -1167,7 +1167,7 @@ public class RuleClassTest extends PackageLoadingTestCase {
 
     assertThat(expected)
         .hasMessageThat()
-        .isEqualTo("Rule class myclass declared too many attributes (202 > 200)");
+        .isEqualTo("Rule class myclass declared too many attributes (201 > 200)");
   }
 
   @Test
