@@ -182,13 +182,13 @@ public class StethoInterceptor implements Interceptor {
     private final String mRequestId;
     private final Request mRequest;
     private final Response mResponse;
-    @Nullable private final Connection mConnection;
+    private final Connection mConnection;
 
     public OkHttpInspectorResponse(
         String requestId,
         Request request,
         Response response,
-        @Nullable Connection connection) {
+        Connection connection) {
       mRequestId = requestId;
       mRequest = request;
       mResponse = response;
