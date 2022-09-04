@@ -69,14 +69,13 @@ public class CcToolchainProviderHelper {
 
     CppToolchainInfo toolchainInfo;
     ImmutableMap<String, PathFragment> toolPaths;
-    CcToolchainFeatures toolchainFeatures;
-    PathFragment toolsDirectory = getToolsDirectory(ruleContext.getLabel());
     try {
       toolchainInfo =
           CppToolchainInfo.create(ruleContext.getLabel(), attributes.getCcToolchainConfigInfo());
-      toolPaths = computeToolPaths(attributes.getCcToolchainConfigInfo(), toolsDirectory);
-      toolchainFeatures =
-          new CcToolchainFeatures(attributes.getCcToolchainConfigInfo(), toolsDirectory);
+      toolPaths =
+          computeToolPaths(
+              attributes.getCcToolchainConfigInfo(),
+              CppToolchainInfo.getToolsDirectory(ruleContext.getLabel()));
     } catch (EvalException e) {
       throw ruleContext.throwWithRuleError(e.getMessage());
     }
@@ -182,7 +181,8 @@ public class CcToolchainProviderHelper {
     ImmutableList.Builder<PathFragment> builtInIncludeDirectoriesBuilder = ImmutableList.builder();
     for (String s : toolchainInfo.getRawBuiltInIncludeDirectories()) {
       try {
-        builtInIncludeDirectoriesBuilder.add(resolveIncludeDir(s, sysroot, toolsDirectory));
+        builtInIncludeDirectoriesBuilder.add(
+            resolveIncludeDir(s, sysroot, toolchainInfo.getToolsDirectory()));
       } catch (InvalidConfigurationException e) {
         ruleContext.ruleError(e.getMessage());
       }
@@ -194,8 +194,7 @@ public class CcToolchainProviderHelper {
         getToolchainForSkylark(toolPaths),
         cppConfiguration,
         toolchainInfo,
-        toolchainFeatures,
-        toolsDirectory,
+        toolchainInfo.getToolsDirectory(),
         attributes.getAllFiles(),
         attributes.getFullInputsForCrosstool(),
         attributes.getCompilerFiles(),
@@ -445,9 +444,5 @@ public class CcToolchainProviderHelper {
    */
   static PathFragment getToolPathFragment(ImmutableMap<String, PathFragment> toolPaths, Tool tool) {
     return toolPaths.get(tool.getNamePart());
-  }
-
-  static PathFragment getToolsDirectory(Label ccToolchainLabel) {
-    return ccToolchainLabel.getPackageIdentifier().getPathUnderExecRoot();
   }
 }

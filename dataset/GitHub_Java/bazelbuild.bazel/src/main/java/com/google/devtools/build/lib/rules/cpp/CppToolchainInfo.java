@@ -39,6 +39,7 @@ import java.util.Map;
 @Immutable
 public final class CppToolchainInfo {
   private final String toolchainIdentifier;
+  private final CcToolchainFeatures toolchainFeatures;
 
   private final String compiler;
   private final String abiGlibcVersion;
@@ -72,6 +73,7 @@ public final class CppToolchainInfo {
 
     return new CppToolchainInfo(
         ccToolchainConfigInfo.getToolchainIdentifier(),
+        new CcToolchainFeatures(ccToolchainConfigInfo, getToolsDirectory(toolchainLabel)),
         ccToolchainConfigInfo.getCompiler(),
         ccToolchainConfigInfo.getAbiLibcVersion(),
         ccToolchainConfigInfo.getTargetCpu(),
@@ -96,6 +98,7 @@ public final class CppToolchainInfo {
   @AutoCodec.Instantiator
   CppToolchainInfo(
       String toolchainIdentifier,
+      CcToolchainFeatures toolchainFeatures,
       String compiler,
       String abiGlibcVersion,
       String targetCpu,
@@ -113,6 +116,8 @@ public final class CppToolchainInfo {
       String legacyCcFlagsMakeVariable)
       throws EvalException {
     this.toolchainIdentifier = toolchainIdentifier;
+    // Since this field can be derived from `crosstoolInfo`, it is re-derived instead of serialized.
+    this.toolchainFeatures = toolchainFeatures;
     this.compiler = compiler;
     this.abiGlibcVersion = abiGlibcVersion;
     this.targetCpu = targetCpu;
@@ -201,6 +206,14 @@ public final class CppToolchainInfo {
   // TODO(bazel-team): The javadoc should clarify how this is used in Blaze.
   public String getAbiGlibcVersion() {
     return abiGlibcVersion;
+  }
+
+  /**
+   * Returns the configured features of the toolchain. Rules should not call this directly, but
+   * instead use {@code CcToolchainProvider.getFeatures}.
+   */
+  public CcToolchainFeatures getFeatures() {
+    return toolchainFeatures;
   }
 
   /**
@@ -301,5 +314,13 @@ public final class CppToolchainInfo {
     }
 
     return legacyCcFlags;
+  }
+
+  public PathFragment getToolsDirectory() {
+    return getToolsDirectory(ccToolchainLabel);
+  }
+
+  static PathFragment getToolsDirectory(Label ccToolchainLabel) {
+    return ccToolchainLabel.getPackageIdentifier().getPathUnderExecRoot();
   }
 }
