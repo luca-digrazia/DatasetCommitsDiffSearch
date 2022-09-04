@@ -18,7 +18,6 @@ package org.graylog.security.shares;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.eventbus.EventBus;
 import org.apache.shiro.subject.Subject;
 import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
@@ -29,7 +28,6 @@ import org.graylog.security.GrantDTO;
 import org.graylog.security.entities.EntityDependencyPermissionChecker;
 import org.graylog.security.entities.EntityDependencyResolver;
 import org.graylog.security.entities.EntityDescriptor;
-import org.graylog.security.events.EntitySharesUpdateEvent;
 import org.graylog.security.shares.EntityShareResponse.ActiveShare;
 import org.graylog.security.shares.EntityShareResponse.AvailableCapability;
 import org.graylog2.plugin.database.users.User;
@@ -57,21 +55,18 @@ public class EntitySharesService {
     private final EntityDependencyPermissionChecker entityDependencyPermissionChecker;
     private final GRNRegistry grnRegistry;
     private final GranteeService granteeService;
-    private final EventBus serverEventBus;
 
     @Inject
     public EntitySharesService(DBGrantService grantService,
                                EntityDependencyResolver entityDependencyResolver,
                                EntityDependencyPermissionChecker entityDependencyPermissionChecker,
                                GRNRegistry grnRegistry,
-                               GranteeService granteeService,
-                               EventBus serverEventBus) {
+                               GranteeService granteeService) {
         this.grantService = grantService;
         this.entityDependencyResolver = entityDependencyResolver;
         this.entityDependencyPermissionChecker = entityDependencyPermissionChecker;
         this.grnRegistry = grnRegistry;
         this.granteeService = granteeService;
-        this.serverEventBus = serverEventBus;
     }
 
     /**
@@ -135,10 +130,6 @@ public class EntitySharesService {
                 .missingPermissionsOnDependencies(checkMissingPermissionsOnDependencies(ownedEntity, sharingUserGRN, request))
                 ;
 
-        final EntitySharesUpdateEvent.Builder updateEventBuilder = EntitySharesUpdateEvent.builder()
-                .user(sharingUser)
-                .entity(ownedEntity);
-
         // Abort if validation fails, but try to return a complete EntityShareResponse
         final ValidationResult validationResult = validateRequest(ownedEntity, request, sharingUserGRN);
         if (validationResult.failed()) {
@@ -159,7 +150,6 @@ public class EntitySharesService {
                         .updatedBy(userName)
                         .updatedAt(ZonedDateTime.now(ZoneOffset.UTC))
                         .build());
-                updateEventBuilder.addUpdates(g.grantee(), newCapability, g.capability());
             }
         }));
 
@@ -173,7 +163,6 @@ public class EntitySharesService {
                                 .target(ownedEntity)
                                 .build(),
                         sharingUser);
-                updateEventBuilder.addCreates(grantee, capability);
             }
         });
 
@@ -182,21 +171,14 @@ public class EntitySharesService {
         existingGrants.forEach((g) -> {
             if (!selectedGranteeCapabilities.containsKey(g.grantee())) {
                 grantService.delete(g.id());
-                updateEventBuilder.addDeletes(g.grantee(), g.capability());
             }
         });
-
-        postUpdateEvent(updateEventBuilder.build());
 
         final ImmutableSet<ActiveShare> activeShares = getActiveShares(ownedEntity, sharingUser);
         return responseBuilder
                 .activeShares(activeShares)
                 .selectedGranteeCapabilities(getSelectedGranteeCapabilities(activeShares, request))
                 .build();
-    }
-
-    private void postUpdateEvent(EntitySharesUpdateEvent updateEvent) {
-        this.serverEventBus.post(updateEvent);
     }
 
     private ValidationResult validateRequest(GRN ownedEntity, EntityShareRequest request, GRN sharingUserGRN) {
