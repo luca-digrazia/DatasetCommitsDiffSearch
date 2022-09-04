@@ -53,7 +53,7 @@ import io.quarkus.test.common.NativeImageLauncher;
 import io.quarkus.test.common.RestAssuredURLManager;
 import io.quarkus.test.common.TestInjectionManager;
 import io.quarkus.test.common.TestResourceManager;
-import io.quarkus.test.common.http.TestHTTPResourceManager;
+import io.quarkus.test.common.http.TestHttpResourceManager;
 
 public class QuarkusTestExtension implements BeforeAllCallback, BeforeEachCallback, AfterEachCallback, TestInstanceFactory {
 
@@ -227,7 +227,7 @@ public class QuarkusTestExtension implements BeforeAllCallback, BeforeEachCallba
             throws TestInstantiationException {
         try {
             Object instance = factoryContext.getTestClass().newInstance();
-            TestHTTPResourceManager.inject(instance);
+            TestHttpResourceManager.inject(instance);
             TestInjectionManager.inject(instance);
             return instance;
         } catch (InstantiationException | IllegalAccessException e) {
@@ -249,8 +249,8 @@ public class QuarkusTestExtension implements BeforeAllCallback, BeforeEachCallba
 
         @Override
         public void close() throws Throwable {
-            resource.close();
             testResourceManager.stop();
+            resource.close();
         }
 
         public boolean isSubstrate() {
