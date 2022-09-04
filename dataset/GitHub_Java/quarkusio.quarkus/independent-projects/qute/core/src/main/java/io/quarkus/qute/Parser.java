@@ -1,6 +1,7 @@
 package io.quarkus.qute;
 
 import io.quarkus.qute.Expression.Part;
+import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.SectionHelperFactory.ParametersInfo;
 import io.quarkus.qute.TemplateNode.Origin;
 import java.io.IOException;
@@ -713,7 +714,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
             if (strParts.size() == 1) {
                 String literal = strParts.get(0);
                 Object literalValue = LiteralSupport.getLiteralValue(literal);
-                if (!Results.isNotFound(literalValue)) {
+                if (!Result.NOT_FOUND.equals(literalValue)) {
                     return ExpressionImpl.literal(idGenerator.get(), literal, literalValue, origin);
                 }
             }
@@ -737,7 +738,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
             }
             parts.add(part);
         }
-        return new ExpressionImpl(idGenerator.get(), namespace, ImmutableList.copyOf(parts), Results.NotFound.EMPTY, origin);
+        return new ExpressionImpl(idGenerator.get(), namespace, ImmutableList.copyOf(parts), Result.NOT_FOUND, origin);
     }
 
     private static Part createPart(Supplier<Integer> idGenerator, String namespace, Part first,
@@ -759,7 +760,7 @@ class Parser implements Function<String, Expression>, ParserHelper {
         if (Expressions.isBracketNotation(value)) {
             value = Expressions.parseBracketContent(value);
             Object literal = LiteralSupport.getLiteralValue(value);
-            if (literal != null && !Results.isNotFound(literal)) {
+            if (literal != null && !Result.NOT_FOUND.equals(literal)) {
                 value = literal.toString();
             } else {
                 StringBuilder builder = new StringBuilder(literal == null ? "Null" : "Non-literal");

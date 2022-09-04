@@ -27,6 +27,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Predicate;
@@ -655,7 +656,7 @@ public class QuteProcessor {
                 if (match.isArray()) {
                     if (info.isProperty()) {
                         String name = info.asProperty().name;
-                        if (name.equals("length") || name.equals("size")) {
+                        if (name.equals("length")) {
                             // myArray.length
                             match.setValues(null, PrimitiveType.INT);
                             continue;
@@ -669,20 +670,21 @@ public class QuteProcessor {
                                 // not an integer index
                             }
                         }
-                    } else if (info.isVirtualMethod()) {
+                    } else if (info.isVirtualMethod() && info.asVirtualMethod().name.equals("get")) {
+                        // array.get(84)
                         List<Expression> params = info.asVirtualMethod().part.asVirtualMethod().getParameters();
-                        String name = info.asVirtualMethod().name;
-                        if (name.equals("get") && params.size() == 1) {
-                            // array.get(84)
+                        if (params.size() == 1) {
                             Expression param = params.get(0);
-                            Object literalValue = param.getLiteral();
+                            Object literalValue;
+                            try {
+                                literalValue = param.getLiteralValue().get();
+                            } catch (InterruptedException | ExecutionException e) {
+                                literalValue = null;
+                            }
                             if (literalValue == null || literalValue instanceof Integer) {
                                 match.setValues(null, match.type().asArrayType().component());
                                 continue;
                             }
-                        } else if (name.equals("take") || name.equals("takeLast")) {
-                            // The returned array has the same component type
-                            continue;
                         }
                     }
                 }
@@ -1446,7 +1448,12 @@ public class QuteProcessor {
             IndexView index) {
         if (valueExpr != null) {
             if (valueExpr.isLiteral()) {
-                Object literalValue = valueExpr.getLiteral();
+                Object literalValue;
+                try {
+                    literalValue = valueExpr.getLiteralValue().get();
+                } catch (InterruptedException | ExecutionException e) {
+                    literalValue = null;
+                }
                 if (literalValue == null) {
                     match.clearValues();
                 } else {

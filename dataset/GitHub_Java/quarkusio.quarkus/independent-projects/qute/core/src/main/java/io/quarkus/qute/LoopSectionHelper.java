@@ -2,6 +2,7 @@ package io.quarkus.qute;
 
 import static io.quarkus.qute.Parameter.EMPTY;
 
+import io.quarkus.qute.Results.Result;
 import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -105,7 +106,7 @@ public class LoopSectionHelper implements SectionHelper {
             return elements.iterator();
         } else {
             String msg;
-            if (Results.isNotFound(it)) {
+            if (Result.NOT_FOUND.equals(it)) {
                 msg = String.format(
                         "Iteration error in template [%s] on line %s: {%s} not found, use {%<s.orEmpty} to ignore this error",
                         iterable.getOrigin().getTemplateId(), iterable.getOrigin().getLine(), iterable.toOriginalString());
@@ -232,7 +233,7 @@ public class LoopSectionHelper implements SectionHelper {
                 case "even":
                     return (index % 2 != 0) ? Results.TRUE : Results.FALSE;
                 default:
-                    return Results.notFound(key);
+                    return Results.NOT_FOUND;
             }
         }
 
