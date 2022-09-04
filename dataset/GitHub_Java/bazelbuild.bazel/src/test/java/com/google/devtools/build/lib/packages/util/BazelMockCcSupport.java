@@ -54,8 +54,6 @@ public final class BazelMockCcSupport extends MockCcSupport {
     writeMacroFile(config);
     setupRulesCc(config);
     setupCcToolchainConfig(config);
-    createParseHeadersAndLayeringCheckWhitelist(config);
-    createStarlarkLooseHeadersWhitelist(config, "//...");
   }
 
   @Override
@@ -65,7 +63,7 @@ public final class BazelMockCcSupport extends MockCcSupport {
 
   @Override
   public String getMockCrosstoolPath() {
-    return "embedded_tools/tools/cpp/";
+    return "bazel_tools_workspace/tools/cpp/";
   }
 
   @Override

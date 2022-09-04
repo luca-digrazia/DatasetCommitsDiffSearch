@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.packages.util;
 
-import com.google.devtools.build.lib.bazel.rules.python.BazelPythonSemantics;
-import com.google.devtools.build.lib.rules.python.PythonSemantics;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import java.io.IOException;
 
@@ -34,6 +32,8 @@ public final class BazelMockPythonSupport extends MockPythonSupport {
 
   @Override
   public void setup(MockToolsConfig config) throws IOException {
+    writeMacroFile(config);
+
     addTool(config, "tools/python/python_version.bzl");
     addTool(config, "tools/python/srcs_version.bzl");
     addTool(config, "tools/python/toolchain.bzl");
@@ -43,6 +43,7 @@ public final class BazelMockPythonSupport extends MockPythonSupport {
     config.create(
         TestConstants.TOOLS_REPOSITORY_SCRATCH + "tools/python/BUILD",
         "package(default_visibility=['//visibility:public'])",
+        getMacroLoadStatement(),
         "load(':python_version.bzl', 'define_python_version_flag')",
         "load('//tools/python:toolchain.bzl', 'py_runtime_pair')",
         "define_python_version_flag(",
@@ -89,10 +90,5 @@ public final class BazelMockPythonSupport extends MockPythonSupport {
       throws IOException {
     // Under BazelPythonSemantics, we can simply set --python_top to be the py_runtime target.
     return pyRuntimeLabel;
-  }
-
-  @Override
-  public PythonSemantics getPythonSemantics() {
-    return new BazelPythonSemantics();
   }
 }
