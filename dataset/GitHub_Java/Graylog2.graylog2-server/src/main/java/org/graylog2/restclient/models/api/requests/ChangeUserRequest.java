@@ -27,7 +27,6 @@ import java.util.List;
 
 public class ChangeUserRequest extends ApiRequest {
     @Constraints.Required
-    @SerializedName("full_name")
     public String fullname;
     @Constraints.Required
     public String email;
