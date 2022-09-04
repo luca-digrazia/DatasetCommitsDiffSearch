@@ -16,10 +16,11 @@ package com.google.devtools.build.lib.exec;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputHelper;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.DigestOfDirectoryException;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.MetadataProvider;
+import com.google.devtools.build.lib.actions.cache.Metadata;
+import com.google.devtools.build.lib.skyframe.FileArtifactValue;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
@@ -33,7 +34,7 @@ import javax.annotation.concurrent.ThreadSafe;
  * <p>Simply maintains a cached mapping from filename to metadata that may be populated only once.
  */
 @ThreadSafe
-public class SingleBuildFileCache implements MetadataProvider {
+public class SingleBuildFileCache implements ActionInputFileCache {
   private final Path execRoot;
 
   public SingleBuildFileCache(String cwd, FileSystem fs) {
@@ -54,13 +55,16 @@ public class SingleBuildFileCache implements MetadataProvider {
           .build();
 
   @Override
-  public FileArtifactValue getMetadata(ActionInput input) throws IOException {
+  public Metadata getMetadata(ActionInput input) throws IOException {
     try {
       return pathToMetadata
           .get(
               input.getExecPathString(),
               () -> {
-                Path path = ActionInputHelper.toPath(input, execRoot);
+                Path path =
+                    (input instanceof Artifact)
+                        ? ((Artifact) input).getPath()
+                        : execRoot.getRelative(input.getExecPath());
                 try {
                   FileArtifactValue metadata = FileArtifactValue.create(path);
                   if (metadata.getType().isDirectory()) {
@@ -91,11 +95,11 @@ public class SingleBuildFileCache implements MetadataProvider {
   /** Container class for caching I/O around ActionInputs. */
   private static class ActionInputMetadata {
     private final ActionInput input;
-    private final FileArtifactValue metadata;
+    private final Metadata metadata;
     private final IOException exceptionOnAccess;
 
     /** Constructor for a successful lookup. */
-    ActionInputMetadata(ActionInput input, FileArtifactValue metadata) {
+    ActionInputMetadata(ActionInput input, Metadata metadata) {
       this.input = input;
       this.metadata = metadata;
       this.exceptionOnAccess = null;
@@ -108,7 +112,7 @@ public class SingleBuildFileCache implements MetadataProvider {
       this.metadata = null;
     }
 
-    FileArtifactValue getMetadata() throws IOException {
+    Metadata getMetadata() throws IOException {
       maybeRaiseException();
       return metadata;
     }

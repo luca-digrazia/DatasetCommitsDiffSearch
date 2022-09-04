@@ -16,7 +16,7 @@ package com.google.devtools.build.lib.actions;
 import static com.google.common.truth.Truth.assertThat;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 
-import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -96,7 +96,7 @@ public final class ActionInputMapTest {
       Collections.shuffle(data);
       for (int i = 0; i < data.size(); ++i) {
         TestEntry entry = data.get(i);
-        assertThat(map.putWithNoDepOwner(entry.input, entry.metadata)).isTrue();
+        assertThat(map.put(entry.input, entry.metadata)).isTrue();
       }
       assertThat(map.size()).isEqualTo(data.size());
       for (int i = 0; i < data.size(); ++i) {
@@ -107,7 +107,7 @@ public final class ActionInputMapTest {
   }
 
   private boolean put(String execPath, int value) {
-    return map.putWithNoDepOwner(new TestInput(execPath), new TestMetadata(value));
+    return map.put(new TestInput(execPath), new TestMetadata(value));
   }
 
   private void assertContains(String execPath, int value) {
@@ -160,7 +160,7 @@ public final class ActionInputMapTest {
     }
   }
 
-  private static class TestMetadata extends FileArtifactValue {
+  private static class TestMetadata implements Metadata {
     private final int id;
 
     public TestMetadata(int id) {
@@ -184,11 +184,6 @@ public final class ActionInputMapTest {
 
     @Override
     public long getModifiedTime() {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public boolean wasModifiedSinceDigest(Path path) {
       throw new UnsupportedOperationException();
     }
 

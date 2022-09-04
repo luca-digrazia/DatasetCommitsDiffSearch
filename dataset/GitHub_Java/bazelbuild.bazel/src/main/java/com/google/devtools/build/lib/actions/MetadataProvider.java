@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions;
 
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import java.io.IOException;
 import javax.annotation.Nullable;
 
@@ -28,21 +29,27 @@ public interface MetadataProvider {
    * then t >= p. Aside from these properties, t can be any value and may vary arbitrarily across
    * calls.
    *
-   * <p>Returned {@link FileArtifactValue} instance corresponds to the final target of a symlink and
-   * therefore must not have a type of {@link FileStateType#SYMLINK}.
+   * <p>Returned {@link Metadata} instance correspond to the final target of a symlink, and
+   * therefore must not have a type of
+   * {@link com.google.devtools.build.lib.actions.FileStateType#SYMLINK} themselves.
    *
-   * <p>The return value is owned by the cache and must not be modified.
+   * The return value is owned by the cache and must not be modified.
    *
    * @param input the input to retrieve the digest for
    * @return the artifact's digest or null if digest cannot be obtained (due to artifact
-   *     non-existence, lookup errors, or any other reason)
+   *         non-existence, lookup errors, or any other reason)
+   *
    * @throws DigestOfDirectoryException in case {@code input} is a directory.
    * @throws IOException If the file cannot be digested.
+   *
    */
   @Nullable
-  FileArtifactValue getMetadata(ActionInput input) throws IOException;
+  Metadata getMetadata(ActionInput input) throws IOException;
 
   /** Looks up an input from its exec path. */
   @Nullable
-  ActionInput getInput(String execPath);
+  default ActionInput getInput(String execPath) {
+    // TODO(shahan): make sure all instances have an implementation and delete the default here.
+    return null;
+  }
 }

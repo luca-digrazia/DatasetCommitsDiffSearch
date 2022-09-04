@@ -15,10 +15,9 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputMap;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.FileArtifactValue;
-import com.google.devtools.build.lib.actions.MetadataProvider;
+import com.google.devtools.build.lib.actions.cache.Metadata;
 import javax.annotation.Nullable;
 
 /**
@@ -28,8 +27,8 @@ import javax.annotation.Nullable;
  * <p>Data for the action's inputs is injected into this cache on construction, using the graph as
  * the source of truth.
  */
-class PerActionFileCache implements MetadataProvider {
-  private final ActionInputMap inputArtifactData;
+class PerActionFileCache implements ActionInputFileCache {
+  private final InputArtifactData inputArtifactData;
   private final boolean missingArtifactsAllowed;
 
   /**
@@ -37,19 +36,18 @@ class PerActionFileCache implements MetadataProvider {
    * @param missingArtifactsAllowed whether to tolerate missing artifacts: can happen during input
    *     discovery.
    */
-  PerActionFileCache(ActionInputMap inputArtifactData, boolean missingArtifactsAllowed) {
+  PerActionFileCache(InputArtifactData inputArtifactData, boolean missingArtifactsAllowed) {
     this.inputArtifactData = Preconditions.checkNotNull(inputArtifactData);
     this.missingArtifactsAllowed = missingArtifactsAllowed;
   }
 
   @Nullable
   @Override
-  public FileArtifactValue getMetadata(ActionInput input) {
-    // TODO(shahan): is this bypass needed?
+  public Metadata getMetadata(ActionInput input) {
     if (!(input instanceof Artifact)) {
       return null;
     }
-    FileArtifactValue result = inputArtifactData.getMetadata(input);
+    Metadata result = inputArtifactData.get(input);
     Preconditions.checkState(missingArtifactsAllowed || result != null, "null for %s", input);
     return result;
   }
