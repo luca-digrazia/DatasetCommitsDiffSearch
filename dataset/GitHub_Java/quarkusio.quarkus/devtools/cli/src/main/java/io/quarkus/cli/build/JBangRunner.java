@@ -5,14 +5,17 @@ import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import io.quarkus.cli.common.BuildOptions;
+import io.quarkus.cli.common.CategoryListFormatOptions;
 import io.quarkus.cli.common.DebugOptions;
 import io.quarkus.cli.common.DevOptions;
 import io.quarkus.cli.common.ListFormatOptions;
 import io.quarkus.cli.common.OutputOptionMixin;
-import io.quarkus.cli.common.RegistryClientMixin;
+import io.quarkus.cli.common.PropertiesOptions;
 import io.quarkus.cli.common.RunModeOption;
+import io.quarkus.cli.registry.RegistryClientMixin;
 import io.quarkus.devtools.project.BuildTool;
 
 public class JBangRunner implements BuildSystemRunner {
@@ -21,14 +24,17 @@ public class JBangRunner implements BuildSystemRunner {
 
     final OutputOptionMixin output;
     final RegistryClientMixin registryClient;
+    final PropertiesOptions propertiesOptions;
     final Path projectRoot;
 
     String mainPath;
 
-    public JBangRunner(OutputOptionMixin output, RegistryClientMixin registryClient, Path projectRoot) {
+    public JBangRunner(OutputOptionMixin output, PropertiesOptions propertiesOptions, RegistryClientMixin registryClient,
+            Path projectRoot) {
         this.output = output;
         this.registryClient = registryClient;
         this.projectRoot = projectRoot;
+        this.propertiesOptions = propertiesOptions;
     }
 
     @Override
@@ -42,7 +48,13 @@ public class JBangRunner implements BuildSystemRunner {
     }
 
     @Override
-    public Integer listExtensions(RunModeOption runMode, ListFormatOptions format, boolean installable, String searchPattern)
+    public Integer listExtensionCategories(RunModeOption runMode, CategoryListFormatOptions format) throws Exception {
+        throw new UnsupportedOperationException("Not there yet. ;)");
+    }
+
+    @Override
+    public Integer listExtensions(RunModeOption runMode, ListFormatOptions format, boolean installable, String searchPattern,
+            String category)
             throws Exception {
         throw new UnsupportedOperationException("Not there yet. ;)");
     }
@@ -60,6 +72,7 @@ public class JBangRunner implements BuildSystemRunner {
     @Override
     public BuildCommandArgs prepareBuild(BuildOptions buildOptions, RunModeOption runMode, List<String> params) {
         ArrayDeque<String> args = new ArrayDeque<>();
+
         if (buildOptions.offline) {
             args.add("--offline");
         }
@@ -69,14 +82,21 @@ public class JBangRunner implements BuildSystemRunner {
         if (buildOptions.buildNative) {
             args.add("--native");
         }
+        if (buildOptions.clean) {
+            args.add("--fresh");
+        }
+
         args.add("build");
+        args.addAll(flattenMappedProperties(propertiesOptions.properties));
+        args.add(registryClient.getRegistryClientProperty());
         args.addAll(params);
         args.add(getMainPath());
         return prependExecutable(args);
     }
 
     @Override
-    public BuildCommandArgs prepareDevMode(DevOptions devOptions, DebugOptions debugOptions, List<String> params) {
+    public List<Supplier<BuildCommandArgs>> prepareDevMode(DevOptions devOptions, DebugOptions debugOptions,
+            List<String> params) {
         throw new UnsupportedOperationException("Not there yet. ;)");
     }
 

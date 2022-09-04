@@ -9,7 +9,6 @@ import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
 import io.quarkus.devtools.project.QuarkusProjectHelper;
 import io.quarkus.maven.ArtifactCoords;
-import io.quarkus.platform.tools.ToolsConstants;
 import io.quarkus.platform.tools.ToolsUtils;
 import io.quarkus.registry.ExtensionCatalogResolver;
 import io.quarkus.registry.RegistryResolutionException;
@@ -59,18 +58,7 @@ public class RegistryClientMixin {
                     coords.getVersion(), QuarkusProjectHelper.artifactResolver(), log);
         }
 
-        final ExtensionCatalogResolver catalogResolver;
-        try {
-            catalogResolver = getExtensionCatalogResolver(log);
-        } catch (RegistryResolutionException e) {
-            log.warn(
-                    "None of the configured Quarkus extension registries appear to be available at the moment. "
-                            + "It should still be possible to create a new project by providing the exact Quarkus platform BOM coordinates, "
-                            + "e.g. 'quarkus create -P "
-                            + ToolsConstants.DEFAULT_PLATFORM_BOM_GROUP_ID + ":"
-                            + ToolsConstants.DEFAULT_PLATFORM_BOM_ARTIFACT_ID + ":" + Version.clientVersion() + "'");
-            throw e;
-        }
+        final ExtensionCatalogResolver catalogResolver = getExtensionCatalogResolver(log);
 
         if (!catalogResolver.hasRegistries()) {
             log.debug("Falling back to direct resolution of the platform bom");
@@ -87,11 +75,11 @@ public class RegistryClientMixin {
         return catalogResolver.resolveExtensionCatalog();
     }
 
-    private ExtensionCatalogResolver getExtensionCatalogResolver(OutputOptionMixin log) throws RegistryResolutionException {
+    private ExtensionCatalogResolver getExtensionCatalogResolver(OutputOptionMixin log) {
         return QuarkusProjectHelper.getCatalogResolver(enabled(), log);
     }
 
-    public void refreshRegistryCache(OutputOptionMixin log) throws RegistryResolutionException {
+    public void refreshRegistryCache(OutputOptionMixin log) {
         if (!refresh) {
             return;
         }
