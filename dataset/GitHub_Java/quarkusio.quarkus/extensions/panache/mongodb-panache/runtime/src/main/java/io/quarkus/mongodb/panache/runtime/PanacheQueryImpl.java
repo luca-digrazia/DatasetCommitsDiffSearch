@@ -50,7 +50,7 @@ public class PanacheQueryImpl<Entity> implements PanacheQuery<Entity> {
         Set<String> fieldNames = new HashSet<>();
         // gather field names from getters
         for (Method method : type.getMethods()) {
-            if (method.getName().startsWith("get")) {
+            if (method.getName().startsWith("get") && !method.getName().equals("getClass")) {
                 String fieldName = MongoPropertyUtil.decapitalize(method.getName().substring(3));
                 fieldNames.add(fieldName);
             }
@@ -62,7 +62,7 @@ public class PanacheQueryImpl<Entity> implements PanacheQuery<Entity> {
         }
 
         // replace fields that have @BsonProperty mappings
-        Map<String, String> replacementMap = MongoPropertyUtil.getReplacementMap(type);
+        Map<String, String> replacementMap = MongoPropertyUtil.extractReplacementMap(type);
         for (Map.Entry<String, String> entry : replacementMap.entrySet()) {
             if (fieldNames.contains(entry.getKey())) {
                 fieldNames.remove(entry.getKey());
