@@ -592,7 +592,7 @@ public final class PackageFactory {
     }
 
     GlobList<String> globList = GlobList.captureResults(includes, excludes, matches);
-    return MutableList.copyOf(env, globList);
+    return new MutableList<>(globList, env);
   }
 
   /**
