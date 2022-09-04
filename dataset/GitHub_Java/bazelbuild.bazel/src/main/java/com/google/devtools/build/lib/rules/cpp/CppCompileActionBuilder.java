@@ -320,7 +320,9 @@ public class CppCompileActionBuilder {
     // finalizeCompileActionBuilder on this builder.
     Preconditions.checkNotNull(shouldScanIncludes);
     Preconditions.checkNotNull(featureConfiguration);
-    boolean useHeaderModules = useHeaderModules();
+    boolean useHeaderModules =
+        allowUsingHeaderModules
+            && featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES);
 
     if (featureConfiguration.actionIsConfigured(getActionName())) {
       for (String executionRequirement :
@@ -471,10 +473,7 @@ public class CppCompileActionBuilder {
 
   private boolean useHeaderModules() {
     return allowUsingHeaderModules
-        && featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)
-        && (sourceFile.isFileType(CppFileTypes.CPP_SOURCE)
-            || sourceFile.isFileType(CppFileTypes.CPP_HEADER)
-            || sourceFile.isFileType(CppFileTypes.CPP_MODULE_MAP));
+        && featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES);
   }
 
   private boolean shouldPruneModules() {

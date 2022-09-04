@@ -269,10 +269,6 @@ public abstract class AbstractAction implements Action, ActionApi {
     return inputs;
   }
 
-  public final ActionEnvironment getEnvironment() {
-    return env;
-  }
-
   @Override
   public Iterable<String> getClientEnvironmentVariables() {
     return env.getInheritedEnv();

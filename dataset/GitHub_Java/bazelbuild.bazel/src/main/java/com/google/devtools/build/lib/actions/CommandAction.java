@@ -33,7 +33,7 @@ public interface CommandAction extends Action, ExecutionInfoSpecifier {
    * method does not provide access to the client environment.
    */
   @VisibleForTesting
-  ImmutableMap<String, String> getIncompleteEnvironmentForTesting();
+  ImmutableMap<String, String> getEnvironment();
 
   /** Returns inputs to this action, including inputs that may be pruned. */
   @VisibleForTesting // productionVisibility = Visibility.PRIVATE
