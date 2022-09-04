@@ -14,9 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Predicate;
-import com.google.common.base.Predicates;
-import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -28,7 +25,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -54,6 +50,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
+import javax.annotation.Nullable;
 
 /**
  * Representation of a C/C++ compilation. Its purpose is to share the code that creates compilation
@@ -123,9 +121,6 @@ public final class CppModel {
    */
   public static final String SYSTEM_INCLUDE_PATHS_VARIABLE_NAME = "system_include_paths";
 
-  /** Name of the build variable for the dependency file path */
-  public static final String DEPENDENCY_FILE_VARIABLE_NAME = "dependency_file";
-
   /** Name of the build variable for the collection of macros defined for preprocessor. */
   public static final String PREPROCESSOR_DEFINES_VARIABLE_NAME = "preprocessor_defines";
 
@@ -142,24 +137,12 @@ public final class CppModel {
   /** Name of the build variable for the LTO indexing bitcode file. */
   public static final String LTO_INDEXING_BITCODE_FILE_VARIABLE_NAME = "lto_indexing_bitcode_file";
 
+  /** Build variable for all user provided copt flags. */
+  public static final String COPTS_VARIABLE_VALUE = "copts";
+
   /** Name of the build variable for stripopts for the strip action. */
   public static final String STRIPOPTS_VARIABLE_NAME = "stripopts";
 
-  /**
-   * Build variable for all flags coming from legacy crosstool fields, such as compiler_flag,
-   * optional_compiler_flag, cxx_flag, optional_cxx_flag.
-   */
-  public static final String LEGACY_COMPILE_FLAGS_VARIABLE_NAME = "legacy_compile_flags";
-
-  /**
-   * Build variable for all flags coming from copt rule attribute, and from --copt, --cxxopt, or
-   * --conlyopt options.
-   */
-  public static final String USER_COMPILE_FLAGS_VARIABLE_NAME = "user_compile_flags";
-
-  /** Build variable for flags coming from unfiltered_cxx_flag CROSSTOOL fields. */
-  public static final String UNFILTERED_COMPILE_FLAGS_VARIABLE_NAME = "unfiltered_compile_flags";
-  
   private final CppSemantics semantics;
   private final RuleContext ruleContext;
   private final BuildConfiguration configuration;
@@ -170,7 +153,7 @@ public final class CppModel {
   private final Set<CppSource> sourceFiles = new LinkedHashSet<>();
   private final List<Artifact> mandatoryInputs = new ArrayList<>();
   private final ImmutableList<String> copts;
-  private final Predicate<String> coptsFilter;
+  @Nullable private Pattern nocopts;
   private boolean fake;
   private boolean maySaveTemps;
   private boolean onlySingleOutput;
@@ -189,7 +172,6 @@ public final class CppModel {
   private final CcToolchainProvider ccToolchain;
   private final FdoSupportProvider fdoSupport;
   private String linkedArtifactNameSuffix = "";
-  private final ImmutableSet<String> features;
 
   public CppModel(
       RuleContext ruleContext,
@@ -197,31 +179,7 @@ public final class CppModel {
       CcToolchainProvider ccToolchain,
       FdoSupportProvider fdoSupport,
       ImmutableList<String> copts) {
-    this(
-        ruleContext,
-        semantics,
-        ccToolchain,
-        fdoSupport,
-        ruleContext.getConfiguration(),
-        copts,
-        Predicates.alwaysTrue());
-  }
-
-  public CppModel(
-      RuleContext ruleContext,
-      CppSemantics semantics,
-      CcToolchainProvider ccToolchain,
-      FdoSupportProvider fdoSupport,
-      ImmutableList<String> copts,
-      Predicate<String> coptsFilter) {
-    this(
-        ruleContext,
-        semantics,
-        ccToolchain,
-        fdoSupport,
-        ruleContext.getConfiguration(),
-        copts,
-        coptsFilter);
+    this(ruleContext, semantics, ccToolchain, fdoSupport, ruleContext.getConfiguration(), copts);
  }
 
   public CppModel(
@@ -230,17 +188,14 @@ public final class CppModel {
       CcToolchainProvider ccToolchain,
       FdoSupportProvider fdoSupport,
       BuildConfiguration configuration,
-      ImmutableList<String> copts,
-      Predicate<String> coptsFilter) {
+      ImmutableList<String> copts) {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.semantics = semantics;
     this.ccToolchain = Preconditions.checkNotNull(ccToolchain);
     this.fdoSupport = Preconditions.checkNotNull(fdoSupport);
     this.configuration = configuration;
     this.copts = copts;
-    this.coptsFilter = Preconditions.checkNotNull(coptsFilter);
     cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    features = ruleContext.getFeatures();
   }
 
   private Artifact getDwoFile(Artifact outputFile) {
@@ -314,6 +269,15 @@ public final class CppModel {
   /** Adds mandatory inputs. */
   public CppModel addMandatoryInputs(Collection<Artifact> artifacts) {
     this.mandatoryInputs.addAll(artifacts);
+    return this;
+  }
+
+  /**
+   * Sets the nocopts pattern. This is used to filter out flags from the system defined set of
+   * flags. By default no filter is applied.
+   */
+  public CppModel setNoCopts(@Nullable Pattern nocopts) {
+    this.nocopts = nocopts;
     return this;
   }
 
@@ -465,8 +429,13 @@ public final class CppModel {
    * Returns a {@code CppCompileActionBuilder} with the common fields for a C++ compile action being
    * initialized.
    */
-  private CppCompileActionBuilder initializeCompileAction(Artifact sourceArtifact) {
-    CppCompileActionBuilder builder = createCompileActionBuilder(sourceArtifact);
+  private CppCompileActionBuilder initializeCompileAction(
+      Artifact sourceArtifact, Label sourceLabel) {
+    CppCompileActionBuilder builder = createCompileActionBuilder(sourceArtifact, sourceLabel);
+    if (nocopts != null) {
+      builder.addNocopts(nocopts);
+    }
+
     builder.setFeatureConfiguration(featureConfiguration);
 
     return builder;
@@ -481,33 +450,8 @@ public final class CppModel {
     return result.build();
   }
 
-  /**
-   * Supplier that computes unfiltered_compile_flags lazily at the execution phase.
-   *
-   * <p>Dear friends of the lambda, this method exists to limit the scope of captured variables
-   * only to arguments (to prevent accidental capture of enclosing instance which could regress
-   * memory).
-   */
-  public static Supplier<ImmutableList<String>> getUnfilteredCompileFlagsSupplier(
-      CcToolchainProvider ccToolchain, ImmutableSet<String> features) {
-    return () -> ccToolchain.getUnfilteredCompilerOptionsWithSysroot(features);
-  }
-
-  /**
-   * Supplier that computes legacy_compile_flags lazily at the execution phase.
-   *
-   * <p>Dear friends of the lambda, this method exists to limit the scope of captured variables
-   * only to arguments (to prevent accidental capture of enclosing instance which could regress
-   * memory).
-   */
-  public static Supplier<ImmutableList<String>> getLegacyCompileFlagsSupplier(
-      CppConfiguration cppConfiguration, String sourceFilename, ImmutableSet<String> features) {
-    return () -> cppConfiguration.collectLegacyCompileFlags(sourceFilename, features);
-  }
-
   private void setupCompileBuildVariables(
       CppCompileActionBuilder builder,
-      Label sourceLabel,
       boolean usePic,
       PathFragment ccRelativeName,
       PathFragment autoFdoImportPath,
@@ -519,6 +463,8 @@ public final class CppModel {
     CcToolchainFeatures.Variables.Builder buildVariables =
         new CcToolchainFeatures.Variables.Builder();
 
+    // TODO(bazel-team): Pull out string constants for all build variables.
+
     CppCompilationContext builderContext = builder.getContext();
     Artifact sourceFile = builder.getSourceFile();
     Artifact outputFile = builder.getOutputFile();
@@ -526,24 +472,7 @@ public final class CppModel {
 
     buildVariables.addStringVariable(SOURCE_FILE_VARIABLE_NAME, sourceFile.getExecPathString());
     buildVariables.addStringVariable(OUTPUT_FILE_VARIABLE_NAME, outputFile.getExecPathString());
-    buildVariables.addStringSequenceVariable(
-        USER_COMPILE_FLAGS_VARIABLE_NAME,
-        ImmutableList.<String>builder()
-            .addAll(copts)
-            .addAll(collectPerFileCopts(sourceFile, sourceLabel))
-            .build());
-
-    String sourceFilename = sourceFile.getExecPathString();
-    buildVariables.addLazyStringSequenceVariable(
-        LEGACY_COMPILE_FLAGS_VARIABLE_NAME,
-        getLegacyCompileFlagsSupplier(cppConfiguration, sourceFilename, features));
-
-    if (!CppFileTypes.OBJC_SOURCE.matches(sourceFilename)
-        && !CppFileTypes.OBJCPP_SOURCE.matches(sourceFilename)) {
-      buildVariables.addLazyStringSequenceVariable(
-          UNFILTERED_COMPILE_FLAGS_VARIABLE_NAME,
-          getUnfilteredCompileFlagsSupplier(ccToolchain, features));
-    }
+    buildVariables.addStringSequenceVariable(COPTS_VARIABLE_VALUE, copts);
 
     if (builder.getTempOutputFile() != null) {
       realOutputFilePath = builder.getTempOutputFile().getPathString();
@@ -566,7 +495,7 @@ public final class CppModel {
     // Set dependency_file to enable <object>.d file generation.
     if (dotdFile != null) {
       buildVariables.addStringVariable(
-          DEPENDENCY_FILE_VARIABLE_NAME, dotdFile.getSafeExecPath().getPathString());
+          "dependency_file", dotdFile.getSafeExecPath().getPathString());
     }
 
     if (featureConfiguration.isEnabled(CppRuleClasses.MODULE_MAPS) && cppModuleMap != null) {
@@ -653,19 +582,6 @@ public final class CppModel {
     builder.setVariables(variables);
   }
 
-  private ImmutableList<String> collectPerFileCopts(Artifact sourceFile, Label sourceLabel) {
-    return cppConfiguration
-        .getPerFileCopts()
-        .stream()
-        .filter(
-            perLabelOptions ->
-                (sourceLabel != null && perLabelOptions.isIncluded(sourceLabel))
-                    || perLabelOptions.isIncluded(sourceFile))
-        .map(PerLabelOptions::getOptions)
-        .flatMap(options -> options.stream())
-        .collect(ImmutableList.toImmutableList());
-  }
-
   /** Returns true if Dotd file should be generated. */
   private boolean isGenerateDotdFile(Artifact sourceArtifact) {
     return CppFileTypes.headerDiscoveryRequired(sourceArtifact)
@@ -683,13 +599,10 @@ public final class CppModel {
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
 
     if (shouldProvideHeaderModules()) {
-      Label moduleMapLabel = Label.parseAbsoluteUnchecked(context.getCppModuleMap().getName());
       Collection<Artifact> modules = createModuleAction(result, context.getCppModuleMap());
       if (featureConfiguration.isEnabled(CppRuleClasses.HEADER_MODULE_CODEGEN)) {
         for (Artifact module : modules) {
-          // TODO(djasper): Investigate whether we need to use a label separate from that of the
-          // module map. It is used for per-file-copts.
-          createModuleCodegenAction(result, moduleMapLabel, module);
+          createModuleCodegenAction(result, module);
         }
       }
     } else if (context.getVerificationModuleMap() != null) {
@@ -704,7 +617,7 @@ public final class CppModel {
       Label sourceLabel = source.getLabel();
       String outputName = FileSystemUtils.removeExtension(
           semantics.getEffectiveSourcePath(sourceArtifact)).getPathString();
-      CppCompileActionBuilder builder = initializeCompileAction(sourceArtifact);
+      CppCompileActionBuilder builder = initializeCompileAction(sourceArtifact, sourceLabel);
 
       builder.setSemantics(semantics);
 
@@ -712,17 +625,16 @@ public final class CppModel {
         switch (source.getType()) {
           case HEADER:
             createHeaderAction(
-                sourceLabel, outputName, result, env, builder, isGenerateDotdFile(sourceArtifact));
+                outputName, result, env, builder, isGenerateDotdFile(sourceArtifact));
             break;
           case CLIF_INPUT_PROTO:
-            createClifMatchAction(sourceLabel, outputName, result, env, builder);
+            createClifMatchAction(outputName, result, env, builder);
             break;
           default:
             boolean bitcodeOutput =
                 featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
                     && CppFileTypes.LTO_SOURCE.matches(sourceArtifact.getFilename());
             createSourceAction(
-                sourceLabel,
                 outputName,
                 result,
                 env,
@@ -770,7 +682,6 @@ public final class CppModel {
   }
 
   private void createHeaderAction(
-      Label sourceLabel,
       String outputName,
       Builder result,
       AnalysisEnvironment env,
@@ -786,29 +697,23 @@ public final class CppModel {
         .setPicMode(getGeneratePicActions());
     setupCompileBuildVariables(
         builder,
-        sourceLabel,
-        this.getGeneratePicActions(),
+        getGeneratePicActions(),
         /* ccRelativeName= */ null,
         /* autoFdoImportPath= */ null,
         /* gcnoFile= */ null,
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
         builder.getContext().getCppModuleMap(),
-        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
+        ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(
-        ruleContext,
-        builder,
-        featureConfiguration.getFeatureSpecification(),
-        coptsFilter,
-        features);
+        ruleContext, builder, featureConfiguration.getFeatureSpecification());
     CppCompileAction compileAction = builder.buildOrThrowRuleError(ruleContext);
     env.registerAction(compileAction);
     Artifact tokenFile = compileAction.getOutputFile();
     result.addHeaderTokenFile(tokenFile);
   }
 
-  private void createModuleCodegenAction(
-      CcCompilationOutputs.Builder result, Label sourceLabel, Artifact module)
+  private void createModuleCodegenAction(CcCompilationOutputs.Builder result, Artifact module)
       throws RuleErrorException {
     if (fake) {
       // We can't currently foresee a situation where we'd want nocompile tests for module codegen.
@@ -820,7 +725,11 @@ public final class CppModel {
     // TODO(djasper): Make this less hacky after refactoring how the PIC/noPIC actions are created.
     boolean pic = module.getFilename().contains(".pic.");
 
-    CppCompileActionBuilder builder = initializeCompileAction(module);
+    // TODO(djasper): Investigate whether we need to use a label separate from that of the module
+    // map. It is used for per-file-copts.
+    CppCompileActionBuilder builder =
+        initializeCompileAction(
+            module, Label.parseAbsoluteUnchecked(context.getCppModuleMap().getName()));
     builder.setSemantics(semantics);
     builder.setPicMode(pic);
     builder.setOutputs(
@@ -846,7 +755,6 @@ public final class CppModel {
 
     setupCompileBuildVariables(
         builder,
-        sourceLabel,
         /* usePic= */ pic,
         ccRelativeName,
         module.getExecPath(),
@@ -854,17 +762,13 @@ public final class CppModel {
         dwoFile,
         /* ltoIndexingFile= */ null,
         builder.getContext().getCppModuleMap(),
-        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
+        ImmutableMap.of());
 
     builder.setGcnoFile(gcnoFile);
     builder.setDwoFile(dwoFile);
 
     semantics.finalizeCompileActionBuilder(
-        ruleContext,
-        builder,
-        featureConfiguration.getFeatureSpecification(),
-        coptsFilter,
-        features);
+        ruleContext, builder, featureConfiguration.getFeatureSpecification());
     CppCompileAction compileAction = builder.buildOrThrowRuleError(ruleContext);
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
     env.registerAction(compileAction);
@@ -879,8 +783,9 @@ public final class CppModel {
   private Collection<Artifact> createModuleAction(
       CcCompilationOutputs.Builder result, CppModuleMap cppModuleMap) throws RuleErrorException {
     AnalysisEnvironment env = ruleContext.getAnalysisEnvironment();
+    Label moduleMapLabel = Label.parseAbsoluteUnchecked(context.getCppModuleMap().getName());
     Artifact moduleMapArtifact = cppModuleMap.getArtifact();
-    CppCompileActionBuilder builder = initializeCompileAction(moduleMapArtifact);
+    CppCompileActionBuilder builder = initializeCompileAction(moduleMapArtifact, moduleMapLabel);
 
     builder.setSemantics(semantics);
 
@@ -888,7 +793,6 @@ public final class CppModel {
     // - the compiled source file is the module map
     // - it creates a header module (.pcm file).
     return createSourceAction(
-        Label.parseAbsoluteUnchecked(cppModuleMap.getName()),
         FileSystemUtils.removeExtension(semantics.getEffectiveSourcePath(moduleMapArtifact))
             .getPathString(),
         result,
@@ -905,11 +809,7 @@ public final class CppModel {
   }
 
   private void createClifMatchAction(
-      Label sourceLabel,
-      String outputName,
-      Builder result,
-      AnalysisEnvironment env,
-      CppCompileActionBuilder builder)
+      String outputName, Builder result, AnalysisEnvironment env, CppCompileActionBuilder builder)
       throws RuleErrorException {
     builder
         .setOutputs(
@@ -921,8 +821,7 @@ public final class CppModel {
         .addAdditionalIncludes(mandatoryInputs);
     setupCompileBuildVariables(
         builder,
-        sourceLabel,
-        /* usePic= */ false,
+        /*  usePic= */ false,
         /* ccRelativeName= */ null,
         /* autoFdoImportPath= */ null,
         /* gcnoFile= */ null,
@@ -931,11 +830,7 @@ public final class CppModel {
         builder.getContext().getCppModuleMap(),
         /* sourceSpecificBuildVariables= */ ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(
-        ruleContext,
-        builder,
-        featureConfiguration.getFeatureSpecification(),
-        coptsFilter,
-        features);
+        ruleContext, builder, featureConfiguration.getFeatureSpecification());
     CppCompileAction compileAction = builder.buildOrThrowRuleError(ruleContext);
     env.registerAction(compileAction);
     Artifact tokenFile = compileAction.getOutputFile();
@@ -943,7 +838,6 @@ public final class CppModel {
   }
 
   private Collection<Artifact> createSourceAction(
-      Label sourceLabel,
       String outputName,
       CcCompilationOutputs.Builder result,
       AnalysisEnvironment env,
@@ -972,18 +866,8 @@ public final class CppModel {
     Preconditions.checkState(generatePicAction || generateNoPicAction);
     if (fake) {
       boolean usePic = !generateNoPicAction;
-      createFakeSourceAction(
-          sourceLabel,
-          outputName,
-          result,
-          env,
-          builder,
-          outputCategory,
-          addObject,
-          ccRelativeName,
-          sourceArtifact.getExecPath(),
-          usePic,
-          generateDotd);
+      createFakeSourceAction(outputName, result, env, builder, outputCategory, addObject,
+          ccRelativeName, sourceArtifact.getExecPath(), usePic, generateDotd);
     } else {
       boolean bitcodeOutput =
           featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)
@@ -1007,7 +891,6 @@ public final class CppModel {
 
         setupCompileBuildVariables(
             picBuilder,
-            sourceLabel,
             /* usePic= */ true,
             ccRelativeName,
             sourceArtifact.getExecPath(),
@@ -1021,7 +904,6 @@ public final class CppModel {
           result.addTemps(
               createTempsActions(
                   sourceArtifact,
-                  sourceLabel,
                   outputName,
                   picBuilder,
                   /* usePic= */ true,
@@ -1034,11 +916,7 @@ public final class CppModel {
         picBuilder.setLtoIndexingFile(ltoIndexingFile);
 
         semantics.finalizeCompileActionBuilder(
-            ruleContext,
-            picBuilder,
-            featureConfiguration.getFeatureSpecification(),
-            coptsFilter,
-            features);
+            ruleContext, picBuilder, featureConfiguration.getFeatureSpecification());
         CppCompileAction picAction = picBuilder.buildOrThrowRuleError(ruleContext);
         env.registerAction(picAction);
         directOutputs.add(picAction.getOutputFile());
@@ -1080,7 +958,6 @@ public final class CppModel {
 
         setupCompileBuildVariables(
             builder,
-            sourceLabel,
             /* usePic= */ false,
             ccRelativeName,
             sourceArtifact.getExecPath(),
@@ -1094,7 +971,6 @@ public final class CppModel {
           result.addTemps(
               createTempsActions(
                   sourceArtifact,
-                  sourceLabel,
                   outputName,
                   builder,
                   /* usePic= */ false,
@@ -1107,11 +983,7 @@ public final class CppModel {
         builder.setLtoIndexingFile(ltoIndexingFile);
 
         semantics.finalizeCompileActionBuilder(
-            ruleContext,
-            builder,
-            featureConfiguration.getFeatureSpecification(),
-            coptsFilter,
-            features);
+            ruleContext, builder, featureConfiguration.getFeatureSpecification());
         CppCompileAction compileAction = builder.buildOrThrowRuleError(ruleContext);
         env.registerAction(compileAction);
         Artifact objectFile = compileAction.getOutputFile();
@@ -1143,8 +1015,7 @@ public final class CppModel {
     builder.setOutputs(outputFiles, /* dotdFile= */ null);
     setupCompileBuildVariables(
         builder,
-        source.getLabel(),
-        /* usePic= */ false,
+        /*  usePic= */ false,
         /* ccRelativeName= */ null,
         /* autoFdoImportPath= */ null,
         /* gcnoFile= */ null,
@@ -1153,11 +1024,7 @@ public final class CppModel {
         builder.getContext().getCppModuleMap(),
         source.getBuildVariables());
     semantics.finalizeCompileActionBuilder(
-        ruleContext,
-        builder,
-        featureConfiguration.getFeatureSpecification(),
-        coptsFilter,
-        features);
+        ruleContext, builder, featureConfiguration.getFeatureSpecification());
     // Make sure this builder doesn't reference ruleContext outside of analysis phase.
     CppCompileActionTemplate actionTemplate = new CppCompileActionTemplate(
         sourceArtifact,
@@ -1179,7 +1046,6 @@ public final class CppModel {
   }
 
   private void createFakeSourceAction(
-      Label sourceLabel,
       String outputName,
       CcCompilationOutputs.Builder result,
       AnalysisEnvironment env,
@@ -1205,7 +1071,6 @@ public final class CppModel {
 
     setupCompileBuildVariables(
         builder,
-        sourceLabel,
         usePic,
         ccRelativeName,
         execPath,
@@ -1213,13 +1078,9 @@ public final class CppModel {
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
         builder.getContext().getCppModuleMap(),
-        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
+        ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(
-        ruleContext,
-        builder,
-        featureConfiguration.getFeatureSpecification(),
-        coptsFilter,
-        features);
+        ruleContext, builder, featureConfiguration.getFeatureSpecification());
     CppCompileAction action = builder.buildOrThrowRuleError(ruleContext);
     env.registerAction(action);
     if (addObject) {
@@ -1497,9 +1358,9 @@ public final class CppModel {
    * Creates a basic cpp compile action builder for source file. Configures options, crosstool
    * inputs, output and dotd file names, compilation context and copts.
    */
-  private CppCompileActionBuilder createCompileActionBuilder(Artifact source) {
+  private CppCompileActionBuilder createCompileActionBuilder(Artifact source, Label label) {
     CppCompileActionBuilder builder =
-        new CppCompileActionBuilder(ruleContext, ccToolchain, configuration);
+        new CppCompileActionBuilder(ruleContext, label, ccToolchain, configuration);
     builder.setSourceFile(source);
     builder.setContext(context);
     builder.addEnvironment(ccToolchain.getEnvironment());
@@ -1524,7 +1385,6 @@ public final class CppModel {
   /** Create the actions for "--save_temps". */
   private ImmutableList<Artifact> createTempsActions(
       Artifact source,
-      Label sourceLabel,
       String outputName,
       CppCompileActionBuilder builder,
       boolean usePic,
@@ -1552,7 +1412,6 @@ public final class CppModel {
     dBuilder.setOutputs(ruleContext, category, outputArtifactNameBase, generateDotd);
     setupCompileBuildVariables(
         dBuilder,
-        sourceLabel,
         usePic,
         ccRelativeName,
         source.getExecPath(),
@@ -1560,13 +1419,9 @@ public final class CppModel {
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
         builder.getContext().getCppModuleMap(),
-        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
+        ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(
-        ruleContext,
-        dBuilder,
-        featureConfiguration.getFeatureSpecification(),
-        coptsFilter,
-        features);
+        ruleContext, dBuilder, featureConfiguration.getFeatureSpecification());
     CppCompileAction dAction = dBuilder.buildOrThrowRuleError(ruleContext);
     ruleContext.registerAction(dAction);
 
@@ -1575,7 +1430,6 @@ public final class CppModel {
         ruleContext, ArtifactCategory.GENERATED_ASSEMBLY, outputArtifactNameBase, generateDotd);
     setupCompileBuildVariables(
         sdBuilder,
-        sourceLabel,
         usePic,
         ccRelativeName,
         source.getExecPath(),
@@ -1583,13 +1437,9 @@ public final class CppModel {
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
         builder.getContext().getCppModuleMap(),
-        /* sourceSpecificBuildVariables= */ ImmutableMap.of());
+        ImmutableMap.of());
     semantics.finalizeCompileActionBuilder(
-        ruleContext,
-        sdBuilder,
-        featureConfiguration.getFeatureSpecification(),
-        coptsFilter,
-        features);
+        ruleContext, sdBuilder, featureConfiguration.getFeatureSpecification());
     CppCompileAction sdAction = sdBuilder.buildOrThrowRuleError(ruleContext);
     ruleContext.registerAction(sdAction);
 
