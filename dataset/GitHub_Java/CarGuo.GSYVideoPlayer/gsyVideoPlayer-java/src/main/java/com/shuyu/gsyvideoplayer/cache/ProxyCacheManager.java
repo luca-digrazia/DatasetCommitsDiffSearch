@@ -10,14 +10,11 @@ import com.danikula.videocache.file.FileNameGenerator;
 import com.danikula.videocache.file.Md5FileNameGenerator;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.FileUtils;
-import com.danikula.videocache.StorageUtils;
+import com.shuyu.gsyvideoplayer.utils.StorageUtils;
 
 import java.io.File;
 import java.io.IOException;
 import java.util.Map;
-
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.TrustManager;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 
@@ -29,7 +26,6 @@ import tv.danmaku.ijk.media.player.IMediaPlayer;
 public class ProxyCacheManager implements ICacheManager, CacheListener {
 
     public static int DEFAULT_MAX_SIZE = 512 * 1024 * 1024;
-    public static int DEFAULT_MAX_COUNT = -1;
 
     //视频代理
     protected HttpProxyCacheServer proxy;
@@ -46,10 +42,6 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
     private ICacheManager.ICacheAvailableListener cacheAvailableListener;
 
     protected ProxyCacheUserAgentHeadersInjector userAgentHeadersInjector = new ProxyCacheUserAgentHeadersInjector();
-
-    private HostnameVerifier v;
-
-    private TrustManager[] trustAllCerts;
 
     /**
      * 单例管理器
@@ -170,14 +162,8 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
         }
         HttpProxyCacheServer.Builder builder = new HttpProxyCacheServer.Builder(context);
         builder.cacheDirectory(file);
-        if (DEFAULT_MAX_COUNT > 0) {
-            builder.maxCacheFilesCount(DEFAULT_MAX_COUNT);
-        } else {
-            builder.maxCacheSize(DEFAULT_MAX_SIZE);
-        }
+        builder.maxCacheSize(DEFAULT_MAX_SIZE);
         builder.headerInjector(userAgentHeadersInjector);
-        builder.hostnameVerifier(v);
-        builder.trustAllCerts(trustAllCerts);
         if (fileNameGenerator != null) {
             builder.fileNameGenerator(fileNameGenerator);
         }
@@ -193,18 +179,9 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
      * 创建缓存代理服务
      */
     public HttpProxyCacheServer newProxy(Context context) {
-        HttpProxyCacheServer.Builder builder = new HttpProxyCacheServer
-                .Builder(context.getApplicationContext())
-                .headerInjector(userAgentHeadersInjector);
-        if (DEFAULT_MAX_COUNT > 0) {
-            builder.maxCacheFilesCount(DEFAULT_MAX_COUNT);
-        } else {
-            builder.maxCacheSize(DEFAULT_MAX_SIZE);
-        }
-        builder.hostnameVerifier(v);
-        builder.trustAllCerts(trustAllCerts);
-        return builder.build();
-
+        return new HttpProxyCacheServer.Builder(context.getApplicationContext())
+                .maxCacheSize(DEFAULT_MAX_SIZE)
+                .headerInjector(userAgentHeadersInjector).build();
     }
 
 
@@ -255,21 +232,5 @@ public class ProxyCacheManager implements ICacheManager, CacheListener {
 
     public static void clearFileNameGenerator() {
         ProxyCacheManager.fileNameGenerator = null;
-    }
-
-    public HostnameVerifier getHostnameVerifier() {
-        return v;
-    }
-
-    public void setHostnameVerifier(HostnameVerifier v) {
-        this.v = v;
-    }
-
-    public TrustManager[] getTrustAllCerts() {
-        return trustAllCerts;
-    }
-
-    public void setTrustAllCerts(TrustManager[] trustAllCerts) {
-        this.trustAllCerts = trustAllCerts;
     }
 }
