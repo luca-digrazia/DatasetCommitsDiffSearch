@@ -17,10 +17,15 @@ package org.androidannotations.processing.rest;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 
 import org.androidannotations.annotations.rest.Delete;
+import org.androidannotations.processing.EBeanHolder;
 
-public class DeleteProcessor extends GetPostProcessor {
+import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JInvocation;
+
+public class DeleteProcessor extends MethodProcessor {
 
 	public DeleteProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationsHolder) {
 		super(processingEnv, restImplementationsHolder);
@@ -32,9 +37,18 @@ public class DeleteProcessor extends GetPostProcessor {
 	}
 
 	@Override
-	public String retrieveUrlSuffix(Element element) {
-		Delete getAnnotation = element.getAnnotation(Delete.class);
-		return getAnnotation.value();
+	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) throws Exception {
+
+		ExecutableElement executableElement = (ExecutableElement) element;
+
+		Delete deleteAnnotation = element.getAnnotation(Delete.class);
+		String urlSuffix = deleteAnnotation.value();
+
+		generateRestTemplateCallBlock(new MethodProcessorHolder(holder, executableElement, urlSuffix, null, null, codeModel));
 	}
 
+	@Override
+	protected JInvocation addHttpEntityVar(JInvocation restCall, MethodProcessorHolder methodHolder) {
+		return restCall.arg(generateHttpEntityVar(methodHolder));
+	}
 }
