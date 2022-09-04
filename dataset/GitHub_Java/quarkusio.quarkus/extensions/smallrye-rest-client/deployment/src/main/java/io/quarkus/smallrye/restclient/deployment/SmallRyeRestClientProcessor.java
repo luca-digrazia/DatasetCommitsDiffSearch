@@ -17,11 +17,8 @@
 package io.quarkus.smallrye.restclient.deployment;
 
 import java.lang.reflect.Modifier;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -32,8 +29,6 @@ import javax.ws.rs.ext.Providers;
 
 import org.apache.commons.logging.impl.Jdk14Logger;
 import org.apache.commons.logging.impl.LogFactoryImpl;
-import org.eclipse.microprofile.rest.client.annotation.RegisterProvider;
-import org.eclipse.microprofile.rest.client.annotation.RegisterProviders;
 import org.eclipse.microprofile.rest.client.ext.DefaultClientHeadersFactoryImpl;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.jandex.AnnotationInstance;
@@ -46,7 +41,7 @@ import org.jboss.jandex.Type;
 import org.jboss.resteasy.client.jaxrs.ResteasyClientBuilder;
 import org.jboss.resteasy.client.jaxrs.internal.proxy.ProxyBuilderImpl;
 import org.jboss.resteasy.client.jaxrs.internal.proxy.ResteasyClientProxy;
-import org.jboss.resteasy.core.providerfactory.ResteasyProviderFactoryImpl;
+import org.jboss.resteasy.core.ResteasyProviderFactoryImpl;
 import org.jboss.resteasy.spi.ResteasyConfiguration;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -62,10 +57,14 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
-import io.quarkus.deployment.builditem.substrate.*;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
+import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
 import io.quarkus.smallrye.restclient.runtime.IncomingHeadersProvider;
 import io.quarkus.smallrye.restclient.runtime.RestClientBase;
 import io.quarkus.smallrye.restclient.runtime.RestClientBuilderImpl;
@@ -79,17 +78,25 @@ class SmallRyeRestClientProcessor {
 
     private static final DotName PATH = DotName.createSimple(Path.class.getName());
 
-    private static final DotName REGISTER_PROVIDER = DotName.createSimple(RegisterProvider.class.getName());
-    private static final DotName REGISTER_PROVIDERS = DotName.createSimple(RegisterProviders.class.getName());
-
     private static final String PROVIDERS_SERVICE_FILE = "META-INF/services/" + Providers.class.getName();
 
     @BuildStep
-    void setupProviders(BuildProducer<SubstrateResourceBuildItem> resources,
-            BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition) {
+    void setupProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<SubstrateResourceBuildItem> resources,
+            BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition) throws Exception {
 
         proxyDefinition.produce(new SubstrateProxyDefinitionBuildItem("javax.ws.rs.ext.Providers"));
+
+        // This abstract one is also accessed directly via reflection
+        reflectiveClass.produce(new ReflectiveClassBuildItem(true, true,
+                "org.jboss.resteasy.plugins.providers.jsonb.AbstractJsonBindingProvider"));
+
+        // for now, register all the providers for reflection. This is not something we want to keep but not having it generates a pile of warnings.
+        // we will improve that later with the SmallRye REST client.
         resources.produce(new SubstrateResourceBuildItem(PROVIDERS_SERVICE_FILE));
+        for (String provider : ServiceUtil.classNamesNamedIn(getClass().getClassLoader(), PROVIDERS_SERVICE_FILE)) {
+            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, provider));
+        }
     }
 
     @BuildStep
@@ -220,31 +227,6 @@ class SmallRyeRestClientProcessor {
         // Indicates that this extension would like the SSL support to be enabled
         extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.SMALLRYE_REST_CLIENT));
         RestClientBuilderImpl.SSL_ENABLED = sslNativeConfig.isEnabled();
-    }
-
-    @BuildStep
-    void registerProviders(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            JaxrsProvidersToRegisterBuildItem jaxrsProvidersToRegisterBuildItem,
-            CombinedIndexBuildItem combinedIndexBuildItem) {
-        RestClientBuilderImpl.REGISTER_BUILTIN_PROVIDERS = jaxrsProvidersToRegisterBuildItem.useBuiltIn();
-        RestClientBuilderImpl.PROVIDERS_TO_REGISTER = String.join(",", jaxrsProvidersToRegisterBuildItem.getProviders());
-
-        // register the providers for reflection
-        for (String providerToRegister : jaxrsProvidersToRegisterBuildItem.getProviders()) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, providerToRegister));
-        }
-
-        // now we register all values of @RegisterProvider for constructor reflection
-
-        IndexView index = combinedIndexBuildItem.getIndex();
-        List<AnnotationInstance> allInstances = new ArrayList<>(index.getAnnotations(REGISTER_PROVIDER));
-        for (AnnotationInstance annotation : index.getAnnotations(REGISTER_PROVIDERS)) {
-            allInstances.addAll(Arrays.asList(annotation.value().asNestedArray()));
-        }
-        for (AnnotationInstance annotationInstance : allInstances) {
-            reflectiveClass
-                    .produce(new ReflectiveClassBuildItem(false, false, annotationInstance.value().asClass().toString()));
-        }
     }
 
     private boolean isRestClientInterface(IndexView index, ClassInfo classInfo) {
