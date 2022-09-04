@@ -243,12 +243,12 @@ public class DevConsoleProcessor {
         routeBuildItemBuildProducer.produce(new RouteBuildItem.Builder()
                 .route("/dev/*")
                 .handler(new DevConsoleFilter())
-                .nonApplicationRoute(false)
+                .nonApplicationRoute()
                 .build());
         routeBuildItemBuildProducer.produce(new RouteBuildItem.Builder()
                 .route("/dev")
                 .handler(new RedirectHandler())
-                .nonApplicationRoute(false)
+                .nonApplicationRoute()
                 .build());
 
         displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem("/q/dev/", "Quarkus DEV Console"));

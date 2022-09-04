@@ -7,9 +7,6 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.NotFoundException;
-import javax.ws.rs.Priorities;
-
 import io.quarkus.deployment.IsDevelopment;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -17,10 +14,11 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.resteasy.reactive.server.runtime.ExceptionMapperRecorder;
 import io.quarkus.resteasy.reactive.server.runtime.NotFoundExceptionMapper;
-import io.quarkus.resteasy.reactive.spi.ExceptionMapperBuildItem;
+import io.quarkus.resteasy.reactive.spi.CustomExceptionMapperBuildItem;
 import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.RouteDescriptionBuildItem;
+import io.quarkus.vertx.http.runtime.devmode.AdditionalRouteDescription;
 import io.quarkus.vertx.http.runtime.devmode.RouteDescription;
 
 public class ResteasyReactiveDevModeProcessor {
@@ -29,10 +27,10 @@ public class ResteasyReactiveDevModeProcessor {
 
     @Record(STATIC_INIT)
     @BuildStep(onlyIf = IsDevelopment.class)
-    void setupExceptionMapper(BuildProducer<ExceptionMapperBuildItem> providers, HttpRootPathBuildItem httpRoot,
+    void setupExceptionMapper(BuildProducer<CustomExceptionMapperBuildItem> customExceptionMappers,
+            HttpRootPathBuildItem httpRoot,
             ExceptionMapperRecorder recorder) {
-        providers.produce(new ExceptionMapperBuildItem(NotFoundExceptionMapper.class.getName(),
-                NotFoundException.class.getName(), Priorities.USER + 1, true));
+        customExceptionMappers.produce(new CustomExceptionMapperBuildItem(NotFoundExceptionMapper.class.getName()));
         recorder.setHttpRoot(httpRoot.getRootPath());
     }
 
@@ -62,9 +60,9 @@ public class ResteasyReactiveDevModeProcessor {
     @BuildStep(onlyIf = IsDevelopment.class)
     void addAdditionalEndpointsExceptionMapper(List<NotFoundPageDisplayableEndpointBuildItem> displayableEndpoints,
             ExceptionMapperRecorder recorder, HttpRootPathBuildItem httpRoot) {
-        List<String> endpoints = displayableEndpoints
+        List<AdditionalRouteDescription> endpoints = displayableEndpoints
                 .stream()
-                .map(NotFoundPageDisplayableEndpointBuildItem::getEndpoint)
+                .map(v -> new AdditionalRouteDescription(v.getEndpoint(), v.getDescription()))
                 .sorted()
                 .collect(Collectors.toList());
 
