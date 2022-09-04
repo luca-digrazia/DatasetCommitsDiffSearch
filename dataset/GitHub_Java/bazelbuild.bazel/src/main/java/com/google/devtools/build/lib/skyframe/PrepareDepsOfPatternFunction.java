@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -29,16 +28,17 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.AbstractRecursivePackageProvider.MissingDepException;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.TargetPatternResolverUtil;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
+import com.google.devtools.build.lib.skyframe.EnvironmentBackedRecursivePackageProvider.MissingDepException;
 import com.google.devtools.build.lib.util.BatchCallback;
 import com.google.devtools.build.lib.util.BatchCallback.NullCallback;
+import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
@@ -144,7 +144,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
 
     public DepsOfPatternPreparer(Environment env, PathPackageLocator pkgPath) {
       this.env = env;
-      this.packageProvider = new EnvironmentBackedRecursivePackageProvider(env, pkgPath);
+      this.packageProvider = new EnvironmentBackedRecursivePackageProvider(env);
       this.pkgPath = pkgPath;
     }
 
@@ -246,7 +246,7 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
       Preconditions.checkArgument(excludedSubdirectories.isEmpty(), excludedSubdirectories);
       FilteringPolicy policy =
           rulesOnly ? FilteringPolicies.RULES_ONLY : FilteringPolicies.NO_FILTER;
-      List<Root> roots = new ArrayList<>();
+      List<Path> roots = new ArrayList<>();
       if (repository.isMain()) {
         roots.addAll(pkgPath.getPathEntries());
       } else {
@@ -261,10 +261,10 @@ public class PrepareDepsOfPatternFunction implements SkyFunction {
           // already checked for its existence.
           throw new IllegalStateException(String.format("No such repository '%s'", repository));
         }
-        roots.add(Root.fromPath(repositoryValue.getPath()));
+        roots.add(repositoryValue.getPath());
       }
 
-      for (Root root : roots) {
+      for (Path root : roots) {
         RootedPath rootedPath = RootedPath.toRootedPath(root, directoryPathFragment);
         env.getValues(
             ImmutableList.of(

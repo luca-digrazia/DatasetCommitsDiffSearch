@@ -13,24 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
+import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.pkgcache.AbstractRecursivePackageProvider;
+import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
+import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -47,13 +49,11 @@ import java.util.Map;
  * <p>This implementation never emits events through the {@link ExtendedEventHandler}s passed to its
  * methods. Instead, it emits events through its environment's {@link Environment#getListener()}.
  */
-public final class EnvironmentBackedRecursivePackageProvider
-    extends AbstractRecursivePackageProvider {
+public final class EnvironmentBackedRecursivePackageProvider implements RecursivePackageProvider {
 
   private final Environment env;
 
-  EnvironmentBackedRecursivePackageProvider(Environment env, PathPackageLocator pkgPath) {
-    super(pkgPath);
+  public EnvironmentBackedRecursivePackageProvider(Environment env) {
     this.env = env;
   }
 
@@ -124,7 +124,7 @@ public final class EnvironmentBackedRecursivePackageProvider
       throw new MissingDepException();
     }
 
-    List<Root> roots = new ArrayList<>();
+    List<Path> roots = new ArrayList<>();
     if (repository.isMain()) {
       roots.addAll(packageLocator.getPathEntries());
     } else {
@@ -135,10 +135,11 @@ public final class EnvironmentBackedRecursivePackageProvider
       }
 
       if (!repositoryValue.repositoryExists()) {
-        eventHandler.handle(Event.error(String.format("No such repository '%s'", repository)));
-        return ImmutableList.of();
+        // This shouldn't be possible; we're given a repository, so we assume that the caller has
+        // already checked for its existence.
+        throw new IllegalStateException(String.format("No such repository '%s'", repository));
       }
-      roots.add(Root.fromPath(repositoryValue.getPath()));
+      roots.add(repositoryValue.getPath());
     }
 
     if (blacklistedSubdirectories.contains(directory)) {
@@ -147,7 +148,7 @@ public final class EnvironmentBackedRecursivePackageProvider
     PathFragment.checkAllPathsAreUnder(blacklistedSubdirectories, directory);
 
     LinkedHashSet<PathFragment> packageNames = new LinkedHashSet<>();
-    for (Root root : roots) {
+    for (Path root : roots) {
       RecursivePkgValue lookup = (RecursivePkgValue) env.getValue(RecursivePkgValue.key(
           repository, RootedPath.toRootedPath(root, directory), blacklistedSubdirectories));
       if (lookup == null) {
@@ -174,5 +175,21 @@ public final class EnvironmentBackedRecursivePackageProvider
     }
 
     return packageNames;
+  }
+
+  @Override
+  public Target getTarget(ExtendedEventHandler eventHandler, Label label)
+      throws NoSuchPackageException, NoSuchTargetException, MissingDepException,
+          InterruptedException {
+    return getPackage(eventHandler, label.getPackageIdentifier()).getTarget(label.getName());
+  }
+
+  /**
+   * Indicates that a missing dependency is needed before target parsing can proceed. Currently
+   * used only in skyframe to notify the framework of missing dependencies. Caught by the compute
+   * method in {@link com.google.devtools.build.lib.skyframe.TargetPatternFunction}, which then
+   * returns null in accordance with the skyframe missing dependency policy.
+   */
+  static class MissingDepException extends RuntimeException {
   }
 }

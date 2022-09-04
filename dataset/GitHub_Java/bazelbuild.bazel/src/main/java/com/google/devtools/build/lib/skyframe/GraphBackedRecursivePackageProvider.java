@@ -13,11 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
-
 import com.google.common.base.Function;
 import com.google.common.base.Objects;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -43,9 +40,9 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.pkgcache.RecursivePackageProvider;
 import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -135,14 +132,6 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
     return pkgResults.build();
   }
 
-  @Override
-  public Path getBuildFileForPackage(PackageIdentifier packageName) {
-    try {
-      return pkgPath.getPackageBuildFile(packageName);
-    } catch (NoSuchPackageException e) {
-      return null;
-    }
-  }
 
   @Override
   public boolean isPackage(ExtendedEventHandler eventHandler, PackageIdentifier packageName)
@@ -204,7 +193,7 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
       return ImmutableList.of();
     }
 
-    List<Root> roots = new ArrayList<>();
+    List<Path> roots = new ArrayList<>();
     if (repository.isMain()) {
       roots.addAll(pkgPath.getPathEntries());
     } else {
@@ -215,14 +204,14 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
         // "nothing".
         return ImmutableList.of();
       }
-      roots.add(Root.fromPath(repositoryValue.getPath()));
+      roots.add(repositoryValue.getPath());
     }
 
     // If we found a TargetsBelowDirectory pattern in the universe that contains this directory,
     // then we can look for packages in and under it in the graph. If we didn't find one, then the
     // directory wasn't in the universe, so return an empty list.
     ImmutableList.Builder<PathFragment> builder = ImmutableList.builder();
-    for (Root root : roots) {
+    for (Path root : roots) {
       RootedPath rootedDir = RootedPath.toRootedPath(root, directory);
       TraversalInfo info =
           new TraversalInfo(rootedDir, blacklistedSubdirectories, excludedSubdirectories);
@@ -271,15 +260,11 @@ public final class GraphBackedRecursivePackageProvider implements RecursivePacka
           if (subdirectoryTransitivelyContainsPackages.get(subdirectory)) {
             PathFragment subdirectoryRelativePath = subdirectory.getRelativePath();
             ImmutableSet<PathFragment> blacklistedSubdirectoriesBeneathThisSubdirectory =
-                info.blacklistedSubdirectories
-                    .stream()
-                    .filter(pathFragment -> pathFragment.startsWith(subdirectoryRelativePath))
-                    .collect(toImmutableSet());
+                PathFragment.filterPathsStartingWith(
+                    info.blacklistedSubdirectories, subdirectoryRelativePath);
             ImmutableSet<PathFragment> excludedSubdirectoriesBeneathThisSubdirectory =
-                info.excludedSubdirectories
-                    .stream()
-                    .filter(pathFragment -> pathFragment.startsWith(subdirectoryRelativePath))
-                    .collect(toImmutableSet());
+                PathFragment.filterPathsStartingWith(
+                    info.excludedSubdirectories, subdirectoryRelativePath);
             if (!excludedSubdirectoriesBeneathThisSubdirectory.contains(subdirectoryRelativePath)) {
               subdirTraversalBuilder.add(
                   new TraversalInfo(

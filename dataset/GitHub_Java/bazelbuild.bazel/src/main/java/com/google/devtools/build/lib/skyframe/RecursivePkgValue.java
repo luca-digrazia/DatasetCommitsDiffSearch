@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -21,6 +20,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.LegacySkyKey;
@@ -83,7 +83,8 @@ public class RecursivePkgValue implements SkyValue {
 
     public RecursivePkgKey(RepositoryName repositoryName, RootedPath rootedPath,
         ImmutableSet<PathFragment> excludedPaths) {
-      PathFragment.checkAllPathsAreUnder(excludedPaths, rootedPath.getRootRelativePath());
+      PathFragment.checkAllPathsAreUnder(excludedPaths,
+          rootedPath.getRelativePath());
       Preconditions.checkState(!repositoryName.isDefault());
       this.repositoryName = repositoryName;
       this.rootedPath = Preconditions.checkNotNull(rootedPath);
