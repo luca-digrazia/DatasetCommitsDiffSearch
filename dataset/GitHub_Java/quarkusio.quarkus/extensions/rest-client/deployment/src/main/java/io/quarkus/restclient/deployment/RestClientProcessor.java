@@ -43,7 +43,6 @@ import org.jboss.resteasy.microprofile.client.async.AsyncInterceptorRxInvokerPro
 import org.jboss.resteasy.spi.ResteasyConfiguration;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
-import io.quarkus.arc.deployment.BeanContainerListenerBuildItem;
 import io.quarkus.arc.deployment.BeanRegistrarBuildItem;
 import io.quarkus.arc.processor.BeanConfigurator;
 import io.quarkus.arc.processor.BeanRegistrar;
@@ -68,7 +67,6 @@ import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.restclient.runtime.RestClientBase;
 import io.quarkus.restclient.runtime.RestClientRecorder;
 import io.quarkus.resteasy.common.deployment.JaxrsProvidersToRegisterBuildItem;
-import io.quarkus.resteasy.common.deployment.RestClientBuildItem;
 import io.quarkus.resteasy.common.deployment.ResteasyDotNames;
 import io.quarkus.resteasy.common.deployment.ResteasyInjectionReadyBuildItem;
 
@@ -96,12 +94,6 @@ class RestClientProcessor {
 
         proxyDefinition.produce(new NativeImageProxyDefinitionBuildItem("javax.ws.rs.ext.Providers"));
         resources.produce(new NativeImageResourceBuildItem(PROVIDERS_SERVICE_FILE));
-    }
-
-    @Record(ExecutionTime.STATIC_INIT)
-    @BuildStep
-    BeanContainerListenerBuildItem fixExtension(RestClientRecorder restClientRecorder) {
-        return new BeanContainerListenerBuildItem(restClientRecorder.hackAroundExtension());
     }
 
     @BuildStep
@@ -146,7 +138,6 @@ class RestClientProcessor {
             BuildProducer<BeanRegistrarBuildItem> beanRegistrars,
             BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport,
             BuildProducer<ServiceProviderBuildItem> serviceProvider,
-            BuildProducer<RestClientBuildItem> restClient,
             RestClientRecorder restClientRecorder) {
 
         // According to the spec only rest client interfaces annotated with RegisterRestClient are registered as beans
@@ -160,10 +151,6 @@ class RestClientProcessor {
 
         if (interfaces.isEmpty()) {
             return;
-        }
-
-        for (DotName interfaze : interfaces.keySet()) {
-            restClient.produce(new RestClientBuildItem(interfaze.toString()));
         }
 
         for (Map.Entry<DotName, ClassInfo> entry : interfaces.entrySet()) {
@@ -366,21 +353,6 @@ class RestClientProcessor {
         for (ClassInfo info : index.getAllKnownImplementors(CLIENT_RESPONSE_FILTER)) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, info.name().toString()));
         }
-    }
-
-    @BuildStep
-    AdditionalBeanBuildItem registerProviderBeans(CombinedIndexBuildItem combinedIndex) {
-        IndexView index = combinedIndex.getIndex();
-        List<AnnotationInstance> allInstances = new ArrayList<>(index.getAnnotations(REGISTER_PROVIDER));
-        for (AnnotationInstance annotation : index.getAnnotations(REGISTER_PROVIDERS)) {
-            allInstances.addAll(Arrays.asList(annotation.value().asNestedArray()));
-        }
-        AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder().setUnremovable();
-        for (AnnotationInstance annotationInstance : allInstances) {
-            // Make sure all providers not annotated with @Provider but used in @RegisterProvider are registered as beans
-            builder.addBeanClass(annotationInstance.value().asClass().toString());
-        }
-        return builder.build();
     }
 
     private boolean isRestClientInterface(IndexView index, ClassInfo classInfo) {
