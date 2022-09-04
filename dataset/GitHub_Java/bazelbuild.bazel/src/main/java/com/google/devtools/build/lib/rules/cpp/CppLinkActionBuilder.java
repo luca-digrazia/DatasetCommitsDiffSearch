@@ -958,7 +958,7 @@ public class CppLinkActionBuilder {
 
     linkCommandLineBuilder.setBuildVariables(buildVariables);
     if (CppHelper.doNotSplitLinkingCmdLine(
-        actionConstructionContext.getAnalysisEnvironment().getStarlarkSemantics(), toolchain)) {
+        actionConstructionContext.getAnalysisEnvironment().getSkylarkSemantics(), toolchain)) {
       linkCommandLineBuilder.doNotSplitLinkingCmdLine();
     }
     LinkCommandLine linkCommandLine = linkCommandLineBuilder.build();
@@ -1249,6 +1249,7 @@ public class CppLinkActionBuilder {
   /** Sets the C++ runtime library inputs for the action. */
   public CppLinkActionBuilder setRuntimeInputs(
       ArtifactCategory runtimeType, Artifact middleman, NestedSet<Artifact> inputs) {
+    Preconditions.checkArgument((middleman == null) == inputs.isEmpty());
     this.toolchainLibrariesType = runtimeType;
     this.runtimeMiddleman = middleman;
     this.toolchainLibrariesInputs = inputs;
