@@ -35,12 +35,12 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.DirectTraversalRoot;
 import com.google.devtools.build.lib.actions.FilesetTraversalParams.PackageBoundaryMode;
-import com.google.devtools.build.lib.actions.HasDigest;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
@@ -101,7 +101,7 @@ import org.junit.runners.JUnit4;
 /** Tests for {@link RecursiveFilesystemTraversalFunction}. */
 @RunWith(JUnit4.class)
 public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTestCase {
-  private static final HasDigest EMPTY_METADATA = HasDigest.EMPTY;
+  private static final Integer EMPTY_METADATA = new Integer(0);
 
   private RecordingEvaluationProgressReceiver progressReceiver;
   private MemoizingEvaluator evaluator;
@@ -1018,7 +1018,8 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
             && ((Artifact) skyKey.argument()).isTreeArtifact()) {
           return TreeArtifactValue.create(allTreeFiles);
         }
-        return FileArtifactValue.createShareable(((Artifact) skyKey.argument()).getPath());
+        return FileArtifactValue.createShareable(
+            ArtifactSkyKey.artifact((SkyKey) skyKey.argument()).getPath());
       } catch (IOException e) {
         throw new SkyFunctionException(e, Transience.PERSISTENT){};
       }

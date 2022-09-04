@@ -144,10 +144,7 @@ public abstract class TimestampBuilderTestCase extends FoundationTestCase {
 
   @Before
   public final void initialize() throws Exception  {
-    options =
-        OptionsParser.builder()
-            .optionsClasses(KeepGoingOption.class, BuildRequestOptions.class)
-            .build();
+    options = OptionsParser.newOptionsParser(KeepGoingOption.class, BuildRequestOptions.class);
     options.parse();
     inMemoryCache = new InMemoryActionCache();
     tsgm = new TimestampGranularityMonitor(clock);

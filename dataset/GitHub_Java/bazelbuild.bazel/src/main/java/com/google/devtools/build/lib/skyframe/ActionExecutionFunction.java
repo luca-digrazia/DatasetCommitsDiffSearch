@@ -647,10 +647,7 @@ public class ActionExecutionFunction implements SkyFunction {
                 skyframeActionExecutor, env, metadataHandler, ImmutableMap.of());
           } catch (IOException e) {
             throw new ActionExecutionException(
-                "Failed to update filesystem context: " + e.getMessage(),
-                e,
-                action,
-                /*catastrophe=*/ false);
+                "Failed to update filesystem context: ", e, action, /*catastrophe=*/ false);
           }
           state.discoveredInputs =
               skyframeActionExecutor.discoverInputs(
@@ -724,10 +721,7 @@ public class ActionExecutionFunction implements SkyFunction {
       state.updateFileSystemContext(skyframeActionExecutor, env, metadataHandler, expandedFilesets);
     } catch (IOException e) {
       throw new ActionExecutionException(
-          "Failed to update filesystem context: " + e.getMessage(),
-          e,
-          action,
-          /*catastrophe=*/ false);
+          "Failed to update filesystem context: ", e, action, /*catastrophe=*/ false);
     }
 
     try (ActionExecutionContext actionExecutionContext =
@@ -753,7 +747,7 @@ public class ActionExecutionFunction implements SkyFunction {
           state.discoveredInputs != null);
     } catch (IOException e) {
       throw new ActionExecutionException(
-          "Failed to close action output: " + e.getMessage(), e, action, /*catastrophe=*/ false);
+          "Failed to close action output", e, action, /*catastrophe=*/ false);
     }
   }
 

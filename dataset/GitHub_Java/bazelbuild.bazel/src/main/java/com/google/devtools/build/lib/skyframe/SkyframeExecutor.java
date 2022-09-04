@@ -2025,11 +2025,10 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         }
         List<BuildOptions> toOptions = Collections.singletonList(fromOptions);
         try {
-          Map<PackageValue.Key, PackageValue> buildSettingPackages =
-              getBuildSettingPackages(transition, eventHandler);
+          Map<SkyKey, SkyValue> buildSettingPackages =
+              collectBuildSettingValues(transition, eventHandler);
           toOptions =
-              ConfigurationResolver.applyTransition(
-                  fromOptions, transition, buildSettingPackages, eventHandler);
+              ConfigurationResolver.applyTransition(fromOptions, transition, buildSettingPackages);
           StarlarkTransition.replayEvents(eventHandler, transition);
         } catch (TransitionException e) {
           eventHandler.handle(Event.error(e.getMessage()));
@@ -2056,11 +2055,11 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         }
         List<BuildOptions> toOptions = Collections.singletonList(fromOptions);
         try {
-          Map<PackageValue.Key, PackageValue> buildSettingPackages =
-              getBuildSettingPackages(key.getTransition(), eventHandler);
+          Map<SkyKey, SkyValue> buildSettingPackages =
+              collectBuildSettingValues(key.getTransition(), eventHandler);
           toOptions =
               ConfigurationResolver.applyTransition(
-                  fromOptions, key.getTransition(), buildSettingPackages, eventHandler);
+                  fromOptions, key.getTransition(), buildSettingPackages);
         } catch (TransitionException e) {
           eventHandler.handle(Event.error(e.getMessage()));
           builder.setHasError();
@@ -2160,45 +2159,24 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     }
   }
 
-  /** Keep in sync with {@link StarlarkTransition#getBuildSettingPackages} */
-  private Map<PackageValue.Key, PackageValue> getBuildSettingPackages(
+  private Map<SkyKey, SkyValue> collectBuildSettingValues(
       ConfigurationTransition transition, ExtendedEventHandler eventHandler)
       throws TransitionException {
-    HashMap<PackageValue.Key, PackageValue> buildSettingPackages = new HashMap<>();
-    // This happens before cycle detection so keep track of all seen build settings to ensure
-    // we don't get stuck in endless loops (e.g. //alias1->//alias2 && //alias2->alias1)
-    Set<Label> allSeenBuildSettings = new HashSet<>();
-    ImmutableSet<Label> unverifiedBuildSettings =
-        StarlarkTransition.getAllBuildSettings(transition);
-    while (!unverifiedBuildSettings.isEmpty()) {
-      for (Label buildSetting : unverifiedBuildSettings) {
-        if (!allSeenBuildSettings.add(buildSetting)) {
-          throw new TransitionException(
-              String.format(
-                  "Error with aliased build settings related to '%s'. Either your aliases form a"
-                      + " dependency cycle or you're attempting to set both an alias its actual"
-                      + " target in the same transition.",
-                  buildSetting));
-        }
-      }
-      ImmutableSet<PackageValue.Key> buildSettingPackageKeys =
-          StarlarkTransition.getPackageKeysFromLabels(unverifiedBuildSettings);
-      EvaluationResult<SkyValue> newlyLoaded =
-          evaluateSkyKeys(eventHandler, buildSettingPackageKeys, true);
-      if (newlyLoaded.hasError()) {
-        throw new TransitionException(
-            new NoSuchPackageException(
-                ((PackageValue.Key) newlyLoaded.getError().getRootCauseOfException()).argument(),
-                "Unable to find build setting package",
-                newlyLoaded.getError().getException()));
-      }
-      buildSettingPackageKeys.forEach(
-          k -> buildSettingPackages.put(k, (PackageValue) newlyLoaded.get(k)));
-      unverifiedBuildSettings =
-          StarlarkTransition.verifyBuildSettingsAndGetAliases(
-              buildSettingPackages, unverifiedBuildSettings);
+    ImmutableSet<SkyKey> buildSettingPackageKeys =
+        StarlarkTransition.getAllBuildSettingPackageKeys(transition);
+    EvaluationResult<SkyValue> buildSettingsResult =
+        evaluateSkyKeys(eventHandler, buildSettingPackageKeys, true);
+    if (buildSettingsResult.hasError()) {
+      throw new TransitionException(
+          new NoSuchPackageException(
+              ((PackageValue.Key) buildSettingsResult.getError().getRootCauseOfException())
+                  .argument(),
+              "Unable to find build setting package",
+              buildSettingsResult.getError().getException()));
     }
-    return buildSettingPackages;
+    ImmutableMap.Builder<SkyKey, SkyValue> buildSettingValues = new ImmutableMap.Builder<>();
+    buildSettingPackageKeys.forEach(k -> buildSettingValues.put(k, buildSettingsResult.get(k)));
+    return buildSettingValues.build();
   }
 
   /**
@@ -2655,8 +2633,8 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       TimestampGranularityMonitor tsgm,
       OptionsProvider options)
       throws InterruptedException, AbruptExitException {
-    getActionEnvFromOptions(options.getOptions(CoreOptions.class));
-    setRepoEnv(options.getOptions(CoreOptions.class));
+    getActionEnvFromOptions(options);
+    setRepoEnv(options);
     RemoteOptions remoteOptions = options.getOptions(RemoteOptions.class);
     setRemoteOutputsMode(
         remoteOptions != null
@@ -2701,9 +2679,10 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     invalidateTransientErrors();
   }
 
-  private void getActionEnvFromOptions(CoreOptions opt) {
+  private void getActionEnvFromOptions(OptionsProvider options) {
     // ImmutableMap does not support null values, so use a LinkedHashMap instead.
     LinkedHashMap<String, String> actionEnvironment = new LinkedHashMap<>();
+    CoreOptions opt = options.getOptions(CoreOptions.class);
     if (opt != null) {
       for (Map.Entry<String, String> v : opt.actionEnvironment) {
         actionEnvironment.put(v.getKey(), v.getValue());
@@ -2717,7 +2696,8 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     PrecomputedValue.ACTION_ENV.set(injectable(), actionEnv);
   }
 
-  private void setRepoEnv(CoreOptions opt) {
+  private void setRepoEnv(OptionsProvider options) {
+    CoreOptions opt = options.getOptions(CoreOptions.class);
     LinkedHashMap<String, String> repoEnv = new LinkedHashMap<>();
     if (opt != null) {
       for (Map.Entry<String, String> v : opt.repositoryEnvironment) {
@@ -2967,4 +2947,3 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     return buildDriver.evaluate(roots, evaluationContext);
   }
 }
-

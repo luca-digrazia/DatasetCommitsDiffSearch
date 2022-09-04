@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
 import com.google.devtools.build.lib.rules.android.AarImportBaseRule;
-import com.google.devtools.build.lib.rules.android.AndroidApplicationResourceInfo;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceBrokerInfo;
 import com.google.devtools.build.lib.rules.android.AndroidDeviceRule;
@@ -101,8 +100,6 @@ import com.google.devtools.build.lib.rules.test.TestingSupportRules;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidBootstrap;
 import com.google.devtools.build.lib.skylarkbuildapi.proto.ProtoBootstrap;
 import com.google.devtools.build.lib.skylarkbuildapi.python.PyBootstrap;
-import com.google.devtools.build.lib.skylarkbuildapi.stubs.ProviderStub;
-import com.google.devtools.build.lib.skylarkbuildapi.stubs.SkylarkAspectStub;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.ResourceFileLoader;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -256,11 +253,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new ProtoLangToolchainRule());
 
           ProtoBootstrap bootstrap =
-              new ProtoBootstrap(
-                  ProtoInfo.PROVIDER,
-                  BazelProtoModule.INSTANCE,
-                  new SkylarkAspectStub(),
-                  new ProviderStub());
+              new ProtoBootstrap(ProtoInfo.PROVIDER, BazelProtoModule.INSTANCE);
           builder.addSkylarkBootstrap(bootstrap);
         }
 
@@ -348,8 +341,7 @@ public class BazelRuleClassProvider {
                   AndroidInstrumentationInfo.PROVIDER,
                   AndroidDeviceBrokerInfo.PROVIDER,
                   AndroidResourcesInfo.PROVIDER,
-                  AndroidNativeLibsInfo.PROVIDER,
-                  AndroidApplicationResourceInfo.PROVIDER);
+                  AndroidNativeLibsInfo.PROVIDER);
           builder.addSkylarkBootstrap(bootstrap);
 
           try {
@@ -414,7 +406,7 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new LocalConfigPlatformRule());
 
           try {
-            builder.addWorkspaceFileSuffix(
+            builder.addWorkspaceFilePrefix(
                 ResourceFileLoader.loadResource(
                     LocalConfigPlatformRule.class, "local_config_platform.WORKSPACE"));
           } catch (IOException e) {

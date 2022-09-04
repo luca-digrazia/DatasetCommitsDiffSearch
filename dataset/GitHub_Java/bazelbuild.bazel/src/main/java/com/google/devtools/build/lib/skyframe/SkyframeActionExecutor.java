@@ -1207,10 +1207,7 @@ public final class SkyframeActionExecutor {
             outputDir.createDirectoryAndParents();
           } catch (IOException e) {
             throw new ActionExecutionException(
-                "failed to create output directory '" + outputDir + "': " + e.getMessage(),
-                e,
-                action,
-                false);
+                "failed to create output directory '" + outputDir + "'", e, action, false);
           }
         }
       }
@@ -1233,13 +1230,8 @@ public final class SkyframeActionExecutor {
       fileOutErr.getErrorPath().getParentDirectory().createDirectoryAndParents();
     } catch (IOException e) {
       throw new ActionExecutionException(
-          "failed to create output directory for output streams'"
-              + fileOutErr.getErrorPath()
-              + "': "
-              + e.getMessage(),
-          e,
-          action,
-          false);
+          "failed to create output directory for output streams'" + fileOutErr.getErrorPath() + "'",
+          e, action, false);
     }
   }
 

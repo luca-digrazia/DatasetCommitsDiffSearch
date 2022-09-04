@@ -39,8 +39,7 @@ class ActionInputMapHelper {
   static void addToMap(
       ActionInputMapSink inputMap,
       Map<Artifact, Collection<Artifact>> expandedArtifacts,
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetsInsideRunfiles,
-      Map<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
+      Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
       Artifact key,
       SkyValue value,
       Environment env)
@@ -54,7 +53,7 @@ class ActionInputMapHelper {
           ImmutableList<FilesetOutputSymlink> expandedFileset =
               getFilesets(env, (Artifact.SpecialArtifact) artifact);
           if (expandedFileset != null) {
-            filesetsInsideRunfiles.put(artifact, expandedFileset);
+            expandedFilesets.put(artifact, expandedFileset);
           }
         }
       }
@@ -91,9 +90,6 @@ class ActionInputMapHelper {
           ArtifactFunction.createSimpleFileArtifactValue(
               (Artifact.DerivedArtifact) key, (ActionExecutionValue) value),
           key);
-      if (key.isFileset()) {
-        topLevelFilesets.put(key, getFilesets(env, (Artifact.SpecialArtifact) key));
-      }
     } else {
       Preconditions.checkState(value instanceof FileArtifactValue);
       inputMap.put(key, (FileArtifactValue) value, /*depOwner=*/ key);

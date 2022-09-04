@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.actions.BuildFailedException;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
-import com.google.devtools.build.lib.actions.ResourceManager;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
@@ -46,7 +45,6 @@ import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.Builder;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.TopDownActionCache;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
@@ -73,27 +71,21 @@ import javax.annotation.Nullable;
 @VisibleForTesting
 public class SkyframeBuilder implements Builder {
 
-  private final ResourceManager resourceManager;
   private final SkyframeExecutor skyframeExecutor;
   private final ModifiedFileSet modifiedOutputFiles;
   private final MetadataProvider fileCache;
   private final ActionInputPrefetcher actionInputPrefetcher;
   private final ActionCacheChecker actionCacheChecker;
-  private final TopDownActionCache topDownActionCache;
 
   @VisibleForTesting
   public SkyframeBuilder(
       SkyframeExecutor skyframeExecutor,
-      ResourceManager resourceManager,
       ActionCacheChecker actionCacheChecker,
-      TopDownActionCache topDownActionCache,
       ModifiedFileSet modifiedOutputFiles,
       MetadataProvider fileCache,
       ActionInputPrefetcher actionInputPrefetcher) {
-    this.resourceManager = resourceManager;
     this.skyframeExecutor = skyframeExecutor;
     this.actionCacheChecker = actionCacheChecker;
-    this.topDownActionCache = topDownActionCache;
     this.modifiedOutputFiles = modifiedOutputFiles;
     this.fileCache = fileCache;
     this.actionInputPrefetcher = actionInputPrefetcher;
@@ -156,7 +148,6 @@ public class SkyframeBuilder implements Builder {
       result =
           skyframeExecutor.buildArtifacts(
               reporter,
-              resourceManager,
               executor,
               artifacts,
               targetsToBuild,
@@ -165,7 +156,6 @@ public class SkyframeBuilder implements Builder {
               exclusiveTests,
               options,
               actionCacheChecker,
-              topDownActionCache,
               executionProgressReceiver,
               topLevelArtifactContext);
       // progressReceiver is finished, so unsynchronized access to builtTargets is now safe.
@@ -189,12 +179,10 @@ public class SkyframeBuilder implements Builder {
         result =
             skyframeExecutor.runExclusiveTest(
                 reporter,
-                resourceManager,
                 executor,
                 exclusiveTest,
                 options,
                 actionCacheChecker,
-                topDownActionCache,
                 null,
                 topLevelArtifactContext);
         exitCode =
