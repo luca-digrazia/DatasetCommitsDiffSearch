@@ -29,6 +29,7 @@ import org.graylog2.restclient.models.api.responses.system.UserResponse;
 import org.apache.shiro.SecurityUtils;
 import org.apache.shiro.subject.SimplePrincipalCollection;
 import org.apache.shiro.subject.Subject;
+import org.graylog2.restroutes.generated.routes;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,7 +37,9 @@ import play.mvc.Http;
 
 import javax.annotation.Nullable;
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 public class User {
 	private static final Logger log = LoggerFactory.getLogger(User.class);
@@ -54,12 +57,13 @@ public class User {
     private final boolean external;
     private final Startpage startpage;
     private final long sessionTimeoutMs;
+    private final Map<String, Object> preferences;
 
     private Subject subject;
 
     @AssistedInject
     public User(ApiClient api, @Assisted UserResponse ur, @Nullable @Assisted String sessionId) {
-        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, sessionId, ur.timezone, ur.readonly, ur.external, ur.getStartpage(), ur.sessionTimeoutMs);
+        this(api, ur.id, ur.username, ur.email, ur.fullName, ur.permissions, sessionId, ur.timezone, ur.readonly, ur.external, ur.getStartpage(), ur.sessionTimeoutMs, ur.preferences);
     }
 
 	public User(ApiClient api,
@@ -73,7 +77,8 @@ public class User {
                 boolean readonly,
                 boolean external,
                 Startpage startpage,
-                long sessionTimeoutMs) {
+                long sessionTimeoutMs,
+                Map<String, Object> preferences) {
         DateTimeZone timezone1 = null;
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.api = api;
@@ -95,11 +100,16 @@ public class User {
         this.readonly = readonly;
         this.external = external;
         this.startpage = startpage;
+        if (preferences != null) {
+            this.preferences = preferences;
+        } else {
+            this.preferences = Collections.emptyMap();
+        }
     }
 
     public boolean update(ChangeUserRequest request) {
         try {
-            api.put().path("/users/{0}", getName()).body(request).expect(Http.Status.NO_CONTENT).execute();
+            api.path(routes.UsersResource().changeUser(getName())).body(request).expect(Http.Status.NO_CONTENT).execute();
             return true;
         } catch (APIException e) {
             log.error("Unable to update user", e);
@@ -143,8 +153,7 @@ public class User {
 
     public boolean updatePassword(ChangePasswordRequest request) {
         try {
-            api.put()
-                .path("/users/{0}/password", getName())
+            api.path(routes.UsersResource().changePassword(getName()))
                 .body(request)
                 .expect(Http.Status.NO_CONTENT)
                 .execute();
@@ -196,6 +205,10 @@ public class User {
 
     public long getSessionTimeoutMs() {
         return sessionTimeoutMs;
+    }
+
+    public Map<String, Object> getPreferences() {
+        return preferences;
     }
 
     public interface Factory {
