@@ -1,49 +1,49 @@
 package io.dropwizard.jersey.filter;
 
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.servlet.*;
+import javax.servlet.Filter;
+import javax.servlet.FilterChain;
+import javax.servlet.FilterConfig;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.Set;
+import java.util.Optional;
 
 public class AllowedMethodsFilter implements Filter {
 
     public static final String ALLOWED_METHODS_PARAM = "allowedMethods";
-    public static final Set<String> DEFAULT_ALLOWED_METHODS = ImmutableSet.of(
+    public static final ImmutableSet<String> DEFAULT_ALLOWED_METHODS = ImmutableSet.of(
             "GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS", "PATCH"
     );
 
     private static final Logger LOG = LoggerFactory.getLogger(AllowedMethodsFilter.class);
 
-    private Set<String> allowedMethods = Sets.newHashSet();
+    private ImmutableSet<String> allowedMethods;
 
     @Override
     public void init(FilterConfig config) {
-        final String allowedMethodsConfig = config.getInitParameter(ALLOWED_METHODS_PARAM);
-        if (allowedMethodsConfig == null) {
-            allowedMethods.addAll(DEFAULT_ALLOWED_METHODS);
-        }
-        else {
-            allowedMethods.addAll(Arrays.asList(allowedMethodsConfig.split(",")));
-        }
+        allowedMethods = Optional.ofNullable(config.getInitParameter(ALLOWED_METHODS_PARAM))
+            .map(p -> ImmutableSet.copyOf(p.split(",")))
+            .orElse(DEFAULT_ALLOWED_METHODS);
     }
 
     @Override
-    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain) throws IOException, ServletException {
-        handle((HttpServletRequest)request, (HttpServletResponse)response, chain);
+    public void doFilter(ServletRequest request, ServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
+        handle((HttpServletRequest) request, (HttpServletResponse) response, chain);
     }
 
-    private void handle(HttpServletRequest request, HttpServletResponse response, FilterChain chain) throws IOException, ServletException {
+    private void handle(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws IOException, ServletException {
         if (allowedMethods.contains(request.getMethod())) {
             chain.doFilter(request, response);
-        }
-        else {
+        } else {
             LOG.debug("Request with disallowed method {} blocked", request.getMethod());
             response.sendError(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
         }
@@ -51,6 +51,5 @@ public class AllowedMethodsFilter implements Filter {
 
     @Override
     public void destroy() {
-        allowedMethods.clear();
     }
 }
