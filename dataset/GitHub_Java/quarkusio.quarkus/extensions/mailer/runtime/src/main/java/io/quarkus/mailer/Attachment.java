@@ -1,12 +1,6 @@
 package io.quarkus.mailer;
 
 import java.io.File;
-import java.util.Iterator;
-import java.util.NoSuchElementException;
-
-import org.reactivestreams.Publisher;
-
-import io.smallrye.mutiny.Multi;
 
 /**
  * Defines an attachment.
@@ -29,7 +23,7 @@ public class Attachment {
     private File file;
     private String description;
     private String disposition;
-    private Publisher<Byte> data;
+    private byte[] data;
     private String contentType;
     private String contentId;
 
@@ -78,20 +72,6 @@ public class Attachment {
     }
 
     /**
-     * Creates a new {@link Attachment}. Disposition is set to {@code attachment}.
-     *
-     * @param name the name
-     * @param data the data as a stream of {@link Byte}
-     * @param contentType the content type
-     */
-    public Attachment(String name, Publisher<Byte> data, String contentType) {
-        setName(name)
-                .setData(data)
-                .setContentType(contentType)
-                .setDisposition(DISPOSITION_ATTACHMENT);
-    }
-
-    /**
      * Creates a new {@link Attachment}. Disposition is set to {@code inline}.
      *
      * @param name the name
@@ -100,22 +80,6 @@ public class Attachment {
      * @param contentId the content id
      */
     public Attachment(String name, byte[] data, String contentType, String contentId) {
-        setName(name)
-                .setData(data)
-                .setContentType(contentType)
-                .setContentId(contentId)
-                .setDisposition(DISPOSITION_INLINE);
-    }
-
-    /**
-     * Creates a new {@link Attachment}. Disposition is set to {@code inline}.
-     *
-     * @param name the name
-     * @param data the data as a stream of {@link Byte}
-     * @param contentType the content type
-     * @param contentId the content id
-     */
-    public Attachment(String name, Publisher<Byte> data, String contentType, String contentId) {
         setName(name)
                 .setData(data)
                 .setContentType(contentType)
@@ -133,23 +97,6 @@ public class Attachment {
      * @param disposition the disposition
      */
     public Attachment(String name, byte[] data, String contentType, String description, String disposition) {
-        setName(name)
-                .setData(data)
-                .setContentType(contentType)
-                .setDescription(description)
-                .setDisposition(disposition);
-    }
-
-    /**
-     * Creates a new {@link Attachment}.
-     *
-     * @param name the name
-     * @param data the data as a stream of {@link Byte}
-     * @param contentType the content type
-     * @param description the description
-     * @param disposition the disposition
-     */
-    public Attachment(String name, Publisher<Byte> data, String contentType, String description, String disposition) {
         setName(name)
                 .setData(data)
                 .setContentType(contentType)
@@ -193,45 +140,11 @@ public class Attachment {
         return this;
     }
 
-    public Publisher<Byte> getData() {
+    public byte[] getData() {
         return data;
     }
 
     public Attachment setData(byte[] data) {
-        if (data == null || data.length == 0) {
-            this.data = Multi.createFrom().empty();
-            return this;
-        }
-
-        // And the fun begins, we cannot use fromArray on an byte[] as the boxing does not work
-        // we cannot use Arrays.stream as it's limited to int, long and double...
-        // so, let's use the good old method creating an iterator for the array. At least it avoids duplicating
-        // the array.
-        Iterable<Byte> iterable = () -> new Iterator<Byte>() {
-            private int index = 0;
-
-            @Override
-            public boolean hasNext() {
-                return data.length > index;
-            }
-
-            @Override
-            public Byte next() {
-                if (!hasNext()) {
-                    throw new NoSuchElementException();
-                }
-                return data[index++];
-            }
-        };
-
-        this.data = Multi.createFrom().iterable(iterable);
-        return this;
-    }
-
-    public Attachment setData(Publisher<Byte> data) {
-        if (data == null) {
-            this.data = Multi.createFrom().empty();
-        }
         this.data = data;
         return this;
     }
