@@ -3,7 +3,6 @@ package io.quarkus.micrometer.deployment.binder;
 import java.util.function.BooleanSupplier;
 
 import javax.inject.Singleton;
-import javax.servlet.DispatcherType;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
@@ -18,6 +17,7 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.micrometer.deployment.MicrometerProcessor;
 import io.quarkus.micrometer.runtime.MicrometerRecorder;
 import io.quarkus.micrometer.runtime.binder.HttpBinderConfiguration;
+import io.quarkus.micrometer.runtime.binder.vertx.VertxMeterFilter;
 import io.quarkus.micrometer.runtime.config.MicrometerConfig;
 import io.quarkus.micrometer.runtime.config.runtime.HttpClientConfig;
 import io.quarkus.micrometer.runtime.config.runtime.HttpServerConfig;
@@ -33,10 +33,9 @@ public class HttpBinderProcessor {
     // Common MeterFilter (uri variation limiter)
     static final String HTTP_METER_FILTER_CONFIGURATION = "io.quarkus.micrometer.runtime.binder.HttpMeterFilterProvider";
 
-    // JAX-RS, Servlet Filters
+    // avoid imports due to related deps not being there
     static final String RESTEASY_CONTAINER_FILTER_CLASS_NAME = "io.quarkus.micrometer.runtime.binder.vertx.VertxMeterBinderRestEasyContainerFilter";
-    static final String RESTEASY_REACTIVE_CONTAINER_FILTER_CLASS_NAME = "io.quarkus.micrometer.runtime.binder.vertx.VertxMeterBinderRestEasyReactiveContainerFilter";
-    static final String UNDERTOW_SERVLET_FILTER_CLASS_NAME = "io.quarkus.micrometer.runtime.binder.vertx.VertxMeterBinderUndertowServletFilter";
+    static final String QUARKUS_REST_CONTAINER_FILTER_CLASS_NAME = "io.quarkus.micrometer.runtime.binder.vertx.VertxMeterBinderQuarkusRestContainerFilter";
 
     // Rest client listener SPI
     private static final String REST_CLIENT_LISTENER_CLASS_NAME = "org.eclipse.microprofile.rest.client.spi.RestClientListener";
@@ -44,7 +43,7 @@ public class HttpBinderProcessor {
             .getClassForName(REST_CLIENT_LISTENER_CLASS_NAME);
 
     // Rest Client listener
-    private static final String REST_CLIENT_METRICS_LISTENER = "io.quarkus.micrometer.runtime.binder.RestClientMetricsListener";
+    private static final String REST_CLIENT_METRICS_LISTENER = "io.quarkus.micrometer.runtime.binder.RestClientMetrics";
 
     static class HttpServerBinderEnabled implements BooleanSupplier {
         MicrometerConfig mConfig;
@@ -64,7 +63,7 @@ public class HttpBinderProcessor {
         }
     }
 
-    @BuildStep(onlyIf = MicrometerProcessor.MicrometerEnabled.class)
+    @BuildStep(onlyIf = { MicrometerProcessor.MicrometerEnabled.class })
     @Record(ExecutionTime.RUNTIME_INIT)
     SyntheticBeanBuildItem enableHttpBinders(MicrometerRecorder recorder,
             MicrometerConfig buildTimeConfig,
@@ -92,39 +91,28 @@ public class HttpBinderProcessor {
                 .done();
     }
 
-    @BuildStep(onlyIf = HttpServerBinderEnabled.class)
+    @BuildStep(onlyIf = { VertxBinderProcessor.VertxBinderEnabled.class, HttpServerBinderEnabled.class })
+    FilterBuildItem addVertxMeterFilter() {
+        return new FilterBuildItem(new VertxMeterFilter(), Integer.MAX_VALUE);
+    }
+
+    @BuildStep(onlyIf = { VertxBinderProcessor.VertxBinderEnabled.class, HttpServerBinderEnabled.class })
     void enableHttpServerSupport(Capabilities capabilities,
             BuildProducer<ResteasyJaxrsProviderBuildItem> resteasyJaxrsProviders,
             BuildProducer<CustomContainerRequestFilterBuildItem> customContainerRequestFilter,
-            BuildProducer<io.quarkus.undertow.deployment.FilterBuildItem> servletFilters,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
 
-        // Will have one or the other of these (exclusive)
         if (capabilities.isPresent(Capability.RESTEASY)) {
             resteasyJaxrsProviders.produce(new ResteasyJaxrsProviderBuildItem(RESTEASY_CONTAINER_FILTER_CLASS_NAME));
             createAdditionalBean(additionalBeans, RESTEASY_CONTAINER_FILTER_CLASS_NAME);
         } else if (capabilities.isPresent(Capability.RESTEASY_REACTIVE)) {
             customContainerRequestFilter
-                    .produce(new CustomContainerRequestFilterBuildItem(RESTEASY_REACTIVE_CONTAINER_FILTER_CLASS_NAME));
-            createAdditionalBean(additionalBeans, RESTEASY_REACTIVE_CONTAINER_FILTER_CLASS_NAME);
-        }
-
-        // But this might be present as well (fallback. Rest URI processing preferred)
-        if (capabilities.isPresent(Capability.SERVLET)) {
-            servletFilters.produce(
-                    io.quarkus.undertow.deployment.FilterBuildItem.builder("metricsFilter", UNDERTOW_SERVLET_FILTER_CLASS_NAME)
-                            .setAsyncSupported(true)
-                            .addFilterUrlMapping("*", DispatcherType.FORWARD)
-                            .addFilterUrlMapping("*", DispatcherType.INCLUDE)
-                            .addFilterUrlMapping("*", DispatcherType.REQUEST)
-                            .addFilterUrlMapping("*", DispatcherType.ASYNC)
-                            .addFilterUrlMapping("*", DispatcherType.ERROR)
-                            .build());
-            createAdditionalBean(additionalBeans, UNDERTOW_SERVLET_FILTER_CLASS_NAME);
+                    .produce(new CustomContainerRequestFilterBuildItem(QUARKUS_REST_CONTAINER_FILTER_CLASS_NAME));
+            createAdditionalBean(additionalBeans, QUARKUS_REST_CONTAINER_FILTER_CLASS_NAME);
         }
     }
 
-    @BuildStep(onlyIf = HttpClientBinderEnabled.class)
+    @BuildStep(onlyIf = { HttpClientBinderEnabled.class })
     void registerRestClientListener(BuildProducer<NativeImageResourceBuildItem> resource,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
         resource.produce(new NativeImageResourceBuildItem(

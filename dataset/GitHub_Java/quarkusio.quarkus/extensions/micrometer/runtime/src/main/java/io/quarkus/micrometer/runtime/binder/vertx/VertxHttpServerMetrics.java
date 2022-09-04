@@ -1,6 +1,8 @@
 package io.quarkus.micrometer.runtime.binder.vertx;
 
+import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import org.jboss.logging.Logger;
 
@@ -32,7 +34,8 @@ public class VertxHttpServerMetrics extends VertxTcpMetrics
     static final Logger log = Logger.getLogger(VertxHttpServerMetrics.class);
     static final String METRICS_CONTEXT = "HTTP_REQUEST_METRICS_CONTEXT";
 
-    HttpBinderConfiguration config;
+    final List<Pattern> ignorePatterns;
+    final Map<Pattern, String> matchPatterns;
 
     final String nameWebsocketConnections;
     final String nameHttpServerPush;
@@ -40,12 +43,12 @@ public class VertxHttpServerMetrics extends VertxTcpMetrics
 
     VertxHttpServerMetrics(MeterRegistry registry, HttpBinderConfiguration config) {
         super(registry, "http.server");
-        this.config = config;
-
-        // not dev-mode changeable
         nameWebsocketConnections = config.getHttpServerWebSocketConnectionsName();
         nameHttpServerPush = config.getHttpServerPushName();
         nameHttpServerRequests = config.getHttpServerRequestsName();
+
+        ignorePatterns = config.getServerIgnorePatterns();
+        matchPatterns = config.getServerMatchPatterns();
     }
 
     /**
@@ -89,10 +92,7 @@ public class VertxHttpServerMetrics extends VertxTcpMetrics
     @Override
     public HttpRequestMetric responsePushed(Map<String, Object> socketMetric, HttpMethod method, String uri,
             HttpServerResponse response) {
-        HttpRequestMetric requestMetric = new HttpRequestMetric(
-                config.getServerMatchPatterns(),
-                config.getServerIgnorePatterns(),
-                uri);
+        HttpRequestMetric requestMetric = new HttpRequestMetric(matchPatterns, ignorePatterns, uri);
         if (requestMetric.isMeasure()) {
             registry.counter(nameHttpServerPush, Tags.of(
                     HttpCommonTags.uri(requestMetric.getPath(), response.getStatusCode()),
@@ -117,10 +117,7 @@ public class VertxHttpServerMetrics extends VertxTcpMetrics
     @Override
     public HttpRequestMetric requestBegin(Map<String, Object> socketMetric, HttpServerRequest request) {
         // evaluate and remember the path to monitor for use later (maybe a 404 or redirect..)
-        HttpRequestMetric requestMetric = new HttpRequestMetric(
-                config.getServerMatchPatterns(),
-                config.getServerIgnorePatterns(),
-                request.path());
+        HttpRequestMetric requestMetric = new HttpRequestMetric(matchPatterns, ignorePatterns, request.path());
         setRequestMetric(Vertx.currentContext(), requestMetric);
 
         if (requestMetric.isMeasure()) {
