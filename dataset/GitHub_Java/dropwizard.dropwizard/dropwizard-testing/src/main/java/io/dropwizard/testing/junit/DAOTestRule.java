@@ -1,7 +1,8 @@
 package io.dropwizard.testing.junit;
 
-import com.google.common.base.Throwables;
-import io.dropwizard.logging.BootstrapLogging;
+import java.util.*;
+import java.util.function.Supplier;
+
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
@@ -10,8 +11,7 @@ import org.hibernate.cfg.Configuration;
 import org.hibernate.context.internal.ManagedSessionContext;
 import org.junit.rules.ExternalResource;
 
-import java.util.*;
-import java.util.concurrent.Callable;
+import io.dropwizard.logging.BootstrapLogging;
 
 /**
  * A JUnit rule for testing DAOs and Hibernate entities. It allows to quickly
@@ -180,20 +180,20 @@ public class DAOTestRule extends ExternalResource {
     /**
      * Performs a call in a transaction
      *
-     * @param call the call
+     * @param supplier the call
      * @param <T>  the type of the returned result
      * @return the result of the call
      */
-    public <T> T inTransaction(Callable<T> call) {
+    public <T> T inTransaction(Supplier<T> supplier) {
         final Session session = sessionFactory.getCurrentSession();
         final Transaction transaction = session.beginTransaction();
         try {
-            final T result = call.call();
+            final T result = supplier.get();
             transaction.commit();
             return result;
-        } catch (final Exception e) {
+        } catch (final RuntimeException e) {
             transaction.rollback();
-            throw Throwables.propagate(e);
+            throw e;
         }
     }
 
