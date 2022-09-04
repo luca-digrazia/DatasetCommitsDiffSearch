@@ -41,7 +41,7 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.SkylarkSignatureProcessor;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.ConversionException;
@@ -268,9 +268,9 @@ public class SkylarkRuleImplementationFunctions {
       };
 
   static void checkDeprecated(
-      String newApi, String oldApi, Location loc, SkylarkSemantics semantics)
+      String newApi, String oldApi, Location loc, SkylarkSemanticsOptions semantics)
       throws EvalException {
-    if (semantics.incompatibleNewActionsApi()) {
+    if (semantics.incompatibleNewActionsApi) {
       throw new EvalException(
           loc,
           "Use " + newApi + " instead of " + oldApi + ". \n"
@@ -732,8 +732,8 @@ public class SkylarkRuleImplementationFunctions {
           List<String> argv =
               helper.buildCommandLine(command, inputs, SCRIPT_SUFFIX, executionRequirements);
           return Tuple.<Object>of(
-              MutableList.copyOf(env, inputs),
-              MutableList.copyOf(env, argv),
+              new MutableList(inputs, env),
+              new MutableList(argv, env),
               helper.getToolsRunfilesSuppliers());
         }
       };
