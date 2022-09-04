@@ -88,7 +88,7 @@ public class IndexGetRowsTest {
   public static String SPARSE_LONG_LONG_MAT = "sparse_long_long_mat";
   public static String SPARSE_LONG_LONG_MAT_COMP = "sparse_long_long_mat_comp";
 
-  private static final Log LOG = LogFactory.getLog(IndexGetRowTest.class);
+  private static final Log LOG = LogFactory.getLog(IndexGetRowsTest.class);
   private static final String LOCAL_FS = LocalFileSystem.DEFAULT_FS;
   private static final String TMP_PATH = System.getProperty("java.io.tmpdir", "/tmp");
   private AngelClient angelClient;
@@ -128,6 +128,13 @@ public class IndexGetRowsTest {
     conf.setInt(AngelConf.ANGEL_WORKER_TASK_NUMBER, 1);
     conf.setInt(AngelConf.ANGEL_MODEL_PARTITIONER_PARTITION_SIZE, 1000);
     conf.setBoolean("use.new.split", true);
+
+
+    conf.setInt(AngelConf.ANGEL_PSAGENT_CACHE_SYNC_TIMEINTERVAL_MS, 10);
+    conf.setInt(AngelConf.ANGEL_WORKER_HEARTBEAT_INTERVAL_MS, 1000);
+    conf.setInt(AngelConf.ANGEL_PS_HEARTBEAT_INTERVAL_MS, 1000);
+    conf.setInt(AngelConf.ANGEL_WORKER_MAX_ATTEMPTS, 1);
+    conf.setInt(AngelConf.ANGEL_PS_MAX_ATTEMPTS, 1);
 
     // get a angel client
     angelClient = AngelClientFactory.get(conf);
@@ -529,7 +536,7 @@ public class IndexGetRowsTest {
     Vector[] rows = client1.get(rowIds, index);
     for (int i = 0; i < rowNum; i++) {
       for (long id : index) {
-        LOG.info(
+        LOG.debug(
           "rows[" + i + "][" + id + "]=" + ((CompLongDoubleVector) rows[i]).get(id) + ", delta["
             + id + "]=" + deltaVec.get(id));
         Assert.assertEquals(((CompLongDoubleVector) rows[i]).get(id), deltaVec.get(id), zero);
