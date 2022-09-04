@@ -20,8 +20,7 @@ public class ObjectValidationSuccessTest {
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(Movie.class, MovieExtensions.class)
                     .addAsResource(new StringAsset("{@java.lang.Object obj}"
-                            + "{@java.lang.Object anotherObj}"
-                            + "{obj.toString}:{anotherObj.raw}"),
+                            + "{obj.toString}"),
                             "templates/object.html"));
 
     @Inject
@@ -29,7 +28,7 @@ public class ObjectValidationSuccessTest {
 
     @Test
     public void testResult() {
-        assertEquals("hello:<strong>", object.data("obj", "hello").data("anotherObj", "<strong>").render());
+        assertEquals("hello", object.data("obj", "hello").render());
     }
 
 }
