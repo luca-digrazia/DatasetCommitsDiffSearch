@@ -62,6 +62,7 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import org.junit.Before;
@@ -4494,8 +4495,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         ")");
     // Test that all bottom jars are on the runtime classpath of the app.
     ConfiguredTarget target = getConfiguredTarget("//java/r/android:foo_app");
-    ImmutableList<Artifact> transitiveSrcJars =
-        OutputGroupInfo.get(target).getOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP).toList();
+    Collection<Artifact> transitiveSrcJars =
+        OutputGroupInfo.get(target).getOutputGroup(JavaSemantics.SOURCE_JARS_OUTPUT_GROUP)
+            .toCollection();
     assertThat(ActionsTestUtil.baseArtifactNames(transitiveSrcJars)).containsExactly(
         "libal_bottom_for_deps-src.jar",
         "libfoo_app-src.jar");
