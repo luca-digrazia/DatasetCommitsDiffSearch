@@ -9,7 +9,6 @@ import java.util.function.Supplier;
 import org.jboss.logging.Logger;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JavaType;
 import com.fasterxml.jackson.databind.MapperFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectReader;
@@ -61,15 +60,13 @@ public class KnativeEventsBindingRecorder {
             }
 
             if (invoker.hasInput()) {
-                JavaType javaInputType = objectMapper.constructType(invoker.getInputGenericType());
-                ObjectReader reader = objectMapper.readerFor(javaInputType);
+                ObjectReader reader = objectMapper.readerFor(invoker.getInputType());
                 invoker.getBindingContext().put(ObjectReader.class.getName(), reader);
                 QueryReader queryReader = queryMapper.readerFor(invoker.getInputType(), invoker.getInputGenericType());
                 invoker.getBindingContext().put(QueryReader.class.getName(), queryReader);
             }
             if (invoker.hasOutput()) {
-                JavaType outputJavaType = objectMapper.constructType(invoker.getOutputType());
-                ObjectWriter writer = objectMapper.writerFor(outputJavaType);
+                ObjectWriter writer = objectMapper.writerFor(invoker.getOutputType());
                 invoker.getBindingContext().put(ObjectWriter.class.getName(), writer);
 
                 String functionName = invoker.getName();
