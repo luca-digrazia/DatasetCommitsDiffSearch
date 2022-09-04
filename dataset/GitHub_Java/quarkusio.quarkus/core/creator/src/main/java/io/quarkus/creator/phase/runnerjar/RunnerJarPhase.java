@@ -1,3 +1,20 @@
+/*
+ * Copyright 2018 Red Hat, Inc. and/or its affiliates
+ * and other contributors as indicated by the @author tags.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.creator.phase.runnerjar;
 
 import java.io.ByteArrayOutputStream;
@@ -259,12 +276,6 @@ public class RunnerJarPhase implements AppCreationPhase<RunnerJarPhase>, RunnerJ
         for (AppDependency appDep : appDeps) {
             final AppArtifact depArtifact = appDep.getArtifact();
             final Path resolvedDep = depResolver.resolve(depArtifact);
-
-            // Exclude files that are not jars (typically, we can have XML files here, see https://github.com/quarkusio/quarkus/issues/2852)
-            if (!resolvedDep.getFileName().toString().endsWith(".jar")) {
-                continue;
-            }
-
             Set<String> transformedFromThisArchive = transformedClasses.get(resolvedDep);
             if (uberJar) {
                 try (FileSystem artifactFs = ZipUtils.newFileSystem(resolvedDep)) {
