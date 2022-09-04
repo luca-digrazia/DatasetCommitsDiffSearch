@@ -102,7 +102,7 @@ public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
     if (compilationArgsProvider == null) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
-    return compilationArgsProvider.getTransitiveCompileTimeJars();
+    return compilationArgsProvider.getRecursiveJavaCompilationArgs().getCompileTimeJars();
   }
 
   @SkylarkCallable(
@@ -116,7 +116,7 @@ public final class JavaSkylarkApiProvider extends SkylarkApiProvider {
     if (compilationArgsProvider == null) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
-    return compilationArgsProvider.getRuntimeJars();
+    return compilationArgsProvider.getRecursiveJavaCompilationArgs().getRuntimeJars();
   }
 
   @SkylarkCallable(

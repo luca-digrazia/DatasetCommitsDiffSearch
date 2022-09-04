@@ -15,13 +15,12 @@ package com.google.devtools.build.lib.rules.java;
 
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
-/**
- * Provides the fully qualified name of the primary class to invoke for java targets.
- */
+/** Provides the fully qualified name of the primary class to invoke for java targets. */
 @Immutable
+@AutoCodec
 public final class JavaPrimaryClassProvider implements TransitiveInfoProvider {
-
   private final String primaryClass;
 
   public JavaPrimaryClassProvider(String primaryClass) {
