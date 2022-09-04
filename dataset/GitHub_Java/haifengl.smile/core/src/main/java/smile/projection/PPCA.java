@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.projection;
 
@@ -28,15 +28,12 @@ import smile.math.matrix.EVD;
  * Probabilistic principal component analysis. Probabilistic PCA is
  * a simplified factor analysis that employs a latent variable model
  * with linear relationship:
- * <p>
  * <pre>
  *     y &sim; W * x + &mu; + &epsilon;
  * </pre>
- * where latent variables <code>x &sim; N(0, I)</code>, error (or noise)
- * <code>&epsilon; &sim; N(0, &Psi;)</code>, and &mu; is the location
- * term (mean). In probabilistic PCA, an isotropic noise model is used,
- * i.e., noise variances constrained to be equal
- * (<code>&Psi;<sub>i</sub> = &sigma;<sup>2</sup></code>).
+ * where latent variables x &sim; N(0, I), error (or noise) &epsilon; &sim; N(0, &Psi;),
+ * and &mu; is the location term (mean). In probabilistic PCA, an isotropic noise model is used,
+ * i.e., noise variances constrained to be equal (&Psi;<sub>i</sub> = &sigma;<sup>2</sup>).
  * A close form of estimation of above parameters can be obtained
  * by maximum likelihood method.
  *

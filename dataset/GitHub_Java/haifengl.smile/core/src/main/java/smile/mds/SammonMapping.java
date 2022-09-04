@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.mds;
 
@@ -62,11 +62,11 @@ public class SammonMapping {
     /**
      * The final stress achieved.
      */
-    public final double stress;
+    private double stress;
     /**
      * The coordinates.
      */
-    public final double[][] coordinates;
+    private double[][] coordinates;
 
     /**
      * Constructor.
@@ -77,6 +77,20 @@ public class SammonMapping {
     public SammonMapping(double stress, double[][] coordinates) {
         this.stress = stress;
         this.coordinates = coordinates;
+    }
+
+    /**
+     * Returns the final stress achieved.
+     */
+    public double getStress() {
+        return stress;
+    }
+
+    /**
+     * Returns the coordinates of projected data.
+     */
+    public double[][] getCoordinates() {
+        return coordinates;
     }
 
     /**
@@ -128,7 +142,7 @@ public class SammonMapping {
     public static SammonMapping of(double[][] proximity, int k, double lambda, double tol, double stepTol, int maxIter) {
         Properties prop = new Properties();
         prop.setProperty("smile.mds.k", String.valueOf(k));
-        return of(proximity, MDS.of(proximity, prop).coordinates, lambda, tol, stepTol, maxIter);
+        return of(proximity, MDS.of(proximity, prop).getCoordinates(), lambda, tol, stepTol, maxIter);
     }
 
     /**

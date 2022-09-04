@@ -1,27 +1,30 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2019 Haifeng Li
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  *******************************************************************************/
+
 package smile.clustering;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.Queue;
 import smile.clustering.linkage.Linkage;
 import smile.clustering.linkage.WardLinkage;
-import smile.math.Math;
+import smile.math.MathEx;
 
 /**
  * Balanced Iterative Reducing and Clustering using Hierarchies. BIRCH performs
@@ -55,6 +58,7 @@ import smile.math.Math;
  * @author Haifeng Li
  */
 public class BIRCH implements Clustering<double[]> {
+    private static final long serialVersionUID = 2L;
 
     /**
      * Branching factor. Maximum number of children nodes.
@@ -80,7 +84,8 @@ public class BIRCH implements Clustering<double[]> {
     /**
      * Internal node of CF tree.
      */
-    class Node {
+    class Node implements Serializable {
+        private static final long serialVersionUID = 2L;
 
         /**
          * The number of observations
@@ -387,9 +392,9 @@ public class BIRCH implements Clustering<double[]> {
      * @return the number of non-outlier leaves.
      */
     public int partition(int k, int minPts) {
-        ArrayList<Leaf> leaves = new ArrayList<Leaf>();
-        ArrayList<double[]> centers = new ArrayList<double[]>();
-        Queue<Node> queue = new LinkedList<Node>();
+        ArrayList<Leaf> leaves = new ArrayList<>();
+        ArrayList<double[]> centers = new ArrayList<>();
+        Queue<Node> queue = new LinkedList<>();
         queue.offer(root);
 
         for (Node node = queue.poll(); node != null; node = queue.poll()) {
@@ -416,20 +421,27 @@ public class BIRCH implements Clustering<double[]> {
         centroids = centers.toArray(new double[n][]);
 
         if (n > k) {
-            double[][] proximity = new double[n][];
-            for (int i = 0; i < n; i++) {
-                proximity[i] = new double[i + 1];
-                for (int j = 0; j < i; j++) {
-                    proximity[i][j] = Math.distance(centroids[i], centroids[j]);
-                }
-            }
-
-            Linkage linkage = new WardLinkage(proximity);
-            HierarchicalClustering hc = new HierarchicalClustering(linkage);
+            Linkage linkage = WardLinkage.of(centroids);
+            HierarchicalClustering hc = HierarchicalClustering.fit(linkage);
 
             int[] y = hc.partition(k);
+
+            // recalculate the centroids of each cluster
+            centroids = new double[k][d];
+            int[] nc = new int[k];
             for (int i = 0; i < n; i++) {
-                leaves.get(i).y = y[i];
+                Leaf leaf = leaves.get(i);
+                int yi = y[i];
+                leaf.y = yi;
+                nc[yi] += leaf.n;
+                for (int j = 0; j < d; j++) {
+                    centroids[yi][j] += leaf.sum[j];
+                }
+            }
+            for (int i = 0; i < k; i++) {
+                for (int j = 0; j < d; j++) {
+                    centroids[i][j] /= nc[i];
+                }
             }
         } else {
             for (int i = 0; i < n; i++) {

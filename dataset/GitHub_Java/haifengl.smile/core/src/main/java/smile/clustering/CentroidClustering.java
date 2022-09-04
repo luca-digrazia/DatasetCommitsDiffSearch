@@ -59,26 +59,29 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
      * The centroids of each cluster.
      */
     public final T[] centroids;
+    /**
+     * The lambda of distance measure.
+     */
+    public final ToDoubleBiFunction<T, U> distance;
 
     /**
      * Constructor.
      * @param distortion the total distortion.
      * @param centroids the centroids of each cluster.
      * @param y the cluster labels.
+     * @param distance the lambda of distance measure.
      */
-    public CentroidClustering(double distortion, T[] centroids, int[] y) {
+    public CentroidClustering(double distortion, T[] centroids, int[] y, ToDoubleBiFunction<T, U> distance) {
         super(centroids.length, y);
         this.distortion = distortion;
         this.centroids = centroids;
+        this.distance = distance;
     }
 
     @Override
     public int compareTo(CentroidClustering<T, U> o) {
         return Double.compare(distortion, o.distortion);
     }
-
-    /** The distance function. */
-    public abstract double distance(T x, U y);
 
     /**
      * Classifies a new observation.
@@ -90,7 +93,7 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
         int label = 0;
 
         for (int i = 0; i < k; i++) {
-            double dist = distance(centroids[i], x);
+            double dist = distance.applyAsDouble(centroids[i], x);
             if (dist < nearest) {
                 nearest = dist;
                 label = i;
@@ -108,7 +111,7 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
     /**
      * Assigns each observation to the nearest centroid.
      */
-    static <T> double assign(int[] y, T[] data, T[] centroids, ToDoubleBiFunction<T, T> distance) {
+    protected static <T> double assign(int[] y, T[] data, T[] centroids, ToDoubleBiFunction<T, T> distance) {
         int k = centroids.length;
         double wcss = IntStream.range(0, data.length).parallel().mapToDouble(i -> {
             double nearest = Double.MAX_VALUE;
@@ -128,7 +131,7 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
     /**
      * Calculates the new centroids in the new clusters.
      */
-    static void updateCentroids(double[][] centroids, double[][] data, int[] y, int[] size) {
+    protected static void updateCentroids(double[][] centroids, double[][] data, int[] y, int[] size) {
         int n = data.length;
         int k = centroids.length;
         int d = centroids[0].length;
@@ -155,7 +158,7 @@ public abstract class CentroidClustering<T, U> extends PartitionClustering imple
      * Calculates the new centroids in the new clusters with missing values.
      * @param notNaN the number of non-missing values per cluster per variable.
      */
-    static void updateCentroidsWithMissingValues(double[][] centroids, double[][] data, int[] y, int[] size, int[][] notNaN) {
+    protected static void updateCentroidsWithMissingValues(double[][] centroids, double[][] data, int[] y, int[] size, int[][] notNaN) {
         int n = data.length;
         int k = centroids.length;
         int d = centroids[0].length;

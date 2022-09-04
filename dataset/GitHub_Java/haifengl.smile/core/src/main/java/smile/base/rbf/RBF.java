@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.base.rbf;
 
@@ -33,22 +33,20 @@ import smile.math.rbf.GaussianRadialBasis;
  * functions. It is a linear combination of radial basis functions.
  * <p>
  * In its basic form, radial basis function network is in the form
- * <code>
- * y(x) = &Sigma; w<sub>i</sub> &phi;(||x-c<sub>i</sub>||)
- * </code>
- * where the approximating function <code>y(x)</code> is represented as
- * a sum of <code>N</code> radial basis functions &phi;, each associated
- * with a different center <code>c<sub>i</sub></code>, and weighted by an
- * appropriate coefficient <code>w<sub>i</sub></code>. For distance,
- * one usually chooses Euclidean distance. The weights
- * <code>w<sub>i</sub></code> can be estimated using the matrix methods of
- * linear least squares, because the approximating function is linear
- * in the weights.
  * <p>
- * The centers <code>c<sub>i</sub></code> can be randomly selected
- * from training data, or learned by some clustering method (e.g. k-means),
- * or learned together with weight parameters undergo a supervised
- * learning processing (e.g. error-correction learning).
+ * y(x) = &Sigma; w<sub>i</sub> &phi;(||x-c<sub>i</sub>||)
+ * <p>
+ * where the approximating function y(x) is represented as a sum of N radial
+ * basis functions &phi;, each associated with a different center c<sub>i</sub>,
+ * and weighted by an appropriate coefficient w<sub>i</sub>. For distance,
+ * one usually chooses Euclidean distance. The weights w<sub>i</sub> can
+ * be estimated using the matrix methods of linear least squares, because
+ * the approximating function is linear in the weights.
+ * <p>
+ * The centers c<sub>i</sub> can be randomly selected from training data,
+ * or learned by some clustering method (e.g. k-means), or learned together
+ * with weight parameters undergo a supervised learning processing
+ * (e.g. error-correction learning).
  *
  * @author Haifeng Li
  */
@@ -293,7 +291,7 @@ public class RBF<T> implements Serializable {
      * @return a Gaussian RBF function with parameter learned from data.
      */
     public static <T> RBF<T>[] fit(T[] x, Metric<T> distance, int k) {
-        CLARANS<T> clarans = CLARANS.fit(x, distance::d, k);
+        CLARANS<T> clarans = CLARANS.fit(x, k, distance::d);
         T[] centers = clarans.centroids;
 
         GaussianRadialBasis basis = new GaussianRadialBasis(estimateWidth(centers, distance));
@@ -318,7 +316,7 @@ public class RBF<T> implements Serializable {
             throw new IllegalArgumentException("Invalid number of nearest neighbors: " + p);
         }
 
-        CLARANS<T> clarans = CLARANS.fit(x, distance::d, k);
+        CLARANS<T> clarans = CLARANS.fit(x, k, distance::d);
         T[] centers = clarans.centroids;
 
         double[] width = estimateWidth(centers, distance, p);
@@ -343,7 +341,7 @@ public class RBF<T> implements Serializable {
             throw new IllegalArgumentException("Invalid scaling parameter: " + r);
         }
 
-        CLARANS<T> clarans = CLARANS.fit(x, distance::d, k);
+        CLARANS<T> clarans = CLARANS.fit(x, k, distance::d);
         T[] centers = clarans.centroids;
 
         double[] width = estimateWidth(x, clarans.y, centers, clarans.size, distance, r);

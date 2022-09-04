@@ -73,8 +73,8 @@ public class XMeans extends CentroidClustering<double[], double[]> {
      * determined by X-Means algorithm automatically.
      * @param data the input data of which each row is an observation.
      * @param kmax the maximum number of clusters.
-     * @param maxIter the maximum number of iterations for k-means.
-     * @param tol the tolerance of k-means convergence test.
+     * @param maxIter the maximum number of iterations for each running.
+     * @param tol the tolerance of convergence test.
      */
     public static XMeans fit(double[][] data, int kmax, int maxIter, double tol) {
         if (kmax < 2) {
@@ -126,7 +126,7 @@ public class XMeans extends CentroidClustering<double[], double[]> {
 
                 kmeans[i] = KMeans.fit(subset, 2, maxIter, tol);
                 double newBIC = bic(2, ni, d, kmeans[i].distortion, kmeans[i].size);
-                double oldBIC = bic(ni, d, distortions[i]);
+                double oldBIC = bic(size[i], d, distortions[i]);
                 score[i] = newBIC - oldBIC;
                 logger.info(String.format("Cluster %3d BIC: %12.4f, BIC after split: %12.4f, improvement: %12.4f", i, oldBIC, newBIC, score[i]));
             }
@@ -151,12 +151,6 @@ public class XMeans extends CentroidClustering<double[], double[]> {
                 }
             }
 
-            // no more split.
-            if (centers.size() == k) {
-                logger.info("No more split. Finish with {} clusters", k);
-                break;
-            }
-
             k = centers.size();
             centroids = centers.toArray(new double[k][]);
 
@@ -168,7 +162,6 @@ public class XMeans extends CentroidClustering<double[], double[]> {
                 distortion = wcss;
             }
 
-            Arrays.fill(distortions, 0.0);
             IntStream.range(0, k).parallel().forEach(cluster -> {
                 double[] centroid = centers.get(cluster);
                 for (int i = 0; i < n; i++) {
@@ -240,6 +233,7 @@ public class XMeans extends CentroidClustering<double[], double[]> {
         double p3 = -(ni - k);
         double p4 = ni * Math.log(ni);
         double p5 = -ni * Math.log(n);
-        return (p1 + p2 + p3) / 2 + p4 + p5;
+        double loglike = (p1 + p2 + p3) / 2 + p4 + p5;
+        return loglike;
     }
 }

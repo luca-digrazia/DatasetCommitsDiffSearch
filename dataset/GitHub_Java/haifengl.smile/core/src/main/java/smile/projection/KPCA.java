@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,17 +13,18 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.projection;
 
 import java.io.Serializable;
 import java.util.Arrays;
+
 import smile.math.MathEx;
-import smile.math.blas.UPLO;
 import smile.math.kernel.MercerKernel;
-import smile.math.matrix.ARPACK;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.EVD;
 
 /**
  * Kernel principal component analysis. Kernel PCA is an extension of
@@ -88,7 +89,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
     /**
      * The projection matrix.
      */
-    private Matrix projection;
+    private DenseMatrix projection;
     /**
      * The coordinates of projected training data.
      */
@@ -104,7 +105,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
      * @param latent the projection matrix.
      * @param projection the projection matrix.
      */
-    public KPCA(T[] data, MercerKernel<T> kernel, double[] mean, double mu, double[][] coordinates, double[] latent, Matrix projection) {
+    public KPCA(T[] data, MercerKernel<T> kernel, double[] mean, double mu, double[][] coordinates, double[] latent, DenseMatrix projection) {
         this.data = data;
         this.kernel = kernel;
         this.mean = mean;
@@ -144,7 +145,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
 
         int n = data.length;
 
-        Matrix K = new Matrix(n, n);
+        DenseMatrix K = Matrix.zeros(n, n);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j <= i; j++) {
                 double x = kernel.k(data[i], data[j]);
@@ -164,16 +165,16 @@ public class KPCA<T> implements Projection<T>, Serializable {
             }
         }
 
-        K.uplo(UPLO.LOWER);
-        Matrix.EVD eigen = ARPACK.syev(K, k, ARPACK.SymmWhich.LA);;
+        K.setSymmetric(true);
+        EVD eigen = K.eigen(k);
 
-        double[] eigvalues = eigen.wr;
-        Matrix eigvectors = eigen.Vr;
+        double[] eigvalues = eigen.getEigenValues();
+        DenseMatrix eigvectors = eigen.getEigenVectors();
 
         int p = (int) Arrays.stream(eigvalues).limit(k).filter(e -> e/n > threshold).count();
 
         double[] latent = new double[p];
-        Matrix projection = new Matrix(p, n);
+        DenseMatrix projection = Matrix.zeros(p, n);
         for (int j = 0; j < p; j++) {
             latent[j] = eigvalues[j];
             double s = Math.sqrt(latent[j]);
@@ -182,7 +183,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
             }
         }
 
-        Matrix coord = projection.mm(K);
+        DenseMatrix coord = projection.abmm(K);
         double[][] coordinates = new double[n][p];
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < p; j++) {
@@ -204,7 +205,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
      * Returns the projection matrix. The dimension reduced data can be obtained
      * by y = W * K(x, &middot;).
      */
-    public Matrix getProjection() {
+    public DenseMatrix getProjection() {
         return projection;
     }
 
@@ -231,7 +232,9 @@ public class KPCA<T> implements Projection<T>, Serializable {
             y[i] = y[i] - my - mean[i] + mu;
         }
 
-        return projection.mv(y);
+        double[] z = new double[p];
+        projection.ax(y, z);
+        return z;
     }
 
     @Override
@@ -253,7 +256,7 @@ public class KPCA<T> implements Projection<T>, Serializable {
 
         double[][] z = new double[x.length][p];
         for (int i = 0; i < y.length; i++) {
-            projection.mv(y[i], z[i]);
+            projection.ax(y[i], z[i]);
         }
         return z;
     }

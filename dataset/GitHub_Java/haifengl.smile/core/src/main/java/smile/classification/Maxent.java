@@ -23,7 +23,6 @@ import java.util.stream.IntStream;
 import smile.math.BFGS;
 import smile.math.MathEx;
 import smile.math.DifferentiableMultivariateFunction;
-import smile.util.IntSet;
 
 /**
  * Maximum Entropy Classifier. Maximum entropy is a technique for learning
@@ -85,7 +84,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
     /**
      * The class label encoder.
      */
-    private final IntSet labels;
+    private final ClassLabel labels;
 
     /**
      * Constructor of binary maximum entropy classifier.
@@ -93,7 +92,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
      * @param w the weights.
      */
     public Maxent(double L, double[] w) {
-        this(L, w, IntSet.of(2));
+        this(L, w, ClassLabel.of(2));
     }
 
     /**
@@ -102,7 +101,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
      * @param w the weights.
      * @param labels class labels
      */
-    public Maxent(double L, double[] w, IntSet labels) {
+    public Maxent(double L, double[] w, ClassLabel labels) {
         this.p = w.length - 1;
         this.k = 2;
         this.L = L;
@@ -116,7 +115,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
      * @param W the weights of first k - 1 classes.
      */
     public Maxent(double L, double[][] W) {
-        this(L, W, IntSet.of(W.length+1));
+        this(L, W, ClassLabel.of(W.length+1));
     }
 
     /**
@@ -125,7 +124,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
      * @param W the weights of first k - 1 classes.
      * @param labels class labels
      */
-    public Maxent(double L, double[][] W, IntSet labels) {
+    public Maxent(double L, double[][] W, ClassLabel labels) {
         this.p = W[0].length - 1;
         this.k = W.length + 1;
         this.L = L;
@@ -193,7 +192,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
             throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);            
         }
 
-        ClassLabels codec = ClassLabels.fit(y);
+        ClassLabel.Result codec = ClassLabel.fit(y);
         int k = codec.k;
         y = codec.y;
 
@@ -286,7 +285,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
             // return the negative log-likelihood here.
             double f = IntStream.range(0, x.length).parallel().mapToDouble(i -> {
                 double wx = dot(x[i], w);
-                return MathEx.log1pe(wx) - y[i] * wx;
+                return log1pe(wx) - y[i] * wx;
             }).sum();
 
             if (lambda > 0.0) {
@@ -316,7 +315,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
                     }
                     gradient[p] -= err;
 
-                    return MathEx.log1pe(wx) - y[i] * wx;
+                    return log1pe(wx) - y[i] * wx;
                 }).sum();
             }).sum();
 
@@ -415,7 +414,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
 
                     MathEx.softmax(posteriori);
 
-                    return -MathEx.log(posteriori[y[i]]);
+                    return -log(posteriori[y[i]]);
                 }).sum();
             }).sum();
 
@@ -462,7 +461,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
                         gradient[pos + p] -= err;
                     }
 
-                    return -MathEx.log(posteriori[y[i]]);
+                    return -log(posteriori[y[i]]);
                 }).sum();
             }).sum();
 
@@ -488,6 +487,29 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
 
             return f;
         }
+    }
+
+    /**
+     * Returns natural log(1+exp(x)) without overflow.
+     */
+    private static double log1pe(double x) {
+        double y = x;
+        if (x <= 15) {
+            y = Math.log1p(Math.exp(x));
+        }
+
+        return y;
+    }
+
+    /**
+     * Returns natural log without underflow.
+     */
+    private static double log(double x) {
+        double y = -690.7755;
+        if (x > 1E-300) {
+            y = Math.log(x);
+        }
+        return y;
     }
 
     /**
@@ -519,7 +541,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
 
     @Override
     public void update(int[] x, int y) {
-        y = labels.indexOf(y);
+        y = labels.id(y);
         if (k == 2) {
             // calculate gradient for incoming data
             double wx = dot(x, w);
@@ -584,7 +606,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
     public int predict(int[] x) {
         if (k == 2) {
             double f = 1.0 / (1.0 + Math.exp(-dot(x, w)));
-            return labels.valueOf(f < 0.5 ? 0 : 1);
+            return labels.label(f < 0.5 ? 0 : 1);
         } else {
             return predict(x, new double[k]);
         }
@@ -600,7 +622,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
             double f = 1.0 / (1.0 + Math.exp(-dot(x, w)));
             posteriori[0] = 1.0 - f;
             posteriori[1] = f;
-            return labels.valueOf(f < 0.5 ? 0 : 1);
+            return labels.label(f < 0.5 ? 0 : 1);
         } else {
             posteriori[k-1] = 0.0;
             for (int i = 0; i < k-1; i++) {
@@ -608,7 +630,7 @@ public class Maxent implements SoftClassifier<int[]>, OnlineClassifier<int[]> {
             }
 
             MathEx.softmax(posteriori);
-            return labels.valueOf(MathEx.whichMax(posteriori));
+            return labels.label(MathEx.whichMax(posteriori));
         }
     }
 }

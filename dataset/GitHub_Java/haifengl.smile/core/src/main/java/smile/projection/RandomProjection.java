@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,12 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.projection;
 
 import java.io.Serializable;
 import smile.math.MathEx;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 import smile.stat.distribution.GaussianDistribution;
 
@@ -63,13 +64,13 @@ public class RandomProjection implements LinearProjection, Serializable {
     /**
      * Projection matrix.
      */
-    private Matrix projection;
+    private DenseMatrix projection;
 
     /**
      * Constructor.
      * @param projection the projection matrix.
      */
-    public RandomProjection(Matrix projection) {
+    public RandomProjection(DenseMatrix projection) {
         this.projection = projection;
     }
 
@@ -106,7 +107,7 @@ public class RandomProjection implements LinearProjection, Serializable {
             MathEx.unitize(projection[i]);
         }
 
-        return new RandomProjection(new Matrix(projection));
+        return new RandomProjection(Matrix.of(projection));
     }
 
     /**
@@ -123,7 +124,7 @@ public class RandomProjection implements LinearProjection, Serializable {
             throw new IllegalArgumentException("Invalid dimension of feature space: " + p);
         }
 
-        Matrix projection = new Matrix(p, n);
+        DenseMatrix projection = Matrix.zeros(p, n);
         double scale = Math.sqrt(3);
         for (int i = 0; i < p; i++) {
             for (int j = 0; j < n; j++) {
@@ -134,7 +135,7 @@ public class RandomProjection implements LinearProjection, Serializable {
     }
 
     @Override
-    public Matrix getProjection() {
+    public DenseMatrix getProjection() {
         return projection;
     }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.mds;
 
@@ -42,11 +42,11 @@ public class IsotonicMDS {
     /**
      * The final stress achieved.
      */
-    public final double stress;
+    private double stress;
     /**
      * The coordinates.
      */
-    public final double[][] coordinates;
+    private double[][] coordinates;
 
     /**
      * Constructor.
@@ -57,6 +57,20 @@ public class IsotonicMDS {
     public IsotonicMDS(double stress, double[][] coordinates) {
         this.stress = stress;
         this.coordinates = coordinates;
+    }
+
+    /**
+     * Returns the final stress achieved.
+     */
+    public double getStress() {
+        return stress;
+    }
+
+    /**
+     * Returns the coordinates of projected data.
+     */
+    public double[][] getCoordinates() {
+        return coordinates;
     }
 
     /**
@@ -104,7 +118,7 @@ public class IsotonicMDS {
     public static IsotonicMDS of(double[][] proximity, int k, double tol, int maxIter) {
         Properties prop = new Properties();
         prop.setProperty("smile.mds.k", String.valueOf(k));
-        return of(proximity, MDS.of(proximity, prop).coordinates, tol, maxIter);
+        return of(proximity, MDS.of(proximity, prop).getCoordinates(), tol, maxIter);
     }
 
     /**
@@ -148,12 +162,13 @@ public class IsotonicMDS {
 
         ObjectiveFunction func = new ObjectiveFunction(nr, nc, d, ord, ord2);
 
-        double stress;
+        double stress = 0.0;
+        BFGS bfgs = new BFGS(tol, maxIter);
         try {
-            stress = BFGS.minimize(func, 5, x, tol, maxIter);
+            stress = bfgs.minimize(func, 5, x);
         } catch (Exception ex) {
             // If L-BFGS doesn't work, let's try BFGS.
-            stress = BFGS.minimize(func, x, tol, maxIter);
+            stress = bfgs.minimize(func, x);
         }
 
         if (stress == 0.0) {

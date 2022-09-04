@@ -17,7 +17,9 @@
 
 package smile.clustering;
 
+import java.util.Arrays;
 import java.util.function.ToDoubleBiFunction;
+import java.util.stream.IntStream;
 import smile.math.MathEx;
 
 /**
@@ -71,6 +73,7 @@ import smile.math.MathEx;
  * @see SIB
  * @see smile.vq.SOM
  * @see smile.vq.NeuralGas
+ * @see BIRCH
  * @see BBDTree
  * 
  * @author Haifeng Li
@@ -113,7 +116,7 @@ public class KMeans extends CentroidClustering<double[], double[]> {
      * Partitions data into k clusters up to 100 iterations.
      * @param data the input data of which each row is an observation.
      * @param k the number of clusters.
-     * @param maxIter the maximum number of iterations.
+     * @param maxIter the maximum number of iterations for each running.
      * @param tol the tolerance of convergence test.
      */
     public static KMeans fit(double[][] data, int k, int maxIter, double tol) {
@@ -125,7 +128,7 @@ public class KMeans extends CentroidClustering<double[], double[]> {
      * @param bbd the BBD-tree of data for fast clustering.
      * @param data the input data of which each row is an observation.
      * @param k the number of clusters.
-     * @param maxIter the maximum number of iterations.
+     * @param maxIter the maximum number of iterations for each running.
      * @param tol the tolerance of convergence test.
      */
     public static KMeans fit(BBDTree bbd, double[][] data, int k, int maxIter, double tol) {
@@ -181,10 +184,10 @@ public class KMeans extends CentroidClustering<double[], double[]> {
      * contain missing values (i.e. Double.NaN).
      * @param data the input data of which each row is an observation.
      * @param k the number of clusters.
-     * @param maxIter the maximum number of iterations.
+     * @param maxIter the maximum number of iterations for each running.
      * @param tol the tolerance of convergence test.
      */
-    public static KMeans lloyd(double[][] data, int k, int maxIter, double tol) {
+    private static KMeans lloyd(double[][] data, int k, int maxIter, double tol) {
         if (k < 2) {
             throw new IllegalArgumentException("Invalid number of clusters: " + k);
         }
@@ -220,10 +223,64 @@ public class KMeans extends CentroidClustering<double[], double[]> {
         }
 
         // In case of early stop, we should recalculate centroids.
-        if (diff > tol) {
-            updateCentroidsWithMissingValues(centroids, data, y, size, notNaN);
-        }
+        updateCentroidsWithMissingValues(centroids, data, y, size, notNaN);
 
         return new KMeans(distortion, centroids, y, MathEx::squaredDistanceWithMissingValues);
+    }
+
+    /**
+     * Calculates the new centroids in the new clusters.
+     */
+    public static void updateCentroids(double[][] centroids, double[][] data, int[] y, int[] size) {
+        int n = data.length;
+        int k = centroids.length;
+        int d = centroids[0].length;
+
+        Arrays.fill(size, 0);
+        IntStream.range(0, k).parallel().forEach(cluster -> {
+            Arrays.fill(centroids[cluster], 0.0);
+            for (int i = 0; i < n; i++) {
+                if (y[i] == cluster) {
+                    size[cluster]++;
+                    for (int j = 0; j < d; j++) {
+                        centroids[cluster][j] += data[i][j];
+                    }
+                }
+            }
+
+            for (int j = 0; j < d; j++) {
+                centroids[cluster][j] /= size[cluster];
+            }
+        });
+    }
+
+    /**
+     * Calculates the new centroids in the new clusters with missing values.
+     * @param notNaN the number of non-missing values per cluster per variable.
+     */
+    public static void updateCentroidsWithMissingValues(double[][] centroids, double[][] data, int[] y, int[] size, int[][] notNaN) {
+        int n = data.length;
+        int k = centroids.length;
+        int d = centroids[0].length;
+
+        IntStream.range(0, k).parallel().forEach(cluster -> {
+            Arrays.fill(centroids[cluster], 0);
+            Arrays.fill(notNaN[cluster], 0);
+            for (int i = 0; i < n; i++) {
+                if (y[i] == cluster) {
+                    size[cluster]++;
+                    for (int j = 0; j < d; j++) {
+                        if (!Double.isNaN(data[i][j])) {
+                            centroids[cluster][j] += data[i][j];
+                            notNaN[cluster][j]++;
+                        }
+                    }
+                }
+            }
+
+            for (int j = 0; j < d; j++) {
+                centroids[cluster][j] /= notNaN[cluster][j];
+            }
+        });
     }
 }

@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.clustering;
 
@@ -21,9 +21,9 @@ import java.io.Serializable;
 import java.util.stream.IntStream;
 
 import smile.math.MathEx;
-import smile.math.blas.UPLO;
-import smile.math.matrix.ARPACK;
 import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.EVD;
 
 /**
  * Spectral Clustering. Given a set of data points, the similarity matrix may
@@ -70,7 +70,7 @@ public class SpectralClustering extends PartitionClustering implements Serializa
      * @param W the adjacency matrix of graph, which will be modified.
      * @param k the number of clusters.
      */
-    public static SpectralClustering fit(Matrix W, int k) {
+    public static SpectralClustering fit(DenseMatrix W, int k) {
         return fit(W, k, 100, 1E-4);
     }
 
@@ -78,10 +78,10 @@ public class SpectralClustering extends PartitionClustering implements Serializa
      * Spectral graph clustering.
      * @param W the adjacency matrix of graph, which will be modified.
      * @param k the number of clusters.
-     * @param maxIter the maximum number of iterations for k-means.
-     * @param tol the tolerance of k-means convergence test.
+     * @param maxIter the maximum number of iterations for each running.
+     * @param tol the tolerance of convergence test.
      */
-    public static SpectralClustering fit(Matrix W, int k, int maxIter, double tol) {
+    public static SpectralClustering fit(DenseMatrix W, int k, int maxIter, double tol) {
         if (k < 2) {
             throw new IllegalArgumentException("Invalid number of clusters: " + k);
         }
@@ -104,9 +104,9 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             }
         }
 
-        W.uplo(UPLO.LOWER);
-        Matrix.EVD eigen = ARPACK.syev(W, k, ARPACK.SymmWhich.LA);
-        double[][] Y = eigen.Vr.toArray();
+        W.setSymmetric(true);
+        EVD eigen = W.eigen(k);
+        double[][] Y = eigen.getEigenVectors().toArray();
         for (int i = 0; i < n; i++) {
             MathEx.unitize2(Y[i]);
         }
@@ -136,8 +136,8 @@ public class SpectralClustering extends PartitionClustering implements Serializa
      *              a somewhat sensitive parameter. To search for the best
      *              setting, one may pick the value that gives the tightest
      *              clusters (smallest distortion) in feature space.
-     * @param maxIter the maximum number of iterations for k-means.
-     * @param tol the tolerance of k-means convergence test.
+     * @param maxIter the maximum number of iterations for each running.
+     * @param tol the tolerance of convergence test.
      */
     public static SpectralClustering fit(double[][] data, int k, double sigma, int maxIter, double tol) {
         if (k < 2) {
@@ -151,7 +151,7 @@ public class SpectralClustering extends PartitionClustering implements Serializa
         int n = data.length;
         double gamma = -0.5 / (sigma * sigma);
 
-        Matrix W = new Matrix(n, n);
+        DenseMatrix W = Matrix.zeros(n, n);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < i; j++) {
                 double w = Math.exp(gamma * MathEx.squaredDistance(data[i], data[j]));
@@ -186,8 +186,8 @@ public class SpectralClustering extends PartitionClustering implements Serializa
      *              a somewhat sensitive parameter. To search for the best
      *              setting, one may pick the value that gives the tightest
      *              clusters (smallest distortion) in feature space.
-     * @param maxIter the maximum number of iterations for k-means.
-     * @param tol the tolerance of k-means convergence test.
+     * @param maxIter the maximum number of iterations for each running.
+     * @param tol the tolerance of convergence test.
      */
     public static SpectralClustering fit(double[][] data, int k, int l, double sigma, int maxIter, double tol) {
         if (l < k || l >= data.length) {
@@ -211,7 +211,7 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             x[i] = data[index[i]];
         }
 
-        Matrix C = new Matrix(n, l);
+        DenseMatrix C = Matrix.zeros(n, l);
         double[] D = new double[n];
 
         IntStream.range(0, n).parallel().forEach(i -> {
@@ -240,10 +240,11 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             }
         }
 
-        Matrix W = C.submatrix(0, 0, l-1, l-1);
-        W.uplo(UPLO.LOWER);
-        Matrix.EVD eigen = ARPACK.syev(W, k, ARPACK.SymmWhich.LA);
-        double[] e = eigen.wr;
+        DenseMatrix W = C.submat(0, 0, l, l);
+
+        W.setSymmetric(true);
+        EVD eigen = W.eigen(k);
+        double[] e = eigen.getEigenValues();
         double scale = Math.sqrt((double)l / n);
         for (int i = 0; i < k; i++) {
             if (e[i] <= 1E-8) {
@@ -253,14 +254,14 @@ public class SpectralClustering extends PartitionClustering implements Serializa
             e[i] = scale / e[i];
         }
         
-        Matrix U = eigen.Vr;
+        DenseMatrix U = eigen.getEigenVectors();
         for (int i = 0; i < l; i++) {
             for (int j = 0; j < k; j++) {
                 U.mul(i, j, e[j]);
             }
         }
         
-        double[][] Y = C.mm(U).toArray();
+        double[][] Y = C.abmm(U).toArray();
         for (int i = 0; i < n; i++) {
             MathEx.unitize2(Y[i]);
         }
