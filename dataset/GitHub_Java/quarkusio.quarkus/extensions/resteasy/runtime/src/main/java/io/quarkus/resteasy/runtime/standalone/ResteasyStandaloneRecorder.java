@@ -1,22 +1,20 @@
 package io.quarkus.resteasy.runtime.standalone;
 
-import java.nio.file.Path;
-import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 
-import org.jboss.logging.Logger;
 import org.jboss.resteasy.spi.ResteasyDeployment;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.PooledByteBufAllocator;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.runtime.RuntimeValue;
+import io.quarkus.resteasy.runtime.ResteasyVertxConfig;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
+import io.quarkus.vertx.http.runtime.HttpConfiguration;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
-import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
-import io.vertx.ext.web.handler.StaticHandler;
 
 /**
  * Provides the runtime methods to bootstrap Resteasy in standalone mode.
@@ -24,27 +22,52 @@ import io.vertx.ext.web.handler.StaticHandler;
 @Recorder
 public class ResteasyStandaloneRecorder {
 
-    private static final Logger log = Logger.getLogger("io.quarkus.resteasy");
     public static final String META_INF_RESOURCES = "META-INF/resources";
-
-    /**
-     * TODO: configuration
-     */
-    protected static final int BUFFER_SIZE = 8 * 1024;
 
     private static boolean useDirect = true;
 
-    private static Handler<RoutingContext> ROOT_HANDLER = new Handler<RoutingContext>() {
-        @Override
-        public void handle(RoutingContext httpServerRequest) {
-            currentRoot.handle(httpServerRequest);
+    private static ResteasyDeployment deployment;
+    private static String contextPath;
+
+    public void staticInit(ResteasyDeployment dep, String path) {
+        if (dep != null) {
+            deployment = dep;
+            deployment.start();
         }
-    };
+        contextPath = path;
+    }
 
-    private volatile static Handler<RoutingContext> currentRoot = null;
+    public void start(ShutdownContext shutdown, boolean isVirtual) {
 
-    //TODO: clean this up
-    private static BufferAllocator ALLOCATOR = new BufferAllocator() {
+        shutdown.addShutdownTask(new Runnable() {
+            @Override
+            public void run() {
+                if (deployment != null) {
+                    deployment.stop();
+                }
+            }
+        });
+        useDirect = !isVirtual;
+    }
+
+    public Handler<RoutingContext> vertxRequestHandler(Supplier<Vertx> vertx,
+            BeanContainer beanContainer, Executor executor, HttpConfiguration readTimeout, ResteasyVertxConfig config) {
+        if (deployment != null) {
+            return new VertxRequestHandler(vertx.get(), beanContainer, deployment, contextPath,
+                    new ResteasyVertxAllocator(config.responseBufferSize), executor,
+                    readTimeout.readTimeout.toMillis());
+        }
+        return null;
+    }
+
+    private static class ResteasyVertxAllocator implements BufferAllocator {
+
+        private final int bufferSize;
+
+        private ResteasyVertxAllocator(int bufferSize) {
+            this.bufferSize = bufferSize;
+        }
+
         @Override
         public ByteBuf allocateBuffer() {
             return allocateBuffer(useDirect);
@@ -52,7 +75,7 @@ public class ResteasyStandaloneRecorder {
 
         @Override
         public ByteBuf allocateBuffer(boolean direct) {
-            return allocateBuffer(direct, BUFFER_SIZE);
+            return allocateBuffer(direct, bufferSize);
         }
 
         @Override
@@ -71,82 +94,7 @@ public class ResteasyStandaloneRecorder {
 
         @Override
         public int getBufferSize() {
-            return BUFFER_SIZE;
+            return bufferSize;
         }
-    };
-
-    private static volatile List<Path> hotDeploymentResourcePaths;
-
-    public static void setHotDeploymentResources(List<Path> resources) {
-        hotDeploymentResourcePaths = resources;
     }
-
-    private static ResteasyDeployment deployment;
-
-    public void setupDeployment(ResteasyDeployment dep) {
-        deployment = dep;
-        deployment.start();
-
-    }
-
-    public Handler<RoutingContext> startResteasy(RuntimeValue<Vertx> vertxValue,
-            String contextPath,
-            ShutdownContext shutdown,
-            BeanContainer beanContainer,
-            boolean hasClasspathResources,
-            boolean isVirtual) throws Exception {
-
-        shutdown.addShutdownTask(new Runnable() {
-            @Override
-            public void run() {
-                deployment.stop();
-            }
-        });
-        Vertx vertx = vertxValue.getValue();
-        useDirect = !isVirtual;
-
-        Router router = null;
-        if (hotDeploymentResourcePaths != null && !hotDeploymentResourcePaths.isEmpty()) {
-            router = router == null ? Router.router(vertx) : router;
-            for (Path resourcePath : hotDeploymentResourcePaths) {
-                String root = resourcePath.toAbsolutePath().toString();
-                StaticHandler staticHandler = StaticHandler.create();
-                staticHandler.setCachingEnabled(false);
-                staticHandler.setAllowRootFileSystemAccess(true);
-                staticHandler.setWebRoot(root);
-                router.route().handler(event -> {
-                    try {
-                        staticHandler.handle(event);
-                    } catch (Exception e) {
-                        // on Windows, the drive in file path screws up cache lookup
-                        // so just punt to next handler
-                        event.next();
-                    }
-                });
-            }
-        }
-        if (hasClasspathResources) {
-            router = router == null ? Router.router(vertx) : router;
-            router.route().handler(StaticHandler.create(META_INF_RESOURCES));
-        }
-
-        VertxRequestHandler requestHandler = new VertxRequestHandler(vertx, beanContainer, deployment, contextPath, ALLOCATOR);
-
-        // We don't to add a Router if we don't have to
-        if (router == null) {
-            currentRoot = requestHandler;
-        } else {
-            router.route().handler(requestHandler);
-            Router finalRouter = router;
-            currentRoot = new Handler<RoutingContext>() {
-                @Override
-                public void handle(RoutingContext event) {
-                    finalRouter.handle(event.request());
-                }
-            };
-        }
-
-        return ROOT_HANDLER;
-    }
-
 }
