@@ -255,6 +255,8 @@ public class FileOutErr extends OutErr {
 
     abstract Path getFileUnsafe();
 
+    abstract boolean mightHaveOutput();
+
     /** Closes and deletes the output. */
     abstract void clear() throws IOException;
   }
@@ -296,6 +298,11 @@ public class FileOutErr extends OutErr {
     @Override
     long getRecordedOutputSize() {
       return 0;
+    }
+
+    @Override
+    boolean mightHaveOutput() {
+      return false;
     }
 
     @Override
@@ -343,11 +350,10 @@ public class FileOutErr extends OutErr {
     private final Path outputFile;
     private OutputStream outputStream;
     private String error;
-    private Long cachedSize;
+    private boolean mightHaveOutput = false;
 
     protected FileRecordingOutputStream(Path outputFile) {
       this.outputFile = outputFile;
-      this.cachedSize = 0L;
     }
 
     @Override
@@ -368,8 +374,8 @@ public class FileOutErr extends OutErr {
       return outputFile;
     }
 
-    private synchronized void markDirty() {
-      cachedSize = null;
+    private void markDirty() {
+      mightHaveOutput = true;
     }
 
     private OutputStream getOutputStream() throws IOException {
@@ -389,7 +395,7 @@ public class FileOutErr extends OutErr {
       close();
       outputStream = null;
       outputFile.delete();
-      cachedSize = 0L;
+      mightHaveOutput = false;
     }
 
     /**
@@ -405,23 +411,25 @@ public class FileOutErr extends OutErr {
       try {
         return getRecordedOutputSize() > 0;
       } catch (IOException ex) {
-        // Error already recorded by getRecordedOutputSize().
+        recordError(ex);
         return true;
       }
     }
 
     @Override
+    boolean mightHaveOutput() {
+      return mightHaveOutput;
+    }
+
+    @Override
     byte[] getRecordedOutput() {
       byte[] bytes = null;
-      synchronized (this) {
-        try {
-          bytes = FileSystemUtils.readContent(outputFile);
-          cachedSize = (long) bytes.length;
-        } catch (FileNotFoundException e) {
-          cachedSize = 0L;
-        } catch (IOException ex) {
-          recordError(ex);
+      try {
+        if (mightHaveOutput && getFile().exists()) {
+          bytes = FileSystemUtils.readContent(getFile());
         }
+      } catch (IOException ex) {
+        recordError(ex);
       }
 
       if (hadError()) {
@@ -436,34 +444,34 @@ public class FileOutErr extends OutErr {
     }
 
     @Override
-    synchronized long getRecordedOutputSize() throws IOException {
+    long getRecordedOutputSize() throws IOException {
       if (hadError()) {
         return error.length();
       }
-      if (cachedSize == null) {
-        try {
-          cachedSize = outputFile.getFileSize();
-        } catch (FileNotFoundException e) {
-          cachedSize = 0L;
-        } catch (IOException e) {
-          recordError(e);
-          throw e;
-        }
+      if (!mightHaveOutput) {
+        return 0;
       }
-      return cachedSize;
+      try {
+        return outputFile.getFileSize();
+      } catch (FileNotFoundException e) {
+        return 0;
+      } catch (IOException e) {
+        recordError(e);
+        throw e;
+      }
     }
 
     @Override
     void dumpOut(OutputStream out) {
-      synchronized (this) {
-        try (InputStream in = outputFile.getInputStream()) {
-          ByteStreams.copy(in, out);
-          out.flush();
-        } catch (FileNotFoundException e) {
-          cachedSize = 0L;
-        } catch (IOException ex) {
-          recordError(ex);
+      try {
+        if (mightHaveOutput && getFile().exists()) {
+          try (InputStream in = getFile().getInputStream()) {
+            ByteStreams.copy(in, out);
+            out.flush();
+          }
         }
+      } catch (IOException ex) {
+        recordError(ex);
       }
 
       if (hadError()) {
