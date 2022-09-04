@@ -25,11 +25,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.packages.SkylarkClassObjectConstructor.SkylarkKey;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
-import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import org.junit.Test;
@@ -41,69 +37,6 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class JavaSkylarkApiTest extends BuildViewTestCase {
-
-  @Test
-  public void testExposesJavaSkylarkApiProvider() throws Exception {
-    scratch.file(
-        "java/test/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "java_library(",
-        "  name = 'dep',",
-        "  srcs = [ 'Dep.java'],",
-        ")",
-        "my_rule(",
-        "  name = 'my',",
-        "  dep = ':dep',",
-        ")");
-    scratch.file(
-        "java/test/extension.bzl",
-        "result = provider()",
-        "def impl(ctx):",
-        "   depj = ctx.attr.dep.java",
-        "   return [result(",
-        "             source_jars = depj.source_jars,",
-        "             transitive_deps = depj.transitive_deps,",
-        "             transitive_runtime_deps = depj.transitive_runtime_deps,",
-        "             transitive_source_jars = depj.transitive_source_jars,",
-        "             outputs = depj.outputs.jars,",
-        "          )]",
-        "my_rule = rule(impl, attrs = { 'dep' : attr.label() })");
-
-    ConfiguredTarget configuredTarget = getConfiguredTarget("//java/test:my");
-    SkylarkClassObject skylarkClassObject =
-        configuredTarget.get(
-            new SkylarkKey(Label.parseAbsolute("//java/test:extension.bzl"), "result"));
-
-    SkylarkNestedSet sourceJars = ((SkylarkNestedSet) skylarkClassObject.getValue("source_jars"));
-    SkylarkNestedSet transitiveDeps =
-        ((SkylarkNestedSet) skylarkClassObject.getValue("transitive_deps"));
-    SkylarkNestedSet transitiveRuntimeDeps =
-        ((SkylarkNestedSet) skylarkClassObject.getValue("transitive_runtime_deps"));
-    SkylarkNestedSet transitiveSourceJars =
-        ((SkylarkNestedSet) skylarkClassObject.getValue("transitive_source_jars"));
-    SkylarkList<OutputJar> outputJars =
-        ((SkylarkList<OutputJar>) skylarkClassObject.getValue("outputs"));
-
-    assertThat(artifactFilesNames(sourceJars.toCollection(Artifact.class)))
-        .containsExactly("libdep-src.jar");
-    assertThat(artifactFilesNames(transitiveDeps.toCollection(Artifact.class)))
-        .containsExactly("libdep-hjar.jar");
-    assertThat(artifactFilesNames(transitiveRuntimeDeps.toCollection(Artifact.class)))
-        .containsExactly("libdep.jar");
-    assertThat(artifactFilesNames(transitiveSourceJars.toCollection(Artifact.class)))
-        .containsExactly("libdep-src.jar");
-    assertThat(outputJars).hasSize(1);
-    assertThat(outputJars.get(0).getClassJar().getFilename()).isEqualTo("libdep.jar");
-  }
-
-  private static Collection<String> artifactFilesNames(Collection<Artifact> artifacts) {
-    List<String> result = new ArrayList<>();
-    for (Artifact artifact : artifacts) {
-      result.add(artifact.getFilename());
-    }
-    return result;
-  }
-
   @Test
   public void testJavaPlugin() throws Exception {
     scratch.file(
@@ -389,102 +322,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     javaCompilationArgsHaveTheSameParent(
         jlJavaProvider.getProvider(JavaCompilationArgsProvider.class).getJavaCompilationArgs(),
         jlTopJavaProvider.getProvider(JavaCompilationArgsProvider.class).getJavaCompilationArgs());
-  }
-
-  @Test
-  public void skylarkJavaToJavaLibraryAttributes() throws Exception {
-    scratch.file(
-        "foo/extension.bzl",
-        "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[java_common.provider]",
-        "  return struct(providers = [dep_params])",
-        "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "java_library(name = 'jl_bottom_for_deps', srcs = ['java/A.java'])",
-        "java_library(name = 'jl_bottom_for_exports', srcs = ['java/A2.java'])",
-        "java_library(name = 'jl_bottom_for_runtime_deps', srcs = ['java/A2.java'])",
-        "my_rule(name = 'mya', dep = ':jl_bottom_for_deps')",
-        "my_rule(name = 'myb', dep = ':jl_bottom_for_exports')",
-        "my_rule(name = 'myc', dep = ':jl_bottom_for_runtime_deps')",
-        "java_library(name = 'lib_exports', srcs = ['java/B.java'], deps = [':mya'],",
-        "  exports = [':myb'], runtime_deps = [':myc'])",
-        "java_library(name = 'lib_interm', srcs = ['java/C.java'], deps = [':lib_exports'])",
-        "java_library(name = 'lib_top', srcs = ['java/D.java'], deps = [':lib_interm'])");
-    assertNoEvents();
-
-    // Test that all bottom jars are on the runtime classpath of lib_exports.
-    ConfiguredTarget jlExports = getConfiguredTarget("//foo:lib_exports");
-    JavaCompilationArgsProvider jlExportsProvider =
-        JavaProvider.getProvider(JavaCompilationArgsProvider.class, jlExports);
-    assertThat(prettyJarNames(jlExportsProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()))
-        .containsAllOf(
-            "foo/libjl_bottom_for_deps.jar",
-            "foo/libjl_bottom_for_runtime_deps.jar",
-            "foo/libjl_bottom_for_exports.jar");
-
-    // Test that libjl_bottom_for_exports.jar is in the recursive java compilation args of lib_top.
-    ConfiguredTarget jlTop = getConfiguredTarget("//foo:lib_interm");
-    JavaCompilationArgsProvider jlTopProvider =
-        JavaProvider.getProvider(JavaCompilationArgsProvider.class, jlTop);
-    assertThat(prettyJarNames(jlTopProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()))
-        .contains("foo/libjl_bottom_for_exports.jar");
-  }
-
-  @Test
-  public void skylarkJavaToJavaBinaryAttributes() throws Exception {
-    scratch.file(
-        "foo/extension.bzl",
-        "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[java_common.provider]",
-        "  return struct(providers = [dep_params])",
-        "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "java_library(name = 'jl_bottom_for_deps', srcs = ['java/A.java'])",
-        "java_library(name = 'jl_bottom_for_runtime_deps', srcs = ['java/A2.java'])",
-        "my_rule(name = 'mya', dep = ':jl_bottom_for_deps')",
-        "my_rule(name = 'myb', dep = ':jl_bottom_for_runtime_deps')",
-        "java_binary(name = 'binary', srcs = ['java/B.java'], main_class = 'foo.A',",
-        "  deps = [':mya'], runtime_deps = [':myb'])");
-    assertNoEvents();
-
-    // Test that all bottom jars are on the runtime classpath.
-    ConfiguredTarget binary = getConfiguredTarget("//foo:binary");
-    assertThat(prettyJarNames(
-        binary.getProvider(JavaRuntimeClasspathProvider.class).getRuntimeClasspath()))
-            .containsAllOf(
-                "foo/libjl_bottom_for_deps.jar", "foo/libjl_bottom_for_runtime_deps.jar");
-  }
-
-  @Test
-  public void skylarkJavaToJavaImportAttributes() throws Exception {
-    scratch.file(
-        "foo/extension.bzl",
-        "def _impl(ctx):",
-        "  dep_params = ctx.attr.dep[java_common.provider]",
-        "  return struct(providers = [dep_params])",
-        "my_rule = rule(_impl, attrs = { 'dep' : attr.label() })");
-    scratch.file(
-        "foo/BUILD",
-        "load(':extension.bzl', 'my_rule')",
-        "java_library(name = 'jl_bottom_for_deps', srcs = ['java/A.java'])",
-        "java_library(name = 'jl_bottom_for_runtime_deps', srcs = ['java/A2.java'])",
-        "my_rule(name = 'mya', dep = ':jl_bottom_for_deps')",
-        "my_rule(name = 'myb', dep = ':jl_bottom_for_runtime_deps')",
-        "java_import(name = 'import', jars = ['B.jar'], deps = [':mya'], runtime_deps = [':myb'])");
-    assertNoEvents();
-
-    // Test that all bottom jars are on the runtime classpath.
-    ConfiguredTarget importTarget = getConfiguredTarget("//foo:import");
-    JavaCompilationArgsProvider compilationProvider =
-        JavaProvider.getProvider(JavaCompilationArgsProvider.class, importTarget);
-    assertThat(prettyJarNames(
-        compilationProvider.getRecursiveJavaCompilationArgs().getRuntimeJars()))
-        .containsAllOf(
-            "foo/libjl_bottom_for_deps.jar", "foo/libjl_bottom_for_runtime_deps.jar");
   }
 
   @Test

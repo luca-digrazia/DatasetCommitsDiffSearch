@@ -19,6 +19,7 @@ import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.analysis.OutputGroupProvider.INTERNAL_SUFFIX;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -42,6 +43,7 @@ import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import java.util.Arrays;
+import javax.annotation.Nullable;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -134,10 +136,16 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   private Iterable<String> getAspectDescriptions(AnalysisResult analysisResult) {
     return transform(
         analysisResult.getAspects(),
-        aspectValue ->
-            String.format(
+        new Function<AspectValue, String>() {
+          @Nullable
+          @Override
+          public String apply(AspectValue aspectValue) {
+            return String.format(
                 "%s(%s)",
-                aspectValue.getConfiguredAspect().getName(), aspectValue.getLabel().toString()));
+                aspectValue.getConfiguredAspect().getName(),
+                aspectValue.getLabel().toString());
+          }
+        });
   }
 
   @Test
@@ -185,7 +193,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
   private Iterable<String> getLabelsToBuild(AnalysisResult analysisResult) {
     return transform(
         analysisResult.getTargetsToBuild(),
-        configuredTarget -> configuredTarget.getLabel().toString());
+        new Function<ConfiguredTarget, String>() {
+          @Nullable
+          @Override
+          public String apply(ConfiguredTarget configuredTarget) {
+            return configuredTarget.getLabel().toString();
+          }
+        });
   }
 
 
@@ -259,9 +273,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     assertThat(
             transform(
                 ((SkylarkNestedSet) names).toCollection(),
-                o -> {
-                  assertThat(o).isInstanceOf(Label.class);
-                  return o.toString();
+                new Function<Object, String>() {
+                  @Nullable
+                  @Override
+                  public String apply(Object o) {
+                    assertThat(o).isInstanceOf(Label.class);
+                    return o.toString();
+                  }
                 }))
         .containsExactly("//test:xxx", "//test:yyy");
     Object ruleKinds = configuredAspect.get("rule_kinds");
@@ -313,12 +331,16 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     Object names = configuredAspect.get("target_labels");
     assertThat(names).isInstanceOf(SkylarkNestedSet.class);
     assertThat(
-            transform(
-                ((SkylarkNestedSet) names).toCollection(),
-                o -> {
-                  assertThat(o).isInstanceOf(Label.class);
-                  return ((Label) o).getName();
-                }))
+        transform(
+            ((SkylarkNestedSet) names).toCollection(),
+            new Function<Object, String>() {
+              @Nullable
+              @Override
+              public String apply(Object o) {
+                assertThat(o).isInstanceOf(Label.class);
+                return ((Label) o).getName();
+              }
+            }))
         .containsExactly("stl", "xxx", "yyy");
   }
 
@@ -448,9 +470,15 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     AnalysisResult analysisResult =
         update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
     assertThat(
-            transform(
-                analysisResult.getTargetsToBuild(),
-                configuredTarget -> configuredTarget.getLabel().toString()))
+        transform(
+            analysisResult.getTargetsToBuild(),
+            new Function<ConfiguredTarget, String>() {
+              @Nullable
+              @Override
+              public String apply(ConfiguredTarget configuredTarget) {
+                return configuredTarget.getLabel().toString();
+              }
+            }))
         .containsExactly("//test:xxx");
     AspectValue aspectValue = analysisResult.getAspects().iterator().next();
     OutputGroupProvider outputGroupProvider =
@@ -484,9 +512,15 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     AnalysisResult analysisResult =
         update(ImmutableList.of("test/aspect.bzl%MyAspect"), "//test:xxx");
     assertThat(
-            transform(
-                analysisResult.getTargetsToBuild(),
-                configuredTarget -> configuredTarget.getLabel().toString()))
+        transform(
+            analysisResult.getTargetsToBuild(),
+            new Function<ConfiguredTarget, String>() {
+              @Nullable
+              @Override
+              public String apply(ConfiguredTarget configuredTarget) {
+                return configuredTarget.getLabel().toString();
+              }
+            }))
         .containsExactly("//test:xxx");
     AspectValue aspectValue = analysisResult.getAspects().iterator().next();
     OutputGroupProvider outputGroupProvider =
@@ -543,12 +577,16 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     Object names = target.get("rule_deps");
     assertThat(names).isInstanceOf(SkylarkNestedSet.class);
     assertThat(
-            transform(
-                ((SkylarkNestedSet) names).toCollection(),
-                o -> {
-                  assertThat(o).isInstanceOf(Label.class);
-                  return o.toString();
-                }))
+        transform(
+            ((SkylarkNestedSet) names).toCollection(),
+            new Function<Object, String>() {
+              @Nullable
+              @Override
+              public String apply(Object o) {
+                assertThat(o).isInstanceOf(Label.class);
+                return o.toString();
+              }
+            }))
         .containsExactly("//test:yyy");
   }
 
@@ -828,7 +866,7 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
-        "  ctx.actions.declare_file('missing_in_action.txt')",
+        "  ctx.new_file('missing_in_action.txt')",
         "  return struct()",
         "",
         "MyAspect = aspect(implementation=_impl)");
@@ -873,14 +911,14 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _impl(target, ctx):",
-        "  f = ctx.actions.declare_file('f.txt')",
+        "  f = ctx.new_file('f.txt')",
         "  ctx.file_action(f, 'f')",
         "  return struct(output_groups = { 'duplicate' : depset([f]) })",
         "",
         "MyAspect = aspect(implementation=_impl)",
         "def _rule_impl(ctx):",
-        "  g = ctx.actions.declare_file('g.txt')",
-        "  ctx.actions.write(g, 'g')",
+        "  g = ctx.new_file('g.txt')",
+        "  ctx.file_action(g, 'g')",
         "  return struct(output_groups = { 'duplicate' : depset([g]) })",
         "my_rule = rule(_rule_impl)",
         "def _noop(ctx):",
@@ -909,8 +947,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _a1_impl(target, ctx):",
-        "  f = ctx.actions.declare_file(target.label.name + '_a1.txt')",
-        "  ctx.actions.write(f, 'f')",
+        "  f = ctx.new_file(target.label.name + '_a1.txt')",
+        "  ctx.file_action(f, 'f')",
         "  return struct(output_groups = { 'a1_group' : depset([f]) })",
         "",
         "a1 = aspect(implementation=_a1_impl, attr_aspects = ['dep'])",
@@ -941,8 +979,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _a1_impl(target, ctx):",
-        "  f = ctx.actions.declare_file(target.label.name + '_a1.txt')",
-        "  ctx.actions.write(f, 'f')",
+        "  f = ctx.new_file(target.label.name + '_a1.txt')",
+        "  ctx.file_action(f, 'f')",
         "  return [OutputGroupInfo(a1_group = depset([f]))]",
         "",
         "a1 = aspect(implementation=_a1_impl, attr_aspects = ['dep'])",
@@ -972,8 +1010,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _a1_impl(target, ctx):",
-        "  f = ctx.actions.declare_file(target.label.name + '_a1.txt')",
-        "  ctx.actions.write(f, 'f')",
+        "  f = ctx.new_file(target.label.name + '_a1.txt')",
+        "  ctx.file_action(f, 'f')",
         "  return struct(output_groups = { 'a1_group' : depset([f]) })",
         "",
         "a1 = aspect(implementation=_a1_impl, attr_aspects = ['dep'])",
@@ -984,8 +1022,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         "  return struct(output_groups = og)",
         "my_rule1 = rule(_rule_impl, attrs = { 'dep' : attr.label(aspects = [a1]) })",
         "def _a2_impl(target, ctx):",
-        "  g = ctx.actions.declare_file(target.label.name + '_a2.txt')",
-        "  ctx.actions.write(g, 'f')",
+        "  g = ctx.new_file(target.label.name + '_a2.txt')",
+        "  ctx.file_action(g, 'f')",
         "  return struct(output_groups = { 'a2_group' : depset([g]) })",
         "",
         "a2 = aspect(implementation=_a2_impl, attr_aspects = ['dep'])",
@@ -1013,8 +1051,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _a1_impl(target, ctx):",
-        "  f = ctx.actions.declare_file(target.label.name + '_a1.txt')",
-        "  ctx.actions.write(f, 'f')",
+        "  f = ctx.new_file(target.label.name + '_a1.txt')",
+        "  ctx.file_action(f, 'f')",
         "  return [OutputGroupInfo(a1_group = depset([f]))]",
         "",
         "a1 = aspect(implementation=_a1_impl, attr_aspects = ['dep'])",
@@ -1030,8 +1068,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         "  return [OutputGroupInfo(**og)]",
         "my_rule1 = rule(_rule_impl, attrs = { 'dep' : attr.label(aspects = [a1]) })",
         "def _a2_impl(target, ctx):",
-        "  g = ctx.actions.declare_file(target.label.name + '_a2.txt')",
-        "  ctx.actions.write(g, 'f')",
+        "  g = ctx.new_file(target.label.name + '_a2.txt')",
+        "  ctx.file_action(g, 'f')",
         "  return [OutputGroupInfo(a2_group = depset([g]))]",
         "",
         "a2 = aspect(implementation=_a2_impl, attr_aspects = ['dep'])",
@@ -1060,8 +1098,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _a1_impl(target, ctx):",
-        "  f = ctx.actions.declare_file(target.label.name + '_a1.txt')",
-        "  ctx.actions.write(f, 'f')",
+        "  f = ctx.new_file(target.label.name + '_a1.txt')",
+        "  ctx.file_action(f, 'f')",
         "  return struct(output_groups = { 'a1_group' : depset([f]) })",
         "",
         "a1 = aspect(implementation=_a1_impl, attr_aspects = ['dep'])",
@@ -1072,8 +1110,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         "  return struct(output_groups = og)",
         "my_rule1 = rule(_rule_impl, attrs = { 'dep' : attr.label(aspects = [a1]) })",
         "def _a2_impl(target, ctx):",
-        "  g = ctx.actions.declare_file(target.label.name + '_a2.txt')",
-        "  ctx.actions.write(g, 'f')",
+        "  g = ctx.new_file(target.label.name + '_a2.txt')",
+        "  ctx.file_action(g, 'f')",
         "  return struct(output_groups = { 'a1_group' : depset([g]) })",
         "",
         "a2 = aspect(implementation=_a2_impl, attr_aspects = ['dep'])",
@@ -1101,8 +1139,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
 
   private static Iterable<String> getOutputGroupContents(OutputGroupProvider outputGroupProvider,
       String groupName) {
-    return Iterables.transform(
-        outputGroupProvider.getOutputGroup(groupName), Artifact::getRootRelativePathString);
+    return Iterables.transform(outputGroupProvider.getOutputGroup(groupName),
+        new Function<Artifact, String>() {
+          @Override
+          public String apply(Artifact artifact) {
+             return artifact.getRootRelativePathString();
+          }
+        });
   }
 
 
@@ -1604,8 +1647,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "foo/extension.bzl",
         "def _aspect_impl(target, ctx):",
-        "   file = ctx.actions.declare_file('aspect-output-' + target.label.name)",
-        "   ctx.actions.write(file, 'data')",
+        "   file = ctx.new_file('aspect-output-' + target.label.name)",
+        "   ctx.file_action(file, 'data')",
         "   return struct(aspect_file = file)",
         "my_aspect = aspect(_aspect_impl)",
         "def _rule_impl(ctx):",
@@ -1631,8 +1674,12 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     ConfiguredTarget target = analysisResult.getTargetsToBuild().iterator().next();
     NestedSet<Artifact> aspectFiles =
         ((SkylarkNestedSet) target.get("aspect_files")).getSet(Artifact.class);
-    assertThat(transform(aspectFiles, Artifact::getFilename))
-        .containsExactly("aspect-output-rbin", "aspect-output-rgen");
+    assertThat(transform(aspectFiles, new Function<Artifact, String>() {
+      @Override
+      public String apply(Artifact artifact) {
+        return artifact.getFilename();
+      }
+    })).containsExactly("aspect-output-rbin", "aspect-output-rgen");
     for (Artifact aspectFile : aspectFiles) {
       String rootPath = aspectFile.getRoot().getExecPath().toString();
       assertWithMessage("Artifact %s should not be in genfiles", aspectFile)
@@ -1721,9 +1768,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     scratch.file(
         "test/aspect.bzl",
         "def _aspect_impl(target,ctx):",
-        "  f = ctx.actions.declare_file('dummy.txt')",
-        "  ctx.actions.run_shell(outputs = [f], command='echo xxx > $(location f)',",
-        "                        mnemonic='AspectAction')",
+        "  f = ctx.new_file('dummy.txt')",
+        "  ctx.action(outputs = [f], command='echo xxx > $(location f)', mnemonic='AspectAction')",
         "  return struct()",
         "my_aspect = aspect(implementation = _aspect_impl)"
     );
@@ -1744,10 +1790,13 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     AnalysisResult analysisResult = update(
         ImmutableList.<String>of("test/aspect.bzl%my_aspect"),
         "//test:xxx");
-    assertThat(
-            Iterables.transform(
-                analysisResult.getAdditionalArtifactsToBuild(), Artifact::getFilename))
-        .contains("file.xa");
+    assertThat(Iterables.transform(analysisResult.getAdditionalArtifactsToBuild(),
+        new Function<Artifact, String>() {
+          @Override
+          public String apply(Artifact artifact) {
+            return artifact.getFilename();
+          }
+        })).contains("file.xa");
   }
 
   @Test
@@ -1787,12 +1836,16 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
     Object names = configuredAspect.get("target_labels");
     assertThat(names).isInstanceOf(SkylarkNestedSet.class);
     assertThat(
-            transform(
-                ((SkylarkNestedSet) names).toCollection(),
-                o -> {
+        transform(
+              ((SkylarkNestedSet) names).toCollection(),
+              new Function<Object, String>() {
+                @Nullable
+                @Override
+                public String apply(Object o) {
                   assertThat(o).isInstanceOf(Label.class);
                   return ((Label) o).getName();
-                }))
+                }
+              }))
         .containsExactly("foo", "bar", "tool");
   }
 
@@ -1865,8 +1918,8 @@ public class SkylarkAspectsTest extends AnalysisTestCase {
         "",
         "def _a3_impl(target,ctx):",
         "  value = []",
-        "  f = ctx.actions.declare_file('a3.out')",
-        "  ctx.actions.write(f, 'text')",
+        "  f = ctx.new_file('a3.out')",
+        "  ctx.file_action(f, 'text')",
         "  for dep in ctx.rule.attr.deps:",
         "     if hasattr(dep, 'a3p'):",
         "         value += dep.a3p",

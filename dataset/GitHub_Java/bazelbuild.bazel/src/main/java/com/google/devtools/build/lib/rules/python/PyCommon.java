@@ -212,8 +212,7 @@ public final class PyCommon {
       }
     }
 
-    LanguageDependentFragment.Checker.depsSupportsLanguage(
-        ruleContext, PyRuleClasses.LANGUAGE, ImmutableList.of("deps"));
+    LanguageDependentFragment.Checker.depsSupportsLanguage(ruleContext, PyRuleClasses.LANGUAGE);
     return convertedFiles != null
         ? ImmutableList.copyOf(convertedFiles.values())
         : sourceFiles;

@@ -161,16 +161,16 @@ public final class RuleConfiguredTargetBuilder {
   }
 
   /**
-   * Like getFilesToBuild(), except that it also includes the runfiles middleman, if any. Middlemen
-   * are expanded in the SpawnStrategy or by the Distributor.
+   * Like getFilesToBuild(), except that it also includes the runfiles middleman, if any.
+   * Middlemen are expanded in the SpawnStrategy or by the Distributor.
    */
-  private NestedSet<Artifact> getFilesToRun(
+  private ImmutableList<Artifact> getFilesToRun(
       RunfilesSupport runfilesSupport, NestedSet<Artifact> filesToBuild) {
     if (runfilesSupport == null) {
-      return filesToBuild;
+      return ImmutableList.copyOf(filesToBuild);
     } else {
-      NestedSetBuilder<Artifact> allFilesToBuild = NestedSetBuilder.stableOrder();
-      allFilesToBuild.addTransitive(filesToBuild);
+      ImmutableList.Builder<Artifact> allFilesToBuild = ImmutableList.builder();
+      allFilesToBuild.addAll(filesToBuild);
       allFilesToBuild.add(runfilesSupport.getRunfilesMiddleman());
       return allFilesToBuild.build();
     }
