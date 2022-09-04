@@ -74,14 +74,6 @@ public class AngelConf extends Configuration {
    * Training data path.
    */
   public static final String ANGEL_TRAIN_DATA_PATH = "angel.train.data.path";
-  public static final String ANGEL_VALIDATE_DATA_PATH = "angel.validate.data.path";
-
-  /**
-   * kerberos config
-   */
-  public static final String ANGEL_KERBEROS_KEYTAB = "angel.kerberos.keytab";
-  public static final String ANGEL_KERBEROS_PRINCIPAL = "angel.kerberos.principal";
-  public static final String ANGEL_KERBEROS_KEYTAB_NAME="angel.kerberos.keytab.name";
 
   /**
    * Predict data path.
