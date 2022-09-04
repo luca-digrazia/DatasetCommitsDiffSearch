@@ -862,7 +862,7 @@ public final class ApplicationManifest {
       boolean createSource,
       Artifact proguardCfg,
       @Nullable Artifact mainDexProguardCfg)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException {
 
     TransitiveInfoCollection resourcesPrerequisite =
         ruleContext.getPrerequisite("resources", Mode.TARGET);
@@ -919,7 +919,8 @@ public final class ApplicationManifest {
     for (String extension : uncompressedExtensions) {
       additionalAaptOpts.add("-0").add(extension);
     }
-    if (resourceFilterFactory.hasConfigurationFilters()) {
+    if (resourceFilterFactory.hasConfigurationFilters()
+        && !resourceFilterFactory.isPrefiltering()) {
       additionalAaptOpts.add("-c").add(resourceFilterFactory.getConfigurationFilterString());
     }
 
