@@ -8,7 +8,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EventListener;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
@@ -59,12 +61,14 @@ import org.jboss.metadata.web.spec.ServletSecurityMetaData;
 import org.jboss.metadata.web.spec.ServletsMetaData;
 import org.jboss.metadata.web.spec.TransportGuaranteeType;
 import org.jboss.metadata.web.spec.WebMetaData;
+import org.jboss.shamrock.deployment.ApplicationArchive;
 import org.jboss.shamrock.deployment.ArchiveContext;
 import org.jboss.shamrock.deployment.ProcessorContext;
 import org.jboss.shamrock.deployment.ResourceProcessor;
 import org.jboss.shamrock.deployment.RuntimePriority;
 import org.jboss.shamrock.deployment.ShamrockConfig;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
+import org.jboss.shamrock.runtime.ConfiguredValue;
 import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
@@ -103,7 +107,30 @@ public class ServletResourceProcessor implements ResourceProcessor {
 
         try (BytecodeRecorder context = processorContext.addStaticInitTask(RuntimePriority.UNDERTOW_CREATE_DEPLOYMENT)) {
             UndertowDeploymentTemplate template = context.getRecordingProxy(UndertowDeploymentTemplate.class);
-            template.createDeployment("test");
+            //we need to check for web resources in order to get welcome files to work
+            //this kinda sucks
+            Set<String> knownFiles = new HashSet<>();
+            Set<String> knownDirectories = new HashSet<>();
+            for(ApplicationArchive i : archiveContext.getAllApplicationArchives()) {
+                Path resource = i.getArchiveRoot().resolve("META-INF/resources");
+                if(Files.exists(resource)) {
+                    Files.walk(resource).forEach(new Consumer<Path>() {
+                        @Override
+                        public void accept(Path path) {
+                            Path rel = resource.relativize(path);
+                            if(Files.isDirectory(rel)) {
+                                knownDirectories.add(rel.toString());
+                            } else {
+                                knownFiles.add(rel.toString());
+                            }
+                        }
+                    });
+                }
+            }
+
+
+            template.createDeployment("test", knownFiles, knownDirectories);
+            template.initHandlerWrappers();
         }
         final IndexView index = archiveContext.getCombinedIndex();
         WebMetaData result = processAnnotations(index);
@@ -204,7 +231,7 @@ public class ServletResourceProcessor implements ResourceProcessor {
 
         try (BytecodeRecorder context = processorContext.addDeploymentTask(RuntimePriority.UNDERTOW_START)) {
             UndertowDeploymentTemplate template = context.getRecordingProxy(UndertowDeploymentTemplate.class);
-            template.startUndertow(null, null, config.getConfig("http.port", "8080"));
+            template.startUndertow(null, null, new ConfiguredValue("http.port", "8080"), new ConfiguredValue("http.host", "localhost"), new ConfiguredValue("http.io-threads",""), new ConfiguredValue("http.worker-threads",""), null);
         }
     }
 

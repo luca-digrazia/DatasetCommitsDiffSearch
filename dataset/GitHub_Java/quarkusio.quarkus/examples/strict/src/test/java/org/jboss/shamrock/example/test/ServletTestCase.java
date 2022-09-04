@@ -1,8 +1,5 @@
 package org.jboss.shamrock.example.test;
 
-import java.io.IOException;
-
-import org.jboss.shamrock.example.testutils.URLResponse;
 import org.jboss.shamrock.example.testutils.URLTester;
 import org.jboss.shamrock.junit.ShamrockTest;
 import org.junit.Assert;
@@ -30,13 +27,5 @@ public class ServletTestCase {
     @Test
     public void testWelcomeFile() {
         Assert.assertTrue(URLTester.relative("/").invokeURL().asString().contains("A HTML page"));
-    }
-
-    // Basic @ServletSecurity test
-    @Test()
-    public void testSecureAccessFailure() {
-        URLResponse response = URLTester.relative("secure-test").invokeURL();
-        Assert.assertEquals(403, response.statusCode());
-        Assert.assertTrue(response.exception() != null);
     }
 }
