@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skylarkbuildapi.android;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.skylarkbuildapi.Bootstrap;
-import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidApplicationResourceInfoApi.AndroidApplicationResourceInfoApiProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidDeviceBrokerInfoApi.AndroidDeviceBrokerInfoApiProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidInstrumentationInfoApi.AndroidInstrumentationInfoApiProvider;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidNativeLibsInfoApi.AndroidNativeLibsInfoApiProvider;
@@ -37,8 +36,6 @@ public class AndroidBootstrap implements Bootstrap {
   private final AndroidResourcesInfoApi.AndroidResourcesInfoApiProvider<?, ?, ?>
       androidResourcesInfoProvider;
   private final AndroidNativeLibsInfoApiProvider androidNativeLibsInfoProvider;
-  private final AndroidApplicationResourceInfoApiProvider<?>
-      androidApplicationResourceInfoApiProvider;
 
   public AndroidBootstrap(
       AndroidSkylarkCommonApi<?, ?> androidCommon,
@@ -46,15 +43,13 @@ public class AndroidBootstrap implements Bootstrap {
       AndroidInstrumentationInfoApiProvider<?> androidInstrumentationInfoProvider,
       AndroidDeviceBrokerInfoApiProvider androidDeviceBrokerInfoProvider,
       AndroidResourcesInfoApiProvider<?, ?, ?> androidResourcesInfoProvider,
-      AndroidNativeLibsInfoApiProvider androidNativeLibsInfoProvider,
-      AndroidApplicationResourceInfoApiProvider<?> androidApplicationResourceInfoApiProvider) {
+      AndroidNativeLibsInfoApiProvider androidNativeLibsInfoProvider) {
     this.androidCommon = androidCommon;
     this.apkInfoProvider = apkInfoProvider;
     this.androidInstrumentationInfoProvider = androidInstrumentationInfoProvider;
     this.androidDeviceBrokerInfoProvider = androidDeviceBrokerInfoProvider;
     this.androidResourcesInfoProvider = androidResourcesInfoProvider;
     this.androidNativeLibsInfoProvider = androidNativeLibsInfoProvider;
-    this.androidApplicationResourceInfoApiProvider = androidApplicationResourceInfoApiProvider;
   }
 
   @Override
@@ -86,10 +81,5 @@ public class AndroidBootstrap implements Bootstrap {
         AndroidNativeLibsInfoApi.NAME,
         FlagGuardedValue.onlyWhenExperimentalFlagIsTrue(
             FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API, androidNativeLibsInfoProvider));
-    builder.put(
-        AndroidApplicationResourceInfoApi.NAME,
-        FlagGuardedValue.onlyWhenExperimentalFlagIsTrue(
-            FlagIdentifier.EXPERIMENTAL_GOOGLE_LEGACY_API,
-            androidApplicationResourceInfoApiProvider));
   }
 }
