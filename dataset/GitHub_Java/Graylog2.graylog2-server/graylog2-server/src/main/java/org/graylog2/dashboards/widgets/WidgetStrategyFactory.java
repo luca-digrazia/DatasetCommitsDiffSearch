@@ -31,16 +31,11 @@ public class WidgetStrategyFactory {
     }
 
     public WidgetStrategy getWidgetForType(final String typeName, Map<String, Object> config, TimeRange timeRange, String widgetId) throws InvalidWidgetConfigurationException {
-        if (widgetStrategyFactories.containsKey(typeName)) {
-            final WidgetStrategy.Factory<? extends WidgetStrategy> factory = widgetStrategyFactories.get(typeName);
-            return factory.create(config, timeRange, widgetId);
-        }
+        final WidgetStrategy.Factory<? extends WidgetStrategy> factory = widgetStrategyFactories.get(typeName);
 
-        if (widgetStrategyFactories.containsKey(typeName.toUpperCase())) {
-            final WidgetStrategy.Factory<? extends WidgetStrategy> factory = widgetStrategyFactories.get(typeName.toUpperCase());
-            return factory.create(config, timeRange, widgetId);
+        if (factory == null) {
+            throw new IllegalArgumentException("Widget type <" + typeName + "> not found!");
         }
-
-        throw new IllegalArgumentException("Widget type <" + typeName + "> not found!");
+        return factory.create(config, timeRange, widgetId);
     }
 }
