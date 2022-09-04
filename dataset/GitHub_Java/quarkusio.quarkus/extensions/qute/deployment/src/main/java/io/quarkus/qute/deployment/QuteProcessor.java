@@ -39,7 +39,6 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
-import org.jboss.jandex.TypeVariable;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -170,7 +169,6 @@ public class QuteProcessor {
                 }
             };
         }).addLocator(new TemplateLocator() {
-
             @Override
             public Optional<TemplateLocation> locate(String id) {
                 TemplatePathBuildItem found = templatePaths.stream().filter(p -> p.getPath().equals(id)).findAny().orElse(null);
@@ -203,7 +201,8 @@ public class QuteProcessor {
                 analysis.add(new TemplateAnalysis(template.getGeneratedId(), template.getExpressions(), path));
             }
         }
-        LOGGER.debugf("Finished analysis of %s templates  in %s ms", analysis.size(), System.currentTimeMillis() - start);
+        LOGGER.debugf("Finished analysis of %s templates  in %s ms",
+                analysis.size(), System.currentTimeMillis() - start);
         return new TemplatesAnalysisBuildItem(analysis);
     }
 
@@ -264,7 +263,7 @@ public class QuteProcessor {
                                     name, match.clazz.toString(), expression.origin.getLine(),
                                     expression.origin.getTemplateId()));
                             break;
-                        } else if (parts.hasNext()) {
+                        } else {
                             match.type = resolveType(member, match, index);
                             if (match.type.kind() == org.jboss.jandex.Type.Kind.PRIMITIVE) {
                                 break;
@@ -407,7 +406,13 @@ public class QuteProcessor {
                                         expression.origin.getTemplateId()));
                                 break;
                             } else {
-                                match.type = resolveType(member, match, index);
+                                if (member.kind() == Kind.FIELD) {
+                                    match.type = member.asField().type();
+                                } else if (member.kind() == Kind.METHOD) {
+                                    match.type = member.asMethod().returnType();
+                                } else {
+                                    throw new IllegalStateException("Unsupported member type: " + member);
+                                }
                                 if (match.type.kind() == org.jboss.jandex.Type.Kind.PRIMITIVE) {
                                     break;
                                 }
@@ -537,11 +542,28 @@ public class QuteProcessor {
             BuildProducer<NativeImageResourceBuildItem> nativeImageResources)
             throws IOException {
         ApplicationArchive applicationArchive = applicationArchivesBuildItem.getRootArchive();
-        String basePath = "templates";
+        String basePath = "templates/";
         Path templatesPath = applicationArchive.getChildPath(basePath);
 
         if (templatesPath != null) {
-            scan(templatesPath, templatesPath, basePath + "/", watchedPaths, templatePaths, nativeImageResources);
+            scan(templatesPath, templatesPath, basePath, watchedPaths, templatePaths, nativeImageResources);
+        }
+
+        String tagBasePath = basePath + "tags/";
+        Path tagsPath = applicationArchive.getChildPath(tagBasePath);
+        if (tagsPath != null) {
+            try (Stream<Path> tagFiles = Files.list(tagsPath)) {
+                Iterator<Path> iter = tagFiles.filter(Files::isRegularFile)
+                        .iterator();
+                while (iter.hasNext()) {
+                    Path path = iter.next();
+                    String tagPath = path.getFileName().toString();
+                    LOGGER.debugf("Found tag: %s", path);
+                    produceTemplateBuildItems(templatePaths, watchedPaths, nativeImageResources, tagBasePath, tagPath, path,
+                            true);
+                }
+            }
+
         }
     }
 
@@ -644,9 +666,7 @@ public class QuteProcessor {
         List<String> tags = new ArrayList<>();
         for (TemplatePathBuildItem templatePath : templatePaths) {
             if (templatePath.isTag()) {
-                // tags/myTag.html -> myTag.html
-                String tagPath = templatePath.getPath();
-                tags.add(tagPath.substring(TemplatePathBuildItem.TAGS.length(), tagPath.length()));
+                tags.add(templatePath.getPath());
             } else {
                 templates.add(templatePath.getPath());
             }
@@ -675,15 +695,13 @@ public class QuteProcessor {
         } else {
             throw new IllegalStateException("Unsupported member type: " + member);
         }
-        // If needed attempt to resolve the type variables using the declaring type
-        if (Types.containsTypeVariable(matchType)) {
-            // First get the type closure of the current match type
+        if (matchType.kind() == org.jboss.jandex.Type.Kind.PARAMETERIZED_TYPE
+                || matchType.kind() == org.jboss.jandex.Type.Kind.TYPE_VARIABLE) {
             Set<Type> closure = Types.getTypeClosure(match.clazz, Types.buildResolvedMap(
-                    match.getParameterizedTypeArguments(), match.getTypeParameters(),
+                    match.type.asParameterizedType().arguments(), match.clazz.typeParameters(),
                     new HashMap<>(), index), index);
             DotName declaringClassName = member.kind() == Kind.METHOD ? member.asMethod().declaringClass().name()
                     : member.asField().declaringClass().name();
-            // Then find the declaring type with resolved type variables
             Type declaringType = closure.stream()
                     .filter(t -> t.name().equals(declaringClassName)).findAny()
                     .orElse(null);
@@ -710,7 +728,7 @@ public class QuteProcessor {
 
     void processLoopHint(Match match, IndexView index) {
         Set<Type> closure = Types.getTypeClosure(match.clazz, Types.buildResolvedMap(
-                match.getParameterizedTypeArguments(), match.getTypeParameters(), new HashMap<>(), index), index);
+                match.type.asParameterizedType().arguments(), match.clazz.typeParameters(), new HashMap<>(), index), index);
         Type matchType = null;
         Type iterableType = closure.stream().filter(t -> t.name().equals(ITERABLE)).findFirst().orElse(null);
         if (iterableType != null) {
@@ -744,15 +762,6 @@ public class QuteProcessor {
     static class Match {
         ClassInfo clazz;
         Type type;
-
-        List<Type> getParameterizedTypeArguments() {
-            return type.kind() == org.jboss.jandex.Type.Kind.PARAMETERIZED_TYPE ? type.asParameterizedType().arguments()
-                    : Collections.emptyList();
-        }
-
-        List<TypeVariable> getTypeParameters() {
-            return clazz.typeParameters();
-        }
     }
 
     private AnnotationTarget findTemplateExtensionMethod(String name, ClassInfo matchClass,
@@ -861,17 +870,16 @@ public class QuteProcessor {
     private static void produceTemplateBuildItems(BuildProducer<TemplatePathBuildItem> templatePaths,
             BuildProducer<HotDeploymentWatchedFileBuildItem> watchedPaths,
             BuildProducer<NativeImageResourceBuildItem> nativeImageResources, String basePath, String filePath,
-            Path originalPath) {
+            Path originalPath,
+            boolean tag) {
         if (filePath.isEmpty()) {
             return;
         }
         String fullPath = basePath + filePath;
-        LOGGER.debugf("Produce template build items [filePath: %s, fullPath: %s, originalPath: %s", filePath, fullPath,
-                originalPath);
         // NOTE: we cannot just drop the template because a template param can be added 
         watchedPaths.produce(new HotDeploymentWatchedFileBuildItem(fullPath, true));
         nativeImageResources.produce(new NativeImageResourceBuildItem(fullPath));
-        templatePaths.produce(new TemplatePathBuildItem(filePath, originalPath));
+        templatePaths.produce(new TemplatePathBuildItem(filePath, originalPath, tag));
     }
 
     private void scan(Path root, Path directory, String basePath, BuildProducer<HotDeploymentWatchedFileBuildItem> watchedPaths,
@@ -889,8 +897,9 @@ public class QuteProcessor {
                         templatePath = templatePath.replace(File.separatorChar, '/');
                     }
                     produceTemplateBuildItems(templatePaths, watchedPaths, nativeImageResources, basePath, templatePath,
-                            filePath);
-                } else if (Files.isDirectory(filePath)) {
+                            filePath,
+                            false);
+                } else if (Files.isDirectory(filePath) && !filePath.getFileName().toString().equals("tags")) {
                     LOGGER.debugf("Scan directory: %s", filePath);
                     scan(root, filePath, basePath, watchedPaths, templatePaths, nativeImageResources);
                 }
