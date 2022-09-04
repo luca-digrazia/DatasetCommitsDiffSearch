@@ -15,39 +15,38 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.fail;
 
-import com.google.common.base.VerifyException;
-import com.google.common.collect.ArrayListMultimap;
-import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Collections2;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimap;
-import com.google.common.collect.SetMultimap;
+import com.google.devtools.build.lib.analysis.AliasProvider;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.Dependency;
+import com.google.devtools.build.lib.analysis.DependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.config.CompilationMode;
+import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
-import com.google.devtools.build.lib.testutil.Suite;
-import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
+import com.google.devtools.build.skyframe.AbstractSkyKey;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-import java.util.Collection;
+import java.util.List;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -72,7 +71,6 @@ import org.junit.runners.JUnit4;
  * method needs a {@link SkyFunction.Environment} and Blaze's test infrastructure doesn't support
  * direct access to environments.
  */
-@TestSpec(size = Suite.SMALL_TESTS)
 @RunWith(JUnit4.class)
 public class ConfigurationsForTargetsTest extends AnalysisTestCase {
 
@@ -82,7 +80,7 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
    */
   private static class ComputeDependenciesFunction implements SkyFunction {
     static final SkyFunctionName SKYFUNCTION_NAME =
-         SkyFunctionName.create("CONFIGURED_TARGET_FUNCTION_COMPUTE_DEPENDENCIES");
+        SkyFunctionName.createHermetic("CONFIGURED_TARGET_FUNCTION_COMPUTE_DEPENDENCIES");
 
     private final LateBoundStateProvider stateProvider;
 
@@ -90,20 +88,27 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
       this.stateProvider = lateBoundStateProvider;
     }
 
-    /**
-     * Returns a {@link SkyKey} for a given <Target, BuildConfiguration> pair.
-     */
-    static SkyKey key(Target target, BuildConfiguration config) {
-      return SkyKey.create(SKYFUNCTION_NAME, new TargetAndConfiguration(target, config));
+    /** Returns a {@link SkyKey} for a given <Target, BuildConfiguration> pair. */
+    private static Key key(Target target, BuildConfiguration config) {
+      return new Key(new TargetAndConfiguration(target, config));
     }
 
-    /**
-     * Returns a {@link OrderedSetMultimap<Attribute, ConfiguredTarget>} map representing the
-     * deps of given target.
-     */
-    static class Value implements SkyValue {
-      OrderedSetMultimap<Attribute, ConfiguredTarget> depMap;
-      Value(OrderedSetMultimap<Attribute, ConfiguredTarget> depMap) {
+    private static class Key extends AbstractSkyKey<TargetAndConfiguration> {
+      private Key(TargetAndConfiguration arg) {
+        super(arg);
+      }
+
+      @Override
+      public SkyFunctionName functionName() {
+        return SKYFUNCTION_NAME;
+      }
+    }
+
+    /** Returns an {@link OrderedSetMultimap} representing the deps of given target. */
+    static final class Value implements SkyValue {
+      OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> depMap;
+
+      Value(OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> depMap) {
         this.depMap = depMap;
       }
     }
@@ -112,21 +117,29 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
     public SkyValue compute(SkyKey skyKey, Environment env)
         throws EvalException, InterruptedException {
       try {
-        OrderedSetMultimap<Attribute, ConfiguredTarget> depMap =
+        OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> depMap =
             ConfiguredTargetFunction.computeDependencies(
-                env, new SkyframeDependencyResolver(env),
-                (TargetAndConfiguration) skyKey.argument(), null,
-                ImmutableMap.<Label, ConfigMatchingProvider>of(),
-                stateProvider.lateBoundRuleClassProvider(), stateProvider.lateBoundHostConfig(),
-                NestedSetBuilder.stableOrder(), NestedSetBuilder.stableOrder());
+                env,
+                new SkyframeDependencyResolver(env),
+                (TargetAndConfiguration) skyKey.argument(),
+                ImmutableList.of(),
+                ImmutableMap.of(),
+                /*toolchainContexts=*/ null,
+                /*useToolchainTransition=*/ false,
+                stateProvider.lateBoundRuleClassProvider(),
+                stateProvider.lateBoundHostConfig(),
+                NestedSetBuilder.stableOrder(),
+                NestedSetBuilder.stableOrder());
         return env.valuesMissing() ? null : new Value(depMap);
+      } catch (RuntimeException e) {
+        throw e;
       } catch (Exception e) {
         throw new EvalException(e);
       }
     }
 
-    private static class EvalException extends SkyFunctionException {
-      public EvalException(Exception cause) {
+    private static final class EvalException extends SkyFunctionException {
+      EvalException(Exception cause) {
         super(cause, Transience.PERSISTENT); // We can generalize the transience if/when needed.
       }
     }
@@ -143,7 +156,7 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
    * the {@link AnalysisMock} instance that instantiates the function gets created before the rest
    * of the build state. See {@link AnalysisTestCase#createMocks} for details.
    */
-  private class LateBoundStateProvider {
+  private final class LateBoundStateProvider {
     RuleClassProvider lateBoundRuleClassProvider() {
       return ruleClassProvider;
     }
@@ -158,42 +171,40 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
    */
   private static final class AnalysisMockWithComputeDepsFunction extends AnalysisMock.Delegate {
     private final LateBoundStateProvider stateProvider;
+
     AnalysisMockWithComputeDepsFunction(LateBoundStateProvider stateProvider) {
       super(AnalysisMock.get());
       this.stateProvider = stateProvider;
     }
 
     @Override
-    public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions() {
+    public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(
+        BlazeDirectories directories) {
       return ImmutableMap.<SkyFunctionName, SkyFunction>builder()
-          .putAll(super.getSkyFunctions())
+          .putAll(super.getSkyFunctions(directories))
           .put(
               ComputeDependenciesFunction.SKYFUNCTION_NAME,
               new ComputeDependenciesFunction(stateProvider))
           .build();
     }
-  };
+  }
 
   @Override
   protected AnalysisMock getAnalysisMock() {
     return new AnalysisMockWithComputeDepsFunction(new LateBoundStateProvider());
   }
 
-  /**
-   * Returns the configured deps for a given target, assuming the target uses the target
-   * configuration.
-   */
-  private Multimap<Attribute, ConfiguredTarget> getConfiguredDeps(String targetLabel)
-      throws Exception {
-    update(targetLabel);
-    SkyKey key = ComputeDependenciesFunction.key(getTarget(targetLabel), getTargetConfiguration());
+  /** Returns the configured deps for a given target. */
+  private Multimap<DependencyKind, ConfiguredTargetAndData> getConfiguredDeps(
+      ConfiguredTarget target) throws Exception {
+    String targetLabel = AliasProvider.getDependencyLabel(target).toString();
+    SkyKey key = ComputeDependenciesFunction.key(getTarget(targetLabel), getConfiguration(target));
     // Must re-enable analysis for Skyframe functions that create configured targets.
     skyframeExecutor.getSkyframeBuildView().enableAnalysis(true);
-    Object evalResult = SkyframeExecutorTestUtils.evaluate(
-        skyframeExecutor, key, /*keepGoing=*/false, reporter);
+    EvaluationResult<ComputeDependenciesFunction.Value> evalResult =
+        SkyframeExecutorTestUtils.evaluate(skyframeExecutor, key, /*keepGoing=*/ false, reporter);
     skyframeExecutor.getSkyframeBuildView().enableAnalysis(false);
-    SkyValue value = ((EvaluationResult<ComputeDependenciesFunction.Value>) evalResult).get(key);
-    return ((ComputeDependenciesFunction.Value) value).depMap;
+    return evalResult.get(key).depMap;
   }
 
   /**
@@ -202,47 +213,31 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
    *
    * <p>Throws an exception if the attribute can't be found.
    */
-  private Collection<ConfiguredTarget> getConfiguredDeps(String targetLabel, String attrName)
+  protected List<ConfiguredTarget> getConfiguredDeps(String targetLabel, String attrName)
       throws Exception {
-    Multimap<Attribute, ConfiguredTarget> allDeps = getConfiguredDeps(targetLabel);
-    for (Attribute attribute : allDeps.keySet()) {
+    ConfiguredTarget target = Iterables.getOnlyElement(update(targetLabel).getTargetsToBuild());
+    return getConfiguredDeps(target, attrName);
+  }
+
+  /**
+   * Returns the configured deps for a given configured target under the given attribute.
+   *
+   * <p>Throws an exception if the attribute can't be found.
+   */
+  protected List<ConfiguredTarget> getConfiguredDeps(ConfiguredTarget target, String attrName)
+      throws Exception {
+    String targetLabel = AliasProvider.getDependencyLabel(target).toString();
+    Multimap<DependencyKind, ConfiguredTargetAndData> allDeps = getConfiguredDeps(target);
+    for (DependencyKind kind : allDeps.keySet()) {
+      Attribute attribute = kind.getAttribute();
       if (attribute.getName().equals(attrName)) {
-        return allDeps.get(attribute);
+        return ImmutableList.copyOf(
+            Collections2.transform(
+                allDeps.get(kind), ConfiguredTargetAndData::getConfiguredTarget));
       }
     }
     throw new AssertionError(
         String.format("Couldn't find attribute %s for label %s", attrName, targetLabel));
-  }
-
-  @Test
-  public void putOnlyEntryCorrectWithSetMultimap() throws Exception {
-    internalTestPutOnlyEntry(HashMultimap.create());
-  }
-
-  /**
-   * Unlike {@link SetMultimap}, {@link ListMultimap} allows duplicate <Key, value> pairs. Make
-   * sure that doesn't fool {@link ConfiguredTargetFunction#putOnlyEntry}.
-   */
-  @Test
-  public void putOnlyEntryCorrectWithListMultimap() throws Exception {
-    internalTestPutOnlyEntry(ArrayListMultimap.create());
-  }
-
-  private void internalTestPutOnlyEntry(Multimap<String, String> map) throws Exception {
-    ConfiguredTargetFunction.putOnlyEntry(map, "foo", "bar");
-    ConfiguredTargetFunction.putOnlyEntry(map, "baz", "bar");
-    try {
-      ConfiguredTargetFunction.putOnlyEntry(map, "foo", "baz");
-      fail("Expected an exception when trying to add a new value to an existing key");
-    } catch (VerifyException e) {
-      assertThat(e).hasMessage("couldn't insert baz: map already has key foo");
-    }
-    try {
-      ConfiguredTargetFunction.putOnlyEntry(map, "foo", "bar");
-      fail("Expected an exception when trying to add a pre-existing <key, value> pair");
-    } catch (VerifyException e) {
-      assertThat(e).hasMessage("couldn't insert bar: map already has key foo");
-    }
   }
 
   @Test
@@ -251,26 +246,129 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
         "a/BUILD",
         "genrule(name = 'gen', srcs = ['gen.in'], cmd = '', outs = ['gen.out'])");
     ConfiguredTarget genIn = Iterables.getOnlyElement(getConfiguredDeps("//a:gen", "srcs"));
-    assertThat(genIn.getConfiguration()).isNull();
+    assertThat(getConfiguration(genIn)).isNull();
   }
 
-  /** Runs the same test with trimmed dynamic configurations. */
-  @TestSpec(size = Suite.SMALL_TESTS)
-  @RunWith(JUnit4.class)
-  public static class WithDynamicConfigurations extends ConfigurationsForTargetsTest {
-    @Override
-    protected FlagBuilder defaultFlags() {
-      return super.defaultFlags().with(Flag.DYNAMIC_CONFIGURATIONS);
+  @Test
+  public void targetDeps() throws Exception {
+    scratch.file(
+        "a/BUILD",
+        "cc_library(name = 'dep1', srcs = ['dep1.cc'])",
+        "cc_library(name = 'dep2', srcs = ['dep2.cc'])",
+        "cc_binary(name = 'binary', srcs = ['main.cc'], deps = [':dep1', ':dep2'])");
+    List<ConfiguredTarget> deps = getConfiguredDeps("//a:binary", "deps");
+    assertThat(deps).hasSize(2);
+    BuildConfiguration topLevelConfiguration =
+        getConfiguration(Iterables.getOnlyElement(update("//a:binary").getTargetsToBuild()));
+    for (ConfiguredTarget dep : deps) {
+      assertThat(topLevelConfiguration.equalsOrIsSupersetOf(getConfiguration(dep))).isTrue();
     }
   }
 
-  /** Runs the same test with untrimmed dynamic configurations. */
-  @TestSpec(size = Suite.SMALL_TESTS)
-  @RunWith(JUnit4.class)
-  public static class WithDynamicConfigurationsNoTrim extends ConfigurationsForTargetsTest {
-    @Override
-    protected FlagBuilder defaultFlags() {
-      return super.defaultFlags().with(Flag.DYNAMIC_CONFIGURATIONS_NOTRIM);
-    }
+  @Test
+  public void hostDeps() throws Exception {
+    scratch.file(
+        "a/BUILD",
+        "cc_binary(name = 'host_tool', srcs = ['host_tool.cc'])",
+        "genrule(name = 'gen', srcs = [], cmd = '', outs = ['gen.out'], tools = [':host_tool'])");
+    ConfiguredTarget toolDep = Iterables.getOnlyElement(getConfiguredDeps("//a:gen", "tools"));
+    assertThat(getConfiguration(toolDep).isHostConfiguration()).isTrue();
+  }
+
+  @Test
+  public void splitDeps() throws Exception {
+    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
+    scratch.file(
+        "java/a/BUILD",
+        "cc_library(name = 'lib', srcs = ['lib.cc'])",
+        "android_binary(name='a', manifest = 'AndroidManifest.xml', deps = [':lib'])");
+    useConfiguration("--fat_apk_cpu=k8,armeabi-v7a");
+    List<ConfiguredTarget> deps = getConfiguredDeps("//java/a:a", "deps");
+    assertThat(deps).hasSize(2);
+    ConfiguredTarget dep1 = deps.get(0);
+    ConfiguredTarget dep2 = deps.get(1);
+    assertThat(ImmutableList.of(getConfiguration(dep1).getCpu(), getConfiguration(dep2).getCpu()))
+        .containsExactly("armeabi-v7a", "k8");
+    // We don't care what order split deps are listed, but it must be deterministic.
+    assertThat(
+            ConfigurationResolver.SPLIT_DEP_ORDERING.compare(
+                Dependency.builder()
+                    .setLabel(dep1.getLabel())
+                    .setConfiguration(getConfiguration(dep1))
+                    .build(),
+                Dependency.builder()
+                    .setLabel(dep2.getLabel())
+                    .setConfiguration(getConfiguration(dep2))
+                    .build()))
+        .isLessThan(0);
+  }
+
+  /**
+   * {@link ConfigurationResolver#resolveConfigurations} caches the transitions applied to deps. In
+   * other words, if a parent rule has 100 deps that all set { compilation_mode=dbg }, there's no
+   * need to compute that transition and request the resulting dep configuration from Skyframe 100
+   * times.
+   *
+   * <p>But we do need to make sure <bold>different</bold> transitions don't trigger false cache
+   * hits. This test checks a subtle version of that: if the same Starlark transition applies to two
+   * deps, but that transition reads their attributes and their attribute values are different, we
+   * need to make sure they're distinctly computed.
+   */
+  @Test
+  public void sameTransitionDifferentParameters() throws Exception {
+    scratch.overwriteFile(
+        "tools/allowlists/function_transition_allowlist/BUILD",
+        "package_group(",
+        "    name = 'function_transition_allowlist',",
+        "    packages = [",
+        "        '//a/...',",
+        "    ],",
+        ")");
+    scratch.file(
+        "a/defs.bzl",
+        "def _transition_impl(settings, attr):",
+        "    return {'//command_line_option:compilation_mode': attr.myattr}",
+        "my_transition = transition(",
+        "    implementation = _transition_impl,",
+        "    inputs = [],",
+        "    outputs = ['//command_line_option:compilation_mode'])",
+        "def _parent_rule_impl(ctx):",
+        "    pass",
+        "parent_rule = rule(",
+        "    implementation = _parent_rule_impl,",
+        "    attrs = {",
+        "        'dep1': attr.label(),",
+        "        'dep2': attr.label(),",
+        "    })",
+        "def _child_rule_impl(ctx):",
+        "    pass",
+        "child_rule = rule(",
+        "    implementation = _child_rule_impl,",
+        "    cfg = my_transition,",
+        "    attrs = {",
+        "        'myattr': attr.string(),",
+        "        '_allowlist_function_transition': attr.label(",
+        "            default = '//tools/allowlists/function_transition_allowlist')",
+        "    }",
+        ")");
+    scratch.file(
+        "a/BUILD",
+        "load('//a:defs.bzl', 'parent_rule', 'child_rule')",
+        "child_rule(",
+        "    name = 'child1',",
+        "    myattr = 'dbg')", // For this dep, my_transition reads myattr="dbg".
+        "child_rule(",
+        "    name = 'child2',",
+        "    myattr = 'opt')", // For this dep, my_transition reads myattr="opt".
+        "parent_rule(",
+        "    name = 'buildme',",
+        "    dep1 = ':child1',",
+        "    dep2 = ':child2')");
+
+    ConfiguredTarget child1 = Iterables.getOnlyElement(getConfiguredDeps("//a:buildme", "dep1"));
+    ConfiguredTarget child2 = Iterables.getOnlyElement(getConfiguredDeps("//a:buildme", "dep2"));
+    // Check that each dep ends up with a distinct compilation_mode value.
+    assertThat(getConfiguration(child1).getCompilationMode()).isEqualTo(CompilationMode.DBG);
+    assertThat(getConfiguration(child2).getCompilationMode()).isEqualTo(CompilationMode.OPT);
   }
 }
