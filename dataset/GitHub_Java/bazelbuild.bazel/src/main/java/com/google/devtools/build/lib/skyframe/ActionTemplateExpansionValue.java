@@ -13,39 +13,47 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.analysis.actions.ActionTemplate;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.skyframe.ActionLookupValue.ActionLookupKey;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 
 /**
  * Value that stores expanded actions from ActionTemplate.
  */
 public final class ActionTemplateExpansionValue extends ActionLookupValue {
-  ActionTemplateExpansionValue(
-      ActionKeyContext actionKeyContext,
-      Iterable<Action> expandedActions,
-      boolean removeActionsAfterEvaluation) {
-    super(actionKeyContext, ImmutableList.copyOf(expandedActions), removeActionsAfterEvaluation);
+  private final Iterable<Action> expandedActions;
+
+  ActionTemplateExpansionValue(Iterable<Action> expandedActions) {
+    super(ImmutableList.<ActionAnalysisMetadata>copyOf(expandedActions));
+    this.expandedActions = ImmutableList.copyOf(expandedActions);
   }
 
-  private static final Interner<ActionTemplateExpansionKey> interner =
-      BlazeInterners.newWeakInterner();
-
-  static ActionTemplateExpansionKey key(ActionTemplate<?> actionTemplate) {
-    return interner.intern(new ActionTemplateExpansionKey(actionTemplate));
+  Iterable<Action> getExpandedActions() {
+    return expandedActions;
   }
+
+  static SkyKey key(ActionTemplate<?> actionTemplate) {
+    return SkyKey.create(
+        SkyFunctions.ACTION_TEMPLATE_EXPANSION,
+        createActionTemplateExpansionKey(actionTemplate));
+  }
+
+  static ActionTemplateExpansionKey createActionTemplateExpansionKey(
+      ActionTemplate<?> actionTemplate) {
+    return new ActionTemplateExpansionKey(actionTemplate);
+  }
+
 
   static final class ActionTemplateExpansionKey extends ActionLookupKey {
     private final ActionTemplate<?> actionTemplate;
 
-    private ActionTemplateExpansionKey(ActionTemplate<?> actionTemplate) {
+    ActionTemplateExpansionKey(ActionTemplate<?> actionTemplate) {
       Preconditions.checkNotNull(
           actionTemplate,
           "Passed in action template cannot be null: %s",
@@ -54,9 +62,10 @@ public final class ActionTemplateExpansionValue extends ActionLookupValue {
     }
 
     @Override
-    public SkyFunctionName functionName() {
+    SkyFunctionName getType() {
       return SkyFunctions.ACTION_TEMPLATE_EXPANSION;
     }
+
 
     @Override
     public Label getLabel() {

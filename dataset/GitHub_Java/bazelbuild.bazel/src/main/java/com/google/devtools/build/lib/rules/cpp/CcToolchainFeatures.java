@@ -480,20 +480,7 @@ public class CcToolchainFeatures implements Serializable {
       expand(variables, commandLine);
     }
   }
-
-  private static boolean isWithFeaturesSatisfied(
-      Set<CToolchain.FeatureSet> withFeatureSets, Set<String> enabledFeatureNames) {
-    if (withFeatureSets.isEmpty()) {
-      return true;
-    }
-    for (CToolchain.FeatureSet featureSet : withFeatureSets) {
-      if (enabledFeatureNames.containsAll(featureSet.getFeatureList())) {
-        return true;
-      }
-    }
-    return false;
-  }
-
+  
   /**
    * Groups a set of flags to apply for certain actions.
    */
@@ -501,7 +488,6 @@ public class CcToolchainFeatures implements Serializable {
   private static class FlagSet implements Serializable {
     private final ImmutableSet<String> actions;
     private final ImmutableSet<String> expandIfAllAvailable;
-    private final ImmutableSet<CToolchain.FeatureSet> withFeatureSets;
     private final ImmutableList<FlagGroup> flagGroups;
     
     private FlagSet(CToolchain.FlagSet flagSet) throws InvalidConfigurationException {
@@ -515,7 +501,6 @@ public class CcToolchainFeatures implements Serializable {
         throws InvalidConfigurationException {
       this.actions = actions;
       this.expandIfAllAvailable = ImmutableSet.copyOf(flagSet.getExpandIfAllAvailableList());
-      this.withFeatureSets = ImmutableSet.copyOf(flagSet.getWithFeatureList());
       ImmutableList.Builder<FlagGroup> builder = ImmutableList.builder();
       for (CToolchain.FlagGroup flagGroup : flagSet.getFlagGroupList()) {
         builder.add(new FlagGroup(flagGroup));
@@ -523,19 +508,14 @@ public class CcToolchainFeatures implements Serializable {
       this.flagGroups = builder.build();
     }
 
-    /** Adds the flags that apply to the given {@code action} to {@code commandLine}. */
-    private void expandCommandLine(
-        String action,
-        Variables variables,
-        Set<String> enabledFeatureNames,
-        List<String> commandLine) {
+    /**
+     * Adds the flags that apply to the given {@code action} to {@code commandLine}.
+     */
+    private void expandCommandLine(String action, Variables variables, List<String> commandLine) {
       for (String variable : expandIfAllAvailable) {
         if (!variables.isAvailable(variable)) {
           return;
         }
-      }
-      if (!isWithFeaturesSatisfied(withFeatureSets, enabledFeatureNames)) {
-        return;
       }
       if (!actions.contains(action)) {
         return;
@@ -631,14 +611,13 @@ public class CcToolchainFeatures implements Serializable {
       }
     }
 
-    /** Adds the flags that apply to the given {@code action} to {@code commandLine}. */
-    private void expandCommandLine(
-        String action,
-        Variables variables,
-        Set<String> enabledFeatureNames,
+    /**
+     * Adds the flags that apply to the given {@code action} to {@code commandLine}.
+     */
+    private void expandCommandLine(String action, Variables variables,
         List<String> commandLine) {
       for (FlagSet flagSet : flagSets) {
-        flagSet.expandCommandLine(action, variables, enabledFeatureNames, commandLine);
+        flagSet.expandCommandLine(action, variables, commandLine);
       }
     }
   }
@@ -769,11 +748,12 @@ public class CcToolchainFeatures implements Serializable {
       }
     }
 
-    /** Adds the flags that apply to this action to {@code commandLine}. */
-    private void expandCommandLine(
-        Variables variables, Set<String> enabledFeatureNames, List<String> commandLine) {
+    /**
+     * Adds the flags that apply to this action to {@code commandLine}.
+     */
+    private void expandCommandLine(Variables variables, List<String> commandLine) {
       for (FlagSet flagSet : flagSets) {
-        flagSet.expandCommandLine(actionName, variables, enabledFeatureNames, commandLine);
+        flagSet.expandCommandLine(actionName, variables, commandLine);
       }
     }
   }
@@ -1092,7 +1072,19 @@ public class CcToolchainFeatures implements Serializable {
           return new StringValue(type.name);
         } else if (IS_WHOLE_ARCHIVE_FIELD_NAME.equals(field)) {
           return new IntegerValue(isWholeArchive ? 1 : 0);
+        } else if ("whole_archive_presence".equals(field)) {
+          // TODO(b/33403458): Cleanup this workaround once bazel >=0.4.3 is released.
+          return isWholeArchive ? new IntegerValue(0) : null;
+        } else if ("no_whole_archive_presence".equals(field)) {
+          // TODO(b/33403458): Cleanup this workaround once bazel >=0.4.3 is released.
+          return !isWholeArchive ? new IntegerValue(0) : null;
         } else {
+          // TODO(b/33403458): Cleanup this workaround once bazel >=0.4.3 is released.
+          for (Type t : Type.values()) {
+            if ((t.name + "_presence").equals(field)) {
+              return type.equals(t) ? new IntegerValue(0) : null;
+            }
+          }
           return null;
         }
       }
@@ -1760,13 +1752,11 @@ public class CcToolchainFeatures implements Serializable {
     List<String> getCommandLine(String action, Variables variables) {
       List<String> commandLine = new ArrayList<>();
       for (Feature feature : enabledFeatures) {
-        feature.expandCommandLine(action, variables, enabledFeatureNames, commandLine);
+        feature.expandCommandLine(action, variables, commandLine);
       }
       
       if (actionIsConfigured(action)) {
-        actionConfigByActionName
-            .get(action)
-            .expandCommandLine(variables, enabledFeatureNames, commandLine);
+        actionConfigByActionName.get(action).expandCommandLine(variables, commandLine);
       }
 
       return commandLine;
@@ -2072,7 +2062,7 @@ public class CcToolchainFeatures implements Serializable {
    */
   String getArtifactNameForCategory(ArtifactCategory artifactCategory, String outputName)
       throws ExpansionException {
-    PathFragment output = PathFragment.create(outputName);
+    PathFragment output = new PathFragment(outputName);
 
     ArtifactNamePattern patternForCategory = null;
     for (ArtifactNamePattern artifactNamePattern : artifactNamePatterns) {

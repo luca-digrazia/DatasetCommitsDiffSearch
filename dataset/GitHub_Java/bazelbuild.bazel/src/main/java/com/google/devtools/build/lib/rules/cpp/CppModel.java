@@ -87,15 +87,13 @@ public final class CppModel {
   private Artifact soImplArtifact;
   private FeatureConfiguration featureConfiguration;
   private List<VariablesExtension> variablesExtensions = new ArrayList<>();
-  private final CcToolchainProvider ccToolchain;
-  private final FdoSupportProvider fdoSupport;
+  private CcToolchainProvider ccToolchain;
 
   public CppModel(RuleContext ruleContext, CppSemantics semantics,
-      CcToolchainProvider ccToolchain, FdoSupportProvider fdoSupport) {
+      CcToolchainProvider ccToolchain) {
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.semantics = semantics;
     this.ccToolchain = Preconditions.checkNotNull(ccToolchain);
-    this.fdoSupport = Preconditions.checkNotNull(fdoSupport);
     configuration = ruleContext.getConfiguration();
     cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
   }
@@ -417,15 +415,14 @@ public final class CppModel {
     }
 
     if (featureConfiguration.isEnabled(CppRuleClasses.PREPROCESSOR_DEFINES)) {
-      String fdoBuildStamp = CppHelper.getFdoBuildStamp(ruleContext, fdoSupport.getFdoSupport());
+      String fdoBuildStamp = CppHelper.getFdoBuildStamp(ruleContext);
       ImmutableList<String> defines;
       if (fdoBuildStamp != null) {
         // Stamp FDO builds with FDO subtype string
         defines = ImmutableList.<String>builder()
             .addAll(builderContext.getDefines())
             .add(CppConfiguration.FDO_STAMP_MACRO
-                + "=\"" + CppHelper.getFdoBuildStamp(
-                    ruleContext, fdoSupport.getFdoSupport()) + "\"")
+                + "=\"" + CppHelper.getFdoBuildStamp(ruleContext) + "\"")
             .build();
       } else {
         defines = builderContext.getDefines();
@@ -442,9 +439,8 @@ public final class CppModel {
     }
 
     if (ccRelativeName != null) {
-      fdoSupport.getFdoSupport().configureCompilation(
-          builder, buildVariables, ruleContext, ccRelativeName, autoFdoImportPath, usePic,
-          featureConfiguration, fdoSupport);
+      CppHelper.getFdoSupport(ruleContext).configureCompilation(builder, buildVariables,
+          ruleContext, ccRelativeName, autoFdoImportPath, usePic, featureConfiguration);
     }
     if (gcnoFile != null) {
       buildVariables.addStringVariable("gcov_gcno_file", gcnoFile.getExecPathString());
@@ -1065,7 +1061,6 @@ public final class CppModel {
             ruleContext,
             featureConfiguration,
             ccToolchain,
-            fdoSupport,
             usePicForSharedLibs,
             // If support is ever added for generating a dwp file for shared
             // library targets (e.g. when linkstatic=0), then this should change
@@ -1113,8 +1108,7 @@ public final class CppModel {
   }
 
   private CppLinkActionBuilder newLinkActionBuilder(Artifact outputArtifact) {
-    return new CppLinkActionBuilder(
-            ruleContext, outputArtifact, ccToolchain, fdoSupport.getFdoSupport())
+    return new CppLinkActionBuilder(ruleContext, outputArtifact, ccToolchain)
         .setCrosstoolInputs(ccToolchain.getLink())
         .addNonCodeInputs(context.getTransitiveCompilationPrerequisites());
   }

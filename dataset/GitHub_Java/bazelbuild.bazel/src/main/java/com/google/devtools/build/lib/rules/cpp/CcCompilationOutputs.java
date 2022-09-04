@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -42,10 +41,9 @@ public class CcCompilationOutputs {
   private final ImmutableList<Artifact> picObjectFiles;
 
   /**
-   * Maps all .o bitcode files coming from a ThinLTO C(++) compilation under our control to the
-   * corresponding minimized bitcode files that can be used for the LTO indexing step.
+   * All .o files coming from a C(++) compilation under our control.
    */
-  private final ImmutableMap<Artifact, Artifact> ltoBitcodeFiles;
+  private final ImmutableList<Artifact> ltoBitcodeFiles;
 
   /**
    * All .dwo files built by the target, corresponding to .o outputs.
@@ -72,7 +70,8 @@ public class CcCompilationOutputs {
   private CcCompilationOutputs(
       ImmutableList<Artifact> objectFiles,
       ImmutableList<Artifact> picObjectFiles,
-      ImmutableMap<Artifact, Artifact> ltoBitcodeFiles,
+      ImmutableList<Artifact> ltoBitcodeFiles,
+
       ImmutableList<Artifact> dwoFiles,
       ImmutableList<Artifact> picDwoFiles,
       NestedSet<Artifact> temps,
@@ -104,8 +103,10 @@ public class CcCompilationOutputs {
     return usePic ? picObjectFiles : objectFiles;
   }
 
-  /** Returns unmodifiable map of bitcode object files resulting from compilation. */
-  public ImmutableMap<Artifact, Artifact> getLtoBitcodeFiles() {
+  /**
+   * Returns unmodifiable view of object files resulting from compilation.
+   */
+  public ImmutableList<Artifact> getLtoBitcodeFiles() {
     return ltoBitcodeFiles;
   }
 
@@ -165,7 +166,7 @@ public class CcCompilationOutputs {
   public static final class Builder {
     private final Set<Artifact> objectFiles = new LinkedHashSet<>();
     private final Set<Artifact> picObjectFiles = new LinkedHashSet<>();
-    private final ImmutableMap.Builder<Artifact, Artifact> ltoBitcodeFiles = ImmutableMap.builder();
+    private final Set<Artifact> ltoBitcodeFiles = new LinkedHashSet<>();
     private final Set<Artifact> dwoFiles = new LinkedHashSet<>();
     private final Set<Artifact> picDwoFiles = new LinkedHashSet<>();
     private final NestedSetBuilder<Artifact> temps = NestedSetBuilder.stableOrder();
@@ -176,7 +177,7 @@ public class CcCompilationOutputs {
       return new CcCompilationOutputs(
           ImmutableList.copyOf(objectFiles),
           ImmutableList.copyOf(picObjectFiles),
-          ltoBitcodeFiles.build(),
+          ImmutableList.copyOf(ltoBitcodeFiles),
           ImmutableList.copyOf(dwoFiles),
           ImmutableList.copyOf(picDwoFiles),
           temps.build(),
@@ -223,13 +224,13 @@ public class CcCompilationOutputs {
       return this;
     }
 
-    public Builder addLTOBitcodeFile(Artifact fullBitcode, Artifact ltoIndexingBitcode) {
-      ltoBitcodeFiles.put(fullBitcode, ltoIndexingBitcode);
+    public Builder addLTOBitcodeFile(Artifact a) {
+      ltoBitcodeFiles.add(a);
       return this;
     }
 
-    public Builder addLTOBitcodeFile(ImmutableMap<Artifact, Artifact> artifacts) {
-      ltoBitcodeFiles.putAll(artifacts);
+    public Builder addLTOBitcodeFile(Iterable<Artifact> artifacts) {
+      Iterables.addAll(ltoBitcodeFiles, artifacts);
       return this;
     }
 

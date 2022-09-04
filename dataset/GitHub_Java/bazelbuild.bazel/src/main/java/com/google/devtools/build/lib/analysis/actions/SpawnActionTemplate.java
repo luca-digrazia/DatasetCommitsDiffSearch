@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.actions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -181,12 +180,6 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
   @Override
   public Iterable<Artifact> getMandatoryInputs() {
     return getInputs();
-  }
-
-  @Override
-  public Iterable<Artifact> getInputFilesForExtraAction(
-      ActionExecutionContext actionExecutionContext) {
-    return ImmutableList.of();
   }
 
   @Override

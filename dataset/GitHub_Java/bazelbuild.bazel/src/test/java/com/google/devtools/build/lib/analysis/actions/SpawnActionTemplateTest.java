@@ -92,7 +92,7 @@ public class SpawnActionTemplateTest {
     Artifact outputTreeArtifact = createOutputTreeArtifact();
     SpawnActionTemplate.Builder builder = builder(inputTreeArtifact, outputTreeArtifact)
         .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
-        .setExecutable(PathFragment.create("/bin/cp"))
+        .setExecutable(new PathFragment("/bin/cp"))
         .setCommandLineTemplate(
             createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
         .setMnemonics("ActionTemplate", "ExpandedAction");
@@ -127,7 +127,7 @@ public class SpawnActionTemplateTest {
     SpawnActionTemplate.Builder builder = builder(inputTreeArtifact, outputTreeArtifact)
         .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
         .setOutputPathMapper(IDENTITY_MAPPER)
-        .setExecutable(PathFragment.create("/bin/cp"))
+        .setExecutable(new PathFragment("/bin/cp"))
         .setMnemonics("ActionTemplate", "ExpandedAction");
 
     try {
@@ -155,10 +155,10 @@ public class SpawnActionTemplateTest {
       String baseName = String.format("child%d", i);
       assertThat(expandedActions.get(i).getInputs()).containsExactly(
           ActionInputHelper.treeFileArtifact(
-              inputTreeArtifact, PathFragment.create("children/" + baseName)));
+              inputTreeArtifact, new PathFragment("children/" + baseName)));
       assertThat(expandedActions.get(i).getOutputs()).containsExactly(
           ActionInputHelper.treeFileArtifact(
-              outputTreeArtifact, PathFragment.create("children/" + baseName)));
+              outputTreeArtifact, new PathFragment("children/" + baseName)));
     }
   }
 
@@ -247,14 +247,14 @@ public class SpawnActionTemplateTest {
         createInputTreeFileArtifacts(inputTreeArtifact);
 
     SpawnActionTemplate.Builder builder = builder(inputTreeArtifact, outputTreeArtifact)
-        .setExecutable(PathFragment.create("/bin/cp"))
+        .setExecutable(new PathFragment("/bin/cp"))
         .setCommandLineTemplate(
             createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact));
 
     OutputPathMapper mapper = new OutputPathMapper() {
       @Override
       public PathFragment parentRelativeOutputPath(TreeFileArtifact inputTreeFileArtifact) {
-        return PathFragment.create("//absolute/" + inputTreeFileArtifact.getParentRelativePath());
+        return new PathFragment("//absolute/" + inputTreeFileArtifact.getParentRelativePath());
       }
     };
 
@@ -272,7 +272,7 @@ public class SpawnActionTemplateTest {
     mapper = new OutputPathMapper() {
       @Override
       public PathFragment parentRelativeOutputPath(TreeFileArtifact inputTreeFileArtifact) {
-        return PathFragment.create("../" + inputTreeFileArtifact.getParentRelativePath());
+        return new PathFragment("../" + inputTreeFileArtifact.getParentRelativePath());
       }
     };
 
@@ -300,7 +300,7 @@ public class SpawnActionTemplateTest {
     return builder(inputTreeArtifact, outputTreeArtifact)
         .setExecutionInfo(ImmutableMap.<String, String>of("local", ""))
         .setEnvironment(ImmutableMap.<String, String>of("env", "value"))
-        .setExecutable(PathFragment.create("/bin/cp"))
+        .setExecutable(new PathFragment("/bin/cp"))
         .setCommandLineTemplate(
             createSimpleCommandLineTemplate(inputTreeArtifact, outputTreeArtifact))
         .setOutputPathMapper(IDENTITY_MAPPER)
@@ -317,7 +317,7 @@ public class SpawnActionTemplateTest {
   }
 
   private Artifact createTreeArtifact(String rootRelativePath) {
-    PathFragment relpath = PathFragment.create(rootRelativePath);
+    PathFragment relpath = new PathFragment(rootRelativePath);
     return new SpecialArtifact(
         root.getPath().getRelative(relpath),
         root,
@@ -327,7 +327,7 @@ public class SpawnActionTemplateTest {
   }
 
   private Artifact createDerivedArtifact(String rootRelativePath) {
-    return new Artifact(PathFragment.create(rootRelativePath), root);
+    return new Artifact(new PathFragment(rootRelativePath), root);
   }
 
   private CustomCommandLine createSimpleCommandLineTemplate(
@@ -342,8 +342,8 @@ public class SpawnActionTemplateTest {
     return ActionInputHelper.asTreeFileArtifacts(
         inputTreeArtifact,
         ImmutableList.of(
-            PathFragment.create("children/child0"),
-            PathFragment.create("children/child1"),
-            PathFragment.create("children/child2")));
+            new PathFragment("children/child0"),
+            new PathFragment("children/child1"),
+            new PathFragment("children/child2")));
   }
 }
