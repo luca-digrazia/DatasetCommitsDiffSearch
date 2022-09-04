@@ -4,6 +4,7 @@ import java.security.Security;
 
 import org.wildfly.security.password.WildFlyElytronPasswordProvider;
 
+import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
 
 /**
@@ -12,13 +13,14 @@ import io.quarkus.runtime.annotations.Recorder;
 @Recorder
 public class ElytronCommonRecorder {
 
-    public void registerPasswordProvider() {
-        //we don't remove this, as there is no correct place where it can be removed
-        //as continuous testing can be running along side the dev mode app, but there is
-        //only ever one provider
+    public void registerPasswordProvider(ShutdownContext shutdownContext) {
         WildFlyElytronPasswordProvider provider = new WildFlyElytronPasswordProvider();
-        if (Security.getProvider(provider.getName()) == null) {
-            Security.addProvider(provider);
-        }
+        Security.addProvider(provider);
+        shutdownContext.addShutdownTask(new Runnable() {
+            @Override
+            public void run() {
+                Security.removeProvider(provider.getName());
+            }
+        });
     }
 }
