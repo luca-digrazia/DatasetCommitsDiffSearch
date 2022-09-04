@@ -13,9 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.base.Predicates;
-import com.google.common.collect.Maps;
-import java.util.Collections;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -43,30 +40,10 @@ public interface InMemoryGraph extends ProcessableGraph {
    * Returns a read-only live view of the done values in the graph. Dirty, changed, and error values
    * are not present in the returned map
    */
-  default Map<SkyKey, SkyValue> getDoneValues() {
-    return transformDoneEntries(getAllValuesMutable());
-  }
+  Map<SkyKey, SkyValue> getDoneValues();
 
   // Only for use by MemoizingEvaluator#delete
   Map<SkyKey, ? extends NodeEntry> getAllValues();
 
   Map<SkyKey, ? extends NodeEntry> getAllValuesMutable();
-
-  static Map<SkyKey, SkyValue> transformDoneEntries(Map<SkyKey, ? extends NodeEntry> nodeMap) {
-    return Collections.unmodifiableMap(
-        Maps.filterValues(
-            Maps.transformValues(
-                nodeMap,
-                entry -> {
-                  if (!entry.isDone()) {
-                    return null;
-                  }
-                  try {
-                    return entry.getValue();
-                  } catch (InterruptedException e) {
-                    throw new IllegalStateException("Interrupted getting " + entry, e);
-                  }
-                }),
-            Predicates.notNull()));
-  }
 }

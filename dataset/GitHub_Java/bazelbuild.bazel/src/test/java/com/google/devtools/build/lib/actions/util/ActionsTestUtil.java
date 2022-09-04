@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionInputPrefetcher;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
@@ -103,7 +102,6 @@ public final class ActionsTestUtil {
     return new ActionExecutionContext(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
-        ActionInputPrefetcher.NONE,
         metadataHandler,
         fileOutErr,
         ImmutableMap.<String, String>copyOf(clientEnv),
@@ -118,7 +116,6 @@ public final class ActionsTestUtil {
     return ActionExecutionContext.forInputDiscovery(
         executor,
         new SingleBuildFileCache(execRoot.getPathString(), execRoot.getFileSystem()),
-        ActionInputPrefetcher.NONE,
         metadataHandler,
         fileOutErr,
         ImmutableMap.<String, String>of(),
@@ -129,8 +126,8 @@ public final class ActionsTestUtil {
   public static ActionExecutionContext createContext(EventHandler eventHandler) {
     DummyExecutor dummyExecutor = new DummyExecutor(eventHandler);
     return new ActionExecutionContext(
-        dummyExecutor, null, ActionInputPrefetcher.NONE, null, null,
-        ImmutableMap.<String, String>of(), createDummyArtifactExpander());
+        dummyExecutor, null, null, null, ImmutableMap.<String, String>of(),
+        createDummyArtifactExpander());
   }
 
   private static ArtifactExpander createDummyArtifactExpander() {

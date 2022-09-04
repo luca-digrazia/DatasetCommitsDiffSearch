@@ -205,19 +205,11 @@ public final class InMemoryMemoizingEvaluator implements MemoizingEvaluator {
       if (prevEntry != null && prevEntry.isDone()) {
         try {
           Iterable<SkyKey> directDeps = prevEntry.getDirectDeps();
-          if (Iterables.isEmpty(directDeps)) {
-            if (newValue.equals(prevEntry.getValue())
-                && !valuesToDirty.contains(key)
-                && !valuesToDelete.contains(key)) {
-              it.remove();
-            }
-          } else {
-            // Rare situation of an injected dep that depends on another node. Usually the dep is
-            // the error transience node. When working with external repositories, it can also be an
-            // external workspace file. Don't bother injecting it, just invalidate it.
-            // We'll wastefully evaluate the node freshly during evaluation, but this happens very
-            // rarely.
-            valuesToDirty.add(key);
+          Preconditions.checkState(
+              Iterables.isEmpty(directDeps), "existing entry for %s has deps: %s", key, directDeps);
+          if (newValue.equals(prevEntry.getValue())
+              && !valuesToDirty.contains(key)
+              && !valuesToDelete.contains(key)) {
             it.remove();
           }
         } catch (InterruptedException e) {

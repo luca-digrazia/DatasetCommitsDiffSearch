@@ -59,6 +59,11 @@ class NotifyingInMemoryGraph extends NotifyingHelper.NotifyingProcessableGraph
   }
 
   @Override
+  public Map<SkyKey, SkyValue> getDoneValues() {
+    return ((InMemoryGraph) delegate).getDoneValues();
+  }
+
+  @Override
   public Map<SkyKey, ? extends NodeEntry> getAllValues() {
     return ((InMemoryGraph) delegate).getAllValues();
   }

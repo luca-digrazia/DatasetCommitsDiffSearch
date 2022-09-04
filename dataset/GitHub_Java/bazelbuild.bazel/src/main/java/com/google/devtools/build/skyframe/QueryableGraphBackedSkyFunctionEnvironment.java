@@ -13,10 +13,10 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.QueryableGraph.Reason;
 import java.util.Map;
 
@@ -38,12 +38,12 @@ public class QueryableGraphBackedSkyFunctionEnvironment extends AbstractSkyFunct
   private static ValueOrUntypedException toUntypedValue(NodeEntry nodeEntry)
       throws InterruptedException {
     if (nodeEntry == null || !nodeEntry.isDone()) {
-      return ValueOrUntypedException.ofNull();
+      return ValueOrExceptionUtils.ofNull();
     }
     SkyValue maybeWrappedValue = nodeEntry.getValueMaybeWithMetadata();
     SkyValue justValue = ValueWithMetadata.justValue(maybeWrappedValue);
     if (justValue != null) {
-      return ValueOrUntypedException.ofValueUntyped(justValue);
+      return ValueOrExceptionUtils.ofValueUntyped(justValue);
     }
     ErrorInfo errorInfo =
         Preconditions.checkNotNull(ValueWithMetadata.getMaybeErrorInfo(maybeWrappedValue));
@@ -51,12 +51,12 @@ public class QueryableGraphBackedSkyFunctionEnvironment extends AbstractSkyFunct
 
     if (exception != null) {
       // Give SkyFunction#compute a chance to handle this exception.
-      return ValueOrUntypedException.ofExn(exception);
+      return ValueOrExceptionUtils.ofExn(exception);
     }
     // In a cycle.
     Preconditions.checkState(
         !Iterables.isEmpty(errorInfo.getCycleInfo()), "%s %s", errorInfo, maybeWrappedValue);
-    return ValueOrUntypedException.ofNull();
+    return ValueOrExceptionUtils.ofNull();
   }
 
   @Override
