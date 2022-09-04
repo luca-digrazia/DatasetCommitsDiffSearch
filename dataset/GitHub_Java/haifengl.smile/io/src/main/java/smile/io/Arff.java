@@ -313,7 +313,7 @@ public class Arff implements AutoCloseable {
             }
 
             NominalScale scale = new NominalScale(attributeValues);
-            attribute = new StructField(name, scale.type(), scale);
+            attribute = new StructField(name, scale.type(), Optional.of(scale));
         }
 
         getLastToken(false);
@@ -485,8 +485,9 @@ public class Arff implements AutoCloseable {
         else if (field.type.isString()) writer.println(" STRING");
         else if (field.type.id() == DataType.ID.DateTime) writer.println(" DATE \"yyyy-MM-dd HH:mm:ss\"");
         else if (field.type.isIntegral()) {
-            if (field.measure instanceof NominalScale) {
-                NominalScale scale = (NominalScale) field.measure;
+            Optional<Measure> measure = field.measure;
+            if (measure.isPresent() && measure.get() instanceof NominalScale) {
+                NominalScale scale = (NominalScale) measure.get();
                 String levels = Arrays.stream(scale.levels()).collect(Collectors.joining(",", " {", "}"));
                 writer.println(levels);
             } else {

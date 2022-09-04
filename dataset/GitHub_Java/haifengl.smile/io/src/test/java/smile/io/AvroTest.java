@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.io;
 
@@ -22,11 +22,16 @@ import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
+import org.apache.avro.Schema;
 import smile.data.DataFrame;
 import smile.data.type.DataTypes;
 import smile.data.type.StructField;
-import smile.math.matrix.Matrix;
+import smile.math.matrix.DenseMatrix;
 import smile.util.Paths;
+
+import java.io.InputStream;
+import java.nio.file.Files;
+
 import static org.junit.Assert.*;
 
 /**
@@ -39,7 +44,9 @@ public class AvroTest {
 
     public AvroTest() {
         try {
-            Avro avro = new Avro(Paths.getTestData("avro/userdata.avsc"));
+            InputStream stream = Files.newInputStream(Paths.getTestData("avro/userdata.avsc"));
+            Schema schema = new Schema.Parser().parse(stream);
+            Avro avro = new Avro(schema);
             df = avro.read(Paths.getTestData("avro/userdata1.avro"));
         } catch (Exception ex) {
             ex.printStackTrace();
@@ -167,7 +174,7 @@ public class AvroTest {
     @Test
     public void testDataFrameToMatrix() {
         System.out.println("toMatrix");
-        Matrix output = df.select("id", "salary").toMatrix();
+        DenseMatrix output = df.select("id", "salary").toMatrix();
         System.out.println(output);
         assertEquals(1000, output.nrows());
         assertEquals(2, output.ncols());

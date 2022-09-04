@@ -32,7 +32,6 @@ import org.apache.avro.io.DatumReader;
 import org.apache.avro.util.Utf8;
 import smile.data.DataFrame;
 import smile.data.Tuple;
-import smile.data.measure.Measure;
 import smile.data.measure.NominalScale;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
@@ -108,8 +107,7 @@ public class Avro {
                     row[i] = record.get(struct.field(i).name);
                     if (row[i] instanceof Utf8) {
                         String str = row[i].toString();
-                        Measure measure = struct.field(i).measure;
-                        row[i] = measure != null ? measure.valueOf(str) : str;
+                        row[i] = struct.field(i).measure.map(m -> (Object) m.valueOf(str)).orElse(str);
                     }
                 }
                 rows.add(Tuple.of(row, struct));
@@ -127,7 +125,7 @@ public class Avro {
                 scale = new NominalScale(field.schema().getEnumSymbols());
             }
 
-            fields.add(new StructField(field.name(), typeOf(field.schema()), scale));
+            fields.add(new StructField(field.name(), typeOf(field.schema()), Optional.ofNullable(scale)));
         }
 
         return DataTypes.struct(fields);
