@@ -83,7 +83,6 @@ public class VanillaJavaBuilderTest {
             ImmutableList.of(
                 "--javacopts",
                 "-Xep:FallThrough:ERROR",
-                "--",
                 "--sources",
                 source.toString(),
                 "--source_jars",
@@ -128,7 +127,6 @@ public class VanillaJavaBuilderTest {
                 "--javacopts",
                 "-Xlint:all",
                 "-Werror",
-                "--",
                 "--sources",
                 source.toString(),
                 "--output",
@@ -167,7 +165,6 @@ public class VanillaJavaBuilderTest {
                 "-source",
                 "7",
                 "-Xlint:none",
-                "--",
                 "--sources",
                 source.toString(),
                 "--output",
@@ -209,7 +206,6 @@ public class VanillaJavaBuilderTest {
             ImmutableList.of(
                 "--javacopts",
                 "-Xep:FallThrough:ERROR",
-                "--",
                 "--sources",
                 source.toString(),
                 "--source_jars",
