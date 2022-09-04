@@ -93,14 +93,13 @@ class BeanValidationProcessor {
                     reflectiveFields.produce(new ReflectiveFieldBuildItem(annotation.target().asField()));
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.METHOD) {
                     contributeClass(classesToBeValidated, recorder, indexView, annotation.target().asMethod().declaringClass());
-                    // we need to register the method for reflection as it could be a getter
                     reflectiveMethods.produce(new ReflectiveMethodBuildItem(annotation.target().asMethod()));
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
                     contributeClass(classesToBeValidated, recorder, indexView, annotation.target().asMethodParameter().method().declaringClass());
-                    // a getter does not have parameters so it's a pure method: no need for reflection in this case
+                    reflectiveMethods.produce(new ReflectiveMethodBuildItem(annotation.target().asMethodParameter().method()));
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
                     contributeClass(classesToBeValidated, recorder, indexView, annotation.target().asClass());
-                    // no need for reflection in the case of a class level constraint
+                    reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, annotation.target().asClass().name().toString()));
                 }
             }
         }
