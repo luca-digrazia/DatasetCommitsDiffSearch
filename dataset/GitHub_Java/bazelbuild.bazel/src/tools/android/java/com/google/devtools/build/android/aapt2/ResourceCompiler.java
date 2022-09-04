@@ -172,7 +172,6 @@ public class ResourceCompiler {
             file,
             false);
         // aapt2 only generates pseudo locales for the default locale.
-        // TODO(b/149251235): omit this file if the output is identical to the default config above.
         generatedResourcesOut.ifPresent(
             out -> compile(directoryName, filename, results, out, file, true));
       } else {
