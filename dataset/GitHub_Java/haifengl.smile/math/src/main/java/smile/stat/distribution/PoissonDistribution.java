@@ -1,24 +1,23 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.stat.distribution;
 
 import smile.math.special.Gamma;
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * Poisson distribution expresses the probability of a number of events
@@ -75,7 +74,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
             }
         }
 
-        lambda = MathEx.mean(data);
+        lambda = Math.mean(data);
         entropy = (Math.log(2 * Math.PI * Math.E) + Math.log(lambda)) / 2 - 1 / (12 * lambda) - 1 / (24 * lambda * lambda) - 19 / (360 * lambda * lambda * lambda);
     }
 
@@ -121,7 +120,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
         if (k < 0) {
             return 0.0;
         } else {
-            return Math.pow(lambda, k) * Math.exp(-lambda) / MathEx.factorial(k);
+            return Math.pow(lambda, k) * Math.exp(-lambda) / Math.factorial(k);
         }
     }
 
@@ -130,7 +129,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
         if (k < 0) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return k * Math.log(lambda) - lambda - MathEx.lfactorial(k);
+            return k * Math.log(lambda) - lambda - Math.logFactorial(k);
         }
     }
 
@@ -270,7 +269,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
             upperBound = (int) Math.floor(lambda + 0.5 + 7.0 * (Math.sqrt(lambda + lambda + 1.) + 1.5));
 
             // probability of x=mode
-            f0Mode = Math.exp(mode * Math.log(lambda) - lambda - MathEx.lfactorial(mode));
+            f0Mode = Math.exp(mode * Math.log(lambda) - lambda - Math.logFactorial(mode));
         }
 
         /**
@@ -361,7 +360,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
 
             // Poisson constants, necessary for computing function values f(k)
             l_my = Math.log(lambda);
-            c_pm = mode * l_my - MathEx.lfactorial(mode);
+            c_pm = mode * l_my - Math.logFactorial(mode);
 
             // function values f(k) = p(k)/p(mode) at k = k2, k4, k1, k5
             f2 = f(k2, l_my, c_pm);
@@ -485,7 +484,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
                 // acceptance-rejection test of candidate X from the original area
                 // test, whether  W <= f(k),    with  W = U*h(x)  and  U -- U(0, 1)
                 // log f(X) = (X - mode)*log(L) - log X! + log mode!
-                if (Math.log(W) <= X * l_my - MathEx.lfactorial(X) - c_pm) {
+                if (Math.log(W) <= X * l_my - Math.logFactorial(X) - c_pm) {
                     return X;
                 }
             }
@@ -495,7 +494,7 @@ public class PoissonDistribution extends DiscreteDistribution implements Discret
          * used by Patchwork
          */
         private double f(int k, double l_nu, double c_pm) {
-            return Math.exp(k * l_nu - MathEx.lfactorial(k) - c_pm);
+            return Math.exp(k * l_nu - Math.logFactorial(k) - c_pm);
         }
     }
 

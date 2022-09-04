@@ -1,28 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.stat.distribution;
 
+import smile.math.Math;
 import smile.math.special.Beta;
-import static java.lang.Math.E;
-import static java.lang.Math.PI;
-import static java.lang.Math.exp;
-import static java.lang.Math.log;
-import static smile.math.MathEx.lfactorial;
 
 /**
  * The binomial distribution is the discrete probability distribution of
@@ -81,7 +75,7 @@ public class BinomialDistribution extends DiscreteDistribution {
         this.n = n;
         this.p = p;
 
-        entropy = log(2 * PI * E * n * p * (1 - p)) / 2;
+        entropy = Math.log(2 * Math.PI * Math.E * n * p * (1 - p)) / 2;
     }
 
     /**
@@ -133,7 +127,7 @@ public class BinomialDistribution extends DiscreteDistribution {
         if (k < 0 || k > n) {
             return 0.0;
         } else {
-            return Math.floor(0.5 + exp(lfactorial(n) - lfactorial(k) - lfactorial(n - k))) * Math.pow(p, k) * Math.pow(1.0 - p, n - k);
+            return Math.floor(0.5 + Math.exp(Math.logFactorial(n) - Math.logFactorial(k) - Math.logFactorial(n - k))) * Math.pow(p, k) * Math.pow(1.0 - p, n - k);
         }
     }
 
@@ -142,8 +136,8 @@ public class BinomialDistribution extends DiscreteDistribution {
         if (k < 0 || k > n) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return lfactorial(n) - lfactorial(k)
-                 - lfactorial(n - k) + k * log(p) + (n - k) * log(1.0 - p);
+            return Math.logFactorial(n) - Math.logFactorial(k)
+                    - Math.logFactorial(n - k) + k * Math.log(p) + (n - k) * Math.log(1.0 - p);
         }
     }
 
@@ -281,12 +275,12 @@ public class BinomialDistribution extends DiscreteDistribution {
             r5 = nu / (double) (k5 + 1) - p;
 
             // reciprocal values of the scale parameters of expon. tail envelopes
-            ll = log(r1);                     // expon. tail left
-            lr = -log(r5);                     // expon. tail right
+            ll = Math.log(r1);                     // expon. tail left
+            lr = -Math.log(r5);                     // expon. tail right
 
             // binomial constants, necessary for computing function values f(k)
-            l_pq = log(p);
-            c_pm = mode * l_pq - lfactorial(mode) - lfactorial(n - mode);
+            l_pq = Math.log(p);
+            c_pm = mode * l_pq - Math.logFactorial(mode) - Math.logFactorial(n - mode);
 
             // function values f(k) = p(k)/p(mode) at k = k2, k4, k1, k5
             f2 = f(k2, n, l_pq, c_pm);
@@ -371,7 +365,7 @@ public class BinomialDistribution extends DiscreteDistribution {
                 } else {
                     W = Math.random();
                     if (U < p5) {                                   // expon. tail left
-                        Dk = (int) (1. - log(W) / ll);
+                        Dk = (int) (1. - Math.log(W) / ll);
                         if ((X = k1 - Dk) < 0) {
                             continue;              // 0 <= X <= k1 - 1
                         }
@@ -380,7 +374,7 @@ public class BinomialDistribution extends DiscreteDistribution {
                             return X;                                       // quick accept of X
                         }
                     } else {                                               // expon. tail right
-                        Dk = (int) (1. - log(W) / lr);
+                        Dk = (int) (1. - Math.log(W) / lr);
                         if ((X = k5 + Dk) > n) {
                             continue;             // k5 + 1 <= X <= n
                         }
@@ -395,7 +389,7 @@ public class BinomialDistribution extends DiscreteDistribution {
                 // acceptance-rejection test of candidate X from the original area
                 // test, whether  W <= BinomialF(k),    with  W = U*h(x)  and  U -- U(0, 1)
                 // log BinomialF(X) = (X - mode)*log(p/q) - log X!(n - X)! + log mode!(n - mode)!
-                if (log(W) <= X * l_pq - lfactorial(X) - lfactorial(n - X) - c_pm) {
+                if (Math.log(W) <= X * l_pq - Math.logFactorial(X) - Math.logFactorial(n - X) - c_pm) {
                     return X;
                 }
             }
@@ -403,7 +397,7 @@ public class BinomialDistribution extends DiscreteDistribution {
 
         // used by BinomialPatchwork
         private double f(int k, int n, double l_pq, double c_pm) {
-            return exp(k * l_pq - lfactorial(k) - lfactorial(n - k) - c_pm);
+            return Math.exp(k * l_pq - Math.logFactorial(k) - Math.logFactorial(n - k) - c_pm);
         }
     }
 
@@ -428,7 +422,7 @@ public class BinomialDistribution extends DiscreteDistribution {
                 mode--;    // mode
             }
             r1 = p / (1.0 - p);
-            modeValue = exp(lfactorial(n) - lfactorial(mode) - lfactorial(n - mode) + mode * log(p) + (n - mode) * log(1. - p));
+            modeValue = Math.exp(Math.logFactorial(n) - Math.logFactorial(mode) - Math.logFactorial(n - mode) + mode * Math.log(p) + (n - mode) * Math.log(1. - p));
         }
 
         /**

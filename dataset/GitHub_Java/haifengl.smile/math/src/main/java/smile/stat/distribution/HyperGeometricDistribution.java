@@ -1,24 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.stat.distribution;
 
-import static smile.math.MathEx.lchoose;
-import static smile.math.MathEx.lfactorial;
+import smile.math.Math;
 
 /**
  * The hypergeometric distribution is a discrete probability distribution that
@@ -117,7 +115,7 @@ public class HyperGeometricDistribution extends DiscreteDistribution {
         if (k < Math.max(0, m + n - N) || k > Math.min(m, n)) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return lchoose(m, k) + lchoose(N - m, n - k) - lchoose(N, n);
+            return Math.logChoose(m, k) + Math.logChoose(N - m, n - k) - Math.logChoose(N, n);
         }
     }
 
@@ -455,7 +453,7 @@ public class HyperGeometricDistribution extends DiscreteDistribution {
          *  subfunction used by random number generator.
          */
         private double lnpk(int k, int L, int m, int n) {
-            return lfactorial(k) + lfactorial(m - k) + lfactorial(n - k) + lfactorial(L + k);
+            return Math.logFactorial(k) + Math.logFactorial(m - k) + Math.logFactorial(n - k) + Math.logFactorial(L + k);
         }
     }
 
@@ -486,15 +484,7 @@ public class HyperGeometricDistribution extends DiscreteDistribution {
 
             // mode probability, using log factorial function
             // (may read directly from fac_table if N < FAK_LEN)
-            fm = Math.exp(lfactorial(N - m)
-                    - lfactorial(L + mode)
-                    - lfactorial(n - mode)
-                    + lfactorial(m)
-                    - lfactorial(m - mode)
-                    - lfactorial(mode)
-                    - lfactorial(N)
-                    + lfactorial(N - n)
-                    + lfactorial(n));
+            fm = Math.exp(Math.logFactorial(N - m) - Math.logFactorial(L + mode) - Math.logFactorial(n - mode) + Math.logFactorial(m) - Math.logFactorial(m - mode) - Math.logFactorial(mode) - Math.logFactorial(N) + Math.logFactorial(N - n) + Math.logFactorial(n));
 
             // safety bound - guarantees at least 17 significant decimal digits
             // bound = min(nn, (int)(modef + k*c'))

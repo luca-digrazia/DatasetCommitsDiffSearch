@@ -1,50 +1,48 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.stat.distribution;
 
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * Bernoulli distribution is a discrete probability distribution, which takes
  * value 1 with success probability p and value 0 with failure probability
  * q = 1 - p.
  * <p>
- * Although Bernoulli distribution belongs to exponential family, we don't
+ * Although Bernoulli distribtuion belongs to exponential family, we don't
  * implement DiscreteExponentialFamily interface here since it is impossible
  * and meaningless to estimate a mixture of Bernoulli distributions.
  *
  * @author Haifeng Li
  */
 public class BernoulliDistribution extends DiscreteDistribution {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * Probability of success.
      */
-    public final double p;
+    private double p;
     /**
      * Probability of failure.
      */
-    public final double q;
+    private double q;
     /**
      * Shannon entropy.
      */
-    private final double entropy;
+    private double entropy;
 
     /**
      * Constructor.
@@ -58,14 +56,14 @@ public class BernoulliDistribution extends DiscreteDistribution {
         this.p = p;
         q = 1 - p;
 
-        entropy = -p * MathEx.log2(p) - q * MathEx.log2(q);
+        entropy = -p * Math.log2(p) - q * Math.log2(q);
     }
 
     /**
-     * Estimates the distribution parameters by MLE.
+     * Constructor. Parameter will be estimated from the data by MLE.
      * @param data data[i] == 1 if the i-<i>th</i> trail is success. Otherwise 0.
      */
-    public static BernoulliDistribution fit(int[] data) {
+    public BernoulliDistribution(int[] data) {
         int k = 0;
         for (int i : data) {
             if (i == 1) {
@@ -75,8 +73,10 @@ public class BernoulliDistribution extends DiscreteDistribution {
             }
         }
 
-        double p = (double) k / data.length;
-        return new BernoulliDistribution(p);
+        p = (double) k / data.length;
+        q = 1 - p;
+
+        entropy = -p * Math.log2(p) - q * Math.log2(q);
     }
 
     /**
@@ -95,11 +95,19 @@ public class BernoulliDistribution extends DiscreteDistribution {
         p = (double) k / data.length;
         q = 1 - p;
 
-        entropy = -p * MathEx.log2(p) - q * MathEx.log2(q);
+        entropy = -p * Math.log2(p) - q * Math.log2(q);
+    }
+
+    /**
+     * Returns the probability of success.
+     * @return the probability of success
+     */
+    public double getProb() {
+        return p;
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return 1;
     }
 
@@ -109,8 +117,13 @@ public class BernoulliDistribution extends DiscreteDistribution {
     }
 
     @Override
-    public double variance() {
+    public double var() {
         return p * q;
+    }
+
+    @Override
+    public double sd() {
+        return Math.sqrt(p * q);
     }
 
     @Override
@@ -125,7 +138,7 @@ public class BernoulliDistribution extends DiscreteDistribution {
 
     @Override
     public double rand() {
-        if (MathEx.random() < q) {
+        if (Math.random() < q) {
             return 0;
         } else {
             return 1;

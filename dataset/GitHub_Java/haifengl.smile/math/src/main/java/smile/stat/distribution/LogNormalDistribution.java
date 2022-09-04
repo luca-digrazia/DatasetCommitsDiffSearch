@@ -1,24 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.stat.distribution;
 
-import smile.math.MathEx;
 import smile.math.special.Erf;
+import smile.math.Math;
 
 /**
  * A log-normal distribution is a probability distribution of a random variable
@@ -34,12 +32,10 @@ import smile.math.special.Erf;
  * @author Haifeng Li
  */
 public class LogNormalDistribution extends AbstractDistribution {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
-    /** The mean of normal distribution. */
-    public final double mu;
-    /** The standard deviation of normal distribution. */
-    public final double sigma;
+    private double mu;
+    private double sigma;
     private double mean;
     private double var;
     private double entropy;
@@ -47,8 +43,6 @@ public class LogNormalDistribution extends AbstractDistribution {
 
     /**
      * Constructor.
-     * @param mu the mean of normal distribution.
-     * @param sigma the standard deviation of normal distribution.
      */
     public LogNormalDistribution(double mu, double sigma) {
         if (sigma <= 0.0) {
@@ -63,9 +57,9 @@ public class LogNormalDistribution extends AbstractDistribution {
     }
 
     /**
-     * Estimates the distribution parameters by MLE.
+     * Constructor. Parameter will be estimated from the data by MLE.
      */
-    public static LogNormalDistribution fit(double[] data) {
+    public LogNormalDistribution(double[] data) {
         double[] x = new double[data.length];
         for (int i = 0; i < x.length; i++) {
             if (data[i] <= 0.0) {
@@ -75,13 +69,30 @@ public class LogNormalDistribution extends AbstractDistribution {
             x[i] = Math.log(data[i]);
         }
 
-        double mu = MathEx.mean(x);
-        double sigma = MathEx.sd(x);
-        return new LogNormalDistribution(mu, sigma);
+        this.mu = Math.mean(x);
+        this.sigma = Math.sd(x);
+
+        mean = Math.exp(mu + sigma * sigma / 2);
+        var = (Math.exp(mu * mu) - 1) * Math.exp(2 * mu + sigma * sigma);
+        entropy = 0.5 + 0.5 * Math.log(2 * Math.PI * sigma * sigma) + mu;
+    }
+
+    /**
+     * Returns the parameter mu, which is the mean of normal distribution log(X).
+     */
+    public double getMu() {
+        return mu;
+    }
+
+    /**
+     * Returns the parameter sigma, which is the standard deviation of normal distribution log(X).
+     */
+    public double getSigma() {
+        return sigma;
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return 2;
     }
 
@@ -91,8 +102,13 @@ public class LogNormalDistribution extends AbstractDistribution {
     }
 
     @Override
-    public double variance() {
+    public double var() {
         return var;
+    }
+
+    @Override
+    public double sd() {
+        return Math.sqrt(var);
     }
 
     @Override

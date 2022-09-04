@@ -1,23 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.stat.distribution;
 
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * The "shifted" geometric distribution is a discrete probability distribution of the
@@ -32,16 +30,15 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class ShiftedGeometricDistribution extends DiscreteDistribution implements DiscreteExponentialFamily {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
-    /** The probability of success. */
-    public final double p;
+    private double p;
     private double entropy;
     /**
      * The exponential distribution to generate Geometric distributed
      * random number.
      */
-    private ExponentialDistribution expDist;
+    ExponentialDistribution expDist;
 
     /**
      * Constructor.
@@ -53,13 +50,13 @@ public class ShiftedGeometricDistribution extends DiscreteDistribution implement
         }
 
         this.p = p;
-        entropy = (-p * MathEx.log2(p) - (1 - p) * MathEx.log2(1 - p)) / p;
+        entropy = (-p * Math.log2(p) - (1 - p) * Math.log2(1 - p)) / p;
     }
 
     /**
-     * Estimates the distribution parameters by MLE.
+     * Constructor. Parameter will be estimated from the data by MLE.
      */
-    public static ShiftedGeometricDistribution fit(int[] data) {
+    public ShiftedGeometricDistribution(int[] data) {
         double sum = 0.0;
         for (int x : data) {
             if (x < 0) {
@@ -69,12 +66,19 @@ public class ShiftedGeometricDistribution extends DiscreteDistribution implement
             sum += x + 1;
         }
 
-        double p = data.length / sum;
-        return new ShiftedGeometricDistribution(p);
+        p = data.length / sum;
+        entropy = (-p * Math.log2(p) - (1 - p) * Math.log2(1 - p)) / p;
+    }
+
+    /**
+     * Returns the probability of success.
+     */
+    public double getProb() {
+        return p;
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return 1;
     }
 
@@ -84,7 +88,7 @@ public class ShiftedGeometricDistribution extends DiscreteDistribution implement
     }
 
     @Override
-    public double variance() {
+    public double var() {
         return (1 - p) / (p * p);
     }
 
@@ -180,6 +184,10 @@ public class ShiftedGeometricDistribution extends DiscreteDistribution implement
 
         mean /= alpha;
 
-        return new DiscreteMixture.Component(alpha, new GeometricDistribution(1 / (1 + mean)));
+        DiscreteMixture.Component c = new DiscreteMixture.Component();
+        c.priori = alpha;
+        c.distribution = new GeometricDistribution(1 / (1 + mean));
+
+        return c;
     }
 }

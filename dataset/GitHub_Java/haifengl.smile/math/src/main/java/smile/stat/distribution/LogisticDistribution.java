@@ -1,21 +1,21 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.stat.distribution;
+
+import smile.math.Math;
 
 /**
  * The logistic distribution is a continuous probability distribution whose
@@ -24,14 +24,12 @@ package smile.stat.distribution;
  * the normal distribution in shape but has heavier tails (higher kurtosis).
  * <p>
  * The cumulative distribution function of the logistic distribution is given by:
- * <p>
  * <pre>
  *                   1
  * F(x; &mu;,s) = -------------
  *              1 + e<sup>-(x-&mu;)/s</sup>
  * </pre>
  * The probability density function of the logistic distribution is given by:
- * <p>
  * <pre>
  *                  e<sup>-(x-&mu;)/s</sup>
  * f(x; &mu;,s) = -----------------
@@ -53,14 +51,12 @@ package smile.stat.distribution;
  * @author Haifeng Li
  */
 public class LogisticDistribution extends AbstractDistribution {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     private static final double PI_SQRT3 = Math.PI / Math.sqrt(3);
     private static final double PI2_3 = Math.PI * Math.PI / 3;
-    /** The location parameter. */
-    public final double mu;
-    /** The scale parameter. */
-    public final double scale;
+    private double mu;
+    private double scale;
 
     /**
      * Constructor.
@@ -75,7 +71,7 @@ public class LogisticDistribution extends AbstractDistribution {
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return 2;
     }
 
@@ -85,7 +81,7 @@ public class LogisticDistribution extends AbstractDistribution {
     }
 
     @Override
-    public double variance() {
+    public double var() {
         return PI2_3 * scale * scale;
     }
 

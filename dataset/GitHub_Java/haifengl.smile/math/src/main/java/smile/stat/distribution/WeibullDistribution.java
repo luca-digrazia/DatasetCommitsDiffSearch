@@ -1,24 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.stat.distribution;
 
-import smile.math.MathEx;
 import smile.math.special.Gamma;
+import smile.math.Math;
 
 /**
  * The Weibull distribution is one of the most widely used lifetime distributions
@@ -63,48 +61,46 @@ import smile.math.special.Gamma;
  * @author Haifeng Li
  */
 public class WeibullDistribution extends AbstractDistribution {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
-    /** The shape parameter. */
-    public final double k;
-    /** The scale parameter. */
-    public final double lambda;
+    private double shape;
+    private double scale;
     private double mean;
-    private double variance;
+    private double var;
     private double entropy;
 
     /**
      * Constructor. The default scale parameter is 1.0.
-     * @param k the shape parameter.
+     * @param shape the shape parameter.
      */
-    public WeibullDistribution(double k) {
-        this(k, 1.0);
+    public WeibullDistribution(double shape) {
+        this(shape, 1.0);
     }
 
     /**
      * Constructor.
-     * @param k the shape parameter.
-     * @param lambda the scale parameter.
+     * @param shape the shape parameter.
+     * @param scale the scale parameter.
      */
-    public WeibullDistribution(double k, double lambda) {
-        if (k <= 0) {
-            throw new IllegalArgumentException("Invalid shape: " + k);
+    public WeibullDistribution(double shape, double scale) {
+        if (shape <= 0) {
+            throw new IllegalArgumentException("Invalid shape: " + shape);
         }
 
-        if (lambda <= 0) {
-            throw new IllegalArgumentException("Invalid scale: " + lambda);
+        if (scale <= 0) {
+            throw new IllegalArgumentException("Invalid scale: " + scale);
         }
 
-        this.k = k;
-        this.lambda = lambda;
+        this.shape = shape;
+        this.scale = scale;
 
-        mean = lambda * Gamma.gamma(1 + 1 / k);
-        variance = lambda * lambda * Gamma.gamma(1 + 2 / k) - mean * mean;
-        entropy = 0.5772156649015328606 * (1 - 1 / k) + Math.log(lambda / k) + 1;
+        mean = scale * Gamma.gamma(1 + 1 / shape);
+        var = scale * scale * Gamma.gamma(1 + 2 / shape) - mean * mean;
+        entropy = 0.5772156649015328606 * (1 - 1 / shape) + Math.log(scale / shape) + 1;
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return 2;
     }
 
@@ -114,8 +110,13 @@ public class WeibullDistribution extends AbstractDistribution {
     }
 
     @Override
-    public double variance() {
-        return variance;
+    public double var() {
+        return var;
+    }
+
+    @Override
+    public double sd() {
+        return Math.sqrt(var());
     }
 
     @Override
@@ -125,13 +126,13 @@ public class WeibullDistribution extends AbstractDistribution {
 
     @Override
     public String toString() {
-        return String.format("Weibull Distribution(%.4f, %.4f)", k, lambda);
+        return String.format("Weibull Distribution(%.4f, %.4f)", shape, scale);
     }
 
     @Override
     public double rand() {
-        double r = MathEx.random();
-        return lambda * Math.pow(-Math.log(1 - r), 1 / k);
+        double r = Math.random();
+        return scale * Math.pow(-Math.log(1 - r), 1 / shape);
     }
 
     @Override
@@ -139,7 +140,7 @@ public class WeibullDistribution extends AbstractDistribution {
         if (x <= 0) {
             return 0.0;
         } else {
-            return (k / lambda) * Math.pow(x / lambda, k - 1) * Math.exp(-Math.pow(x / lambda, k));
+            return (shape / scale) * Math.pow(x / scale, shape - 1) * Math.exp(-Math.pow(x / scale, shape));
         }
     }
 
@@ -148,7 +149,7 @@ public class WeibullDistribution extends AbstractDistribution {
         if (x <= 0) {
             return Double.NEGATIVE_INFINITY;
         } else {
-            return Math.log(k / lambda) + (k - 1) * Math.log(x / lambda) - Math.pow(x / lambda, k);
+            return Math.log(shape / scale) + (shape - 1) * Math.log(x / scale) - Math.pow(x / scale, shape);
         }
     }
 
@@ -157,7 +158,7 @@ public class WeibullDistribution extends AbstractDistribution {
         if (x <= 0) {
             return 0.0;
         } else {
-            return 1 - Math.exp(-Math.pow(x / lambda, k));
+            return 1 - Math.exp(-Math.pow(x / scale, shape));
         }
     }
 
@@ -167,7 +168,7 @@ public class WeibullDistribution extends AbstractDistribution {
             throw new IllegalArgumentException("Invalid p: " + p);
         }
 
-        return lambda * Math.pow(-Math.log(1 - p), 1 / k);
+        return scale * Math.pow(-Math.log(1 - p), 1 / shape);
     }
 }
 

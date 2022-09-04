@@ -1,27 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.stat.distribution;
 
 import java.util.Arrays;
-import java.util.stream.Collectors;
-import java.util.stream.DoubleStream;
-
-import smile.math.MathEx;
+import smile.math.Math;
 
 /**
  * An empirical distribution function or empirical cdf, is a cumulative
@@ -34,7 +29,7 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class EmpiricalDistribution extends DiscreteDistribution {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The possible values of random variable.
@@ -57,7 +52,7 @@ public class EmpiricalDistribution extends DiscreteDistribution {
      */
     private double[] cdf;
     private double mean;
-    private double variance;
+    private double var;
     private double sd;
     private double entropy;
     // Walker's alias method to generate random samples.
@@ -97,11 +92,11 @@ public class EmpiricalDistribution extends DiscreteDistribution {
 
             mean += x[i] * p[i];
             mean2 += x[i] * x[i] * p[i];
-            entropy -= p[i] * MathEx.log2(p[i]);
+            entropy -= p[i] * Math.log2(p[i]);
         }
 
-        variance = mean2 - mean * mean;
-        sd = Math.sqrt(variance);
+        var = mean2 - mean * mean;
+        sd = Math.sqrt(var);
 
         if (Math.abs(cdf[cdf.length - 1] - 1.0) > 1E-7) {
             throw new IllegalArgumentException("The sum of probabilities is not 1.");
@@ -109,15 +104,15 @@ public class EmpiricalDistribution extends DiscreteDistribution {
     }
 
     /**
-     * Estimates the distribution.
+     * Constructor. CDF will be estimated from the data.
      */
     public EmpiricalDistribution(int[] data) {
         if (data.length == 0) {
             throw new IllegalArgumentException("Empty dataset.");
         }
 
-        xMin = MathEx.min(data);
-        xMax = MathEx.max(data);
+        xMin = Math.min(data);
+        xMax = Math.max(data);
 
         int n = xMax - xMin + 1;
         x = new int[n];
@@ -143,15 +138,15 @@ public class EmpiricalDistribution extends DiscreteDistribution {
 
             mean += x[i] * p[i];
             mean2 += x[i] * x[i] * p[i];
-            entropy -= p[i] * MathEx.log2(p[i]);
+            entropy -= p[i] * Math.log2(p[i]);
         }
 
-        variance = mean2 - mean * mean;
-        sd = Math.sqrt(variance);
+        var = mean2 - mean * mean;
+        sd = Math.sqrt(var);
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return p.length;
     }
 
@@ -161,8 +156,8 @@ public class EmpiricalDistribution extends DiscreteDistribution {
     }
 
     @Override
-    public double variance() {
-        return variance;
+    public double var() {
+        return var;
     }
 
     @Override
@@ -177,17 +172,24 @@ public class EmpiricalDistribution extends DiscreteDistribution {
 
     @Override
     public String toString() {
-        return Arrays.stream(p).mapToObj(pi -> String.format("%.2f", pi)).collect(Collectors.joining(", ", "Empirical Distribution(", ")"));
+        StringBuilder builder = new StringBuilder("Empirical Distribution(");
+        for (int i = 0; i < p.length; i++) {
+            builder.append(p[i]);
+            builder.append(' ');
+        }
+        builder.setCharAt(builder.length() - 1, ')');
+        return builder.toString();
     }
 
     @Override
     public double rand() {
+
         if (a == null) {
             initRand();
         }
 
         // generate sample
-        double rU = MathEx.random() * p.length;
+        double rU = Math.random() * p.length;
 
         int k = (int) (rU);
         rU -= k;  /* rU becomes rU-[rU] */
@@ -199,8 +201,8 @@ public class EmpiricalDistribution extends DiscreteDistribution {
         }
     }
 
-    @Override
-    public int[] randi(int n) {
+    public int[] rand(int n) {
+
         if (a == null) {
             initRand();
         }
@@ -208,7 +210,7 @@ public class EmpiricalDistribution extends DiscreteDistribution {
         // generate sample
         int[] ans = new int[n];
         for (int i = 0; i < n; i++) {
-            double rU = MathEx.random() * p.length;
+            double rU = Math.random() * p.length;
 
             int k = (int) (rU);
             rU -= k;  /* rU becomes rU-[rU] */
@@ -223,7 +225,6 @@ public class EmpiricalDistribution extends DiscreteDistribution {
         return ans;
     }
 
-    /** Initializes the random number generator. */
     private synchronized void initRand() {
         // set up alias table
         q = new double[p.length];

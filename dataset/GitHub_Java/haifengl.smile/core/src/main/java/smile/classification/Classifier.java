@@ -1,35 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.classification;
 
 import java.io.Serializable;
-import java.util.Arrays;
-import java.util.Optional;
-
-import smile.data.DataFrame;
-import smile.data.Tuple;
-import smile.data.formula.Formula;
-import smile.data.measure.Measure;
-import smile.data.measure.NominalScale;
-import smile.data.type.StructType;
-import smile.data.vector.BaseVector;
-import smile.math.MathEx;
-import smile.sort.QuickSort;
 
 /**
  * A classifier assigns an input object into one of a given number of categories.
@@ -52,30 +39,11 @@ import smile.sort.QuickSort;
 public interface Classifier<T> extends Serializable {
     /**
      * Predicts the class label of an instance.
-     *
+     * 
      * @param x the instance to be classified.
      * @return the predicted class label.
      */
     int predict(T x);
-
-    /**
-     * Returns the real-valued decision function value.
-     *
-     * @param x the instance to be classified.
-     * @return the prediction score.
-     */
-    default double f(T x) {
-        throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Predicts the class label of an instance.
-     * @param x a tuple instance.
-     * @return the predicted class label.
-     */
-    default int predict(Tuple x) {
-        throw new UnsupportedOperationException();
-    }
 
     /**
      * Predicts the class labels of an array of instances.
@@ -84,26 +52,10 @@ public interface Classifier<T> extends Serializable {
      * @return the predicted class labels.
      */
     default int[] predict(T[] x) {
-        return Arrays.stream(x).mapToInt(xi -> predict(xi)).toArray();
-    }
-
-    /**
-     * Predicts the class labels of a data frame.
-     *
-     * @param data the data frame.
-     * @return the predicted class labels.
-     */
-    default int[] predict(DataFrame data) {
-        return data.stream().mapToInt(x -> predict(x)).toArray();
-    }
-
-    /** Returns the formula associated with the model. */
-    default Optional<Formula> formula() {
-        return Optional.empty();
-    }
-
-    /** Returns the design matrix schema. */
-    default Optional<StructType> schema() {
-        return Optional.empty();
+        int[] y = new int[x.length];
+        for (int i = 0; i < y.length; i++) {
+            y[i] = predict(x[i]);
+        }
+        return y;
     }
 }

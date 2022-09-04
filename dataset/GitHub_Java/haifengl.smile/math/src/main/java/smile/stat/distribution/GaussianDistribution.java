@@ -1,23 +1,22 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
-import smile.math.MathEx;
+import smile.math.Math;
 import smile.math.special.Erf;
 
 /**
@@ -45,9 +44,9 @@ import smile.math.special.Erf;
  * sequence of iid random variables, each having mean &mu; and variance &sigma;<sup>2</sup>
  * but otherwise distributions of X<sub>i</sub>'s can be arbitrary, then the
  * central limit theorem states that
- * <pre>
- *     &radic;<span style="text-decoration:overline;">n</span> (1&frasl;n <big>&Sigma;</big> X<sub>i</sub> - &mu;) &rarr; N(0, &sigma;<sup>2</sup>).
- * </pre>
+ * <p>
+ * &radic;<span style="text-decoration:overline;">n</span> (1&frasl;n <big>&Sigma;</big> X<sub>i</sub> - &mu;) &rarr; N(0, &sigma;<sup>2</sup>).
+ * <p>
  * The theorem will hold even if the summands X<sub>i</sub> are not iid,
  * although some constraints on the degree of dependence and the growth rate
  * of moments still have to be imposed.
@@ -63,16 +62,14 @@ import smile.math.special.Erf;
  * @author Haifeng Li
  */
 public class GaussianDistribution extends AbstractDistribution implements ExponentialFamily {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     private static final double LOG2PIE_2 = Math.log(2 * Math.PI * Math.E) / 2;
     private static final double LOG2PI_2 = Math.log(2 * Math.PI) / 2;
     private static final GaussianDistribution singleton = new GaussianDistribution(0.0, 1.0);
 
-    /** The mean. */
-    public final double mu;
-    /** The standard deviation. */
-    public final double sigma;
+    private double mu;
+    private double sigma;
     private double variance;
 
     private double entropy;
@@ -93,12 +90,15 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
     }
 
     /**
-     * Estimates the distribution parameters by MLE.
+     * Constructor. Mean and standard deviation will be estimated from the data by MLE.
      */
-    public static GaussianDistribution fit(double[] data) {
-        double mu = MathEx.mean(data);
-        double sigma = MathEx.sd(data);
-        return new GaussianDistribution(mu, sigma);
+    public GaussianDistribution(double[] data) {
+        mu = Math.mean(data);
+        sigma = Math.sd(data);
+        variance = sigma * sigma;
+
+        entropy = Math.log(sigma) + LOG2PIE_2;
+        pdfConstant = Math.log(sigma) + LOG2PI_2;
     }
 
     public static GaussianDistribution getInstance() {
@@ -106,7 +106,7 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return 2;
     }
 
@@ -116,7 +116,7 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
     }
 
     @Override
-    public double variance() {
+    public double var() {
         return variance;
     }
 
@@ -153,8 +153,8 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
 
         } else {
             do {
-                x = MathEx.random(-1, 1);
-                y = MathEx.random(-1, 1);
+                x = Math.random(-1, 1);
+                y = Math.random(-1, 1);
                 r = x * x + y * y;
             } while (r >= 1.0);
 
@@ -190,9 +190,9 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
 
         double y, r, x;
 
-        double u = MathEx.random();
+        double u = Math.random();
         while (u == 0.0) {
-            u = MathEx.random();
+            u = Math.random();
         }
         
         y = u - 0.5;
@@ -300,6 +300,10 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
 
         sd = Math.sqrt(sd / alpha);
 
-        return new Mixture.Component(alpha, new GaussianDistribution(mean, sd));
+        Mixture.Component c = new Mixture.Component();
+        c.priori = alpha;
+        c.distribution = new GaussianDistribution(mean, sd);
+
+        return c;
     }
 }
