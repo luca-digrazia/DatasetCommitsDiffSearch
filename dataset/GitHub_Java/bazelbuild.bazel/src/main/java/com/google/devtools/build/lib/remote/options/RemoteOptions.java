@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.server.FailureDetails.RemoteExecution;
 import com.google.devtools.build.lib.server.FailureDetails.RemoteExecution.Code;
 import com.google.devtools.build.lib.util.OptionsUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Converters.AssignmentConverter;
 import com.google.devtools.common.options.EnumConverter;
@@ -33,15 +32,12 @@ import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsParsingException;
 import com.google.protobuf.TextFormat;
 import com.google.protobuf.TextFormat.ParseException;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.SortedMap;
-import java.util.regex.Pattern;
 
 /** Options for remote execution and distributed caching. */
 public final class RemoteOptions extends OptionsBase {
@@ -74,10 +70,9 @@ public final class RemoteOptions extends OptionsBase {
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
-          "HOST or HOST:PORT of a remote execution endpoint. The supported schemas are grpc, "
-              + "grpcs (grpc with TLS enabled) and unix (local UNIX sockets). If no schema is "
-              + "provided Bazel will default to grpcs. Specify grpc:// or unix: schema to "
-              + "disable TLS.")
+          "HOST or HOST:PORT of a remote execution endpoint.The supported schemas are grpc and"
+              + " grpcs (grpc with TLS enabled). If no schema is provided bazel'll default to"
+              + " grpcs. Specify grpc:// schema to disable TLS.")
   public String remoteExecutor;
 
   @Option(
@@ -87,10 +82,10 @@ public final class RemoteOptions extends OptionsBase {
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
-          "A URI of a caching endpoint. The supported schemas are http, https, grpc, grpcs "
-              + "(grpc with TLS enabled) and unix (local UNIX sockets). If no schema is provided "
-              + "Bazel will default to grpcs. Specify grpc://, http:// or unix: schema to disable "
-              + "TLS. See https://docs.bazel.build/versions/master/remote-caching.html")
+          "A URI of a caching endpoint. The supported schemas are http, https, grpc and grpcs"
+              + " (grpc with TLS enabled). If no schema is provided bazel will default to grpcs."
+              + " Specify grpc:// or http:// schema to disable TLS. See"
+              + " https://docs.bazel.build/versions/master/remote-caching.html")
   public String remoteCache;
 
   @Option(
@@ -100,9 +95,9 @@ public final class RemoteOptions extends OptionsBase {
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
           "A Remote Asset API endpoint URI, to be used as a remote download proxy. The supported"
-              + " schemas are grpc, grpcs (grpc with TLS enabled) and unix (local UNIX sockets)."
-              + " If no schema is provided Bazel will default to grpcs. See: "
-              + "https://github.com/bazelbuild/remote-apis/blob/master/build/bazel/remote/asset/v1/remote_asset.proto")
+              + " schemas are grpc and grpcs (grpc with TLS enabled). If no schema is provided"
+              + " bazel will default to grpcs. See:"
+              + " https://github.com/bazelbuild/remote-apis/blob/master/build/bazel/remote/asset/v1/remote_asset.proto")
   public String remoteDownloader;
 
   @Option(
@@ -162,34 +157,13 @@ public final class RemoteOptions extends OptionsBase {
 
   @Option(
       name = "remote_timeout",
-      defaultValue = "60s",
+      defaultValue = "60",
       documentationCategory = OptionDocumentationCategory.REMOTE,
       effectTags = {OptionEffectTag.UNKNOWN},
-      converter = RemoteTimeoutConverter.class,
       help =
-          "The maximum amount of time to wait for remote execution and cache calls. For the REST"
-              + " cache, this is both the connect and the read timeout. Following units can be"
-              + " used: Days (d), hours (h), minutes (m), seconds (s), and milliseconds (ms). If"
-              + " the unit is omitted, the value is interpreted as seconds.")
-  public Duration remoteTimeout;
-
-  /** Returns the specified duration. Assumes seconds if unitless. */
-  public static class RemoteTimeoutConverter implements Converter<Duration> {
-    private static final Pattern UNITLESS_REGEX = Pattern.compile("^[0-9]+$");
-
-    @Override
-    public Duration convert(String input) throws OptionsParsingException {
-      if (UNITLESS_REGEX.matcher(input).matches()) {
-        input += "s";
-      }
-      return new Converters.DurationConverter().convert(input);
-    }
-
-    @Override
-    public String getTypeDescription() {
-      return "An immutable length of time.";
-    }
-  }
+          "The maximum number of seconds to wait for remote execution and cache calls. For the "
+              + "REST cache, this is both the connect and the read timeout.")
+  public int remoteTimeout;
 
   @Option(
       name = "remote_accept_cached",
