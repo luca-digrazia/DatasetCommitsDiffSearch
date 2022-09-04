@@ -12,7 +12,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalInt;
 import java.util.function.Consumer;
 import java.util.function.UnaryOperator;
 
@@ -21,7 +20,6 @@ import io.smallrye.config.SmallRyeConfigBuilder;
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigBuilder;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
-import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.Converter;
 import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.protean.gizmo.BranchResult;
@@ -40,7 +38,6 @@ import org.jboss.shamrock.deployment.builditem.ConfigurationBuildItem;
 import org.jboss.shamrock.deployment.builditem.ConfigurationCustomConverterBuildItem;
 import org.jboss.shamrock.deployment.builditem.ExtensionClassLoaderBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
-import org.jboss.shamrock.deployment.builditem.RunTimeConfigurationSourceBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.RuntimeReinitializedClassBuildItem;
 import org.jboss.shamrock.deployment.configuration.ConfigDefinition;
 import org.jboss.shamrock.deployment.configuration.ConfigPatternMap;
@@ -79,7 +76,6 @@ public class ConfigurationSetup {
     private static final MethodDescriptor SCPR_CONSTRUCT = MethodDescriptor.ofConstructor(SimpleConfigurationProviderResolver.class, Config.class);
     private static final MethodDescriptor SRCB_BUILD = MethodDescriptor.ofMethod(SmallRyeConfigBuilder.class, "build", Config.class);
     private static final MethodDescriptor SRCB_WITH_CONVERTER = MethodDescriptor.ofMethod(SmallRyeConfigBuilder.class, "withConverter", ConfigBuilder.class, Class.class, int.class, Converter.class);
-    private static final MethodDescriptor SRCB_WITH_SOURCES = MethodDescriptor.ofMethod(SmallRyeConfigBuilder.class, "withSources", ConfigBuilder.class, ConfigSource[].class);
     private static final MethodDescriptor SRCB_ADD_DEFAULT_SOURCES = MethodDescriptor.ofMethod(SmallRyeConfigBuilder.class, "addDefaultSources", ConfigBuilder.class);
     private static final MethodDescriptor SRCB_CONSTRUCT = MethodDescriptor.ofConstructor(SmallRyeConfigBuilder.class);
     private static final MethodDescriptor II_IN_IMAGE_BUILD = MethodDescriptor.ofMethod(ImageInfo.class, "inImageBuildtimeCode", boolean.class);
@@ -164,8 +160,7 @@ public class ConfigurationSetup {
         Consumer<GeneratedClassBuildItem> classConsumer,
         Consumer<RuntimeReinitializedClassBuildItem> runTimeInitConsumer,
         Consumer<BytecodeRecorderObjectLoaderBuildItem> objectLoaderConsumer,
-        List<ConfigurationCustomConverterBuildItem> converters,
-        List<RunTimeConfigurationSourceBuildItem> runTimeSources
+        List<ConfigurationCustomConverterBuildItem> converters
     ) {
         final ClassOutput classOutput = new ClassOutput() {
             public void write(final String name, final byte[] data) {
@@ -207,26 +202,6 @@ public class ConfigurationSetup {
                 carc.setModifiers(Opcodes.ACC_STATIC);
                 final ResultHandle builder = carc.newInstance(SRCB_CONSTRUCT);
                 carc.invokeVirtualMethod(SRCB_ADD_DEFAULT_SOURCES, builder);
-                final int size = runTimeSources.size();
-                if (size > 0) {
-                    final ResultHandle arrayHandle = carc.newArray(ConfigSource[].class, carc.load(size));
-                    for (int i = 0; i < size; i ++) {
-                        final RunTimeConfigurationSourceBuildItem source = runTimeSources.get(i);
-                        final OptionalInt priority = source.getPriority();
-                        final ResultHandle val;
-                        if (priority.isPresent()) {
-                            val = carc.newInstance(MethodDescriptor.ofConstructor(source.getClassName(), int.class), carc.load(priority.getAsInt()));
-                        } else {
-                            val = carc.newInstance(MethodDescriptor.ofConstructor(source.getClassName()));
-                        }
-                        carc.writeArrayValue(arrayHandle, i, val);
-                    }
-                    carc.invokeVirtualMethod(
-                        SRCB_WITH_SOURCES,
-                        builder,
-                        arrayHandle
-                    );
-                }
                 for (ConfigurationCustomConverterBuildItem converter : converters) {
                     carc.invokeVirtualMethod(
                         SRCB_WITH_CONVERTER,
@@ -395,7 +370,7 @@ public class ConfigurationSetup {
             // branches for each next-string
             final Iterable<String> names = keyMap.childNames();
             for (String name : names) {
-                if (name.equals(ConfigPatternMap.WC_SINGLE) || name.equals(ConfigPatternMap.WC_MULTI)) {
+                if (name.equals(ConfigPatternMap.WILD_CARD)) {
                     // skip
                 } else {
                     // TODO: string switch
