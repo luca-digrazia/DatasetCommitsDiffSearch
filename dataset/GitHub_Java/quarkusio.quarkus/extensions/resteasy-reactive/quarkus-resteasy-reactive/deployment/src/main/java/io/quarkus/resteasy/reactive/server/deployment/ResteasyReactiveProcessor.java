@@ -57,16 +57,13 @@ import org.jboss.resteasy.reactive.server.core.ServerSerialisers;
 import org.jboss.resteasy.reactive.server.model.ContextResolvers;
 import org.jboss.resteasy.reactive.server.model.DynamicFeatures;
 import org.jboss.resteasy.reactive.server.model.Features;
-import org.jboss.resteasy.reactive.server.model.HandlerChainCustomizer;
 import org.jboss.resteasy.reactive.server.model.ParamConverterProviders;
-import org.jboss.resteasy.reactive.server.processor.scanning.MethodScanner;
 import org.jboss.resteasy.reactive.spi.BeanFactory;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
-import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.arc.runtime.ClientProxyUnwrapper;
 import io.quarkus.deployment.Capabilities;
@@ -103,7 +100,6 @@ import io.quarkus.resteasy.reactive.server.runtime.exceptionmappers.Authenticati
 import io.quarkus.resteasy.reactive.server.runtime.exceptionmappers.AuthenticationRedirectExceptionMapper;
 import io.quarkus.resteasy.reactive.server.runtime.exceptionmappers.ForbiddenExceptionMapper;
 import io.quarkus.resteasy.reactive.server.runtime.exceptionmappers.UnauthorizedExceptionMapper;
-import io.quarkus.resteasy.reactive.server.runtime.security.SecurityContextOverrideHandler;
 import io.quarkus.resteasy.reactive.spi.CustomExceptionMapperBuildItem;
 import io.quarkus.resteasy.reactive.spi.DynamicFeatureBuildItem;
 import io.quarkus.resteasy.reactive.spi.ExceptionMapperBuildItem;
@@ -200,17 +196,6 @@ public class ResteasyReactiveProcessor {
     void registerCustomExceptionMappers(BuildProducer<CustomExceptionMapperBuildItem> customExceptionMapper) {
         customExceptionMapper.produce(new CustomExceptionMapperBuildItem(AuthenticationFailedExceptionMapper.class.getName()));
         customExceptionMapper.produce(new CustomExceptionMapperBuildItem(UnauthorizedExceptionMapper.class.getName()));
-    }
-
-    @BuildStep
-    public void unremoveableBeans(Optional<ResourceScanningResultBuildItem> resourceScanningResultBuildItem,
-            BuildProducer<UnremovableBeanBuildItem> unremoveableBeans) {
-        if (!resourceScanningResultBuildItem.isPresent()) {
-            return;
-        }
-        Set<String> beanParams = resourceScanningResultBuildItem.get().getResult()
-                .getBeanParams();
-        unremoveableBeans.produce(UnremovableBeanBuildItem.beanClassNames(beanParams.toArray(new String[0])));
     }
 
     @BuildStep
@@ -545,16 +530,6 @@ public class ResteasyReactiveProcessor {
                 UnauthorizedExceptionMapper.class.getName(),
                 UnauthorizedException.class.getName(),
                 Priorities.USER + 1, false));
-    }
-
-    @BuildStep
-    MethodScannerBuildItem integrateSecurityOverrideSupport() {
-        return new MethodScannerBuildItem(new MethodScanner() {
-            @Override
-            public List<HandlerChainCustomizer> scan(MethodInfo method, Map<String, Object> methodContext) {
-                return Collections.singletonList(new SecurityContextOverrideHandler.Customizer());
-            }
-        });
     }
 
     private String determineApplicationPath(IndexView index) {

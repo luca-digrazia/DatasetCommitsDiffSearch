@@ -21,7 +21,6 @@ import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNa
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MATRIX_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.MULTI;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.NON_BLOCKING;
-import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.OPTIONAL;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PATH;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PATH_PARAM;
 import static org.jboss.resteasy.reactive.common.processor.ResteasyReactiveDotNames.PATH_SEGMENT;
@@ -833,13 +832,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
                 if (convertible) {
                     handleSortedSetParam(existingConverters, errorLocation, hasRuntimeConverters, builder, elementType);
                 }
-            } else if (pt.name().equals(OPTIONAL)) {
-                typeHandled = true;
-                elementType = toClassName(pt.arguments().get(0), currentClassInfo, actualEndpointInfo, index);
-                if (convertible) {
-                    handleOptionalParam(existingConverters, errorLocation, hasRuntimeConverters, builder, elementType);
-                }
-                builder.setOptional(true);
             } else if (convertible) {
                 throw new RuntimeException("Invalid parameter type '" + pt + "' used on method " + errorLocation);
             }
@@ -881,10 +873,6 @@ public abstract class EndpointIndexer<T extends EndpointIndexer<T, PARAM, METHOD
     }
 
     protected void handleSortedSetParam(Map<String, String> existingConverters, String errorLocation,
-            boolean hasRuntimeConverters, PARAM builder, String elementType) {
-    }
-
-    protected void handleOptionalParam(Map<String, String> existingConverters, String errorLocation,
             boolean hasRuntimeConverters, PARAM builder, String elementType) {
     }
 

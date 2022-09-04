@@ -188,15 +188,7 @@ public class VertxResteasyReactiveRequestContext extends ResteasyReactiveRequest
 
     @Override
     public InputStream createInputStream(ByteBuffer existingData) {
-        if (existingData == null) {
-            return createInputStream();
-        }
         return new VertxInputStream(context, 10000, Unpooled.wrappedBuffer(existingData), this);
-    }
-
-    @Override
-    public InputStream createInputStream() {
-        return new VertxInputStream(context, 10000, this);
     }
 
     @Override

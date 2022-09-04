@@ -159,7 +159,7 @@ public class DeploymentInfo {
         return this;
     }
 
-    public List<HandlerChainCustomizer> getGlobalHandlerCustomizers() {
+    public List<HandlerChainCustomizer> getGlobalHandlerCustomers() {
         return globalHandlerCustomers;
     }
 
