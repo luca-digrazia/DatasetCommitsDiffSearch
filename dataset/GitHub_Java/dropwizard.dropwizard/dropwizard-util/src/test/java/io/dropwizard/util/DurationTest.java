@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 public class DurationTest {
     @Test
-    void convertsDays() throws Exception {
+    public void convertsDays() throws Exception {
         assertThat(Duration.days(2).toDays())
             .isEqualTo(2);
         assertThat(Duration.days(2).toHours())
@@ -23,43 +23,43 @@ public class DurationTest {
     }
 
     @Test
-    void convertsHours() throws Exception {
+    public void convertsHours() throws Exception {
         assertThat(Duration.hours(2).toMinutes())
             .isEqualTo(120);
     }
 
     @Test
-    void convertsMinutes() throws Exception {
+    public void convertsMinutes() throws Exception {
         assertThat(Duration.minutes(3).toSeconds())
             .isEqualTo(180);
     }
 
     @Test
-    void convertsSeconds() throws Exception {
+    public void convertsSeconds() throws Exception {
         assertThat(Duration.seconds(2).toMilliseconds())
             .isEqualTo(2000);
     }
 
     @Test
-    void convertsMilliseconds() throws Exception {
+    public void convertsMilliseconds() throws Exception {
         assertThat(Duration.milliseconds(2).toMicroseconds())
             .isEqualTo(2000);
     }
 
     @Test
-    void convertsMicroseconds() throws Exception {
+    public void convertsMicroseconds() throws Exception {
         assertThat(Duration.microseconds(2).toNanoseconds())
             .isEqualTo(2000);
     }
 
     @Test
-    void convertsNanoseconds() throws Exception {
+    public void convertsNanoseconds() throws Exception {
         assertThat(Duration.nanoseconds(2).toNanoseconds())
             .isEqualTo(2);
     }
 
     @Test
-    void parsesDays() throws Exception {
+    public void parsesDays() throws Exception {
         assertThat(Duration.parse("1d"))
             .isEqualTo(Duration.days(1));
 
@@ -71,7 +71,7 @@ public class DurationTest {
     }
 
     @Test
-    void parsesHours() throws Exception {
+    public void parsesHours() throws Exception {
         assertThat(Duration.parse("1h"))
             .isEqualTo(Duration.hours(1));
 
@@ -83,7 +83,7 @@ public class DurationTest {
     }
 
     @Test
-    void parsesMinutes() throws Exception {
+    public void parsesMinutes() throws Exception {
         assertThat(Duration.parse("1m"))
             .isEqualTo(Duration.minutes(1));
 
@@ -101,7 +101,7 @@ public class DurationTest {
     }
 
     @Test
-    void parsesSeconds() throws Exception {
+    public void parsesSeconds() throws Exception {
         assertThat(Duration.parse("1s"))
             .isEqualTo(Duration.seconds(1));
 
@@ -113,7 +113,7 @@ public class DurationTest {
     }
 
     @Test
-    void parsesMilliseconds() throws Exception {
+    public void parsesMilliseconds() throws Exception {
         assertThat(Duration.parse("1ms"))
             .isEqualTo(Duration.milliseconds(1));
 
@@ -125,7 +125,7 @@ public class DurationTest {
     }
 
     @Test
-    void parsesMicroseconds() throws Exception {
+    public void parsesMicroseconds() throws Exception {
         assertThat(Duration.parse("1us"))
             .isEqualTo(Duration.microseconds(1));
 
@@ -137,7 +137,7 @@ public class DurationTest {
     }
 
     @Test
-    void parsesNanoseconds() throws Exception {
+    public void parsesNanoseconds() throws Exception {
         assertThat(Duration.parse("1ns"))
             .isEqualTo(Duration.nanoseconds(1));
 
@@ -149,28 +149,28 @@ public class DurationTest {
     }
 
     @Test
-    void parseDurationWithWhiteSpaces() {
+    public void parseDurationWithWhiteSpaces() {
         assertThat(Duration.parse("5   seconds"))
             .isEqualTo(Duration.seconds(5));
     }
 
     @Test
-    void unableParseWrongDurationCount() {
+    public void unableParseWrongDurationCount() {
         assertThatIllegalArgumentException().isThrownBy(() -> Duration.parse("five seconds"));
     }
 
     @Test
-    void unableParseWrongDurationTimeUnit() {
+    public void unableParseWrongDurationTimeUnit() {
         assertThatIllegalArgumentException().isThrownBy(() -> Duration.parse("1gs"));
     }
 
     @Test
-    void unableParseWrongDurationFormat() {
+    public void unableParseWrongDurationFormat() {
         assertThatIllegalArgumentException().isThrownBy(() -> Duration.parse("1 milli second"));
     }
 
     @Test
-    void isHumanReadable() throws Exception {
+    public void isHumanReadable() throws Exception {
         assertThat(Duration.microseconds(1).toString())
             .isEqualTo("1 microsecond");
 
@@ -179,19 +179,19 @@ public class DurationTest {
     }
 
     @Test
-    void hasAQuantity() throws Exception {
+    public void hasAQuantity() throws Exception {
         assertThat(Duration.microseconds(12).getQuantity())
             .isEqualTo(12);
     }
 
     @Test
-    void hasAUnit() throws Exception {
+    public void hasAUnit() throws Exception {
         assertThat(Duration.microseconds(1).getUnit())
             .isEqualTo(TimeUnit.MICROSECONDS);
     }
 
     @Test
-    void isComparable() throws Exception {
+    public void isComparable() throws Exception {
         // both zero
         assertThat(Duration.nanoseconds(0).compareTo(Duration.nanoseconds(0))).isEqualTo(0);
         assertThat(Duration.nanoseconds(0).compareTo(Duration.microseconds(0))).isEqualTo(0);
@@ -816,7 +816,7 @@ public class DurationTest {
     }
 
     @Test
-    void serializesCorrectlyWithJackson() throws IOException {
+    public void serializesCorrectlyWithJackson() throws IOException {
         final ObjectMapper mapper = new ObjectMapper();
 
         assertThat(mapper.writeValueAsString(Duration.nanoseconds(0L))).isEqualTo("\"0 nanoseconds\"");
@@ -843,7 +843,7 @@ public class DurationTest {
     }
 
     @Test
-    void deserializesCorrectlyWithJackson() throws IOException {
+    public void deserializesCorrectlyWithJackson() throws IOException {
         final ObjectMapper mapper = new ObjectMapper();
 
         assertThat(mapper.readValue("\"0 nanoseconds\"", Duration.class)).isEqualTo(Duration.nanoseconds(0L));
@@ -881,7 +881,6 @@ public class DurationTest {
 
         try (final ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes);
              final ObjectInputStream objectInputStream = new ObjectInputStream(inputStream)) {
-            @SuppressWarnings("BanSerializableRead")
             final Object o = objectInputStream.readObject();
             assertThat(o)
                     .isInstanceOf(Duration.class)

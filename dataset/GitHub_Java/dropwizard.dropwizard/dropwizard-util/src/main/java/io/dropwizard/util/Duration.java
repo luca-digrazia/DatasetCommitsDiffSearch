@@ -2,62 +2,53 @@ package io.dropwizard.util;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
-import com.google.common.base.CharMatcher;
-import com.google.common.collect.ImmutableMap;
 
+import java.io.Serializable;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
-public class Duration {
-    private static final Pattern PATTERN = Pattern.compile("[\\d]+[\\s]*(" +
-            "ns|nanosecond(s)?|" +
-            "us|microsecond(s)?|" +
-            "ms|millisecond(s)?|" +
-            "s|second(s)?|" +
-            "m|minute(s)?|" +
-            "h|hour(s)?|" +
-            "d|day(s)?" +
-            ')');
-    private static final ImmutableMap<String, TimeUnit> SUFFIXES;
+public class Duration implements Comparable<Duration>, Serializable {
+    private static final long serialVersionUID = 1445611723318059801L;
+
+    private static final Pattern DURATION_PATTERN = Pattern.compile("(\\d+)\\s*(\\S+)");
+    private static final Map<String, TimeUnit> SUFFIXES;
 
     static {
-        final ImmutableMap.Builder<String, TimeUnit> suffixes = ImmutableMap.builder();
-
+        final Map<String, TimeUnit> suffixes = new HashMap<>();
         suffixes.put("ns", TimeUnit.NANOSECONDS);
         suffixes.put("nanosecond", TimeUnit.NANOSECONDS);
         suffixes.put("nanoseconds", TimeUnit.NANOSECONDS);
-
         suffixes.put("us", TimeUnit.MICROSECONDS);
         suffixes.put("microsecond", TimeUnit.MICROSECONDS);
         suffixes.put("microseconds", TimeUnit.MICROSECONDS);
-
         suffixes.put("ms", TimeUnit.MILLISECONDS);
         suffixes.put("millisecond", TimeUnit.MILLISECONDS);
         suffixes.put("milliseconds", TimeUnit.MILLISECONDS);
-
         suffixes.put("s", TimeUnit.SECONDS);
         suffixes.put("second", TimeUnit.SECONDS);
         suffixes.put("seconds", TimeUnit.SECONDS);
-
         suffixes.put("m", TimeUnit.MINUTES);
+        suffixes.put("min", TimeUnit.MINUTES);
+        suffixes.put("mins", TimeUnit.MINUTES);
         suffixes.put("minute", TimeUnit.MINUTES);
         suffixes.put("minutes", TimeUnit.MINUTES);
-
         suffixes.put("h", TimeUnit.HOURS);
         suffixes.put("hour", TimeUnit.HOURS);
         suffixes.put("hours", TimeUnit.HOURS);
-
         suffixes.put("d", TimeUnit.DAYS);
         suffixes.put("day", TimeUnit.DAYS);
         suffixes.put("days", TimeUnit.DAYS);
+        SUFFIXES = Collections.unmodifiableMap(suffixes);
 
-        SUFFIXES = suffixes.build();
     }
-    
+
     public static Duration nanoseconds(long count) {
         return new Duration(count, TimeUnit.NANOSECONDS);
     }
@@ -85,22 +76,21 @@ public class Duration {
     public static Duration days(long count) {
         return new Duration(count, TimeUnit.DAYS);
     }
-    
-    private static long parseCount(String s) {
-        checkArgument(PATTERN.matcher(s).matches(), "Invalid duration: %s", s);
-        final String value = CharMatcher.WHITESPACE.removeFrom(s);
-        return Long.parseLong(CharMatcher.JAVA_LETTER.trimTrailingFrom(value));
-    }
-    
-    private static TimeUnit parseUnit(String s) {
-        final String value = CharMatcher.WHITESPACE.removeFrom(s);
-        final String suffix = CharMatcher.DIGIT.trimLeadingFrom(value);
-        return SUFFIXES.get(suffix);
-    }
 
     @JsonCreator
     public static Duration parse(String duration) {
-        return new Duration(parseCount(duration), parseUnit(duration));
+        final Matcher matcher = DURATION_PATTERN.matcher(duration);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Invalid duration: " + duration);
+        }
+
+        final long count = Long.parseLong(matcher.group(1));
+        final TimeUnit unit = SUFFIXES.get(matcher.group(2));
+        if (unit == null) {
+            throw new IllegalArgumentException("Invalid duration: " + duration + ". Wrong time unit");
+        }
+
+        return new Duration(count, unit);
     }
 
     private final long count;
@@ -108,7 +98,7 @@ public class Duration {
 
     private Duration(long count, TimeUnit unit) {
         this.count = count;
-        this.unit = checkNotNull(unit);
+        this.unit = requireNonNull(unit);
     }
 
     public long getQuantity() {
@@ -149,8 +139,12 @@ public class Duration {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) { return true; }
-        if ((obj == null) || (getClass() != obj.getClass())) { return false; }
+        if (this == obj) {
+            return true;
+        }
+        if ((obj == null) || (getClass() != obj.getClass())) {
+            return false;
+        }
         final Duration duration = (Duration) obj;
         return (count == duration.count) && (unit == duration.unit);
 
@@ -169,5 +163,14 @@ public class Duration {
             units = units.substring(0, units.length() - 1);
         }
         return Long.toString(count) + ' ' + units;
+    }
+
+    @Override
+    public int compareTo(Duration other) {
+        if (unit == other.unit) {
+            return Long.compare(count, other.count);
+        }
+
+        return Long.compare(toNanoseconds(), other.toNanoseconds());
     }
 }

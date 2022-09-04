@@ -159,9 +159,6 @@ public class Size implements Comparable<Size>, Serializable {
         return Long.compare(toBytes(), other.toBytes());
     }
 
-    /**
-     * @since 2.0
-     */
     public DataSize toDataSize() {
         switch (unit) {
             case BYTES:
@@ -179,9 +176,6 @@ public class Size implements Comparable<Size>, Serializable {
         }
     }
 
-    /**
-     * @since 2.0
-     */
     public static Size fromDataSize(DataSize dataSize) {
         switch (dataSize.getUnit()) {
             case BYTES:
