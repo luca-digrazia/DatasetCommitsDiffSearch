@@ -39,11 +39,6 @@ public interface BuildEventArtifactUploader {
   void shutdown();
 
   /**
-   * Return true if the upload may be "slow". Examples of slowness include writes to remote storage.
-   */
-  boolean mayBeSlow();
-
-  /**
    * Returns a {@link PathConverter} for the uploaded files, or {@code null} when the uploaded
    * failed.
    */
