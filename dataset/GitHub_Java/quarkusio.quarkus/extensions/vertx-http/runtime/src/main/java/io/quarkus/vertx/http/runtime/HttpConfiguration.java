@@ -35,13 +35,7 @@ public class HttpConfiguration {
      * The HTTP host
      */
     @ConfigItem(defaultValue = "0.0.0.0")
-    public String host;
-
-    /**
-     * Enable listening to host:port
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean hostEnabled;
+    public Optional<String> host;
 
     /**
      * The HTTPS port
@@ -68,15 +62,6 @@ public class HttpConfiguration {
      */
     @ConfigItem(defaultValue = "false")
     public boolean allowForwarded;
-
-    /**
-     * If insecure (i.e. http rather than https) requests are allowed. If this is {@code enabled}
-     * then http works as normal. {@code redirect} will still open the http port, but
-     * all requests will be redirected to the HTTPS port. {@code disabled} will prevent the HTTP
-     * port from opening at all.
-     */
-    @ConfigItem(defaultValue = "enabled")
-    public InsecureRequests insecureRequests;
 
     /**
      * The CORS config
@@ -109,15 +94,6 @@ public class HttpConfiguration {
      */
     @ConfigItem(defaultValue = "30M", name = "idle-timeout")
     public Duration idleTimeout;
-
-    /**
-     * Http connection read timeout for blocking IO. This is the maximum amount of time
-     * a thread will wait for data, before an IOException will be thrown and the connection
-     * closed.
-     *
-     */
-    @ConfigItem(defaultValue = "60s", name = "read-timeout")
-    public Duration readTimeout;
 
     /**
      * Request body related settings
@@ -161,14 +137,8 @@ public class HttpConfiguration {
     /**
      * Path to a unix domain socket
      */
-    @ConfigItem(defaultValue = "/var/run/io.quarkus.app.socket")
-    public String domainSocket;
-
-    /**
-     * Enable listening to host:port
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean domainSocketEnabled;
+    @ConfigItem(name = "domain-socket")
+    public Optional<String> domainSocket;
 
     public int determinePort(LaunchMode launchMode) {
         return launchMode == LaunchMode.TEST ? testPort : port;
@@ -178,9 +148,4 @@ public class HttpConfiguration {
         return launchMode == LaunchMode.TEST ? testSslPort : sslPort;
     }
 
-    public static enum InsecureRequests {
-        ENABLED,
-        REDIRECT,
-        DISABLED;
-    }
 }
