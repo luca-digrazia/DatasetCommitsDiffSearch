@@ -328,15 +328,8 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	private PageChangeHolder createPageChangeHolder(JFieldRef idRef, TypeMirror viewParameterType, boolean hasAddOnPageChangeListenerMethod) {
-		AbstractJClass viewClass;
-		JDefinedClass onPageChangeListenerClass;
-		if (getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_VIEW_PAGER) == null) {
-			viewClass = getClasses().VIEW_PAGER;
-			onPageChangeListenerClass = getCodeModel().anonymousClass(getClasses().PAGE_CHANGE_LISTENER);
-		} else {
-			viewClass = getClasses().ANDROIDX_VIEW_PAGER;
-			onPageChangeListenerClass = getCodeModel().anonymousClass(getClasses().ANDROIDX_PAGE_CHANGE_LISTENER);
-		}
+		JDefinedClass onPageChangeListenerClass = getCodeModel().anonymousClass(getClasses().PAGE_CHANGE_LISTENER);
+		AbstractJClass viewClass = getClasses().VIEW_PAGER;
 		if (viewParameterType != null) {
 			viewClass = getJClass(viewParameterType.toString());
 		}
