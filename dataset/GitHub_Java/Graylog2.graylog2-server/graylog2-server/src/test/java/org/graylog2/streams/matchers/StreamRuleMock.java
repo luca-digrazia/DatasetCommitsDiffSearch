@@ -3,7 +3,6 @@ package org.graylog2.streams.matchers;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.plugin.streams.StreamRule;
-import org.graylog2.plugin.streams.StreamRuleType;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -11,15 +10,14 @@ import org.graylog2.plugin.streams.StreamRuleType;
 public class StreamRuleMock implements StreamRule {
     private ObjectId objectId = null;
     private ObjectId streamId = null;
-    private StreamRuleType type = null;
+    private Integer type = 0;
     private String value = null;
     private String field = null;
     private Boolean inverted = false;
 
     public StreamRuleMock(DBObject rule) {
         this.objectId = (ObjectId) rule.get("_id");
-        if (rule.get("type") != null)
-            this.type = StreamRuleType.fromInteger((Integer) rule.get("type"));
+        this.type = (Integer) rule.get("type");
         this.value = (String) rule.get("value");
         this.field = (String) rule.get("field");
         this.inverted = (Boolean) rule.get("inverted");
@@ -33,7 +31,7 @@ public class StreamRuleMock implements StreamRule {
         return streamId;
     }
 
-    public StreamRuleType getType() {
+    public Integer getType() {
         return type;
     }
 
@@ -59,7 +57,7 @@ public class StreamRuleMock implements StreamRule {
         this.streamId = streamId;
     }
 
-    public void setType(StreamRuleType type) {
+    public void setType(Integer type) {
         this.type = type;
     }
 
