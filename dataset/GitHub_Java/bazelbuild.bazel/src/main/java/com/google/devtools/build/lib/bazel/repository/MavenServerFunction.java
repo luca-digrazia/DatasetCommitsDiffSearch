@@ -14,26 +14,20 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenServerRule;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.repository.ExternalPackageException;
-import com.google.devtools.build.lib.repository.ExternalPackageUtil;
-import com.google.devtools.build.lib.repository.ExternalRuleNotFoundException;
+import com.google.devtools.build.lib.rules.ExternalPackageUtil;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction.RepositoryFunctionException;
 import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
-import com.google.devtools.build.lib.skyframe.ClientEnvironmentFunction;
-import com.google.devtools.build.lib.skyframe.ClientEnvironmentValue;
+import com.google.devtools.build.lib.skyframe.FileValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -56,8 +50,7 @@ import org.apache.maven.settings.building.SettingsBuildingResult;
  * Implementation of maven_repository.
  */
 public class MavenServerFunction implements SkyFunction {
-  public static final SkyFunctionName NAME =
-      SkyFunctionName.createHermetic("MAVEN_SERVER_FUNCTION");
+  public static final SkyFunctionName NAME = SkyFunctionName.create("MAVEN_SERVER_FUNCTION");
 
   private static final String USER_KEY = "user";
   private static final String SYSTEM_KEY = "system";
@@ -71,28 +64,18 @@ public class MavenServerFunction implements SkyFunction {
   @Nullable
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
-      throws InterruptedException, RepositoryFunctionException, ExternalPackageException {
+      throws InterruptedException, RepositoryFunctionException,
+          ExternalPackageUtil.ExternalPackageException {
     String repository = (String) skyKey.argument();
     Rule repositoryRule = null;
     try {
       repositoryRule = ExternalPackageUtil.getRuleByName(repository, env);
-    } catch (ExternalRuleNotFoundException ex) {
+    } catch (ExternalPackageUtil.ExternalRuleNotFoundException ex) {
       // Ignored. We throw a new one below.
     }
     if (env.valuesMissing()) {
       return null;
     }
-
-    SkyKey m2HomeKey = ClientEnvironmentFunction.key("M2_HOME");
-    SkyKey userHomeKey = ClientEnvironmentFunction.key("HOME");
-    Map<SkyKey, SkyValue> envvars = env.getValues(ImmutableList.of(m2HomeKey, userHomeKey));
-    if (env.valuesMissing()) {
-      return null;
-    }
-
-    String m2Home = ((ClientEnvironmentValue) envvars.get(m2HomeKey)).getValue();
-    String userHome = ((ClientEnvironmentValue) envvars.get(userHomeKey)).getValue();
-
     String serverName;
     String url;
     Map<String, FileValue> settingsFiles;
@@ -100,7 +83,7 @@ public class MavenServerFunction implements SkyFunction {
         && repositoryRule.getRuleClass().equals(MavenServerRule.NAME);
     if (!foundRepoRule) {
       if (repository.equals(MavenServerValue.DEFAULT_ID)) {
-        settingsFiles = getDefaultSettingsFile(m2Home, userHome, directories, env);
+        settingsFiles = getDefaultSettingsFile(directories, env);
         serverName = MavenServerValue.DEFAULT_ID;
         url = MavenConnector.getMavenCentralRemote().getUrl();
       } else {
@@ -114,14 +97,13 @@ public class MavenServerFunction implements SkyFunction {
       try {
         url = mapper.get("url", Type.STRING);
         if (!mapper.isAttributeValueExplicitlySpecified("settings_file")) {
-          settingsFiles = getDefaultSettingsFile(m2Home, userHome, directories, env);
+          settingsFiles = getDefaultSettingsFile(directories, env);
         } else {
           PathFragment settingsFilePath =
               PathFragment.create(mapper.get("settings_file", Type.STRING));
-          RootedPath settingsPath =
-              RootedPath.toRootedPath(
-                  Root.fromPath(directories.getWorkspace().getRelative(settingsFilePath)),
-                  PathFragment.EMPTY_FRAGMENT);
+          RootedPath settingsPath = RootedPath.toRootedPath(
+              directories.getWorkspace().getRelative(settingsFilePath),
+              PathFragment.EMPTY_FRAGMENT);
           FileValue fileValue = (FileValue) env.getValue(FileValue.key(settingsPath));
           if (fileValue == null) {
             return null;
@@ -196,34 +178,28 @@ public class MavenServerFunction implements SkyFunction {
   }
 
   private Map<String, FileValue> getDefaultSettingsFile(
-      @Nullable String m2Home,
-      @Nullable String userHome,
-      BlazeDirectories directories,
-      Environment env)
-      throws InterruptedException {
+      BlazeDirectories directories, Environment env) throws InterruptedException {
     // The system settings file is at $M2_HOME/conf/settings.xml.
+    String m2Home = System.getenv("M2_HOME");
     ImmutableList.Builder<SkyKey> settingsFilesBuilder = ImmutableList.builder();
     SkyKey systemKey = null;
-    if (!Strings.isNullOrEmpty(m2Home)) {
+    if (m2Home != null) {
       PathFragment mavenInstallSettings =
           PathFragment.create(m2Home).getRelative("conf/settings.xml");
-      systemKey =
-          FileValue.key(
-              RootedPath.toRootedPath(
-                  Root.fromPath(directories.getWorkspace().getRelative(mavenInstallSettings)),
-                  PathFragment.EMPTY_FRAGMENT));
+      systemKey = FileValue.key(
+          RootedPath.toRootedPath(directories.getWorkspace().getRelative(mavenInstallSettings),
+              PathFragment.EMPTY_FRAGMENT));
       settingsFilesBuilder.add(systemKey);
     }
 
     // The user settings file is at $HOME/.m2/settings.xml.
+    String userHome = System.getenv("HOME");
     SkyKey userKey = null;
-    if (!Strings.isNullOrEmpty(userHome)) {
+    if (userHome != null) {
       PathFragment userSettings = PathFragment.create(userHome).getRelative(".m2/settings.xml");
-      userKey =
-          FileValue.key(
-              RootedPath.toRootedPath(
-                  Root.fromPath(directories.getWorkspace().getRelative(userSettings)),
-                  PathFragment.EMPTY_FRAGMENT));
+      userKey = FileValue.key(RootedPath.toRootedPath(
+          directories.getWorkspace().getRelative(userSettings),
+          PathFragment.EMPTY_FRAGMENT));
       settingsFilesBuilder.add(userKey);
     }
 

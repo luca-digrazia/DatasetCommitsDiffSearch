@@ -52,7 +52,6 @@ import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.RecordingDifferencer;
-import com.google.devtools.build.skyframe.SequencedRecordingDifferencer;
 import com.google.devtools.build.skyframe.SequentialBuildDriver;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
@@ -140,7 +139,7 @@ public abstract class PackageLookupFunctionTest extends FoundationTestCase {
             repositoryHandlers, null, new AtomicBoolean(true), ImmutableMap::of, directories));
     skyFunctions.put(SkyFunctions.REPOSITORY, new RepositoryLoaderFunction());
 
-    differencer = new SequencedRecordingDifferencer();
+    differencer = new RecordingDifferencer();
     evaluator = new InMemoryMemoizingEvaluator(skyFunctions, differencer);
     driver = new SequentialBuildDriver(evaluator);
     PrecomputedValue.BUILD_ID.set(differencer, UUID.randomUUID());
