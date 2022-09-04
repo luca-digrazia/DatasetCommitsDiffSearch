@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
@@ -108,7 +109,7 @@ public abstract class AbstractConfiguredTarget
   public Object getValue(String name) {
     // Standard fields should be proxied to their default provider object
     DefaultProvider defaultProvider =
-        (DefaultProvider) get(DefaultProvider.SKYLARK_CONSTRUCTOR.getKey());
+        (DefaultProvider) get(SkylarkRuleContext.getDefaultProvider().getKey());
     switch (name) {
       case FILES_FIELD:
       case DEFAULT_RUNFILES_FIELD:

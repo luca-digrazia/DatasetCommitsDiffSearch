@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.devtools.build.lib.syntax.EvalUtils.SKYLARK_COMPARATOR;
 
-import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
@@ -28,9 +27,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.rules.SkylarkRuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
@@ -38,8 +34,6 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Set;
 import javax.annotation.Nullable;
 
@@ -57,11 +51,9 @@ import javax.annotation.Nullable;
  * not mentioned on the output.
  */
 @Immutable
-public final class OutputGroupProvider extends SkylarkClassObject
-    implements TransitiveInfoProvider, SkylarkIndexable, Iterable<String> {
+public final class OutputGroupProvider implements
+    TransitiveInfoProvider, SkylarkIndexable, Iterable<String> {
   public static final String SKYLARK_NAME = "output_groups";
-
-  public static NativeClassObjectConstructor SKYLARK_CONSTRUCTOR = new Constructor();
 
   /**
    * Prefix for output groups that are not reported to the user on the terminal output of Blaze when
@@ -121,25 +113,8 @@ public final class OutputGroupProvider extends SkylarkClassObject
   private final ImmutableMap<String, NestedSet<Artifact>> outputGroups;
 
   public OutputGroupProvider(ImmutableMap<String, NestedSet<Artifact>> outputGroups) {
-    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of());
     this.outputGroups = outputGroups;
   }
-
-  @Nullable
-  public static OutputGroupProvider get(TransitiveInfoCollection collection) {
-    return (OutputGroupProvider) collection.getProvider(OutputGroupProvider.class);
-  }
-
-  @Nullable
-  public static OutputGroupProvider get(ConfiguredAspect aspect) {
-    SkylarkProviders skylarkProviders = aspect.getProvider(SkylarkProviders.class);
-
-
-    return skylarkProviders != null
-        ? (OutputGroupProvider) skylarkProviders.getDeclaredProvider(SKYLARK_CONSTRUCTOR.getKey())
-        : null;
-  }
-
 
   /** Return the artifacts in a particular output group.
    *
@@ -235,6 +210,7 @@ public final class OutputGroupProvider extends SkylarkClassObject
           "Output group %s not present", key
       ));
     }
+
   }
 
   @Override
@@ -245,52 +221,5 @@ public final class OutputGroupProvider extends SkylarkClassObject
   @Override
   public Iterator<String> iterator() {
     return SKYLARK_COMPARATOR.sortedCopy(outputGroups.keySet()).iterator();
-  }
-
-  @Override
-  public Object getValue(String name) {
-    NestedSet<Artifact> result = outputGroups.get(name);
-    if (result == null) {
-      return null;
-    }
-    return SkylarkNestedSet.of(Artifact.class, result);
-  }
-
-  @Override
-  public ImmutableCollection<String> getKeys() {
-    return outputGroups.keySet();
-  }
-
-  /**
-   * A constructor callable from Skylark for OutputGroupProvider.
-   */
-  private static class Constructor extends NativeClassObjectConstructor {
-
-    private Constructor() {
-      super("OutputGroupInfo");
-    }
-
-    @Override
-    protected SkylarkClassObject createInstanceFromSkylark(Object[] args, Location loc)
-        throws EvalException {
-
-      @SuppressWarnings("unchecked")
-      Map<String, Object> kwargs = (Map<String, Object>) args[0];
-
-      ImmutableMap.Builder<String, NestedSet<Artifact>> builder = ImmutableMap.builder();
-      for (Entry<String, Object> entry : kwargs.entrySet()) {
-        builder.put(entry.getKey(),
-            SkylarkRuleConfiguredTargetBuilder.convertToOutputGroupValue(
-                loc, entry.getKey(), entry.getValue()));
-
-
-      }
-      return new OutputGroupProvider(builder.build());
-    }
-
-    @Override
-    public String getErrorMessageFormatForInstances() {
-      return "Output group %s not present";
-    }
   }
 }

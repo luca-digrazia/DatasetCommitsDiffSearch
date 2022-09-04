@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.FileTarget;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.rules.SkylarkRuleContext;
 import com.google.devtools.build.lib.rules.fileset.FilesetProvider;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.util.FileType;
@@ -49,7 +50,7 @@ public abstract class FileConfiguredTarget extends AbstractConfiguredTarget
     SkylarkProviders skylarkProviders =
         new SkylarkProviders(
             ImmutableMap.<String, Object>of(),
-            ImmutableMap.of(DefaultProvider.SKYLARK_CONSTRUCTOR.getKey(), defaultProvider));
+            ImmutableMap.of(SkylarkRuleContext.getDefaultProvider().getKey(), defaultProvider));
     TransitiveInfoProviderMap.Builder builder =
         TransitiveInfoProviderMap.builder()
             .put(VisibilityProvider.class, this)

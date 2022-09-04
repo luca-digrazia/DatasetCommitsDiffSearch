@@ -135,6 +135,14 @@ public final class RuleConfiguredTargetBuilder {
       addSkylarkTransitiveInfo(OutputGroupProvider.SKYLARK_NAME, outputGroupProvider);
     }
 
+    // Populate default provider fields and build it
+    DefaultProvider defaultProvider =
+        DefaultProvider.build(
+            providersBuilder.getProvider(RunfilesProvider.class),
+            providersBuilder.getProvider(FileProvider.class),
+            filesToRunProvider);
+    skylarkDeclaredProviders.put(defaultProvider.getConstructor().getKey(), defaultProvider);
+
     TransitiveInfoProviderMap providers = providersBuilder.build();
     addRegisteredProvidersToSkylarkProviders(providers);
 

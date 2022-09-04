@@ -849,7 +849,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "test/foo.bzl",
         "foo_provider = provider()",
         "def _impl(ctx):",
-        "    default = DefaultInfo(",
+        "    default = ctx.default_provider(",
         "        runfiles=ctx.runfiles(ctx.files.runs),",
         "    )",
         "    foo = foo_provider()",
@@ -865,7 +865,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "test/bar.bzl",
         "load(':foo.bzl', 'foo_provider')",
         "def _impl(ctx):",
-        "    provider = ctx.attr.deps[0][DefaultInfo]",
+        "    provider = ctx.attr.deps[0][ctx.default_provider]",
         "    return struct(",
         "        provider = provider,",
         "        dir = str(sorted(dir(provider))),",
@@ -892,7 +892,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Object provider = providers.getValue("provider");
     assertThat(provider).isInstanceOf(DefaultProvider.class);
     assertThat(((DefaultProvider) provider).getConstructor().getPrintableName())
-        .isEqualTo("DefaultInfo");
+        .isEqualTo("default_provider");
 
     assertThat(providers.getValue("dir"))
         .isEqualTo(
@@ -923,7 +923,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     scratch.file(
         "test/bar.bzl",
         "def _impl(ctx):",
-        "    provider = ctx.attr.deps[0][DefaultInfo]",
+        "    provider = ctx.attr.deps[0][ctx.default_provider]",
         "    return struct(",
         "        provider = provider,",
         "        dir = str(sorted(dir(provider))),",
@@ -948,7 +948,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Object provider = providers.getValue("provider");
     assertThat(provider).isInstanceOf(DefaultProvider.class);
     assertThat(((DefaultProvider) provider).getConstructor().getPrintableName())
-        .isEqualTo("DefaultInfo");
+        .isEqualTo("default_provider");
 
     assertThat(providers.getValue("dir"))
         .isEqualTo(
@@ -989,8 +989,8 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "load(':foo.bzl', 'foo_provider')",
         "def _impl(ctx):",
         "    dep = ctx.attr.deps[0]",
-        "    provider = dep[DefaultInfo]",  // The goal is to test this object
-        "    return struct(",               // so we return it here
+        "    provider = dep[ctx.default_provider]",  // The goal is to test this object
+        "    return struct(",                        // so we return it here
         "        default = provider,",
         "    )",
         "bar_rule = rule(",
@@ -1011,7 +1011,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     assertThat(provider).isInstanceOf(DefaultProvider.class);
     SkylarkClassObject defaultProvider = (DefaultProvider) provider;
     assertThat((defaultProvider).getConstructor().getPrintableName())
-        .isEqualTo("DefaultInfo");
+        .isEqualTo("default_provider");
   }
 
   @Test
@@ -1020,7 +1020,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "test/foo.bzl",
         "foo_provider = provider()",
         "def _impl(ctx):",
-        "    default = DefaultInfo(",
+        "    default = ctx.default_provider(",
         "        foo=ctx.runfiles(),",
         "    )",
         "    return [default]",
