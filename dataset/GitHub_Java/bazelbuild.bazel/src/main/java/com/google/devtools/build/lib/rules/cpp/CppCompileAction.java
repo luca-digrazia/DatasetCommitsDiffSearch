@@ -177,20 +177,21 @@ public class CppCompileAction extends AbstractAction
   private final boolean shouldPruneModules;
   private final boolean usePic;
   private final boolean useHeaderModules;
-  private final boolean isStrictSystemIncludes;
   private final CppCompilationContext context;
   private final Iterable<IncludeScannable> lipoScannables;
   private final ImmutableList<Artifact> builtinIncludeFiles;
   // A list of files to include scan that are not source files, pcm files, lipo scannables, or
   // included via a command-line "-include file.h". Actions that use non C++ files as source
   // files--such as Clif--may use this mechanism.
-  private final ImmutableList<Artifact> additionalIncludeScanningRoots;
+  private final ImmutableList<Artifact> additionalIncludeScannables;
   @VisibleForTesting public final CompileCommandLine compileCommandLine;
   private final ImmutableMap<String, String> executionInfo;
   private final ImmutableMap<String, String> environment;
   private final String actionName;
 
+  @VisibleForTesting final CppConfiguration cppConfiguration;
   private final FeatureConfiguration featureConfiguration;
+  protected final Class<? extends CppCompileActionContext> actionContext;
   protected final CppSemantics cppSemantics;
 
   /**
@@ -228,14 +229,12 @@ public class CppCompileAction extends AbstractAction
    * @param owner the owner of the action, usually the configured target that emitted it
    * @param allInputs the list of all action inputs.
    * @param featureConfiguration TODO(bazel-team): Add parameter description.
-   * @param crosstoolTopPathFragment the path to the CROSSTOOL given in --crosstool_top
    * @param variables TODO(bazel-team): Add parameter description.
    * @param sourceFile the source file that should be compiled. {@code mandatoryInputs} must contain
    *     this file
    * @param shouldScanIncludes a boolean indicating whether scanning of {@code sourceFile} is to be
    *     performed looking for inclusions.
    * @param usePic TODO(bazel-team): Add parameter description.
-   * @param isStrictSystemIncludes should this compile action use strict system includes
    * @param mandatoryInputs any additional files that need to be present for the compilation to
    *     succeed, can be empty but not null, for example, extra sources for FDO.
    * @param outputFile the object file that is written as result of the compilation, or the fake
@@ -245,10 +244,12 @@ public class CppCompileAction extends AbstractAction
    * @param dwoFile the .dwo output file where debug information is stored for Fission builds (null
    *     if Fission mode is disabled)
    * @param optionalSourceFile an additional optional source file (null if unneeded)
+   * @param cppConfiguration TODO(bazel-team): Add parameter description.
    * @param context the compilation context
+   * @param actionContext TODO(bazel-team): Add parameter description.
    * @param coptsFilter regular expression to remove options from {@code copts}
    * @param lipoScannables List of artifacts to include-scan when this action is a lipo action
-   * @param additionalIncludeScanningRoots list of additional artifacts to include-scan
+   * @param additionalIncludeScannables list of additional artifacts to include-scan
    * @param actionClassId TODO(bazel-team): Add parameter description
    * @param environment TODO(bazel-team): Add parameter description
    * @param actionName a string giving the name of this action for the purpose of toolchain
@@ -260,14 +261,12 @@ public class CppCompileAction extends AbstractAction
       ActionOwner owner,
       NestedSet<Artifact> allInputs,
       FeatureConfiguration featureConfiguration,
-      PathFragment crosstoolTopPathFragment,
       CcToolchainFeatures.Variables variables,
       Artifact sourceFile,
       boolean shouldScanIncludes,
       boolean shouldPruneModules,
       boolean usePic,
       boolean useHeaderModules,
-      boolean isStrictSystemIncludes,
       NestedSet<Artifact> mandatoryInputs,
       ImmutableList<Artifact> builtinIncludeFiles,
       NestedSet<Artifact> prunableInputs,
@@ -278,10 +277,12 @@ public class CppCompileAction extends AbstractAction
       @Nullable Artifact ltoIndexingFile,
       Artifact optionalSourceFile,
       ImmutableMap<String, String> localShellEnvironment,
+      CppConfiguration cppConfiguration,
       CppCompilationContext context,
+      Class<? extends CppCompileActionContext> actionContext,
       Predicate<String> coptsFilter,
       Iterable<IncludeScannable> lipoScannables,
-      ImmutableList<Artifact> additionalIncludeScanningRoots,
+      ImmutableList<Artifact> additionalIncludeScannables,
       UUID actionClassId,
       ImmutableMap<String, String> executionInfo,
       ImmutableMap<String, String> environment,
@@ -302,6 +303,7 @@ public class CppCompileAction extends AbstractAction
     this.outputFile = Preconditions.checkNotNull(outputFile);
     this.optionalSourceFile = optionalSourceFile;
     this.context = context;
+    this.cppConfiguration = cppConfiguration;
     this.featureConfiguration = featureConfiguration;
     // inputsKnown begins as the logical negation of shouldScanIncludes.
     // When scanning includes, the inputs begin as not known, and become
@@ -313,7 +315,6 @@ public class CppCompileAction extends AbstractAction
     Preconditions.checkArgument(!shouldPruneModules || shouldScanIncludes, this);
     this.usePic = usePic;
     this.useHeaderModules = useHeaderModules;
-    this.isStrictSystemIncludes = isStrictSystemIncludes;
     this.discoversInputs = shouldScanIncludes || cppSemantics.needsDotdInputPruning();
     this.compileCommandLine =
         CompileCommandLine.builder(
@@ -321,11 +322,12 @@ public class CppCompileAction extends AbstractAction
                 outputFile,
                 coptsFilter,
                 actionName,
-                crosstoolTopPathFragment,
+                cppConfiguration,
                 dotdFile)
             .setFeatureConfiguration(featureConfiguration)
             .setVariables(variables)
             .build();
+    this.actionContext = actionContext;
     this.lipoScannables = lipoScannables;
     this.actionClassId = actionClassId;
     this.executionInfo = executionInfo;
@@ -338,7 +340,7 @@ public class CppCompileAction extends AbstractAction
     this.prunableInputs = prunableInputs;
     this.builtinIncludeFiles = builtinIncludeFiles;
     this.cppSemantics = cppSemantics;
-    this.additionalIncludeScanningRoots = ImmutableList.copyOf(additionalIncludeScanningRoots);
+    this.additionalIncludeScannables = ImmutableList.copyOf(additionalIncludeScannables);
     this.builtInIncludeDirectories =
         ImmutableList.copyOf(cppProvider.getBuiltInIncludeDirectories());
     this.gccToolPath = cppProvider.getToolPathFragment(Tool.GCC);
@@ -422,7 +424,7 @@ public class CppCompileAction extends AbstractAction
     try {
       initialResult =
           actionExecutionContext
-              .getContext(CppCompileActionContext.class)
+              .getContext(actionContext)
               .findAdditionalInputs(
                   this, actionExecutionContext, cppSemantics.getIncludeProcessing());
     } catch (ExecException e) {
@@ -648,7 +650,7 @@ public class CppCompileAction extends AbstractAction
       builder.addAll(context.getHeaderModuleSrcs());
     } else {
       builder.add(getSourceFile());
-      builder.addAll(additionalIncludeScanningRoots);
+      builder.addAll(additionalIncludeScannables);
     }
     return builder.build().toCollection();
   }
@@ -690,13 +692,13 @@ public class CppCompileAction extends AbstractAction
     return getArgv(getInternalOutputFile());
   }
 
-  protected final List<String> getArgv(PathFragment outputFile) {
-    return compileCommandLine.getArgv(outputFile, overwrittenVariables);
-  }
-
   @Override
   public List<String> getArguments() {
     return getArgv();
+  }
+
+  protected final List<String> getArgv(PathFragment outputFile) {
+    return compileCommandLine.getArgv(outputFile, overwrittenVariables);
   }
 
   @Override
@@ -790,7 +792,7 @@ public class CppCompileAction extends AbstractAction
       allowedIncludes.add(optionalSourceFile);
     }
     Iterable<PathFragment> ignoreDirs =
-        isStrictSystemIncludes
+        cppConfiguration.isStrictSystemIncludes()
             ? getBuiltInIncludeDirectories()
             : getValidationIgnoredDirs();
 
@@ -1040,6 +1042,11 @@ public class CppCompileAction extends AbstractAction
     return context.getDeclaredIncludeSrcs();
   }
 
+  @VisibleForTesting
+  public Class<? extends CppCompileActionContext> getActionContext() {
+    return actionContext;
+  }
+
   /**
    * Estimate resource consumption when this action is executed locally.
    */
@@ -1103,7 +1110,7 @@ public class CppCompileAction extends AbstractAction
     try {
       CppCompileActionResult cppCompileActionResult =
           actionExecutionContext
-              .getContext(CppCompileActionContext.class)
+              .getContext(actionContext)
               .execWithReply(this, actionExecutionContext);
       reply = cppCompileActionResult.contextReply();
       spawnResults = cppCompileActionResult.spawnResults();
@@ -1267,7 +1274,7 @@ public class CppCompileAction extends AbstractAction
       throws ActionExecutionException, InterruptedException {
     Iterable<Artifact> scannedIncludes;
     try {
-      scannedIncludes = actionExecutionContext.getContext(CppCompileActionContext.class)
+      scannedIncludes = actionExecutionContext.getContext(actionContext)
           .findAdditionalInputs(this, actionExecutionContext,  cppSemantics.getIncludeProcessing());
     } catch (ExecException e) {
       throw e.toActionExecutionException(this);
