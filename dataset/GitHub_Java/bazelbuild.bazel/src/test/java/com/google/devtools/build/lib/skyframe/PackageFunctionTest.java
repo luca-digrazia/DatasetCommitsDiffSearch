@@ -23,17 +23,17 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.ConstantRuleVisibility;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
-import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
+import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.ManualClock;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Dirent;
 import com.google.devtools.build.lib.vfs.FileStatus;
@@ -79,10 +79,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
-            new PathPackageLocator(
-                outputBase,
-                ImmutableList.copyOf(roots),
-                BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
+            new PathPackageLocator(outputBase, ImmutableList.copyOf(roots)),
             packageCacheOptions,
             Options.getDefaults(SkylarkSemanticsOptions.class),
             "",
@@ -312,10 +309,7 @@ public class PackageFunctionTest extends BuildViewTestCase {
     packageCacheOptions.globbingThreads = 7;
     getSkyframeExecutor()
         .preparePackageLoading(
-            new PathPackageLocator(
-                outputBase,
-                ImmutableList.<Path>of(rootDirectory),
-                BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
+            new PathPackageLocator(outputBase, ImmutableList.<Path>of(rootDirectory)),
             packageCacheOptions,
             Options.getDefaults(SkylarkSemanticsOptions.class),
             "",

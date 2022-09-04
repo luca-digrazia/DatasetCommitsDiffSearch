@@ -20,7 +20,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
+
 import java.util.Collection;
+
 import javax.annotation.Nullable;
 
 /**
@@ -54,7 +56,7 @@ public class ErrorInfo {
         ImmutableList.of(cycleInfo),
         /*isDirectlyTransient=*/ false,
         /*isTransitivelyTransient=*/ false,
-        /* isCatostrophic= */ false);
+        /*isCatastrophic=*/ false);
   }
 
   /** Create an ErrorInfo from a collection of existing errors. */

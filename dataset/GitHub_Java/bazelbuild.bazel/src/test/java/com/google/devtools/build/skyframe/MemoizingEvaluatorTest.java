@@ -1173,9 +1173,11 @@ public class MemoizingEvaluatorTest {
     }
   }
 
-  /** {@link ParallelEvaluator} can be configured to not store errors alongside recovered values. */
-  protected void parentOfCycleAndErrorInternal(
-      boolean errorsStoredAlongsideValues, boolean useTransientError)
+  /**
+   * {@link ParallelEvaluator} can be configured to not store errors alongside recovered values.
+   * In that case, transient errors that are recovered from do not make the parent transient.
+   */
+  protected void parentOfCycleAndTransientInternal(boolean errorsStoredAlongsideValues)
       throws Exception {
     initializeTester();
     SkyKey cycleKey1 = GraphTester.toSkyKey("cycleKey1");
@@ -1184,12 +1186,7 @@ public class MemoizingEvaluatorTest {
     SkyKey errorKey = GraphTester.toSkyKey("errorKey");
     tester.getOrCreate(cycleKey1).addDependency(cycleKey2).setComputedValue(COPY);
     tester.getOrCreate(cycleKey2).addDependency(cycleKey1).setComputedValue(COPY);
-    TestFunction errorFunction = tester.getOrCreate(errorKey);
-    if (useTransientError) {
-      errorFunction.setHasTransientError(true);
-    } else {
-      errorFunction.setHasError(true);
-    }
+    tester.getOrCreate(errorKey).setHasTransientError(true);
     tester.getOrCreate(mid).addErrorDependency(errorKey, new StringValue("recovered"))
         .setComputedValue(COPY);
     SkyKey top = GraphTester.toSkyKey("top");
@@ -1201,18 +1198,12 @@ public class MemoizingEvaluatorTest {
     ErrorInfo errorInfo = evalResult.getError(top);
     assertThat(topEvaluated.getCount()).isEqualTo(1);
     if (errorsStoredAlongsideValues) {
-      if (useTransientError) {
-        // The parent should be transitively transient, since it transitively depends on a transient
-        // error.
-        assertThat(errorInfo.isTransitivelyTransient()).isTrue();
-      } else {
-        assertThatErrorInfo(errorInfo).isNotTransient();
-      }
+      // The parent should be transitively transient, since it transitively depends on a transient
+      // error.
+      assertThat(errorInfo.isTransitivelyTransient()).isTrue();
       assertThat(errorInfo.getException()).hasMessage(NODE_TYPE.getName() + ":errorKey");
       assertThat(errorInfo.getRootCauseOfException()).isEqualTo(errorKey);
     } else {
-      // When errors are not stored alongside values, transient errors that are recovered from do
-      // not make the parent transient
       assertThatErrorInfo(errorInfo).isNotTransient();
       assertThatErrorInfo(errorInfo).hasExceptionThat().isNull();
     }
@@ -1231,9 +1222,8 @@ public class MemoizingEvaluatorTest {
   }
 
   @Test
-  public void parentOfCycleAndError() throws Exception {
-    parentOfCycleAndErrorInternal(
-        /*errorsStoredAlongsideValues=*/ true, /*useTransientError=*/ true);
+  public void parentOfCycleAndTransient() throws Exception {
+    parentOfCycleAndTransientInternal(/*errorsStoredAlongsideValues=*/ true);
   }
 
   /**
@@ -3773,11 +3763,14 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(key).addDependency("other").setComputedValue(COPY);
     assertThat(tester.evalAndGet("value")).isEqualTo(prevVal);
     tester.differencer.inject(ImmutableMap.of(key, val));
-    StringValue depVal = new StringValue("newfoo");
-    tester.getOrCreate("other").setConstantValue(depVal);
-    tester.differencer.invalidate(ImmutableList.of(GraphTester.toSkyKey("other")));
-    // Injected value is ignored for value with deps.
-    assertThat(tester.evalAndGet("value")).isEqualTo(depVal);
+    try {
+      tester.evalAndGet("value");
+      fail("injection over value with deps should have failed");
+    } catch (IllegalStateException e) {
+      assertThat(e).hasMessage(
+          "existing entry for " + NODE_TYPE.getName() + ":value has deps: "
+              + "[" + NODE_TYPE.getName() + ":other]");
+    }
   }
 
   @Test
@@ -3789,7 +3782,14 @@ public class MemoizingEvaluatorTest {
     tester.getOrCreate(key).addDependency("other").setComputedValue(COPY);
     assertThat(tester.evalAndGet("value")).isEqualTo(val);
     tester.differencer.inject(ImmutableMap.of(key, val));
-    assertThat(tester.evalAndGet("value")).isEqualTo(val);
+    try {
+      tester.evalAndGet("value");
+      fail("injection over value with deps should have failed");
+    } catch (IllegalStateException e) {
+      assertThat(e).hasMessage(
+          "existing entry for " + NODE_TYPE.getName() + ":value has deps: "
+              + "[" + NODE_TYPE.getName() + ":other]");
+    }
   }
 
   @Test
@@ -3862,46 +3862,32 @@ public class MemoizingEvaluatorTest {
     assertThat(newVal).isEqualTo(val);
   }
 
-  protected void runTestPersistentErrorsNotRerun(boolean includeTransientError) throws Exception {
+  @Test
+  public void persistentErrorsNotRerun() throws Exception {
     SkyKey topKey = GraphTester.toSkyKey("top");
     SkyKey transientErrorKey = GraphTester.toSkyKey("transientError");
     SkyKey persistentErrorKey1 = GraphTester.toSkyKey("persistentError1");
     SkyKey persistentErrorKey2 = GraphTester.toSkyKey("persistentError2");
 
-    TestFunction topFunction = tester.getOrCreate(topKey)
+    tester.getOrCreate(topKey)
+          .addErrorDependency(transientErrorKey, new StringValue("doesn't matter"))
           .addErrorDependency(persistentErrorKey1, new StringValue("doesn't matter"))
           .setHasError(true);
     tester.getOrCreate(persistentErrorKey1).setHasError(true);
-    if (includeTransientError) {
-      topFunction.addErrorDependency(transientErrorKey, new StringValue("doesn't matter"));
-      tester.getOrCreate(transientErrorKey)
-            .addErrorDependency(persistentErrorKey2, new StringValue("doesn't matter"))
-            .setHasTransientError(true);
-    }
+    tester.getOrCreate(transientErrorKey)
+          .addErrorDependency(persistentErrorKey2, new StringValue("doesn't matter"))
+          .setHasTransientError(true);
     tester.getOrCreate(persistentErrorKey2).setHasError(true);
 
     tester.evalAndGetError(topKey);
-    if (includeTransientError) {
-      assertThat(tester.getEnqueuedValues()).containsExactly(
-          topKey, transientErrorKey, persistentErrorKey1, persistentErrorKey2);
-    } else {
-      assertThat(tester.getEnqueuedValues()).containsExactly(topKey, persistentErrorKey1);
-    }
+    assertThat(tester.getEnqueuedValues()).containsExactly(
+        topKey, transientErrorKey, persistentErrorKey1, persistentErrorKey2);
 
     tester.invalidate();
     tester.invalidateTransientErrors();
     tester.evalAndGetError(topKey);
-    if (includeTransientError) {
-      // TODO(bazel-team): We can do better here once we implement change pruning for errors.
-      assertThat(tester.getEnqueuedValues()).containsExactly(topKey, transientErrorKey);
-    } else {
-      assertThat(tester.getEnqueuedValues()).isEmpty();
-    }
-  }
-
-  @Test
-  public void persistentErrorsNotRerun() throws Exception {
-    runTestPersistentErrorsNotRerun(/*includeTransientError=*/ true);
+    // TODO(bazel-team): We can do better here once we implement change pruning for errors.
+    assertThat(tester.getEnqueuedValues()).containsExactly(topKey, transientErrorKey);
   }
 
   /**
@@ -4445,7 +4431,7 @@ public class MemoizingEvaluatorTest {
   @Test
   public void errorChanged() throws Exception {
     SkyKey error = GraphTester.skyKey("error");
-    tester.getOrCreate(error).setHasError(true);
+    tester.getOrCreate(error).setHasTransientError(true);
     assertThatErrorInfo(tester.evalAndGetError(error)).hasExceptionThat().isNotNull();
     tester.getOrCreate(error, /*markAsModified=*/ true);
     tester.invalidate();

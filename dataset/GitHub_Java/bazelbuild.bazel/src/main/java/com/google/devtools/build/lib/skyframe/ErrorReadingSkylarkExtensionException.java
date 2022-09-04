@@ -25,4 +25,8 @@ public class ErrorReadingSkylarkExtensionException extends Exception {
   public ErrorReadingSkylarkExtensionException(IOException e) {
     super(e.getMessage(), e);
   }
+
+  public ErrorReadingSkylarkExtensionException(FileSymlinkException e) {
+    super(e.getMessage(), e);
+  }
 }
