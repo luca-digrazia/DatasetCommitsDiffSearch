@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -150,8 +151,7 @@ public class NativeImageBuildStep {
         String nativeImageName = getNativeImageName(outputTargetBuildItem, packageConfig);
         String resultingExecutableName = getResultingExecutableName(nativeImageName, isContainerBuild);
 
-        NativeImageBuildRunner buildRunner = getNativeImageBuildRunner(nativeConfig, outputDir,
-                nativeImageName, resultingExecutableName);
+        NativeImageBuildRunner buildRunner = getNativeImageBuildRunner(nativeConfig, outputDir, resultingExecutableName);
         buildRunner.setup(processInheritIODisabled.isPresent());
         final GraalVM.Version graalVMVersion = buildRunner.getGraalVMVersion();
 
@@ -184,8 +184,7 @@ public class NativeImageBuildStep {
 
             List<String> nativeImageArgs = commandAndExecutable.args;
 
-            int exitCode = buildRunner.build(nativeImageArgs, nativeImageName, resultingExecutableName, outputDir,
-                    nativeConfig.debug.enabled, processInheritIODisabled.isPresent());
+            int exitCode = buildRunner.build(nativeImageArgs, outputDir, processInheritIODisabled.isPresent());
             if (exitCode != 0) {
                 throw imageGenerationFailed(exitCode, nativeImageArgs);
             }
@@ -194,11 +193,6 @@ public class NativeImageBuildStep {
             IoUtils.copy(generatedExecutablePath, finalExecutablePath);
             Files.delete(generatedExecutablePath);
             if (nativeConfig.debug.enabled) {
-                final String symbolsName = String.format("%s.debug", nativeImageName);
-                Path generatedSymbols = outputDir.resolve(symbolsName);
-                Path finalSymbolsPath = outputTargetBuildItem.getOutputDirectory().resolve(symbolsName);
-                IoUtils.copy(generatedSymbols, finalSymbolsPath);
-                Files.delete(generatedSymbols);
                 final String sources = "sources";
                 final Path generatedSources = outputDir.resolve(sources);
                 final Path finalSources = outputTargetBuildItem.getOutputDirectory().resolve(sources);
@@ -206,6 +200,17 @@ public class NativeImageBuildStep {
                 IoUtils.recursiveDelete(generatedSources);
             }
             System.setProperty("native.image.path", finalExecutablePath.toAbsolutePath().toString());
+
+            if (objcopyExists()) {
+                if (nativeConfig.debug.enabled) {
+                    splitDebugSymbols(finalExecutablePath);
+                }
+                // Strip debug symbols regardless, because the underlying JDK might contain them
+                objcopy("--strip-debug", finalExecutablePath.toString());
+            } else {
+                log.warn("objcopy executable not found in PATH. Debug symbols will not be separated from executable.");
+                log.warn("That will result in a larger native image with debug symbols embedded in it.");
+            }
 
             return new NativeImageBuildItem(finalExecutablePath,
                     new NativeImageBuildItem.GraalVMVersion(graalVMVersion.fullVersion, graalVMVersion.major,
@@ -239,9 +244,9 @@ public class NativeImageBuildStep {
     }
 
     private static NativeImageBuildRunner getNativeImageBuildRunner(NativeConfig nativeConfig, Path outputDir,
-            String nativeImageName, String resultingExecutableName) {
+            String resultingExecutableName) {
         if (!isContainerBuild(nativeConfig)) {
-            NativeImageBuildLocalRunner localRunner = getNativeImageBuildLocalRunner(nativeConfig, outputDir.toFile());
+            NativeImageBuildLocalRunner localRunner = getNativeImageBuildLocalRunner(nativeConfig);
             if (localRunner != null) {
                 return localRunner;
             }
@@ -254,8 +259,7 @@ public class NativeImageBuildStep {
             log.warn(errorMessage + " Attempting to fall back to container build.");
         }
         if (nativeConfig.remoteContainerBuild) {
-            return new NativeImageBuildRemoteContainerRunner(nativeConfig, outputDir,
-                    nativeImageName, resultingExecutableName);
+            return new NativeImageBuildRemoteContainerRunner(nativeConfig, outputDir, resultingExecutableName);
         }
         return new NativeImageBuildLocalContainerRunner(nativeConfig, outputDir);
     }
@@ -368,12 +372,12 @@ public class NativeImageBuildStep {
         }
     }
 
-    private static NativeImageBuildLocalRunner getNativeImageBuildLocalRunner(NativeConfig nativeConfig, File outputDir) {
+    private static NativeImageBuildLocalRunner getNativeImageBuildLocalRunner(NativeConfig nativeConfig) {
         String executableName = getNativeImageExecutableName();
         if (nativeConfig.graalvmHome.isPresent()) {
             File file = Paths.get(nativeConfig.graalvmHome.get(), "bin", executableName).toFile();
             if (file.exists()) {
-                return new NativeImageBuildLocalRunner(file.getAbsolutePath(), outputDir);
+                return new NativeImageBuildLocalRunner(file.getAbsolutePath());
             }
         }
 
@@ -395,7 +399,7 @@ public class NativeImageBuildStep {
         if (javaHome != null) {
             File file = new File(javaHome, "bin/" + executableName);
             if (file.exists()) {
-                return new NativeImageBuildLocalRunner(file.getAbsolutePath(), outputDir);
+                return new NativeImageBuildLocalRunner(file.getAbsolutePath());
             }
         }
 
@@ -408,7 +412,7 @@ public class NativeImageBuildStep {
                 if (dir.isDirectory()) {
                     File file = new File(dir, executableName);
                     if (file.exists()) {
-                        return new NativeImageBuildLocalRunner(file.getAbsolutePath(), outputDir);
+                        return new NativeImageBuildLocalRunner(file.getAbsolutePath());
                     }
                 }
             }
@@ -440,6 +444,51 @@ public class NativeImageBuildStep {
         }
 
         return "";
+    }
+
+    private boolean objcopyExists() {
+        // System path
+        String systemPath = System.getenv(PATH);
+        if (systemPath != null) {
+            String[] pathDirs = systemPath.split(File.pathSeparator);
+            for (String pathDir : pathDirs) {
+                File dir = new File(pathDir);
+                if (dir.isDirectory()) {
+                    File file = new File(dir, "objcopy");
+                    if (file.exists()) {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private void splitDebugSymbols(Path executable) {
+        Path symbols = Paths.get(String.format("%s.debug", executable.toString()));
+        objcopy("--only-keep-debug", executable.toString(), symbols.toString());
+        objcopy(String.format("--add-gnu-debuglink=%s", symbols.toString()), executable.toString());
+    }
+
+    private static void objcopy(String... args) {
+        final List<String> command = new ArrayList<>(args.length + 1);
+        command.add("objcopy");
+        command.addAll(Arrays.asList(args));
+        if (log.isDebugEnabled()) {
+            log.debugf("Execute %s", String.join(" ", command));
+        }
+        Process process = null;
+        try {
+            process = new ProcessBuilder(command).start();
+            process.waitFor();
+        } catch (IOException | InterruptedException e) {
+            throw new RuntimeException("Unable to invoke objcopy", e);
+        } finally {
+            if (process != null) {
+                process.destroy();
+            }
+        }
     }
 
     private static class NativeImageInvokerInfo {
@@ -660,11 +709,6 @@ public class NativeImageBuildStep {
                 if (nativeConfig.enableDashboardDump) {
                     nativeImageArgs.add("-H:DashboardDump=" + outputTargetBuildItem.getBaseName() + "_dashboard.dump");
                     nativeImageArgs.add("-H:+DashboardAll");
-                }
-
-                // Disable single parsing of compiler graphs till https://github.com/oracle/graal/issues/3435 gets fixed
-                if (graalVMVersion.isNewerThan(GraalVM.Version.VERSION_21_1)) {
-                    nativeImageArgs.add("-H:-ParseOnce");
                 }
 
                 nativeImageArgs.add(nativeImageName);
