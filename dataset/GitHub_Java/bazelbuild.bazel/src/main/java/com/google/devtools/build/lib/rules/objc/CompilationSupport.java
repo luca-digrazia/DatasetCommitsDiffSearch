@@ -423,29 +423,6 @@ public abstract class CompilationSupport {
   /**
    * Registers all actions necessary to compile this rule's sources and archive them.
    *
-   * @param compilationArtifacts collection of artifacts required for the compilation
-   * @param objcProvider provides all compiling and linking information to register these actions
-   * @param toolchain the toolchain to be used in determining command lines
-   * @return this compilation support
-   * @throws RuleErrorException for invalid crosstool files
-   */
-  CompilationSupport registerCompileAndArchiveActions(
-      CompilationArtifacts compilationArtifacts,
-      ObjcProvider objcProvider,
-      CcToolchainProvider toolchain)
-      throws RuleErrorException, InterruptedException {
-    return registerCompileAndArchiveActions(
-        compilationArtifacts,
-        objcProvider,
-        ExtraCompileArgs.NONE,
-        ImmutableList.<PathFragment>of(),
-        toolchain,
-        maybeGetFdoSupport());
-  }
-
-  /**
-   * Registers all actions necessary to compile this rule's sources and archive them.
-   *
    * @param common common information about this rule and its dependencies
    * @return this compilation support
    * @throws RuleErrorException for invalid crosstool files
@@ -730,8 +707,7 @@ public abstract class CompilationSupport {
     return this;
   }
   /**
-   * Registers any actions necessary to link this rule and its dependencies. Manually sets the
-   * toolchain.
+   * Registers any actions necessary to link this rule and its dependencies.
    *
    * <p>Dsym bundle is generated if {@link ObjcConfiguration#generateDsym()} is set.
    *
@@ -746,7 +722,6 @@ public abstract class CompilationSupport {
    * @param extraLinkArgs any additional arguments to pass to the linker
    * @param extraLinkInputs any additional input artifacts to pass to the link action
    * @param dsymOutputType the file type of the dSYM bundle to be generated
-   * @param toolchain the CROSSTOOL-derived toolchain for use in linking
    * @return this compilation support
    */
   abstract CompilationSupport registerLinkActions(
@@ -755,47 +730,7 @@ public abstract class CompilationSupport {
       J2ObjcEntryClassProvider j2ObjcEntryClassProvider,
       ExtraLinkArgs extraLinkArgs,
       Iterable<Artifact> extraLinkInputs,
-      DsymOutputType dsymOutputType,
-      CcToolchainProvider toolchain)
-      throws InterruptedException;
-
-  /**
-   * Registers any actions necessary to link this rule and its dependencies. Automatically infers
-   * the toolchain from the configuration of this CompilationSupport - if a different toolchain is
-   * required, use the custom toolchain override.
-   *
-   * <p>Dsym bundle is generated if {@link ObjcConfiguration#generateDsym()} is set.
-   *
-   * <p>When Bazel flags {@code --compilation_mode=opt} and {@code --objc_enable_binary_stripping}
-   * are specified, additional optimizations will be performed on the linked binary: all-symbol
-   * stripping (using {@code /usr/bin/strip}) and dead-code stripping (using linker flags: {@code
-   * -dead_strip} and {@code -no_dead_strip_inits_and_terms}).
-   *
-   * @param objcProvider common information about this rule's attributes and its dependencies
-   * @param j2ObjcMappingFileProvider contains mapping files for j2objc transpilation
-   * @param j2ObjcEntryClassProvider contains j2objc entry class information for dead code removal
-   * @param extraLinkArgs any additional arguments to pass to the linker
-   * @param extraLinkInputs any additional input artifacts to pass to the link action
-   * @param dsymOutputType the file type of the dSYM bundle to be generated
-   * @return this compilation support
-   */
-  CompilationSupport registerLinkActions(
-      ObjcProvider objcProvider,
-      J2ObjcMappingFileProvider j2ObjcMappingFileProvider,
-      J2ObjcEntryClassProvider j2ObjcEntryClassProvider,
-      ExtraLinkArgs extraLinkArgs,
-      Iterable<Artifact> extraLinkInputs,
-      DsymOutputType dsymOutputType)
-      throws InterruptedException {
-    return registerLinkActions(
-        objcProvider,
-        j2ObjcMappingFileProvider,
-        j2ObjcEntryClassProvider,
-        extraLinkArgs,
-        extraLinkInputs,
-        dsymOutputType,
-        CppHelper.getToolchain(ruleContext, ":cc_toolchain"));
-  }
+      DsymOutputType dsymOutputType) throws InterruptedException;
 
   /**
    * Returns the copts for the compile action in the current rule context (using a combination of
@@ -876,57 +811,6 @@ public abstract class CompilationSupport {
       ObjcProvider objcProvider, Iterable<Artifact> inputArtifacts, Artifact outputArchive,
       @Nullable CcToolchainProvider ccToolchain, @Nullable FdoSupportProvider fdoSupport)
       throws InterruptedException;
-
-  private PathFragment removeSuffix(PathFragment path, String suffix) {
-    String name = path.getBaseName();
-    Preconditions.checkArgument(
-        name.endsWith(suffix), "expected %s to end with %s, but it does not", name, suffix);
-    return path.replaceName(name.substring(0, name.length() - suffix.length()));
-  }
-
-  protected CompilationSupport registerDsymActions(DsymOutputType dsymOutputType) {
-    Artifact tempDsymBundleZip = intermediateArtifacts.tempDsymBundleZip(dsymOutputType);
-    Artifact linkedBinary =
-        objcConfiguration.shouldStripBinary()
-            ? intermediateArtifacts.unstrippedSingleArchitectureBinary()
-            : intermediateArtifacts.strippedSingleArchitectureBinary();
-    Artifact debugSymbolFile = intermediateArtifacts.dsymSymbol(dsymOutputType);
-    Artifact dsymPlist = intermediateArtifacts.dsymPlist(dsymOutputType);
-
-    PathFragment dsymOutputDir = removeSuffix(tempDsymBundleZip.getExecPath(), ".temp.zip");
-    PathFragment dsymPlistZipEntry = dsymPlist.getExecPath().relativeTo(dsymOutputDir);
-    PathFragment debugSymbolFileZipEntry =
-        debugSymbolFile
-            .getExecPath()
-            .replaceName(linkedBinary.getFilename())
-            .relativeTo(dsymOutputDir);
-
-    StringBuilder unzipDsymCommand =
-        new StringBuilder()
-            .append(
-                String.format(
-                    "unzip -p %s %s > %s",
-                    tempDsymBundleZip.getExecPathString(),
-                    dsymPlistZipEntry,
-                    dsymPlist.getExecPathString()))
-            .append(
-                String.format(
-                    " && unzip -p %s %s > %s",
-                    tempDsymBundleZip.getExecPathString(),
-                    debugSymbolFileZipEntry,
-                    debugSymbolFile.getExecPathString()));
-
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .setMnemonic("UnzipDsym")
-            .setShellCommand(unzipDsymCommand.toString())
-            .addInput(tempDsymBundleZip)
-            .addOutput(dsymPlist)
-            .addOutput(debugSymbolFile)
-            .build(ruleContext));
-
-    return this;
-  }
 
  /**
    * Returns all framework names to pass to the linker using {@code -framework} flags. For a
