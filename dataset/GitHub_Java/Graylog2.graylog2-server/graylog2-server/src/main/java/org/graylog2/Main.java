@@ -209,8 +209,8 @@ public final class Main extends NodeRunner {
                 // Write a notification.
                 final NotificationService notificationService = injector.getInstance(NotificationService.class);
                 Notification notification = notificationService.buildNow()
-                        .addType(Notification.Type.MULTI_MASTER)
-                        .addSeverity(Notification.Severity.URGENT);
+                        .addType(NotificationImpl.Type.MULTI_MASTER)
+                        .addSeverity(NotificationImpl.Severity.URGENT);
                 notificationService.publishIfFirst(notification);
 
                 configuration.setIsMaster(false);
@@ -278,8 +278,17 @@ public final class Main extends NodeRunner {
         }
 
         if (configuration.getRestTransportUri() == null) {
-            configuration.setRestTransportUri(configuration.getDefaultRestTransportUri().toString());
-            LOG.info("No rest_transport_uri set. Falling back to [{}].", configuration.getRestTransportUri());
+            String guessedIf;
+            try {
+                guessedIf = Tools.guessPrimaryNetworkAddress().getHostAddress();
+            } catch (Exception e) {
+                LOG.error("Could not guess primary network address for rest_transport_uri. Please configure it in your graylog2.conf.", e);
+                throw new RuntimeException("No rest_transport_uri.");
+            }
+
+            String transportStr = "http://" + guessedIf + ":" + configuration.getRestListenUri().getPort();
+            LOG.info("No rest_transport_uri set. Falling back to [{}].", transportStr);
+            configuration.setRestTransportUri(transportStr);
         }
 
         return configuration;
