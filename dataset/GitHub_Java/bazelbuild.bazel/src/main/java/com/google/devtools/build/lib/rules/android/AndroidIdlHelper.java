@@ -17,14 +17,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -47,13 +45,6 @@ import javax.annotation.Nullable;
  * Helper class for Android IDL processing.
  */
 public class AndroidIdlHelper {
-
-  /**
-   * Name of the output group used for idl jars (the jars containing the class files for sources
-   * generated from annotation processors).
-   */
-  static final String IDL_JARS_OUTPUT_GROUP =
-      OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX + "idl_jars";
 
   private final RuleContext ruleContext;
   private final AndroidIdlProvider androidIdlProvider;
@@ -110,8 +101,9 @@ public class AndroidIdlHelper {
           manifestProtoOutput, idlClassJar, idlSourceJar);
     }
     builder
-        .addProvider(AndroidIdlProvider.class, androidIdlProvider)
-        .addOutputGroup(IDL_JARS_OUTPUT_GROUP, androidIdlProvider.getTransitiveIdlJars());
+        .add(AndroidIdlProvider.class, androidIdlProvider)
+        .addOutputGroup(
+            AndroidSemantics.IDL_JARS_OUTPUT_GROUP, androidIdlProvider.getTransitiveIdlJars());
   }
 
   /**
@@ -341,7 +333,7 @@ public class AndroidIdlHelper {
             .addOutput(idlClassJar)
             .addOutput(idlSourceJar)
             .setExecutable(ruleContext.getExecutablePrerequisite("$idlclass", Mode.HOST))
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .addExecPath("--manifest_proto", manifestProtoOutput)
                     .addExecPath("--class_jar", classJar)
@@ -350,8 +342,8 @@ public class AndroidIdlHelper {
                     .add("--temp_dir")
                     .addPath(idlTempDir)
                     .addExecPaths(ImmutableList.copyOf(generatedIdlJavaFiles))
-                    .build(),
-                ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).build())
+                    .build())
+            .useParameterFile(ParameterFileType.SHELL_QUOTED)
             .setProgressMessage("Building idl jars %s", idlClassJar.prettyPrint())
             .setMnemonic("AndroidIdlJars")
             .build(ruleContext));
@@ -380,7 +372,7 @@ public class AndroidIdlHelper {
             .addOutput(output)
             .setProgressMessage("Android IDL generation")
             .setMnemonic("AndroidIDLGenerate")
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .add("-b") // Fail if trying to compile a parcelable.
                     .addAll(importArgs)
