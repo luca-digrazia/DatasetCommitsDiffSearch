@@ -428,13 +428,13 @@ public class QuarkusNative extends QuarkusTask {
             @Override
             public void accept(ConfigBuilder configBuilder) {
                 InMemoryConfigSource type = new InMemoryConfigSource(Integer.MAX_VALUE, "Native Image Type")
-                        .add("quarkus.package.type", "native");
+                        .add("quarkus.package.types", "native");
 
                 InMemoryConfigSource configs = new InMemoryConfigSource(0, "Native Image Maven Settings");
 
                 configs.add("quarkus.native.add-all-charsets", addAllCharsets);
 
-                if (additionalBuildArgs != null && !additionalBuildArgs.isEmpty()) {
+                if (additionalBuildArgs != null) {
                     configs.add("quarkus.native.additional-build-args",
                             additionalBuildArgs.stream()
                                     .map(val -> val.replace("\\", "\\\\"))
@@ -448,9 +448,9 @@ public class QuarkusNative extends QuarkusTask {
 
                 configs.add("quarkus.native.debug-symbols", debugSymbols);
                 configs.add("quarkus.native.enable-reports", enableReports);
-                if (containerRuntime != null && !containerRuntime.trim().isEmpty()) {
+                if (containerRuntime != null) {
                     configs.add("quarkus.native.container-runtime", containerRuntime);
-                } else if (dockerBuild != null && !dockerBuild.trim().isEmpty()) {
+                } else if (dockerBuild != null) {
                     if (!dockerBuild.isEmpty() && !dockerBuild.toLowerCase().equals("false")) {
                         if (dockerBuild.toLowerCase().equals("true")) {
                             configs.add("quarkus.native.container-runtime", "docker");
@@ -459,7 +459,7 @@ public class QuarkusNative extends QuarkusTask {
                         }
                     }
                 }
-                if (containerRuntimeOptions != null && !containerRuntimeOptions.trim().isEmpty()) {
+                if (containerRuntimeOptions != null) {
                     configs.add("quarkus.native.container-runtime-options", containerRuntimeOptions);
                 }
                 configs.add("quarkus.native.dump-proxies", dumpProxies);
@@ -479,10 +479,10 @@ public class QuarkusNative extends QuarkusTask {
 
                 configs.add("quarkus.native.full-stack-traces", fullStackTraces);
 
-                if (graalvmHome != null && !graalvmHome.trim().isEmpty()) {
+                if (graalvmHome != null) {
                     configs.add("quarkus.native.graalvm-home", graalvmHome);
                 }
-                if (nativeImageXmx != null && !nativeImageXmx.trim().isEmpty()) {
+                if (nativeImageXmx != null) {
                     configs.add("quarkus.native.native-image-xmx", nativeImageXmx);
                 }
                 configs.add("quarkus.native.report-errors-at-runtime", reportErrorsAtRuntime);
