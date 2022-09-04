@@ -14,8 +14,6 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
-import android.widget.SeekBar;
-import android.widget.TextView;
 
 import com.shuyu.gsyvideoplayer.GSYTextureView;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
@@ -105,19 +103,8 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
 
     protected ImageView mCoverImageView; //内部使用，请勿操作哟~
 
-    protected View mStartButton;
-
-    protected SeekBar mProgressBar;
-
-    protected ImageView mFullscreenButton;
-
-    protected TextView mCurrentTimeTextView, mTotalTimeTextView;
-
-    protected ViewGroup mTopContainer, mBottomContainer;
-
-    protected ImageView mBackButton;
-
     protected Bitmap mFullPauseBitmap = null;//暂停时的全屏图片；
+
 
     private OrientationUtils mOrientationUtils; //旋转工具类
 
@@ -230,7 +217,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
         if (mHideKey) {
             showNavKey(mContext, mSystemUiVisibility);
         }
-        showSupportActionBar(mContext, mActionBar, mStatusBar);
     }
 
     /**
@@ -356,6 +342,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      * 回到正常效果
      */
     private void backToNormal() {
+        showSupportActionBar(mContext, mActionBar, mStatusBar);
 
         final ViewGroup vp = getViewGroup();
 

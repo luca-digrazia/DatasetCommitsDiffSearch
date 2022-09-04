@@ -3,6 +3,7 @@ package com.shuyu.gsyvideoplayer.utils;
 import android.app.Activity;
 import android.content.Context;
 import android.content.ContextWrapper;
+import android.graphics.Point;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
@@ -13,8 +14,9 @@ import android.support.v7.internal.view.ContextThemeWrapper;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.View;
-import android.view.ViewGroup;
 import android.view.WindowManager;
+
+import com.shuyu.gsyvideoplayer.GSYVideoManager;
 
 import java.io.File;
 import java.util.Formatter;
@@ -150,14 +152,21 @@ public class CommonUtil {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             //       设置屏幕始终在前面，不然点击鼠标，重新出现虚拟按键
             ((Activity) context).getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav
                             // bar
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
                             | View.SYSTEM_UI_FLAG_IMMERSIVE);
         } else {
             ((Activity) context).getWindow().getDecorView().setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav
+                            // bar
+                            | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
             );
         }
     }
@@ -255,4 +264,30 @@ public class CommonUtil {
             }
         }
     }
+
+
+    public static Point getPauseBitmapSize(int w, int h) {
+
+        int videoHeight = 0;
+        int videoWidth = 0;
+
+        if (GSYVideoManager.instance().getMediaPlayer() != null) {
+            videoHeight = GSYVideoManager.instance().getCurrentVideoHeight();
+            videoWidth = GSYVideoManager.instance().getCurrentVideoWidth();
+        }
+
+
+        if (videoHeight == 0 || videoWidth == 0) {
+            videoWidth = w;
+            videoHeight = h;
+        }
+
+        if (videoWidth > w || videoHeight > h) {
+            videoWidth = w;
+            videoHeight = h;
+        }
+
+        return new Point(videoWidth, videoHeight);
+    }
+
 }
