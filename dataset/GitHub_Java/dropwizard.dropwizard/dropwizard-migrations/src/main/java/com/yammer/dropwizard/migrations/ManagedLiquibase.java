@@ -30,7 +30,6 @@ public class ManagedLiquibase extends Liquibase implements Managed {
         @Override
         public void stop() throws Exception {
             dataSource.stop();
-            close();
         }
 
         @Override
@@ -60,6 +59,9 @@ public class ManagedLiquibase extends Liquibase implements Managed {
         final DatabaseConnection connection = getDatabase().getConnection();
         if (connection instanceof ManagedJdbcConnection) {
             ((ManagedJdbcConnection) connection).stop();
+        }
+        if (connection != null) {
+            connection.close();
         }
     }
 }
