@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.undertow.runtime;
 
 import java.io.IOException;
@@ -13,7 +29,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import javax.net.ssl.SSLContext;
@@ -95,7 +110,6 @@ public class UndertowDeploymentTemplate {
     private static final List<HandlerWrapper> hotDeploymentWrappers = new CopyOnWriteArrayList<>();
     private static volatile List<Path> hotDeploymentResourcePaths;
     private static volatile HttpHandler currentRoot = ResponseCodeHandler.HANDLE_404;
-    private static volatile ServletContext servletContext;
 
     private static final AttachmentKey<Collection<io.quarkus.arc.ContextInstanceHandle<?>>> REQUEST_CONTEXT = AttachmentKey
             .create(Collection.class);
@@ -380,12 +394,8 @@ public class UndertowDeploymentTemplate {
         }
     }
 
-    public Supplier<ServletContext> servletContextSupplier() {
-        return new ServletContextSupplier();
-    }
-
     public DeploymentManager bootServletContainer(RuntimeValue<DeploymentInfo> info, BeanContainer beanContainer,
-            LaunchMode launchMode, ShutdownContext shutdownContext) {
+            LaunchMode launchMode) {
         if (info.getValue().getExceptionHandler() == null) {
             //if a 500 error page has not been mapped we change the default to our more modern one, with a UID in the
             //log. If this is not production we also include the stack trace
@@ -437,13 +447,6 @@ public class UndertowDeploymentTemplate {
             DeploymentManager manager = servletContainer.addDeployment(info.getValue());
             manager.deploy();
             manager.start();
-            servletContext = manager.getDeployment().getServletContext();
-            shutdownContext.addShutdownTask(new Runnable() {
-                @Override
-                public void run() {
-                    servletContext = null;
-                }
-            });
             return manager;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -611,14 +614,6 @@ public class UndertowDeploymentTemplate {
                 out[index] = alphabet[val & 0x3F];
             }
             return out;
-        }
-    }
-
-    public static class ServletContextSupplier implements Supplier<ServletContext> {
-
-        @Override
-        public ServletContext get() {
-            return servletContext;
         }
     }
 }
