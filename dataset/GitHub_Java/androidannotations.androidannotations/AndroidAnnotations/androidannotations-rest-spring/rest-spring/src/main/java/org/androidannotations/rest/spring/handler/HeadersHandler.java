@@ -25,12 +25,12 @@ import org.androidannotations.rest.spring.annotations.Headers;
 import org.androidannotations.rest.spring.helper.RestSpringValidatorHelper;
 import org.androidannotations.rest.spring.holder.RestHolder;
 
-public class HeaderHandler extends BaseAnnotationHandler<RestHolder> {
+public class HeadersHandler extends BaseAnnotationHandler<RestHolder> {
 
-	private  RestSpringValidatorHelper restValidatorHelper;
+	private RestSpringValidatorHelper restValidatorHelper;
 
-	public HeaderHandler(AndroidAnnotationsEnvironment environment) {
-		super(Header.class, environment);
+	public HeadersHandler(AndroidAnnotationsEnvironment environment) {
+		super(Headers.class, environment);
 		restValidatorHelper = new RestSpringValidatorHelper(environment, getTarget());
 	}
 
@@ -38,7 +38,7 @@ public class HeaderHandler extends BaseAnnotationHandler<RestHolder> {
 	protected void validate(Element element, ElementValidation validation) {
 		restValidatorHelper.elementHasOneOfRestMethodAnnotations(element, validation);
 
-		validatorHelper.doesNotHaveAnnotation(element, Headers.class, validation);
+		validatorHelper.doesNotHaveAnnotation(element, Header.class, validation);
 	}
 
 	@Override
