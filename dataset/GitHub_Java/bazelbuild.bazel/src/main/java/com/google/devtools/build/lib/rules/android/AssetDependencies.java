@@ -90,18 +90,14 @@ public class AssetDependencies {
   }
 
   /** Creates a new AndroidAssetInfo using the passed assets as the direct dependency. */
-  public AndroidAssetsInfo toInfo(MergedAndroidAssets assets) {
+  public AndroidAssetsInfo toInfo(ParsedAndroidAssets assets) {
     if (neverlink) {
       return AndroidAssetsInfo.empty(assets.getLabel());
     }
 
-    // Create a new object to avoid passing around unwanted merge information to the provider
-    ParsedAndroidAssets parsedAssets = new ParsedAndroidAssets(assets);
-
     return AndroidAssetsInfo.of(
         assets.getLabel(),
-        assets.getMergedAssets(),
-        NestedSetBuilder.create(Order.NAIVE_LINK_ORDER, parsedAssets),
+        NestedSetBuilder.create(Order.NAIVE_LINK_ORDER, assets),
         NestedSetBuilder.<ParsedAndroidAssets>naiveLinkOrder()
             .addTransitive(transitiveParsedAssets)
             .addTransitive(directParsedAssets)
@@ -123,12 +119,7 @@ public class AssetDependencies {
     }
 
     return AndroidAssetsInfo.of(
-        label,
-        null,
-        directParsedAssets,
-        transitiveParsedAssets,
-        transitiveAssets,
-        transitiveSymbols);
+        label, directParsedAssets, transitiveParsedAssets, transitiveAssets, transitiveSymbols);
   }
 
   public NestedSet<ParsedAndroidAssets> getDirectParsedAssets() {
