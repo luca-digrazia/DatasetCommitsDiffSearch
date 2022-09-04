@@ -92,7 +92,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
     protected final Label stlLabel;
     protected final Path fdoZip;
     protected final Label sysrootLabel;
-    protected final Function<String, String> cpuTransformer;
 
     CppConfigurationParameters(
         CrosstoolConfig.CToolchain toolchain,
@@ -103,8 +102,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         Label crosstoolTop,
         Label ccToolchainLabel,
         Label stlLabel,
-        Label sysrootLabel,
-        Function<String, String> cpuTransformer) {
+        Label sysrootLabel) {
       this.toolchain = toolchain;
       this.crosstoolFile = crosstoolFile;
       this.cacheKeySuffix = cacheKeySuffix;
@@ -115,7 +113,6 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
       this.ccToolchainLabel = ccToolchainLabel;
       this.stlLabel = stlLabel;
       this.sysrootLabel = sysrootLabel;
-      this.cpuTransformer = cpuTransformer;
     }
   }
 
@@ -237,8 +234,7 @@ public class CppConfigurationLoader implements ConfigurationFragmentFactory {
         crosstoolTopLabel,
         ccToolchainLabel,
         stlLabel,
-        sysrootLabel,
-        cpuTransformer);
+        sysrootLabel);
   }
 
   @Nullable

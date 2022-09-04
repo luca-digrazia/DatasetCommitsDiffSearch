@@ -83,6 +83,8 @@ public class CcToolchainSelectionTest extends BuildViewTestCase {
         .setList("srcs", "a.cc")
         .write();
     CppCompileAction compileAction = getCppCompileAction("//lib");
+    System.err.println("!!!!!!!!!!!!!!!!!!!!!!");
+    System.err.println(compileAction.getInputs());
     boolean isPiii =
         ImmutableList.copyOf(compileAction.getInputs())
             .stream()

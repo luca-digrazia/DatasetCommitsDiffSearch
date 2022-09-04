@@ -93,11 +93,7 @@ public class PlatformConfiguration extends BuildConfiguration.Fragment {
     return toolchainResolutionOverrides.get(toolchainType);
   }
 
-  @SkylarkCallable(
-    name = "enabled_toolchain_types",
-    structField = true,
-    doc = "The set of toolchain types enabled for platform-based toolchain selection."
-  )
+  /** Returns the set of toolchain types enabled for platform-based toolchain selection. */
   public List<Label> getEnabledToolchainTypes() {
     return enabledToolchainTypes;
   }

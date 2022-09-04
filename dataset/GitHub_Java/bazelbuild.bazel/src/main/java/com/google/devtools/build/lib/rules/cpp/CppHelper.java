@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
-import com.google.devtools.build.lib.analysis.ConfigurationMakeVariableContext;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
@@ -159,22 +158,20 @@ public class CppHelper {
     List<String> tokens = new ArrayList<>();
     ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers =
         ImmutableList.of(new CcFlagsSupplier(ruleContext));
-    ConfigurationMakeVariableContext makeVariableContext =
-        ruleContext.getConfigurationMakeVariableContext(makeVariableSuppliers);
     for (String token : input) {
       try {
         // Legacy behavior: tokenize all items.
         if (tokenization) {
           ruleContext.tokenizeAndExpandMakeVars(
-              tokens, attributeName, token, makeVariableContext);
+              tokens, attributeName, token, makeVariableSuppliers);
         } else {
           String exp =
-              ruleContext.expandSingleMakeVariable(attributeName, token, makeVariableContext);
+              ruleContext.expandSingleMakeVariable(attributeName, token, makeVariableSuppliers);
           if (exp != null) {
             ShellUtils.tokenize(tokens, exp);
           } else {
             tokens.add(
-                ruleContext.expandMakeVariables(attributeName, token, makeVariableContext));
+                ruleContext.expandMakeVariables(attributeName, token, makeVariableSuppliers));
           }
         }
       } catch (ShellUtils.TokenizationException e) {
@@ -200,18 +197,17 @@ public class CppHelper {
    * variable or flag) or tokenizes and expands make variables.
    */
   public static void expandAttribute(RuleContext ruleContext,
-      List<String> result, String attrName, String attrValue, boolean attemptLabelExpansion) {
+      List<String> values, String attrName, String attrValue, boolean attemptLabelExpansion) {
     if (attemptLabelExpansion && CppHelper.isLinkoptLabel(attrValue)) {
-      if (!CppHelper.expandLabel(ruleContext, result, attrValue)) {
+      if (!CppHelper.expandLabel(ruleContext, values, attrValue)) {
         ruleContext.attributeError(attrName, "could not resolve label '" + attrValue + "'");
       }
     } else {
       ruleContext.tokenizeAndExpandMakeVars(
-          result,
+          values,
           attrName,
           attrValue,
-          ruleContext.getConfigurationMakeVariableContext(
-              ImmutableList.of(new CcFlagsSupplier(ruleContext))));
+          ImmutableList.of(new CcFlagsSupplier(ruleContext)));
     }
   }
 
@@ -236,8 +232,8 @@ public class CppHelper {
    * @param labelName the name of the label to expand
    * @return true if the label was expanded successfully, false otherwise
    */
-  private static boolean expandLabel(
-      RuleContext ruleContext, List<String> linkopts, String labelName) {
+  private static boolean expandLabel(RuleContext ruleContext, List<String> linkopts,
+      String labelName) {
     try {
       Label label = ruleContext.getLabel().getRelative(labelName);
       for (String prereqKind : LINKOPTS_PREREQUISITE_LABEL_KINDS) {
