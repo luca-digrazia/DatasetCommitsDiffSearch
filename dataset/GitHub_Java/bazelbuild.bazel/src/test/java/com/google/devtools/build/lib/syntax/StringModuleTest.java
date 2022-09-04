@@ -23,12 +23,10 @@ import org.junit.runners.JUnit4;
 // 1) --incompatible_string_replace_count has been flipped (#11244) and deleted, or 2) the
 // standalone Starlark interpreter and tests gain the ability to run with semantics flags.
 @RunWith(JUnit4.class)
-public class StringModuleTest {
-
-  private final EvaluationTestCase ev = new EvaluationTestCase();
+public class StringModuleTest extends EvaluationTestCase {
 
   private void runReplaceTest(String flag) throws Exception {
-    ev.new Scenario(flag)
+    new Scenario(flag)
         .testEval("'banana'.replace('a', 'o')", "'bonono'")
         .testEval("'banana'.replace('a', 'o', 2)", "'bonona'")
         .testEval("'banana'.replace('a', 'o', 0)", "'banana'")
@@ -55,13 +53,13 @@ public class StringModuleTest {
   @Test
   public void testReplaceIncompatibleFlag() throws Exception {
     // Test the scenario that changes with the incompatible flag
-    ev.new Scenario("--incompatible_string_replace_count=false")
+    new Scenario("--incompatible_string_replace_count=false")
         .testEval("'banana'.replace('a', 'o', -2)", "'banana'")
         .testEval("'banana'.replace('a', 'e', -1)", "'banana'")
         .testEval("'banana'.replace('a', 'e', -10)", "'banana'")
         .testEval("'banana'.replace('', '-', -2)", "'banana'");
 
-    ev.new Scenario("--incompatible_string_replace_count=true")
+    new Scenario("--incompatible_string_replace_count=true")
         .testEval("'banana'.replace('a', 'o', -2)", "'bonono'")
         .testEval("'banana'.replace('a', 'e', -1)", "'benene'")
         .testEval("'banana'.replace('a', 'e', -10)", "'benene'")
@@ -71,9 +69,9 @@ public class StringModuleTest {
   @Test
   public void testReplaceNoneCount() throws Exception {
     // Passing None as the max number of replacements is disallowed with the incompatible flag.
-    ev.new Scenario("--incompatible_string_replace_count=false")
+    new Scenario("--incompatible_string_replace_count=false")
         .testEval("'banana'.replace('a', 'e', None)", "'benene'");
-    ev.new Scenario("--incompatible_string_replace_count=true")
+    new Scenario("--incompatible_string_replace_count=true")
         .testIfErrorContains("Cannot pass a None count", "'banana'.replace('a', 'e', None)");
   }
 }
