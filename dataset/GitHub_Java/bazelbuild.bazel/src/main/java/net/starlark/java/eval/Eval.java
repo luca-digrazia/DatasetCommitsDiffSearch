@@ -41,7 +41,6 @@ import net.starlark.java.syntax.Identifier;
 import net.starlark.java.syntax.IfStatement;
 import net.starlark.java.syntax.IndexExpression;
 import net.starlark.java.syntax.IntLiteral;
-import net.starlark.java.syntax.LambdaExpression;
 import net.starlark.java.syntax.ListExpression;
 import net.starlark.java.syntax.LoadStatement;
 import net.starlark.java.syntax.Location;
@@ -149,8 +148,10 @@ final class Eval {
     return TokenKind.PASS;
   }
 
-  private static StarlarkFunction newFunction(StarlarkThread.Frame fr, Resolver.Function rfn)
+  private static void execDef(StarlarkThread.Frame fr, DefStatement node)
       throws EvalException, InterruptedException {
+    Resolver.Function rfn = node.getResolvedFunction();
+
     // Evaluate default value expressions of optional parameters.
     // We use MANDATORY to indicate a required parameter
     // (not null, because defaults must be a legal tuple value, as
@@ -174,29 +175,13 @@ final class Eval {
       defaults = EMPTY;
     }
 
-    // Capture the cells of the function's
-    // free variables from the lexical environment.
-    Object[] freevars = new Object[rfn.getFreeVars().size()];
-    int i = 0;
-    for (Resolver.Binding bind : rfn.getFreeVars()) {
-      // Unlike expr(Identifier), we want the cell itself, not its content.
-      switch (bind.getScope()) {
-        case FREE:
-          freevars[i++] = fn(fr).getFreeVar(bind.getIndex());
-          break;
-        case CELL:
-          freevars[i++] = fr.locals[bind.getIndex()];
-          break;
-        default:
-          throw new IllegalStateException("unexpected: " + bind);
-      }
-    }
-
     // Nested functions use the same globalIndex as their enclosing function,
     // since both were compiled from the same Program.
     StarlarkFunction fn = fn(fr);
-    return new StarlarkFunction(
-        rfn, fn.getModule(), fn.globalIndex, Tuple.wrap(defaults), Tuple.wrap(freevars));
+    assignIdentifier(
+        fr,
+        node.getIdentifier(),
+        new StarlarkFunction(rfn, Tuple.wrap(defaults), fn.getModule(), fn.globalIndex));
   }
 
   private static TokenKind execIf(StarlarkThread.Frame fr, IfStatement node)
@@ -223,23 +208,32 @@ final class Eval {
     Module module = loader.load(moduleName);
     if (module == null) {
       fr.setErrorLocation(node.getStartLocation());
-      throw Starlark.errorf("module '%s' not found", moduleName);
+      throw Starlark.errorf(
+          "file '%s' was not correctly loaded. Make sure the 'load' statement appears in the"
+              + " global scope in your file",
+          moduleName);
     }
+    Map<String, Object> globals = module.getExportedGlobals();
 
     for (LoadStatement.Binding binding : node.getBindings()) {
       // Extract symbol.
       Identifier orig = binding.getOriginalName();
-      Object value = module.getGlobal(orig.getName());
+      Object value = globals.get(orig.getName());
       if (value == null) {
         fr.setErrorLocation(orig.getStartLocation());
         throw Starlark.errorf(
             "file '%s' does not contain symbol '%s'%s",
-            moduleName,
-            orig.getName(),
-            SpellChecker.didYouMean(orig.getName(), module.getGlobals().keySet()));
+            moduleName, orig.getName(), SpellChecker.didYouMean(orig.getName(), globals.keySet()));
       }
 
-      assignIdentifier(fr, binding.getLocalName(), value);
+      // Define module-local variable.
+      // TODO(adonovan): eventually the default behavior should be that
+      // loads bind file-locally. Either way, the resolver should designate
+      // the proper scope of binding.getLocalName() and this should become
+      // simply assign(binding.getLocalName(), value).
+      // Currently, we update the module but not module.exportedGlobals;
+      // changing it to fr.locals.put breaks a test. TODO(adonovan): find out why.
+      fn(fr).setGlobal(binding.getLocalName().getBinding().getIndex(), value);
     }
   }
 
@@ -276,9 +270,7 @@ final class Eval {
       case FOR:
         return execFor(fr, (ForStatement) st);
       case DEF:
-        DefStatement def = (DefStatement) st;
-        StarlarkFunction fn = newFunction(fr, def.getResolvedFunction());
-        assignIdentifier(fr, def.getIdentifier(), fn);
+        execDef(fr, (DefStatement) st);
         return TokenKind.PASS;
       case IF:
         return execIf(fr, (IfStatement) st);
@@ -336,11 +328,12 @@ final class Eval {
       case LOCAL:
         fr.locals[bind.getIndex()] = value;
         break;
-      case CELL:
-        ((StarlarkFunction.Cell) fr.locals[bind.getIndex()]).x = value;
-        break;
       case GLOBAL:
+        // Updates a module binding and sets its 'exported' flag.
+        // (Only load bindings are not exported.
+        // But exportedGlobals does at run time what should be done in the resolver.)
         fn(fr).setGlobal(bind.getIndex(), value);
+        fn(fr).getModule().exportedGlobals.add(id.getName());
         break;
       default:
         throw new IllegalStateException(bind.getScope().toString());
@@ -382,16 +375,9 @@ final class Eval {
     Expression rhs = stmt.getRHS();
 
     if (lhs instanceof Identifier) {
-      // x op= y    (lhs must be evaluated only once)
       Object x = eval(fr, lhs);
       Object y = eval(fr, rhs);
-      Object z;
-      try {
-        z = inplaceBinaryOp(fr, op, x, y);
-      } catch (EvalException ex) {
-        fr.setErrorLocation(stmt.getOperatorLocation());
-        throw ex;
-      }
+      Object z = inplaceBinaryOp(fr, op, x, y);
       assignIdentifier(fr, (Identifier) lhs, z);
 
     } else if (lhs instanceof IndexExpression) {
@@ -400,47 +386,14 @@ final class Eval {
       IndexExpression index = (IndexExpression) lhs;
       Object object = eval(fr, index.getObject());
       Object key = eval(fr, index.getKey());
-      Object x = EvalUtils.index(fr.thread, object, key);
+      Object x = EvalUtils.index(fr.thread.mutability(), fr.thread.getSemantics(), object, key);
       // Evaluate rhs after lhs.
       Object y = eval(fr, rhs);
-      Object z;
-      try {
-        z = inplaceBinaryOp(fr, op, x, y);
-      } catch (EvalException ex) {
-        fr.setErrorLocation(stmt.getOperatorLocation());
-        throw ex;
-      }
+      Object z = inplaceBinaryOp(fr, op, x, y);
       try {
         EvalUtils.setIndex(object, key, z);
       } catch (EvalException ex) {
         fr.setErrorLocation(stmt.getOperatorLocation());
-        throw ex;
-      }
-
-    } else if (lhs instanceof DotExpression) {
-      // object.field op= y  (lhs must be evaluated only once)
-      DotExpression dot = (DotExpression) lhs;
-      Object object = eval(fr, dot.getObject());
-      String field = dot.getField().getName();
-      try {
-        Object x =
-            Starlark.getattr(
-                fr.thread.mutability(),
-                fr.thread.getSemantics(),
-                object,
-                field,
-                /*defaultValue=*/ null);
-        Object y = eval(fr, rhs);
-        Object z;
-        try {
-          z = inplaceBinaryOp(fr, op, x, y);
-        } catch (EvalException ex) {
-          fr.setErrorLocation(stmt.getOperatorLocation());
-          throw ex;
-        }
-        EvalUtils.setField(object, field, z);
-      } catch (EvalException ex) {
-        fr.setErrorLocation(dot.getDotLocation());
         throw ex;
       }
 
@@ -506,8 +459,6 @@ final class Eval {
         }
       case FLOAT_LITERAL:
         return StarlarkFloat.of(((FloatLiteral) expr).getValue());
-      case LAMBDA:
-        return newFunction(fr, ((LambdaExpression) expr).getResolvedFunction());
       case LIST_EXPR:
         return evalList(fr, (ListExpression) expr);
       case SLICE:
@@ -686,12 +637,6 @@ final class Eval {
       case LOCAL:
         result = fr.locals[bind.getIndex()];
         break;
-      case CELL:
-        result = ((StarlarkFunction.Cell) fr.locals[bind.getIndex()]).x;
-        break;
-      case FREE:
-        result = fn(fr).getFreeVar(bind.getIndex()).x;
-        break;
       case GLOBAL:
         result = fn(fr).getGlobal(bind.getIndex());
         break;
@@ -717,7 +662,7 @@ final class Eval {
     Object object = eval(fr, index.getObject());
     Object key = eval(fr, index.getKey());
     try {
-      return EvalUtils.index(fr.thread, object, key);
+      return EvalUtils.index(fr.thread.mutability(), fr.thread.getSemantics(), object, key);
     } catch (EvalException ex) {
       fr.setErrorLocation(index.getLbracketLocation());
       throw ex;
