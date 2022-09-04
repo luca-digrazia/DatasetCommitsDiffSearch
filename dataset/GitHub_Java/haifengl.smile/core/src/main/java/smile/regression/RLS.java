@@ -49,20 +49,12 @@ import smile.math.matrix.SVD;
  */
 public class RLS implements OnlineRegression<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
-
+    private static final Logger logger = LoggerFactory.getLogger(RLS.class);
+    
     /**
      * The dimensionality.
      */
     private int p;
-    /**
-     * The coefficients with intercept.
-     */
-    private double[] w;
-    /**
-     * The forgetting factor in (0, 1]. Values closer to 1 will have
-     * longer memory and values closer to 0 will be have shorter memory.
-     */
-    private double lambda;
     /**
      * First initialized to the matrix (X<sup>T</sup>X)<sup>-1</sup>,
      * it is updated with each new learning instance.
@@ -71,12 +63,21 @@ public class RLS implements OnlineRegression<double[]>, Serializable {
     /**
      * A single learning instance X, padded with 1 for intercept.
      */
-    private double[] x1;
+    private transient double[] x1;
+    /**
+     * The coefficients with intercept.
+     */
+    private transient double[] w;
     /**
      * A temporary array used in computing V * X .
      */
-    private double[] Vx;
-
+    private transient double[] Vx;
+    /**
+     * The forgetting factor in (0, 1]. Values closer to 1 will have
+     * longer memory and values closer to 0 will be have shorter memory.
+     */
+    private double lambda;
+    
     /**
      * Trainer for linear regression by recursive least squares.
      */
@@ -134,9 +135,7 @@ public class RLS implements OnlineRegression<double[]>, Serializable {
             X.set(i, p, 1.0);
         }
 
-        // Always use SVD instead of QR because it is more stable
-        // when the data is close to rank deficient, which is more
-        // likely in RLS as the initial data size may be small.
+        // weights and intercept
         this.w = new double[p+1];
         SVD svd = X.svd();
         svd.solve(y, w);
@@ -231,7 +230,7 @@ public class RLS implements OnlineRegression<double[]>, Serializable {
      * @param lambda the forgetting factor
      */
     public void setForgettingFactor(double lambda) {
-        if (lambda <= 0 || lambda > 1){
+        if (lambda<=0 || lambda>1){
            throw new IllegalArgumentException("The forgetting factor is not between 0 (exclusive) and 1 (inclusive)"); 
         }
         this.lambda = lambda;
