@@ -14,10 +14,7 @@
 
 package com.google.devtools.build.lib.vfs;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
@@ -28,6 +25,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map.Entry;
 
 /**
@@ -79,15 +77,11 @@ public class DigestHashFunction {
   private final String name;
   private final MessageDigest messageDigestPrototype;
   private final boolean messageDigestPrototypeSupportsClone;
-  private final ImmutableList<String> names;
 
-  private DigestHashFunction(
-      HashFunction hashFunction, DigestLength digestLength, ImmutableList<String> names) {
+  private DigestHashFunction(HashFunction hashFunction, DigestLength digestLength, String name) {
     this.hashFunction = hashFunction;
     this.digestLength = digestLength;
-    checkArgument(!names.isEmpty());
-    this.name = names.get(0);
-    this.names = names;
+    this.name = name;
     this.messageDigestPrototype = getMessageDigestInstance();
     this.messageDigestPrototypeSupportsClone = supportsClone(messageDigestPrototype);
   }
@@ -119,9 +113,8 @@ public class DigestHashFunction {
           e);
     }
 
-    ImmutableList<String> names =
-        ImmutableList.<String>builder().add(hashName).add(altNames).build();
-    DigestHashFunction hashFunction = new DigestHashFunction(hash, digestLength, names);
+    DigestHashFunction hashFunction = new DigestHashFunction(hash, digestLength, hashName);
+    List<String> names = ImmutableList.<String>builder().add(hashName).add(altNames).build();
     synchronized (hashFunctionRegistry) {
       for (String name : names) {
         if (hashFunctionRegistry.containsKey(name)) {
@@ -159,8 +152,7 @@ public class DigestHashFunction {
       return getDefault();
     } catch (DefaultHashFunctionNotSetException e) {
       // Some tests use this class without calling GoogleUnixFileSystemModule.globalInit().
-      Preconditions.checkState(
-          System.getenv("TEST_TMPDIR") != null, "Default hash function has not been set");
+      System.err.println("Using DigestHashFunction.DEFAULT_HASH_FOR_TESTS for testing");
       return DEFAULT_HASH_FOR_TESTS;
     }
   }
@@ -235,10 +227,6 @@ public class DigestHashFunction {
 
   public DigestLength getDigestLength() {
     return digestLength;
-  }
-
-  public ImmutableList<String> getNames() {
-    return names;
   }
 
   @Override

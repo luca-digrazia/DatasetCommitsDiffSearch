@@ -410,19 +410,6 @@ public abstract class FileArtifactValue implements SkyValue {
     public boolean wasModifiedSinceDigest(Path path) {
       throw new UnsupportedOperationException();
     }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(this)
-          .add("digest", bytesToString(digest))
-          .add("size", size)
-          .add("locationIndex", locationIndex)
-          .toString();
-    }
-  }
-
-  private static String bytesToString(byte[] bytes) {
-    return "0x" + BaseEncoding.base16().omitPadding().encode(bytes);
   }
 
   /** File stored inline in metadata. */
