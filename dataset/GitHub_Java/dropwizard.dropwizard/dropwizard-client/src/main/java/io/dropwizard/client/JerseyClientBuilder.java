@@ -308,18 +308,12 @@ public class JerseyClientBuilder {
         }
 
         if (executorService == null) {
-            // Create an ExecutorService based on the provided
-            // configuration. The DisposableExecutorService decorator
-            // is used to ensure that the service is shut down if the
-            // Jersey client disposes of it.
-            executorService = new DropwizardExecutorProvider.DisposableExecutorService(
-                environment.lifecycle()
+            executorService = environment.lifecycle()
                     .executorService("jersey-client-" + name + "-%d")
                     .minThreads(configuration.getMinThreads())
                     .maxThreads(configuration.getMaxThreads())
                     .workQueue(new ArrayBlockingQueue<>(configuration.getWorkQueueSize()))
-                    .build()
-            );
+                    .build();
         }
 
         if (objectMapper == null) {

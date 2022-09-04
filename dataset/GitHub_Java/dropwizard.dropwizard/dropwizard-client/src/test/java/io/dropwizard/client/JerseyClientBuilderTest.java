@@ -8,6 +8,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import io.dropwizard.jersey.gzip.ConfiguredGZipEncoder;
 import io.dropwizard.jersey.gzip.GZipDecoder;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProvider;
 import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.lifecycle.setup.ExecutorServiceBuilder;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
@@ -25,8 +26,6 @@ import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.SystemDefaultCredentialsProvider;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
-import org.glassfish.jersey.client.rx.RxClient;
-import org.glassfish.jersey.client.rx.java8.RxCompletionStageInvoker;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -153,17 +152,9 @@ public class JerseyClientBuilderTest {
     }
 
     @Test
-    public void createsAnRxEnabledClient() throws Exception {
-        final RxClient<RxCompletionStageInvoker> client =
-            builder.using(executorService, objectMapper)
-                .buildRx("test", RxCompletionStageInvoker.class);
-
-        for (Object o : client.getConfiguration().getInstances()) {
-            if (o instanceof DropwizardExecutorProvider) {
-                final DropwizardExecutorProvider provider = (DropwizardExecutorProvider) o;
-                assertThat(provider.getExecutorService()).isSameAs(executorService);
-            }
-        }
+    public void usesTheObjectMapperForJson() throws Exception {
+        final Client client = builder.using(executorService, objectMapper).build("test");
+        assertThat(client.getConfiguration().isRegistered(JacksonMessageBodyProvider.class)).isTrue();
     }
 
     @Test
@@ -217,6 +208,13 @@ public class JerseyClientBuilderTest {
         assertThat(Iterables.filter(client.getConfiguration().getInstances(), ConfiguredGZipEncoder.class)
                 .iterator().hasNext()).isFalse();
         verify(apacheHttpClientBuilder).disableContentCompression(true);
+    }
+
+    @Test
+    public void usesAnObjectMapperFromTheEnvironment() throws Exception {
+        final Client client = builder.using(environment).build("test");
+
+        assertThat(client.getConfiguration().isRegistered(JacksonMessageBodyProvider.class)).isTrue();
     }
 
     @Test
