@@ -356,10 +356,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     TargetPattern.Parser targetPatternParser = new TargetPattern.Parser(parserPrefix);
     String universeScopePattern = Iterables.getOnlyElement(universeScope);
     return QueryExpressionMapper.compose(
-        ImmutableList.of(
-            new RdepsToAllRdepsQueryExpressionMapper(targetPatternParser, universeScopePattern),
-            new FilteredDirectRdepsInUniverseExpressionMapper(
-                targetPatternParser, universeScopePattern)));
+        new RdepsToAllRdepsQueryExpressionMapper(targetPatternParser, universeScopePattern),
+        new FilteredDirectRdepsInUniverseExpressionMapper(
+            targetPatternParser, universeScopePattern));
   }
 
   @Override
@@ -1066,13 +1065,11 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       target -> TransitiveTraversalValue.key(target.getLabel());
 
   /** A strict (i.e. non-lazy) variant of {@link #makeTransitiveTraversalKeys}. */
-  public static <T extends Target> Iterable<SkyKey> makeTransitiveTraversalKeysStrict(
-      Iterable<T> targets) {
+  public static Iterable<SkyKey> makeTransitiveTraversalKeysStrict(Iterable<Target> targets) {
     return ImmutableList.copyOf(makeTransitiveTraversalKeys(targets));
   }
 
-  private static <T extends Target> Iterable<SkyKey> makeTransitiveTraversalKeys(
-      Iterable<T> targets) {
+  private static Iterable<SkyKey> makeTransitiveTraversalKeys(Iterable<Target> targets) {
     return Iterables.transform(targets, TARGET_TO_SKY_KEY);
   }
 
