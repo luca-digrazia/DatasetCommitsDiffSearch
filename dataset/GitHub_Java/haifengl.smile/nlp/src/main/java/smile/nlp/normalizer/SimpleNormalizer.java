@@ -61,6 +61,7 @@ public class SimpleNormalizer implements Normalizer {
 
     @Override
     public String normalize(String text) {
+
         if (!java.text.Normalizer.isNormalized(text, java.text.Normalizer.Form.NFKC)) {
             text = java.text.Normalizer.normalize(text, java.text.Normalizer.Form.NFKC);
         }
@@ -75,6 +76,8 @@ public class SimpleNormalizer implements Normalizer {
 
         text = DASH.matcher(text).replaceAll("--");
 
-        return text.trim();
+        text = text.trim();
+
+        return text;
     }
 }
