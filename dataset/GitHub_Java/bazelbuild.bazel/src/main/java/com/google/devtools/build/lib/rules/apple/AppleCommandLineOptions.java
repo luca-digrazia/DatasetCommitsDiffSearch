@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.skyframe.serialization.DeserializationConte
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.starlarkbuildapi.apple.AppleBitcodeModeApi;
-import com.google.devtools.build.lib.util.CPU;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
@@ -187,8 +186,7 @@ public class AppleCommandLineOptions extends FragmentOptions {
   public static final String DEFAULT_TVOS_CPU = "x86_64";
 
   /** The default macOS CPU value. */
-  public static final String DEFAULT_MACOS_CPU =
-      CPU.getCurrent() == CPU.AARCH64 ? "arm64" : "x86_64";
+  public static final String DEFAULT_MACOS_CPU = "x86_64";
 
   /** The default Catalyst CPU value. */
   public static final String DEFAULT_CATALYST_CPU = "x86_64";
@@ -485,7 +483,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
     // Preseve Xcode selection preferences so that the same Xcode version is used throughout the
     // build.
     host.preferMutualXcode = preferMutualXcode;
-    host.includeXcodeExecutionRequirements = includeXcodeExecutionRequirements;
 
     return host;
   }
