@@ -68,7 +68,7 @@ public class ParamsFilePreProcessor implements ArgsPreProcessor {
         while (iterator.hasNext()) {
           char next = iterator.next();
           if (Character.isWhitespace(next) && !iterator.isInQuote() && !iterator.isEscaped()) {
-            newArgs.add(unescape(arg.toString()));
+            newArgs.add(arg.toString());
             arg = new StringBuilder();
           } else {
             arg.append(next);
@@ -90,14 +90,6 @@ public class ParamsFilePreProcessor implements ArgsPreProcessor {
       }
     }
     return args;
-  }
-
-  private String unescape(String arg) {
-    if (arg.startsWith("'") && arg.endsWith("'")) {
-      String unescaped = arg.replace("'\\''", "'");
-      return unescaped.substring(1, unescaped.length() - 1);
-    }
-    return arg;
   }
 
   // Doesn't implement iterator to avoid autoboxing and to throw exceptions.
@@ -153,7 +145,7 @@ public class ParamsFilePreProcessor implements ArgsPreProcessor {
         throw new NoSuchElementException();
       }
       char current = (char) reader.read();
-
+      
       // check for \r\n line endings. If found, drop the \r for normalized parsing.
       if (current == '\r' && peek() == '\n') {
         current = (char) reader.read();

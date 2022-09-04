@@ -79,6 +79,11 @@ public final class Digraph<T> implements Cloneable {
   private final HashMap<T, Node<T>> nodes = Maps.newHashMap();
 
   /**
+   * A source of unique, deterministic hashCodes for {@link Node} instances.
+   */
+  private int nextHashCode = 0;
+
+  /**
    * Construct an empty Digraph.
    */
   public Digraph() {}
@@ -372,7 +377,7 @@ public final class Digraph<T> implements Cloneable {
     if (label == null) {
       throw new NullPointerException();
     }
-    return nodes.computeIfAbsent(label, k -> new Node<>(k));
+    return nodes.computeIfAbsent(label, k -> new Node<>(k, nextHashCode++));
   }
 
   /******************************************************************
@@ -684,6 +689,29 @@ public final class Digraph<T> implements Cloneable {
       dfs.visit(n, new AbstractGraphVisitor<>());
     }
     return dfs.getMarked();
+  }
+
+  /**
+   * Removes the node in the graph specified by the given label.  Optionally,
+   * preserves the graph order (by connecting up the broken edges) or drop them
+   * all.  If the specified label is not the label of any node in the graph,
+   * does nothing.
+   *
+   * @param label the label of the node to remove.
+   * @param preserveOrder if true, adds edges between the neighbours
+   *   of the removed node so as to maintain the graph ordering
+   *   relation between all pairs of such nodes.  If false, simply
+   *   discards all edges from the deleted node to its neighbours.
+   * @return true iff 'label' identifies a node (i.e. the graph was changed).
+   */
+  public boolean removeNode(T label, boolean preserveOrder) {
+    Node<T> node = getNodeMaybe(label);
+    if (node != null) {
+      removeNode(node, preserveOrder);
+      return true;
+    } else {
+      return false;
+    }
   }
 
   /**

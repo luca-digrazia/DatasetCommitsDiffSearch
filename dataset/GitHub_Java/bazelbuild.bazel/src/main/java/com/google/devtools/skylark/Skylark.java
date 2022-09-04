@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.syntax.Printer;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -50,9 +49,8 @@ class Skylark {
         }
       };
 
-  private static final Charset CHARSET = StandardCharsets.ISO_8859_1;
   private final BufferedReader reader =
-      new BufferedReader(new InputStreamReader(System.in, CHARSET));
+      new BufferedReader(new InputStreamReader(System.in, StandardCharsets.UTF_8));
   private final Mutability mutability = Mutability.create("interpreter");
   private final Environment env =
       Environment.builder(mutability)
@@ -100,7 +98,7 @@ class Skylark {
   public int execute(String path) {
     String content;
     try {
-      content = new String(Files.readAllBytes(Paths.get(path)), CHARSET);
+      content = new String(Files.readAllBytes(Paths.get(path)), StandardCharsets.UTF_8);
       BuildFileAST.eval(env, content);
       return 0;
     } catch (EvalException e) {
