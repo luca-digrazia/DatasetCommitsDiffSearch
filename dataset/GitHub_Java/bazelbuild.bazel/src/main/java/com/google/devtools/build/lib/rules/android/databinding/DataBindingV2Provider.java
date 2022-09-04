@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android.databinding;
 
-import static com.google.devtools.build.lib.rules.android.AndroidSkylarkData.fromNoneable;
-
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -117,12 +115,9 @@ public final class DataBindingV2Provider extends NativeInfo
     NestedSetBuilder<LabelJavaPackagePair> transitiveLabelAndJavaPackages =
         NestedSetBuilder.stableOrder();
     ImmutableList.Builder<LabelJavaPackagePair> labelAndJavaPackages = ImmutableList.builder();
-
-    if (label != null && javaPackage != null) {
-      LabelJavaPackagePair labelAndJavaPackage = new LabelJavaPackagePair(label, javaPackage);
-      labelAndJavaPackages.add(labelAndJavaPackage);
-      transitiveLabelAndJavaPackages.add(labelAndJavaPackage);
-    }
+    LabelJavaPackagePair labelAndJavaPackage = new LabelJavaPackagePair(label, javaPackage);
+    labelAndJavaPackages.add(labelAndJavaPackage);
+    transitiveLabelAndJavaPackages.add(labelAndJavaPackage);
 
     if (databindingV2ProvidersInDeps != null) {
 
@@ -163,21 +158,21 @@ public final class DataBindingV2Provider extends NativeInfo
 
     @Override
     public DataBindingV2ProviderApi<Artifact> createInfo(
-        Object setterStoreFile,
-        Object classInfoFile,
-        Object brFile,
-        Object label,
-        Object javaPackage,
+        Artifact setterStoreFile,
+        Artifact classInfoFile,
+        Artifact brFile,
+        String label,
+        String javaPackage,
         SkylarkList<DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInDeps,
         SkylarkList<DataBindingV2ProviderApi<Artifact>> databindingV2ProvidersInExports)
         throws EvalException {
 
       return createProvider(
-          fromNoneable(setterStoreFile, Artifact.class),
-          fromNoneable(classInfoFile, Artifact.class),
-          fromNoneable(brFile, Artifact.class),
-          fromNoneable(label, String.class),
-          fromNoneable(javaPackage, String.class),
+          setterStoreFile,
+          classInfoFile,
+          brFile,
+          label,
+          javaPackage,
           databindingV2ProvidersInDeps == null
               ? null
               : databindingV2ProvidersInDeps.getImmutableList(),
