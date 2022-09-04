@@ -15,9 +15,9 @@ package com.google.devtools.build.lib.windows;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Function;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
@@ -32,6 +32,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.attribute.DosFileAttributes;
 import java.util.Arrays;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import javax.annotation.Nullable;
@@ -105,11 +106,42 @@ public class WindowsFileSystem extends JavaIoFileSystem {
     private static Path getCachedChildPathInternalImpl(
         Path parent, String child, Function<String, String> resolver) {
       if (parent != null && parent.isRootDirectory()) {
-        // This is a top-level directory. It must be a drive name ("C:" or "c").
+        // This is a top-level directory. It's either a drive name ("C:" or "c") or some other
+        // Unix path (e.g. "/usr").
+        //
+        // We need to translate it to an absolute Windows path. The correct way would be looking
+        // up /etc/mtab to see if any mount point matches the prefix of the path, and change the
+        // prefix to the mounted path. Looking up /etc/mtab each time we create a path however
+        // would be too expensive so we use a heuristic instead.
+        //
+        // If the name looks like a volume name ("C:" or "c") then we treat it as such, otherwise
+        // we make it relative to UNIX_ROOT, thus "/usr" becomes "C:/tools/msys64/usr".
+        //
+        // This heuristic ignores other mount points as well as procfs.
+
+        // TODO(laszlocsomor): use GetLogicalDrives to retrieve the list of drives and only apply
+        // this heuristic for the valid drives. It's possible that the user has a directory "/a"
+        // but no "A:\" drive, so in that case we should prepend the MSYS root.
+
         if (WindowsPath.isWindowsVolumeName(child)) {
           child = WindowsPath.getDriveLetter((WindowsPath) parent, child) + ":";
         } else {
-          throw new IllegalArgumentException("Cannot create Unix-style paths on Windows.");
+          if (UNIX_ROOT.get() == null) {
+            String jvmFlag = "bazel.windows_unix_root";
+            PathFragment value = determineUnixRoot(jvmFlag);
+            if (value == null) {
+              throw new IllegalStateException(
+                  String.format(
+                      "\"%1$s\" JVM flag is not set. Use the --host_jvm_args flag or export the "
+                          + "BAZEL_SH environment variable. For example "
+                          + "\"--host_jvm_args=-D%1$s=c:/tools/msys64\" or "
+                          + "\"set BAZEL_SH=c:/tools/msys64/usr/bin/bash.exe\". "
+                          + "parent=(%2$s) name=(%3$s)",
+                      jvmFlag, parent, child));
+            }
+            UNIX_ROOT.set(value);
+          }
+          parent = parent.getRelative(UNIX_ROOT.get());
         }
       }
 
@@ -271,14 +303,10 @@ public class WindowsFileSystem extends JavaIoFileSystem {
     return WindowsPathFactory.createForTesting(mockResolver);
   }
 
+  private static final AtomicReference<PathFragment> UNIX_ROOT = new AtomicReference<>(null);
+
   public static final LinkOption[] NO_OPTIONS = new LinkOption[0];
   public static final LinkOption[] NO_FOLLOW = new LinkOption[] {LinkOption.NOFOLLOW_LINKS};
-
-  public WindowsFileSystem() {}
-
-  public WindowsFileSystem(HashFunction hashFunction) {
-    super(hashFunction);
-  }
 
   @Override
   protected PathFactory getPathFactory() {
@@ -443,5 +471,24 @@ public class WindowsFileSystem extends JavaIoFileSystem {
       throws IOException {
     return Files.readAttributes(
         file.toPath(), DosFileAttributes.class, symlinkOpts(followSymlinks));
+  }
+
+  private static PathFragment determineUnixRoot(String jvmArgName) {
+    // Get the path from a JVM flag, if specified.
+    String path = System.getProperty(jvmArgName);
+    if (path == null) {
+      return null;
+    }
+
+    path = path.trim();
+    if (path.isEmpty()) {
+      return null;
+    }
+
+    PathFragment result = PathFragment.create(path);
+    if (result.getDriveLetter() == '\0' || !result.isAbsolute()) {
+      return null;
+    }
+    return result;
   }
 }

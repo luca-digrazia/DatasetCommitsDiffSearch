@@ -69,7 +69,7 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
   }
 
   @Override
-  protected Collection<String> getDirectoryEntries(Path path) throws IOException {
+  protected Collection<Path> getDirectoryEntries(Path path) throws IOException {
     File file = getIoFile(path);
     String[] entries = null;
     long startTime = Profiler.nanoTimeMaybe();
@@ -85,10 +85,10 @@ public class JavaIoFileSystem extends AbstractFileSystemWithCustomStat {
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_DIR, file.getPath());
     }
-    Collection<String> result = new ArrayList<>(entries.length);
+    Collection<Path> result = new ArrayList<>(entries.length);
     for (String entry : entries) {
       if (!entry.equals(".") && !entry.equals("..")) {
-        result.add(entry);
+        result.add(path.getChild(entry));
       }
     }
     return result;

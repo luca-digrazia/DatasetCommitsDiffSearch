@@ -96,7 +96,7 @@ public abstract class ReadonlyFileSystem extends AbstractFileSystem {
   }
 
   @Override
-  public void renameTo(Path sourcePath, Path targetPath) throws IOException {
+  protected void renameTo(Path sourcePath, Path targetPath) throws IOException {
     throw modificationException();
   }
 
@@ -106,7 +106,7 @@ public abstract class ReadonlyFileSystem extends AbstractFileSystem {
   }
 
   @Override
-  public void setLastModifiedTime(Path path, long newTime) throws IOException {
+  protected void setLastModifiedTime(Path path, long newTime) throws IOException {
     throw modificationException();
   }
 
