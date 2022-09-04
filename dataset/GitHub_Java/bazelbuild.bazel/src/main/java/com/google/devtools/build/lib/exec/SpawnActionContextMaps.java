@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.actions.SandboxedSpawnActionContext;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
+import com.google.devtools.build.lib.analysis.test.TestActionContext;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.Reporter;
@@ -327,7 +328,8 @@ public final class SpawnActionContextMaps
     }
 
     /** Builds a {@link SpawnActionContextMaps} instance. */
-    public SpawnActionContextMaps build(ImmutableList<ActionContextProvider> actionContextProviders)
+    public SpawnActionContextMaps build(
+        ImmutableList<ActionContextProvider> actionContextProviders, String testStrategyValue)
         throws ExecutorInitException {
       StrategyConverter strategyConverter = new StrategyConverter(actionContextProviders);
 
@@ -391,6 +393,14 @@ public final class SpawnActionContextMaps
             new AutoValue_SpawnActionContextMaps_RegexFilterSpawnActionContext(
                 entry.regexFilter(), contexts.build()));
       }
+
+      ActionContext testStrategy =
+          strategyConverter.getStrategy(TestActionContext.class, testStrategyValue);
+      if (testStrategy == null) {
+        throw makeExceptionForInvalidStrategyValue(
+            testStrategyValue, "test", strategyConverter.getValidValues(TestActionContext.class));
+      }
+      strategies.add(testStrategy);
 
       AbstractSpawnStrategy remoteLocalFallbackStrategy = null;
       if (remoteLocalFallbackStrategyName != null) {

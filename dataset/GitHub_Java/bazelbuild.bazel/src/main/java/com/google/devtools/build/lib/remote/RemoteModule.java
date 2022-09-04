@@ -492,8 +492,7 @@ public final class RemoteModule extends BlazeModule {
     if (actionContextProvider == null) {
       return;
     }
-    actionContextProvider.registerActionContexts(builder);
-    builder.addExecutorLifecycleListener(actionContextProvider);
+    builder.addActionContextProvider(actionContextProvider);
     RemoteOptions remoteOptions =
         Preconditions.checkNotNull(
             env.getOptions().getOptions(RemoteOptions.class), "RemoteOptions");
@@ -543,7 +542,7 @@ public final class RemoteModule extends BlazeModule {
     }
 
     @Override
-    public BuildEventArtifactUploader create(CommandEnvironment env) throws IOException {
+    public BuildEventArtifactUploader create(CommandEnvironment env) {
       BuildEventArtifactUploaderFactory uploaderFactory0 = this.uploaderFactory;
       if (uploaderFactory0 == null) {
         return new LocalFilesArtifactUploader();

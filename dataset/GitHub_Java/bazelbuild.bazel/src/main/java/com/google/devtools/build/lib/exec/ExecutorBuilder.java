@@ -59,14 +59,9 @@ public class ExecutorBuilder {
   /**
    * Adds the specified action context to the executor, by wrapping it in a simple action context
    * provider implementation.
-   *
-   * <p>If two action contexts are registered that share an identifying type and commandline
-   * identifier the last registered will take precedence.
    */
-  public <T extends ActionContext> ExecutorBuilder addActionContext(
-      Class<T> identifyingType, T context, String... commandlineIdentifiers) {
-    return addActionContextProvider(
-        new SimpleActionContextProvider<>(identifyingType, context, commandlineIdentifiers));
+  public ExecutorBuilder addActionContext(ActionContext context) {
+    return addActionContextProvider(new SimpleActionContextProvider(context));
   }
 
   /**
@@ -85,8 +80,8 @@ public class ExecutorBuilder {
    * mnemonic.
    *
    * <p>During execution, each strategy is {@linkplain SpawnActionContext#canExec(Spawn,
-   * ActionContext.ActionContextRegistry) asked} whether it can execute a given Spawn. The first
-   * strategy in the list that says so will get the job.
+   * com.google.devtools.build.lib.actions.ActionExecutionContext) asked} whether it can execute a
+   * given Spawn. The first strategy in the list that says so will get the job.
    */
   public ExecutorBuilder addDynamicRemoteStrategiesByMnemonic(
       String mnemonic, List<String> strategies) {
@@ -101,8 +96,8 @@ public class ExecutorBuilder {
    * mnemonic.
    *
    * <p>During execution, each strategy is {@linkplain SpawnActionContext#canExec(Spawn,
-   * ActionContext.ActionContextRegistry) asked} whether it can execute a given Spawn. The first
-   * strategy in the list that says so will get the job.
+   * com.google.devtools.build.lib.actions.ActionExecutionContext) asked} whether it can execute a
+   * given Spawn. The first strategy in the list that says so will get the job.
    */
   public ExecutorBuilder addDynamicLocalStrategiesByMnemonic(
       String mnemonic, List<String> strategies) {
