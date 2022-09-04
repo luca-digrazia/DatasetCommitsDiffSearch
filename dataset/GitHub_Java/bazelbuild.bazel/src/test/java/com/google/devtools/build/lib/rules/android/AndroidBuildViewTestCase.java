@@ -36,7 +36,7 @@ import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfig
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.android.deployinfo.AndroidDeployInfoOuterClass.AndroidDeployInfo;
-import com.google.devtools.build.lib.rules.java.JavaCompileActionTestHelper;
+import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
@@ -115,20 +115,31 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
         .isNotNull();
   }
 
-  protected List<String> resourceArguments(ValidatedAndroidResources resource)
+  protected List<String> resourceArguments(ValidatedAndroidData resource)
       throws CommandLineExpansionException {
     return getGeneratingSpawnActionArgs(resource.getApk());
   }
 
-  protected SpawnAction resourceGeneratingAction(ValidatedAndroidResources resource) {
+  protected SpawnAction resourceGeneratingAction(ValidatedAndroidData resource) {
     return getGeneratingSpawnAction(resource.getApk());
   }
 
-  protected static ValidatedAndroidResources getValidatedResources(ConfiguredTarget target) {
-    return getValidatedResources(target, /* transitive= */ false);
+  protected static ResourceContainer getResourceContainer(ConfiguredTarget target) {
+    return getResourceContainer(target, /* transitive= */ false);
   }
 
-  protected static ValidatedAndroidResources getValidatedResources(
+  protected static ResourceContainer getResourceContainer(
+      ConfiguredTarget target, boolean transitive) {
+    ValidatedAndroidData validated = getValidatedData(target, transitive);
+    assertThat(validated).isInstanceOf(ResourceContainer.class);
+    return (ResourceContainer) validated;
+  }
+
+  protected static ValidatedAndroidData getValidatedData(ConfiguredTarget target) {
+    return getValidatedData(target, /* transitive = */ false);
+  }
+
+  protected static ValidatedAndroidData getValidatedData(
       ConfiguredTarget target, boolean transitive) {
     Preconditions.checkNotNull(target);
     final AndroidResourcesInfo info = target.get(AndroidResourcesInfo.PROVIDER);
@@ -215,15 +226,11 @@ public abstract class AndroidBuildViewTestCase extends BuildViewTestCase {
     return null;
   }
 
-  protected List<String> getProcessorNames(SpawnAction compileAction) throws Exception {
-    return JavaCompileActionTestHelper.getProcessorNames(compileAction);
-  }
-
   protected List<String> getProcessorNames(String outputTarget) throws Exception {
     OutputFileConfiguredTarget out = (OutputFileConfiguredTarget)
         getFileConfiguredTarget(outputTarget);
-    SpawnAction compileAction = (SpawnAction) getGeneratingAction(out.getArtifact());
-    return getProcessorNames(compileAction);
+    JavaCompileAction compileAction = (JavaCompileAction) getGeneratingAction(out.getArtifact());
+    return compileAction.getProcessorNames();
   }
 
   // Returns an artifact that will be generated when a rule has resources.

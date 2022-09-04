@@ -88,8 +88,8 @@ public final class FilesToRunProvider
 
   /** Return a {@link RunfilesSupplier} encapsulating runfiles for this tool. */
   public RunfilesSupplier getRunfilesSupplier() {
-    if (runfilesSupport != null) {
-      return RunfilesSupplierImpl.create(runfilesSupport);
+    if (executable != null && runfilesSupport != null) {
+      return new RunfilesSupplierImpl(executable, runfilesSupport.getRunfiles());
     } else {
       return EmptyRunfilesSupplier.INSTANCE;
     }

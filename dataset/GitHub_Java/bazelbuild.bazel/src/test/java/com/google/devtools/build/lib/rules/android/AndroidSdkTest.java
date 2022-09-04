@@ -15,30 +15,14 @@ package com.google.devtools.build.lib.rules.android;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.devtools.build.lib.rules.android.AndroidSdkTest.WithPlatforms;
-import com.google.devtools.build.lib.rules.android.AndroidSdkTest.WithoutPlatforms;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.junit.runners.Suite;
-import org.junit.runners.Suite.SuiteClasses;
 
 /** Tests for {@link com.google.devtools.build.lib.rules.android.AndroidSdk}. */
-@RunWith(Suite.class)
-@SuiteClasses({WithoutPlatforms.class, WithPlatforms.class})
-public abstract class AndroidSdkTest extends AndroidBuildViewTestCase {
-  /** Use legacy toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithoutPlatforms extends AndroidSdkTest {}
-
-  /** Use platform-based toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithPlatforms extends AndroidSdkTest {
-    @Override
-    protected boolean platformBasedToolchains() {
-      return true;
-    }
-  }
+@RunWith(JUnit4.class)
+public class AndroidSdkTest extends BuildViewTestCase {
 
   @Test
   public void testSourcePropertiesProvided() throws Exception {
@@ -59,7 +43,6 @@ public abstract class AndroidSdkTest extends AndroidBuildViewTestCase {
         "    proguard = 'ProGuard',",
         "    shrinked_android_jar = 'android.jar',",
         "    zipalign = 'zipalign',",
-        "    tags = ['__ANDROID_RULES_MIGRATION__'],",
         ")");
     AndroidSdkProvider sdkProvider = getConfiguredTarget("//sdk").get(AndroidSdkProvider.PROVIDER);
     assertThat(sdkProvider.getSourceProperties().toDetailString())

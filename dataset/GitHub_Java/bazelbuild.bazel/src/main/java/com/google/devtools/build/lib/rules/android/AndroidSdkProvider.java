@@ -33,6 +33,7 @@ import javax.annotation.Nullable;
 public final class AndroidSdkProvider extends NativeInfo
     implements AndroidSdkProviderApi<Artifact, FilesToRunProvider, TransitiveInfoCollection> {
 
+  public static final String PROVIDER_NAME = "AndroidSdkInfo";
   public static final Provider PROVIDER = new Provider();
 
   private final String buildToolsVersion;
@@ -66,7 +67,7 @@ public final class AndroidSdkProvider extends NativeInfo
       FilesToRunProvider mainDexListCreator,
       FilesToRunProvider aidl,
       FilesToRunProvider aapt,
-      FilesToRunProvider aapt2,
+      @Nullable FilesToRunProvider aapt2,
       @Nullable FilesToRunProvider apkBuilder,
       FilesToRunProvider apkSigner,
       FilesToRunProvider proguard,
@@ -170,6 +171,7 @@ public final class AndroidSdkProvider extends NativeInfo
   }
 
   @Override
+  @Nullable
   public FilesToRunProvider getAapt2() {
     return aapt2;
   }
@@ -201,7 +203,7 @@ public final class AndroidSdkProvider extends NativeInfo
           Artifact, FilesToRunProvider, TransitiveInfoCollection> {
 
     private Provider() {
-      super(NAME, AndroidSdkProvider.class);
+      super(PROVIDER_NAME, AndroidSdkProvider.class);
     }
 
     @Override
@@ -218,7 +220,7 @@ public final class AndroidSdkProvider extends NativeInfo
         FilesToRunProvider mainDexListCreator,
         FilesToRunProvider aidl,
         FilesToRunProvider aapt,
-        FilesToRunProvider aapt2,
+        Object aapt2,
         Object apkBuilder,
         FilesToRunProvider apkSigner,
         FilesToRunProvider proguard,
@@ -237,7 +239,7 @@ public final class AndroidSdkProvider extends NativeInfo
           mainDexListCreator,
           aidl,
           aapt,
-          aapt2,
+          fromNoneable(aapt2, FilesToRunProvider.class),
           fromNoneable(apkBuilder, FilesToRunProvider.class),
           apkSigner,
           proguard,
