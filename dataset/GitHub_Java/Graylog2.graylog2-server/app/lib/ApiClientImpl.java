@@ -215,11 +215,6 @@ class ApiClientImpl implements ApiClient {
             return this;
         }
 
-        public ApiRequestBuilder<T> fromMasterNode() {
-            this.node = serverNodes.master();
-            return this;
-        }
-
         public ApiRequestBuilder<T> queryParam(String name, String value) {
             queryParams.add(F.Tuple(name, value));
             return this;
@@ -303,17 +298,7 @@ class ApiClientImpl implements ApiClient {
                 }
 
                 if (response.getStatusCode() >= 200 && response.getStatusCode() < 300) {
-                    T result = null;
-                    try {
-                        result = deserializeJson(response, responseClass);
-
-                        return result;
-                    } catch (Exception e) {
-                        log.error("Caught Exception while deserializing JSON request: " + e);
-                        log.debug("Response from backend was: " + response.getResponseBody("UTF-8"));
-
-                        throw new APIException(request, response);
-                    }
+                    return deserializeJson(response, responseClass);
                 } else {
                     return null;
                 }
