@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.protobuf.TextFormat;
 import java.util.List;
@@ -71,8 +70,7 @@ public class LinkBuildVariablesTestCase extends BuildViewTestCase {
   public static CcToolchainFeatures buildFeatures(String... toolchain) throws Exception {
     CToolchain.Builder toolchainBuilder = CToolchain.newBuilder();
     TextFormat.merge(Joiner.on("").join(toolchain), toolchainBuilder);
-    return new CcToolchainFeatures(
-        toolchainBuilder.buildPartial(), /* crosstoolTop= */ PathFragment.EMPTY_FRAGMENT);
+    return new CcToolchainFeatures(toolchainBuilder.buildPartial());
   }
 
   /** Returns the value of a given sequence variable in context of the given Variables instance. */
