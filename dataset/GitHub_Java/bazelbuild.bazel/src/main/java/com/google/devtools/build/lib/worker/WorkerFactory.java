@@ -53,7 +53,7 @@ class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker> {
   }
 
   @Override
-  public Worker create(WorkerKey key) {
+  public Worker create(WorkerKey key) throws Exception {
     int workerId = pidCounter.getAndIncrement();
     String workTypeName = WorkerKey.makeWorkerTypeName(key.getProxied());
     Path logFile =
@@ -65,8 +65,12 @@ class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker> {
       Path workDir = getSandboxedWorkerPath(key, workerId);
       worker = new SandboxedWorker(key, workerId, workDir, logFile);
     } else if (key.getProxied()) {
-      WorkerMultiplexer workerMultiplexer = WorkerMultiplexerManager.getInstance(key, logFile);
-      worker = new WorkerProxy(key, workerId, workerMultiplexer.getLogFile(), workerMultiplexer);
+      WorkerMultiplexer workerMultiplexer =
+          WorkerMultiplexerManager.getInstance(
+              key, logFile, workerOptions.workerVerbose ? reporter : null);
+      worker =
+          new WorkerProxy(
+              key, workerId, key.getExecRoot(), workerMultiplexer.getLogFile(), workerMultiplexer);
     } else {
       worker = new SingleplexWorker(key, workerId, key.getExecRoot(), logFile);
     }
@@ -110,12 +114,13 @@ class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker> {
   @Override
   public void destroyObject(WorkerKey key, PooledObject<Worker> p) throws Exception {
     if (workerOptions.workerVerbose) {
-      int workerId = p.getObject().getWorkerId();
       reporter.handle(
           Event.info(
               String.format(
                   "Destroying %s %s (id %d)",
-                  key.getMnemonic(), WorkerKey.makeWorkerTypeName(key.getProxied()), workerId)));
+                  key.getMnemonic(),
+                  WorkerKey.makeWorkerTypeName(key.getProxied()),
+                  p.getObject().getWorkerId())));
     }
     p.getObject().destroy();
   }
@@ -158,10 +163,10 @@ class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker> {
       }
       return false;
     }
-    boolean filesChanged =
-        !key.getWorkerFilesCombinedHash().equals(worker.getWorkerFilesCombinedHash());
+    boolean hashMatches =
+        key.getWorkerFilesCombinedHash().equals(worker.getWorkerFilesCombinedHash());
 
-    if (workerOptions.workerVerbose && reporter != null && filesChanged) {
+    if (workerOptions.workerVerbose && reporter != null && !hashMatches) {
       StringBuilder msg = new StringBuilder();
       msg.append(
           String.format(
@@ -188,6 +193,6 @@ class WorkerFactory extends BaseKeyedPooledObjectFactory<WorkerKey, Worker> {
       reporter.handle(Event.warn(msg.toString()));
     }
 
-    return !filesChanged;
+    return hashMatches;
   }
 }

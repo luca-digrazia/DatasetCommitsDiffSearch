@@ -67,7 +67,6 @@ public class WorkerModule extends BlazeModule {
   public void beforeCommand(CommandEnvironment env) {
     this.env = env;
     env.getEventBus().register(this);
-    WorkerMultiplexerManager.beforeCommand(env);
   }
 
   @Subscribe
@@ -237,6 +236,6 @@ public class WorkerModule extends BlazeModule {
     if (this.workerFactory != null) {
       this.workerFactory.setReporter(null);
     }
-    WorkerMultiplexerManager.afterCommand();
+    WorkerMultiplexerManager.afterCommandCleanup();
   }
 }

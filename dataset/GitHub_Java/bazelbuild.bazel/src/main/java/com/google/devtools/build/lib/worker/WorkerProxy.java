@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.worker;
 
 import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.UserExecException;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.vfs.Path;
@@ -43,7 +42,7 @@ final class WorkerProxy extends Worker {
       Path logFile,
       WorkerMultiplexer workerMultiplexer) {
     super(workerKey, workerId, logFile);
-    this.workDir = workerKey.getExecRoot();
+    this.workDir = workDir;
     this.workerMultiplexer = workerMultiplexer;
     final WorkerProxy self = this;
     this.shutdownHook =
@@ -56,15 +55,10 @@ final class WorkerProxy extends Worker {
   }
 
   @Override
-  void setReporter(EventHandler reporter) {
-    workerMultiplexer.setReporter(reporter);
-  }
-
-  @Override
   public void prepareExecution(
       SandboxInputs inputFiles, SandboxOutputs outputs, Set<PathFragment> workerFiles)
       throws IOException {
-    workerMultiplexer.createProcess(workDir);
+    workerMultiplexer.createProcess(workerKey, workDir);
   }
 
   /** Send the WorkRequest to multiplexer. */
@@ -83,18 +77,19 @@ final class WorkerProxy extends Worker {
 
   /** Send the WorkRequest to multiplexer. */
   @Override
-  void putRequest(WorkRequest request) throws IOException {
+  void putRequest(WorkRequest request) throws IOException, InterruptedException {
+    workerMultiplexer.resetResponseChecker(request.getRequestId());
     workerMultiplexer.putRequest(request);
   }
 
   /** Wait for WorkResponse from multiplexer. */
   @Override
-  WorkResponse getResponse(int requestId) throws InterruptedException {
+  WorkResponse getResponse(int requestId) throws IOException, InterruptedException {
     return workerMultiplexer.getResponse(requestId);
   }
 
   @Override
-  public void finishExecution(Path execRoot) {}
+  public void finishExecution(Path execRoot) throws IOException {}
 
   @Override
   boolean diedUnexpectedly() {
