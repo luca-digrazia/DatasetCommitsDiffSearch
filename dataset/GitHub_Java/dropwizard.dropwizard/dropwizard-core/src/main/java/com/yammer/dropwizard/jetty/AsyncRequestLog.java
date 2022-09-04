@@ -1,23 +1,20 @@
 package com.yammer.dropwizard.jetty;
 
-// TODO: 10/12/11 <coda> -- write tests for AsyncRequestLog
-
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.LoggingEvent;
+import ch.qos.logback.core.Appender;
+import ch.qos.logback.core.spi.AppenderAttachableImpl;
+import com.yammer.metrics.core.Clock;
 import org.eclipse.jetty.http.HttpHeaders;
 import org.eclipse.jetty.server.Authentication;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.RequestLog;
 import org.eclipse.jetty.server.Response;
 import org.eclipse.jetty.util.DateCache;
-import org.eclipse.jetty.util.RolloverFileOutputStream;
 import org.eclipse.jetty.util.component.AbstractLifeCycle;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.io.PrintWriter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.TimeZone;
+import java.util.*;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,7 +27,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
     private static final AtomicInteger THREAD_COUNTER = new AtomicInteger();
-    private static final Logger LOGGER = LoggerFactory.getLogger(AsyncRequestLog.class);
     private static final int BATCH_SIZE = 10000;
 
     private class Dispatcher implements Runnable {
@@ -43,10 +39,14 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
                 try {
                     statements.add(queue.take());
                     queue.drainTo(statements, BATCH_SIZE);
+
                     for (String statement : statements) {
-                        writer.println(statement);
+                        final LoggingEvent event = new LoggingEvent();
+                        event.setLevel(Level.INFO);
+                        event.setMessage(statement);
+                        appenders.appendLoopOnAppenders(event);
                     }
-                    writer.flush();
+
                     statements.clear();
                 } catch (InterruptedException ignored) {
                     Thread.currentThread().interrupt();
@@ -55,73 +55,56 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
         }
 
         public void stop() {
-            this.running = true;
+            this.running = false;
         }
     }
 
-    private static final ThreadLocal<DateCache> DATE_CACHE = new ThreadLocal<DateCache>() {
-        @Override
-        protected DateCache initialValue() {
-            final DateCache cache = new DateCache("dd/MMM/yyyy:HH:mm:ss Z",
-                                                  Locale.getDefault());
-            cache.setTimeZoneID("UTC");
-            return cache;
-        }
-    };
-
+    private final Clock clock;
+    @SuppressWarnings("ThreadLocalNotStaticFinal")
+    private final ThreadLocal<DateCache> dateCache;
     private final BlockingQueue<String> queue;
-    private final String filenamePattern;
-    private final int numberOfFilesToRetain;
-    private final Thread dispatchThread;
     private final Dispatcher dispatcher;
-    private PrintWriter writer;
+    private final Thread dispatchThread;
+    private final AppenderAttachableImpl<ILoggingEvent> appenders;
 
-    /**
-     * Creates a new {@link AsyncRequestLog}.
-     *
-     * @param filenamePattern          The filename pattern to which the log statements will be
-     *                                 written. If {@code filenamePattern} contains the string
-     *                                 {@code yyyy_mm_dd}, the file will be rotated every day, with
-     *                                 {@code yyyy_mm_dd} being replaced by the year, month, and
-     *                                 day. If {@code filenamePattern} is {@code null}, statements
-     *                                 will be logged to STDOUT.
-     * @param numberOfFilesToRetain    If {@code filenamePattern} is to be rotated, the number of
-     *                                 total log files (including the active one) to be kept.
-     */
-    public AsyncRequestLog(String filenamePattern, int numberOfFilesToRetain) {
-        this.filenamePattern = filenamePattern;
-        this.numberOfFilesToRetain = numberOfFilesToRetain;
-        this.writer = null;
+    public AsyncRequestLog(Clock clock,
+                           AppenderAttachableImpl<ILoggingEvent> appenders,
+                           final TimeZone timeZone) {
+        this.clock = clock;
         this.queue = new LinkedBlockingQueue<String>();
         this.dispatcher = new Dispatcher();
         this.dispatchThread = new Thread(dispatcher);
         dispatchThread.setName("async-request-log-dispatcher-" + THREAD_COUNTER.incrementAndGet());
         dispatchThread.setDaemon(true);
+
+        this.dateCache = new ThreadLocal<DateCache>() {
+            @Override
+            protected DateCache initialValue() {
+                final DateCache cache = new DateCache("dd/MMM/yyyy:HH:mm:ss Z", Locale.US);
+                cache.setTimeZoneID(timeZone.getID());
+                return cache;
+            }
+        };
+
+        this.appenders = appenders;
     }
 
-    @Override
-    @SuppressWarnings({"IOResourceOpenedButNotSafelyClosed", "UseOfSystemOutOrSystemErr"})
-    protected void doStart() throws Exception {
-        if (filenamePattern == null) {
-            this.writer = new PrintWriter(System.out);
-        } else {
-            final RolloverFileOutputStream outputStream = new RolloverFileOutputStream(
-                    filenamePattern,
-                    true,
-                    numberOfFilesToRetain,
-                    TimeZone.getTimeZone("UTC"));
-            this.writer = new PrintWriter(outputStream);
-            LOGGER.info("Opened {}", outputStream.getDatedFilename());
-        }
 
+    @Override
+    protected void doStart() throws Exception {
+        final Iterator<Appender<ILoggingEvent>> iterator = appenders.iteratorForAppenders();
+        while (iterator.hasNext()) {
+            iterator.next().start();
+        }
         dispatchThread.start();
     }
 
     @Override
     protected void doStop() throws Exception {
         dispatcher.stop();
-        if (writer != null) {
-            writer.close();
+        final Iterator<Appender<ILoggingEvent>> iterator = appenders.iteratorForAppenders();
+        while (iterator.hasNext()) {
+            iterator.next().stop();
         }
     }
 
@@ -142,11 +125,11 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
                                                              .getUserPrincipal()
                                                              .getName());
         } else {
-            buf.append(" - ");
+            buf.append('-');
         }
 
         buf.append(" [");
-        buf.append(DATE_CACHE.get().format(request.getTimeStamp()));
+        buf.append(dateCache.get().format(request.getTimeStamp()));
 
         buf.append("] \"");
         buf.append(request.getMethod());
@@ -187,12 +170,11 @@ public class AsyncRequestLog extends AbstractLifeCycle implements RequestLog {
                 }
                 buf.append((char) ('0' + (responseLength % 10)));
             }
-            buf.append(' ');
         } else {
-            buf.append(" - ");
+            buf.append(" -");
         }
 
-        final long now = System.currentTimeMillis();
+        final long now = clock.time();
         final long dispatchTime = request.getDispatchTime();
 
         buf.append(' ');
