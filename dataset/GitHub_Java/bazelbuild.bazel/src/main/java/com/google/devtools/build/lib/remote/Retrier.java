@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.util.Preconditions;
 import io.grpc.Status;
 import io.grpc.StatusException;
 import io.grpc.StatusRuntimeException;
-import java.io.IOException;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -277,22 +276,13 @@ public class Retrier {
   }
 
   /**
-   * Returns {@code true} if the {@link Status} is retriable.
-   */
-  public boolean isRetriable(Status s) {
-    return isRetriable.apply(s);
-  }
-
-  /**
    * Executes the given callable in a loop, retrying on retryable errors, as defined by the current
    * backoff/retry policy. Will raise the last encountered retriable error, or the first
    * non-retriable error.
    *
-   * <p>This method never throws {@link StatusRuntimeException} even if the passed-in Callable does.
-   *
    * @param c The callable to execute.
    */
-  public <T> T execute(Callable<T> c) throws InterruptedException, IOException {
+  public <T> T execute(Callable<T> c) throws InterruptedException, RetryException {
     Backoff backoff = backoffSupplier.get();
     while (true) {
       try {
@@ -300,11 +290,8 @@ public class Retrier {
       } catch (StatusException | StatusRuntimeException e) {
         onFailure(backoff, Status.fromThrowable(e));
       } catch (Exception e) {
-        // Generic catch because Callable is declared to throw Exception, we rethrow any unchecked
-        // exception as well as any exception we declared above.
+        // Generic catch because Callable is declared to throw Exception.
         Throwables.throwIfUnchecked(e);
-        Throwables.throwIfInstanceOf(e, IOException.class);
-        Throwables.throwIfInstanceOf(e, InterruptedException.class);
         throw new RetryException(e, backoff.getRetryAttempts());
       }
     }

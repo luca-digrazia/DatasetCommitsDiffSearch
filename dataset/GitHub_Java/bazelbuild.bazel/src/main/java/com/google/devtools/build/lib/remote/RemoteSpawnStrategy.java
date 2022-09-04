@@ -103,9 +103,9 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
     // action to enable server-side parallelism (need a different gRPC channel per action).
     if (SimpleBlobStoreFactory.isRemoteCacheOptions(remoteOptions)) {
       remoteCache = new SimpleBlobStoreActionCache(SimpleBlobStoreFactory.create(remoteOptions));
-    } else if (GrpcRemoteCache.isRemoteCacheOptions(remoteOptions)) {
+    } else if (GrpcActionCache.isRemoteCacheOptions(remoteOptions)) {
       remoteCache =
-          new GrpcRemoteCache(
+          new GrpcActionCache(
               GrpcUtils.createChannel(remoteOptions.remoteCache, channelOptions),
               channelOptions,
               remoteOptions);
@@ -306,11 +306,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
       if (remoteOptions.remoteLocalFallback) {
         execLocally(spawn, actionExecutionContext, remoteCache, actionKey);
       } else {
-        String cwd = actionExecutionContext.getExecRoot().getPathString();
-        String message =
-            CommandFailureUtils.describeCommandFailure(
-                verboseFailures, spawn.getArguments(), spawn.getEnvironment(), cwd);
-        throw new UserExecException(message, e.getCause());
+        throw new UserExecException(e.getCause());
       }
     } catch (CacheNotFoundException e) {
       // TODO(olaola): handle this exception by reuploading / reexecuting the action remotely.
@@ -318,11 +314,7 @@ final class RemoteSpawnStrategy implements SpawnActionContext {
       if (remoteOptions.remoteLocalFallback) {
         execLocally(spawn, actionExecutionContext, remoteCache, actionKey);
       } else {
-        String cwd = actionExecutionContext.getExecRoot().getPathString();
-        String message =
-            CommandFailureUtils.describeCommandFailure(
-                verboseFailures, spawn.getArguments(), spawn.getEnvironment(), cwd);
-        throw new UserExecException(message, e);
+        throw new UserExecException(e);
       }
     } catch (IOException e) {
       throw new UserExecException("Unexpected IO error.", e);

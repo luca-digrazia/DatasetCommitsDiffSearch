@@ -116,11 +116,6 @@ public class GrpcRemoteExecutionClientTest {
         }
 
         @Override
-        public ArtifactExpander getArtifactExpander() {
-          throw new UnsupportedOperationException();
-        }
-
-        @Override
         public long getTimeoutMillis() {
           return 0;
         }
@@ -175,13 +170,10 @@ public class GrpcRemoteExecutionClientTest {
     FileSystemUtils.createDirectoryAndParents(stderr.getParentDirectory());
     outErr = new FileOutErr(stdout, stderr);
     RemoteOptions options = Options.getDefaults(RemoteOptions.class);
-    Retrier retrier = new Retrier(options);
     Channel channel = InProcessChannelBuilder.forName(fakeServerName).directExecutor().build();
-    GrpcRemoteExecutor executor =
-        new GrpcRemoteExecutor(channel, null, options.remoteTimeout, retrier);
-    GrpcRemoteCache remoteCache =
-        new GrpcRemoteCache(channel, ChannelOptions.DEFAULT, options, retrier);
-    client = new RemoteSpawnRunner(execRoot, options, null, remoteCache, executor);
+    GrpcRemoteExecutor executor = new GrpcRemoteExecutor(channel, ChannelOptions.DEFAULT, options);
+    GrpcActionCache remoteCache = new GrpcActionCache(channel, ChannelOptions.DEFAULT, options);
+    client = new RemoteSpawnRunner(execRoot, options, executor, remoteCache);
     inputDigest = fakeFileCache.createScratchInput(simpleSpawn.getInputFiles().get(0), "xyz");
   }
 
