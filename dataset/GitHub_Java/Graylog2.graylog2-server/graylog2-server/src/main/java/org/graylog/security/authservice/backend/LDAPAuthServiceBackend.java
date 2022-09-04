@@ -1,21 +1,22 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog.security.authservice.backend;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.inject.assistedinject.Assisted;
 import com.unboundid.ldap.sdk.LDAPConnection;
@@ -23,11 +24,16 @@ import com.unboundid.ldap.sdk.LDAPException;
 import org.graylog.security.authservice.AuthServiceBackend;
 import org.graylog.security.authservice.AuthServiceBackendDTO;
 import org.graylog.security.authservice.AuthServiceCredentials;
+import org.graylog.security.authservice.AuthenticationDetails;
 import org.graylog.security.authservice.ProvisionerService;
 import org.graylog.security.authservice.UserDetails;
+import org.graylog.security.authservice.ldap.LDAPConnectorConfig;
+import org.graylog.security.authservice.ldap.LDAPUser;
+import org.graylog.security.authservice.ldap.UnboundLDAPConfig;
 import org.graylog.security.authservice.ldap.UnboundLDAPConnector;
 import org.graylog.security.authservice.test.AuthServiceBackendTestResult;
-import org.graylog2.shared.security.ldap.LdapEntry;
+import org.graylog2.security.encryption.EncryptedValue;
+import org.graylog2.shared.security.AuthenticationServiceUnavailableException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +41,11 @@ import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class LDAPAuthServiceBackend implements AuthServiceBackend {
     public static final String TYPE_NAME = "ldap";
@@ -61,64 +70,68 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
     }
 
     @Override
-    public Optional<UserDetails> authenticateAndProvision(AuthServiceCredentials authCredentials, ProvisionerService provisionerService) {
+    public Optional<AuthenticationDetails> authenticateAndProvision(AuthServiceCredentials authCredentials, ProvisionerService provisionerService) {
         try (final LDAPConnection connection = ldapConnector.connect(config.getLDAPConnectorConfig())) {
             if (connection == null) {
                 return Optional.empty();
             }
 
-            final Optional<LdapEntry> optionalUserEntry = findUser(connection, authCredentials);
-            if (!optionalUserEntry.isPresent()) {
+            final Optional<LDAPUser> optionalUser = findUser(connection, authCredentials);
+            if (!optionalUser.isPresent()) {
                 LOG.debug("User <{}> not found in LDAP", authCredentials.username());
                 return Optional.empty();
             }
 
-            final LdapEntry userEntry = optionalUserEntry.get();
+            final LDAPUser userEntry = optionalUser.get();
 
-            if (!isAuthenticated(connection, userEntry, authCredentials)) {
-                LOG.debug("Invalid credentials for user <{}> (DN: {})", authCredentials.username(), userEntry.getDn());
-                return Optional.empty();
+            if (!authCredentials.isAuthenticated()) {
+                if (!isAuthenticated(connection, userEntry, authCredentials)) {
+                    LOG.debug("Invalid credentials for user <{}> (DN: {})", authCredentials.username(), userEntry.dn());
+                    return Optional.empty();
+                }
             }
 
             final UserDetails userDetails = provisionerService.provision(provisionerService.newDetails(this)
                     .authServiceType(backendType())
                     .authServiceId(backendId())
-                    .authServiceUid(userEntry.getNonBlank(config.userUniqueIdAttribute()))
-                    .username(userEntry.getNonBlank(config.userNameAttribute()))
-                    .fullName(userEntry.getNonBlank(config.userFullNameAttribute()))
-                    .email(userEntry.getEmail())
+                    .accountIsEnabled(true)
+                    .base64AuthServiceUid(userEntry.base64UniqueId())
+                    .username(userEntry.username())
+                    .fullName(userEntry.fullName())
+                    .email(userEntry.email())
                     .defaultRoles(backend.defaultRoles())
                     .build());
 
-            return Optional.of(userDetails);
+            return Optional.of(AuthenticationDetails.builder().userDetails(userDetails).build());
         } catch (GeneralSecurityException e) {
             LOG.error("Error setting up TLS connection", e);
-            return Optional.empty();
+            throw new AuthenticationServiceUnavailableException("Error setting up TLS connection", e);
         } catch (LDAPException e) {
             LOG.error("LDAP error", e);
-            return Optional.empty();
+            throw new AuthenticationServiceUnavailableException("LDAP error", e);
         }
     }
 
     private boolean isAuthenticated(LDAPConnection connection,
-                                    LdapEntry userEntry,
+                                    LDAPUser user,
                                     AuthServiceCredentials authCredentials) throws LDAPException {
         return ldapConnector.authenticate(
                 connection,
-                userEntry.getDn(),
+                user.dn(),
                 authCredentials.password()
         );
     }
 
-    private Optional<LdapEntry> findUser(LDAPConnection connection, AuthServiceCredentials authCredentials) throws LDAPException {
-        return Optional.ofNullable(ldapConnector.search(
-                connection,
-                config.userSearchBase(),
-                config.userSearchPattern(),
-                config.userFullNameAttribute(),
-                config.userUniqueIdAttribute(),
-                authCredentials.username()
-        ));
+    private Optional<LDAPUser> findUser(LDAPConnection connection, AuthServiceCredentials authCredentials) throws LDAPException {
+        final UnboundLDAPConfig searchConfig = UnboundLDAPConfig.builder()
+                .userSearchBase(config.userSearchBase())
+                .userSearchPattern(config.userSearchPattern())
+                .userUniqueIdAttribute(config.userUniqueIdAttribute())
+                .userNameAttribute(config.userNameAttribute())
+                .userFullNameAttribute(config.userFullNameAttribute())
+                .build();
+
+        return ldapConnector.searchUserByPrincipal(connection, searchConfig, authCredentials.username());
     }
 
     @Override
@@ -137,17 +150,69 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
     }
 
     @Override
+    public AuthServiceBackendDTO prepareConfigUpdate(AuthServiceBackendDTO existingBackend, AuthServiceBackendDTO newBackend) {
+        final LDAPAuthServiceBackendConfig newConfig = (LDAPAuthServiceBackendConfig) newBackend.config();
+
+        if (newConfig.systemUserPassword().isDeleteValue()) {
+            // If the system user password should be deleted, use an unset value
+            return newBackend.toBuilder()
+                    .config(newConfig.toBuilder()
+                            .systemUserPassword(EncryptedValue.createUnset())
+                            .build())
+                    .build();
+        }
+        if (newConfig.systemUserPassword().isKeepValue()) {
+            // If the system user password should be kept, use the value from the existing config
+            final LDAPAuthServiceBackendConfig existingConfig = (LDAPAuthServiceBackendConfig) existingBackend.config();
+            return newBackend.toBuilder()
+                    .config(newConfig.toBuilder()
+                            .systemUserPassword(existingConfig.systemUserPassword())
+                            .build())
+                    .build();
+        }
+
+        return newBackend;
+    }
+
+    @Override
     public AuthServiceBackendTestResult testConnection(@Nullable AuthServiceBackendDTO existingBackendConfig) {
         final LDAPAuthServiceBackendConfig testConfig = buildTestConfig(existingBackendConfig);
 
-        try (final LDAPConnection connection = ldapConnector.connect(testConfig.getLDAPConnectorConfig())) {
+        final LDAPConnectorConfig config = testConfig.getLDAPConnectorConfig();
+
+        if (config.serverList().size() == 1) {
+            return testSingleConnection(config, config.serverList().get(0));
+        }
+
+        // Test each server separately, so we can see the result for each
+        final List<AuthServiceBackendTestResult> testResults = config.serverList().stream().map(server -> testSingleConnection(config, server)).collect(Collectors.toList());
+
+        if (testResults.stream().anyMatch(res -> !res.isSuccess())) {
+            return AuthServiceBackendTestResult
+                    .createFailure("Test failure",
+                            testResults.stream().map(r -> {
+                                if (r.isSuccess()) {
+                                    return r.message();
+                                } else {
+                                    return r.message() + " : " + String.join(",", r.errors());
+                                }
+                            }).collect(Collectors.toList()));
+        } else {
+            return AuthServiceBackendTestResult.createSuccess("Successfully connected to " + config.serverList());
+        }
+    }
+
+    private AuthServiceBackendTestResult testSingleConnection(LDAPConnectorConfig config, LDAPConnectorConfig.LDAPServer server) {
+        final LDAPConnectorConfig singleServerConfig = config.toBuilder().serverList(ImmutableList.of(server)).build();
+
+        try (final LDAPConnection connection = ldapConnector.connect(singleServerConfig)) {
             if (connection == null) {
-                return AuthServiceBackendTestResult.createFailure("Couldn't establish connection to " + testConfig.serverUrls());
+                return AuthServiceBackendTestResult.createFailure("Couldn't establish connection to " + server);
             }
-            return AuthServiceBackendTestResult.createSuccess("Successfully connected to " + testConfig.serverUrls());
+            return AuthServiceBackendTestResult.createSuccess("Successfully connected to " + server);
         } catch (Exception e) {
             return AuthServiceBackendTestResult.createFailure(
-                    "Couldn't establish connection to " + testConfig.serverUrls(),
+                    "Couldn't establish connection to " + server,
                     Collections.singletonList(e.getMessage())
             );
         }
@@ -159,9 +224,9 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
 
         try (final LDAPConnection connection = ldapConnector.connect(testConfig.getLDAPConnectorConfig())) {
             if (connection == null) {
-                return AuthServiceBackendTestResult.createFailure("Couldn't establish connection to " + testConfig.serverUrls());
+                return AuthServiceBackendTestResult.createFailure("Couldn't establish connection to " + testConfig.servers());
             }
-            final Optional<LdapEntry> user = findUser(connection, credentials);
+            final Optional<LDAPUser> user = findUser(connection, credentials);
 
             if (!user.isPresent()) {
                 return AuthServiceBackendTestResult.createFailure(
@@ -172,7 +237,7 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
 
             if (isAuthenticated(connection, user.get(), credentials)) {
                 return AuthServiceBackendTestResult.createSuccess(
-                        "Successfully logged in <" + credentials.username() + "> into " + testConfig.serverUrls(),
+                        "Successfully logged in <" + credentials.username() + "> into " + testConfig.servers(),
                         createTestResult(testConfig, true, true, user.get())
                 );
             }
@@ -182,7 +247,7 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
             );
         } catch (Exception e) {
             return AuthServiceBackendTestResult.createFailure(
-                    "Couldn't test user login on " + testConfig.serverUrls(),
+                    "Couldn't test user login on " + testConfig.servers(),
                     Collections.singletonList(e.getMessage())
             );
         }
@@ -191,12 +256,10 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
     private LDAPAuthServiceBackendConfig buildTestConfig(@Nullable AuthServiceBackendDTO existingBackendConfig) {
         final LDAPAuthServiceBackendConfig.Builder newConfigBuilder = config.toBuilder();
 
-        // If there is no password set in the current config and we got an existing config, use the password of the
+        // If the existing password should be kept and we got an existing config, use the password of the
         // existing config for the connection check. This is needed to make connection tests of existing backends work
         // because the UI doesn't have access to the existing password.
-        // TODO: This logic doesn't work if a user wants to update a backend that currently has a password set to a
-        //       backend that doesn't need a password.
-        if (!config.systemUserPassword().isSet() && existingBackendConfig != null) {
+        if (config.systemUserPassword().isKeepValue() && existingBackendConfig != null) {
             final LDAPAuthServiceBackendConfig existingConfig = (LDAPAuthServiceBackendConfig) existingBackendConfig.config();
             newConfigBuilder.systemUserPassword(existingConfig.systemUserPassword());
         }
@@ -207,19 +270,25 @@ public class LDAPAuthServiceBackend implements AuthServiceBackend {
     private Map<String, Object> createTestResult(LDAPAuthServiceBackendConfig config,
                                                  boolean userExists,
                                                  boolean loginSuccess,
-                                                 @Nullable LdapEntry user) {
+                                                 @Nullable LDAPUser user) {
         final ImmutableMap.Builder<String, Object> userDetails = ImmutableMap.<String, Object>builder()
                 .put("user_exists", userExists)
                 .put("login_success", loginSuccess);
 
         if (user != null) {
-            userDetails.put("user_details", ImmutableMap.of(
-                    "dn", user.getDn(),
-                    config.userUniqueIdAttribute(), user.get(config.userUniqueIdAttribute()),
-                    config.userNameAttribute(), user.get(config.userNameAttribute()),
-                    config.userFullNameAttribute(), user.get(config.userFullNameAttribute()),
-                    "email", user.getEmail()
-            ));
+            // Use regular HashMap to allow duplicates. Users might use the same attribute for name and full name.
+            // See: https://github.com/Graylog2/graylog2-server/issues/10069
+            final Map<String, String> attributes = new HashMap<>();
+
+            attributes.put("dn", user.dn());
+            // Use a special key for the unique ID attribute. If users use something like "uid" for the unique ID,
+            // it might be confusing to see a base64 encoded value instead of the plain text one.
+            attributes.put("unique_id (" + config.userUniqueIdAttribute() + ")", user.base64UniqueId());
+            attributes.put(config.userNameAttribute(), user.username());
+            attributes.put(config.userFullNameAttribute(), user.fullName());
+            attributes.put("email", user.email());
+
+            userDetails.put("user_details", ImmutableMap.copyOf(attributes));
         } else {
             userDetails.put("user_details", ImmutableMap.of());
         }

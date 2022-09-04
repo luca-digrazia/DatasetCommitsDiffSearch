@@ -39,7 +39,6 @@ import com.unboundid.ldap.sdk.extensions.StartTLSExtendedRequest;
 import com.unboundid.util.Base64;
 import com.unboundid.util.LDAPTestUtils;
 import com.unboundid.util.ssl.SSLUtil;
-import org.graylog2.configuration.TLSProtocolsConfiguration;
 import org.graylog2.security.TrustAllX509TrustManager;
 import org.graylog2.security.TrustManagerProvider;
 import org.graylog2.security.encryption.EncryptedValue;
@@ -75,18 +74,18 @@ public class UnboundLDAPConnector {
     private static final String OBJECT_CLASS_ATTRIBUTE = "objectClass";
 
     private final int connectionTimeout;
-    private final TLSProtocolsConfiguration tlsConfiguration;
+    private final Set<String> enabledTlsProtocols;
     private final TrustManagerProvider trustManagerProvider;
     private final EncryptedValueService encryptedValueService;
     private final int requestTimeoutSeconds;
 
     @Inject
     public UnboundLDAPConnector(@Named("ldap_connection_timeout") int connectionTimeout,
-                                TLSProtocolsConfiguration tlsConfiguration,
+                                @Named("enabled_tls_protocols") Set<String> enabledTlsProtocols,
                                 TrustManagerProvider trustManagerProvider,
                                 EncryptedValueService encryptedValueService) {
         this.connectionTimeout = connectionTimeout; // TODO: Make configurable per backend
-        this.tlsConfiguration = tlsConfiguration;
+        this.enabledTlsProtocols = enabledTlsProtocols;
         this.trustManagerProvider = trustManagerProvider;
         this.encryptedValueService = encryptedValueService;
         this.requestTimeoutSeconds = 60; // TODO: Make configurable per backend
@@ -108,7 +107,7 @@ public class UnboundLDAPConnector {
         StartTLSExtendedRequest startTLSRequest = null;
         SocketFactory socketFactory = null;
         if (ldapConfig.transportSecurity() != LDAPTransportSecurity.NONE) {
-            SSLUtil.setEnabledSSLProtocols(tlsConfiguration.getEnabledTlsProtocols());
+            SSLUtil.setEnabledSSLProtocols(enabledTlsProtocols);
 
             final SSLUtil sslUtil;
             if (ldapConfig.verifyCertificates()) {
