@@ -4,7 +4,6 @@ package io.quarkus.kubernetes.deployment;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 import io.dekorate.kubernetes.annotation.ImagePullPolicy;
 import io.dekorate.kubernetes.annotation.ServiceType;
@@ -52,6 +51,12 @@ public class OpenshiftConfig implements PlatformConfiguration {
      */
     @ConfigItem(defaultValue = "true")
     boolean addBuildTimestamp;
+
+    /**
+     * Environment variables to add to all containers
+     */
+    @ConfigItem
+    Map<String, EnvConfig> envVars;
 
     /**
      * Working directory
@@ -102,12 +107,6 @@ public class OpenshiftConfig implements PlatformConfiguration {
      */
     @ConfigItem(defaultValue = "ClusterIP")
     ServiceType serviceType;
-
-    /**
-     * The nodePort to set when serviceType is set to nodePort
-     */
-    @ConfigItem
-    OptionalInt nodePort;
 
     /**
      * Image pull policy
@@ -224,6 +223,10 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return addBuildTimestamp;
     }
 
+    public Map<String, EnvConfig> getEnvVars() {
+        return envVars;
+    }
+
     public Optional<String> getWorkingDir() {
         return workingDir;
     }
@@ -308,51 +311,12 @@ public class OpenshiftConfig implements PlatformConfiguration {
         return initContainers;
     }
 
-    public Map<String, ContainerConfig> getSidecars() {
+    public Map<String, ContainerConfig> getContainers() {
         return containers;
     }
 
     @Override
     public boolean isExpose() {
         return false;
-    }
-
-    @Override
-    public String getTargetPlatformName() {
-        return Constants.OPENSHIFT;
-    }
-
-    /**
-     * Environment variables to add to all containers using the old syntax.
-     *
-     * @deprecated Use {@link #env} instead using the new syntax as follows:
-     *             <ul>
-     *             <li>{@code quarkus.kubernetes.env-vars.foo.field=fieldName} becomes
-     *             {@code quarkus.kubernetes.env.fields.foo=fieldName}</li>
-     *             <li>{@code quarkus.kubernetes.env-vars.envvar.value=value} becomes
-     *             {@code quarkus.kubernetes.env.vars.envvar=value}</li>
-     *             <li>{@code quarkus.kubernetes.env-vars.bar.configmap=configName} becomes
-     *             {@code quarkus.kubernetes.env.configmaps=configName}</li>
-     *             <li>{@code quarkus.kubernetes.env-vars.baz.secret=secretName} becomes
-     *             {@code quarkus.kubernetes.env.secrets=secretName}</li>
-     *             </ul>
-     */
-    @ConfigItem
-    @Deprecated
-    Map<String, EnvConfig> envVars;
-
-    /**
-     * Environment variables to add to all containers.
-     */
-    @ConfigItem
-    EnvVarsConfig env;
-
-    @Deprecated
-    public Map<String, EnvConfig> getEnvVars() {
-        return envVars;
-    }
-
-    public EnvVarsConfig getEnv() {
-        return env;
     }
 }

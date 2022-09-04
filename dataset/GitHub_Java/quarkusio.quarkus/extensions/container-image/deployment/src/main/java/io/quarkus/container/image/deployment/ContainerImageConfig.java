@@ -1,6 +1,5 @@
 package io.quarkus.container.image.deployment;
 
-import java.util.List;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigItem;
@@ -26,12 +25,6 @@ public class ContainerImageConfig {
      */
     @ConfigItem(defaultValue = "${quarkus.application.version:latest}")
     public Optional<String> tag;
-
-    /**
-     * Additional tags of the container image.
-     */
-    @ConfigItem
-    public Optional<List<String>> additionalTags;
 
     /**
      * The container registry to use
@@ -68,27 +61,4 @@ public class ContainerImageConfig {
      */
     @ConfigItem
     public boolean push;
-
-    /**
-     * The name of the container image extension to use (e.g. docker, jib, s2i).
-     * The option will be used in case multiple extensions are present.
-     */
-    @ConfigItem
-    public Optional<String> builder;
-
-    /**
-     * Since user.name which is default value can be uppercase and uppercase values are not allowed
-     * in the repository part of image references, we need to make the username lowercase.
-     *
-     * We purposely don't change the value of an explicitly set group.
-     */
-    public Optional<String> getEffectiveGroup() {
-        if (group.isPresent()) {
-            String originalGroup = group.get();
-            if (originalGroup.equals(System.getProperty("user.name"))) {
-                return Optional.of(originalGroup.toLowerCase());
-            }
-        }
-        return group;
-    }
 }

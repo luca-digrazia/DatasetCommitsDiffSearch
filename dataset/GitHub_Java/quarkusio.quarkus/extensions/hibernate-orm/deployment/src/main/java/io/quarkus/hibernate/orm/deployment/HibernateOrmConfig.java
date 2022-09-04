@@ -1,6 +1,5 @@
 package io.quarkus.hibernate.orm.deployment;
 
-import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
@@ -103,24 +102,6 @@ public class HibernateOrmConfig {
     Optional<String> implicitNamingStrategy;
 
     /**
-     * Defines the method for multi-tenancy (DATABASE, NONE, SCHEMA). The complete list of allowed values is available in the
-     * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/MultiTenancyStrategy.html[Hibernate ORM JavaDoc].
-     * The type DISCRIMINATOR is currently not supported. The default value is NONE (no multi-tenancy).
-     *
-     * @asciidoclet
-     */
-    @ConfigItem
-    public Optional<String> multitenant;
-
-    /**
-     * Defines the name of the data source to use in case of SCHEMA approach. The default data source will be used if not set.
-     *
-     * @asciidoclet
-     */
-    @ConfigItem
-    public Optional<String> multitenantSchemaDatasource;
-
-    /**
      * Query related configuration.
      */
     @ConfigItem
@@ -188,8 +169,6 @@ public class HibernateOrmConfig {
                 database.isAnyPropertySet() ||
                 jdbc.isAnyPropertySet() ||
                 log.isAnyPropertySet() ||
-                multitenant.isPresent() ||
-                multitenantSchemaDatasource.isPresent() ||
                 !cache.isEmpty();
     }
 
@@ -219,8 +198,6 @@ public class HibernateOrmConfig {
 
     @ConfigGroup
     public static class HibernateOrmConfigDatabase {
-
-        private static final String DEFAULT_CHARSET = "UTF-8";
 
         /**
          * Select whether the database schema is generated or not.
@@ -252,11 +229,9 @@ public class HibernateOrmConfig {
 
         /**
          * The charset of the database.
-         * <p>
-         * Used for DDL generation and also for the SQL import scripts.
          */
-        @ConfigItem(defaultValue = "UTF-8")
-        public Charset charset;
+        @ConfigItem
+        public Optional<String> charset;
 
         /**
          * Whether Hibernate should quote all identifiers.
@@ -267,7 +242,7 @@ public class HibernateOrmConfig {
         public boolean isAnyPropertySet() {
             return !"none".equals(generation) || defaultCatalog.isPresent() || defaultSchema.isPresent()
                     || generationHaltOnError
-                    || !DEFAULT_CHARSET.equals(charset.name())
+                    || charset.isPresent()
                     || globallyQuotedIdentifiers;
         }
     }

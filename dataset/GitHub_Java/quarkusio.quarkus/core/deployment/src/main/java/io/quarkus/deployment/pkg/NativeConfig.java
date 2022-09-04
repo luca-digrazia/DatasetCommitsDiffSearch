@@ -74,7 +74,7 @@ public class NativeConfig {
     public Optional<String> nativeImageXmx;
 
     /**
-     * If debug symbols should be included. Only applicable to GraalVM EE.
+     * If debug symbols should be included
      */
     @ConfigItem
     public boolean debugSymbols;
@@ -140,7 +140,7 @@ public class NativeConfig {
     /**
      * The docker image to use to do the image build
      */
-    @ConfigItem(defaultValue = "quay.io/quarkus/ubi-quarkus-native-image:20.1.0-java11")
+    @ConfigItem(defaultValue = "quay.io/quarkus/ubi-quarkus-native-image:19.3.1-java11")
     public String builderImage;
 
     /**
@@ -275,21 +275,5 @@ public class NativeConfig {
         @ConfigItem
         public Optional<List<String>> includes;
 
-    }
-
-    /**
-     * Debugging options.
-     */
-    @ConfigItem
-    public Debug debug;
-
-    @ConfigGroup
-    public static class Debug {
-        /**
-         * If debug is enabled and debug symbols are generated.
-         * The symbols will be generated in a separate .debug file.
-         */
-        @ConfigItem
-        public boolean enabled;
     }
 }

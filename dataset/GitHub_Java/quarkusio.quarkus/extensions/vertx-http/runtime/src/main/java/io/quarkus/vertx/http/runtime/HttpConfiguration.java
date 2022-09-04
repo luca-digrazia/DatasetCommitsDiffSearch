@@ -1,7 +1,6 @@
 package io.quarkus.vertx.http.runtime;
 
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 
@@ -183,19 +182,13 @@ public class HttpConfiguration {
 
     /**
      * If this is true then the request start time will be recorded to enable logging of total request time.
-     *
+     * 
      * This has a small performance penalty, so is disabled by default.
      */
     @ConfigItem
     public boolean recordRequestStartTime;
 
     AccessLogConfig accessLog;
-
-    /**
-     * Configuration that allows setting the same site attributes for cookies.
-     */
-    @ConfigItem
-    public Map<String, SameSiteCookieConfig> sameSiteCookie;
 
     public int determinePort(LaunchMode launchMode) {
         return launchMode == LaunchMode.TEST ? testPort : port;

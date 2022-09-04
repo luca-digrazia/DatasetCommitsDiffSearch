@@ -1,7 +1,7 @@
 
 package io.quarkus.kubernetes.deployment;
 
-import java.util.OptionalInt;
+import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
@@ -19,7 +19,7 @@ public class AwsElasticBlockStoreVolumeConfig {
      * The partition.
      */
     @ConfigItem
-    OptionalInt partition;
+    Optional<Integer> partition;
 
     /**
      * Filesystem type.

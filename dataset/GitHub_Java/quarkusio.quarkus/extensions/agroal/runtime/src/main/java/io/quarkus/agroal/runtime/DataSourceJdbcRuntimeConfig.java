@@ -96,11 +96,4 @@ public class DataSourceJdbcRuntimeConfig {
      */
     @ConfigItem
     public Optional<String> validationQuerySql = Optional.empty();
-
-    /**
-     * Disable pooling to prevent reuse of Connections. Use this with when an external pool manages the life-cycle
-     * of Connections.
-     */
-    @ConfigItem(defaultValue = "true")
-    public boolean poolingEnabled = true;
 }

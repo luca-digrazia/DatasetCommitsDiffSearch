@@ -105,6 +105,12 @@ public class MongoClientConfig {
     public Optional<Duration> maxConnectionLifeTime;
 
     /**
+     * The maximum wait time that a thread may wait for a connection to become available.
+     */
+    @ConfigItem
+    public Optional<Duration> waitQueueTimeout;
+
+    /**
      * Configures the time period between runs of the maintenance job.
      */
     @ConfigItem
@@ -115,6 +121,14 @@ public class MongoClientConfig {
      */
     @ConfigItem
     public Optional<Duration> maintenanceInitialDelay;
+
+    /**
+     * This multiplier, multiplied with the {@code maxPoolSize} setting, gives the maximum number of
+     * threads that may be waiting for a connection to become available from the pool. All further threads will get an
+     * exception right away.
+     */
+    @ConfigItem
+    public OptionalInt waitQueueMultiple;
 
     /**
      * How long a connection can take to be opened before timing out.
