@@ -23,6 +23,7 @@ import com.fasterxml.jackson.jaxrs.cfg.EndpointConfigBase;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterInjector;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterModifier;
 import com.google.common.base.Function;
+import com.google.common.base.Predicates;
 import com.google.common.collect.FluentIterable;
 import com.google.common.collect.Iterables;
 import org.apache.shiro.subject.Subject;
@@ -126,12 +127,7 @@ public abstract class RestResource {
 
     protected boolean isAnyPermitted(String... permissions) {
         final boolean[] permitted = getSubject().isPermitted(permissions);
-        for (boolean p : permitted) {
-            if (p) {
-                return true;
-            }
-        }
-        return false;
+        return Iterables.any(Arrays.asList(permitted), Predicates.alwaysTrue());
     }
 
     protected void checkAnyPermission(String permissions[], String instanceId) {
