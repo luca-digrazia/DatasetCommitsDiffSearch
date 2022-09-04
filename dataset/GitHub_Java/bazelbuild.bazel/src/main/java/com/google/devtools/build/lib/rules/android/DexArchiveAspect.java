@@ -217,14 +217,15 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
     }
     AndroidRuntimeJarProvider.Builder desugaredJars = new AndroidRuntimeJarProvider.Builder()
         .addTransitiveProviders(collectPrerequisites(ruleContext, AndroidRuntimeJarProvider.class));
-    if (isProtoLibrary(ruleContext)) {
+    if (isProtoLibrary(ruleContext)
+        && getAndroidConfig(ruleContext).incrementalDexingForLiteProtos()) {
       // TODO(b/33557068): Desugar protos if needed instead of assuming they don't need desugaring
       result.addProvider(desugaredJars.build());
       return Functions.identity();
     }
 
     JavaRuntimeJarProvider jarProvider = base.getProvider(JavaRuntimeJarProvider.class);
-    if (jarProvider != null) {
+    if (jarProvider != null && !isProtoLibrary(ruleContext)) {
       // These are all transitive hjars of dependencies and hjar of the jar itself
       NestedSet<Artifact> compileTimeClasspath =
           getJavaCompilationArgsProvider(base, ruleContext)
