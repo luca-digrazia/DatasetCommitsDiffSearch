@@ -71,7 +71,7 @@ public class SynthProxiableBeanWithoutNoArgConstructorTest {
     }
 
     @Vetoed
-    static class SynthBean {
+    public class SynthBean {
         private String s;
 
         public SynthBean(String s) {
