@@ -1012,12 +1012,7 @@ public final class Profiler {
               writer.name("args");
 
               writer.beginObject();
-              if (data.type == ProfilerTask.LOCAL_CPU_USAGE) {
-                writer.name("cpu").value(data.description);
-              } else {
-                writer.name("action").value(data.description);
-              }
-
+              writer.name("cpu").value(data.description);
               writer.endObject();
 
               writer.endObject();
