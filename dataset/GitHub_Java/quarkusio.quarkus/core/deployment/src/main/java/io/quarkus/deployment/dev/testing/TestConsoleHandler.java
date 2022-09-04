@@ -33,7 +33,8 @@ public class TestConsoleHandler implements TestListener {
 
     private static final Logger log = Logger.getLogger("io.quarkus.test");
 
-    public static final ConsoleCommand TOGGLE_TEST_OUTPUT = new ConsoleCommand('o', "Toggle test output",
+    public static final ConsoleCommand TOGGLE_TEST_OUTPUT = new ConsoleCommand('o', "Toggle test output", "Toggle test output",
+            1000,
             new ConsoleCommand.HelpState(TestSupport.instance().get()::isDisplayTestOutput),
             () -> TestSupport.instance().get().toggleTestOutput());
 
@@ -87,9 +88,7 @@ public class TestConsoleHandler implements TestListener {
         consoleContext.reset(new ConsoleCommand('r', "Resume testing", "to resume testing", 500, null, new Runnable() {
             @Override
             public void run() {
-                if (lastResults == null) {
-                    testsStatusOutput.setMessage(BLUE + "Starting tests" + RESET);
-                }
+                testsStatusOutput.setMessage(BLUE + "Starting tests" + RESET);
                 TestSupport.instance().get().start();
             }
         }));
@@ -97,11 +96,7 @@ public class TestConsoleHandler implements TestListener {
     }
 
     private void setupFirstRunConsole() {
-        if (lastResults != null) {
-            resultsOutput.setMessage(lastResults);
-        } else {
-            testsStatusOutput.setMessage(BLUE + "Running tests for the first time" + RESET);
-        }
+        testsStatusOutput.setMessage(BLUE + "Running tests for the first time" + RESET);
         consoleContext.reset();
         addTestOutput();
     }
