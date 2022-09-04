@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.java;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static com.google.devtools.build.lib.rules.java.JavaCompileActionBuilder.UTF8_ENVIRONMENT;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 import static java.util.stream.Collectors.joining;
 
@@ -231,8 +230,7 @@ public class JavaHeaderCompileActionBuilder {
 
     SpawnAction.Builder builder = new SpawnAction.Builder();
 
-    builder.setEnvironment(
-        ruleContext.getConfiguration().getActionEnvironment().addFixedVariables(UTF8_ENVIRONMENT));
+    builder.setEnvironment(JavaCompileAction.UTF8_ENVIRONMENT);
 
     builder.setProgressMessage(
         new ProgressMessage(
