@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
@@ -121,6 +120,7 @@ import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.extra.ExtraAction;
 import com.google.devtools.build.lib.rules.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
+import com.google.devtools.build.lib.skyframe.ActionLookupValue;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
@@ -677,8 +677,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Returns the ConfiguredTarget for the specified label, configured for the "build" (aka "target")
-   * configuration. If the label corresponds to a target with a top-level configuration transition,
-   * that transition is applied to the given config in the returned ConfiguredTarget.
+   * configuration.
    */
   public ConfiguredTarget getConfiguredTarget(String label)
       throws LabelSyntaxException {
@@ -686,9 +685,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
-   * Returns the ConfiguredTarget for the specified label, using the given build configuration. If
-   * the label corresponds to a target with a top-level configuration transition, that transition is
-   * applied to the given config in the returned ConfiguredTarget.
+   * Returns the ConfiguredTarget for the specified label, using the
+   * given build configuration.
    */
   protected ConfiguredTarget getConfiguredTarget(String label, BuildConfiguration config)
       throws LabelSyntaxException {
@@ -697,8 +695,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Returns the ConfiguredTarget for the specified label, using the
-   * given build configuration. If the label corresponds to a target with a top-level configuration
-   * transition, that transition is applied to the given config in the returned ConfiguredTarget.
+   * given build configuration.
    *
    * <p>If the evaluation of the SkyKey corresponding to the configured target fails, this
    * method may return null.  In that case, use a debugger to inspect the {@link ErrorInfo}
@@ -707,7 +704,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * {@link SkyframeExecutor#getConfiguredTargetForTesting}.  See also b/26382502.
    */
   protected ConfiguredTarget getConfiguredTarget(Label label, BuildConfiguration config) {
-    return view.getConfiguredTargetForTesting(reporter, BlazeTestUtils.convertLabel(label), config);
+    return view.getConfiguredTargetForTesting(
+        reporter, BlazeTestUtils.convertLabel(label), config);
   }
 
   /**
@@ -773,7 +771,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
     skyframeExecutor.invalidateFilesUnderPathForTesting(
         reporter,
-        new ModifiedFileSet.Builder().modify(PathFragment.create(buildFilePathString)).build(),
+        new ModifiedFileSet.Builder().modify(new PathFragment(buildFilePathString)).build(),
         rootDirectory);
     return (Rule) getTarget("//" + packageName + ":" + ruleName);
   }
@@ -924,7 +922,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   protected Artifact getSourceArtifact(String name) {
-    return getSourceArtifact(PathFragment.create(name), Root.asSourceRoot(rootDirectory));
+    return getSourceArtifact(new PathFragment(name), Root.asSourceRoot(rootDirectory));
   }
 
   /**
@@ -959,7 +957,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * used instead.
    */
   protected Artifact getBinArtifactWithNoOwner(String rootRelativePath) {
-    return getDerivedArtifact(PathFragment.create(rootRelativePath),
+    return getDerivedArtifact(new PathFragment(rootRelativePath),
         targetConfig.getBinDirectory(RepositoryName.MAIN),
         ActionsTestUtil.NULL_ARTIFACT_OWNER);
   }
@@ -971,11 +969,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * be "foo.o".
    */
   protected Artifact getBinArtifact(String packageRelativePath, String owner) {
-    ConfiguredTargetKey config = makeLabelAndConfiguration(owner);
-    return getPackageRelativeDerivedArtifact(
-        packageRelativePath,
-        config.getConfiguration().getBinDirectory(RepositoryName.MAIN),
-        config);
+    return getBinArtifact(packageRelativePath, makeLabelAndConfiguration(owner));
   }
 
   /**
@@ -1031,13 +1025,25 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   /**
+   * Gets a derived Artifact for testing in the subdirectory of the {@link
+   * BuildConfiguration#getBinDirectory} corresponding to the package of {@code owner}. So
+   * to specify a file foo/foo.o owned by target //foo:foo, {@code packageRelativePath} should just
+   * be "foo.o".
+   */
+  private Artifact getBinArtifact(String packageRelativePath, ArtifactOwner owner) {
+    return getPackageRelativeDerivedArtifact(packageRelativePath,
+        targetConfig.getBinDirectory(RepositoryName.MAIN),
+        owner);
+  }
+
+  /**
    * Gets a derived Artifact for testing in the {@link BuildConfiguration#getGenfilesDirectory}.
    * This method should only be used for tests that do no analysis, and so there is no
    * ConfiguredTarget to own this artifact. If the test runs the analysis phase, {@link
    * #getGenfilesArtifact(String, ArtifactOwner)} or its convenience methods should be used instead.
    */
   protected Artifact getGenfilesArtifactWithNoOwner(String rootRelativePath) {
-    return getDerivedArtifact(PathFragment.create(rootRelativePath),
+    return getDerivedArtifact(new PathFragment(rootRelativePath),
         targetConfig.getGenfilesDirectory(RepositoryName.MAIN),
         ActionsTestUtil.NULL_ARTIFACT_OWNER);
   }
@@ -1049,8 +1055,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * just be "foo.o".
    */
   protected Artifact getGenfilesArtifact(String packageRelativePath, String owner) {
-    ConfiguredTargetKey configKey = makeLabelAndConfiguration(owner);
-    return getGenfilesArtifact(packageRelativePath, configKey, configKey.getConfiguration());
+    return getGenfilesArtifact(packageRelativePath, makeLabelAndConfiguration(owner));
   }
 
   /**
@@ -1060,8 +1065,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * just be "foo.o".
    */
   protected Artifact getGenfilesArtifact(String packageRelativePath, ConfiguredTarget owner) {
-    ConfiguredTargetKey configKey = new ConfiguredTargetKey(owner);
-    return getGenfilesArtifact(packageRelativePath, configKey, configKey.getConfiguration());
+    return getGenfilesArtifact(packageRelativePath, new ConfiguredTargetKey(owner));
   }
 
   /**
@@ -1110,14 +1114,14 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Gets a derived Artifact for testing in the subdirectory of the {@link
-   * BuildConfiguration#getGenfilesDirectory} corresponding to the package of {@code owner}. So to
-   * specify a file foo/foo.o owned by target //foo:foo, {@code packageRelativePath} should just be
-   * "foo.o".
+   * BuildConfiguration#getGenfilesDirectory} corresponding to the package of {@code owner}.
+   * So to specify a file foo/foo.o owned by target //foo:foo, {@code packageRelativePath} should
+   * just be "foo.o".
    */
-  private Artifact getGenfilesArtifact(
-      String packageRelativePath, ArtifactOwner owner, BuildConfiguration config) {
-    return getPackageRelativeDerivedArtifact(
-        packageRelativePath, config.getGenfilesDirectory(RepositoryName.MAIN), owner);
+  private Artifact getGenfilesArtifact(String packageRelativePath, ArtifactOwner owner) {
+    return getPackageRelativeDerivedArtifact(packageRelativePath,
+        targetConfig.getGenfilesDirectory(RepositoryName.MAIN),
+        owner);
   }
 
   /**
@@ -1150,7 +1154,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * @param owner the artifact's owner.
    */
   protected Artifact getSharedArtifact(String rootRelativePath, ConfiguredTarget owner) {
-    return getDerivedArtifact(PathFragment.create(rootRelativePath),
+    return getDerivedArtifact(new PathFragment(rootRelativePath),
         targetConfig.getBinDirectory(RepositoryName.MAIN),
         new ConfiguredTargetKey(owner));
   }
@@ -1233,7 +1237,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
   }
 
-  public static Label makeLabel(String label) {
+  private static Label makeLabel(String label) {
     try {
       return Label.parseAbsolute(label);
     } catch (LabelSyntaxException e) {
@@ -1242,17 +1246,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   }
 
   private ConfiguredTargetKey makeLabelAndConfiguration(String label) {
-    BuildConfiguration config;
-    try {
-      config = getConfiguredTarget(label).getConfiguration();
-    } catch (LabelSyntaxException e) {
-      throw new IllegalArgumentException(e);
-    }
+    BuildConfiguration config = targetConfig;
     if (targetConfig.useDynamicConfigurations()) {
       try {
-        config = view.getDynamicConfigurationForTesting(getTarget(label), config, reporter);
+        config = view.getDynamicConfigurationForTesting(getTarget(label), targetConfig, reporter);
       } catch (Exception e) {
-        //TODO(b/36585204): Clean this up
         throw new RuntimeException(e);
       }
     }
@@ -1656,7 +1654,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public List<ActionAnalysisMetadata> getRegisteredActions() {
+    public Iterable<ActionAnalysisMetadata> getRegisteredActions() {
       throw new UnsupportedOperationException();
     }
 

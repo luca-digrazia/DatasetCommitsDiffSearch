@@ -19,6 +19,7 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.ResolvedTargets;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
+import com.google.devtools.build.lib.events.DelegatingEventHandler;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -34,6 +35,8 @@ import com.google.devtools.build.lib.pkgcache.LoadingPhaseCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.LoadingPhaseRunner;
 import com.google.devtools.build.lib.pkgcache.LoadingResult;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
+import com.google.devtools.build.lib.pkgcache.ParseFailureListener;
+import com.google.devtools.build.lib.pkgcache.ParsingFailedEvent;
 import com.google.devtools.build.lib.pkgcache.TargetParsingCompleteEvent;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.pkgcache.TestFilter;
@@ -68,6 +71,27 @@ import javax.annotation.Nullable;
  * <p>The Skyframe-based re-implementation of this class is in TargetPatternPhaseFunction.
  */
 public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
+
+  private static final class ParseFailureListenerImpl extends DelegatingEventHandler
+      implements ParseFailureListener, ExtendedEventHandler {
+    private final ExtendedEventHandler eventHandler;
+
+    private ParseFailureListenerImpl(ExtendedEventHandler delegate) {
+      super(delegate);
+      this.eventHandler = delegate;
+    }
+
+    @Override
+    public void parsingError(String targetPattern, String message) {
+      eventHandler.post(new ParsingFailedEvent(targetPattern, message));
+    }
+
+    @Override
+    public void post(ExtendedEventHandler.Postable obj) {
+      eventHandler.post(obj);
+    }
+  }
+
   private static final Logger LOG = Logger.getLogger(LoadingPhaseRunner.class.getName());
 
   private final PackageManager packageManager;
@@ -104,11 +128,13 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
     }
 
     targetPatternEvaluator.updateOffset(relativeWorkingDirectory);
+    ExtendedEventHandler parseFailureListener =
+        new ParseFailureListenerImpl(eventHandler);
     // Determine targets to build:
     ResolvedTargets<Target> targets =
         getTargetsToBuild(
-            eventHandler, targetPatterns, options.compileOneDependency,
-            options.buildTagFilterList, options.buildManualTests, keepGoing);
+            parseFailureListener, targetPatterns, options.compileOneDependency,
+            options.buildTagFilterList, keepGoing);
 
     ImmutableSet<Target> filteredTargets = targets.getFilteredTargets();
 
@@ -123,7 +149,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
     if (determineTests || buildTestsOnly) {
       // Parse the targets to get the tests.
       ResolvedTargets<Target> testTargets =
-          determineTests(eventHandler, targetPatterns, options, keepGoing);
+          determineTests(parseFailureListener, targetPatterns, options, keepGoing);
       if (testTargets.getTargets().isEmpty() && !testTargets.getFilteredTargets().isEmpty()) {
         eventHandler.handle(Event.warn("All specified test targets were excluded by filters"));
       }
@@ -217,7 +243,7 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
         new LoadingPhaseCompleteEvent(
             patternParsingValue.getTargets(),
             patternParsingValue.getTestSuiteTargets(),
-            packageManager.getAndClearStatistics(),
+            packageManager.getStatistics(),
             testSuiteTime));
     LOG.info("Target pattern evaluation finished");
     return patternParsingValue.toLoadingResult();
@@ -242,7 +268,6 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
    * @param targetPatterns the list of command-line target patterns specified by the user
    * @param compileOneDependency if true, enables alternative interpretation of targetPatterns; see
    *     {@link LoadingOptions#compileOneDependency}
-   * @param buildManualTests
    * @throws TargetParsingException if parsing failed and !keepGoing
    */
   private ResolvedTargets<Target> getTargetsToBuild(
@@ -250,12 +275,11 @@ public final class LegacyLoadingPhaseRunner extends LoadingPhaseRunner {
       List<String> targetPatterns,
       boolean compileOneDependency,
       List<String> buildTagFilterList,
-      boolean buildManualTests, boolean keepGoing)
+      boolean keepGoing)
       throws TargetParsingException, InterruptedException {
     ResolvedTargets<Target> evaluated =
         targetPatternEvaluator.parseTargetPatternList(eventHandler, targetPatterns,
-            buildManualTests ? FilteringPolicies.NO_FILTER : FilteringPolicies.FILTER_MANUAL,
-            keepGoing);
+            FilteringPolicies.FILTER_MANUAL, keepGoing);
 
     ResolvedTargets<Target> result = ResolvedTargets.<Target>builder()
         .merge(evaluated)

@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.pkgcache;
 
+import com.google.common.base.Function;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -64,7 +65,7 @@ public final class LoadingPhaseCompleteEvent implements ExtendedEventHandler.Pos
    *         targets we attempted to load.
    */
   public Iterable<Label> getLabels() {
-    return Iterables.transform(targets, Target::getLabel);
+    return Iterables.transform(targets, TO_LABEL);
   }
   
   public long getTimeInMs() {
@@ -77,4 +78,11 @@ public final class LoadingPhaseCompleteEvent implements ExtendedEventHandler.Pos
   public PackageManager.PackageManagerStatistics getPkgManagerStats() {
     return pkgManagerStats;
   }
+
+  private static final Function<Target, Label> TO_LABEL = new Function<Target, Label>() {
+    @Override
+    public Label apply(Target input) {
+      return input.getLabel();
+    }
+  };
 }
