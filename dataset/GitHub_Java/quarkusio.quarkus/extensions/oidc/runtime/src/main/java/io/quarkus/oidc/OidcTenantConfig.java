@@ -30,7 +30,7 @@ public class OidcTenantConfig {
      * The application type, which can be one of the following values from enum {@link ApplicationType}.
      */
     @ConfigItem(defaultValue = "service")
-    public ApplicationType applicationType = ApplicationType.SERVICE;
+    public ApplicationType applicationType;
 
     /**
      * The base URL of the OpenID Connect (OIDC) server, for example, 'https://host:port/auth'.
@@ -164,12 +164,6 @@ public class OidcTenantConfig {
     @ConfigItem
     public Logout logout = new Logout();
 
-    /**
-     * Default token state manager configuration
-     */
-    @ConfigItem
-    public TokenStateManager tokenStateManager = new TokenStateManager();
-
     @ConfigGroup
     public static class Tls {
         public enum Verification {
@@ -187,8 +181,8 @@ public class OidcTenantConfig {
          * Certificate validation and hostname verification, which can be one of the following values from enum
          * {@link Verification}. Default is required.
          */
-        @ConfigItem(defaultValue = "required")
-        public Verification verification = Verification.REQUIRED;
+        @ConfigItem(defaultValue = "REQUIRED")
+        public Verification verification;
 
         public Verification getVerification() {
             return verification;
@@ -232,56 +226,6 @@ public class OidcTenantConfig {
 
         public Optional<String> getPostLogoutPath() {
             return postLogoutPath;
-        }
-    }
-
-    /**
-     * Default Authorization Code token state manager configuration
-     */
-    @ConfigGroup
-    public static class TokenStateManager {
-
-        public enum Strategy {
-            /**
-             * Keep ID, access and refresh tokens.
-             */
-            KEEP_ALL_TOKENS,
-
-            /**
-             * Keep ID token only
-             */
-            ID_TOKEN
-        }
-
-        /**
-         * Default TokenStateManager strategy.
-         */
-        @ConfigItem(defaultValue = "keep_all_tokens")
-        public Strategy strategy = Strategy.KEEP_ALL_TOKENS;
-
-        /**
-         * Default TokenStateManager keeps all tokens (ID, access and refresh)
-         * returned in the authorization code grant response in a single session cookie by default.
-         * 
-         * Enable this property to minimize a session cookie size
-         */
-        @ConfigItem(defaultValue = "false")
-        public boolean splitTokens;
-
-        public boolean isSplitTokens() {
-            return splitTokens;
-        }
-
-        public void setSplitTokens(boolean spliTokens) {
-            this.splitTokens = spliTokens;
-        }
-
-        public Strategy getStrategy() {
-            return strategy;
-        }
-
-        public void setStrategy(Strategy strategy) {
-            this.strategy = strategy;
         }
     }
 
@@ -435,14 +379,6 @@ public class OidcTenantConfig {
 
     public Logout getLogout() {
         return logout;
-    }
-
-    public ApplicationType getApplicationType() {
-        return applicationType;
-    }
-
-    public void setApplicationType(ApplicationType applicationType) {
-        this.applicationType = applicationType;
     }
 
     @ConfigGroup
@@ -646,13 +582,13 @@ public class OidcTenantConfig {
             idtoken,
 
             /**
-             * Access Token - the default value for the 'service' applications;
+             * Access Token - the default and only supported value for the 'service' applications;
              * can also be used as the source of roles for the 'web-app' applications.
              */
             accesstoken,
 
             /**
-             * User Info
+             * User Info - only supported for the "web-app" applications
              */
             userinfo
         }
@@ -725,34 +661,17 @@ public class OidcTenantConfig {
         public Map<String, String> extraParams;
 
         /**
-         * Cookie path parameter value which, if set, will be used for the session, state and post logout cookies.
+         * Cookie path parameter value which, if set, will be used for the session and state cookies.
          * It may need to be set when the redirect path has a root different to that of the original request URL.
          */
         @ConfigItem
         public Optional<String> cookiePath = Optional.empty();
 
         /**
-         * Cookie domain parameter value which, if set, will be used for the session, state and post logout cookies.
-         */
-        @ConfigItem
-        public Optional<String> cookieDomain = Optional.empty();
-
-        /**
          * If this property is set to 'true' then an OIDC UserInfo endpoint will be called
          */
         @ConfigItem(defaultValue = "false")
         public boolean userInfoRequired;
-
-        /**
-         * Session age extension in minutes.
-         * The user session age property is set to the value of the ID token life-span by default and
-         * the user will be redirected to the OIDC provider to re-authenticate once the session has expired.
-         * If this property is set to a non-zero value then the expired ID token can be refreshed before
-         * the session has expired.
-         * This property will be ignored if the `token.refresh-expired` property has not been enabled.
-         */
-        @ConfigItem(defaultValue = "5M")
-        public Duration sessionAgeExtension = Duration.ofMinutes(5);
 
         /**
          * If this property is set to 'true' then a normal 302 redirect response will be returned
@@ -762,10 +681,7 @@ public class OidcTenantConfig {
          * authorization endpoints typically do not support CORS.
          * If this property is set to `false` then a status code of '499' will be returned to allow
          * the client to handle the redirect manually
-         *
-         * This property is deprecated. Please use a 'javaScriptAutoRedirect' property instead.
          */
-        @Deprecated
         @ConfigItem(defaultValue = "true")
         public boolean xhrAutoRedirect = true;
 
@@ -775,26 +691,6 @@ public class OidcTenantConfig {
 
         public void setXhrAutoredirect(boolean autoRedirect) {
             this.xhrAutoRedirect = autoRedirect;
-        }
-
-        /**
-         * If this property is set to 'true' then a normal 302 redirect response will be returned
-         * if the request was initiated via JavaScript API such as XMLHttpRequest or Fetch and the current user needs to be
-         * (re)authenticated which may not be desirable for Single Page Applications since
-         * it automatically following the redirect may not work given that OIDC authorization endpoints typically do not support
-         * CORS.
-         * If this property is set to `false` then a status code of '499' will be returned to allow
-         * the client to handle the redirect manually
-         */
-        @ConfigItem(defaultValue = "true")
-        public boolean javaScriptAutoRedirect = true;
-
-        public boolean isJavaScriptAutoRedirect() {
-            return javaScriptAutoRedirect;
-        }
-
-        public void setJavaScriptAutoredirect(boolean autoRedirect) {
-            this.javaScriptAutoRedirect = autoRedirect;
         }
 
         public Optional<String> getRedirectPath() {
@@ -845,14 +741,6 @@ public class OidcTenantConfig {
             this.cookiePath = Optional.of(cookiePath);
         }
 
-        public Optional<String> getCookieDomain() {
-            return cookieDomain;
-        }
-
-        public void setCookieDomain(String cookieDomain) {
-            this.cookieDomain = Optional.of(cookieDomain);
-        }
-
         public boolean isUserInfoRequired() {
             return userInfoRequired;
         }
@@ -876,15 +764,6 @@ public class OidcTenantConfig {
         public void setVerifyAccessToken(boolean verifyAccessToken) {
             this.verifyAccessToken = verifyAccessToken;
         }
-
-        public Duration getSessionAgeExtension() {
-            return sessionAgeExtension;
-        }
-
-        public void setSessionAgeExtension(Duration sessionAgeExtension) {
-            this.sessionAgeExtension = sessionAgeExtension;
-        }
-
     }
 
     @ConfigGroup
@@ -941,28 +820,14 @@ public class OidcTenantConfig {
 
         /**
          * Refresh expired ID tokens.
-         * If this property is enabled then a refresh token request will be performed if the ID token has expired
-         * and, if successful, the local session will be updated with the new set of tokens.
-         * Otherwise, the local session will be invalidated and the user redirected to the OpenID Provider to re-authenticate.
-         * In this case the user may not be challenged again if the OIDC provider session is still active.
-         *
-         * For this option be effective the `authentication.session-age-extension` property should also be set to a non-zero
-         * value since the refresh token is currently kept in the user session.
-         *
-         * This option is valid only when the application is of type {@link ApplicationType#WEB_APP}}.
+         * If this property is enabled then a refresh token request is performed and, if successful, the local session is
+         * updated with the new set of tokens.
+         * Otherwise, the local session is invalidated as an indication that the session at the OpenID Provider no longer
+         * exists.
+         * This option is only valid when the application is of type {@link ApplicationType#WEB_APP}}.
          */
         @ConfigItem
         public boolean refreshExpired;
-
-        /**
-         * Token auto-refresh interval in seconds during the user re-authentication.
-         * If this option is set then the valid ID token will be refreshed if it will expire in less than a number of minutes
-         * set by this option. The user will still be authenticated if the ID token can no longer be refreshed but is still
-         * valid.
-         * This option will be ignored if the 'refresh-expired' property is not enabled.
-         */
-        @ConfigItem
-        public Optional<Duration> autoRefreshInterval = Optional.empty();
 
         /**
          * Forced JWK set refresh interval in minutes.
@@ -970,27 +835,12 @@ public class OidcTenantConfig {
         @ConfigItem(defaultValue = "10M")
         public Duration forcedJwkRefreshInterval = Duration.ofMinutes(10);
 
-        /**
-         * Custom HTTP header that contains a bearer token.
-         * This option is valid only when the application is of type {@link ApplicationType#SERVICE}}.
-         */
-        @ConfigItem
-        public Optional<String> header = Optional.empty();
-
         public Optional<String> getIssuer() {
             return issuer;
         }
 
         public void setIssuer(String issuer) {
             this.issuer = Optional.of(issuer);
-        }
-
-        public Optional<String> getHeader() {
-            return header;
-        }
-
-        public void setHeader(String header) {
-            this.header = Optional.of(header);
         }
 
         public Optional<List<String>> getAudience() {
@@ -1075,8 +925,9 @@ public class OidcTenantConfig {
 
     public static enum ApplicationType {
         /**
-         * A {@code WEB_APP} is a client that serves pages, usually a frontend application. For this type of client the
-         * Authorization Code Flow is defined as the preferred method for authenticating users.
+         * A {@code WEB_APP} is a client that server pages, usually a frontend application. For this type of client the
+         * Authorization Code Flow is
+         * defined as the preferred method for authenticating users.
          */
         WEB_APP,
 
@@ -1085,13 +936,6 @@ public class OidcTenantConfig {
          * RESTful Architectural Design. For this type of client, the Bearer Authorization method is defined as the preferred
          * method for authenticating and authorizing users.
          */
-        SERVICE,
-
-        /**
-         * A combined {@code SERVICE} and {@code WEB_APP} client.
-         * For this type of client, the Bearer Authorization method will be used if the Authorization header is set
-         * and Authorization Code Flow - if not.
-         */
-        HYBRID
+        SERVICE
     }
 }
