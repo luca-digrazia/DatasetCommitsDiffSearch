@@ -4,22 +4,12 @@ import io.quarkus.builder.item.MultiBuildItem;
 
 final public class NotFoundPageDisplayableEndpointBuildItem extends MultiBuildItem {
     private final String endpoint;
-    private final String description;
-
-    public NotFoundPageDisplayableEndpointBuildItem(String endpoint, String description) {
-        this.endpoint = endpoint;
-        this.description = description;
-    }
 
     public NotFoundPageDisplayableEndpointBuildItem(String endpoint) {
-        this(endpoint, null);
+        this.endpoint = endpoint;
     }
 
     public String getEndpoint() {
         return endpoint;
-    }
-
-    public String getDescription() {
-        return description;
     }
 }

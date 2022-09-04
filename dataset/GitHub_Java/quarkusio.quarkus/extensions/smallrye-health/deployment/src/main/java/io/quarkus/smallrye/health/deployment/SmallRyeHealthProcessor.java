@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Set;
 
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.eclipse.microprofile.health.Health;
 import org.eclipse.microprofile.health.Liveness;
 import org.eclipse.microprofile.health.Readiness;
@@ -19,7 +18,6 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.ShutdownListenerBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.deployment.util.ServiceUtil;
 import io.quarkus.kubernetes.spi.KubernetesHealthLivenessPathBuildItem;
@@ -27,7 +25,6 @@ import io.quarkus.kubernetes.spi.KubernetesHealthReadinessPathBuildItem;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
-import io.quarkus.smallrye.health.runtime.ShutdownReadinessListener;
 import io.quarkus.smallrye.health.runtime.SmallRyeHealthHandler;
 import io.quarkus.smallrye.health.runtime.SmallRyeHealthRecorder;
 import io.quarkus.smallrye.health.runtime.SmallRyeLivenessHandler;
@@ -35,7 +32,6 @@ import io.quarkus.smallrye.health.runtime.SmallRyeReadinessHandler;
 import io.quarkus.vertx.http.deployment.RouteBuildItem;
 import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
 import io.quarkus.vertx.http.runtime.HandlerType;
-import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.smallrye.health.SmallRyeHealthReporter;
 
 class SmallRyeHealthProcessor {
@@ -77,10 +73,7 @@ class SmallRyeHealthProcessor {
     @BuildStep
     void healthCheck(BuildProducer<AdditionalBeanBuildItem> buildItemBuildProducer,
             List<HealthBuildItem> healthBuildItems) {
-        boolean extensionsEnabled = config.extensionsEnabled &&
-                !ConfigProvider.getConfig().getOptionalValue("mp.health.disable-default-procedures", boolean.class)
-                        .orElse(false);
-        if (extensionsEnabled) {
+        if (config.extensionsEnabled) {
             for (HealthBuildItem buildItem : healthBuildItems) {
                 if (buildItem.isEnabled()) {
                     buildItemBuildProducer.produce(new AdditionalBeanBuildItem(buildItem.getHealthCheckClass()));
@@ -147,22 +140,11 @@ class SmallRyeHealthProcessor {
     }
 
     @BuildStep
-    public void kubernetes(HttpBuildTimeConfig httpConfig,
-            BuildProducer<KubernetesHealthLivenessPathBuildItem> livenessPathItemProducer,
+    public void kubernetes(BuildProducer<KubernetesHealthLivenessPathBuildItem> livenessPathItemProducer,
             BuildProducer<KubernetesHealthReadinessPathBuildItem> readinessPathItemProducer) {
-        if (httpConfig.rootPath == null) {
-            livenessPathItemProducer.produce(new KubernetesHealthLivenessPathBuildItem(health.rootPath + health.livenessPath));
-            readinessPathItemProducer
-                    .produce(new KubernetesHealthReadinessPathBuildItem(health.rootPath + health.readinessPath));
-        } else {
-            String basePath = httpConfig.rootPath.replaceAll("/$", "") + health.rootPath;
-            livenessPathItemProducer.produce(new KubernetesHealthLivenessPathBuildItem(basePath + health.livenessPath));
-            readinessPathItemProducer.produce(new KubernetesHealthReadinessPathBuildItem(basePath + health.readinessPath));
-        }
-    }
-
-    @BuildStep
-    ShutdownListenerBuildItem shutdownListener() {
-        return new ShutdownListenerBuildItem(new ShutdownReadinessListener());
+        livenessPathItemProducer
+                .produce(new KubernetesHealthLivenessPathBuildItem(health.rootPath + health.livenessPath));
+        readinessPathItemProducer
+                .produce(new KubernetesHealthReadinessPathBuildItem(health.rootPath + health.readinessPath));
     }
 }
