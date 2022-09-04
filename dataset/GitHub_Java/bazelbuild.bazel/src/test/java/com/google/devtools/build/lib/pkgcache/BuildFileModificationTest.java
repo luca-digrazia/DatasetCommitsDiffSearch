@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
@@ -74,7 +73,7 @@ public class BuildFileModificationTest extends FoundationTestCase {
     BlazeDirectories directories =
         new BlazeDirectories(outputBase, outputBase, rootDirectory, analysisMock.getProductName());
     skyframeExecutor =
-        SequencedSkyframeExecutor.create(
+        SequencedSkyframeExecutor.createForTesting(
             analysisMock
                 .getPackageFactoryBuilderForTesting()
                 .build(ruleClassProvider, scratch.getFileSystem()),
@@ -87,11 +86,7 @@ public class BuildFileModificationTest extends FoundationTestCase {
             AnalysisMock.get().getSkyFunctions(),
             ImmutableList.<PrecomputedValue.Injected>of(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
-            PathFragment.EMPTY_FRAGMENT,
-            analysisMock.getProductName(),
-            BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
-            BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-            BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
+            analysisMock.getProductName());
     OptionsParser parser = OptionsParser.newOptionsParser(
         PackageCacheOptions.class, SkylarkSemanticsOptions.class);
     analysisMock.getInvocationPolicyEnforcer().enforce(parser);

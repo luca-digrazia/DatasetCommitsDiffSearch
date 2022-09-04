@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.LoadingMock;
-import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
@@ -339,15 +338,15 @@ public class IncrementalLoadingTest {
     tester.addFile("e/data.txt");
     throwOnReaddir = parentDir;
     tester.sync();
-    try {
-      tester.getTarget("//e:e");
-    } catch (NoSuchPackageException expected) {
-    }
+    Target target = tester.getTarget("//e:e");
+    assertThat(((Rule) target).containsErrors()).isTrue();
+    GlobList<?> globList = (GlobList<?>) ((Rule) target).getAttributeContainer().getAttr("data");
+    assertThat(globList).isEmpty();
     throwOnReaddir = null;
     tester.sync();
-    Target target = tester.getTarget("//e:e");
+    target = tester.getTarget("//e:e");
     assertThat(((Rule) target).containsErrors()).isFalse();
-    GlobList<?> globList = (GlobList<?>) ((Rule) target).getAttributeContainer().getAttr("data");
+    globList = (GlobList<?>) ((Rule) target).getAttributeContainer().getAttr("data");
     assertThat(globList).containsExactly(Label.parseAbsolute("//e:data.txt"));
   }
 
@@ -462,7 +461,7 @@ public class IncrementalLoadingTest {
 
       LoadingMock loadingMock = LoadingMock.get();
       skyframeExecutor =
-          SequencedSkyframeExecutor.create(
+          SequencedSkyframeExecutor.createForTesting(
               loadingMock
                   .getPackageFactoryBuilderForTesting()
                   .build(loadingMock.createRuleClassProvider(), fs),
@@ -479,11 +478,7 @@ public class IncrementalLoadingTest {
               ImmutableMap.<SkyFunctionName, SkyFunction>of(),
               ImmutableList.<PrecomputedValue.Injected>of(),
               ImmutableList.<SkyValueDirtinessChecker>of(),
-              PathFragment.EMPTY_FRAGMENT,
-              loadingMock.getProductName(),
-              BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
-              BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-              BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
+              loadingMock.getProductName());
       PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
       packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
       packageCacheOptions.showLoadingProgress = true;

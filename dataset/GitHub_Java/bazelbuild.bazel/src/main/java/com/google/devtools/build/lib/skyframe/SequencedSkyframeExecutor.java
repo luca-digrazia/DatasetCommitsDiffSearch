@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.UnionDirtine
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFileAction;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.ExternalFilesKnowledge;
 import com.google.devtools.build.lib.skyframe.ExternalFilesHelper.FileType;
-import com.google.devtools.build.lib.skyframe.PackageFunction.ActionOnIOExceptionReadingBuildFile;
 import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossRepositoryLabelViolationStrategy;
 import com.google.devtools.build.lib.skyframe.PackageLookupValue.BuildFileName;
 import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
@@ -127,8 +126,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       PathFragment blacklistedPackagePrefixesFile,
       String productName,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
-      List<BuildFileName> buildFilesByPriority,
-      ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
+      List<BuildFileName> buildFilesByPriority) {
     super(
         evaluatorSupplier,
         pkgFactory,
@@ -143,8 +141,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         blacklistedPackagePrefixesFile,
         productName,
         crossRepositoryLabelViolationStrategy,
-        buildFilesByPriority,
-        actionOnIOExceptionReadingBuildFile);
+        buildFilesByPriority);
     this.diffAwarenessManager = new DiffAwarenessManager(diffAwarenessFactories);
     this.customDirtinessCheckers = customDirtinessCheckers;
   }
@@ -163,8 +160,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       PathFragment blacklistedPackagePrefixesFile,
       String productName,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
-      List<BuildFileName> buildFilesByPriority,
-      ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
+      List<BuildFileName> buildFilesByPriority) {
     SequencedSkyframeExecutor skyframeExecutor =
         new SequencedSkyframeExecutor(
             InMemoryMemoizingEvaluator.SUPPLIER,
@@ -181,8 +177,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             blacklistedPackagePrefixesFile,
             productName,
             crossRepositoryLabelViolationStrategy,
-            buildFilesByPriority,
-            actionOnIOExceptionReadingBuildFile);
+            buildFilesByPriority);
     skyframeExecutor.init();
     return skyframeExecutor;
   }
@@ -200,8 +195,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
       String productName,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
-      List<BuildFileName> buildFilesByPriority,
-      ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
+      List<BuildFileName> buildFilesByPriority) {
     return create(
         pkgFactory,
         directories,
@@ -216,8 +210,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT,
         productName,
         crossRepositoryLabelViolationStrategy,
-        buildFilesByPriority,
-        actionOnIOExceptionReadingBuildFile);
+        buildFilesByPriority);
   }
 
   @VisibleForTesting
@@ -246,8 +239,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         customDirtinessCheckers,
         productName,
         BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
-        BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-        BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
+        BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
   }
 
   @VisibleForTesting
@@ -264,8 +256,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
       String productName,
       CrossRepositoryLabelViolationStrategy crossRepositoryLabelViolationStrategy,
-      ImmutableList<BuildFileName> buildFilesByPriority,
-      ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile) {
+      ImmutableList<BuildFileName> buildFilesByPriority) {
     return create(
         pkgFactory,
         directories,
@@ -280,8 +271,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT,
         productName,
         crossRepositoryLabelViolationStrategy,
-        buildFilesByPriority,
-        actionOnIOExceptionReadingBuildFile);
+        buildFilesByPriority);
   }
 
   @VisibleForTesting
@@ -308,8 +298,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         blacklistedPackagePrefixesFile,
         productName,
         BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
-        BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-        BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
+        BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
   }
 
   @Override
