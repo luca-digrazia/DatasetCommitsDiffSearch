@@ -16,11 +16,9 @@ package com.google.devtools.build.lib.rules.java;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.collect.Streams;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.PackageSpecificationProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import java.util.List;
@@ -34,10 +32,8 @@ public abstract class JavaPackageConfigurationProvider implements TransitiveInfo
   /** Creates a {@link JavaPackageConfigurationProvider}. */
   @AutoCodec.Instantiator
   public static JavaPackageConfigurationProvider create(
-      List<PackageSpecificationProvider> packageSpecifications,
-      List<String> javacopts,
-      NestedSet<Artifact> data) {
-    return new AutoValue_JavaPackageConfigurationProvider(packageSpecifications, javacopts, data);
+      List<PackageSpecificationProvider> packageSpecifications, List<String> javacopts) {
+    return new AutoValue_JavaPackageConfigurationProvider(packageSpecifications, javacopts);
   }
 
   /** Package specifications for which the configuration should be applied. */
@@ -45,8 +41,6 @@ public abstract class JavaPackageConfigurationProvider implements TransitiveInfo
 
   /** The javacopts for this configuration. */
   abstract List<String> javacopts();
-
-  abstract NestedSet<Artifact> data();
 
   /**
    * Returns true if this configuration matches the current label: that is, if the label's package
