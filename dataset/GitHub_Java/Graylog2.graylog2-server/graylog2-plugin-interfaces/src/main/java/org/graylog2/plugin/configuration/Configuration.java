@@ -26,10 +26,8 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import com.google.common.base.Strings;
 import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,9 +42,7 @@ public class Configuration {
 
     static {
         objectMapper = new ObjectMapper();
-        objectMapper
-                .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS)
-                .enable(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT);
+        objectMapper.enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
     }
 
     @JsonProperty
@@ -124,10 +120,6 @@ public class Configuration {
         return bools.containsKey(key);
     }
 
-    public void setBoolean(String key, boolean value) {
-        bools.put(key, value);
-    }
-
     public Map<String, Object> getSource() {
         return source;
     }
@@ -145,7 +137,7 @@ public class Configuration {
     }
 
     public static Configuration deserializeFromJson(String json) {
-        if (Strings.isNullOrEmpty(json)) {
+        if (json == null) {
             return EMPTY_CONFIGURATION;
         }
         try {
