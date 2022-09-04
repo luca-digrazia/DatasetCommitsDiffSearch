@@ -11,8 +11,6 @@ import android.view.View;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
 
-import com.bumptech.glide.Glide;
-import com.bumptech.glide.request.RequestOptions;
 import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.model.SwitchVideoModel;
 import com.example.gsyvideoplayer.video.SampleVideo;
@@ -167,14 +165,12 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        getCurPlay().onVideoPause();
         super.onPause();
         isPause = true;
     }
 
     @Override
     protected void onResume() {
-        getCurPlay().onVideoResume();
         super.onResume();
         isPause = false;
     }
@@ -183,9 +179,7 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
     protected void onDestroy() {
         super.onDestroy();
         isRelease = true;
-        if (isPlay) {
-            getCurPlay().release();
-        }
+        GSYVideoPlayer.releaseAllVideos();
         //GSYPreViewManager.instance().releaseMediaPlayer();
         if (orientationUtils != null)
             orientationUtils.releaseListener();
@@ -205,15 +199,6 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
     }
 
 
-
-    private GSYVideoPlayer getCurPlay() {
-        if (detailPlayer.getFullWindowPlayer() != null) {
-            return  detailPlayer.getFullWindowPlayer();
-        }
-        return detailPlayer;
-    }
-
-
     private void resolveNormalVideoUI() {
         //增加title
         detailPlayer.getTitleTextView().setVisibility(View.GONE);
@@ -230,9 +215,7 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
      * @param url
      */
     public void loadFirstFrameCover(String url) {
-
-        //原始方法
-        /*final MediaMetadataRetriever mediaMetadataRetriever = getMediaMetadataRetriever(url);
+        final MediaMetadataRetriever mediaMetadataRetriever = getMediaMetadataRetriever(url);
         //获取帧图片
         if (getMediaMetadataRetriever(url) != null) {
             new Thread(new Runnable() {
@@ -252,18 +235,7 @@ public class DetailMoreTypeActivity extends AppCompatActivity {
                     });
                 }
             }).start();
-        }*/
-
-        //可以参考Glide，内部也是封装了MediaMetadataRetriever
-        Glide.with(this.getApplicationContext())
-                .setDefaultRequestOptions(
-                        new RequestOptions()
-                                .frame(1000000)
-                                .centerCrop()
-                                .error(R.mipmap.xxx2)
-                                .placeholder(R.mipmap.xxx1))
-                .load(url)
-                .into(coverImageView);
+        }
     }
 
     public MediaMetadataRetriever getMediaMetadataRetriever(String url) {
