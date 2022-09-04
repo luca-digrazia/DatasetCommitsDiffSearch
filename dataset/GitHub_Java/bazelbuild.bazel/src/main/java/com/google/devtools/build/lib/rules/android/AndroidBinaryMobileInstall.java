@@ -123,8 +123,7 @@ public final class AndroidBinaryMobileInstall {
   static void addMobileInstall(
       RuleContext ruleContext,
       RuleConfiguredTargetBuilder ruleConfiguredTargetBuilder,
-      Artifact javaResourceJar,
-      ImmutableList<Artifact> shardDexZips,
+      AndroidBinary.DexingOutput dexingOutput,
       JavaSemantics javaSemantics,
       NativeLibs nativeLibs,
       ResourceApk resourceApk,
@@ -157,11 +156,11 @@ public final class AndroidBinaryMobileInstall {
             .setExecutable(
                 ruleContext.getExecutablePrerequisite("$build_incremental_dexmanifest", Mode.HOST))
             .addOutput(incrementalDexManifest)
-            .addInputs(shardDexZips)
+            .addInputs(dexingOutput.shardDexZips)
             .addCommandLine(
                 CustomCommandLine.builder()
                     .addExecPath(incrementalDexManifest)
-                    .addExecPaths(shardDexZips)
+                    .addExecPaths(dexingOutput.shardDexZips)
                     .build(),
                 ParamFileInfo.builder(ParameterFileType.UNQUOTED).build())
             .build(ruleContext));
@@ -176,7 +175,7 @@ public final class AndroidBinaryMobileInstall {
         ApkActionsBuilder.create("incremental apk")
             .setClassesDex(stubDex)
             .addInputZip(mobileInstallResourceApks.incrementalResourceApk.getArtifact())
-            .setJavaResourceZip(javaResourceJar, resourceExtractor)
+            .setJavaResourceZip(dexingOutput.javaResourceJar, resourceExtractor)
             .addInputZips(nativeLibsAar)
             .setJavaResourceFile(stubData)
             .setSignedApk(incrementalApk)
@@ -230,13 +229,13 @@ public final class AndroidBinaryMobileInstall {
         .registerActions(ruleContext);
     splitApkSetBuilder.add(resourceSplitApk);
 
-    for (int i = 0; i < shardDexZips.size(); i++) {
+    for (int i = 0; i < dexingOutput.shardDexZips.size(); i++) {
       String splitName = "dex" + (i + 1);
       Artifact splitApkResources =
           createSplitApkResources(ruleContext, applicationManifest, splitName, true);
       Artifact splitApk = getMobileInstallArtifact(ruleContext, splitName + ".apk");
       ApkActionsBuilder.create("split dex apk " + (i + 1))
-          .setClassesDex(shardDexZips.get(i))
+          .setClassesDex(dexingOutput.shardDexZips.get(i))
           .addInputZip(splitApkResources)
           .setSignedApk(splitApk)
           .setSigningKey(signingKey)
@@ -260,7 +259,7 @@ public final class AndroidBinaryMobileInstall {
     Artifact javaSplitApk = getMobileInstallArtifact(ruleContext, "java_resources.apk");
     ApkActionsBuilder.create("split Java resource apk")
         .addInputZip(javaSplitApkResources)
-        .setJavaResourceZip(javaResourceJar, resourceExtractor)
+        .setJavaResourceZip(dexingOutput.javaResourceJar, resourceExtractor)
         .setSignedApk(javaSplitApk)
         .setSigningKey(signingKey)
         .registerActions(ruleContext);
