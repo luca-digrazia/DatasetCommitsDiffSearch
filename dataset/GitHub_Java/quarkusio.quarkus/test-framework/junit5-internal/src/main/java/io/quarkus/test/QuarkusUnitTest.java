@@ -311,10 +311,10 @@ public class QuarkusUnitTest
                         } else if (cause != null) {
                             assertException.accept(cause);
                         } else {
-                            fail("Unable to unwrap the build exception from: " + e);
+                            fail("Unable to unwrap build exception from: " + e);
                         }
                     } else {
-                        fail("Unable to unwrap the build exception from: " + e);
+                        fail("Unable to unwrap build exception from: " + e);
                     }
                 } else {
                     throw e;
@@ -362,12 +362,8 @@ public class QuarkusUnitTest
 
                     @Override
                     public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
-                        if (exc == null) {
-                            Files.delete(dir);
-                            return FileVisitResult.CONTINUE;
-                        } else {
-                            throw exc;
-                        }
+                        Files.delete(dir);
+                        return FileVisitResult.CONTINUE;
                     }
                 });
             }
