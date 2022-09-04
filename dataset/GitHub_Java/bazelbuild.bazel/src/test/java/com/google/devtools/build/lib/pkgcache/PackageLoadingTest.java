@@ -114,10 +114,10 @@ public class PackageLoadingTest extends FoundationTestCase {
       PackageOptions packageOptions, BuildLanguageOptions buildLanguageOptions) {
     PathPackageLocator pkgLocator =
         PathPackageLocator.create(
-            /*outputBase=*/ null,
+            null,
             packageOptions.packagePath,
             reporter,
-            rootDirectory.asFragment(),
+            rootDirectory,
             rootDirectory,
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     packageOptions.showLoadingProgress = true;

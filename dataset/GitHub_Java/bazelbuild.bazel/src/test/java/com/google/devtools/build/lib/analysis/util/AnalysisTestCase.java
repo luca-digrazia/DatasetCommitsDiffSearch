@@ -550,7 +550,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         .getArtifactFactory()
         .getDerivedArtifact(
             label.getPackageFragment().getRelative(packageRelativePath),
-            getTargetConfiguration().getBinDirectory(label.getRepository()),
+            getTargetConfiguration().getBinDirectory(label.getPackageIdentifier().getRepository()),
             ConfiguredTargetKey.builder()
                 .setConfiguredTarget(owner)
                 .setConfiguration(

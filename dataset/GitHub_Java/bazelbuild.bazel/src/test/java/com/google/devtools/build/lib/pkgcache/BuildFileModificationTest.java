@@ -116,7 +116,7 @@ public class BuildFileModificationTest extends FoundationTestCase {
             null,
             packageOptions.packagePath,
             reporter,
-            rootDirectory.asFragment(),
+            rootDirectory,
             rootDirectory,
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     packageOptions.showLoadingProgress = true;
