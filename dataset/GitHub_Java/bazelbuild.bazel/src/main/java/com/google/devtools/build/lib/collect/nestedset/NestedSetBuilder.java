@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.MapMaker;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
-import com.google.errorprone.annotations.DoNotCall;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -109,13 +108,6 @@ public final class NestedSetBuilder<E> {
     }
     Iterables.addAll(items, elements);
     return this;
-  }
-
-  /** @deprecated Use {@link #addTransitive} to avoid excessive memory use. */
-  @Deprecated
-  @DoNotCall
-  public NestedSetBuilder<E> addAll(NestedSet<? extends E> elements) {
-    throw new UnsupportedOperationException();
   }
 
   /**
