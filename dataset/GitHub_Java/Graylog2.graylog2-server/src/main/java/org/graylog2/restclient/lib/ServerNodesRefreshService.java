@@ -25,6 +25,7 @@ import com.google.inject.Singleton;
 import org.graylog2.restclient.models.Node;
 import org.graylog2.restclient.models.api.responses.cluster.NodeSummaryResponse;
 import org.graylog2.restclient.models.api.responses.cluster.NodesResponse;
+import org.graylog2.restroutes.generated.routes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,8 +71,7 @@ public class ServerNodesRefreshService {
         public List<Node> call() throws Exception {
             List<Node> newNodes = Lists.newArrayList();
             log.debug("Updating graylog2 server node list from node {}", node);
-            NodesResponse response = api.get(NodesResponse.class)
-                    .path("/system/cluster/nodes")
+            NodesResponse response = api.path(routes.ClusterResource().nodes(), NodesResponse.class)
                     .node(node)
                     .unauthenticated()
                     .execute();
@@ -89,26 +89,29 @@ public class ServerNodesRefreshService {
     private void resolveConfiguredNodes() {
         // either we have just started and never seen any servers, or we lost connection to all servers in our cluster
         // resolve all configured nodes, to figure out the proper transport addresses in this network
-        final Collection<Node> configuredNodes = serverNodes.getConfiguredNodes();
-        final Map<Node, NodeSummaryResponse> responses =
-                api.get(NodeSummaryResponse.class)
-                        .path("/system/cluster/node")
-                        .nodes(configuredNodes)
-                        .unauthenticated()
-                        .timeout(apiTimeout("node_refresh", 2, TimeUnit.SECONDS))
-                        .executeOnAll();
-        List<Node> resolvedNodes = Lists.newArrayList();
-        for (Map.Entry<Node, NodeSummaryResponse> nsr : responses.entrySet()) {
-            if (nsr.getValue() == null) {
-                //skip empty responses, they indicate an error
-                continue;
+        try {
+            final Collection<Node> configuredNodes = serverNodes.getConfiguredNodes();
+            final Map<Node, NodeSummaryResponse> responses =
+                    api.path(routes.ClusterResource().node(), NodeSummaryResponse.class)
+                            .nodes(configuredNodes)
+                            .unauthenticated()
+                            .timeout(apiTimeout("node_refresh", 2, TimeUnit.SECONDS))
+                            .executeOnAll();
+            List<Node> resolvedNodes = Lists.newArrayList();
+            for (Map.Entry<Node, NodeSummaryResponse> nsr : responses.entrySet()) {
+                if (nsr.getValue() == null) {
+                    //skip empty responses, they indicate an error
+                    continue;
+                }
+                final Node resolvedNode = nodeFactory.fromSummaryResponse(nsr.getValue());
+                resolvedNode.setActive(true);
+                resolvedNodes.add(resolvedNode);
+                serverNodes.linkConfiguredNode(nsr.getKey(), resolvedNode);
             }
-            final Node resolvedNode = nodeFactory.fromSummaryResponse(nsr.getValue());
-            resolvedNode.setActive(true);
-            resolvedNodes.add(resolvedNode);
-            serverNodes.linkConfiguredNode(nsr.getKey(), resolvedNode);
+            serverNodes.put(resolvedNodes);
+        } catch (Exception e) {
+            log.error("Resolving configured nodes failed", e);
         }
-        serverNodes.put(resolvedNodes);
     }
 
     public void start() {
