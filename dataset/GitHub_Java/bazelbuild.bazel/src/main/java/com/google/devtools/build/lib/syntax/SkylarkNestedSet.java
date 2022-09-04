@@ -53,7 +53,7 @@ import javax.annotation.Nullable;
           + "<p>"
           + "Depsets are not implemented as hash sets and do not support fast membership tests. If "
           + "you need a general set datatype, you can simulate one using a dictionary where all "
-          + "keys map to <code>True</code>."
+          + "keys map to <code>None</code>."
           + "<p>"
           + "Depsets are immutable. They should be created using their "
           + "<a href=\"globals.html#depset\">constructor function</a> and merged or augmented with "
@@ -132,7 +132,7 @@ public final class SkylarkNestedSet implements SkylarkValue, SkylarkQueryable {
       SkylarkType lastInsertedType = null;
       // TODO(bazel-team): we should check ImmutableList here but it screws up genrule at line 43
       for (Object object : (SkylarkList) item) {
-        SkylarkType elemType = SkylarkType.of(object);
+        SkylarkType elemType = SkylarkType.of(object.getClass());
         contentType = getTypeAfterInsert(contentType, elemType, lastInsertedType, loc);
         lastInsertedType = elemType;
         checkImmutable(object, loc);
@@ -391,7 +391,7 @@ public final class SkylarkNestedSet implements SkylarkValue, SkylarkQueryable {
      * elements and transitive sets.
      */
     public Builder addDirect(Object direct) throws EvalException {
-      SkylarkType elemType = SkylarkType.of(direct);
+      SkylarkType elemType = SkylarkType.of(direct.getClass());
       contentType = getTypeAfterInsert(contentType, elemType, lastInsertedType, location);
       lastInsertedType = elemType;
       builder.add(direct);
