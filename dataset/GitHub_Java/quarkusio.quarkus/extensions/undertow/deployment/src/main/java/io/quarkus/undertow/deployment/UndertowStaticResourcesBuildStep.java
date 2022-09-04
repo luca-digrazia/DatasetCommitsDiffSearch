@@ -27,15 +27,22 @@ public class UndertowStaticResourcesBuildStep {
     protected static final String META_INF_RESOURCES = "META-INF/resources";
 
     @BuildStep
-    KnownPathsBuildItem scanStaticResources(ApplicationArchivesBuildItem applicationArchivesBuildItem,
+    void handleGeneratedWebResources(BuildProducer<GeneratedResourceBuildItem> generatedResources,
+            List<GeneratedWebResourceBuildItem> generatedWebResources) throws Exception {
+        for (GeneratedWebResourceBuildItem genResource : generatedWebResources) {
+            generatedResources.produce(new GeneratedResourceBuildItem(META_INF_RESOURCES_SLASH + genResource.getName(),
+                    genResource.getClassData()));
+        }
+    }
+
+    @BuildStep
+    void scanStaticResources(ApplicationArchivesBuildItem applicationArchivesBuildItem,
             BuildProducer<GeneratedResourceBuildItem> generatedResources,
+            BuildProducer<KnownPathsBuildItem> knownPathsBuilds,
+            BuildProducer<StaticResourceFilesBuildItem> staticResourceFiles,
             List<GeneratedWebResourceBuildItem> generatedWebResources,
             LaunchModeBuildItem launchModeBuildItem) throws Exception {
-        if (launchModeBuildItem.getLaunchMode() == LaunchMode.DEVELOPMENT) {
-            //we don't need to do this in development mode
-            //we serve directly from the project dir
-            return new KnownPathsBuildItem(Collections.emptySet(), Collections.emptySet());
-        }
+
         //we need to check for web resources in order to get welcome files to work
         //this kinda sucks
         Set<String> knownFiles = new HashSet<>();
@@ -51,7 +58,7 @@ public class UndertowStaticResourcesBuildStep {
                             return;
                         }
                         Path rel = resource.relativize(path);
-                        if (Files.isDirectory(rel)) {
+                        if (Files.isDirectory(path)) {
                             knownDirectories.add(rel.toString());
                         } else {
                             knownFiles.add(rel.toString());
@@ -83,8 +90,6 @@ public class UndertowStaticResourcesBuildStep {
             }
         }
         for (GeneratedWebResourceBuildItem genResource : generatedWebResources) {
-            generatedResources.produce(new GeneratedResourceBuildItem(META_INF_RESOURCES_SLASH + genResource.getName(),
-                    genResource.getClassData()));
             String sub = genResource.getName();
             if (sub.startsWith("/")) {
                 sub = sub.substring(1);
@@ -98,7 +103,15 @@ public class UndertowStaticResourcesBuildStep {
                 }
             }
         }
-        return new KnownPathsBuildItem(knownFiles, knownDirectories);
+        if (launchModeBuildItem.getLaunchMode() == LaunchMode.DEVELOPMENT) {
+            //we don't need knownPaths in development mode
+            //we serve directly from the project dir
+            knownPathsBuilds.produce(new KnownPathsBuildItem(Collections.emptySet(), Collections.emptySet()));
+            //but we need files to display them in case of 404 in development mode
+            staticResourceFiles.produce(new StaticResourceFilesBuildItem(knownFiles));
+        } else {
+            knownPathsBuilds.produce(new KnownPathsBuildItem(knownFiles, knownDirectories));
+        }
     }
 
     @BuildStep
