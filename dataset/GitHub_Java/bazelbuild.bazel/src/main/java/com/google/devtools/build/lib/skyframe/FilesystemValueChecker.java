@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker.DirtyResult;
 import com.google.devtools.build.lib.skyframe.TreeArtifactValue.ArchivedRepresentation;
+import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.BatchStat;
@@ -68,6 +69,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
 import javax.annotation.Nullable;
 
 /**
@@ -318,8 +320,9 @@ public class FilesystemValueChecker {
                 /*includeLinks=*/ true,
                 Artifact.asPathFragments(artifacts));
       } catch (IOException e) {
-        logger.atWarning().withCause(e).log(
-            "Unable to process batch stat, falling back to individual stats");
+        // Batch stat did not work. Log an exception and fall back on system calls.
+        LoggingUtil.logToRemote(Level.WARNING, "Unable to process batch stat", e);
+        logger.atWarning().withCause(e).log("Unable to process batch stat");
         outputStatJob(
                 dirtyKeys,
                 shard,
