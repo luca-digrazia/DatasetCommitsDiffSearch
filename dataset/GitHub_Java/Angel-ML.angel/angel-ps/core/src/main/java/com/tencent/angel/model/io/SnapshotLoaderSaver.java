@@ -138,8 +138,8 @@ public class SnapshotLoaderSaver extends PSMatrixLoaderSaverImpl {
         } else {
           rowMeta.setSaveType(SaveType.SPARSE.getTypeId());
         }
-        //row.getStorage().serialize(dataOutputStream);
-        save(rows.getRow(rowId), saveContext, partMeta, output);
+        row.getStorage().serialize(dataOutputStream);
+        //save(rows.getRow(rowId), saveContext, partMeta, output);
       } else {
         rowMeta.setElementNum(0);
         rowMeta.setOffset(dataOutputStream.getPos());
@@ -206,8 +206,7 @@ public class SnapshotLoaderSaver extends PSMatrixLoaderSaverImpl {
       Map<Integer, RowPartitionMeta> rowMetas = partMeta.getRowMetas();
       for (RowPartitionMeta rowMeta : rowMetas.values()) {
         ServerRow row = rows.getRow(rowMeta.getRowId());
-        load(row, loadContext, partMeta, input);
-        //row.getStorage().deserialize(input);
+        row.getStorage().deserialize(input);
       }
     } finally {
       part.setState(PartitionState.READ_AND_WRITE);
