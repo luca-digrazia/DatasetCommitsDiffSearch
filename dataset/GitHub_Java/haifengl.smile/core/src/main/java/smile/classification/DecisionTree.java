@@ -18,8 +18,10 @@ package smile.classification;
 import java.io.Serializable;
 import java.util.*;
 import java.util.concurrent.Callable;
-import smile.data.type.StructType;
-import smile.math.MathEx;
+import smile.data.Attribute;
+import smile.data.NominalAttribute;
+import smile.data.NumericAttribute;
+import smile.math.Math;
 import smile.sort.QuickSort;
 import smile.util.MulticoreExecutor;
 
@@ -93,12 +95,12 @@ import smile.util.MulticoreExecutor;
  * @author Haifeng Li
  */
 public class DecisionTree implements SoftClassifier<double[]> {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The attributes of independent variable.
      */
-    private StructType schema;
+    private Attribute[] attributes;
     /**
      * Variable importance. Every time a split of a node is made on variable
      * the (GINI, information gain, etc.) impurity criterion for the two
@@ -138,6 +140,100 @@ public class DecisionTree implements SoftClassifier<double[]> {
      */
     private transient int[][] order;
 
+    /**
+     * Trainer for decision tree classifiers.
+     */
+    public static class Trainer extends ClassifierTrainer<double[]> {
+        /**
+         * The splitting rule.
+         */
+        private SplitRule rule = SplitRule.GINI;
+        /**
+         * The minimum size of leaf nodes.
+         */
+        private int nodeSize = 1;
+        /**
+         * The maximum number of leaf nodes in the tree.
+         */
+        private int maxNodes = 100;
+
+        /**
+         * Default constructor of maximal 100 leaf nodes in the tree.
+         */
+        public Trainer() {
+
+        }
+
+        /**
+         * Constructor.
+         * 
+         * @param maxNodes the maximum number of leaf nodes in the tree.
+         */
+        public Trainer(int maxNodes) {
+            if (maxNodes < 2) {
+                throw new IllegalArgumentException("Invalid maximum number of leaf nodes: " + maxNodes);
+            }
+            
+            this.maxNodes = maxNodes;
+        }
+        
+        /**
+         * Constructor.
+         * 
+         * @param attributes the attributes of independent variable.
+         * @param maxNodes the maximum number of leaf nodes in the tree.
+         */
+        public Trainer(Attribute[] attributes, int maxNodes) {
+            super(attributes);
+            
+            if (maxNodes < 2) {
+                throw new IllegalArgumentException("Invalid maximum number of leaf nodes: " + maxNodes);
+            }
+            
+            this.maxNodes = maxNodes;
+        }
+        
+        /**
+         * Sets the splitting rule.
+         * @param rule the splitting rule.
+         */
+        public Trainer setSplitRule(SplitRule rule) {
+            this.rule = rule;
+            return this;
+        }
+        
+        /**
+         * Sets the maximum number of leaf nodes in the tree.
+         * @param maxNodes the maximum number of leaf nodes in the tree.
+         */
+        public Trainer setMaxNodes(int maxNodes) {
+            if (maxNodes < 2) {
+                throw new IllegalArgumentException("Invalid maximum number of leaf nodes: " + maxNodes);
+            }
+            
+            this.maxNodes = maxNodes;
+            return this;
+        }
+
+        /**
+         * Sets the minimum size of leaf nodes.
+         * @param nodeSize the minimum size of leaf nodes..
+         */
+        public Trainer setNodeSize(int nodeSize) {
+            if (nodeSize < 1) {
+                throw new IllegalArgumentException("Invalid minimum size of leaf nodes: " + nodeSize);
+            }
+
+            this.nodeSize = nodeSize;
+            return this;
+        }
+
+        @Override
+        public DecisionTree train(double[][] x, int[] y) {
+            return new DecisionTree(attributes, x, y, maxNodes, nodeSize, rule);
+        }
+    }
+    
     /**
      * The criterion to choose variable to split instances.
      */
@@ -225,7 +321,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
             if (trueChild == null && falseChild == null) {
                 return output;
             } else {
-                if (schema.measure(splitFeature) == Attribute.Type.NOMINAL) {
+                if (attributes[splitFeature].getType() == Attribute.Type.NOMINAL) {
                     if (x[splitFeature] == splitValue) {
                         return trueChild.predict(x);
                     } else {
@@ -396,7 +492,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
             }
             
             if (mtry < p) {
-                MathEx.permutate(variables);
+                Math.permutate(variables);
 
                 // Random forest already runs on parallel.
                 for (int j = 0; j < mtry; j++) {
@@ -465,7 +561,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 }
 
                 for (int l = 0; l < m; l++) {
-                    int tc = MathEx.sum(trueCount[l]);
+                    int tc = Math.sum(trueCount[l]);
                     int fc = n - tc;
 
                     // If either side is empty, skip this feature.
@@ -477,8 +573,8 @@ public class DecisionTree implements SoftClassifier<double[]> {
                         falseCount[q] = count[q] - trueCount[l][q];
                     }
 
-                    int trueLabel = MathEx.whichMax(trueCount[l]);
-                    int falseLabel = MathEx.whichMax(falseCount);
+                    int trueLabel = Math.whichMax(trueCount[l]);
+                    int falseLabel = Math.whichMax(falseCount);
                     double gain = impurity - (double) tc / n * impurity(trueCount[l], tc) - (double) fc / n * impurity(falseCount, fc);
 
                     if (gain > splitNode.splitScore) {
@@ -504,7 +600,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
                             continue;
                         }
 
-                        int tc = MathEx.sum(trueCount);
+                        int tc = Math.sum(trueCount);
                         int fc = n - tc;
 
                         // If either side is empty, skip this feature.
@@ -519,8 +615,8 @@ public class DecisionTree implements SoftClassifier<double[]> {
                             falseCount[l] = count[l] - trueCount[l];
                         }
 
-                        int trueLabel = MathEx.whichMax(trueCount);
-                        int falseLabel = MathEx.whichMax(falseCount);
+                        int trueLabel = Math.whichMax(trueCount);
+                        int falseLabel = Math.whichMax(falseCount);
                         double gain = impurity - (double) tc / n * impurity(trueCount, tc) - (double) fc / n * impurity(falseCount, fc);
 
                         if (gain > splitNode.splitScore) {
@@ -661,7 +757,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
                 for (int i = 0; i < count.length; i++) {
                     if (count[i] > 0) {
                         double p = (double) count[i] / n;
-                        impurity -= p * MathEx.log2(p);
+                        impurity -= p * Math.log2(p);
                     }
                 }
                 break;
@@ -776,15 +872,10 @@ public class DecisionTree implements SoftClassifier<double[]> {
      * @param samples the sample set of instances for stochastic learning.
      * samples[i] is the number of sampling for instance i.
      */
-    public static DecisionTree fit(Attribute[] attributes, double[][] x, int[] y, Properties prop, int[] samples, int[][] order) {
+    public DecisionTree(Attribute[] attributes, double[][] x, int[] y, int maxNodes, int nodeSize, int mtry, SplitRule rule, int[] samples, int[][] order) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
-
-        int mtry = prop.getProperty("mtry");
-        int maxNodes = prop.getProperty("max.nodes");
-        int nodeSize = prop.getProperty("node.size");
-        SplitRule rule = SplitRule.valueOf(prop.getProperty("split.rule", "GINI"));
 
         if (mtry < 1 || mtry > x[0].length) {
             throw new IllegalArgumentException("Invalid number of variables to split on at a node of the tree: " + mtry);
@@ -799,7 +890,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
         }
 
         // class label set.
-        int[] labels = MathEx.unique(y);
+        int[] labels = Math.unique(y);
         Arrays.sort(labels);
         
         for (int i = 0; i < labels.length; i++) {
@@ -872,7 +963,7 @@ public class DecisionTree implements SoftClassifier<double[]> {
         for (int i = 0; i < k; i++) {
             posteriori[i] = (double) count[i] / n;
         }
-        root = new Node(MathEx.whichMax(count), posteriori);
+        root = new Node(Math.whichMax(count), posteriori);
         
         TrainNode trainRoot = new TrainNode(root, x, y, samples);
         // Now add splits to the tree until max tree size is reached
