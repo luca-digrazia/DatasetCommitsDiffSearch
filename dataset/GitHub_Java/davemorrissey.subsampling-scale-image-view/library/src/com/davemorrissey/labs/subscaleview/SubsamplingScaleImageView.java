@@ -392,9 +392,10 @@ public class SubsamplingScaleImageView extends View {
         }
 
         if (imageSource.getBitmap() != null && imageSource.getSRegion() != null) {
-            onImageLoaded(Bitmap.createBitmap(imageSource.getBitmap(), imageSource.getSRegion().left, imageSource.getSRegion().top, imageSource.getSRegion().width(), imageSource.getSRegion().height()), ORIENTATION_0, false);
+            onImageLoaded(Bitmap.createBitmap(imageSource.getBitmap(), imageSource.getSRegion().left, imageSource.getSRegion().top, imageSource.getSRegion().width(), imageSource.getSRegion().height()), ORIENTATION_0);
         } else if (imageSource.getBitmap() != null) {
-            onImageLoaded(imageSource.getBitmap(), ORIENTATION_0, imageSource.isCached());
+            this.bitmapIsCached = imageSource.isCached();
+            onImageLoaded(imageSource.getBitmap(), ORIENTATION_0);
         } else {
             this.sRegion = imageSource.getSRegion();
             Uri uri = imageSource.getUri();
@@ -1549,7 +1550,7 @@ public class SubsamplingScaleImageView extends View {
                     if (preview) {
                         subsamplingScaleImageView.onPreviewLoaded(bitmap);
                     } else {
-                        subsamplingScaleImageView.onImageLoaded(bitmap, orientation, false);
+                        subsamplingScaleImageView.onImageLoaded(bitmap, orientation);
                     }
                 } else if (exception != null && subsamplingScaleImageView.onImageEventListener != null) {
                     if (preview) {
@@ -1585,16 +1586,16 @@ public class SubsamplingScaleImageView extends View {
     /**
      * Called by worker task when full size image bitmap is ready (tiling is disabled).
      */
-    private synchronized void onImageLoaded(Bitmap bitmap, int sOrientation, boolean bitmapIsCached) {
+    private synchronized void onImageLoaded(Bitmap bitmap, int sOrientation) {
         // If actual dimensions don't match the declared size, reset everything.
         if (this.sWidth > 0 && this.sHeight > 0 && (this.sWidth != bitmap.getWidth() || this.sHeight != bitmap.getHeight())) {
             reset(false);
         }
-        if (this.bitmap != null && !this.bitmapIsCached) {
+        if (this.bitmap != null && !bitmapIsCached) {
             this.bitmap.recycle();
         }
         this.bitmapIsPreview = false;
-        this.bitmapIsCached = bitmapIsCached;
+        this.bitmapIsCached = false;
         this.bitmap = bitmap;
         this.sWidth = bitmap.getWidth();
         this.sHeight = bitmap.getHeight();
