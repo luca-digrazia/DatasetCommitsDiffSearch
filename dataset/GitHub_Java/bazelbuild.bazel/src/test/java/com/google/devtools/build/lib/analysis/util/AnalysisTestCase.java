@@ -58,7 +58,7 @@ import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunctio
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
@@ -154,7 +154,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     directories =
         new BlazeDirectories(
-            new ServerDirectories(outputBase, outputBase, outputBase),
+            new ServerDirectories(outputBase, outputBase),
             rootDirectory,
             analysisMock.getProductName());
     workspaceStatusActionFactory =
@@ -183,8 +183,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
         BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
         BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
-        BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
-        DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider));
+        BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE);
   }
 
   /**
@@ -197,7 +196,6 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         analysisMock
             .getPackageFactoryBuilderForTesting(directories)
             .build(ruleClassProvider, scratch.getFileSystem());
-    useConfiguration();
     skyframeExecutor =
         createSkyframeExecutor(pkgFactory, ruleClassProvider.getBuildInfoFactories());
 
@@ -222,7 +220,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     loadingPhaseRunner = skyframeExecutor.getLoadingPhaseRunner(
         pkgFactory.getRuleClassNames(), defaultFlags().contains(Flag.SKYFRAME_LOADING_PHASE));
     buildView = new BuildView(directories, ruleClassProvider, skyframeExecutor, null);
-
+    useConfiguration();
   }
 
   protected AnalysisMock getAnalysisMock() {
@@ -392,12 +390,12 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     return update(new EventBus(), defaultFlags(), aspects, labels);
   }
 
-  protected ConfiguredTargetAndData getConfiguredTargetAndTarget(String label)
+  protected ConfiguredTargetAndTarget getConfiguredTargetAndTarget(String label)
       throws InterruptedException {
     return getConfiguredTargetAndTarget(label, getTargetConfiguration());
   }
 
-  protected ConfiguredTargetAndData getConfiguredTargetAndTarget(
+  protected ConfiguredTargetAndTarget getConfiguredTargetAndTarget(
       String label, BuildConfiguration config) {
     ensureUpdateWasCalled();
     Label parsedLabel;
@@ -406,7 +404,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     } catch (LabelSyntaxException e) {
       throw new AssertionError(e);
     }
-    return skyframeExecutor.getConfiguredTargetAndDataForTesting(reporter, parsedLabel, config);
+    return skyframeExecutor.getConfiguredTargetAndTargetForTesting(reporter, parsedLabel, config);
   }
 
   protected Target getTarget(String label) throws InterruptedException {
@@ -418,21 +416,9 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     }
   }
 
-  protected final ConfiguredTargetAndData getConfiguredTargetAndData(
-      String label, BuildConfiguration configuration) {
+  protected ConfiguredTarget getConfiguredTarget(String label, BuildConfiguration configuration) {
     ensureUpdateWasCalled();
     return getConfiguredTargetForSkyframe(label, configuration);
-  }
-
-  protected final ConfiguredTargetAndData getConfiguredTargetAndData(String label)
-      throws InterruptedException {
-    return getConfiguredTargetAndData(label, getTargetConfiguration());
-  }
-
-  protected final ConfiguredTarget getConfiguredTarget(
-      String label, BuildConfiguration configuration) {
-    ConfiguredTargetAndData result = getConfiguredTargetAndData(label, configuration);
-    return result == null ? null : result.getConfiguredTarget();
   }
 
   /**
@@ -443,16 +429,15 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     return getConfiguredTarget(label, getTargetConfiguration());
   }
 
-  private ConfiguredTargetAndData getConfiguredTargetForSkyframe(
-      String label, BuildConfiguration configuration) {
+  private ConfiguredTarget getConfiguredTargetForSkyframe(String label,
+      BuildConfiguration configuration) {
     Label parsedLabel;
     try {
       parsedLabel = Label.parseAbsolute(label);
     } catch (LabelSyntaxException e) {
       throw new AssertionError(e);
     }
-    return skyframeExecutor.getConfiguredTargetAndDataForTesting(
-        reporter, parsedLabel, configuration);
+    return skyframeExecutor.getConfiguredTargetForTesting(reporter, parsedLabel, configuration);
   }
 
   /**
@@ -476,8 +461,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         .getDerivedArtifact(
             label.getPackageFragment().getRelative(packageRelativePath),
             getTargetConfiguration().getBinDirectory(label.getPackageIdentifier().getRepository()),
-            ConfiguredTargetKey.of(
-                owner, skyframeExecutor.getConfiguration(reporter, owner.getConfigurationKey())));
+            ConfiguredTargetKey.of(owner));
   }
 
   protected Set<SkyKey> getSkyframeEvaluatedTargetKeys() {
