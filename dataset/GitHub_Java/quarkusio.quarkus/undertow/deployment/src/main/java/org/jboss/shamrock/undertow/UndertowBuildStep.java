@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.undertow;
 
 import static io.undertow.servlet.api.SecurityInfo.EmptyRoleSemantic.DENY;
@@ -45,7 +29,6 @@ import javax.servlet.annotation.WebServlet;
 import javax.xml.stream.XMLInputFactory;
 import javax.xml.stream.XMLStreamReader;
 
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.annotation.javaee.Descriptions;
 import org.jboss.annotation.javaee.DisplayNames;
 import org.jboss.annotation.javaee.Icons;
@@ -92,7 +75,6 @@ import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.deployment.ApplicationArchive;
 import org.jboss.shamrock.deployment.builditem.ApplicationArchivesBuildItem;
 import org.jboss.shamrock.deployment.builditem.ArchiveRootBuildItem;
-import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
 import org.jboss.shamrock.deployment.builditem.CombinedIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.InjectionFactoryBuildItem;
 import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
@@ -100,13 +82,11 @@ import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
-import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
 import org.jboss.shamrock.deployment.recording.RecorderContext;
+import org.jboss.shamrock.runtime.ConfiguredValue;
 import org.jboss.shamrock.runtime.RuntimeValue;
-import org.jboss.shamrock.undertow.runtime.HttpConfig;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
-import io.undertow.Undertow;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.FilterInfo;
 import io.undertow.servlet.api.HttpMethodSecurityInfo;
@@ -128,18 +108,13 @@ public class UndertowBuildStep {
     @Inject
     CombinedIndexBuildItem combinedIndexBuildItem;
 
-    @ConfigProperty(name = "shamrock.http")
-    HttpConfig config;
-
     @BuildStep
     @Record(RUNTIME_INIT)
     public ServiceStartBuildItem boot(UndertowDeploymentTemplate template,
-                                      ServletDeploymentBuildItem servletDeploymentBuildItem,
+                                      ServletHandlerBuildItem servletHandlerBuildItem,
                                       List<HttpHandlerWrapperBuildItem> wrappers,
-                                      ShutdownContextBuildItem shutdown,
-                                      BuildProducer<UndertowBuildItem> undertowProducer) throws Exception {
-        RuntimeValue<Undertow> ut = template.startUndertow(shutdown, servletDeploymentBuildItem.getDeployment(), config, wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
-        undertowProducer.produce(new UndertowBuildItem(ut));
+                                      ShutdownContextBuildItem shutdown) throws Exception {
+        template.startUndertow(shutdown, servletHandlerBuildItem.getHandler(), new ConfiguredValue("http.port", "8080"), new ConfiguredValue("http.host", "localhost"), new ConfiguredValue("http.io-threads", ""), new ConfiguredValue("http.worker-threads", ""), wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()));
         return new ServiceStartBuildItem("undertow");
     }
 
@@ -152,28 +127,19 @@ public class UndertowBuildStep {
 
                 .build();
     }
-    
-    @BuildStep
-    List<BeanDefiningAnnotationBuildItem> beanDefiningAnnotations() {
-        List<BeanDefiningAnnotationBuildItem> annotations = new ArrayList<>();
-        annotations.add(new BeanDefiningAnnotationBuildItem(webFilter));
-        annotations.add(new BeanDefiningAnnotationBuildItem(webServlet));
-        annotations.add(new BeanDefiningAnnotationBuildItem(webListener));
-        return annotations;
-    }
+
 
     @Record(STATIC_INIT)
     @BuildStep
-    public ServletDeploymentBuildItem build(ApplicationArchivesBuildItem applicationArchivesBuildItem,
-                                            List<ServletBuildItem> servlets,
-                                            List<FilterBuildItem> filters,
-                                            List<ServletInitParamBuildItem> initParams,
-                                            List<ServletContextAttributeBuildItem> contextParams,
-                                            UndertowDeploymentTemplate template, RecorderContext context,
-                                            List<ServletExtensionBuildItem> extensions,
-                                            InjectionFactoryBuildItem injectionFactory,
-                                            InjectionFactoryBuildItem bc,
-                                            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
+    public ServletHandlerBuildItem build(ApplicationArchivesBuildItem applicationArchivesBuildItem,
+                                         List<ServletBuildItem> servlets,
+                                         List<FilterBuildItem> filters,
+                                         List<ServletInitParamBuildItem> initParams,
+                                         List<ServletContextAttributeBuildItem> contextParams,
+                                         UndertowDeploymentTemplate template, RecorderContext context,
+                                         List<ServletExtensionBuildItem> extensions,
+                                         InjectionFactoryBuildItem injectionFactory,
+                                         BuildProducer<ReflectiveClassBuildItem> reflectiveClasses) throws Exception {
 
         reflectiveClasses.produce(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(), "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
 
@@ -345,7 +311,7 @@ public class UndertowBuildStep {
         for (ServletExtensionBuildItem i : extensions) {
             template.addServletExtension(deployment, i.getValue());
         }
-        return new ServletDeploymentBuildItem(template.bootServletContainer(deployment, bc.getFactory()));
+        return new ServletHandlerBuildItem(template.bootServletContainer(deployment));
 
     }
 

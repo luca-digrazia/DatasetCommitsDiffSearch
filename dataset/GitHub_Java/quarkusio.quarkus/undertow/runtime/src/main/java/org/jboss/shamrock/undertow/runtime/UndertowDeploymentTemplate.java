@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.undertow.runtime;
 
 import java.nio.file.Paths;
@@ -30,12 +14,12 @@ import javax.servlet.MultipartConfigElement;
 import javax.servlet.Servlet;
 import javax.servlet.ServletException;
 
+import org.jboss.shamrock.runtime.ConfiguredValue;
 import org.jboss.shamrock.runtime.InjectionFactory;
 import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.RuntimeValue;
 import org.jboss.shamrock.runtime.ShutdownContext;
 import org.jboss.shamrock.runtime.Template;
-import org.jboss.shamrock.runtime.cdi.BeanContainer;
 
 import io.undertow.Undertow;
 import io.undertow.server.HandlerWrapper;
@@ -47,13 +31,10 @@ import io.undertow.server.handlers.resource.PathResourceManager;
 import io.undertow.server.session.SessionIdGenerator;
 import io.undertow.servlet.ServletExtension;
 import io.undertow.servlet.Servlets;
-import io.undertow.servlet.api.ClassIntrospecter;
-import io.undertow.servlet.api.Deployment;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.FilterInfo;
 import io.undertow.servlet.api.InstanceFactory;
-import io.undertow.servlet.api.InstanceHandle;
 import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletInfo;
@@ -182,9 +163,9 @@ public class UndertowDeploymentTemplate {
         info.getValue().addInitParameter(name, value);
     }
 
-    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, Deployment deployment, HttpConfig config, List<HandlerWrapper> wrappers) throws ServletException {
+    public void startUndertow(ShutdownContext shutdown, HttpHandler handler, ConfiguredValue port, ConfiguredValue host, ConfiguredValue ioThreads, ConfiguredValue workerThreads, List<HandlerWrapper> wrappers) throws ServletException {
         if (undertow == null) {
-            startUndertowEagerly(config, null);
+            startUndertowEagerly(port, host, ioThreads, workerThreads, null);
 
             //in development mode undertow is started eagerly
             shutdown.addShutdownTask(new Runnable() {
@@ -195,12 +176,11 @@ public class UndertowDeploymentTemplate {
                 }
             });
         }
-        HttpHandler main = deployment.getHandler();
+        HttpHandler main = handler;
         for (HandlerWrapper i : wrappers) {
             main = i.wrap(main);
         }
         currentRoot = main;
-        return new RuntimeValue<>(undertow);
     }
 
 
@@ -211,22 +191,22 @@ public class UndertowDeploymentTemplate {
      * be no chance to use hot deployment to fix the error. In development mode we start Undertow early, so any error
      * on boot can be corrected via the hot deployment handler
      */
-    public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper) throws ServletException {
+    public static void startUndertowEagerly(ConfiguredValue port, ConfiguredValue host, ConfiguredValue ioThreads, ConfiguredValue workerThreads, HandlerWrapper hotDeploymentWrapper) throws ServletException {
         if (undertow == null) {
-            log.log(Level.INFO, "Starting Undertow on port " + config.port);
+            log.log(Level.INFO, "Starting Undertow on port " + port.getValue());
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
             if (hotDeploymentWrapper != null) {
                 rootHandler = hotDeploymentWrapper.wrap(rootHandler);
             }
 
             Undertow.Builder builder = Undertow.builder()
-                    .addHttpListener(config.port, config.host)
+                    .addHttpListener(Integer.parseInt(port.getValue()), host.getValue())
                     .setHandler(rootHandler);
-            if (config.ioThreads.isPresent()) {
-                builder.setIoThreads(config.ioThreads.get());
+            if (!ioThreads.getValue().equals("")) {
+                builder.setIoThreads(Integer.parseInt(ioThreads.getValue()));
             }
-            if (config.workerThreads.isPresent()) {
-                builder.setWorkerThreads(config.workerThreads.get());
+            if (!workerThreads.getValue().equals("")) {
+                builder.setWorkerThreads(Integer.parseInt(workerThreads.getValue()));
             }
             undertow = builder
                     .build();
@@ -234,40 +214,12 @@ public class UndertowDeploymentTemplate {
         }
     }
 
-    public Deployment bootServletContainer(RuntimeValue<DeploymentInfo> info, InjectionFactory injectionFactory) {
+    public HttpHandler bootServletContainer(RuntimeValue<DeploymentInfo> info) {
         try {
-            ClassIntrospecter defaultVal = info.getValue().getClassIntrospecter();
-            info.getValue().setClassIntrospecter(new ClassIntrospecter() {
-                @Override
-                public <T> InstanceFactory<T> createInstanceFactory(Class<T> clazz) throws NoSuchMethodException {
-                    InjectionInstance<T> res = injectionFactory.create(clazz);
-                    if(res == null) {
-                        return defaultVal.createInstanceFactory(clazz);
-                    }
-                    return new InstanceFactory<T>() {
-                        @Override
-                        public InstanceHandle<T> createInstance() throws InstantiationException {
-                            T ih = res.newInstance();
-                            return new InstanceHandle<T>() {
-                                @Override
-                                public T getInstance() {
-                                    return ih;
-                                }
-
-                                @Override
-                                public void release() {
-
-                                }
-                            };
-                        }
-                    };
-                }
-            });
             ServletContainer servletContainer = Servlets.defaultContainer();
             DeploymentManager manager = servletContainer.addDeployment(info.getValue());
             manager.deploy();
-            manager.start();
-            return manager.getDeployment();
+            return manager.start();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
