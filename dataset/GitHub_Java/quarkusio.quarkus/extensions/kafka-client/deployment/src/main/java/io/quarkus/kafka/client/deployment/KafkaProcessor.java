@@ -1,8 +1,7 @@
 package io.quarkus.kafka.client.deployment;
 
+import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
 
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
@@ -37,12 +36,12 @@ import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.kafka.client.serialization.JsonbDeserializer;
 import io.quarkus.kafka.client.serialization.JsonbSerializer;
 import io.quarkus.kafka.client.serialization.ObjectMapperDeserializer;
 import io.quarkus.kafka.client.serialization.ObjectMapperSerializer;
-import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 
 public class KafkaProcessor {
 
@@ -72,32 +71,31 @@ public class KafkaProcessor {
 
     @BuildStep
     public void build(CombinedIndexBuildItem indexBuildItem, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            Capabilities capabilities) {
-        final Set<DotName> toRegister = new HashSet<>();
-
-        collectImplementors(toRegister, indexBuildItem, Serializer.class);
-        collectImplementors(toRegister, indexBuildItem, Deserializer.class);
-        collectImplementors(toRegister, indexBuildItem, Partitioner.class);
-        collectImplementors(toRegister, indexBuildItem, PartitionAssignor.class);
+            BuildProducer<JniBuildItem> jni, Capabilities capabilities) {
+        Collection<ClassInfo> serializers = indexBuildItem.getIndex()
+                .getAllKnownSubclasses(DotName.createSimple(Serializer.class.getName()));
+        Collection<ClassInfo> deserializers = indexBuildItem.getIndex()
+                .getAllKnownSubclasses(DotName.createSimple(Deserializer.class.getName()));
+        Collection<ClassInfo> partitioners = indexBuildItem.getIndex()
+                .getAllKnownSubclasses(DotName.createSimple(Partitioner.class.getName()));
+        Collection<ClassInfo> partitionAssignors = indexBuildItem.getIndex()
+                .getAllKnownSubclasses(DotName.createSimple(PartitionAssignor.class.getName()));
 
         for (Class i : BUILT_INS) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, i.getName()));
-            collectSubclasses(toRegister, indexBuildItem, i);
         }
         if (capabilities.isCapabilityPresent(Capabilities.JSONB)) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, JsonbSerializer.class, JsonbDeserializer.class));
-            collectSubclasses(toRegister, indexBuildItem, JsonbSerializer.class);
-            collectSubclasses(toRegister, indexBuildItem, JsonbDeserializer.class);
         }
         if (capabilities.isCapabilityPresent(Capabilities.JACKSON)) {
             reflectiveClass.produce(
                     new ReflectiveClassBuildItem(false, false, ObjectMapperSerializer.class, ObjectMapperDeserializer.class));
-            collectSubclasses(toRegister, indexBuildItem, ObjectMapperSerializer.class);
-            collectSubclasses(toRegister, indexBuildItem, ObjectMapperDeserializer.class);
         }
 
-        for (DotName s : toRegister) {
-            reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, s.toString()));
+        for (Collection<ClassInfo> list : Arrays.asList(serializers, deserializers, partitioners, partitionAssignors)) {
+            for (ClassInfo s : list) {
+                reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, s.toString()));
+            }
         }
 
         // built in partitioner and partition assignors
@@ -105,25 +103,8 @@ public class KafkaProcessor {
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, RangeAssignor.class.getName()));
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, RoundRobinAssignor.class.getName()));
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, StickyAssignor.class.getName()));
-    }
 
-    private static void collectImplementors(Set<DotName> set, CombinedIndexBuildItem indexBuildItem, Class<?> cls) {
-        collectClassNames(set, indexBuildItem.getIndex().getAllKnownImplementors(DotName.createSimple(cls.getName())));
-    }
-
-    private static void collectSubclasses(Set<DotName> set, CombinedIndexBuildItem indexBuildItem, Class<?> cls) {
-        collectClassNames(set, indexBuildItem.getIndex().getAllKnownSubclasses(DotName.createSimple(cls.getName())));
-    }
-
-    private static void collectClassNames(Set<DotName> set, Collection<ClassInfo> classInfos) {
-        classInfos.forEach(c -> {
-            set.add(c.name());
-        });
-    }
-
-    @BuildStep
-    HealthBuildItem addHealthCheck(KafkaBuildTimeConfig buildTimeConfig) {
-        return new HealthBuildItem("io.quarkus.kafka.client.health.KafkaHealthCheck",
-                buildTimeConfig.healthEnabled, "kafka");
+        // enable JNI
+        jni.produce(new JniBuildItem());
     }
 }
