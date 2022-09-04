@@ -103,14 +103,10 @@ public class QuarkusErrorHandler implements Handler<RoutingContext> {
         String accept = event.request().getHeader("Accept");
         if (accept != null && accept.contains("application/json")) {
             event.response().headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=utf-8");
-            String escapedDetails = escapeJsonString(details);
-            String escapedStack = escapeJsonString(stack);
-            StringBuilder jsonPayload = new StringBuilder("{\"details\":\"")
-                    .append(escapedDetails)
-                    .append("\",\"stack\":\"")
-                    .append(escapedStack)
-                    .append("\"}");
-            writeResponse(event, jsonPayload.toString());
+            String escapedStack = stack.replace(System.lineSeparator(), "\\n").replace("\"", "\\\"");
+            StringBuilder jsonPayload = new StringBuilder("{\"details\":\"").append(details).append("\",\"stack\":\"")
+                    .append(escapedStack).append("\"}");
+            event.response().end(jsonPayload.toString());
         } else {
             //We default to HTML representation
             event.response().headers().set(HttpHeaderNames.CONTENT_TYPE, "text/html; charset=utf-8");
@@ -118,13 +114,7 @@ public class QuarkusErrorHandler implements Handler<RoutingContext> {
             if (showStack && exception != null) {
                 htmlBuilder.stack(exception);
             }
-            writeResponse(event, htmlBuilder.toString());
-        }
-    }
-
-    private void writeResponse(RoutingContext event, String output) {
-        if (!event.response().ended()) {
-            event.response().end(output);
+            event.response().end(htmlBuilder.toString());
         }
     }
 
@@ -132,12 +122,12 @@ public class QuarkusErrorHandler implements Handler<RoutingContext> {
         StringWriter stringWriter = new StringWriter();
         exception.printStackTrace(new PrintWriter(stringWriter));
 
-        return stringWriter.toString().trim();
+        return escapeHtml(stringWriter.toString().trim());
     }
 
     private static String generateHeaderMessage(final Throwable exception, String uuid) {
-        return String.format("Error handling %s, %s: %s", uuid, exception.getClass().getName(),
-                extractFirstLine(exception.getMessage()));
+        return escapeHtml(String.format("Error handling %s, %s: %s", uuid, exception.getClass().getName(),
+                extractFirstLine(exception.getMessage())));
     }
 
     private static String extractFirstLine(final String message) {
@@ -149,37 +139,15 @@ public class QuarkusErrorHandler implements Handler<RoutingContext> {
         return lines[0].trim();
     }
 
-    static String escapeJsonString(final String text) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            char ch = text.charAt(i);
-            switch (ch) {
-                case '"':
-                    sb.append("\\\"");
-                    break;
-                case '\\':
-                    sb.append("\\\\");
-                    break;
-                case '\b':
-                    sb.append("\\b");
-                    break;
-                case '\f':
-                    sb.append("\\f");
-                    break;
-                case '\n':
-                    sb.append("\\n");
-                    break;
-                case '\r':
-                    sb.append("\\r");
-                    break;
-                case '\t':
-                    sb.append("\\t");
-                    break;
-                default:
-                    sb.append(ch);
-            }
+    private static String escapeHtml(final String bodyText) {
+        if (bodyText == null) {
+            return "null";
         }
-        return sb.toString();
+
+        return bodyText
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;");
     }
 
 }
