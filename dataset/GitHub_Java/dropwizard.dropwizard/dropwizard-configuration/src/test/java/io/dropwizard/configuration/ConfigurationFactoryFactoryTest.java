@@ -2,12 +2,12 @@ package io.dropwizard.configuration;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.Resources;
 import io.dropwizard.configuration.BaseConfigurationFactoryTest.Example;
 import io.dropwizard.jackson.Jackson;
-import io.dropwizard.util.Resources;
 import io.dropwizard.validation.BaseValidator;
 
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
 import javax.validation.Validator;
 import java.io.File;
@@ -22,7 +22,7 @@ public class ConfigurationFactoryFactoryTest {
     private final Validator validator = BaseValidator.newValidator();
 
     @Test
-    void createDefaultFactory() throws Exception {
+    public void createDefaultFactory() throws Exception {
         File validFile = new File(Resources.getResource("factory-test-valid.yml").toURI());
         ConfigurationFactory<Example> factory =
             factoryFactory.create(Example.class, validator, Jackson.newObjectMapper(), "dw");
@@ -32,7 +32,7 @@ public class ConfigurationFactoryFactoryTest {
     }
 
     @Test
-    void createDefaultFactoryFailsUnknownProperty() throws Exception {
+    public void createDefaultFactoryFailsUnknownProperty() throws Exception {
         File validFileWithUnknownProp = new File(
             Resources.getResource("factory-test-unknown-property.yml").toURI());
         ConfigurationFactory<Example> factory =
@@ -44,7 +44,7 @@ public class ConfigurationFactoryFactoryTest {
     }
 
     @Test
-    void createFactoryAllowingUnknownProperties() throws Exception {
+    public void createFactoryAllowingUnknownProperties() throws Exception {
         ConfigurationFactoryFactory<Example> customFactory = new PassThroughConfigurationFactoryFactory();
         File validFileWithUnknownProp = new File(
             Resources.getResource("factory-test-unknown-property.yml").toURI());

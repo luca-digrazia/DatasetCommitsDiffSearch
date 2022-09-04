@@ -3,10 +3,8 @@ package io.dropwizard.servlets.tasks;
 import com.google.common.collect.ImmutableMultimap;
 import org.junit.Test;
 
-import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 public class PostBodyTaskTest {
@@ -21,7 +19,6 @@ public class PostBodyTaskTest {
     @Test
     public void throwsExceptionWhenCallingExecuteWithoutThePostBody() throws Exception {
         assertThatExceptionOfType(UnsupportedOperationException.class).isThrownBy(() ->
-            task.execute(new ImmutableMultimap.Builder<String, String>().build(),
-                new PrintWriter(new OutputStreamWriter(System.out, UTF_8))));
+            task.execute(new ImmutableMultimap.Builder<String, String>().build(), new PrintWriter(System.out)));
     }
 }

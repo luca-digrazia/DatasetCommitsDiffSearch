@@ -4,18 +4,19 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import org.junit.Rule;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
 @SuppressWarnings("serial")
 @RunWith(Parameterized.class)
-public class GenericsTest {
+public class GenericsTest<T> {
 
     @Parameters(name = "Test {0}")
     public static Collection<Object[]> data() {
@@ -26,40 +27,49 @@ public class GenericsTest {
             {IntegerList.class, Integer.class, Integer.class, Integer.class, null, null },
             {NumberList.class, Number.class, Number.class, Number.class, null, null },
             {IntegerValueMap.class, Object.class, Number.class, Integer.class, null, null },
+            {ListOfStringSets.class, Set.class, Set.class, Set.class, null, null },
         });
     }
 
     private Class<?> klass;
     private Class<?> typeParameter;
-    private Class<?> bound;
+    private Class<? super T> bound;
     private Class<?> boundTypeParameter;
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
+    private Class<? extends Exception> expectedException;
+    private String expectedMessage;
 
-    public GenericsTest(Class<?> klass, Class<?> typeParameter, Class<?> bound, Class<?> boundTypeParameter, Class<? extends Exception> expectedException, String expectedMessage) {
+    public GenericsTest(Class<?> klass, Class<?> typeParameter, Class<? super T> bound, Class<?> boundTypeParameter,
+                        Class<? extends Exception> expectedException, String expectedMessage) {
         this.klass = klass;
         this.typeParameter = typeParameter;
         this.bound = bound;
         this.boundTypeParameter = boundTypeParameter;
-        
-        if (expectedException != null) {
-            thrown.expect(expectedException);
-            if (expectedMessage != null)
-                thrown.expectMessage(expectedMessage);
-        }
+        this.expectedException = expectedException;
+        this.expectedMessage = expectedMessage;
     }
 
     @Test
     public void testTypeParameter() {
-        assertThat(Generics.getTypeParameter(klass)).isEqualTo(typeParameter);
+        if (expectedException == null) {
+            assertThat(Generics.getTypeParameter(klass)).isEqualTo(typeParameter);
+        } else {
+            assertThatExceptionOfType(expectedException).isThrownBy(() -> Generics.getTypeParameter(klass))
+                .withMessage(expectedMessage);
+        }
     }
-    
+
     @Test
     public void testBoundTypeParameter() {
-        assertThat(Generics.getTypeParameter(klass, bound)).isEqualTo(boundTypeParameter);
+        if (expectedException == null) {
+            assertThat(Generics.getTypeParameter(klass, bound)).isEqualTo(boundTypeParameter);
+        } else {
+            assertThatExceptionOfType(expectedException).isThrownBy(() -> Generics.getTypeParameter(klass, bound))
+                .withMessage(expectedMessage);
+        }
     }
-    
+
     public static class IntegerList extends ArrayList<Integer> { }
     public static class NumberList<V extends Number> extends ArrayList<V> { }
     public static class IntegerValueMap<K> extends HashMap<K, Integer> { }
+    public static class ListOfStringSets extends ArrayList<Set<String>> { }
 }

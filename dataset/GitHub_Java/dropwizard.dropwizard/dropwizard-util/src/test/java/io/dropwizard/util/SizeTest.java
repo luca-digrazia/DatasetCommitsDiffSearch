@@ -1,51 +1,46 @@
 package io.dropwizard.util;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.jupiter.api.Test;
+import org.junit.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
-import java.io.ObjectOutputStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException;
 
-@SuppressWarnings("deprecation")
-class SizeTest {
+public class SizeTest {
     @Test
-    void convertsToTerabytes() {
+    public void convertsToTerabytes() throws Exception {
         assertThat(Size.terabytes(2).toTerabytes())
                 .isEqualTo(2);
     }
 
     @Test
-    void convertsToGigabytes() {
+    public void convertsToGigabytes() throws Exception {
         assertThat(Size.terabytes(2).toGigabytes())
                 .isEqualTo(2048);
     }
 
     @Test
-    void convertsToMegabytes() {
+    public void convertsToMegabytes() throws Exception {
         assertThat(Size.gigabytes(2).toMegabytes())
                 .isEqualTo(2048);
     }
 
     @Test
-    void convertsToKilobytes() {
+    public void convertsToKilobytes() throws Exception {
         assertThat(Size.megabytes(2).toKilobytes())
                 .isEqualTo(2048);
     }
 
     @Test
-    void convertsToBytes() {
+    public void convertsToBytes() throws Exception {
         assertThat(Size.kilobytes(2).toBytes())
                 .isEqualTo(2048L);
     }
 
     @Test
-    void parsesTerabytes() {
+    public void parsesTerabytes() throws Exception {
         assertThat(Size.parse("2TB"))
                 .isEqualTo(Size.terabytes(2));
 
@@ -60,7 +55,7 @@ class SizeTest {
     }
 
     @Test
-    void parsesGigabytes() {
+    public void parsesGigabytes() throws Exception {
         assertThat(Size.parse("2GB"))
                 .isEqualTo(Size.gigabytes(2));
 
@@ -75,7 +70,7 @@ class SizeTest {
     }
 
     @Test
-    void parsesMegabytes() {
+    public void parsesMegabytes() throws Exception {
         assertThat(Size.parse("2MB"))
                 .isEqualTo(Size.megabytes(2));
 
@@ -90,7 +85,7 @@ class SizeTest {
     }
 
     @Test
-    void parsesKilobytes() {
+    public void parsesKilobytes() throws Exception {
         assertThat(Size.parse("2KB"))
                 .isEqualTo(Size.kilobytes(2));
 
@@ -105,7 +100,7 @@ class SizeTest {
     }
 
     @Test
-    void parsesBytes() {
+    public void parsesBytes() throws Exception {
         assertThat(Size.parse("2B"))
                 .isEqualTo(Size.bytes(2));
 
@@ -117,18 +112,18 @@ class SizeTest {
     }
 
     @Test
-    void parseSizeWithWhiteSpaces() {
+    public void parseSizeWithWhiteSpaces() {
         assertThat(Size.parse("64   kilobytes"))
                 .isEqualTo(Size.kilobytes(64));
     }
 
     @Test
-    void parseCaseInsensitive() {
+    public void parseCaseInsensitive() {
         assertThat(Size.parse("1b")).isEqualTo(Size.parse("1B"));
     }
 
     @Test
-    void parseSingleLetterSuffix() {
+    public void parseSingleLetterSuffix() {
         assertThat(Size.parse("1B")).isEqualTo(Size.bytes(1));
         assertThat(Size.parse("1K")).isEqualTo(Size.kilobytes(1));
         assertThat(Size.parse("1M")).isEqualTo(Size.megabytes(1));
@@ -137,22 +132,22 @@ class SizeTest {
     }
 
     @Test
-    void unableParseWrongSizeCount() {
+    public void unableParseWrongSizeCount() {
         assertThatIllegalArgumentException().isThrownBy(() -> Size.parse("three bytes"));
     }
 
     @Test
-    void unableParseWrongSizeUnit() {
+    public void unableParseWrongSizeUnit() {
         assertThatIllegalArgumentException().isThrownBy(() -> Size.parse("1EB"));
     }
 
     @Test
-    void unableParseWrongSizeFormat() {
+    public void unableParseWrongSizeFormat() {
         assertThatIllegalArgumentException().isThrownBy(() -> Size.parse("1 mega byte"));
     }
 
     @Test
-    void isHumanReadable() {
+    public void isHumanReadable() throws Exception {
         assertThat(Size.gigabytes(3).toString())
                 .isEqualTo("3 gigabytes");
 
@@ -161,19 +156,19 @@ class SizeTest {
     }
 
     @Test
-    void hasAQuantity() {
+    public void hasAQuantity() throws Exception {
         assertThat(Size.gigabytes(3).getQuantity())
                 .isEqualTo(3);
     }
 
     @Test
-    void hasAUnit() {
+    public void hasAUnit() throws Exception {
         assertThat(Size.gigabytes(3).getUnit())
                 .isEqualTo(SizeUnit.GIGABYTES);
     }
 
     @Test
-    void isComparable() {
+    public void isComparable() throws Exception {
         // both zero
         assertThat(Size.bytes(0).compareTo(Size.bytes(0))).isEqualTo(0);
         assertThat(Size.bytes(0).compareTo(Size.kilobytes(0))).isEqualTo(0);
@@ -512,7 +507,7 @@ class SizeTest {
     }
 
     @Test
-    void serializesCorrectlyWithJackson() throws IOException {
+    public void serializesCorrectlyWithJackson() throws IOException {
         final ObjectMapper mapper = new ObjectMapper();
 
         assertThat(mapper.writeValueAsString(Size.bytes(0L))).isEqualTo("\"0 bytes\"");
@@ -533,7 +528,7 @@ class SizeTest {
     }
 
     @Test
-    void deserializesCorrectlyWithJackson() throws IOException {
+    public void deserializesCorrectlyWithJackson() throws IOException {
         final ObjectMapper mapper = new ObjectMapper();
 
         assertThat(mapper.readValue("\"0 bytes\"", Size.class)).isEqualTo(Size.bytes(0L));
@@ -554,7 +549,7 @@ class SizeTest {
     }
 
     @Test
-    void verifyComparableContract() {
+    public void verifyComparableContract() {
         final Size kb = Size.kilobytes(1024L);
         final Size bytes = Size.bytes(kb.toBytes());
 
@@ -564,48 +559,5 @@ class SizeTest {
         // If comparator == 0, then the following must be true
         assertThat(bytes.equals(kb)).isTrue();
         assertThat(kb.equals(bytes)).isTrue();
-    }
-
-    @Test
-    void testFromDataSize() {
-        assertThat(Size.fromDataSize(DataSize.bytes(5L))).isEqualTo(Size.bytes(5L));
-        assertThat(Size.fromDataSize(DataSize.kibibytes(5L))).isEqualTo(Size.kilobytes(5L));
-        assertThat(Size.fromDataSize(DataSize.kilobytes(5L))).isEqualTo(Size.bytes(5L * 1000L));
-        assertThat(Size.fromDataSize(DataSize.mebibytes(5L))).isEqualTo(Size.megabytes(5L));
-        assertThat(Size.fromDataSize(DataSize.megabytes(5L))).isEqualTo(Size.bytes(5L * 1000L * 1000L));
-        assertThat(Size.fromDataSize(DataSize.gibibytes(5L))).isEqualTo(Size.gigabytes(5L));
-        assertThat(Size.fromDataSize(DataSize.gigabytes(5L))).isEqualTo(Size.bytes(5L * 1000L * 1000L * 1000L));
-        assertThat(Size.fromDataSize(DataSize.tebibytes(5L))).isEqualTo(Size.terabytes(5L));
-        assertThat(Size.fromDataSize(DataSize.terabytes(5L))).isEqualTo(Size.bytes(5L * 1000L * 1000L * 1000L * 1000L));
-        assertThat(Size.fromDataSize(DataSize.pebibytes(5L))).isEqualTo(Size.terabytes(5L * 1024L * 1024L));
-        assertThat(Size.fromDataSize(DataSize.petabytes(5L))).isEqualTo(Size.bytes(5L * 1000L * 1000L * 1000L * 1000L * 1000L));
-    }
-
-    @Test
-    void testToDataSize() {
-        assertThat(Size.bytes(5L).toDataSize()).isEqualTo(DataSize.bytes(5L));
-        assertThat(Size.kilobytes(5L).toDataSize()).isEqualTo(DataSize.kibibytes(5L));
-        assertThat(Size.megabytes(5L).toDataSize()).isEqualTo(DataSize.mebibytes(5L));
-        assertThat(Size.gigabytes(5L).toDataSize()).isEqualTo(DataSize.gibibytes(5L));
-        assertThat(Size.terabytes(5L).toDataSize()).isEqualTo(DataSize.tebibytes(5L));
-    }
-
-    @Test
-    void testSerialization() throws IOException, ClassNotFoundException {
-        final Size size = Size.megabytes(42L);
-        final byte[] bytes;
-        try (final ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-             final ObjectOutputStream objectOutputStream = new ObjectOutputStream(outputStream)) {
-            objectOutputStream.writeObject(size);
-            bytes = outputStream.toByteArray();
-        }
-
-        try (final ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes);
-             final ObjectInputStream objectInputStream = new ObjectInputStream(inputStream)) {
-            final Object o = objectInputStream.readObject();
-            assertThat(o)
-                    .isInstanceOf(Size.class)
-                    .isEqualTo(size);
-        }
     }
 }

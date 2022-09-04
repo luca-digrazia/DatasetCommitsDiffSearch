@@ -1,5 +1,6 @@
 package io.dropwizard.jersey.guava;
 
+import com.codahale.metrics.MetricRegistry;
 import com.google.common.base.Optional;
 import io.dropwizard.jersey.AbstractJerseyTest;
 import io.dropwizard.jersey.DropwizardResourceConfig;
@@ -21,7 +22,7 @@ public class OptionalQueryParamResourceTest extends AbstractJerseyTest {
 
     @Override
     protected Application configure() {
-        return DropwizardResourceConfig.forTesting()
+        return DropwizardResourceConfig.forTesting(new MetricRegistry())
                 .register(OptionalQueryParamResource.class)
                 .register(MyMessageParamConverterProvider.class);
     }

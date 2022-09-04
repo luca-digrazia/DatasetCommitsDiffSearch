@@ -1,19 +1,18 @@
 package io.dropwizard.hibernate;
 
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.dropwizard.db.DataSourceFactory;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.setup.Environment;
-import org.hibernate.CacheMode;
-import org.hibernate.HibernateException;
 import org.hibernate.Session;
 import org.hibernate.SessionFactory;
 import org.hibernate.Transaction;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.Before;
+import org.junit.Test;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 
@@ -30,8 +29,8 @@ public class UnitOfWorkAwareProxyFactoryTest {
 
     private SessionFactory sessionFactory;
 
-    @BeforeEach
-    void setUp() throws Exception {
+    @Before
+    public void setUp() throws Exception {
         final HibernateBundle<?> bundle = mock(HibernateBundle.class);
         final Environment environment = mock(Environment.class);
         when(environment.lifecycle()).thenReturn(mock(LifecycleEnvironment.class));
@@ -42,12 +41,12 @@ public class UnitOfWorkAwareProxyFactoryTest {
         dataSourceFactory.setUser("sa");
         dataSourceFactory.setDriverClass("org.hsqldb.jdbcDriver");
         dataSourceFactory.setValidationQuery("SELECT 1 FROM INFORMATION_SCHEMA.SYSTEM_USERS");
-        dataSourceFactory.setProperties(Collections.singletonMap("hibernate.dialect", "org.hibernate.dialect.HSQLDialect"));
+        dataSourceFactory.setProperties(ImmutableMap.of("hibernate.dialect", "org.hibernate.dialect.HSQLDialect"));
         dataSourceFactory.setInitialSize(1);
         dataSourceFactory.setMinSize(1);
 
         sessionFactory = new SessionFactoryFactory()
-                .build(bundle, environment, dataSourceFactory, Collections.emptyList());
+                .build(bundle, environment, dataSourceFactory, ImmutableList.of());
         try (Session session = sessionFactory.openSession()) {
             Transaction transaction = session.beginTransaction();
             session.createNativeQuery("create table user_sessions (token varchar(64) primary key, username varchar(16))")
@@ -59,7 +58,7 @@ public class UnitOfWorkAwareProxyFactoryTest {
     }
 
     @Test
-    void testProxyWorks() throws Exception {
+    public void testProxyWorks() throws Exception {
         final SessionDao sessionDao = new SessionDao(sessionFactory);
         final UnitOfWorkAwareProxyFactory unitOfWorkAwareProxyFactory =
                 new UnitOfWorkAwareProxyFactory("default", sessionFactory);
@@ -71,7 +70,7 @@ public class UnitOfWorkAwareProxyFactoryTest {
     }
 
     @Test
-    void testProxyWorksWithoutUnitOfWork() {
+    public void testProxyWorksWithoutUnitOfWork() {
         assertThat(new UnitOfWorkAwareProxyFactory("default", sessionFactory)
                 .create(PlainAuthenticator.class)
                 .authenticate("c82d11e"))
@@ -79,7 +78,7 @@ public class UnitOfWorkAwareProxyFactoryTest {
     }
 
     @Test
-    void testProxyHandlesErrors() {
+    public void testProxyHandlesErrors() {
         assertThatExceptionOfType(IllegalStateException.class).isThrownBy(()->
             new UnitOfWorkAwareProxyFactory("default", sessionFactory)
                 .create(BrokenAuthenticator.class)
@@ -88,23 +87,23 @@ public class UnitOfWorkAwareProxyFactoryTest {
     }
 
     @Test
-    void testNewAspect() {
+    public void testNewAspect() {
         final UnitOfWorkAwareProxyFactory unitOfWorkAwareProxyFactory =
                 new UnitOfWorkAwareProxyFactory("default", sessionFactory);
 
-        Map<String, SessionFactory> sessionFactories = Collections.singletonMap("default", sessionFactory);
+        ImmutableMap<String, SessionFactory> sessionFactories = ImmutableMap.of("default", sessionFactory);
         UnitOfWorkAspect aspect1 = unitOfWorkAwareProxyFactory.newAspect(sessionFactories);
         UnitOfWorkAspect aspect2 = unitOfWorkAwareProxyFactory.newAspect(sessionFactories);
         assertThat(aspect1).isNotSameAs(aspect2);
     }
 
     @Test
-    void testCanBeConfiguredWithACustomAspect() {
+    public void testCanBeConfiguredWithACustomAspect() {
         final SessionDao sessionDao = new SessionDao(sessionFactory);
         final UnitOfWorkAwareProxyFactory unitOfWorkAwareProxyFactory =
             new UnitOfWorkAwareProxyFactory("default", sessionFactory) {
                 @Override
-                public UnitOfWorkAspect newAspect(Map<String, SessionFactory> sessionFactories) {
+                public UnitOfWorkAspect newAspect(ImmutableMap<String, SessionFactory> sessionFactories) {
                     return new CustomAspect(sessionFactories);
                 }
             };
@@ -112,34 +111,6 @@ public class UnitOfWorkAwareProxyFactoryTest {
         final OAuthAuthenticator oAuthAuthenticator = unitOfWorkAwareProxyFactory
             .create(OAuthAuthenticator.class, SessionDao.class, sessionDao);
         assertThat(oAuthAuthenticator.authenticate("gr6f9y0")).isTrue();
-    }
-
-    @Test
-    void testNestedCall() {
-        final UnitOfWorkAwareProxyFactory unitOfWorkAwareProxyFactory =
-                new UnitOfWorkAwareProxyFactory("default", sessionFactory);
-
-        final NestedCall nestedCall = unitOfWorkAwareProxyFactory
-                .create(NestedCall.class, SessionFactory.class, sessionFactory);
-
-        // Both method calls are expected to succeed (asserts are in NestedCall)
-        // Run a non-nested call as reference
-        nestedCall.normalCall();
-        // Run a nested call
-        nestedCall.nestedCall();
-    }
-
-    @Test
-    void testInvalidNestedCall() {
-        final UnitOfWorkAwareProxyFactory unitOfWorkAwareProxyFactory =
-                new UnitOfWorkAwareProxyFactory("default", sessionFactory);
-
-        final NestedCall nestedCall = unitOfWorkAwareProxyFactory
-                .create(NestedCall.class, SessionFactory.class, sessionFactory);
-
-        assertThatExceptionOfType(IllegalStateException.class).isThrownBy(()-> {
-            nestedCall.invalidNestedCall();
-        });
     }
 
     static class SessionDao {
@@ -201,46 +172,6 @@ public class UnitOfWorkAwareProxyFactoryTest {
             getSession().createNativeQuery("insert into user_sessions values ('gr6f9y0', 'jeff_29')")
                 .executeUpdate();
             transaction.commit();
-        }
-    }
-
-    static class NestedCall {
-
-        private final SessionFactory sessionFactory;
-
-        public NestedCall(SessionFactory sessionFactory) {
-            this.sessionFactory = sessionFactory;
-        }
-
-        @UnitOfWork
-        public void normalCall() {
-            assertThat(transactionActive())
-                .withFailMessage("Expected transaction to be active in normal call")
-                .isTrue();
-        }
-
-        @UnitOfWork
-        public void nestedCall() {
-            assertThat(transactionActive())
-                .withFailMessage("Expected transaction to be active before nested call")
-                .isTrue();
-            normalCall();
-            assertThat(transactionActive())
-                .withFailMessage("Expected transaction to be active after nested call")
-                .isTrue();
-        }
-
-        @UnitOfWork(cacheMode = CacheMode.IGNORE)
-        public void invalidNestedCall() {
-            normalCall();
-        }
-
-        private boolean transactionActive() {
-            try {
-                return sessionFactory.getCurrentSession().getTransaction().isActive();
-            } catch (HibernateException ex) {
-                return false;
-            }
         }
     }
 }

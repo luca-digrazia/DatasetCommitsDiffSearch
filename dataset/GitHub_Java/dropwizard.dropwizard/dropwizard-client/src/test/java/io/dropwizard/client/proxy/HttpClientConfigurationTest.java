@@ -1,14 +1,13 @@
 package io.dropwizard.client.proxy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.io.Resources;
 import io.dropwizard.client.HttpClientConfiguration;
 import io.dropwizard.configuration.ConfigurationParsingException;
 import io.dropwizard.configuration.ConfigurationValidationException;
-import io.dropwizard.configuration.DefaultConfigurationFactoryFactory;
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.Jackson;
 import io.dropwizard.jersey.validation.Validators;
-import io.dropwizard.util.Resources;
 import org.junit.Test;
 
 import java.io.File;
@@ -25,12 +24,10 @@ public class HttpClientConfigurationTest {
     private HttpClientConfiguration configuration = new HttpClientConfiguration();
 
     private void load(String configLocation) throws Exception {
-        configuration = new DefaultConfigurationFactoryFactory<HttpClientConfiguration>()
-            .create(
-                HttpClientConfiguration.class,
+        configuration = new YamlConfigurationFactory<>(HttpClientConfiguration.class,
                 Validators.newValidator(),
-                objectMapper, "dw"
-            ).build(new File(Resources.getResource(configLocation).toURI()));
+                objectMapper, "dw")
+                .build(new File(Resources.getResource(configLocation).toURI()));
     }
 
     @Test
