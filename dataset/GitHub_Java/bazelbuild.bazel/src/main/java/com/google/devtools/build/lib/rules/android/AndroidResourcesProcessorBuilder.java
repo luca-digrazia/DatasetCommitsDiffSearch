@@ -264,8 +264,7 @@ public class AndroidResourcesProcessorBuilder {
     if (dependencies != null) {
       ResourceContainerConverter.addToCommandLine(dependencies, builder, AAPT2_RESOURCE_DEP_TO_ARG);
       inputs
-          .addTransitive(dependencies.getTransitiveResources())
-          .addTransitive(dependencies.getTransitiveAssets())
+          .addTransitive(dependencies.getTransitiveResourceRoots())
           .addTransitive(dependencies.getTransitiveManifests())
           .addTransitive(dependencies.getTransitiveAapt2RTxt())
           .addTransitive(dependencies.getTransitiveSymbolsBin())
@@ -274,7 +273,7 @@ public class AndroidResourcesProcessorBuilder {
 
     configureCommonFlags(outs, inputs, builder);
 
-    ParamFileInfo.Builder paramFileInfo = ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED);
+    ParamFileInfo.Builder paramFileInfo = ParamFileInfo.builder(ParameterFileType.UNQUOTED);
     // Some flags (e.g. --mainData) may specify lists (or lists of lists) separated by special
     // characters (colon, semicolon, hashmark, ampersand) that don't work on Windows, and quoting
     // semantics are very complicated (more so than in Bash), so let's just always use a parameter
@@ -329,8 +328,7 @@ public class AndroidResourcesProcessorBuilder {
     if (dependencies != null) {
       ResourceContainerConverter.addToCommandLine(dependencies, builder, RESOURCE_DEP_TO_ARG);
       inputs
-          .addTransitive(dependencies.getTransitiveResources())
-          .addTransitive(dependencies.getTransitiveAssets())
+          .addTransitive(dependencies.getTransitiveResourceRoots())
           .addTransitive(dependencies.getTransitiveManifests())
           .addTransitive(dependencies.getTransitiveRTxt())
           .addTransitive(dependencies.getTransitiveSymbolsBin());
@@ -338,7 +336,7 @@ public class AndroidResourcesProcessorBuilder {
     builder.addExecPath("--aapt", sdk.getAapt().getExecutable());
     configureCommonFlags(outs, inputs, builder);
 
-    ParamFileInfo.Builder paramFileInfo = ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED);
+    ParamFileInfo.Builder paramFileInfo = ParamFileInfo.builder(ParameterFileType.UNQUOTED);
     // Some flags (e.g. --mainData) may specify lists (or lists of lists) separated by special
     // characters (colon, semicolon, hashmark, ampersand) that don't work on Windows, and quoting
     // semantics are very complicated (more so than in Bash), so let's just always use a parameter

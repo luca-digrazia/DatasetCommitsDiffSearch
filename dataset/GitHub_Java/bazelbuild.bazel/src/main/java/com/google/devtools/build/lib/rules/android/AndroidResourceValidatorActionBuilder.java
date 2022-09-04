@@ -175,10 +175,11 @@ public class AndroidResourceValidatorActionBuilder {
     }
 
     if (!resourceDeps.getTransitiveCompiledSymbols().isEmpty()) {
-      builder.addExecPaths(
-          "--compiledDep",
-          VectorArg.join(context.getConfiguration().getHostPathSeparator())
-              .each(resourceDeps.getTransitiveCompiledSymbols()));
+      builder
+          .addExecPaths(
+              "--compiledDep",
+              VectorArg.join(context.getConfiguration().getHostPathSeparator())
+                  .each(resourceDeps.getTransitiveCompiledSymbols()));
       inputs.addAll(resourceDeps.getTransitiveCompiledSymbols());
     }
 
@@ -198,7 +199,7 @@ public class AndroidResourceValidatorActionBuilder {
             .addInputs(inputs.build())
             .addOutputs(outs.build())
             .addCommandLine(
-                builder.build(), ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).build())
+                builder.build(), ParamFileInfo.builder(ParameterFileType.UNQUOTED).build())
             .setExecutable(
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
             .setProgressMessage(
@@ -274,7 +275,7 @@ public class AndroidResourceValidatorActionBuilder {
             .addInputs(inputs.build())
             .addOutputs(ImmutableList.copyOf(outs))
             .addCommandLine(
-                builder.build(), ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).build())
+                builder.build(), ParamFileInfo.builder(ParameterFileType.UNQUOTED).build())
             .setExecutable(
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
             .setProgressMessage("Validating Android resources for %s", ruleContext.getLabel())
@@ -282,6 +283,9 @@ public class AndroidResourceValidatorActionBuilder {
             .build(context));
 
     // Return the full set of validated transitive dependencies.
-    return primary.toBuilder().setJavaSourceJar(sourceJarOut).setRTxt(rTxtOut).build();
+    return primary.toBuilder()
+        .setJavaSourceJar(sourceJarOut)
+        .setRTxt(rTxtOut)
+        .build();
   }
 }
