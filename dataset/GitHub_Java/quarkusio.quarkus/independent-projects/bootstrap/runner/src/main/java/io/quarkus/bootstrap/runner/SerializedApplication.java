@@ -57,7 +57,7 @@ public class SerializedApplication {
             data.writeUTF(mainClass);
             data.writeInt(classPath.size());
             for (Path jar : classPath) {
-                String relativePath = applicationRoot.relativize(jar).toString().replace("\\", "/");
+                String relativePath = relativize(applicationRoot, jar).replace("\\", "/");
                 data.writeUTF(relativePath);
                 writeJar(data, jar);
             }
@@ -224,6 +224,14 @@ public class SerializedApplication {
             out.writeBoolean(true);
             out.writeUTF(string);
         }
+    }
+
+    private static String relativize(Path applicationRoot, Path jar) {
+        Path relative = applicationRoot.relativize(jar);
+        if (relative.getName(0).toString().equals("..")) {
+            throw new RuntimeException(jar + " was not present in application " + applicationRoot);
+        }
+        return relative.toString();
     }
 
 }

@@ -15,6 +15,7 @@ import java.util.function.Function;
 
 /**
  * Classloader used for production application, using the multi jar strategy
+ *
  */
 public class RunnerClassLoader extends ClassLoader {
 
@@ -48,6 +49,10 @@ public class RunnerClassLoader extends ClassLoader {
         //note that for performance reasons this CL does not do parent first delegation
         //although the intention is not for it to be a true isolated parent first CL
         //'delegation misses' where the parent throws a ClassNotFoundException are very expensive
+        Class<?> loaded = findLoadedClass(name);
+        if (loaded != null) {
+            return loaded;
+        }
         if (name.startsWith("java.")) {
             return getParent().loadClass(name);
         }
@@ -56,10 +61,6 @@ public class RunnerClassLoader extends ClassLoader {
             return getParent().loadClass(name);
         }
         synchronized (getClassLoadingLock(name)) {
-            Class<?> loaded = findLoadedClass(name);
-            if (loaded != null) {
-                return loaded;
-            }
             ClassLoadingResource[] resources;
             if (packageName == null) {
                 resources = resourceDirectoryMap.get("");

@@ -5,7 +5,6 @@ import static java.nio.file.StandardOpenOption.CREATE;
 import static java.nio.file.StandardOpenOption.TRUNCATE_EXISTING;
 import static java.nio.file.StandardOpenOption.WRITE;
 
-import java.io.BufferedWriter;
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -13,7 +12,15 @@ import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.io.OutputStream;
 import java.io.UncheckedIOException;
-import java.nio.file.*;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.FileSystem;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.OpenOption;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -23,8 +30,8 @@ import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
@@ -37,7 +44,6 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
 
-import org.apache.commons.lang3.SystemUtils;
 import org.jboss.logging.Logger;
 
 import io.quarkus.bootstrap.BootstrapDependencyProcessingException;
@@ -60,7 +66,6 @@ import io.quarkus.deployment.builditem.MainClassBuildItem;
 import io.quarkus.deployment.builditem.QuarkusBuildCloseablesBuildItem;
 import io.quarkus.deployment.builditem.TransformedClassesBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
-import io.quarkus.deployment.pkg.builditem.AppCDSRequestedBuildItem;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
 import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
@@ -119,17 +124,19 @@ public class JarResultBuildStep {
     private static final BiPredicate<Path, BasicFileAttributes> IS_JSON_FILE_PREDICATE = new IsJsonFilePredicate();
     public static final String DEPLOYMENT_CLASS_PATH_DAT = "deployment-class-path.dat";
     public static final String BUILD_SYSTEM_PROPERTIES = "build-system.properties";
-    public static final String DEPLOYMENT_LIB = "deployment";
+    public static final String DEPLOYMENT_LIB = "deployment-lib";
+    public static final String DEPLOYMENT_QUARKUS = "deployment-quarkus";
     public static final String APPMODEL_DAT = "appmodel.dat";
     public static final String QUARKUS_RUN_JAR = "quarkus-run.jar";
-    public static final String BOOT_LIB = "boot";
+    public static final String BOOT_LIB = "boot-lib";
     public static final String LIB = "lib";
-    public static final String MAIN = "main";
     public static final String GENERATED_BYTECODE_JAR = "generated-bytecode.jar";
     public static final String TRANSFORMED_BYTECODE_JAR = "transformed-bytecode.jar";
     public static final String APP = "app";
     public static final String QUARKUS = "quarkus";
     public static final String DEFAULT_FAST_JAR_DIRECTORY_NAME = "quarkus-app";
+
+    private static final boolean IS_WINDOWS = System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows");
 
     @BuildStep
     OutputTargetBuildItem outputTarget(BuildSystemTargetBuildItem bst, PackageConfig packageConfig) {
@@ -161,50 +168,20 @@ public class JarResultBuildStep {
             List<GeneratedResourceBuildItem> generatedResources,
             List<UberJarRequiredBuildItem> uberJarRequired,
             QuarkusBuildCloseablesBuildItem closeablesBuildItem,
-            MainClassBuildItem mainClassBuildItem, Optional<AppCDSRequestedBuildItem> appCDS) throws Exception {
-
-        if (appCDS.isPresent()) {
-            handleAppCDSSupportFileGeneration(transformedClasses, generatedClasses, appCDS.get());
-        }
-
+            MainClassBuildItem mainClassBuildItem) throws Exception {
         if (!uberJarRequired.isEmpty() || packageConfig.uberJar
                 || packageConfig.type.equalsIgnoreCase(PackageConfig.UBER_JAR)) {
             return buildUberJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses, applicationArchivesBuildItem,
                     packageConfig, applicationInfo, generatedClasses, generatedResources, closeablesBuildItem,
                     mainClassBuildItem);
-        } else if (packageConfig.isLegacyJar()) {
+        } else if (packageConfig.type.equalsIgnoreCase(PackageConfig.LEGACY)
+                || packageConfig.type.equalsIgnoreCase(PackageConfig.JAR)) {
             return buildLegacyThinJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses,
                     applicationArchivesBuildItem,
                     packageConfig, applicationInfo, generatedClasses, generatedResources, mainClassBuildItem);
         } else {
             return buildThinJar(curateOutcomeBuildItem, outputTargetBuildItem, transformedClasses, applicationArchivesBuildItem,
                     packageConfig, applicationInfo, generatedClasses, generatedResources, mainClassBuildItem);
-        }
-    }
-
-    // the idea here is to just dump the class names of the generated and transformed classes into a file
-    // that is read at runtime when AppCDS generation is requested
-    private void handleAppCDSSupportFileGeneration(TransformedClassesBuildItem transformedClasses,
-            List<GeneratedClassBuildItem> generatedClasses, AppCDSRequestedBuildItem appCDS) throws IOException {
-        Path appCDsDir = appCDS.getAppCDSDir();
-        Path generatedClassesFile = appCDsDir.resolve("generatedAndTransformed.lst");
-        try (BufferedWriter writer = Files.newBufferedWriter(generatedClassesFile, StandardOpenOption.CREATE)) {
-            StringBuilder classes = new StringBuilder();
-            for (GeneratedClassBuildItem generatedClass : generatedClasses) {
-                classes.append(generatedClass.getName().replace('/', '.')).append(System.lineSeparator());
-            }
-
-            for (Set<TransformedClassesBuildItem.TransformedClass> transformedClassesSet : transformedClasses
-                    .getTransformedClassesByJar().values()) {
-                for (TransformedClassesBuildItem.TransformedClass transformedClass : transformedClassesSet) {
-                    classes.append(transformedClass.getFileName().replace('/', '.').replace(".class", ""))
-                            .append(System.lineSeparator());
-                }
-            }
-
-            if (classes.length() != 0) {
-                writer.write(classes.toString());
-            }
         }
     }
 
@@ -246,7 +223,7 @@ public class JarResultBuildStep {
             originalJar = null;
         }
 
-        return new JarBuildItem(runnerJar, originalJar, null, PackageConfig.UBER_JAR);
+        return new JarBuildItem(runnerJar, originalJar, null);
     }
 
     private void buildUberJar0(CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -405,7 +382,7 @@ public class JarResultBuildStep {
         }
         runnerJar.toFile().setReadable(true, false);
 
-        return new JarBuildItem(runnerJar, null, libDir, PackageConfig.LEGACY);
+        return new JarBuildItem(runnerJar, null, libDir);
     }
 
     private JarBuildItem buildThinJar(CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -424,9 +401,8 @@ public class JarResultBuildStep {
                 .resolve(packageConfig.outputDirectory.orElse(DEFAULT_FAST_JAR_DIRECTORY_NAME));
         //unmodified 3rd party dependencies
         Path libDir = buildDir.resolve(LIB);
-        Path mainLib = libDir.resolve(MAIN);
         //parent first entries
-        Path baseLib = libDir.resolve(BOOT_LIB);
+        Path baseLib = buildDir.resolve(BOOT_LIB);
         Files.createDirectories(baseLib);
 
         Path appDir = buildDir.resolve(APP);
@@ -434,7 +410,7 @@ public class JarResultBuildStep {
         if (!rebuild) {
             IoUtils.recursiveDelete(buildDir);
             Files.createDirectories(buildDir);
-            Files.createDirectories(mainLib);
+            Files.createDirectories(libDir);
             Files.createDirectories(baseLib);
             Files.createDirectories(appDir);
             Files.createDirectories(quarkus);
@@ -503,7 +479,7 @@ public class JarResultBuildStep {
             if (rebuild) {
                 jars.addAll(appDep.getArtifact().getPaths().toList());
             } else {
-                copyDependency(curateOutcomeBuildItem, copiedArtifacts, mainLib, baseLib, jars, true, classPath, appDep);
+                copyDependency(curateOutcomeBuildItem, copiedArtifacts, libDir, baseLib, jars, true, classPath, appDep);
             }
             if (curateOutcomeBuildItem.getEffectiveModel().getParentFirstArtifacts()
                     .contains(appDep.getArtifact().getKey())) {
@@ -516,8 +492,9 @@ public class JarResultBuildStep {
         }
 
         runnerJar.toFile().setReadable(true, false);
-        Path initJar = buildDir.resolve(QUARKUS_RUN_JAR);
         if (!rebuild) {
+
+            Path initJar = buildDir.resolve(QUARKUS_RUN_JAR);
             try (FileSystem runnerZipFs = ZipUtils.newZip(initJar)) {
                 AppArtifact appArtifact = curateOutcomeBuildItem.getEffectiveModel().getAppArtifact();
                 generateManifest(runnerZipFs, classPath.toString(), packageConfig, appArtifact,
@@ -526,10 +503,12 @@ public class JarResultBuildStep {
             }
 
             //now copy the deployment artifacts, if required
-            if (packageConfig.type.equalsIgnoreCase(PackageConfig.MUTABLE_JAR)) {
+            if (packageConfig.mutableApplication) {
 
-                Path deploymentLib = libDir.resolve(DEPLOYMENT_LIB);
+                Path deploymentLib = buildDir.resolve(DEPLOYMENT_LIB);
                 Files.createDirectories(deploymentLib);
+                Path depQuarkus = buildDir.resolve(DEPLOYMENT_QUARKUS);
+                Files.createDirectories(depQuarkus);
                 for (AppDependency appDep : curateOutcomeBuildItem.getEffectiveModel().getFullDeploymentDeps()) {
                     copyDependency(curateOutcomeBuildItem, copiedArtifacts, deploymentLib, baseLib, jars, false, classPath,
                             appDep);
@@ -546,8 +525,7 @@ public class JarResultBuildStep {
                 PersistentAppModel model = new PersistentAppModel(outputTargetBuildItem.getBaseName(), relativePaths,
                         curateOutcomeBuildItem.getEffectiveModel(),
                         buildDir.relativize(runnerJar).toString());
-                Path appmodelDat = deploymentLib.resolve(APPMODEL_DAT);
-                try (OutputStream out = Files.newOutputStream(appmodelDat)) {
+                try (OutputStream out = Files.newOutputStream(depQuarkus.resolve(APPMODEL_DAT))) {
                     ObjectOutputStream obj = new ObjectOutputStream(out);
                     obj.writeObject(model);
                     obj.close();
@@ -556,8 +534,7 @@ public class JarResultBuildStep {
                 //we just include all deployment deps, even though we only really need bootstrap
                 //as we don't really have a resolved bootstrap CP
                 //once we have the app model it will all be done in QuarkusClassLoader anyway
-                Path deploymentCp = deploymentLib.resolve(DEPLOYMENT_CLASS_PATH_DAT);
-                try (OutputStream out = Files.newOutputStream(deploymentCp)) {
+                try (OutputStream out = Files.newOutputStream(depQuarkus.resolve(DEPLOYMENT_CLASS_PATH_DAT))) {
                     ObjectOutputStream obj = new ObjectOutputStream(out);
                     List<String> paths = new ArrayList<>();
                     for (AppDependency i : curateOutcomeBuildItem.getEffectiveModel().getFullDeploymentDeps()) {
@@ -566,21 +543,13 @@ public class JarResultBuildStep {
                     obj.writeObject(paths);
                     obj.close();
                 }
-                Path buildSystemProps = deploymentLib.resolve(BUILD_SYSTEM_PROPERTIES);
-                try (OutputStream out = Files.newOutputStream(buildSystemProps)) {
+                try (OutputStream out = Files.newOutputStream(depQuarkus.resolve(BUILD_SYSTEM_PROPERTIES))) {
                     outputTargetBuildItem.getBuildSystemProperties().store(out, "The original build properties");
                 }
             }
         }
-        try (Stream<Path> files = Files.walk(buildDir)) {
-            files.forEach(new Consumer<Path>() {
-                @Override
-                public void accept(Path path) {
-                    path.toFile().setReadable(true, false);
-                }
-            });
-        }
-        return new JarBuildItem(initJar, null, libDir, packageConfig.type);
+
+        return new JarBuildItem(runnerJar, null, libDir);
     }
 
     private void copyDependency(CurateOutcomeBuildItem curateOutcomeBuildItem, Map<AppArtifactKey, List<Path>> runtimeArtifacts,
@@ -602,7 +571,7 @@ public class JarResultBuildStep {
                     final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
                     final Path targetPath = baseLib.resolve(fileName);
                     Files.copy(resolvedDep, targetPath, StandardCopyOption.REPLACE_EXISTING);
-                    classPath.append(" " + LIB + "/" + BOOT_LIB + "/" + fileName);
+                    classPath.append(" " + BOOT_LIB + "/" + fileName);
                     runtimeArtifacts.computeIfAbsent(depArtifact.getKey(), (s) -> new ArrayList<>()).add(targetPath);
                 } else {
                     final String fileName = depArtifact.getGroupId() + "." + resolvedDep.getFileName();
@@ -667,7 +636,7 @@ public class JarResultBuildStep {
                 .map((s) -> new GeneratedClassBuildItem(true, s.getName(), s.getClassData()))
                 .collect(Collectors.toList()));
 
-        if (SystemUtils.IS_OS_WINDOWS) {
+        if (IS_WINDOWS) {
             log.warn("Uber JAR strategy is used for native image source JAR generation on Windows. This is done " +
                     "for the time being to work around a current GraalVM limitation on Windows concerning the " +
                     "maximum command length (see https://github.com/oracle/graal/issues/2387).");
@@ -1129,7 +1098,10 @@ public class JarResultBuildStep {
 
         @Override
         public boolean getAsBoolean() {
-            return packageConfig.isAnyJarType();
+            return packageConfig.type.equalsIgnoreCase(PackageConfig.LEGACY) ||
+                    packageConfig.type.equalsIgnoreCase(PackageConfig.JAR) ||
+                    packageConfig.type.equalsIgnoreCase(PackageConfig.FAST_JAR) ||
+                    packageConfig.type.equalsIgnoreCase(PackageConfig.UBER_JAR);
         }
     }
 
