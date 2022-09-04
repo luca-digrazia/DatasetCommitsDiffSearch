@@ -2385,11 +2385,20 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
-  public void testMapEachAcceptsBuiltinFunction() throws Exception {
+  public void testLazyArgMapEachWrongArgCount() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     setRuleContext(ruleContext);
-    // map_each accepts a non-Starlark built-in function such as str.
-    exec("ruleContext.actions.args().add_all(['foo'], map_each = str)");
+    checkEvalErrorContains(
+        "map_each must be a function that accepts a single",
+        "args = ruleContext.actions.args()",
+        "def bad_fn(val, val2): return str(val)",
+        "args.add_all([1, 2], map_each=bad_fn)",
+        "ruleContext.actions.run(",
+        "  inputs = depset(ruleContext.files.srcs),",
+        "  outputs = ruleContext.files.srcs,",
+        "  arguments = [args],",
+        "  executable = ruleContext.files.tools[0],",
+        ")");
   }
 
   @Test

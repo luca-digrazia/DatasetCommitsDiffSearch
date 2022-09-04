@@ -46,7 +46,7 @@ public final class EvalUtils {
   }
 
   /**
-   * Compare two Starlark objects.
+   * Compare two Skylark objects.
    *
    * <p>It may throw an unchecked exception ComparisonException that should be wrapped in an
    * EvalException.
@@ -119,7 +119,7 @@ public final class EvalUtils {
   }
 
   /**
-   * Is this object known or assumed to be recursively hashable by Starlark?
+   * Is this object known or assumed to be recursively hashable by Skylark?
    *
    * @param o an Object
    * @return true if the object is known to be a hashable value.
@@ -132,7 +132,7 @@ public final class EvalUtils {
   }
 
   /**
-   * Is this object known or assumed to be recursively immutable by Starlark?
+   * Is this object known or assumed to be recursively immutable by Skylark?
    *
    * @param o an Object
    * @return true if the object is known to be an immutable value.
@@ -146,19 +146,55 @@ public final class EvalUtils {
   }
 
   /**
-   * Is this class known to be *recursively* immutable by Starlark? For instance, class Tuple is not
+   * Is this class known to be *recursively* immutable by Skylark? For instance, class Tuple is not
    * it, because it can contain mutable values.
    *
    * @param c a Class
    * @return true if the class is known to represent only recursively immutable values.
    */
   // NB: This is used as the basis for accepting objects in Depset-s,
-  // as well as for accepting objects as keys for Starlark dict-s.
+  // as well as for accepting objects as keys for Skylark dict-s.
   private static boolean isImmutable(Class<?> c) {
     return c.isAnnotationPresent(Immutable.class) // TODO(bazel-team): beware of containers!
         || c.equals(String.class)
         || c.equals(Integer.class)
         || c.equals(Boolean.class);
+  }
+
+  // TODO(bazel-team): move the following few type-related functions to SkylarkType
+  /**
+   * Return the Skylark-type of {@code c}
+   *
+   * <p>The result will be a type that Skylark understands and is either equal to {@code c} or is a
+   * supertype of it.
+   *
+   * <p>Skylark's type validation isn't equipped to deal with inheritance so we must tell it which
+   * of the superclasses or interfaces of {@code c} is the one that matters for type compatibility.
+   *
+   * @param c a class
+   * @return a super-class of c to be used in validation-time type inference.
+   */
+  public static Class<?> getSkylarkType(Class<?> c) {
+    // TODO(bazel-team): Iterable and Class likely do not belong here.
+    if (String.class.equals(c)
+        || Boolean.class.equals(c)
+        || Integer.class.equals(c)
+        || Iterable.class.equals(c)
+        || Class.class.equals(c)) {
+      return c;
+    }
+    // TODO(bazel-team): We should require all Skylark-addressable values that aren't builtin types
+    // (String/Boolean/Integer) to implement StarlarkValue. We should also require them to have a
+    // (possibly inherited) @SkylarkModule annotation.
+    Class<?> parent = SkylarkInterfaceUtils.getParentWithSkylarkModule(c);
+    if (parent != null) {
+      return parent;
+    }
+    Preconditions.checkArgument(
+        StarlarkValue.class.isAssignableFrom(c),
+        "%s is not allowed as a Starlark value (getSkylarkType() failed)",
+        c);
+    return c;
   }
 
   /**
@@ -169,8 +205,8 @@ public final class EvalUtils {
   }
 
   /**
-   * Returns a pretty name for the datatype of object {@code object} in Starlark or the BUILD
-   * language, with full details if the {@code full} boolean is true.
+   * Returns a pretty name for the datatype of object {@code object} in Skylark
+   * or the BUILD language, with full details if the {@code full} boolean is true.
    */
   public static String getDataTypeName(Object object, boolean fullDetails) {
     Preconditions.checkNotNull(object);
@@ -194,10 +230,8 @@ public final class EvalUtils {
    * Returns a pretty name for the datatype equivalent of class 'c' in the Build language.
    *
    * @param highlightNameSpaces Determines whether the result should also contain a special comment
-   *     when the given class identifies a Starlark name space.
+   *     when the given class identifies a Skylark name space.
    */
-  // TODO(adonovan): document that this function accepts (and must accept) any Java class,
-  // not just those corresponding to legal Starlark value classes, or even their supertypes.
   private static String getDataTypeNameFromClass(Class<?> c, boolean highlightNameSpaces) {
     // Check for "direct hits" first to avoid needing to scan for annotations.
     if (c.equals(String.class)) {
@@ -278,7 +312,7 @@ public final class EvalUtils {
     }
   }
 
-  /** @return true if x is Java null or Starlark None */
+  /** @return true if x is Java null or Skylark None */
   public static boolean isNullOrNone(Object x) {
     return x == null || x == Starlark.NONE;
   }
@@ -649,7 +683,7 @@ public final class EvalUtils {
     if (object instanceof SkylarkIndexable) {
       Object result = ((SkylarkIndexable) object).getIndex(semantics, key);
       // TODO(bazel-team): We shouldn't have this fromJava call here. If it's needed at all,
-      // it should go in the implementations of SkylarkIndexable#getIndex that produce non-Starlark
+      // it should go in the implementations of SkylarkIndexable#getIndex that produce non-Skylark
       // values.
       return result == null ? null : Starlark.fromJava(result, mu);
     } else if (object instanceof String) {
@@ -748,7 +782,7 @@ public final class EvalUtils {
             expr.getStartLocation(),
             FunctionSignature.NOARGS,
             /*defaultValues=*/ Tuple.empty(),
-            ImmutableList.<Statement>of(ReturnStatement.make(expr)),
+            ImmutableList.<Statement>of(new ReturnStatement(expr)),
             module);
 
     return Starlark.fastcall(thread, fn, NOARGS, NOARGS);
@@ -782,7 +816,7 @@ public final class EvalUtils {
       stmts =
           ImmutableList.<Statement>builder()
               .addAll(stmts.subList(0, n - 1))
-              .add(ReturnStatement.make(expr))
+              .add(new ReturnStatement(expr))
               .build();
     }
 

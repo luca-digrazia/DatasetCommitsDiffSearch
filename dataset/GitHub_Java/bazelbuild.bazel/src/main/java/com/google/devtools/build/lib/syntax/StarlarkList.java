@@ -16,19 +16,19 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.skylarkinterface.Param;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import java.util.AbstractList;
 import java.util.Arrays;
 import java.util.Collection;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.Param;
-import net.starlark.java.annot.StarlarkBuiltin;
-import net.starlark.java.annot.StarlarkDocumentationCategory;
-import net.starlark.java.annot.StarlarkMethod;
 
 /** A StarlarkList is a mutable finite sequence of values. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "list",
-    category = StarlarkDocumentationCategory.BUILTIN,
+    category = SkylarkModuleCategory.BUILTIN,
     doc =
         "The built-in list type. Example list expressions:<br>"
             + "<pre class=language-python>x = [1, 2, 3]</pre>"
@@ -339,7 +339,7 @@ public final class StarlarkList<E> extends AbstractList<E>
     elems[--size] = null; // aid GC
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "remove",
       doc =
           "Removes the first item from the list whose value is x. "
@@ -368,7 +368,7 @@ public final class StarlarkList<E> extends AbstractList<E>
     elems[index] = value;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "append",
       doc = "Adds an item to the end of the list.",
       parameters = {
@@ -380,7 +380,7 @@ public final class StarlarkList<E> extends AbstractList<E>
     return Starlark.NONE;
   }
 
-  @StarlarkMethod(name = "clear", doc = "Removes all the elements of the list.")
+  @SkylarkCallable(name = "clear", doc = "Removes all the elements of the list.")
   public NoneType clearMethod() throws EvalException {
     Starlark.checkMutable(this);
     for (int i = 0; i < size; i++) {
@@ -390,7 +390,7 @@ public final class StarlarkList<E> extends AbstractList<E>
     return Starlark.NONE;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "insert",
       doc = "Inserts an item at a given position.",
       parameters = {
@@ -403,7 +403,7 @@ public final class StarlarkList<E> extends AbstractList<E>
     return Starlark.NONE;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "extend",
       doc = "Adds all items to the end of the list.",
       parameters = {@Param(name = "items", type = Object.class, doc = "Items to add at the end.")})
@@ -414,7 +414,7 @@ public final class StarlarkList<E> extends AbstractList<E>
     return Starlark.NONE;
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "index",
       doc =
           "Returns the index in the list of the first item whose value is x. "
@@ -447,7 +447,7 @@ public final class StarlarkList<E> extends AbstractList<E>
     throw Starlark.errorf("item %s not found in list", Starlark.repr(x));
   }
 
-  @StarlarkMethod(
+  @SkylarkCallable(
       name = "pop",
       doc =
           "Removes the item at the given position in the list, and returns it. "
@@ -467,10 +467,5 @@ public final class StarlarkList<E> extends AbstractList<E>
     Object result = elems[index];
     remove(index, (Location) null);
     return result;
-  }
-
-  @Override
-  public Object[] toArray() {
-    return size != 0 ? Arrays.copyOf(elems, size) : EMPTY_ARRAY;
   }
 }

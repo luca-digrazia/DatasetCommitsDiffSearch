@@ -53,7 +53,7 @@ import javax.annotation.Nullable;
 // - separate the universal predeclared environment and make it implicit.
 // - eliminate initialize(). The only constructor we need is:
 //   (String name, Mutability mu, Map<String, Object> predeclared, Object label).
-public final class Module implements Resolver.Module {
+public final class Module implements ValidationEnvironment.Module {
 
   /**
    * Final, except that it may be initialized after instantiation. Null mutability indicates that
@@ -79,8 +79,7 @@ public final class Module implements Resolver.Module {
   final LinkedHashMap<String, FlagGuardedValue> restrictedBindings;
 
   /** Set of bindings that are exported (can be loaded from other modules). */
-  // Public for use in serialization tests, which live in a different package for Bazelish reasons.
-  public final Set<String> exportedBindings;
+  final HashSet<String> exportedBindings;
 
   /** Constructs an uninitialized instance; caller must call {@link #initialize} before use. */
   public Module() {
