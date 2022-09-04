@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -22,19 +21,15 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
-/** A structured representation of the compilation outputs of a C++ rule. */
-@SkylarkModule(
-  name = "cc_compilation_outputs",
-  category = SkylarkModuleCategory.BUILTIN,
-  doc = "Helper class containing CC compilation outputs."
-)
+/**
+ * A structured representation of the compilation outputs of a C++ rule.
+ */
 public class CcCompilationOutputs {
   /**
    * All .o files built by the target.
@@ -200,7 +195,9 @@ public class CcCompilationOutputs {
       return this;
     }
 
-    /** Adds an object file. */
+    /**
+     * Adds an .o file.
+     */
     public Builder addObjectFile(Artifact artifact) {
       // We skip file extension checks for TreeArtifacts because they represent directory artifacts
       // without a file extension.
@@ -218,7 +215,9 @@ public class CcCompilationOutputs {
       return this;
     }
 
-    /** Adds a pic object file. */
+    /**
+     * Adds a .pic.o file.
+     */
     public Builder addPicObjectFile(Artifact artifact) {
       picObjectFiles.add(artifact);
       return this;

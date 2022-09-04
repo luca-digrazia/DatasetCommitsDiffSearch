@@ -199,6 +199,7 @@ public class CppLinkActionBuilder {
 
   private boolean isLtoIndexing = false;
   private boolean usePicForLtoBackendActions = false;
+  private boolean useFissionForLtoBackendActions = false;
   private Iterable<LtoBackendArtifacts> allLtoArtifacts = null;
   
   private final List<VariablesExtension> variablesExtensions = new ArrayList<>();
@@ -846,7 +847,7 @@ public class CppLinkActionBuilder {
             toolchain,
             fdoSupport,
             usePicForLtoBackendActions,
-            cppConfiguration.useFission());
+            useFissionForLtoBackendActions);
       }
     }
 
@@ -1007,6 +1008,12 @@ public class CppLinkActionBuilder {
   /** Sets flag for using PIC in any scheduled LTO Backend actions. */
   public CppLinkActionBuilder setUsePicForLtoBackendActions(boolean usePic) {
     this.usePicForLtoBackendActions = usePic;
+    return this;
+  }
+
+  /** Sets flag for using Fission in any scheduled LTO Backend actions. */
+  public CppLinkActionBuilder setUseFissionForLtoBackendActions(boolean useFission) {
+    this.useFissionForLtoBackendActions = useFission;
     return this;
   }
 

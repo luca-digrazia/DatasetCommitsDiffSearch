@@ -641,7 +641,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
         String gccToolPath = "DUMMY_GCC_TOOL";
         String linkerToolPath = "DUMMY_LINKER_TOOL";
         String arToolPath = "DUMMY_AR_TOOL";
-        String stripToolPath = "DUMMY_STRIP_TOOL";
         for (ToolPath tool : toolchain.getToolPathList()) {
           if (tool.getName().equals(Tool.GCC.getNamePart())) {
             gccToolPath = tool.getPath();
@@ -653,9 +652,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
           if (tool.getName().equals(Tool.AR.getNamePart())) {
             arToolPath = tool.getPath();
           }
-          if (tool.getName().equals(Tool.STRIP.getNamePart())) {
-            stripToolPath = tool.getPath();
-          }
         }
         TextFormat.merge(
             CppActionConfigs.getCppActionConfigs(
@@ -664,10 +660,9 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 gccToolPath,
                 linkerToolPath,
                 arToolPath,
-                stripToolPath,
                 supportsEmbeddedRuntimes,
                 toolchain.getSupportsInterfaceSharedObjects()),
-            toolchainBuilder);
+              toolchainBuilder);
       } catch (ParseException e) {
         // Can only happen if we change the proto definition without changing our
         // configuration above.
@@ -1288,15 +1283,9 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns the execution path to the linker binary to use for this build. Relative paths are
-   * relative to the execution root.
+   * Returns the execution path to the linker binary to use for this build.
+   * Relative paths are relative to the execution root.
    */
-  @SkylarkCallable(name = "ld_executable", structField = true, doc = "Path to the linker binary.")
-  public String getLdExecutableForSkylark() {
-    PathFragment ldExecutable = getLdExecutable();
-    return ldExecutable != null ? ldExecutable.getPathString() : "";
-  }
-
   public PathFragment getLdExecutable() {
     return ldExecutable;
   }
@@ -1827,7 +1816,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     // Make variables provided by crosstool/gcc compiler suite.
     globalMakeEnvBuilder.put("AR", getArExecutable().getPathString());
     globalMakeEnvBuilder.put("NM", getNmExecutable().getPathString());
-    globalMakeEnvBuilder.put("LD", getLdExecutable().getPathString());
     PathFragment objcopyTool = getObjCopyExecutable();
     if (objcopyTool != null) {
       // objcopy is optional in Crosstool
@@ -1874,16 +1862,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     } else {
       lipoSuffix = "";
     }
-    String toolchainPrefix;
-    if (toolchainIdInOutputDirectory) {
-      toolchainPrefix = toolchainIdentifier;
-    } else {
-      toolchainPrefix = desiredCpu;
-      if (!cppOptions.outputDirectoryTag.isEmpty()) {
-        toolchainPrefix += "-" + cppOptions.outputDirectoryTag;
-      }
-    }
-
+    String toolchainPrefix = toolchainIdInOutputDirectory
+        ? toolchainIdentifier : desiredCpu;
     return toolchainPrefix + lipoSuffix;
   }
 

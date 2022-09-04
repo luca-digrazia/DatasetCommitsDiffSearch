@@ -61,7 +61,7 @@ public class DwoArtifactsCollector {
     picDwoBuilder.addAll(compilationOutputs.getPicDwoFiles());
 
     // If we are generating .dwo, add any generated for LtoBackendArtifacts.
-    if (generateDwo && ltoBackendArtifacts != null) {
+    if (generateDwo) {
       for (LtoBackendArtifacts ltoBackendArtifact : ltoBackendArtifacts) {
         Artifact objectFile = ltoBackendArtifact.getObjectFile();
         if (ltoBackendArtifactsUsePic) {

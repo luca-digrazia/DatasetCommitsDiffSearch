@@ -68,7 +68,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -105,7 +104,6 @@ public final class CcLibraryHelper {
             CppFileTypes.ASSEMBLER_WITH_C_PREPROCESSOR),
         ImmutableSet.<String>of(
             CppCompileAction.CC_FLAGS_MAKE_VARIABLE_ACTION_NAME,
-            CppCompileAction.STRIP_ACTION_NAME,
             CppCompileAction.C_COMPILE,
             CppCompileAction.CPP_COMPILE,
             CppCompileAction.CPP_HEADER_PARSING,
@@ -849,7 +847,7 @@ public final class CcLibraryHelper {
 
   /**
    * This adds the {@link CcSpecificLinkParamsProvider} to the providers created by this class.
-   * Otherwise the result will contain an instance of {@link CcLinkParamsInfo}.
+   * Otherwise the result will contain an instance of {@link CcLinkParamsProvider}.
    */
   public CcLibraryHelper enableCcSpecificLinkParamsProvider() {
     this.emitCcSpecificLinkParamsProvider = true;
@@ -1083,21 +1081,9 @@ public final class CcLibraryHelper {
               createCcLinkParamsStore(ccLinkingOutputs, cppCompilationContext, forcePic)));
     } else {
       providers.put(
-          new CcLinkParamsInfo(
+          new CcLinkParamsProvider(
               createCcLinkParamsStore(ccLinkingOutputs, cppCompilationContext, forcePic)));
     }
-
-    if (CcCommon.hasSourcesInTargetConfig(ruleContext)) {
-      List<String> sources =
-          compilationUnitSources
-              .stream()
-              .map(cppSource -> cppSource.getSource().getExecPathString())
-              .collect(Collectors.toList());
-      providers.put(
-          TransitiveSourcesProvider.class,
-          CcCommon.getTransitiveSourcesProvider(ruleContext, sources));
-    }
-
     return new Info(
         providers.build(),
         outputGroups,
@@ -1564,7 +1550,7 @@ public final class CcLibraryHelper {
         builder.addLinkstamps(linkstamps.build(), cppCompilationContext);
         builder.addTransitiveTargets(
             deps,
-            CcLinkParamsInfo.TO_LINK_PARAMS,
+            CcLinkParamsProvider.TO_LINK_PARAMS,
             CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
         if (!neverlink) {
           builder.addLibraries(
