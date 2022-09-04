@@ -12,7 +12,6 @@ import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.eclipse.microprofile.config.spi.ConfigSourceProvider;
 import org.eclipse.microprofile.config.spi.Converter;
 
-import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
@@ -38,7 +37,12 @@ class ConfigBuildSteps {
     @BuildStep
     void generateConfigSources(List<RunTimeConfigurationSourceBuildItem> runTimeSources,
             final BuildProducer<GeneratedClassBuildItem> generatedClass) {
-        ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
+        ClassOutput classOutput = new ClassOutput() {
+            @Override
+            public void write(String name, byte[] data) {
+                generatedClass.produce(new GeneratedClassBuildItem(true, name, data));
+            }
+        };
 
         try (ClassCreator cc = ClassCreator.builder().interfaces(ConfigSourceProvider.class).setFinal(true)
                 .className(PROVIDER_CLASS_NAME)
