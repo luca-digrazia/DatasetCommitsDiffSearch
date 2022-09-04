@@ -36,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.annotation.Nullable;
 import java.text.DecimalFormat;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -141,21 +140,17 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
             }
 
             if (triggered) {
+                final List<MessageSummary> summaries = Lists.newArrayList();
                 final String resultDescription = "Field " + field + " had a " + type + " of "
                         + decimalFormat.format(result) + " in the last " + time + " minutes with trigger condition "
                         + thresholdType + " than " + decimalFormat.format(threshold) + ". "
                         + "(Current grace time: " + grace + " minutes)";
 
-                final List<MessageSummary> summaries;
                 if (getBacklog() > 0) {
-                    final List<ResultMessage> searchHits = fieldStatsResult.getSearchHits();
-                    summaries = Lists.newArrayListWithCapacity(searchHits.size());
-                    for (ResultMessage resultMessage : searchHits) {
+                    for (ResultMessage resultMessage : fieldStatsResult.getSearchHits()) {
                         final Message msg = new Message(resultMessage.getMessage());
                         summaries.add(new MessageSummary(resultMessage.getIndex(), msg));
                     }
-                } else {
-                    summaries = Collections.emptyList();
                 }
 
                 return new CheckResult(true, this, resultDescription, Tools.iso8601(), summaries);
