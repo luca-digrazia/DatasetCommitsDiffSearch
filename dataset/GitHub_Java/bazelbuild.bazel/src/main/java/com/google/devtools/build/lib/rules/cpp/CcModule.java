@@ -419,11 +419,11 @@ public abstract class CcModule
   @Nullable
   protected <T> ImmutableList<T> asClassImmutableList(Object o) {
     if (o == Starlark.UNBOUND) {
-      return ImmutableList.of();
+      return null;
     } else {
       ImmutableList<T> list = ((Sequence<T>) o).getImmutableList();
       if (list.isEmpty()) {
-        return ImmutableList.of();
+        return null;
       }
       return list;
     }
@@ -690,21 +690,8 @@ public abstract class CcModule
       Object quoteIncludes,
       Object frameworkIncludes,
       Object defines,
-      Object localDefines,
-      Object textualHdrsNoneable,
-      Object modularPublicHdrsNoneable,
-      Object modularPrivateHdrsNoneable,
-      StarlarkThread thread)
+      Object localDefines)
       throws EvalException {
-    if (textualHdrsNoneable != Starlark.UNBOUND
-        || modularPublicHdrsNoneable != Starlark.UNBOUND
-        || modularPrivateHdrsNoneable != Starlark.UNBOUND) {
-      checkPrivateStarlarkificationAllowlist(thread);
-    }
-    ImmutableList<Artifact> textualHdrs = asClassImmutableList(textualHdrsNoneable);
-    ImmutableList<Artifact> modularPublicHdrs = asClassImmutableList(modularPublicHdrsNoneable);
-    ImmutableList<Artifact> modularPrivateHdrs = asClassImmutableList(modularPrivateHdrsNoneable);
-
     CcCompilationContext.Builder ccCompilationContext =
         CcCompilationContext.builder(
             /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null);
@@ -732,10 +719,6 @@ public abstract class CcModule
     ccCompilationContext.addDefines(toNestedSetOfStrings(defines, "defines"));
     ccCompilationContext.addNonTransitiveDefines(
         toNestedSetOfStrings(localDefines, "local_defines").toList());
-    ccCompilationContext.addTextualHdrs(textualHdrs);
-    ccCompilationContext.addModularPublicHdrs(modularPublicHdrs);
-    ccCompilationContext.addModularPrivateHdrs(modularPrivateHdrs);
-
     return ccCompilationContext.build();
   }
 
@@ -1934,8 +1917,10 @@ public abstract class CcModule
     if (moduleMap != null) {
       helper.setCppModuleMap(moduleMap);
     }
-    for (CppModuleMap additionalModuleMap : additionalModuleMaps) {
-      helper.registerAdditionalModuleMap(additionalModuleMap);
+    if (additionalModuleMaps != null) {
+      for (CppModuleMap additionalModuleMap : additionalModuleMaps) {
+        helper.registerAdditionalModuleMap(additionalModuleMap);
+      }
     }
     if (disallowNopicOutputs) {
       helper.setGenerateNoPicAction(false);
