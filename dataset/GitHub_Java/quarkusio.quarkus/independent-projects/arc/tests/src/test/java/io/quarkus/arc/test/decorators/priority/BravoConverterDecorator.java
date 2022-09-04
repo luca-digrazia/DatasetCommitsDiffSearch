@@ -5,18 +5,20 @@ import javax.decorator.Decorator;
 import javax.decorator.Delegate;
 import javax.inject.Inject;
 
-@Priority(20)
+@Priority(2)
 @Decorator
-class AlphaConverterDecorator implements Converter<String> {
+class BravoConverterDecorator implements Converter<String> {
+
+    Converter<String> delegate;
 
     @Inject
-    @Delegate
-    Converter<String> delegate;
+    public BravoConverterDecorator(@Delegate Converter<String> delegate) {
+        this.delegate = delegate;
+    }
 
     @Override
     public String convert(String value) {
-        // skip first char
-        return delegate.convert(value).substring(1);
+        return new StringBuilder(delegate.convert(value)).reverse().toString();
     }
 
 }
