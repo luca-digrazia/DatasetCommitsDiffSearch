@@ -104,7 +104,7 @@ import io.quarkus.test.junit.callback.QuarkusTestBeforeClassCallback;
 import io.quarkus.test.junit.callback.QuarkusTestBeforeEachCallback;
 import io.quarkus.test.junit.callback.QuarkusTestMethodContext;
 import io.quarkus.test.junit.internal.DeepClone;
-import io.quarkus.test.junit.internal.SerializationWithXStreamFallbackDeepClone;
+import io.quarkus.test.junit.internal.XStreamDeepClone;
 
 public class QuarkusTestExtension
         implements BeforeEachCallback, AfterEachCallback, BeforeAllCallback, InvocationInterceptor, AfterAllCallback,
@@ -367,7 +367,12 @@ public class QuarkusTestExtension
                                 }
                                 tm.close();
                             } finally {
-                                hangDetectionExecutor.shutdown();
+                                if (hangTaskKey != null) {
+                                    hangTaskKey.cancel(true);
+                                    hangTaskKey = null;
+                                }
+                                hangDetectionExecutor.shutdownNow();
+                                hangDetectionExecutor = null;
                             }
                         }
                         try {
@@ -428,8 +433,9 @@ public class QuarkusTestExtension
         }
     }
 
+    // keep it super simple for now, but we might need multiple strategies in the future
     private void populateDeepCloneField(StartupAction startupAction) {
-        deepClone = new SerializationWithXStreamFallbackDeepClone(startupAction.getClassLoader());
+        deepClone = new XStreamDeepClone(startupAction.getClassLoader());
     }
 
     private void populateCallbacks(ClassLoader classLoader) throws ClassNotFoundException {
