@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,54 +23,38 @@ import java.lang.annotation.Target;
 import android.content.Intent;
 
 /**
- * <blockquote>
- * 
  * This annotation is intended to be used on methods to receive results from a
  * previously started activity using
- * {@link android.app.Activity#startActivityForResult(Intent, int)}
- * 
- * </blockquote> <blockquote>
- * 
+ * {@link android.app.Activity#startActivityForResult(Intent, int)} or the
+ * generated <code>IntentBuilder.startActivityForResult()</code> method of the
+ * activity.
+ * <p/>
  * The annotation value must be an integer constant that represents the
  * <b>requestCode</b> associated with the given result.
- * 
- * </blockquote> <blockquote>
- * 
+ * <p/>
  * The method may have multiple parameter :
  * <ul>
- * <li>A android.content.Intent that contains data
- * <li>An int or an java.lang.Integer to get the resultCode
+ * <li>A {@link android.content.Intent} that contains data
+ * <li>An <code>int</code> or an {@link java.lang.Integer} to get the resultCode
  * </ul>
+ * <p/>
+ * <blockquote>
  * 
- * Some usage examples of &#064;OnActivityResult annotation: <blockquote>
- * 
- * </blockquote>
+ * Some usage examples of &#064;OnActivityResult annotation:
  * 
  * <pre>
  * &#064;OnActivityResult(<b>REQUEST_CODE</b>)
  * void onResult(int resultCode, Intent data) {
  * }
- * </pre>
  * 
- * </blockquote> <blockquote>
- * 
- * <pre>
  * &#064;OnActivityResult(<b>REQUEST_CODE</b>)
  * void onResult(int resultCode) {
  * }
- * </pre>
  * 
- * </blockquote> <blockquote>
- * 
- * <pre>
  * &#064;OnActivityResult(<b>ANOTHER_REQUEST_CODE</b>)
  * void onResult(Intent data) {
  * }
- * </pre>
  * 
- * </blockquote> <blockquote>
- * 
- * <pre>
  * &#064;OnActivityResult(<b>ANOTHER_REQUEST_CODE</b>)
  * void onResult() {
  * }
@@ -78,12 +62,9 @@ import android.content.Intent;
  * 
  * </blockquote>
  * 
+ * @see EActivity
  * @see android.app.Activity#startActivityForResult(Intent, int)
  * @see android.app.Activity#onActivityResult(int, int, Intent)
- * 
- * 
- * @author Mathieu Boniface < mat.boniface@gmail.com >
- * 
  */
 
 @Retention(RetentionPolicy.CLASS)

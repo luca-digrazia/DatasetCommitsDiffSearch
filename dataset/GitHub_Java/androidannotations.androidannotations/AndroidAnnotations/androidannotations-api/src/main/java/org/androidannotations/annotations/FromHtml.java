@@ -27,9 +27,8 @@ import org.androidannotations.annotations.res.HtmlRes;
  * {@link android.widget.TextView} subclass field annotated with
  * {@link ViewById} to inject text as HTML.
  * <p/>
- * The annotation value should be a R.string.* field that refers to string
- * resource. If not set, the method name will be used as the R.string.* field
- * name.
+ * The annotation value should be a R.id.* field that refers to string resource.
+ * If not set, the method name will be used as the R.id.* field name.
  * <p/>
  * <blockquote>
  * 
