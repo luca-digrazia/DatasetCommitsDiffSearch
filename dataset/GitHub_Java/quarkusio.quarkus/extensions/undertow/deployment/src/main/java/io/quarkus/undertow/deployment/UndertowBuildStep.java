@@ -92,6 +92,7 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
+import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
@@ -148,6 +149,11 @@ public class UndertowBuildStep {
     CombinedIndexBuildItem combinedIndexBuildItem;
 
     @BuildStep
+    CapabilityBuildItem capability() {
+        return new CapabilityBuildItem(Capability.SERVLET);
+    }
+
+    @BuildStep
     public FeatureBuildItem setupCapability() {
         return new FeatureBuildItem(Feature.SERVLET);
     }
@@ -194,10 +200,8 @@ public class UndertowBuildStep {
         if (servletContextPathBuildItem.getServletContextPath().equals("/")) {
             undertowProducer.accept(new DefaultRouteBuildItem(ut));
         } else {
-            routeProducer.produce(RouteBuildItem.builder().route(servletContextPathBuildItem.getServletContextPath() + "/*")
-                    .handler(ut).build());
-            routeProducer.produce(
-                    RouteBuildItem.builder().route(servletContextPathBuildItem.getServletContextPath()).handler(ut).build());
+            routeProducer.produce(new RouteBuildItem(servletContextPathBuildItem.getServletContextPath() + "/*", ut, false));
+            routeProducer.produce(new RouteBuildItem(servletContextPathBuildItem.getServletContextPath(), ut, false));
         }
         return new ServiceStartBuildItem("undertow");
     }
@@ -246,33 +250,27 @@ public class UndertowBuildStep {
         }
     }
 
-    @BuildStep
-    List<IgnoredServletContainerInitializerBuildItem> translateDeprecated(
-            List<BlacklistedServletContainerInitializerBuildItem> old) {
-        return old.stream().map(BlacklistedServletContainerInitializerBuildItem::getSciClass)
-                .map(IgnoredServletContainerInitializerBuildItem::new).collect(Collectors.toList());
-    }
-
     /*
      * look for Servlet container initializers
      *
      */
     @BuildStep
     public List<ServletContainerInitializerBuildItem> servletContainerInitializer(
+            ApplicationArchivesBuildItem archives,
             CombinedIndexBuildItem combinedIndexBuildItem,
-            List<IgnoredServletContainerInitializerBuildItem> ignoredScis,
+            List<BlacklistedServletContainerInitializerBuildItem> blacklistedBuildItems,
             BuildProducer<AdditionalBeanBuildItem> beans) throws IOException {
 
-        Set<String> ignoredClassNames = new HashSet<>();
-        for (IgnoredServletContainerInitializerBuildItem bi : ignoredScis) {
-            ignoredClassNames.add(bi.getSciClass());
+        Set<String> blacklistedClassNames = new HashSet<>();
+        for (BlacklistedServletContainerInitializerBuildItem bi : blacklistedBuildItems) {
+            blacklistedClassNames.add(bi.getSciClass());
         }
         List<ServletContainerInitializerBuildItem> ret = new ArrayList<>();
         Set<String> initializers = ServiceUtil.classNamesNamedIn(Thread.currentThread().getContextClassLoader(),
                 SERVLET_CONTAINER_INITIALIZER);
 
         for (String initializer : initializers) {
-            if (ignoredClassNames.contains(initializer)) {
+            if (blacklistedClassNames.contains(initializer)) {
                 continue;
             }
             beans.produce(AdditionalBeanBuildItem.unremovableOf(initializer));
