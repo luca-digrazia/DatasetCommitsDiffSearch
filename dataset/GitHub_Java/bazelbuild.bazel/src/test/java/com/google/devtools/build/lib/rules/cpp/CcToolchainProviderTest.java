@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import static com.google.common.truth.Truth.assertThat;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -122,15 +123,29 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
     testDisablingLinkingApiMethod("provider.link_options_do_not_use");
   }
 
-  private void testDisablingLinkingApiMethod(String method) throws Exception {
-    useConfiguration("--experimental_disable_legacy_cc_linking_api");
-    testDisablingLinkingApiMethodWithConfiguration(method);
-    useConfiguration("--incompatible_disable_legacy_flags_cc_toolchain_api");
-    testDisablingLinkingApiMethodWithConfiguration(method);
+  @Test
+  public void testDisablingMostlyStaticLinkOptionsFromConfiguration() throws Exception {
+    testDisablingLinkingApiMethod("ctx.fragments.cpp.mostly_static_link_options([], False)");
   }
 
-  private void testDisablingLinkingApiMethodWithConfiguration(String method) throws Exception {
-    scratch.overwriteFile(
+  @Test
+  public void testDisablingFullyStaticLinkOptionsFromConfiguration() throws Exception {
+    testDisablingLinkingApiMethod("ctx.fragments.cpp.fully_static_link_options([], True)");
+  }
+
+  @Test
+  public void testDisablingDynamicLinkOptionsFromConfiguration() throws Exception {
+    testDisablingLinkingApiMethod("ctx.fragments.cpp.dynamic_link_options([], False)");
+  }
+
+  @Test
+  public void testDisablingLinkOptionsFromConfiguration() throws Exception {
+    testDisablingLinkingApiMethod("ctx.fragments.cpp.link_options");
+  }
+
+  private void testDisablingLinkingApiMethod(String method) throws Exception {
+    useConfiguration("--experimental_disable_legacy_cc_linking_api");
+    scratch.file(
         "test/rule.bzl",
         "def _impl(ctx):",
         "  provider = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]",
@@ -143,15 +158,18 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
         "  fragments = [ 'cpp' ],",
         "  attrs = {'_cc_toolchain': attr.label(default=Label('//test:toolchain')) }",
         ")");
-    scratch.overwriteFile(
+    scratch.file(
         "test/BUILD",
         "load(':rule.bzl', 'my_rule')",
         "cc_toolchain_alias(name = 'toolchain')",
         "my_rule(name = 'target')");
-    invalidatePackages();
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:target");
-    assertContainsEvent("Skylark APIs accessing linking flags has been removed.");
+    AssertionError e =
+        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:target"));
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            "Skylark APIs accessing linking flags has been removed. "
+                + "Use the new API on cc_common.");
   }
 
   @Test
@@ -173,15 +191,30 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
   public void testDisablingUnfilteredOptions() throws Exception {
     testDisablingCompilationApiMethod("provider.unfiltered_compiler_options([])");
   }
-  private void testDisablingCompilationApiMethod(String method) throws Exception {
-    useConfiguration("--experimental_disable_legacy_cc_compilation_api");
-    testDisablingCompilationApiMethodWithConfiguration(method);
-    useConfiguration("--incompatible_disable_legacy_flags_cc_toolchain_api");
-    testDisablingCompilationApiMethodWithConfiguration(method);
+
+  @Test
+  public void testDisablingCompilerOptionsFromConfiguration() throws Exception {
+    testDisablingCompilationApiMethod("ctx.fragments.cpp.compiler_options([])");
   }
 
-  private void testDisablingCompilationApiMethodWithConfiguration(String method) throws Exception {
-    scratch.overwriteFile(
+  @Test
+  public void testDisablingCxxOptionsFromConfiguration() throws Exception {
+    testDisablingCompilationApiMethod("ctx.fragments.cpp.cxx_options([])");
+  }
+
+  @Test
+  public void testDisablingCOptionsFromConfiguration() throws Exception {
+    testDisablingCompilationApiMethod("ctx.fragments.cpp.c_options");
+  }
+
+  @Test
+  public void testDisablingUnfilteredOptionsFromConfiguration() throws Exception {
+    testDisablingCompilationApiMethod("ctx.fragments.cpp.unfiltered_compiler_options([])");
+  }
+
+  private void testDisablingCompilationApiMethod(String method) throws Exception {
+    useConfiguration("--experimental_disable_legacy_cc_compilation_api");
+    scratch.file(
         "test/rule.bzl",
         "def _impl(ctx):",
         "  provider = ctx.attr._cc_toolchain[cc_common.CcToolchainInfo]",
@@ -194,15 +227,18 @@ public class CcToolchainProviderTest extends BuildViewTestCase {
         "  fragments = [ 'cpp' ],",
         "  attrs = {'_cc_toolchain': attr.label(default=Label('//test:toolchain')) }",
         ")");
-    scratch.overwriteFile(
+    scratch.file(
         "test/BUILD",
         "load(':rule.bzl', 'my_rule')",
         "cc_toolchain_alias(name = 'toolchain')",
         "my_rule(name = 'target')");
-    invalidatePackages();
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//test:target");
-    assertContainsEvent("Skylark APIs accessing compilation flags has been removed.");
+    AssertionError e =
+        assertThrows(AssertionError.class, () -> getConfiguredTarget("//test:target"));
+    assertThat(e)
+        .hasMessageThat()
+        .contains(
+            "Skylark APIs accessing compilation flags has been removed. "
+                + "Use the new API on cc_common.");
   }
 
   @Test
