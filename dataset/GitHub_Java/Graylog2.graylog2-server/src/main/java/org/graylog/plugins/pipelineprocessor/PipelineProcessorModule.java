@@ -20,7 +20,6 @@ import org.graylog.plugins.pipelineprocessor.functions.ProcessorFunctionsModule;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
 import org.graylog.plugins.pipelineprocessor.rest.PipelineConnectionsResource;
 import org.graylog.plugins.pipelineprocessor.rest.PipelineResource;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineRestPermissions;
 import org.graylog.plugins.pipelineprocessor.rest.RuleResource;
 import org.graylog2.plugin.PluginConfigBean;
 import org.graylog2.plugin.PluginModule;
@@ -41,7 +40,6 @@ public class PipelineProcessorModule extends PluginModule {
         addRestResource(RuleResource.class);
         addRestResource(PipelineResource.class);
         addRestResource(PipelineConnectionsResource.class);
-        addPermissions(PipelineRestPermissions.class);
 
         install(new ProcessorFunctionsModule());
     }
