@@ -1,15 +1,19 @@
 package io.dropwizard.jetty.setup;
 
 import io.dropwizard.jetty.MutableServletContextHandler;
-import org.eclipse.jetty.continuation.ContinuationFilter;
 import org.eclipse.jetty.http.MimeTypes;
 import org.eclipse.jetty.security.SecurityHandler;
 import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.servlets.WelcomeFilter;
+import org.eclipse.jetty.util.resource.Resource;
+import org.eclipse.jetty.util.resource.ResourceCollection;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 import org.mockito.ArgumentCaptor;
 
 import javax.servlet.Filter;
@@ -28,6 +32,9 @@ public class ServletEnvironmentTest {
     private final ServletHandler servletHandler = mock(ServletHandler.class);
     private final MutableServletContextHandler handler = mock(MutableServletContextHandler.class);
     private final ServletEnvironment environment = new ServletEnvironment(handler);
+
+    @Rule
+    public TemporaryFolder tempDir = new TemporaryFolder();
 
     @Before
     public void setUp() throws Exception {
@@ -89,7 +96,7 @@ public class ServletEnvironmentTest {
 
     @Test
     public void addsFilterClasses() throws Exception {
-        final FilterRegistration.Dynamic builder = environment.addFilter("filter", ContinuationFilter.class);
+        final FilterRegistration.Dynamic builder = environment.addFilter("filter", WelcomeFilter.class);
         assertThat(builder)
                 .isNotNull();
 
@@ -100,7 +107,7 @@ public class ServletEnvironmentTest {
                 .isEqualTo("filter");
 
         // this is ugly, but comparing classes sucks with these type bounds
-        assertThat(holder.getValue().getHeldClass().equals(ContinuationFilter.class))
+        assertThat(holder.getValue().getHeldClass().equals(WelcomeFilter.class))
                 .isTrue();
     }
 
@@ -120,10 +127,57 @@ public class ServletEnvironmentTest {
     }
 
     @Test
+    public void setsBaseResource() throws Exception {
+        final Resource testResource = Resource.newResource(tempDir.newFolder());
+        environment.setBaseResource(testResource);
+
+        verify(handler).setBaseResource(testResource);
+    }
+
+    @Test
+    public void setsBaseResourceList() throws Exception {
+        Resource wooResource = Resource.newResource(tempDir.newFolder());
+        Resource fooResource = Resource.newResource(tempDir.newFolder());
+
+        final Resource[] testResources = new Resource[]{wooResource, fooResource};
+        environment.setBaseResource(testResources);
+
+        ArgumentCaptor<Resource> captor = ArgumentCaptor.forClass(Resource.class);
+        verify(handler).setBaseResource(captor.capture());
+
+        Resource actualResource = captor.getValue();
+        assertThat(actualResource).isInstanceOf(ResourceCollection.class);
+
+        ResourceCollection actualResourceCollection = (ResourceCollection) actualResource;
+        assertThat(actualResourceCollection.getResources()).contains(wooResource, fooResource);
+
+    }
+
+    @Test
     public void setsResourceBase() throws Exception {
         environment.setResourceBase("/woo");
 
         verify(handler).setResourceBase("/woo");
+    }
+
+    @Test
+    public void setsBaseResourceStringList() throws Exception {
+        String wooResource = tempDir.newFolder().getAbsolutePath();
+        String fooResource = tempDir.newFolder().getAbsolutePath();
+
+        final String[] testResources = new String[]{wooResource, fooResource};
+        environment.setBaseResource(testResources);
+
+        ArgumentCaptor<Resource> captor = ArgumentCaptor.forClass(Resource.class);
+        verify(handler).setBaseResource(captor.capture());
+
+        Resource actualResource = captor.getValue();
+        assertThat(actualResource).isInstanceOf(ResourceCollection.class);
+
+        ResourceCollection actualResourceCollection = (ResourceCollection) actualResource;
+        assertThat(actualResourceCollection.getResources()).contains(Resource.newResource(wooResource),
+            Resource.newResource(fooResource));
+
     }
 
     @Test
