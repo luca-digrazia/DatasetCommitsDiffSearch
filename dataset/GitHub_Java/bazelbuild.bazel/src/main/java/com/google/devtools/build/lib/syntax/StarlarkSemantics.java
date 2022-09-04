@@ -140,6 +140,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleDisableObjcProviderResources();
 
+  public abstract boolean incompatibleDisallowDataTransition();
+
   public abstract boolean incompatibleDisallowDictPlus();
 
   public abstract boolean incompatibleDisallowFileType();
@@ -212,11 +214,12 @@ public abstract class StarlarkSemantics {
           .incompatibleDisableThirdPartyLicenseChecking(false)
           .incompatibleDisableDeprecatedAttrParams(false)
           .incompatibleDisableObjcProviderResources(false)
+          .incompatibleDisallowDataTransition(true)
           .incompatibleDisallowDictPlus(true)
           .incompatibleDisallowFileType(true)
           .incompatibleDisallowLegacyJavaProvider(false)
           .incompatibleDisallowLegacyJavaInfo(false)
-          .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(true)
+          .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(false)
           .incompatibleDisallowNativeInBuildFile(false)
           .incompatibleDisallowOldStyleArgsAdd(true)
           .incompatibleDisallowStructProviderSyntax(false)
@@ -266,6 +269,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDisableDeprecatedAttrParams(boolean value);
 
     public abstract Builder incompatibleDisableObjcProviderResources(boolean value);
+
+    public abstract Builder incompatibleDisallowDataTransition(boolean value);
 
     public abstract Builder incompatibleDisallowDictPlus(boolean value);
 
