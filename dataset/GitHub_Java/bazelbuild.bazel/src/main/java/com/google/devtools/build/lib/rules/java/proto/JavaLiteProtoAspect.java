@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.java.proto;
 
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.devtools.build.lib.cmdline.Label.parseAbsoluteUnchecked;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
@@ -50,6 +51,8 @@ import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
+import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
+import com.google.devtools.build.lib.rules.proto.SupportData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import javax.annotation.Nullable;
 
@@ -90,12 +93,13 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
     ConfiguredAspect.Builder aspect = new ConfiguredAspect.Builder(this, parameters, ruleContext);
 
     // Get SupportData, which is provided by the proto_library rule we attach to.
-    ProtoSourcesProvider protoProvider =
-        ctadBase.getConfiguredTarget().getProvider(ProtoSourcesProvider.class);
+    SupportData supportData =
+        checkNotNull(ctadBase.getConfiguredTarget().getProvider(ProtoSupportDataProvider.class))
+            .getSupportData();
 
     JavaProtoAspectCommon aspectCommon =
         JavaProtoAspectCommon.getLiteInstance(ruleContext, javaSemantics);
-    Impl impl = new Impl(ruleContext, protoProvider, aspectCommon);
+    Impl impl = new Impl(ruleContext, supportData, aspectCommon);
     impl.addProviders(aspect);
 
     return aspect.build();
@@ -146,7 +150,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
   private static class Impl {
 
     private final RuleContext ruleContext;
-    private final ProtoSourcesProvider protoProvider;
+    private final SupportData supportData;
 
     /**
      * Compilation-args from all dependencies, merged together. This is typically the input to a
@@ -160,12 +164,9 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
     private final JavaProtoAspectCommon aspectCommon;
     private final Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders;
 
-    Impl(
-        RuleContext ruleContext,
-        ProtoSourcesProvider protoProvider,
-        JavaProtoAspectCommon aspectCommon) {
+    Impl(RuleContext ruleContext, SupportData supportData, JavaProtoAspectCommon aspectCommon) {
       this.ruleContext = ruleContext;
-      this.protoProvider = protoProvider;
+      this.supportData = supportData;
       this.aspectCommon = aspectCommon;
       this.javaProtoLibraryAspectProviders =
           ruleContext.getPrerequisites(
@@ -194,7 +195,7 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
         transitiveOutputJars.addTransitive(provider.getJars());
       }
 
-      if (!protoProvider.getDirectProtoSources().isEmpty()) {
+      if (supportData.hasProtoSources()) {
         Artifact sourceJar = aspectCommon.getSourceJarArtifact();
         createProtoCompileAction(sourceJar);
         Artifact outputJar = aspectCommon.getOutputJarArtifact();
@@ -263,17 +264,17 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
                   "javalite",
                   aspectCommon.getProtoToolchainProvider(),
                   sourceJar.getExecPathString())),
-          protoProvider.getDirectProtoSources(),
-          protoProvider.getTransitiveImports(),
-          protoProvider.getProtosInDirectDeps(),
-          protoProvider.getTransitiveProtoSourceRoots(),
-          protoProvider.getDirectProtoSourceRoots(),
+          supportData.getDirectProtoSources(),
+          supportData.getTransitiveImports(),
+          supportData.getProtosInDirectDeps(),
+          supportData.getTransitiveProtoPathFlags(),
+          supportData.getDirectProtoSourceRoots(),
           ruleContext.getLabel(),
           ImmutableList.of(sourceJar),
           "JavaLite",
           /* allowServices= */ true,
-          protoProvider.getProtosInExports(),
-          protoProvider.getExportedProtoSourceRoots());
+          supportData.getProtosInExports(),
+          supportData.getExportedProtoSourceRoots());
     }
   }
 }
