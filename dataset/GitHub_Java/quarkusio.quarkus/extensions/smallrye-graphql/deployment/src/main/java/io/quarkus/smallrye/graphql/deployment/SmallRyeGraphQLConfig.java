@@ -1,6 +1,5 @@
 package io.quarkus.smallrye.graphql.deployment;
 
-import java.util.List;
 import java.util.Optional;
 
 import io.quarkus.runtime.annotations.ConfigDocSection;
@@ -12,14 +11,13 @@ import io.smallrye.graphql.schema.helper.TypeAutoNameStrategy;
 public class SmallRyeGraphQLConfig {
 
     /**
-     * The rootPath under which queries will be served. Default to graphql
-     * By default, this value will be resolved as a path relative to `${quarkus.http.root-path}`.
+     * The rootPath under which queries will be served. Default to /graphql
      */
-    @ConfigItem(defaultValue = "graphql")
+    @ConfigItem(defaultValue = "/graphql")
     String rootPath;
 
     /**
-     * Enable metrics. By default this is false. If set to true, a metrics extension is required.
+     * Enable metrics. By default this will be enabled if the metrics extension is added.
      */
     @ConfigItem(name = "metrics.enabled")
     Optional<Boolean> metricsEnabled;
@@ -43,51 +41,10 @@ public class SmallRyeGraphQLConfig {
     boolean eventsEnabled;
 
     /**
-     * Enable GET Requests. Allow queries via HTTP GET.
-     */
-    @ConfigItem(name = "http.get.enabled")
-    Optional<Boolean> httpGetEnabled;
-
-    /**
-     * Enable Query parameter on POST Requests. Allow POST request to override or supply values in a query parameter.
-     */
-    @ConfigItem(name = "http.post.queryparameters.enabled")
-    Optional<Boolean> httpPostQueryParametersEnabled;
-
-    /**
      * Change the type naming strategy.
      */
     @ConfigItem(defaultValue = "Default")
     TypeAutoNameStrategy autoNameStrategy;
-
-    /**
-     * List of extension fields that should be included in the error response.
-     * By default none will be included. Examples of valid values include
-     * [exception,classification,code,description,validationErrorType,queryPath]
-     */
-    @ConfigItem
-    Optional<List<String>> errorExtensionFields;
-
-    /**
-     * List of Runtime Exceptions class names that should show the error message.
-     * By default Runtime Exception messages will be hidden and a generic `Server Error` message will be returned.
-     */
-    @ConfigItem
-    Optional<List<String>> showRuntimeExceptionMessage;
-
-    /**
-     * List of Checked Exceptions class names that should hide the error message.
-     * By default Checked Exception messages will show the exception message.
-     */
-    @ConfigItem
-    Optional<List<String>> hideCheckedExceptionMessage;
-
-    /**
-     * The default error message that will be used for hidden exception messages.
-     * Defaults to "Server Error"
-     */
-    @ConfigItem
-    Optional<String> defaultErrorMessage;
 
     /**
      * SmallRye GraphQL UI configuration
