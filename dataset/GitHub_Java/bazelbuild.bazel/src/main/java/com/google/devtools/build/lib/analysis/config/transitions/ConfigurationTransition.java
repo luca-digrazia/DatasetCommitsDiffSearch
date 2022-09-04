@@ -14,14 +14,11 @@
 
 package com.google.devtools.build.lib.analysis.config.transitions;
 
-import static com.google.common.collect.ImmutableSet.toImmutableSet;
-
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.util.ClassName;
 import java.util.Map;
 
 /**
@@ -48,18 +45,13 @@ public interface ConfigurationTransition {
    * {@link #requiresOptionFragments()} variation for Starlark transitions, which need a {@link
    * BuildOptions} instance to map required options to their {@link FragmentOptions}.
    *
-   * <p>This version pre-translates the fragments to their final string representations. This is
-   * because Starlark transitions can depend on both native fragments and Starlark flags. The latter
-   * are reported directly, not as part of a larger fragment.
-   *
    * <p>Non-Starlark transitions should override {@link #requiresOptionFragments()} and ignore this.
    *
-   * <p>Callers may ignore this method if they know they're not calling into a Starlark transition.
+   * <p>Callers may also ignore this if they know they're not calling into a Starlark transition.
    */
-  default ImmutableSet<String> requiresOptionFragments(BuildOptions options) {
-    return requiresOptionFragments().stream()
-        .map(ClassName::getSimpleNameWithOuter)
-        .collect(toImmutableSet());
+  default ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments(
+      BuildOptions options) {
+    return requiresOptionFragments();
   }
 
   /**
@@ -72,8 +64,7 @@ public interface ConfigurationTransition {
    *
    * <p>Returning an empty or null map triggers a {@link RuntimeException}.
    */
-  Map<String, BuildOptions> apply(BuildOptionsView buildOptions, EventHandler eventHandler)
-      throws InterruptedException;
+  Map<String, BuildOptions> apply(BuildOptionsView buildOptions, EventHandler eventHandler);
 
   /**
    * We want to keep the number of transition interfaces no larger than what's necessary to maintain
