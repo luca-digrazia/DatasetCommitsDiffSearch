@@ -40,10 +40,13 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
+import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -73,6 +76,7 @@ import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
+import java.util.Map.Entry;
 import javax.annotation.Nullable;
 
 /**
@@ -184,8 +188,23 @@ public class LegacyCompilationSupport extends CompilationSupport {
       ExtraCompileArgs extraCompileArgs,
       Iterable<PathFragment> priorityHeaders,
       Optional<CppModuleMap> moduleMap) {
-    ImmutableList.Builder<Artifact> objFiles = ImmutableList.builder();
-    ImmutableList.Builder<ObjcHeaderThinningInfo> objcHeaderThinningInfos = ImmutableList.builder();
+    ImmutableList.Builder<Artifact> objFiles = new ImmutableList.Builder<>();
+    ImmutableMap<Artifact, Artifact> sourceFilesToHeadersListFiles = ImmutableMap.of();
+    if (isHeaderThinningEnabled()) {
+      sourceFilesToHeadersListFiles =
+          generateHeadersListArtifactsForSources(
+              Iterables.concat(
+                  compilationArtifacts.getSrcs(), compilationArtifacts.getNonArcSrcs()));
+      if (!sourceFilesToHeadersListFiles.isEmpty()) {
+        registerHeaderScanningAction(
+            sourceFilesToHeadersListFiles,
+            objcProvider,
+            compilationArtifacts,
+            priorityHeaders,
+            moduleMap,
+            extraCompileArgs);
+      }
+    }
 
     for (Artifact sourceFile : compilationArtifacts.getSrcs()) {
       Artifact objFile = intermediateArtifacts.objFile(sourceFile);
@@ -201,18 +220,15 @@ public class LegacyCompilationSupport extends CompilationSupport {
             compilationArtifacts,
             Iterables.concat(extraCompileArgs, ImmutableList.of("-fobjc-arc")));
       } else {
-        ObjcHeaderThinningInfo objcHeaderThinningInfo =
-            registerCompileAction(
-                sourceFile,
-                objFile,
-                objcProvider,
-                priorityHeaders,
-                moduleMap,
-                compilationArtifacts,
-                Iterables.concat(extraCompileArgs, ImmutableList.of("-fobjc-arc")));
-        if (objcHeaderThinningInfo != null) {
-          objcHeaderThinningInfos.add(objcHeaderThinningInfo);
-        }
+        registerCompileAction(
+            sourceFile,
+            objFile,
+            objcProvider,
+            priorityHeaders,
+            moduleMap,
+            compilationArtifacts,
+            Iterables.concat(extraCompileArgs, ImmutableList.of("-fobjc-arc")),
+            sourceFilesToHeadersListFiles);
       }
     }
     for (Artifact nonArcSourceFile : compilationArtifacts.getNonArcSrcs()) {
@@ -228,18 +244,15 @@ public class LegacyCompilationSupport extends CompilationSupport {
             compilationArtifacts,
             Iterables.concat(extraCompileArgs, ImmutableList.of("-fno-objc-arc")));
       } else {
-        ObjcHeaderThinningInfo objcHeaderThinningInfo =
-            registerCompileAction(
-                nonArcSourceFile,
-                objFile,
-                objcProvider,
-                priorityHeaders,
-                moduleMap,
-                compilationArtifacts,
-                Iterables.concat(extraCompileArgs, ImmutableList.of("-fno-objc-arc")));
-        if (objcHeaderThinningInfo != null) {
-          objcHeaderThinningInfos.add(objcHeaderThinningInfo);
-        }
+        registerCompileAction(
+            nonArcSourceFile,
+            objFile,
+            objcProvider,
+            priorityHeaders,
+            moduleMap,
+            compilationArtifacts,
+            Iterables.concat(extraCompileArgs, ImmutableList.of("-fno-objc-arc")),
+            sourceFilesToHeadersListFiles);
       }
     }
 
@@ -248,41 +261,30 @@ public class LegacyCompilationSupport extends CompilationSupport {
     for (Artifact archive : compilationArtifacts.getArchive().asSet()) {
       registerArchiveActions(objFiles.build(), archive);
     }
-
-    registerHeaderScanningActions(
-        objcHeaderThinningInfos.build(), objcProvider, compilationArtifacts);
   }
 
-  private CustomCommandLine compileActionCommandLine(
-      Artifact sourceFile,
-      Artifact objFile,
+  /**
+   * Configures a {@link CustomCommandLine.Builder} with common compilation arguments for building
+   * Objective-C sources.
+   *
+   * <p>The command line arguments generated by this method are common to both ObjcCompile and
+   * ObjcHeaderScanning actions. Arguments that are only necessary or useful when doing more than
+   * preprocessing (i.e. building an object file via ObjcCompile) are not specified here.
+   *
+   * @param commandLine existing {@link CustomCommandLine.Builder} to add common arguments to
+   * @return passed in {@code commandLine} with common arguments added
+   */
+  private CustomCommandLine.Builder commonCompileActionCommandLine(
+      CustomCommandLine.Builder commandLine,
       ObjcProvider objcProvider,
       Iterable<PathFragment> priorityHeaders,
       Optional<CppModuleMap> moduleMap,
       Optional<Artifact> pchFile,
-      Optional<Artifact> dotdFile,
       Iterable<String> otherFlags,
-      boolean collectCodeCoverage,
       boolean isCPlusPlusSource) {
-    CustomCommandLine.Builder commandLine = new CustomCommandLine.Builder().add(CLANG);
-
     if (isCPlusPlusSource) {
       commandLine.add("-stdlib=libc++");
       commandLine.add("-std=gnu++11");
-    }
-
-    // The linker needs full debug symbol information to perform binary dead-code stripping.
-    if (objcConfiguration.shouldStripBinary()) {
-      commandLine.add("-g");
-    }
-
-    List<String> coverageFlags = ImmutableList.of();
-    if (collectCodeCoverage) {
-      if (buildConfiguration.isLLVMCoverageMapFormatEnabled()) {
-        coverageFlags = CLANG_LLVM_COVERAGE_FLAGS;
-      } else {
-        coverageFlags = CLANG_GCOV_COVERAGE_FLAGS;
-      }
     }
 
     commandLine
@@ -297,8 +299,60 @@ public class LegacyCompilationSupport extends CompilationSupport {
         .addBeforeEachPath("-isystem", objcProvider.get(INCLUDE_SYSTEM))
         .add(otherFlags)
         .addFormatEach("-D%s", objcProvider.get(DEFINE))
-        .add(coverageFlags)
         .add(getCompileRuleCopts());
+
+    // Add module map arguments.
+    if (moduleMap.isPresent()) {
+      // If modules are enabled for the rule, -fmodules is added to the copts already. (This implies
+      // module map usage). Otherwise, we need to pass -fmodule-maps.
+      if (!attributes.enableModules()) {
+        commandLine.add("-fmodule-maps");
+      }
+      // -fmodule-map-file only loads the module in Xcode 7, so we add the module maps's directory
+      // to the include path instead.
+      // TODO(bazel-team): Use -fmodule-map-file when Xcode 6 support is dropped.
+      commandLine
+          .add("-iquote")
+          .add(moduleMap.get().getArtifact().getExecPath().getParentDirectory().toString())
+          .add("-fmodule-name=" + moduleMap.get().getName());
+    }
+
+    return commandLine;
+  }
+
+  private CustomCommandLine compileActionCommandLine(
+      Artifact sourceFile,
+      Artifact objFile,
+      ObjcProvider objcProvider,
+      Iterable<PathFragment> priorityHeaders,
+      Optional<CppModuleMap> moduleMap,
+      Optional<Artifact> pchFile,
+      Optional<Artifact> dotdFile,
+      Iterable<String> otherFlags,
+      boolean collectCodeCoverage,
+      boolean isCPlusPlusSource) {
+    CustomCommandLine.Builder commandLine =
+        commonCompileActionCommandLine(
+            new CustomCommandLine.Builder().add(CLANG),
+            objcProvider,
+            priorityHeaders,
+            moduleMap,
+            pchFile,
+            otherFlags,
+            isCPlusPlusSource);
+
+    // The linker needs full debug symbol information to perform binary dead-code stripping.
+    if (objcConfiguration.shouldStripBinary()) {
+      commandLine.add("-g");
+    }
+
+    if (collectCodeCoverage) {
+      if (buildConfiguration.isLLVMCoverageMapFormatEnabled()) {
+        commandLine.add(CLANG_LLVM_COVERAGE_FLAGS);
+      } else {
+        commandLine.add(CLANG_GCOV_COVERAGE_FLAGS);
+      }
+    }
 
     // Add input source file arguments
     commandLine.add("-c");
@@ -339,34 +393,18 @@ public class LegacyCompilationSupport extends CompilationSupport {
       commandLine.add("-MD").addExecPath("-MF", dotdFile.get());
     }
 
-    // Add module map arguments.
-    if (moduleMap.isPresent()) {
-      // If modules are enabled for the rule, -fmodules is added to the copts already. (This implies
-      // module map usage). Otherwise, we need to pass -fmodule-maps.
-      if (!attributes.enableModules()) {
-        commandLine.add("-fmodule-maps");
-      }
-      // -fmodule-map-file only loads the module in Xcode 7, so we add the module maps's directory
-      // to the include path instead.
-      // TODO(bazel-team): Use -fmodule-map-file when Xcode 6 support is dropped.
-      commandLine
-          .add("-iquote")
-          .add(moduleMap.get().getArtifact().getExecPath().getParentDirectory().toString())
-          .add("-fmodule-name=" + moduleMap.get().getName());
-    }
-
     return commandLine.build();
   }
 
-  @Nullable
-  private ObjcHeaderThinningInfo registerCompileAction(
+  private void registerCompileAction(
       Artifact sourceFile,
       Artifact objFile,
       ObjcProvider objcProvider,
       Iterable<PathFragment> priorityHeaders,
       Optional<CppModuleMap> moduleMap,
       CompilationArtifacts compilationArtifacts,
-      Iterable<String> otherFlags) {
+      Iterable<String> otherFlags,
+      ImmutableMap<Artifact, Artifact> sourceToOutput) {
     boolean isCPlusPlusSource = ObjcRuleClasses.CPP_SOURCES.matches(sourceFile.getExecPath());
     boolean runCodeCoverage =
         buildConfiguration.isCodeCoverageEnabled() && ObjcRuleClasses.isInstrumentable(sourceFile);
@@ -408,14 +446,9 @@ public class LegacyCompilationSupport extends CompilationSupport {
             .addTransitiveMandatoryInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE))
             .setDotdFile(dotdFile)
             .addMandatoryInputs(compilationArtifacts.getPchFile().asSet());
-
-    Artifact headersListFile = null;
-    if (isHeaderThinningEnabled()
-        && SOURCES_FOR_HEADER_THINNING.matches(sourceFile.getFilename())) {
-      headersListFile = intermediateArtifacts.headersListFile(sourceFile);
-      compileBuilder.setHeadersListFile(headersListFile);
+    if (sourceToOutput.containsKey(sourceFile)) {
+      compileBuilder.setHeadersListFile(sourceToOutput.get(sourceFile));
     }
-
     ruleContext.registerAction(
         compileBuilder
             .setMnemonic("ObjcCompile")
@@ -425,11 +458,6 @@ public class LegacyCompilationSupport extends CompilationSupport {
             .addOutputs(gcnoFile.asSet())
             .addOutput(dotdFile.artifact())
             .build(ruleContext));
-
-    return headersListFile == null
-        ? null
-        : new ObjcHeaderThinningInfo(
-            sourceFile, headersListFile, ImmutableList.copyOf(commandLine.arguments()));
   }
 
   /**
@@ -493,6 +521,64 @@ public class LegacyCompilationSupport extends CompilationSupport {
             .addCommonTransitiveInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE))
             .addCommonInputs(compilationArtifacts.getPchFile().asSet())
             .build(ruleContext.getActionOwner()));
+  }
+
+  private ImmutableMap<Artifact, Artifact> generateHeadersListArtifactsForSources(
+      Iterable<Artifact> sources) {
+    ImmutableMap.Builder<Artifact, Artifact> sourceFileToHeadersListBuilder =
+        ImmutableMap.builder();
+    for (Artifact source : sources) {
+      // Tree artifacts are not currently supported
+      if (!source.isTreeArtifact() && SOURCES_FOR_HEADER_THINNING.matches(source.getFilename())) {
+        sourceFileToHeadersListBuilder.put(source, intermediateArtifacts.headersListFile(source));
+      }
+    }
+    return sourceFileToHeadersListBuilder.build();
+  }
+
+  private void registerHeaderScanningAction(
+      ImmutableMap<Artifact, Artifact> sourceFilesToHeadersListFiles,
+      ObjcProvider objcProvider,
+      CompilationArtifacts compilationArtifacts,
+      Iterable<PathFragment> priorityHeaders,
+      Optional<CppModuleMap> moduleMap,
+      Iterable<String> otherFlags) {
+    FilesToRunProvider headerScannerExecutable = getHeaderThinningToolExecutable();
+
+    CustomCommandLine.Builder cmdLine = CustomCommandLine.builder();
+    for (Entry<Artifact, Artifact> entry : sourceFilesToHeadersListFiles.entrySet()) {
+      cmdLine.addJoinPaths(
+          ":", Lists.newArrayList(entry.getKey().getExecPath(), entry.getValue().getExecPath()));
+    }
+    cmdLine.add("--");
+    commonCompileActionCommandLine(
+        cmdLine,
+        objcProvider,
+        priorityHeaders,
+        moduleMap,
+        compilationArtifacts.getPchFile(),
+        otherFlags,
+        true);
+
+    NestedSet<Artifact> moduleMapInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    if (objcConfiguration.moduleMapsEnabled()) {
+      moduleMapInputs = objcProvider.get(MODULE_MAP);
+    }
+
+    ruleContext.registerAction(
+        new SpawnAction.Builder()
+            .setMnemonic("ObjcHeaderScanning")
+            .setExecutable(headerScannerExecutable)
+            .setCommandLine(cmdLine.build())
+            .addInputs(sourceFilesToHeadersListFiles.keySet())
+            .addInputs(compilationArtifacts.getPrivateHdrs())
+            .addInputs(compilationArtifacts.getPchFile().asSet())
+            .addTransitiveInputs(objcProvider.get(ObjcProvider.HEADER))
+            .addTransitiveInputs(moduleMapInputs)
+            .addTransitiveInputs(objcProvider.get(ObjcProvider.STATIC_FRAMEWORK_FILE))
+            .addTransitiveInputs(objcProvider.get(ObjcProvider.DYNAMIC_FRAMEWORK_FILE))
+            .addOutputs(sourceFilesToHeadersListFiles.values())
+            .build(ruleContext));
   }
 
   private void registerArchiveActions(List<Artifact> objFiles, Artifact archive) {

@@ -254,11 +254,7 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .setFeatureConfiguration(getFeatureConfiguration(ruleContext, buildConfiguration))
             .build();
     ruleContext.registerAction(executableLinkAction);    
-
-    if (objcConfiguration.shouldStripBinary()) {
-      registerBinaryStripAction(binaryToLink, StrippingType.DEFAULT);
-    }
-
+    
     return this;
   }
   private CcLibraryHelper createCcLibraryHelper(ObjcProvider objcProvider,
