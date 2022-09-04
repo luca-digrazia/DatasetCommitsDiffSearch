@@ -139,9 +139,6 @@ public class Deflector { // extends Ablenkblech
             LOG.error("Could not properly create new target <{}>", newTarget);
         }
 
-        LOG.info("Waiting for index allocation of <{}>", newTarget);
-        indices.waitForRecovery(newTarget);
-
         LOG.info("Done!");
 
         // Point deflector to new index.
