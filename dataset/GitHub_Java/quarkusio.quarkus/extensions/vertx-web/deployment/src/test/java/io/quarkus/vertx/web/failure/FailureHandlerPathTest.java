@@ -29,7 +29,7 @@ public class FailureHandlerPathTest {
     public static class Routes {
 
         @Route
-        String fail(@Param String type) {
+        void fail(@Param String type) {
             throw new RuntimeException("Unknown!");
         }
 

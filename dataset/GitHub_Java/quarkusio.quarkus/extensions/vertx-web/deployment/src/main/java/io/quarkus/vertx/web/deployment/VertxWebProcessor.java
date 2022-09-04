@@ -530,15 +530,14 @@ class VertxWebProcessor {
         } else {
             baseName = io.quarkus.arc.processor.DotNames.simpleName(bean.getImplClazz().name());
         }
-        String targetPackage = io.quarkus.arc.processor.DotNames
-                .internalPackageNameWithTrailingSlash(bean.getImplClazz().name());
+        String targetPackage = io.quarkus.arc.processor.DotNames.packageName(bean.getImplClazz().name());
 
         StringBuilder sigBuilder = new StringBuilder();
         sigBuilder.append(method.name()).append("_").append(method.returnType().name().toString());
         for (Type i : method.parameters()) {
             sigBuilder.append(i.name().toString());
         }
-        String generatedName = targetPackage + baseName + HANDLER_SUFFIX + "_" + method.name() + "_"
+        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + HANDLER_SUFFIX + "_" + method.name() + "_"
                 + HashUtil.sha1(sigBuilder.toString() + hashSuffix);
 
         ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName)
@@ -815,7 +814,7 @@ class VertxWebProcessor {
 
     private static final List<DotName> TYPES_IGNORED_FOR_REFLECTION = Arrays
             .asList(io.quarkus.arc.processor.DotNames.STRING,
-                    DotNames.BUFFER, DotNames.JSON_ARRAY, DotNames.JSON_OBJECT);
+                    DotNames.BUFFER, DotNames.RX_BUFFER, DotNames.JSON_ARRAY, DotNames.JSON_OBJECT);
 
     private static void registerForReflection(Type contentType,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy) {
@@ -847,6 +846,8 @@ class VertxWebProcessor {
             writer.invokeStaticMethod(Methods.MULTI_SUBSCRIBE_BUFFER, res, rc);
         } else if (descriptor.isContentTypeMutinyBuffer()) {
             writer.invokeStaticMethod(Methods.MULTI_SUBSCRIBE_MUTINY_BUFFER, res, rc);
+        } else if (descriptor.isContentTypeRxBuffer()) {
+            writer.invokeStaticMethod(Methods.MULTI_SUBSCRIBE_RX_BUFFER, res, rc);
         } else if (descriptor.isContentTypeString()) {
             writer.invokeStaticMethod(Methods.MULTI_SUBSCRIBE_STRING, res, rc);
         } else { // Multi<Object> - encode to json.
@@ -871,6 +872,8 @@ class VertxWebProcessor {
             writer.invokeStaticMethod(Methods.MULTI_SSE_SUBSCRIBE_BUFFER, res, rc);
         } else if (descriptor.isContentTypeMutinyBuffer()) {
             writer.invokeStaticMethod(Methods.MULTI_SSE_SUBSCRIBE_MUTINY_BUFFER, res, rc);
+        } else if (descriptor.isContentTypeRxBuffer()) {
+            writer.invokeStaticMethod(Methods.MULTI_SSE_SUBSCRIBE_RX_BUFFER, res, rc);
         } else if (descriptor.isContentTypeString()) {
             writer.invokeStaticMethod(Methods.MULTI_SSE_SUBSCRIBE_STRING, res, rc);
         } else { // Multi<Object> - encode to json.
@@ -894,7 +897,8 @@ class VertxWebProcessor {
             writer.invokeStaticMethod(Methods.MULTI_JSON_SUBSCRIBE_VOID, res, rc);
         } else if (descriptor.isContentTypeString()) {
             writer.invokeStaticMethod(Methods.MULTI_JSON_SUBSCRIBE_STRING, res, rc);
-        } else if (descriptor.isContentTypeBuffer() || descriptor.isContentTypeMutinyBuffer()) {
+        } else if (descriptor.isContentTypeBuffer() || descriptor.isContentTypeRxBuffer()
+                || descriptor.isContentTypeMutinyBuffer()) {
             writer.invokeStaticMethod(Methods.MULTI_JSON_FAIL, rc);
         } else { // Multi<Object> - encode to json.
             writer.invokeStaticMethod(Methods.MULTI_JSON_SUBSCRIBE_OBJECT, res, rc);
@@ -915,7 +919,7 @@ class VertxWebProcessor {
      * <pre>
      *     item -> {
      *       if (item != null) {
-     *          Buffer buffer = getBuffer(item); // Manage Mutiny buffer
+     *          Buffer buffer = getBuffer(item); // Manage RX and Mutiny buffer
      *          rc.response().end(buffer);
      *       } else {
      *           rc.fail(new NullPointerException(...);
@@ -994,6 +998,10 @@ class VertxWebProcessor {
             BytecodeCreator writer, FieldCreator validatorField, ResultHandle owner) {
         if (descriptor.isContentTypeString() || descriptor.isContentTypeBuffer()) {
             return res;
+        }
+
+        if (descriptor.isContentTypeRxBuffer()) {
+            return writer.invokeVirtualMethod(Methods.RX_GET_DELEGATE, res);
         }
 
         if (descriptor.isContentTypeMutinyBuffer()) {
@@ -1133,6 +1141,20 @@ class VertxWebProcessor {
                     }
                 }).build());
 
+        injectors.add(ParameterInjector.builder().matchType(DotNames.RX_ROUTING_CONTEXT)
+                .resultHandleProvider(new ResultHandleProvider() {
+                    @Override
+                    public ResultHandle get(MethodInfo method, Type paramType, Set<AnnotationInstance> annotations,
+                            ResultHandle routingContext, MethodCreator invoke, int position,
+                            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy) {
+                        return invoke.newInstance(
+                                MethodDescriptor
+                                        .ofConstructor(io.vertx.reactivex.ext.web.RoutingContext.class,
+                                                RoutingContext.class),
+                                routingContext);
+                    }
+                }).build());
+
         injectors.add(ParameterInjector.builder().matchType(DotNames.ROUTING_EXCHANGE)
                 .resultHandleProvider(new ResultHandleProvider() {
                     @Override
@@ -1170,7 +1192,7 @@ class VertxWebProcessor {
                     }
                 }).build());
 
-        injectors.add(ParameterInjector.builder().matchType(DotNames.MUTINY_HTTP_SERVER_REQUEST)
+        injectors.add(ParameterInjector.builder().matchType(DotNames.RX_HTTP_SERVER_REQUEST)
                 .resultHandleProvider(new ResultHandleProvider() {
                     @Override
                     public ResultHandle get(MethodInfo method, Type paramType, Set<AnnotationInstance> annotations,
@@ -1178,7 +1200,7 @@ class VertxWebProcessor {
                             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy) {
                         return invoke.newInstance(
                                 MethodDescriptor
-                                        .ofConstructor(io.vertx.mutiny.core.http.HttpServerRequest.class,
+                                        .ofConstructor(io.vertx.reactivex.core.http.HttpServerRequest.class,
                                                 HttpServerRequest.class),
                                 invoke
                                         .invokeInterfaceMethod(Methods.REQUEST,
@@ -1187,7 +1209,7 @@ class VertxWebProcessor {
                 }).build());
 
         injectors
-                .add(ParameterInjector.builder().matchType(DotNames.MUTINY_HTTP_SERVER_RESPONSE)
+                .add(ParameterInjector.builder().matchType(DotNames.RX_HTTP_SERVER_RESPONSE)
                         .resultHandleProvider(new ResultHandleProvider() {
                             @Override
                             public ResultHandle get(MethodInfo method, Type paramType,
@@ -1196,7 +1218,7 @@ class VertxWebProcessor {
                                     BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy) {
                                 return invoke.newInstance(
                                         MethodDescriptor
-                                                .ofConstructor(io.vertx.mutiny.core.http.HttpServerResponse.class,
+                                                .ofConstructor(io.vertx.reactivex.core.http.HttpServerResponse.class,
                                                         HttpServerResponse.class),
                                         invoke
                                                 .invokeInterfaceMethod(Methods.RESPONSE,
