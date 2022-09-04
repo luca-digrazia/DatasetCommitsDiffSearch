@@ -14,7 +14,6 @@ import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.FieldDescriptor;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.ResultHandle;
-import io.quarkus.gizmo.TryBlock;
 import io.quarkus.panache.common.Page;
 import io.quarkus.panache.common.Sort;
 import io.quarkus.rest.data.panache.RestDataResource;
@@ -51,18 +50,14 @@ public final class ListHalMethodImplementor extends HalMethodImplementor {
      *             &#64;QueryParam("sort") String sortQuery) {
      *         Page page = Page.of(pageIndex, pageSize);
      *         Sort sort = ...; // Build a sort instance by parsing a query param
-     *         try {
-     *             List<Entity> entities = resource.getAll(page, sort);
-     *             // Get the page count, and build first, last, next, previous page instances
-     *             HalCollectionWrapper wrapper = new HalCollectionWrapper(entities, Entity.class, "entities");
-     *             // Add first, last, next and previous page URIs to the wrapper if they exist
-     *             Response.ResponseBuilder responseBuilder = Response.status(200);
-     *             responseBuilder.entity(wrapper);
-     *             // Add headers with first, last, next and previous page URIs if they exist
-     *             return responseBuilder.build();
-     *         } catch (Throwable t) {
-     *             throw new RestDataPanacheException(t);
-     *         }
+     *         List<Entity> entities = resource.getAll(page, sort);
+     *         // Get the page count, and build first, last, next, previous page instances
+     *         HalCollectionWrapper wrapper = new HalCollectionWrapper(entities, Entity.class, "entities");
+     *         // Add first, last, next and previous page URIs to the wrapper if they exist
+     *         Response.ResponseBuilder responseBuilder = Response.status(200);
+     *         responseBuilder.entity(wrapper);
+     *         // Add headers with first, last, next and previous page URIs if they exist
+     *         return responseBuilder.build();
      *    }
      * }
      * </pre>
@@ -85,14 +80,14 @@ public final class ListHalMethodImplementor extends HalMethodImplementor {
     private void implementPaged(ClassCreator classCreator, ResourceMetadata resourceMetadata,
             ResourceProperties resourceProperties, FieldDescriptor resourceField) {
         // Method parameters: sort strings, page index, page size, uri info
+        // TODO could list be an Iterator?
         MethodCreator methodCreator = classCreator.getMethodCreator(METHOD_NAME, Response.class, List.class, int.class,
                 int.class, UriInfo.class);
 
         // Add method annotations
-        addPathAnnotation(methodCreator, resourceProperties.getPath(RESOURCE_METHOD_NAME));
+        addPathAnnotation(methodCreator, resourceProperties.getMethodPath(RESOURCE_METHOD_NAME));
         addGetAnnotation(methodCreator);
         addProducesAnnotation(methodCreator, APPLICATION_HAL_JSON);
-        addSortQueryParamValidatorAnnotation(methodCreator);
         addQueryParamAnnotation(methodCreator.getParameterAnnotations(0), "sort");
         addQueryParamAnnotation(methodCreator.getParameterAnnotations(1), "page");
         addDefaultValueAnnotation(methodCreator.getParameterAnnotations(1), Integer.toString(DEFAULT_PAGE_INDEX));
@@ -100,62 +95,56 @@ public final class ListHalMethodImplementor extends HalMethodImplementor {
         addDefaultValueAnnotation(methodCreator.getParameterAnnotations(2), Integer.toString(DEFAULT_PAGE_SIZE));
         addContextAnnotation(methodCreator.getParameterAnnotations(3));
 
+        // Invoke resource methods
         ResultHandle resource = methodCreator.readInstanceField(resourceField, methodCreator.getThis());
+
         ResultHandle sortQuery = methodCreator.getMethodParam(0);
         ResultHandle sort = sortImplementor.getSort(methodCreator, sortQuery);
         ResultHandle pageIndex = methodCreator.getMethodParam(1);
         ResultHandle pageSize = methodCreator.getMethodParam(2);
         ResultHandle page = paginationImplementor.getPage(methodCreator, pageIndex, pageSize);
-        ResultHandle uriInfo = methodCreator.getMethodParam(3);
-
-        // Invoke resource methods
-        TryBlock tryBlock = implementTryBlock(methodCreator, "Failed to list the entities");
-        ResultHandle pageCount = tryBlock.invokeVirtualMethod(
+        ResultHandle pageCount = methodCreator.invokeVirtualMethod(
                 ofMethod(resourceMetadata.getResourceClass(), Constants.PAGE_COUNT_METHOD_PREFIX + RESOURCE_METHOD_NAME,
                         int.class, Page.class),
                 resource, page);
-        ResultHandle links = paginationImplementor.getLinks(tryBlock, uriInfo, page, pageCount);
-        ResultHandle entities = tryBlock.invokeVirtualMethod(
+        ResultHandle uriInfo = methodCreator.getMethodParam(3);
+        ResultHandle links = paginationImplementor.getLinks(methodCreator, uriInfo, page, pageCount);
+        ResultHandle entities = methodCreator.invokeVirtualMethod(
                 ofMethod(resourceMetadata.getResourceClass(), RESOURCE_METHOD_NAME, List.class, Page.class, Sort.class),
                 resource, page, sort);
 
         // Wrap and return response
-        ResultHandle wrapper = wrapHalEntities(tryBlock, entities, resourceMetadata.getEntityType(),
+        ResultHandle wrapper = wrapHalEntities(methodCreator, entities, resourceMetadata.getEntityType(),
                 resourceProperties.getHalCollectionName());
-        tryBlock.invokeVirtualMethod(
+        methodCreator.invokeVirtualMethod(
                 ofMethod(HalCollectionWrapper.class, "addLinks", void.class, Link[].class), wrapper, links);
-        tryBlock.returnValue(ResponseImplementor.ok(tryBlock, wrapper, links));
-
-        tryBlock.close();
+        methodCreator.returnValue(ResponseImplementor.ok(methodCreator, wrapper, links));
         methodCreator.close();
     }
 
     private void implementNotPaged(ClassCreator classCreator, ResourceMetadata resourceMetadata,
             ResourceProperties resourceProperties, FieldDescriptor resourceFieldDescriptor) {
+        // TODO could list be an Iterator?
         MethodCreator methodCreator = classCreator.getMethodCreator(METHOD_NAME, Response.class, List.class);
 
         // Add method annotations
-        addPathAnnotation(methodCreator, resourceProperties.getPath(RESOURCE_METHOD_NAME));
+        addPathAnnotation(methodCreator, resourceProperties.getMethodPath(RESOURCE_METHOD_NAME));
         addGetAnnotation(methodCreator);
         addProducesAnnotation(methodCreator, APPLICATION_HAL_JSON);
         addQueryParamAnnotation(methodCreator.getParameterAnnotations(0), "sort");
 
+        // Invoke resource methods
         ResultHandle sortQuery = methodCreator.getMethodParam(0);
         ResultHandle sort = sortImplementor.getSort(methodCreator, sortQuery);
         ResultHandle resource = methodCreator.readInstanceField(resourceFieldDescriptor, methodCreator.getThis());
-
-        // Invoke resource methods
-        TryBlock tryBlock = implementTryBlock(methodCreator, "Failed to list the entities");
-        ResultHandle entities = tryBlock.invokeVirtualMethod(
+        ResultHandle entities = methodCreator.invokeVirtualMethod(
                 ofMethod(resourceMetadata.getResourceClass(), RESOURCE_METHOD_NAME, List.class, Page.class, Sort.class),
-                resource, tryBlock.loadNull(), sort);
+                resource, methodCreator.loadNull(), sort);
 
         // Wrap and return response
-        ResultHandle wrapper = wrapHalEntities(tryBlock, entities, resourceMetadata.getEntityType(),
+        ResultHandle wrapper = wrapHalEntities(methodCreator, entities, resourceMetadata.getEntityType(),
                 resourceProperties.getHalCollectionName());
-        tryBlock.returnValue(ResponseImplementor.ok(tryBlock, wrapper));
-
-        tryBlock.close();
+        methodCreator.returnValue(ResponseImplementor.ok(methodCreator, wrapper));
         methodCreator.close();
     }
 }
