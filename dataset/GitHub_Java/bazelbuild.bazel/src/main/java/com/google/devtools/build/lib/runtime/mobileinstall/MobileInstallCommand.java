@@ -277,8 +277,7 @@ public class MobileInstallCommand implements BlazeCommand {
       }
     }
 
-    Path workingDir =
-        env.getDirectories().getOutputPath(env.getWorkspaceName()).getParentDirectory();
+    Path workingDir = env.getBlazeWorkspace().getOutputPath().getParentDirectory();
     com.google.devtools.build.lib.shell.Command command =
         new CommandBuilder()
             .addArgs(cmdLine)
