@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
+import static com.google.devtools.build.lib.cmdline.Label.parseAbsoluteUnchecked;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.rules.java.JavaRuleClasses.HOST_JAVA_RUNTIME_ATTRIBUTE_NAME;
@@ -39,6 +40,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
+import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -56,6 +58,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import javax.annotation.Nullable;
 
 /** An Aspect which JavaProtoLibrary injects to build Java SPEED protos. */
 public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
@@ -72,15 +75,18 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
   private final JavaSemantics javaSemantics;
 
+  @Nullable private final String jacocoLabel;
   private final RpcSupport rpcSupport;
   private final String defaultSpeedProtoToolchainLabel;
 
   protected JavaProtoAspect(
       JavaSemantics javaSemantics,
+      @Nullable String jacocoLabel,
       RpcSupport rpcSupport,
       String defaultSpeedProtoToolchainLabel,
       RuleDefinitionEnvironment env) {
     this.javaSemantics = Preconditions.checkNotNull(javaSemantics);
+    this.jacocoLabel = jacocoLabel;
     this.rpcSupport = Preconditions.checkNotNull(rpcSupport);
     this.defaultSpeedProtoToolchainLabel =
         Preconditions.checkNotNull(defaultSpeedProtoToolchainLabel);
@@ -140,7 +146,13 @@ public class JavaProtoAspect extends NativeAspectClass implements ConfiguredAspe
 
     rpcSupport.mutateAspectDefinition(result, aspectParameters);
 
-    return result.build();
+    Attribute.Builder<Label> jacocoAttr =
+        attr("$jacoco_instrumentation", LABEL).cfg(HostTransition.INSTANCE);
+
+    if (jacocoLabel != null) {
+      jacocoAttr.value(parseAbsoluteUnchecked(jacocoLabel));
+    }
+    return result.add(jacocoAttr).build();
   }
 
   private static class Impl {

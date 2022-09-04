@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.java.proto;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
+import static com.google.devtools.build.lib.cmdline.Label.parseAbsoluteUnchecked;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.rules.java.JavaRuleClasses.HOST_JAVA_RUNTIME_ATTRIBUTE_NAME;
@@ -39,6 +40,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AspectDefinition;
 import com.google.devtools.build.lib.packages.AspectParameters;
+import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
 import com.google.devtools.build.lib.packages.NativeAspectClass;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
@@ -55,6 +57,7 @@ import com.google.devtools.build.lib.rules.proto.ProtoConfiguration;
 import com.google.devtools.build.lib.rules.proto.ProtoInfo;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
+import javax.annotation.Nullable;
 
 /** An Aspect which JavaLiteProtoLibrary injects to build Java Lite protos. */
 public class JavaLiteProtoAspect extends NativeAspectClass implements ConfiguredAspectFactory {
@@ -68,15 +71,18 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
 
   private final JavaSemantics javaSemantics;
 
+  @Nullable private final String jacocoLabel;
   private final String defaultProtoToolchainLabel;
   private final Label hostJdkAttribute;
   private final Label javaToolchainAttribute;
 
   public JavaLiteProtoAspect(
       JavaSemantics javaSemantics,
+      @Nullable String jacocoLabel,
       String defaultProtoToolchainLabel,
       RuleDefinitionEnvironment env) {
     this.javaSemantics = javaSemantics;
+    this.jacocoLabel = jacocoLabel;
     this.defaultProtoToolchainLabel = defaultProtoToolchainLabel;
     this.hostJdkAttribute = JavaSemantics.hostJdkAttribute(env);
     this.javaToolchainAttribute = JavaSemantics.javaToolchainAttribute(env);
@@ -129,7 +135,13 @@ public class JavaLiteProtoAspect extends NativeAspectClass implements Configured
                     .value(javaToolchainAttribute)
                     .mandatoryProviders(ToolchainInfo.PROVIDER.id()));
 
-    return result.build();
+    Attribute.Builder<Label> jacocoAttr =
+        attr("$jacoco_instrumentation", LABEL).cfg(HostTransition.INSTANCE);
+
+    if (jacocoLabel != null) {
+      jacocoAttr.value(parseAbsoluteUnchecked(jacocoLabel));
+    }
+    return result.add(jacocoAttr).build();
   }
 
   private static class Impl {
