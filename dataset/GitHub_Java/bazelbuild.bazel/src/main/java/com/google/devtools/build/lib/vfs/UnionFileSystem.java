@@ -333,14 +333,15 @@ public class UnionFileSystem extends FileSystem {
    * @param path the {@link Path} whose children are to be retrieved
    */
   @Override
-  protected Collection<String> getDirectoryEntries(Path path) throws IOException {
+  protected Collection<Path> getDirectoryEntries(Path path) throws IOException {
+    Path origPath = path;
     path = internalResolveSymlink(path);
     FileSystem delegate = getDelegate(path);
     Path resolvedPath = adjustPath(path, delegate);
     Collection<Path> entries = resolvedPath.getDirectoryEntries();
-    Collection<String> result = Lists.newArrayListWithCapacity(entries.size());
+    Collection<Path> result = Lists.newArrayListWithCapacity(entries.size());
     for (Path entry : entries) {
-      result.add(entry.getBaseName());
+      result.add(origPath.getChild(entry.getBaseName()));
     }
     return result;
   }
