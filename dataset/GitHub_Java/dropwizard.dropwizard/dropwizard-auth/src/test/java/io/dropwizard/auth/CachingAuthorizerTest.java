@@ -1,10 +1,10 @@
 package io.dropwizard.auth;
 
 import com.codahale.metrics.MetricRegistry;
-import com.github.benmanes.caffeine.cache.CaffeineSpec;
-import io.dropwizard.util.Sets;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import com.google.common.cache.CacheBuilderSpec;
+import com.google.common.collect.ImmutableSet;
+import org.junit.Before;
+import org.junit.Test;
 import org.mockito.InOrder;
 
 import java.security.Principal;
@@ -25,14 +25,15 @@ public class CachingAuthorizerTest {
     private final CachingAuthorizer<Principal> cached = new CachingAuthorizer<>(
         new MetricRegistry(),
         underlying,
-        CaffeineSpec.parse("maximumSize=1")
+        CacheBuilderSpec.parse("maximumSize=1")
     );
 
     private final Principal principal = new PrincipalImpl("principal");
     private final Principal principal2 = new PrincipalImpl("principal2");
+    private final Principal principal3 = new PrincipalImpl("principal3");
     private final String role = "popular_kids";
 
-    @BeforeEach
+    @Before
     public void setUp() throws Exception {
         when(underlying.authorize(any(), anyString())).thenReturn(true);
     }
@@ -48,10 +49,7 @@ public class CachingAuthorizerTest {
     @Test
     public void respectsTheCacheConfiguration() throws Exception {
         cached.authorize(principal, role);
-        // We need to make sure that background cache invalidation is done before other requests
-        cached.cache.cleanUp();
         cached.authorize(principal2, role);
-        cached.cache.cleanUp();
         cached.authorize(principal, role);
 
         final InOrder inOrder = inOrder(underlying);
@@ -82,7 +80,7 @@ public class CachingAuthorizerTest {
     public void invalidatesSetsofPrincipals() throws Exception {
         cached.authorize(principal, role);
         cached.authorize(principal2, role);
-        cached.invalidateAll(Sets.of(principal, principal2));
+        cached.invalidateAll(ImmutableSet.of(principal, principal2));
         cached.authorize(principal, role);
         cached.authorize(principal2, role);
 
