@@ -129,28 +129,25 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
    */
   protected String configurationBin(
       String arch, ConfigurationDistinguisher configurationDistinguisher) {
-    return configurationBin(arch, configurationDistinguisher, null, CompilationMode.FASTBUILD);
+    return configurationBin(arch, configurationDistinguisher, null);
   }
 
   /**
-   * Returns the bin dir for artifacts built for a given Apple architecture and minimum OS version
-   * (as set by a configuration transition) and configuration distinguisher but the global default
-   * for {@code --cpu}.
+   * Returns the bin dir for artifacts built for a given Apple architecture and minimum OS
+   * version (as set by a configuration transition) and configuration distinguisher but the global
+   * default for {@code --cpu}.
    *
    * @param arch the given Apple architecture which artifacts are built under this configuration.
    *     Note this will likely be different than the value of {@code --cpu}.
-   * @param configurationDistinguisher the configuration distinguisher used to describe the a
-   *     configuration transition
-   * @param minOsVersion the minimum os version for which to compile artifacts in the configuration
-   * @param compilationMode the compilation mode used during the build
+   * @param configurationDistinguisher the configuration distinguisher used to describe the
+   *     a configuration transition
+   * @param minOsVersion the minimum os version for which to compile artifacts in the
+   *     configuration
    */
   protected String configurationBin(
-      String arch,
-      ConfigurationDistinguisher configurationDistinguisher,
-      DottedVersion minOsVersion,
-      CompilationMode compilationMode) {
-    return configurationDir(arch, configurationDistinguisher, minOsVersion, compilationMode)
-        + "bin/";
+      String arch, ConfigurationDistinguisher configurationDistinguisher,
+      DottedVersion minOsVersion) {
+    return configurationDir(arch, configurationDistinguisher, minOsVersion) + "bin/";
   }
 
    /**
@@ -168,12 +165,10 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   protected String configurationGenfiles(
       String arch, ConfigurationDistinguisher configurationDistinguisher,
       DottedVersion minOsVersion) {
-    return configurationDir(
-            arch, configurationDistinguisher, minOsVersion, CompilationMode.FASTBUILD)
-        + getTargetConfiguration()
-            .getGenfilesDirectory(RepositoryName.MAIN)
-            .getExecPath()
-            .getBaseName();
+    return configurationDir(arch, configurationDistinguisher, minOsVersion)
+        + getTargetConfiguration().getGenfilesDirectory(RepositoryName.MAIN)
+            .getExecPath().getBaseName();
+
   }
 
   private static String toolExecutable(String toolSrcPath) {
@@ -182,31 +177,26 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   private String configurationDir(
-      String arch,
-      ConfigurationDistinguisher configurationDistinguisher,
-      DottedVersion minOsVersion,
-      CompilationMode compilationMode) {
+      String arch, ConfigurationDistinguisher configurationDistinguisher,
+      DottedVersion minOsVersion) {
     String minOsSegment = minOsVersion == null ? "" : "-min" + minOsVersion;
-    String modeSegment = compilationModeFlag(compilationMode);
     switch (configurationDistinguisher) {
       case UNKNOWN:
-        return String.format("%s-out/ios_%s-%s/", TestConstants.PRODUCT_NAME, arch, modeSegment);
+        return String.format("%s-out/ios_%s-fastbuild/", TestConstants.PRODUCT_NAME, arch);
       case APPLEBIN_IOS:
         return String.format(
-            "%1$s-out/ios-%2$s%4$s-%3$s-ios_%2$s-%5$s/",
+            "%1$s-out/ios-%2$s%4$s-%3$s-ios_%2$s-fastbuild/",
             TestConstants.PRODUCT_NAME,
             arch,
             configurationDistinguisher.toString().toLowerCase(Locale.US),
-            minOsSegment,
-            modeSegment);
+            minOsSegment);
       case APPLEBIN_WATCHOS:
         return String.format(
-            "%1$s-out/watchos-%2$s%4$s-%3$s-watchos_%2$s-%5$s/",
+            "%1$s-out/watchos-%2$s%4$s-%3$s-watchos_%2$s-fastbuild/",
             TestConstants.PRODUCT_NAME,
             arch,
             configurationDistinguisher.toString().toLowerCase(Locale.US),
-            minOsSegment,
-            modeSegment);
+            minOsSegment);
       default:
         throw new AssertionError();
     }

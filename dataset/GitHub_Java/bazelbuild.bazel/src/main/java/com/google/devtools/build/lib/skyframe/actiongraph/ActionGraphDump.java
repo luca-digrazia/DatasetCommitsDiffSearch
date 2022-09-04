@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.skyframe.actiongraph;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
-import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
 import com.google.devtools.build.lib.analysis.AnalysisProtos;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -59,10 +58,6 @@ public class ActionGraphDump {
   private final KnownAspectDescriptors knownAspectDescriptors;
   private final KnownRuleConfiguredTargets knownRuleConfiguredTargets;
   private final boolean includeActionCmdLine;
-
-  public ActionGraphDump(boolean includeActionCmdLine) {
-    this(/* actionGraphTargets= */ ImmutableList.of("..."), includeActionCmdLine);
-  }
 
   public ActionGraphDump(List<String> actionGraphTargets, boolean includeActionCmdLine) {
     this.actionGraphTargets = ImmutableSet.copyOf(actionGraphTargets);
@@ -110,7 +105,7 @@ public class ActionGraphDump {
       SpawnAction spawnAction = (SpawnAction) action;
       // TODO(twerth): This handles the fixed environment. We probably want to output the inherited
       // environment as well.
-      Map<String, String> fixedEnvironment = spawnAction.getEnvironment().getFixedEnv().toMap();
+      ImmutableMap<String, String> fixedEnvironment = spawnAction.getEnvironment().getFixedEnv();
       for (Map.Entry<String, String> environmentVariable : fixedEnvironment.entrySet()) {
         AnalysisProtos.KeyValuePair.Builder keyValuePairBuilder =
             AnalysisProtos.KeyValuePair.newBuilder();
@@ -122,16 +117,6 @@ public class ActionGraphDump {
 
       if (includeActionCmdLine) {
         actionBuilder.addAllArguments(spawnAction.getArguments());
-      }
-    }
-
-    if (action instanceof ExecutionInfoSpecifier) {
-      ExecutionInfoSpecifier executionInfoSpecifier = (ExecutionInfoSpecifier) action;
-      for (Map.Entry<String, String> info : executionInfoSpecifier.getExecutionInfo().entrySet()) {
-        actionBuilder.addExecutionInfo(
-            AnalysisProtos.KeyValuePair.newBuilder()
-                .setKey(info.getKey())
-                .setValue(info.getValue()));
       }
     }
 

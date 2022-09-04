@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.extra.CppLinkInfo;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -319,7 +318,7 @@ public final class CppLinkAction extends AbstractAction
                 estimateResourceConsumptionLocal());
         return ActionResult.create(
             actionExecutionContext
-                .getContext(SpawnActionContext.class)
+                .getSpawnActionContext(spawn)
                 .exec(spawn, actionExecutionContext));
       } catch (ExecException e) {
         throw e.toActionExecutionException(
