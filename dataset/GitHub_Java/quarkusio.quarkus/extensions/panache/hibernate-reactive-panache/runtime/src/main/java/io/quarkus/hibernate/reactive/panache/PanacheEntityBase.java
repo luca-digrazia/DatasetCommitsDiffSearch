@@ -703,7 +703,6 @@ public abstract class PanacheEntityBase {
      * @see #persist(Stream)
      * @see #persist(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static Uni<Void> persist(Iterable<?> entities) {
         return INSTANCE.persist(entities);
     }
@@ -717,7 +716,6 @@ public abstract class PanacheEntityBase {
      * @see #persist(Iterable)
      * @see #persist(Object,Object...)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static Uni<Void> persist(Stream<?> entities) {
         return INSTANCE.persist(entities);
     }
@@ -731,7 +729,6 @@ public abstract class PanacheEntityBase {
      * @see #persist(Stream)
      * @see #persist(Iterable)
      */
-    @GenerateBridge(callSuperMethod = true)
     public static Uni<Void> persist(Object firstEntity, Object... entities) {
         return INSTANCE.persist(firstEntity, entities);
     }
