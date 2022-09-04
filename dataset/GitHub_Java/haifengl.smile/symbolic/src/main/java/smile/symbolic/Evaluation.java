@@ -17,8 +17,6 @@
 package smile.symbolic;
 
 /**
- * <code>Evaluation</code> computes the value of an expression for a particular value.
- *
  * @author Ernest DeFoy
  */
 public class Evaluation {
@@ -32,6 +30,9 @@ public class Evaluation {
     }
 
     public double evaluate(String expression, double val) throws InvalidExpressionException {
+
+
+
         return 0.0;
     }
 }
