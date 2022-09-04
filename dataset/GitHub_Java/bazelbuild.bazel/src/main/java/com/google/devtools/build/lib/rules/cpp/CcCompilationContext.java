@@ -144,7 +144,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
             getSystemIncludeDirs().stream()
-                .map(PathFragment::getSafePathString)
+                .map(PathFragment::getPathString)
                 .collect(ImmutableList.toImmutableList())));
   }
 
@@ -155,7 +155,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
             getIncludeDirs().stream()
-                .map(PathFragment::getSafePathString)
+                .map(PathFragment::getPathString)
                 .collect(ImmutableList.toImmutableList())));
   }
 
@@ -166,7 +166,7 @@ public final class CcCompilationContext implements CcCompilationContextApi {
         NestedSetBuilder.wrap(
             Order.STABLE_ORDER,
             getQuoteIncludeDirs().stream()
-                .map(PathFragment::getSafePathString)
+                .map(PathFragment::getPathString)
                 .collect(ImmutableList.toImmutableList())));
   }
 

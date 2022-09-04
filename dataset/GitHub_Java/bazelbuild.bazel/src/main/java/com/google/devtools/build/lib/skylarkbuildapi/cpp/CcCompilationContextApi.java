@@ -32,39 +32,36 @@ import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 public interface CcCompilationContextApi {
   @SkylarkCallable(
       name = "defines",
-      doc = "Returns the set of defines needed to compile this target. Each define is a string.",
+      documented = false,
+      allowReturnNones = true,
       structField = true)
   SkylarkNestedSet getSkylarkDefines();
 
   @SkylarkCallable(
       name = "headers",
-      doc = "Returns the set of headers needed to compile this target.",
+      documented = false,
+      allowReturnNones = true,
       structField = true)
   SkylarkNestedSet getSkylarkHeaders();
 
   @SkylarkCallable(
       name = "system_includes",
-      doc =
-          "Returns the set of search paths for header files referenced by angle brackets, e.g. "
-              + "#include <foo/bar/header.h>. They can be either relative to the exec root "
-              + "or absolute. Usually passed with -isystem.",
+      documented = false,
+      allowReturnNones = true,
       structField = true)
   SkylarkNestedSet getSkylarkSystemIncludeDirs();
 
   @SkylarkCallable(
       name = "includes",
-      doc =
-          "Returns the set of search paths for header files referenced both by angle bracket and "
-              + "quotes Usually passed with -I.",
+      documented = false,
+      allowReturnNones = true,
       structField = true)
   SkylarkNestedSet getSkylarkIncludeDirs();
 
   @SkylarkCallable(
       name = "quote_includes",
-      doc =
-          "Returns the set of search paths for header files referenced by quotes, e.g. "
-              + "#include \"foo/bar/header.h\". They can be either relative to the exec "
-              + "root or absolute. Usually passed with -iquote.",
+      documented = false,
+      allowReturnNones = true,
       structField = true)
   SkylarkNestedSet getSkylarkQuoteIncludeDirs();
 }
