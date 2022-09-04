@@ -29,8 +29,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-import static com.codahale.metrics.MetricRegistry.name;
-
 public class EventBusProvider implements Provider<EventBus> {
     private final BaseConfiguration configuration;
     private final MetricRegistry metricRegistry;
@@ -48,9 +46,6 @@ public class EventBusProvider implements Provider<EventBus> {
 
     private ExecutorService executorService(int nThreads) {
         final ThreadFactory threadFactory = new ThreadFactoryBuilder().setDaemon(true).setNameFormat("eventbus-handler-%d").build();
-        return new InstrumentedExecutorService(
-                Executors.newFixedThreadPool(nThreads, threadFactory),
-                metricRegistry,
-                name(this.getClass(), "executor-service"));
+        return new InstrumentedExecutorService(Executors.newFixedThreadPool(nThreads, threadFactory), metricRegistry);
     }
 }

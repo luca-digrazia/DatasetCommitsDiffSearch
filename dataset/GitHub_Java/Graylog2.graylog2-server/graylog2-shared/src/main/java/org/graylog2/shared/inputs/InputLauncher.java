@@ -30,7 +30,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 public class InputLauncher {
@@ -53,10 +52,7 @@ public class InputLauncher {
 
     private ExecutorService executorService(final MetricRegistry metricRegistry) {
         final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat("inputs-%d").build();
-        return new InstrumentedExecutorService(
-                Executors.newCachedThreadPool(threadFactory),
-                metricRegistry,
-                name(this.getClass(), "executor-service"));
+        return new InstrumentedExecutorService(Executors.newCachedThreadPool(threadFactory), metricRegistry);
     }
 
     public IOState<MessageInput> launch(final MessageInput input) {
