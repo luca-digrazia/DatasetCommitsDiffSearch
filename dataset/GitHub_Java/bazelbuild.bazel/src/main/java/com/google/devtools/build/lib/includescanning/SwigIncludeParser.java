@@ -43,8 +43,8 @@ class SwigIncludeParser extends IncludeParser {
     return pos;
   }
 
-  /** See javadoc for {@link IncludeParser#getFileType()} */
   @Override
+  /** See javadoc for {@link IncludeParser#getFileType()} */
   protected GrepIncludesFileType getFileType() {
     return GrepIncludesFileType.SWIG;
   }

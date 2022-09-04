@@ -13,9 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.includescanning;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
@@ -24,16 +22,18 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Interner;
 import com.google.common.collect.Sets;
 import com.google.common.flogger.GoogleLogger;
 import com.google.common.io.CharStreams;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
@@ -67,6 +67,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -134,7 +135,7 @@ class IncludeParser {
 
     @Override
     public String toString() {
-      return type + " " + pattern + " " + findRoot + " " + findFilter;
+      return "" + type + " " + pattern + " " + findRoot + " " + findFilter;
     }
   }
 
@@ -189,17 +190,24 @@ class IncludeParser {
 
     private final AtomicReference<FilesystemCalls> syscallCache = new AtomicReference<>();
 
-    private final LoadingCache<Artifact, ImmutableList<Artifact>> fileLevelHintsCache =
+    private final LoadingCache<Artifact, Collection<Artifact>> fileLevelHintsCache =
         CacheBuilder.newBuilder()
             .concurrencyLevel(HINTS_CACHE_CONCURRENCY)
-            .build(CacheLoader.from(this::getHintedInclusionsLegacy));
+            .build(
+                new CacheLoader<Artifact, Collection<Artifact>>() {
+                  @Override
+                  public Collection<Artifact> load(Artifact path) {
+                    return getHintedInclusionsLegacy(
+                        Rule.Type.FILE, path.getExecPath(), path.getRoot());
+                  }
+                });
 
     /**
      * Constructs a hint set for a given INCLUDE_HINTS file to read.
      *
      * @param hintsRules the {@link HintsRules} parsed from INCLUDE_HINTS
      */
-    Hints(HintsRules hintsRules, ArtifactFactory artifactFactory) {
+    public Hints(HintsRules hintsRules, ArtifactFactory artifactFactory) {
       this.artifactFactory = artifactFactory;
       this.rules = hintsRules.rules;
       clearCachedLegacyHints();
@@ -208,9 +216,9 @@ class IncludeParser {
     static HintsRules getRules(Path hintsFile) throws IOException {
       ImmutableList.Builder<Rule> rules = ImmutableList.builder();
       try (InputStream is = hintsFile.getInputStream()) {
-        for (String line : CharStreams.readLines(new InputStreamReader(is, UTF_8))) {
+        for (String line : CharStreams.readLines(new InputStreamReader(is, "UTF-8"))) {
           line = line.trim();
-          if (line.isEmpty() || line.startsWith("#")) {
+          if (line.length() == 0 || line.startsWith("#")) {
             continue;
           }
           String[] tokens = WS_PAT.split(line);
@@ -252,7 +260,7 @@ class IncludeParser {
     }
 
     /** Returns the "file" type hinted inclusions for a given path, caching results by path. */
-    ImmutableList<Artifact> getFileLevelHintedInclusionsLegacy(Artifact path) {
+    Collection<Artifact> getFileLevelHintedInclusionsLegacy(Artifact path) {
       if (!path.getExecPathString().startsWith(ALLOWED_PREFIX)) {
         return ImmutableList.of();
       }
@@ -262,27 +270,35 @@ class IncludeParser {
     /**
      * Returns the "path" type hinted inclusions for the given paths. Callers are responsible for
      * caching.
-     *
-     * <p>Returns {@code null} when a skyframe restart is necessary.
      */
-    @Nullable
-    ImmutableSet<Artifact> getPathLevelHintedInclusions(
+    Collection<Artifact> getPathLevelHintedInclusions(
         ImmutableList<PathFragment> paths, Environment env) throws InterruptedException {
+      return getHintedInclusionsWithSkyframe(Rule.Type.PATH, paths, env);
+    }
+
+    /**
+     * Performs the work of matching the given paths against the hints and returns the matching
+     * files. This is semantically different from {@link #getHintedInclusionsLegacy} in that it will
+     * not cross package boundaries.
+     */
+    private Collection<Artifact> getHintedInclusionsWithSkyframe(
+        Rule.Type type, ImmutableList<PathFragment> paths, Environment env)
+        throws InterruptedException {
       ImmutableList<String> pathStrings =
           paths.stream()
               .map(PathFragment::getPathString)
-              .filter(p -> p.startsWith(ALLOWED_PREFIX))
-              .collect(toImmutableList());
+              .filter((p) -> p.startsWith(ALLOWED_PREFIX))
+              .collect(ImmutableList.toImmutableList());
       if (pathStrings.isEmpty()) {
-        return ImmutableSet.of();
+        return ImmutableList.of();
       }
-      // Delay creation until we know we need one. Use a sorted set to make sure that the results
-      // have a stable order and are unique.
-      ImmutableSortedSet.Builder<Artifact> hints = null;
+      // Delay creation until we know we need one. Use a TreeSet to make sure that the results are
+      // sorted with a stable order and unique.
+      Set<Artifact> hints = null;
       List<ContainingPackageLookupValue.Key> rulePaths = new ArrayList<>(rules.size());
       List<String> findFilters = new ArrayList<>(rules.size());
       for (Rule rule : rules) {
-        if (rule.type != Rule.Type.PATH) {
+        if (type != rule.type) {
           continue;
         }
         String firstMatchPathString = null;
@@ -298,7 +314,7 @@ class IncludeParser {
           continue;
         }
         if (hints == null) {
-          hints = ImmutableSortedSet.orderedBy(Artifact.EXEC_PATH_COMPARATOR);
+          hints = Sets.newTreeSet(Artifact.EXEC_PATH_COMPARATOR);
         }
         PathFragment relativePath = PathFragment.create(m.replaceFirst(rule.findRoot));
         logger.atFine().log(
@@ -347,11 +363,12 @@ class IncludeParser {
                   containingPackageLookupValue.getContainingPackageName(),
                   containingPackageLookupValue.getContainingPackageRoot(),
                   pattern,
-                  /*excludeDirs=*/ true,
+                  /* excludeDirs= */ true,
                   relativePath.relativeTo(packageFragment)));
         } catch (InvalidGlobPatternException e) {
           env.getListener()
               .handle(Event.warn("Error parsing pattern " + pattern + " for " + relativePath));
+          continue;
         }
       }
       Map<SkyKey, ValueOrException<IOException>> globResults =
@@ -375,22 +392,22 @@ class IncludeParser {
                   packageFragment.getRelative(file), globKey.getPackageRoot()));
         }
       }
-      return hints == null ? ImmutableSet.of() : hints.build();
+      return hints == null || hints.isEmpty() ? ImmutableList.<Artifact>of() : hints;
     }
 
     /**
      * Performs the work of matching a given path against the hints and returns the expanded paths.
-     * The above {@link #getHintedInclusions} should be used in preference, but if the performance
-     * impact of Skyframe restarts is untenable, this can be used as a fallback.
+     * The above {@link #getHintedInclusionsWithSkyframe} should be used in preference, but if the
+     * performance impact of Skyframe restarts is untenable, this can be used as a fallback.
      */
-    private ImmutableList<Artifact> getHintedInclusionsLegacy(Artifact artifact) {
-      String pathString = artifact.getExecPath().getPathString();
-      Root sourceRoot = artifact.getRoot().getRoot();
+    private Collection<Artifact> getHintedInclusionsLegacy(
+        Rule.Type type, PathFragment path, ArtifactRoot sourceRoot) {
+      String pathString = path.getPathString();
       // Delay creation until we know we need one. Use a TreeSet to make sure that the results are
       // sorted with a stable order and unique.
       Set<Path> hints = null;
-      for (Rule rule : rules) {
-        if (rule.type != Rule.Type.FILE) {
+      for (final Rule rule : rules) {
+        if (type != rule.type) {
           continue;
         }
         Matcher m = rule.pattern.matcher(pathString);
@@ -407,7 +424,7 @@ class IncludeParser {
               relativePath, ALLOWED_PREFIX);
           continue;
         }
-        Path root = sourceRoot.getRelative(relativePath);
+        Path root = sourceRoot.getRoot().getRelative(relativePath);
 
         logger.atFine().log("hint for %s %s root: %s", rule.type, pathString, root);
         try {
@@ -428,21 +445,23 @@ class IncludeParser {
           logger.atWarning().withCause(e).log("Error in hint expansion");
         }
       }
-      if (hints == null || hints.isEmpty()) {
+      if (hints != null && !hints.isEmpty()) {
+        // Transform paths into source artifacts (all hints must be to source artifacts).
+        List<Artifact> result = new ArrayList<>(hints.size());
+        for (Path hint : hints) {
+          Root sourcePath = sourceRoot.getRoot();
+          result.add(
+              Preconditions.checkNotNull(
+                  artifactFactory.getSourceArtifact(sourcePath.relativize(hint), sourcePath),
+                  "%s %s %s %s",
+                  hint,
+                  sourcePath,
+                  path));
+        }
+        return result;
+      } else {
         return ImmutableList.of();
       }
-      // Transform paths into source artifacts (all hints must be to source artifacts).
-      ImmutableList.Builder<Artifact> result = ImmutableList.builderWithExpectedSize(hints.size());
-      for (Path hint : hints) {
-        result.add(
-            Preconditions.checkNotNull(
-                artifactFactory.getSourceArtifact(sourceRoot.relativize(hint), sourceRoot),
-                "Missing source artifact, hint=%s, sourceRoot=%s, pathString=%s",
-                hint,
-                sourceRoot,
-                pathString));
-      }
-      return result.build();
     }
 
     private Collection<Inclusion> getHintedInclusions(Artifact path) {
@@ -571,7 +590,7 @@ class IncludeParser {
    * @param pos the starting position
    * @return the resulting position after skipping whitespace and comments.
    */
-  static int skipWhitespace(byte[] chars, int pos, int end) {
+  protected static int skipWhitespace(byte[] chars, int pos, int end) {
     while (pos < end) {
       if (Character.isWhitespace(chars[pos] & 0xff)) {
         pos++;
@@ -712,7 +731,7 @@ class IncludeParser {
   }
 
   /** Processes the output generated by an auxiliary include-scanning binary stored in a file. */
-  static List<Inclusion> processIncludes(Path file) throws IOException {
+  public static List<Inclusion> processIncludes(Path file) throws IOException {
     try {
       byte[] data = FileSystemUtils.readContent(file);
       return IncludeParser.processIncludes(Arrays.asList(new String(data, ISO_8859_1).split("\n")));
@@ -725,7 +744,8 @@ class IncludeParser {
    * Processes the output generated by an auxiliary include-scanning binary read from a stream.
    * Closes the stream upon completion.
    */
-  static List<Inclusion> processIncludes(Object streamName, InputStream is) throws IOException {
+  public static List<Inclusion> processIncludes(Object streamName, InputStream is)
+      throws IOException {
     try (InputStreamReader reader = new InputStreamReader(is, ISO_8859_1)) {
       return processIncludes(CharStreams.readLines(reader));
     } catch (IOException e) {
@@ -866,7 +886,7 @@ class IncludeParser {
     //  (see CppHelper.getGrepIncludes) or misspelled. It would be better to disallow this case.
     if (remoteIncludeScanner != null
         && grepIncludes != null
-        && remoteIncludeScanner.shouldParseRemotely(file)) {
+        && remoteIncludeScanner.shouldParseRemotely(file, actionExecutionContext)) {
       inclusions =
           remoteIncludeScanner.extractInclusions(
               file,
@@ -905,6 +925,73 @@ class IncludeParser {
   }
 
   /**
+   * Extracts all inclusions from a given source file.
+   *
+   * @param file the file to parse & extract inclusions from
+   * @param actionExecutionContext Services in the scope of the action, like the stream to which
+   *     scanning messages are printed
+   * @return a new set of inclusions, normalized to the cache
+   */
+  ListenableFuture<Collection<Inclusion>> extractInclusionsAsync(
+      Executor executor,
+      Artifact file,
+      ActionExecutionMetadata actionExecutionMetadata,
+      ActionExecutionContext actionExecutionContext,
+      Artifact grepIncludes,
+      @Nullable SpawnIncludeScanner remoteIncludeScanner,
+      boolean isOutputFile)
+      throws IOException {
+    ListenableFuture<Collection<Inclusion>> inclusions;
+    if (remoteIncludeScanner != null
+        && remoteIncludeScanner.shouldParseRemotely(file, actionExecutionContext)) {
+      inclusions =
+          remoteIncludeScanner.extractInclusionsAsync(
+              executor,
+              file,
+              actionExecutionMetadata,
+              actionExecutionContext,
+              grepIncludes,
+              getFileType(),
+              isOutputFile);
+    } else {
+      try (SilentCloseable c =
+          Profiler.instance().profile(ProfilerTask.SCANNER, file.getExecPathString())) {
+        inclusions =
+            Futures.immediateFuture(
+                extractInclusions(
+                    FileSystemUtils.readContent(actionExecutionContext.getInputPath(file))));
+      } catch (IOException e) {
+        if (remoteIncludeScanner != null) {
+          logger.atWarning().withCause(e).log(
+              "Falling back on remote parsing of %s", actionExecutionContext.getInputPath(file));
+          inclusions =
+              remoteIncludeScanner.extractInclusionsAsync(
+                  executor,
+                  file,
+                  actionExecutionMetadata,
+                  actionExecutionContext,
+                  grepIncludes,
+                  getFileType(),
+                  isOutputFile);
+        } else {
+          throw e;
+        }
+      }
+    }
+    if (hints != null) {
+      return Futures.transform(
+          inclusions,
+          (c) -> {
+            // Ugly, but saves doing another copy.
+            c.addAll(hints.getHintedInclusions(file));
+            return c;
+          },
+          MoreExecutors.directExecutor());
+    }
+    return inclusions;
+  }
+
+  /**
    * Returns type of the scanned file.
    *
    * <p>Supported values are "c++" for standard c/c++ headers and sources, and "swig" for .swig
@@ -934,11 +1021,11 @@ class IncludeParser {
       return new IncludesKeywordData(pos, true, false);
     }
 
-    static IncludesKeywordData importOrSwig(int pos) {
+    protected static IncludesKeywordData importOrSwig(int pos) {
       return new IncludesKeywordData(pos, false, false);
     }
 
-    static IncludesKeywordData hasInclude(int pos) {
+    protected static IncludesKeywordData hasInclude(int pos) {
       return new IncludesKeywordData(pos, true, true);
     }
   }
@@ -965,6 +1052,8 @@ class IncludeParser {
 
   /**
    * Returns true if we interested in the given inclusion kind. Can be overridden by the subclass.
+   *
+   * @param kind
    */
   protected boolean isValidInclusionKind(Kind kind) {
     return true;
@@ -973,6 +1062,8 @@ class IncludeParser {
   /**
    * Returns inclusion object for non-standard inclusion cases or null if inclusion should be
    * ignored.
+   *
+   * @param inclusionContent
    */
   @Nullable
   protected Inclusion createOtherInclusion(String inclusionContent) {
