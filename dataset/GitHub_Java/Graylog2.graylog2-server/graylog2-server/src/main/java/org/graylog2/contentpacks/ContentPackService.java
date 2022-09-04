@@ -41,11 +41,11 @@ import org.graylog2.contentpacks.model.ContentPackInstallation;
 import org.graylog2.contentpacks.model.ContentPackUninstallDetails;
 import org.graylog2.contentpacks.model.ContentPackUninstallation;
 import org.graylog2.contentpacks.model.ContentPackV1;
+import org.graylog2.contentpacks.model.LegacyContentPack;
+import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.contentpacks.model.constraints.Constraint;
 import org.graylog2.contentpacks.model.constraints.ConstraintCheckResult;
-import org.graylog2.contentpacks.model.constraints.GraylogVersionConstraint;
-import org.graylog2.contentpacks.model.entities.EntitiesWithConstraints;
 import org.graylog2.contentpacks.model.entities.Entity;
 import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.contentpacks.model.entities.EntityExcerpt;
@@ -54,7 +54,6 @@ import org.graylog2.contentpacks.model.entities.NativeEntity;
 import org.graylog2.contentpacks.model.entities.NativeEntityDescriptor;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
 import org.graylog2.contentpacks.model.entities.references.ValueType;
-import org.graylog2.contentpacks.model.entities.references.ValueTyped;
 import org.graylog2.contentpacks.model.parameters.Parameter;
 import org.graylog2.utilities.Graphs;
 import org.slf4j.Logger;
@@ -64,6 +63,7 @@ import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.time.Instant;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -132,7 +132,17 @@ public class ContentPackService {
                 if (existingEntity.isPresent()) {
                     LOG.trace("Found existing entity for {}", entityDescriptor);
                     final NativeEntity<?> nativeEntity = existingEntity.get();
-                    allEntityDescriptors.add(nativeEntity.descriptor());
+                    final NativeEntityDescriptor nativeEntityDescriptor = nativeEntity.descriptor();
+                    /* Found entity on the system or we found a other installation which stated that */
+                    if (contentPackInstallationPersistenceService.countInstallationOfEntityById(nativeEntityDescriptor.id()) <= 0 ||
+                        contentPackInstallationPersistenceService.countInstallationOfEntityByIdAndFoundOnSystem(nativeEntityDescriptor.id()) > 0) {
+                          final NativeEntityDescriptor serverDescriptor = nativeEntityDescriptor.toBuilder()
+                                  .foundOnSystem(true)
+                                  .build();
+                        allEntityDescriptors.add(serverDescriptor);
+                    } else {
+                        allEntityDescriptors.add(nativeEntity.descriptor());
+                    }
                     allEntities.put(entityDescriptor, nativeEntity.entity());
                 } else {
                     LOG.trace("Creating new entity for {}", entityDescriptor);
@@ -203,7 +213,7 @@ public class ContentPackService {
             if (nativeEntityDescriptorOptional.isPresent()) {
                 NativeEntityDescriptor nativeEntityDescriptor = nativeEntityDescriptorOptional.get();
                 if (contentPackInstallationPersistenceService
-                        .countInstallationOfEntityById(nativeEntityDescriptor.contentPackEntityId()) <= 1) {
+                        .countInstallationOfEntityById(nativeEntityDescriptor.id()) <= 1) {
                     nativeEntityDescriptors.add(nativeEntityDescriptor);
                 }
             }
@@ -256,9 +266,13 @@ public class ContentPackService {
                 if (nativeEntityDescriptorOptional.isPresent()) {
                     final NativeEntityDescriptor nativeEntityDescriptor = nativeEntityDescriptorOptional.get();
                     final Optional nativeEntityOptional = facade.loadNativeEntity(nativeEntityDescriptor);
+                    final ModelId entityId = nativeEntityDescriptor.id();
+                    final long installCount = contentPackInstallationPersistenceService
+                            .countInstallationOfEntityById(entityId);
+                    final long systemFoundCount = contentPackInstallationPersistenceService.
+                            countInstallationOfEntityByIdAndFoundOnSystem(entityId);
 
-                    if (contentPackInstallationPersistenceService
-                            .countInstallationOfEntityById(nativeEntityDescriptor.contentPackEntityId()) > 1) {
+                    if (installCount > 1 || (installCount == 1 && systemFoundCount >= 1)) {
                        skippedEntities.add(nativeEntityDescriptor);
                        LOG.debug("Did not remove entity since other content pack installations still use them: {}",
                                nativeEntityDescriptor);
@@ -295,7 +309,7 @@ public class ContentPackService {
 
     public Set<EntityExcerpt> listAllEntityExcerpts() {
         final ImmutableSet.Builder<EntityExcerpt> entityIndexBuilder = ImmutableSet.builder();
-        entityFacades.values().forEach(catalog -> entityIndexBuilder.addAll(catalog.listEntityExcerpts()));
+        entityFacades.values().forEach(facade -> entityIndexBuilder.addAll(facade.listEntityExcerpts()));
         return entityIndexBuilder.build();
     }
 
@@ -341,13 +355,18 @@ public class ContentPackService {
     }
 
     public ImmutableSet<Entity> collectEntities(Collection<EntityDescriptor> resolvedEntities) {
+        // It's important to only compute the EntityDescriptor IDs once per #collectEntities call! Otherwise we
+        // will get broken references between the entities.
+        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(resolvedEntities);
+
         final ImmutableSet.Builder<Entity> entities = ImmutableSet.builder();
-        final ImmutableSet.Builder<Constraint> constraints = ImmutableSet.<Constraint>builder()
-                .add(GraylogVersionConstraint.currentGraylogVersion());
         for (EntityDescriptor entityDescriptor : resolvedEntities) {
+            if (EntityDescriptorIds.isDefaultStreamDescriptor(entityDescriptor)) {
+                continue;
+            }
             final EntityFacade<?> facade = entityFacades.getOrDefault(entityDescriptor.type(), UnsupportedEntityFacade.INSTANCE);
 
-            facade.exportEntity(entityDescriptor).ifPresent(entities::add);
+            facade.exportEntity(entityDescriptor, entityDescriptorIds).ifPresent(entities::add);
         }
 
         return entities.build();
@@ -404,6 +423,8 @@ public class ContentPackService {
     public Set<ConstraintCheckResult> checkConstraints(ContentPack contentPack) {
         if (contentPack instanceof ContentPackV1) {
             return checkConstraintsV1((ContentPackV1) contentPack);
+        } else if (contentPack instanceof LegacyContentPack) {
+            return Collections.emptySet();
         } else {
             throw new IllegalArgumentException("Unsupported content pack version: " + contentPack.version());
         }
@@ -428,7 +449,7 @@ public class ContentPackService {
         checkMissingParameters(parameters, contentPackParameterNames);
 
         final Map<String, ValueType> contentPackParameterValueTypes = contentPackParameters.stream()
-                .collect(Collectors.toMap(Parameter::name, ValueTyped::valueType));
+                .collect(Collectors.toMap(Parameter::name, Parameter::valueType));
         final Set<String> invalidParameters = parameters.entrySet().stream()
                 .filter(entry -> entry.getValue().valueType() != contentPackParameterValueTypes.get(entry.getKey()))
                 .map(Map.Entry::getKey)
