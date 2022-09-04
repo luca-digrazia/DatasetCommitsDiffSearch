@@ -103,7 +103,7 @@ class RequestContext implements ManagedContext {
             if (initialState instanceof RequestContextState) {
                 currentContext.set(((RequestContextState) initialState).value);
             } else {
-                throw new IllegalArgumentException("Invalid inital state: " + initialState.getClass().getName());
+                throw new IllegalArgumentException("Invalid inital state: " + initialState);
             }
         }
     }
@@ -125,28 +125,16 @@ class RequestContext implements ManagedContext {
 
     @Override
     public void destroy() {
-        destroy(currentContext.get());
-    }
-
-    @Override
-    public void destroy(ContextState state) {
-        if (state instanceof RequestContextState) {
-            destroy(((RequestContextState) state).value);
-        } else {
-            throw new IllegalArgumentException("Invalid state: " + state.getClass().getName());
-        }
-    }
-
-    private void destroy(Map<Contextual<?>, ContextInstanceHandle<?>> currentContext) {
-        if (currentContext != null) {
-            synchronized (currentContext) {
+        Map<Contextual<?>, ContextInstanceHandle<?>> ctx = currentContext.get();
+        if (ctx != null) {
+            synchronized (ctx) {
                 // Fire an event with qualifier @BeforeDestroyed(RequestScoped.class) if there are any observers for it
                 try {
                     fireIfNotEmpty(beforeDestroyedNotifier);
                 } catch (Exception e) {
                     LOGGER.warn("An error occurred during delivery of the @BeforeDestroyed(RequestScoped.class) event", e);
                 }
-                for (InstanceHandle<?> instance : currentContext.values()) {
+                for (InstanceHandle<?> instance : ctx.values()) {
                     try {
                         instance.destroy();
                     } catch (Exception e) {
@@ -159,7 +147,7 @@ class RequestContext implements ManagedContext {
                 } catch (Exception e) {
                     LOGGER.warn("An error occurred during delivery of the @Destroyed(RequestScoped.class) event", e);
                 }
-                currentContext.clear();
+                ctx.clear();
             }
         }
     }
