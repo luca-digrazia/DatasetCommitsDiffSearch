@@ -578,7 +578,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     labelToTarget.put(from.getLabel(), from);
     while (!toVisit.isEmpty()) {
       Target current = toVisit.removeFirst();
-      if (to.getLabel().equals(current.getLabel())) {
+      if (to.equals(current)) {
         List<Label> labelPath = Digraph.getPathToTreeNode(nodeToParent, to.getLabel());
         ImmutableList.Builder<Target> targetPathBuilder = ImmutableList.builder();
         for (Label label : labelPath) {
@@ -687,12 +687,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private ImmutableSet<PathFragment> getBlacklistedExcludes(TargetPatternKey targetPatternKey)
   throws InterruptedException {
     return targetPatternKey.getAllBlacklistedSubdirectoriesToExclude(blacklistPatternsSupplier);
-  }
-
-  @ThreadSafe
-  @Override
-  public Collection<Target> getSiblingTargetsInPackage(Target target) {
-    return target.getPackage().getTargets().values();
   }
 
   @ThreadSafe
