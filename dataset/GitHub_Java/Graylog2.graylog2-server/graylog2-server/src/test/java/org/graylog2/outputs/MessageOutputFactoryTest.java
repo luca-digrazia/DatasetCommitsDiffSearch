@@ -23,20 +23,17 @@ import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.mockito.junit.MockitoJUnit;
-import org.mockito.junit.MockitoRule;
+import org.junit.runner.RunWith;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class MessageOutputFactoryTest {
-    @Rule
-    public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
     private final Map<String, MessageOutput.Factory<? extends MessageOutput>> availableOutputs;
 
     private MessageOutputFactory messageOutputFactory;
