@@ -403,7 +403,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     public ApkSigningMethod apkSigningMethod;
 
     @Option(name = "use_singlejar_apkbuilder",
-        defaultValue = "true",
+        defaultValue = "false",
         category = "undocumented",
         help = "Build Android APKs with SingleJar.")
     public boolean useSingleJarApkBuilder;

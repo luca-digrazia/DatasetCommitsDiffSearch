@@ -113,7 +113,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    multidex = 'legacy',",
         "    main_dex_proguard_specs = ['a.spec'])");
 
-    Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(ct)),
+    Artifact intermediateJar = artifactByPath(getFilesToBuild(ct),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
     List<String> args = getGeneratingSpawnAction(intermediateJar).getArguments();
     MoreAsserts.assertContainsSublist(args, "-include", "java/a/a.spec");
@@ -131,9 +131,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "cc_library(name = 'cc',",
         "           srcs = ['cc.cc'])");
 
-    Artifact jarShard = artifactByPath(
-        ImmutableList.of(getCompressedUnsignedApk(getConfiguredTarget("//java/a:a"))),
-        ".apk", "classes.dex.zip", "shard1.dex.zip", "shard1.jar");
+    Artifact jarShard = artifactByPath(getFilesToBuild(getConfiguredTarget("//java/a:a")),
+        "a.apk", ".apk", ".apk", "classes.dex.zip", "shard1.dex.zip", "shard1.jar");
     Iterable<Artifact> shardInputs = getGeneratingAction(jarShard).getInputs();
     assertThat(getFirstArtifactEndingWith(shardInputs, ".txt")).isNull();
   }
@@ -684,7 +683,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Action jackDexAction =
         getGeneratingAction(
             artifactByPath(
-                ImmutableList.of(getCompressedUnsignedApk(topTarget)), ".apk", "classes.dex.zip"));
+                getFilesToBuild(topTarget), "top.apk", ".apk", ".apk", "classes.dex.zip"));
     Iterable<String> jackDexInputs = ActionsTestUtil.baseArtifactNames(jackDexAction.getInputs());
     assertThat(jackDexInputs).containsAllOf("libtop.jack", "libdep.jack");
     assertThat(jackDexInputs).doesNotContain("libneverlink.jack");
@@ -715,7 +714,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Action jackDexAction =
         getGeneratingAction(
             artifactByPath(
-                ImmutableList.of(getCompressedUnsignedApk(topTarget)), ".apk", "classes.dex.zip"));
+                getFilesToBuild(topTarget), "top.apk", ".apk", ".apk", "classes.dex.zip"));
     Iterable<String> jackDexInputs = ActionsTestUtil.baseArtifactNames(jackDexAction.getInputs());
     assertThat(jackDexInputs).containsAllOf("transitive.pro_valid", "direct.pro");
   }
@@ -742,7 +741,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Action jackDexAction =
         getGeneratingAction(
             artifactByPath(
-                ImmutableList.of(getCompressedUnsignedApk(topTarget)), ".apk", "classes.dex.zip"));
+                getFilesToBuild(topTarget), "top.apk", ".apk", ".apk", "classes.dex.zip"));
     Iterable<String> jackDexInputs = ActionsTestUtil.baseArtifactNames(jackDexAction.getInputs());
     assertThat(jackDexInputs).doesNotContain("transitive.pro_valid");
   }
@@ -794,27 +793,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(getFilesToBuild(binary));
     assertThat(getFirstArtifactEndingWith(artifacts, "signed_hello.apk")).isNull();
     SpawnAction unsignedApkAction = (SpawnAction) actionsTestUtil()
-        .getActionForArtifactEndingWith(artifacts, "/hello_unsigned.apk");
-    assertTrue(
-        Iterables.any(
-            unsignedApkAction.getInputs(),
-            new Predicate<Artifact>() {
-              @Override
-              public boolean apply(Artifact artifact) {
-                return artifact.getFilename().equals("SingleJar_deploy.jar");
-              }
-            }));
-    SpawnAction compressedUnsignedApkAction = (SpawnAction) actionsTestUtil()
-        .getActionForArtifactEndingWith(artifacts, "compressed_hello_unsigned.apk");
-    assertTrue(
-        Iterables.any(
-            compressedUnsignedApkAction.getInputs(),
-            new Predicate<Artifact>() {
-              @Override
-              public boolean apply(Artifact artifact) {
-                return artifact.getFilename().equals("SingleJar_deploy.jar");
-              }
-            }));
+        .getActionForArtifactEndingWith(artifacts, "hello_unsigned.apk");
+    assertThat(unsignedApkAction.getCommandFilename()).endsWith("sdk/apkbuilder");
     SpawnAction zipalignAction = (SpawnAction) actionsTestUtil()
         .getActionForArtifactEndingWith(artifacts, "zipaligned_hello.apk");
     assertThat(zipalignAction.getCommandFilename()).endsWith("sdk/zipalign");
@@ -1850,7 +1830,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Set<Artifact> artifacts = actionsTestUtil().artifactClosureOf(getFilesToBuild(target));
     Artifact shard1 = getFirstArtifactEndingWith(artifacts, "shard1.jar");
     Artifact shard2 = getFirstArtifactEndingWith(artifacts, "shard2.jar");
-    Artifact resourceJar = getFirstArtifactEndingWith(artifacts, "/java_resources.jar");
+    Artifact resourceJar = getFirstArtifactEndingWith(artifacts,
+        "java_resources.jar");
     expectedArguments.add("--output_jar");
     expectedArguments.add(shard1.getExecPathString());
     expectedArguments.add("--output_jar");
@@ -1900,7 +1881,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     // Verify that dex compilation is followed by the correct merge operation
     Action apkAction = getGeneratingAction(getFirstArtifactEndingWith(
-        actionsTestUtil().artifactClosureOf(getFilesToBuild(target)), "compressed_a_unsigned.apk"));
+        getFilesToBuild(target), "a_unsigned.apk"));
     Action mergeAction = getGeneratingAction(getFirstArtifactEndingWith(
         apkAction.getInputs(), "classes.dex.zip"));
     Iterable<Artifact> dexShards = Iterables.filter(
@@ -2162,7 +2143,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     useConfiguration(
         "--android_sdk=//sdk:sdk", "--experimental_android_use_singlejar_for_multidex");
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
-    Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(a)),
+    Artifact intermediateJar = artifactByPath(getFilesToBuild(a),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
     List<String> args = getGeneratingSpawnAction(intermediateJar).getArguments();
     assertContainsSublist(
@@ -2206,7 +2187,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     useConfiguration(
         "--android_sdk=//sdk:sdk", "--experimental_android_use_singlejar_for_multidex");
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
-    Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(a)),
+    Artifact intermediateJar = artifactByPath(getFilesToBuild(a),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
     List<String> args = getGeneratingSpawnAction(intermediateJar).getArguments();
     assertEquals(-1,
@@ -2228,7 +2209,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    manifest = 'AndroidManifest.xml',",
         "    multidex = 'legacy',)");
     ConfiguredTarget a = getConfiguredTarget("//java/foo:abin");
-    Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(a)),
+    Artifact intermediateJar = artifactByPath(getFilesToBuild(a),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
     List<String> args = getGeneratingSpawnAction(intermediateJar).getArguments();
     MoreAsserts.assertDoesNotContainSublist(
