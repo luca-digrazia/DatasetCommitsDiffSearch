@@ -18,27 +18,44 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.SwiftConfigurationApi;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 
 /**
  * A configuration containing flags required for Swift tools. This is used primarily by swift_*
  * family of rules written in Skylark.
  */
+@AutoCodec
+@SkylarkModule(
+  name = "swift",
+  doc = "A configuration fragment for Swift tools.",
+  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT
+)
 @Immutable
-public class SwiftConfiguration extends BuildConfiguration.Fragment
-    implements SwiftConfigurationApi {
+public class SwiftConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> copts;
 
-  private SwiftConfiguration(SwiftCommandLineOptions options) {
-    this.copts = ImmutableList.copyOf(options.copts);
+  public SwiftConfiguration(SwiftCommandLineOptions options) {
+    this(ImmutableList.copyOf(options.copts));
+  }
+
+  @AutoCodec.Instantiator
+  SwiftConfiguration(ImmutableList<String> copts) {
+    this.copts = copts;
   }
 
   /** Returns a list of options to use for compiling Swift. */
-  @Override
+  @SkylarkCallable(
+    name = "copts",
+    doc = "A list of compiler options that should be passed to <code>swiftc</code> when compiling "
+        + "Swift code.")
   public ImmutableList<String> getCopts() {
     return copts;
   }
@@ -46,8 +63,8 @@ public class SwiftConfiguration extends BuildConfiguration.Fragment
   /** Loads {@link SwiftConfiguration} from build options. */
   public static class Loader implements ConfigurationFragmentFactory {
     @Override
-    public SwiftConfiguration create(BuildOptions buildOptions)
-        throws InvalidConfigurationException {
+    public SwiftConfiguration create(ConfigurationEnvironment env, BuildOptions buildOptions)
+        throws InvalidConfigurationException, InterruptedException {
       SwiftCommandLineOptions options = buildOptions.get(SwiftCommandLineOptions.class);
 
       return new SwiftConfiguration(options);
