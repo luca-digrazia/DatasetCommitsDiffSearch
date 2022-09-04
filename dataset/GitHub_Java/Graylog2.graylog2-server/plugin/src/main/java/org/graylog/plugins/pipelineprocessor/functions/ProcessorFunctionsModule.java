@@ -20,7 +20,6 @@ import com.google.inject.Binder;
 import com.google.inject.Scopes;
 import com.google.inject.TypeLiteral;
 import com.google.inject.multibindings.MapBinder;
-
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
 import org.graylog.plugins.pipelineprocessor.functions.conversion.BooleanConversion;
 import org.graylog.plugins.pipelineprocessor.functions.conversion.DoubleConversion;
@@ -40,6 +39,17 @@ import org.graylog.plugins.pipelineprocessor.functions.dates.periods.PeriodParse
 import org.graylog.plugins.pipelineprocessor.functions.dates.periods.Seconds;
 import org.graylog.plugins.pipelineprocessor.functions.dates.periods.Weeks;
 import org.graylog.plugins.pipelineprocessor.functions.dates.periods.Years;
+import org.graylog.plugins.pipelineprocessor.functions.debug.Debug;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base16Decode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base16Encode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base32Decode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base32Encode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base32HumanDecode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base32HumanEncode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base64Decode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base64Encode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base64UrlDecode;
+import org.graylog.plugins.pipelineprocessor.functions.encoding.Base64UrlEncode;
 import org.graylog.plugins.pipelineprocessor.functions.hashing.CRC32;
 import org.graylog.plugins.pipelineprocessor.functions.hashing.CRC32C;
 import org.graylog.plugins.pipelineprocessor.functions.hashing.MD5;
@@ -52,11 +62,14 @@ import org.graylog.plugins.pipelineprocessor.functions.ips.CidrMatch;
 import org.graylog.plugins.pipelineprocessor.functions.ips.IpAddressConversion;
 import org.graylog.plugins.pipelineprocessor.functions.json.JsonParse;
 import org.graylog.plugins.pipelineprocessor.functions.json.SelectJsonPath;
+import org.graylog.plugins.pipelineprocessor.functions.lookup.Lookup;
+import org.graylog.plugins.pipelineprocessor.functions.lookup.LookupValue;
 import org.graylog.plugins.pipelineprocessor.functions.messages.CloneMessage;
 import org.graylog.plugins.pipelineprocessor.functions.messages.CreateMessage;
 import org.graylog.plugins.pipelineprocessor.functions.messages.DropMessage;
 import org.graylog.plugins.pipelineprocessor.functions.messages.HasField;
 import org.graylog.plugins.pipelineprocessor.functions.messages.RemoveField;
+import org.graylog.plugins.pipelineprocessor.functions.messages.RemoveFromStream;
 import org.graylog.plugins.pipelineprocessor.functions.messages.RenameField;
 import org.graylog.plugins.pipelineprocessor.functions.messages.RouteToStream;
 import org.graylog.plugins.pipelineprocessor.functions.messages.SetField;
@@ -101,6 +114,7 @@ public class ProcessorFunctionsModule extends PluginModule {
         addMessageProcessorFunction(DropMessage.NAME, DropMessage.class);
         addMessageProcessorFunction(CreateMessage.NAME, CreateMessage.class);
         addMessageProcessorFunction(CloneMessage.NAME, CloneMessage.class);
+        addMessageProcessorFunction(RemoveFromStream.NAME, RemoveFromStream.class);
         addMessageProcessorFunction(RouteToStream.NAME, RouteToStream.class);
         // helper service for route_to_stream
         serviceBinder().addBinding().to(StreamCacheService.class).in(Scopes.SINGLETON);
@@ -155,6 +169,18 @@ public class ProcessorFunctionsModule extends PluginModule {
         addMessageProcessorFunction(SHA256.NAME, SHA256.class);
         addMessageProcessorFunction(SHA512.NAME, SHA512.class);
 
+        // encoding
+        addMessageProcessorFunction(Base16Encode.NAME, Base16Encode.class);
+        addMessageProcessorFunction(Base16Decode.NAME, Base16Decode.class);
+        addMessageProcessorFunction(Base32Encode.NAME, Base32Encode.class);
+        addMessageProcessorFunction(Base32Decode.NAME, Base32Decode.class);
+        addMessageProcessorFunction(Base32HumanEncode.NAME, Base32HumanEncode.class);
+        addMessageProcessorFunction(Base32HumanDecode.NAME, Base32HumanDecode.class);
+        addMessageProcessorFunction(Base64Encode.NAME, Base64Encode.class);
+        addMessageProcessorFunction(Base64Decode.NAME, Base64Decode.class);
+        addMessageProcessorFunction(Base64UrlEncode.NAME, Base64UrlEncode.class);
+        addMessageProcessorFunction(Base64UrlDecode.NAME, Base64UrlDecode.class);
+
         // ip handling
         addMessageProcessorFunction(CidrMatch.NAME, CidrMatch.class);
         addMessageProcessorFunction(IpAddressConversion.NAME, IpAddressConversion.class);
@@ -171,6 +197,13 @@ public class ProcessorFunctionsModule extends PluginModule {
         addMessageProcessorFunction(SyslogLevelConversion.NAME, SyslogLevelConversion.class);
         addMessageProcessorFunction(SyslogPriorityConversion.NAME, SyslogPriorityConversion.class);
         addMessageProcessorFunction(SyslogPriorityToStringConversion.NAME, SyslogPriorityToStringConversion.class);
+
+        // Lookup tables
+        addMessageProcessorFunction(Lookup.NAME, Lookup.class);
+        addMessageProcessorFunction(LookupValue.NAME, LookupValue.class);
+
+        // Debug
+        addMessageProcessorFunction(Debug.NAME, Debug.class);
     }
 
     protected void addMessageProcessorFunction(String name, Class<? extends Function<?>> functionClass) {
