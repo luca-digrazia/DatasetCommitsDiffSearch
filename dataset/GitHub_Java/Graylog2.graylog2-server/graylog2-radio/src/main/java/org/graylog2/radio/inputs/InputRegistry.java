@@ -167,7 +167,6 @@ public class InputRegistry {
                 input.setCreatorUserId(isr.creatorUserId);
                 input.setPersistId(isr.id);
                 input.setCreatedAt(new DateTime(isr.createdAt));
-                input.setGlobal(isr.global);
 
                 input.checkConfiguration();
             } catch (NoSuchInputTypeException e) {

@@ -40,6 +40,7 @@ public abstract class MessageInput {
 
     protected String title;
     protected String creatorUserId;
+    protected String inputId;
     protected String persistId;
     protected DateTime createdAt;
     protected Boolean global = false;
@@ -66,6 +67,10 @@ public abstract class MessageInput {
     public abstract String getName();
     public abstract String linkToDocs();
     public abstract Map<String, Object> getAttributes();
+
+    public void setId(String id) {
+        this.inputId = id;
+    }
 
     public void setPersistId(String id) {
         this.persistId = id;

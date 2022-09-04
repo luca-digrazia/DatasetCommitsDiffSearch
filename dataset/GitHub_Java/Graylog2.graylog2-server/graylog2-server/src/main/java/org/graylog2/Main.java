@@ -240,6 +240,8 @@ public final class Main {
         server.initializers().register(new ThroughputCounterInitializer());
         server.initializers().register(new NodePingInitializer());
         server.initializers().register(new AlarmScannerInitializer());
+        if (configuration.isEnableGraphiteOutput())       { server.initializers().register(new GraphiteInitializer()); }
+        if (configuration.isEnableLibratoMetricsOutput()) { server.initializers().register(new LibratoMetricsInitializer()); }
         server.initializers().register(new DeflectorThreadsInitializer());
         server.initializers().register(new AnonymousInformationCollectorInitializer());
         if (configuration.performRetention() && commandLineArguments.performRetention()) {
@@ -248,7 +250,6 @@ public final class Main {
         if (commandLineArguments.isStats()) { server.initializers().register(new StatisticsPrinterInitializer()); }
         server.initializers().register(new MasterCacheWorkersInitializer());
         server.initializers().register(new ClusterHealthCheckInitializer());
-        server.initializers().register(new StreamThroughputCounterInitializer());
 
         // Register message filters. (Order is important here)
         server.registerFilter(new StaticFieldFilter());

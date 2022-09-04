@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.system.inputs;
 
@@ -22,30 +23,25 @@ import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.database.NotFoundException;
+import org.bson.types.ObjectId;
 import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
-import org.graylog2.inputs.InputImpl;
-import org.graylog2.inputs.InputService;
-import org.graylog2.inputs.ServerInputRegistry;
+import org.graylog2.inputs.InputRegistry;
+import org.graylog2.plugin.inputs.InputState;
+import org.graylog2.inputs.NoSuchInputTypeException;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
-import org.graylog2.plugin.inputs.InputState;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.documentation.annotations.*;
 import org.graylog2.rest.resources.RestResource;
+import org.graylog2.rest.resources.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.security.RestPermissions;
-import org.graylog2.shared.ServerStatus;
-import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.inputs.NoSuchInputTypeException;
-import org.graylog2.shared.rest.resources.system.inputs.requests.InputLaunchRequest;
 import org.graylog2.system.activities.Activity;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -63,9 +59,6 @@ import java.util.UUID;
 public class InputsResource extends RestResource {
 
     private static final Logger LOG = LoggerFactory.getLogger(InputsResource.class);
-
-    @Inject
-    private InputService inputService;
 
     @GET @Timed
     @Produces(MediaType.APPLICATION_JSON)
@@ -163,8 +156,8 @@ public class InputsResource extends RestResource {
             inputData.put("node_id", core.getNodeId());
 
         // ... and check if it would pass validation. We don't need to go on if it doesn't.
-        Input mongoInput = new InputImpl(inputData);
-        if (!inputService.validate(mongoInput)) {
+        Input mongoInput = new Input(core, inputData);
+        if (!mongoInput.validate(inputData)) {
             LOG.error("Validation error.");
             throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
@@ -176,10 +169,10 @@ public class InputsResource extends RestResource {
         }
 
         // Persist input.
-        String id;
+        ObjectId id;
         try {
-            id = inputService.save(mongoInput);
-            input.setPersistId(id);
+            id = mongoInput.save();
+            input.setPersistId(id.toStringMongod());
         } catch (ValidationException e) {
             LOG.error("Validation error.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
@@ -190,7 +183,7 @@ public class InputsResource extends RestResource {
 
         Map<String, Object> result = Maps.newHashMap();
         result.put("input_id", inputId);
-        result.put("persist_id", id);
+        result.put("persist_id", id.toStringMongod());
 
         return Response.status(Response.Status.ACCEPTED).entity(json(result)).build();
     }
@@ -227,12 +220,14 @@ public class InputsResource extends RestResource {
         LOG.info(msg);
         core.getActivityWriter().write(new Activity(msg, InputsResource.class));
 
-        core.inputs().terminate(input);
+        // Shutdown actual input.
+        input.stop();
 
-        if (serverStatus.hasCapability(ServerStatus.Capability.MASTER) || !input.getGlobal()) {
+        if (core.isMaster() || !input.getGlobal()) {
             // Remove from list and mongo.
             core.inputs().cleanInput(input);
         }
+        core.inputs().removeFromRunning(input);
 
         String msg2 = "Terminated input [" + input.getName()+ "]. Reason: REST request.";
         LOG.info(msg2);
@@ -251,14 +246,12 @@ public class InputsResource extends RestResource {
     public Response launchExisting(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
         MessageInput input = null;
         try {
-             input = ServerInputRegistry.getMessageInput(inputService.findForThisNode(core.getNodeId(), inputId), core);
+             input = InputRegistry.getMessageInput(Input.findForThisNode(core, inputId), core);
         } catch (NoSuchInputTypeException e) {
             LOG.info("Cannot launch input. Input not found.");
             throw new WebApplicationException(404);
         } catch (ConfigurationException e) {
             LOG.info("Cannot launch input. Configuration is invalid.");
-            throw new WebApplicationException(404);
-        } catch (org.graylog2.database.NotFoundException e) {
             throw new WebApplicationException(404);
         }
 
@@ -277,58 +270,6 @@ public class InputsResource extends RestResource {
         LOG.info(msg2);
         core.getActivityWriter().write(new Activity(msg2, InputsResource.class));
 
-        return Response.status(Response.Status.ACCEPTED).build();
-    }
-
-    @GET @Timed
-    @Path("/{inputId}/stop")
-    @ApiOperation(value = "Stop existing input on this node")
-    @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "No such input on this node.")
-    })
-    public Response stop(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
-        MessageInput input = null;
-        try {
-            input = ServerInputRegistry.getMessageInput(inputService.findForThisNode(core.getNodeId(), inputId), core);
-        } catch (NoSuchInputTypeException e) {
-            LOG.info("Cannot launch input. Input not found.");
-            throw new WebApplicationException(404);
-        } catch (ConfigurationException e) {
-            LOG.info("Cannot launch input. Configuration is invalid.");
-            throw new WebApplicationException(404);
-        } catch (NotFoundException e) {
-            throw new WebApplicationException(404);
-        }
-
-        if (input == null) {
-            LOG.info("Cannot launch input. Input not found.");
-            throw new WebApplicationException(404);
-        }
-
-        String msg = "Stopping input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg);
-        core.getActivityWriter().write(new Activity(msg, InputsResource.class));
-
-        core.inputs().stop(input);
-
-        String msg2 = "Stopped input [" + input.getName()+ "]. Reason: REST request.";
-        LOG.info(msg2);
-        core.getActivityWriter().write(new Activity(msg2, InputsResource.class));
-
-        return Response.status(Response.Status.ACCEPTED).build();
-    }
-
-    @GET @Timed
-    @Path("/{inputId}/restart")
-    @ApiOperation(value = "Restart existing input on this node")
-    @Produces(MediaType.APPLICATION_JSON)
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "No such input on this node.")
-    })
-    public Response restart(@ApiParam(title = "inputId", required = true) @PathParam("inputId") String inputId) {
-        stop(inputId);
-        launchExisting(inputId);
         return Response.status(Response.Status.ACCEPTED).build();
     }
 

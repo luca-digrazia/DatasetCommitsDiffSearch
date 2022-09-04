@@ -51,11 +51,9 @@ public class Notification extends Persisted {
     public enum Type {
         DEFLECTOR_EXISTS_AS_INDEX,
         MULTI_MASTER,
-        NO_MASTER,
         ES_OPEN_FILES,
         NO_INPUT_RUNNING,
-        INPUT_FAILED_TO_START,
-        CHECK_SERVER_CLOCKS
+        INPUT_FAILED_TO_START
     }
 
     public enum Severity {
@@ -89,8 +87,7 @@ public class Notification extends Persisted {
         super(core, new HashMap<String, Object>());
     }
 
-    // this should really never be necessary, because timestamp should always be "now" (or can be overridden)
-    protected static Notification build(Core core) {
+    public static Notification build(Core core) {
         return new Notification(core);
     }
 
@@ -99,6 +96,9 @@ public class Notification extends Persisted {
         notification.addTimestamp(Tools.iso8601());
 
         return notification;
+    }
+    public static void publish(Core core, Type type, Severity severity) {
+        publish(core, type, severity, null);
     }
 
     public Notification addType(Type type) {
@@ -138,31 +138,46 @@ public class Notification extends Persisted {
         return this;
     }
 
-    public boolean publishIfFirst() {
-
-        // node id should never be empty
-        if (!fields.containsKey("node_id")) {
-            addThisNode();
-        }
-
-        // also the timestamp should never be empty
-        if (!fields.containsKey("timestamp")) {
-            fields.put("timestamp", Tools.getISO8601String(Tools.iso8601()));
-        }
-
+    public Notification publish() {
         // Write only if there is no such warning yet.
         if (!isFirst(core, this.type)) {
-            return false;
+            return this;
         }
         try {
             this.save();
         } catch(ValidationException e) {
             // We have no validations, but just in case somebody adds some...
             LOG.error("Validating user warning failed.", e);
-            return false;
         }
 
-        return true;
+        return this;
+    }
+
+    public static void publish(Core core, Type type, Severity severity, Node node) {
+        /*// Write only if there is no such warning yet.
+        if (!isFirst(core, type)) {
+            return;
+        }
+
+        Map<String, Object> fields = Maps.newHashMap();
+        fields.put("type", type.toString().toLowerCase());
+        fields.put("severity", severity.toString().toLowerCase());
+        fields.put("timestamp", Tools.iso8601());
+
+        if (node != null)
+            fields.put("node_id", node.getNodeId());
+
+        Notification w = new Notification(core, fields);
+
+        try {
+            w.save();
+        } catch(ValidationException e) {
+            // We have no validations, but just in case somebody adds some...
+            LOG.error("Validating user warning failed.", e);
+        }*/
+
+        Notification notification = new Notification(core);
+        notification.addType(type).addSeverity(severity).addNode(node).publish();
     }
 
     public static void fixed(Core core, Type type) {
