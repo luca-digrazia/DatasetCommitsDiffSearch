@@ -21,19 +21,17 @@ public class ExecutorServiceBuilder {
     private final String nameFormat;
     private int corePoolSize;
     private int maximumPoolSize;
-    private boolean allowCoreThreadTimeOut;
     private Duration keepAliveTime;
     private Duration shutdownTime;
     private BlockingQueue<Runnable> workQueue;
     private ThreadFactory threadFactory;
     private RejectedExecutionHandler handler;
-
+    
     public ExecutorServiceBuilder(LifecycleEnvironment environment, String nameFormat, ThreadFactory factory) {
         this.environment = environment;
         this.nameFormat = nameFormat;
         this.corePoolSize = 0;
         this.maximumPoolSize = 1;
-        this.allowCoreThreadTimeOut = false;
         this.keepAliveTime = Duration.seconds(60);
         this.shutdownTime = Duration.seconds(5);
         this.workQueue = new LinkedBlockingQueue<>();
@@ -41,9 +39,9 @@ public class ExecutorServiceBuilder {
         this.handler = new ThreadPoolExecutor.AbortPolicy();
     }
 
-    public ExecutorServiceBuilder(LifecycleEnvironment environment, String nameFormat) {
-        this(environment, nameFormat, new ThreadFactoryBuilder().setNameFormat(nameFormat).build());
-    }
+	public ExecutorServiceBuilder(LifecycleEnvironment environment, String nameFormat) {
+		this(environment, nameFormat, new ThreadFactoryBuilder().setNameFormat(nameFormat).build());
+	}
 
     public ExecutorServiceBuilder minThreads(int threads) {
         this.corePoolSize = threads;
@@ -52,11 +50,6 @@ public class ExecutorServiceBuilder {
 
     public ExecutorServiceBuilder maxThreads(int threads) {
         this.maximumPoolSize = threads;
-        return this;
-    }
-
-    public ExecutorServiceBuilder allowCoreThreadTimeOut(boolean allowCoreThreadTimeOut) {
-        this.allowCoreThreadTimeOut = allowCoreThreadTimeOut;
         return this;
     }
 
@@ -96,7 +89,6 @@ public class ExecutorServiceBuilder {
                                                                    workQueue,
                                                                    threadFactory,
                                                                    handler);
-        executor.allowCoreThreadTimeOut(allowCoreThreadTimeOut);
         environment.manage(new ExecutorServiceManager(executor, shutdownTime, nameFormat));
         return executor;
     }
@@ -107,6 +99,6 @@ public class ExecutorServiceBuilder {
 
     @VisibleForTesting
     static synchronized void setLog(Logger newLog) {
-        log = newLog;
+       log = newLog;
     }
 }
