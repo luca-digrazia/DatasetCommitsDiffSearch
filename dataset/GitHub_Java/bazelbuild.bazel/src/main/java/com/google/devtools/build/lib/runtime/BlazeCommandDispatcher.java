@@ -13,9 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import static com.google.devtools.build.lib.runtime.BlazeOptionHandler.BAD_OPTION_TAG;
-import static com.google.devtools.build.lib.runtime.BlazeOptionHandler.ERROR_SEPARATOR;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -94,18 +91,16 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
   private String shutdownReason = null;
   private OutputStream logOutputStream = null;
   private final LoadingCache<BlazeCommand, OpaqueOptionsData> optionsDataCache =
-      CacheBuilder.newBuilder()
-          .build(
-              new CacheLoader<BlazeCommand, OpaqueOptionsData>() {
-                @Override
-                public OpaqueOptionsData load(BlazeCommand command) {
-                  return OptionsParser.getOptionsData(
-                      BlazeCommandUtils.getOptions(
-                          command.getClass(),
-                          runtime.getBlazeModules(),
-                          runtime.getRuleClassProvider()));
-                }
-              });
+      CacheBuilder.newBuilder().build(
+          new CacheLoader<BlazeCommand, OpaqueOptionsData>() {
+            @Override
+            public OpaqueOptionsData load(BlazeCommand command) {
+              return OptionsParser.getOptionsData(BlazeCommandUtils.getOptions(
+                  command.getClass(),
+                  runtime.getBlazeModules(),
+                  runtime.getRuleClassProvider()));
+            }
+          });
 
   @VisibleForTesting
   BlazeCommandDispatcher(BlazeRuntime runtime, BugReporter bugReporter, BlazeCommand... commands) {
@@ -123,7 +118,9 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     runtime.overrideCommands(ImmutableList.copyOf(commands));
   }
 
-  /** Create a Blaze dispatcher that uses the specified {@code BlazeRuntime} instance. */
+  /**
+   * Create a Blaze dispatcher that uses the specified {@code BlazeRuntime} instance.
+   */
   @VisibleForTesting
   public BlazeCommandDispatcher(BlazeRuntime runtime) {
     this(runtime, runtime.getBugReporter());
@@ -187,11 +184,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         switch (lockingMode) {
           case WAIT:
             if (!otherClientDescription.equals(currentClientDescription)) {
-              outErr.printErrLn(
-                  "Another command ("
-                      + currentClientDescription
-                      + ") is running. "
-                      + " Waiting for it to complete on the server...");
+              outErr.printErrLn("Another command (" + currentClientDescription + ") is running. "
+                  + " Waiting for it to complete on the server...");
               otherClientDescription = currentClientDescription;
             }
             commandLock.wait(500);
@@ -232,17 +226,16 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
             ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
             FailureDetails.Command.Code.PREVIOUSLY_SHUTDOWN);
       }
-      BlazeCommandResult result =
-          execExclusively(
-              originalCommandLine,
-              invocationPolicy,
-              args,
-              outErr,
-              firstContactTimeMillis,
-              commandName,
-              command,
-              waitTimeInMs,
-              startupOptionsTaggedWithBazelRc);
+      BlazeCommandResult result = execExclusively(
+          originalCommandLine,
+          invocationPolicy,
+          args,
+          outErr,
+          firstContactTimeMillis,
+          commandName,
+          command,
+          waitTimeInMs,
+          startupOptionsTaggedWithBazelRc);
       if (result.shutdown()) {
         // TODO(lberki): This also handles the case where we catch an uncaught Throwable in
         // execExclusively() which is not an explicit shutdown.
@@ -303,7 +296,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
             // Provide the options parser so that we can cache OptionsData here.
             createOptionsParser(command),
             invocationPolicy);
-    DetailedExitCode earlyExitCode = optionHandler.parseOptions(args, storedEventHandler);
+    DetailedExitCode earlyExitCode =
+        DetailedExitCode.justExitCode(optionHandler.parseOptions(args, storedEventHandler));
     OptionsParsingResult options = optionHandler.getOptionsResult();
 
     CommandLineEvent originalCommandLineEvent =
@@ -356,7 +350,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         out = new FileOutputStream(commonOptions.starlarkCpuProfile);
       } catch (IOException ex) {
         String message = "Starlark CPU profiler: " + ex.getMessage();
-        outErr.printErrLn(message);
+        storedEventHandler.handle(Event.error(message));
         return createDetailedCommandResult(
             message,
             ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
@@ -366,7 +360,7 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
         Starlark.startCpuProfile(out, Duration.ofMillis(10));
       } catch (IllegalStateException ex) { // e.g. SIGPROF in use
         String message = Strings.nullToEmpty(ex.getMessage());
-        outErr.printErrLn(message);
+        storedEventHandler.handle(Event.error(message));
         return createDetailedCommandResult(
             message,
             ExitCode.LOCAL_ENVIRONMENTAL_ERROR,
@@ -573,7 +567,9 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       }
 
       // Parse starlark options.
-      earlyExitCode = optionHandler.parseStarlarkOptions(env, storedEventHandler);
+      earlyExitCode =
+          DetailedExitCode.justExitCode(
+              optionHandler.parseStarlarkOptions(env, storedEventHandler));
       if (!earlyExitCode.isSuccess()) {
         replayEarlyExitEvents(
             outErr,
@@ -648,15 +644,8 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       NoBuildEvent noBuildEvent) {
     PrintingEventHandler printingEventHandler =
         new PrintingEventHandler(outErr, EventKind.ALL_EVENTS);
-
-    Optional<String> badOption = retrieveBadOption(storedEventHandler.getEvents());
-
     for (String note : optionHandler.getRcfileNotes()) {
-      if (badOption.isPresent()) {
-        if (note.contains(badOption.get())) {
-          printingEventHandler.handle(Event.info(note));
-        }
-      }
+      printingEventHandler.handle(Event.info(note));
     }
     for (Event event : storedEventHandler.getEvents()) {
       printingEventHandler.handle(event);
@@ -665,15 +654,6 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       env.getEventBus().post(post);
     }
     env.getEventBus().post(noBuildEvent);
-  }
-
-  private static Optional<String> retrieveBadOption(ImmutableList<Event> events) {
-    return events.stream()
-        .filter(e -> e.getTag() != null && e.getTag().equals(BAD_OPTION_TAG))
-        .map(Event::getMessage)
-        .filter(message -> message.contains(ERROR_SEPARATOR))
-        .map(message -> message.substring(0, message.indexOf(ERROR_SEPARATOR)))
-        .findFirst();
   }
 
   private OutErr bufferOut(OutErr outErr) {
@@ -751,15 +731,19 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     return new UiEventHandler(outErr, eventOptions, runtime.getClock(), workspacePathFragment);
   }
 
-  /** Returns the runtime instance shared by the commands that this dispatcher dispatches to. */
+  /**
+   * Returns the runtime instance shared by the commands that this dispatcher
+   * dispatches to.
+   */
   @VisibleForTesting
   public BlazeRuntime getRuntime() {
     return runtime;
   }
 
   /**
-   * Shuts down all the registered commands to give them a chance to cleanup or close resources.
-   * Should be called by the owner of this command dispatcher in all termination cases.
+   * Shuts down all the registered commands to give them a chance to cleanup or
+   * close resources. Should be called by the owner of this command dispatcher
+   * in all termination cases.
    */
   public void shutdown() {
     closeSilently(logOutputStream);
