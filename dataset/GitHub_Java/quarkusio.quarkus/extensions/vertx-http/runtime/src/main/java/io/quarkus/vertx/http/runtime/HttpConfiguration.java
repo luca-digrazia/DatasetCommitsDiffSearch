@@ -35,7 +35,7 @@ public class HttpConfiguration {
      * The HTTP host
      */
     @ConfigItem(defaultValue = "0.0.0.0")
-    public Optional<String> host;
+    public String host;
 
     /**
      * The HTTPS port
@@ -48,20 +48,6 @@ public class HttpConfiguration {
      */
     @ConfigItem(defaultValue = "8444")
     public int testSslPort;
-
-    /**
-     * If this is true then the address, scheme etc will be set from headers forwarded by the proxy server, such as
-     * {@code X-Forwarded-For}. This should only be set if you are behind a proxy that sets these headers.
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean proxyAddressForwarding;
-
-    /**
-     * If this is true and proxy address forwarding is enabled then the standard {@code Forwarded} header will be used,
-     * rather than the more common but not standard {@code X-Forwarded-For}.
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean allowForwarded;
 
     /**
      * The CORS config
@@ -109,36 +95,6 @@ public class HttpConfiguration {
      */
     @ConfigItem(name = "auth.session.encryption-key")
     public Optional<String> encryptionKey;
-
-    /**
-     * Enable socket reuse port (linux/macOs native transport only)
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean soReusePort;
-
-    /**
-     * Enable tcp quick ack (linux native transport only)
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean tcpQuickAck;
-
-    /**
-     * Enable tcp cork (linux native transport only)
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean tcpCork;
-
-    /**
-     * Enable tcp fast open (linux native transport only)
-     */
-    @ConfigItem(defaultValue = "false")
-    public boolean tcpFastOpen;
-
-    /**
-     * Path to a unix domain socket
-     */
-    @ConfigItem(name = "domain-socket")
-    public Optional<String> domainSocket;
 
     public int determinePort(LaunchMode launchMode) {
         return launchMode == LaunchMode.TEST ? testPort : port;

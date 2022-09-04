@@ -7,7 +7,9 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import javax.inject.Singleton;
@@ -15,7 +17,6 @@ import javax.inject.Singleton;
 import io.quarkus.security.identity.SecurityIdentity;
 import io.quarkus.vertx.http.runtime.HttpBuildTimeConfig;
 import io.quarkus.vertx.http.runtime.PolicyMappingConfig;
-import io.smallrye.mutiny.Uni;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.ext.web.RoutingContext;
 
@@ -30,42 +31,42 @@ public class PathMatchingHttpSecurityPolicy implements HttpSecurityPolicy {
     private final PathMatcher<List<HttpMatcher>> pathMatcher = new PathMatcher<>();
 
     @Override
-    public Uni<CheckResult> checkPermission(RoutingContext routingContext, Uni<SecurityIdentity> identity,
+    public CompletionStage<CheckResult> checkPermission(RoutingContext routingContext, SecurityIdentity identity,
             AuthorizationRequestContext requestContext) {
+        CompletableFuture<CheckResult> latch = new CompletableFuture<>();
         List<HttpSecurityPolicy> permissionCheckers = findPermissionCheckers(routingContext.request());
-        return doPermissionCheck(routingContext, identity, 0, null, permissionCheckers, requestContext);
+        doPermissionCheck(routingContext, latch, identity, 0, permissionCheckers, requestContext);
+        return latch;
     }
 
-    private Uni<CheckResult> doPermissionCheck(RoutingContext routingContext,
-            Uni<SecurityIdentity> identity, int index, SecurityIdentity augmentedIdentity,
+    private void doPermissionCheck(RoutingContext routingContext, CompletableFuture<CheckResult> latch,
+            SecurityIdentity identity, int index,
             List<HttpSecurityPolicy> permissionCheckers, AuthorizationRequestContext requestContext) {
         if (index == permissionCheckers.size()) {
-            return Uni.createFrom().item(new CheckResult(true, augmentedIdentity));
+            latch.complete(new CheckResult(true, identity));
+            return;
         }
         //get the current checker
         HttpSecurityPolicy res = permissionCheckers.get(index);
-        return res.checkPermission(routingContext, identity, requestContext)
-                .flatMap(new Function<CheckResult, Uni<? extends CheckResult>>() {
+        res.checkPermission(routingContext, identity, requestContext)
+                .handle(new BiFunction<HttpSecurityPolicy.CheckResult, Throwable, Object>() {
                     @Override
-                    public Uni<? extends CheckResult> apply(CheckResult checkResult) {
-                        if (!checkResult.isPermitted()) {
-                            return Uni.createFrom().item(CheckResult.DENY);
+                    public Object apply(CheckResult checkResult, Throwable throwable) {
+                        if (throwable != null) {
+                            latch.completeExceptionally(throwable);
                         } else {
-                            if (checkResult.getAugmentedIdentity() != null) {
-
-                                //attempt to run the next checker
-                                return doPermissionCheck(routingContext,
-                                        Uni.createFrom().item(checkResult.getAugmentedIdentity()), index + 1,
-                                        checkResult.getAugmentedIdentity(),
-                                        permissionCheckers,
-                                        requestContext);
+                            if (!checkResult.isPermitted()) {
+                                latch.complete(CheckResult.DENY);
                             } else {
+                                SecurityIdentity newIdentity = checkResult.getAugmentedIdentity() != null
+                                        ? checkResult.getAugmentedIdentity()
+                                        : identity;
                                 //attempt to run the next checker
-                                return doPermissionCheck(routingContext, identity, index + 1, augmentedIdentity,
-                                        permissionCheckers,
+                                doPermissionCheck(routingContext, latch, newIdentity, index + 1, permissionCheckers,
                                         requestContext);
                             }
                         }
+                        return null;
                     }
                 });
     }
@@ -84,7 +85,6 @@ public class PathMatchingHttpSecurityPolicy implements HttpSecurityPolicy {
             }
 
             for (String path : entry.getValue().paths.orElse(Collections.emptyList())) {
-                path = path.trim();
                 if (tempMap.containsKey(path)) {
                     HttpMatcher m = new HttpMatcher(new HashSet<>(entry.getValue().methods.orElse(Collections.emptyList())),
                             checker);
