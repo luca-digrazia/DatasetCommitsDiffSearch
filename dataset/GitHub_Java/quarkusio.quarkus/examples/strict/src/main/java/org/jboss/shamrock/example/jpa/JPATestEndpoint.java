@@ -5,14 +5,9 @@ import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
-import java.io.PrintWriter;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 
-/**
- * Various tests for the JPA integration.
- * WARNING: these tests will ONLY pass in Substrate, as it also verifies reflection non-functionality.
- */
 @WebServlet(name = "JPATestEndpoint", urlPatterns = "/jpa/test")
 public class JPATestEndpoint extends HttpServlet {
 
@@ -27,7 +22,7 @@ public class JPATestEndpoint extends HttpServlet {
         resp.getWriter().write("OK");
     }
 
-    private void makeSureClassAreAccessibleViaReflection(String className, String errorMessage, HttpServletResponse resp) throws IOException {
+    private void makeSureClassAreAccessibleViaReflection(String className, String error, HttpServletResponse resp) throws IOException {
         try {
             className = getTrickedClassName(className);
 
@@ -35,13 +30,13 @@ public class JPATestEndpoint extends HttpServlet {
             Object instance = custClass.newInstance();
         }
         catch (Exception e) {
-            reportException(errorMessage, e, resp);
+            resp.getWriter().write(error + " " + e.toString());
         }
     }
 
     private void makeSureEntitiesAreAccessibleViaReflection(HttpServletResponse resp) throws IOException {
         try {
-            String className = getTrickedClassName(org.jboss.shamrock.example.jpa.Customer.class.getName());
+            String className = getTrickedClassName("org.jboss.shamrock.example.jpa.Customer");
 
             Class<?> custClass = Class.forName(className);
             Object instance = custClass.newInstance();
@@ -52,20 +47,19 @@ public class JPATestEndpoint extends HttpServlet {
             }
             Method setter = custClass.getDeclaredMethod("setName", String.class);
             Method getter = custClass.getDeclaredMethod("getName");
-            //FIXME TODO invoker the following methods reflectively isn't working on SubstrateVM in combination with Hibernate entity enhancement ?!
-            // setter.invoke(instance, "Emmanuel");
-            //            if (! "Emmanuel".equals(getter.invoke(instance))) {
-            //                resp.getWriter().write("getter / setter should be reachable and usable");
-            //            }
+            setter.invoke(instance, "Emmanuel");
+            if (! "Emmanuel".equals(getter.invoke(instance))) {
+                resp.getWriter().write("getter / setter should be reachable and usable");
+            }
         }
         catch (Exception e) {
-            reportException(e, resp);
+            resp.getWriter().write(e.toString());
         }
     }
 
     private void makeSureAnnotatedEmbeddableAreAccessibleViaReflection(HttpServletResponse resp) throws IOException {
         try {
-            String className = getTrickedClassName(org.jboss.shamrock.example.jpa.WorkAddress.class.getName());
+            String className = getTrickedClassName("org.jboss.shamrock.example.jpa.WorkAddress");
 
             Class<?> custClass = Class.forName(className);
             Object instance = custClass.newInstance();
@@ -77,12 +71,12 @@ public class JPATestEndpoint extends HttpServlet {
             }
         }
         catch (Exception e) {
-            reportException(e, resp);
+            resp.getWriter().write(e.toString());
         }
     }
     private void makeSureNonAnnotatedEmbeddableAreAccessibleViaReflection(HttpServletResponse resp) throws IOException {
         try {
-            String className = getTrickedClassName(org.jboss.shamrock.example.jpa.Address.class.getName());
+            String className = getTrickedClassName("org.jboss.shamrock.example.jpa.Address");
 
             Class<?> custClass = Class.forName(className);
             Object instance = custClass.newInstance();
@@ -94,13 +88,13 @@ public class JPATestEndpoint extends HttpServlet {
             }
         }
         catch (Exception e) {
-            reportException(e, resp);
+            resp.getWriter().write(e.toString());
         }
     }
 
     private void makeSureNonEntityAreDCE(HttpServletResponse resp) {
         try {
-            String className = getTrickedClassName(org.jboss.shamrock.example.jpa.NotAnEntityNotReferenced.class.getName());
+            String className = getTrickedClassName("org.jboss.shamrock.example.jpa.NotAnEntityNotReferenced");
 
             Class<?> custClass = Class.forName(className);
             resp.getWriter().write("Should not be able to find a non referenced non entity class");
@@ -119,21 +113,4 @@ public class JPATestEndpoint extends HttpServlet {
         className = className.subSequence(0, className.indexOf(' ')).toString();
         return className;
     }
-
-    private void reportException(final Exception e, final HttpServletResponse resp) throws IOException {
-        reportException(null, e, resp);
-    }
-
-    private void reportException(String errorMessage, final Exception e, final HttpServletResponse resp) throws IOException {
-        final PrintWriter writer = resp.getWriter();
-        if ( errorMessage != null ) {
-            writer.write(errorMessage);
-            writer.write(" ");
-        }
-        writer.write(e.toString());
-        writer.append("\n\t");
-        e.printStackTrace(writer);
-        writer.append("\n\t");
-    }
-
 }
