@@ -1,39 +1,28 @@
 package io.quarkus.extest;
 
 import static org.hamcrest.Matchers.is;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import javax.inject.Inject;
 
-import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
-import org.eclipse.microprofile.config.spi.ConfigSource;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
-import io.quarkus.extest.runtime.config.MyEnum;
 import io.quarkus.extest.runtime.config.NestedConfig;
 import io.quarkus.extest.runtime.config.ObjectOfValue;
 import io.quarkus.extest.runtime.config.ObjectValueOf;
-import io.quarkus.extest.runtime.config.OverrideBuildTimeConfigSource;
 import io.quarkus.extest.runtime.config.TestBuildAndRunTimeConfig;
 import io.quarkus.extest.runtime.config.TestRunTimeConfig;
 import io.quarkus.test.QuarkusUnitTest;
@@ -44,16 +33,11 @@ import io.restassured.RestAssured;
  */
 public class ConfiguredBeanTest {
     @RegisterExtension
-    static final QuarkusUnitTest TEST = new QuarkusUnitTest()
+    static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(ConfiguredBean.class)
-                    // Don't change this to types, because of classloader class cast exception.
-                    .addAsServiceProvider("org.eclipse.microprofile.config.spi.ConfigSource",
-                            "io.quarkus.extest.runtime.config.OverrideBuildTimeConfigSource")
                     .addAsResource("application.properties"));
 
-    @Inject
-    Config config;
     @Inject
     ConfiguredBean configuredBean;
 
@@ -66,7 +50,6 @@ public class ConfiguredBeanTest {
         Assertions.assertNotNull(configuredBean);
         Assertions.assertNotNull(configuredBean.getBuildTimeConfig());
         Assertions.assertNotNull(configuredBean.getRunTimeConfig());
-        Assertions.assertEquals("huhu", configuredBean.getFooRuntimeConfig().bar);
     }
 
     /**
@@ -129,13 +112,6 @@ public class ConfiguredBeanTest {
         }
         Assertions.assertNotEquals("${java.vm.version}", buildTimeConfig.allValues.expandedDefault);
         Assertions.assertFalse(buildTimeConfig.allValues.expandedDefault.isEmpty());
-        List<MyEnum> enums = Arrays.asList(MyEnum.OPTIONAL, MyEnum.ENUM_ONE, MyEnum.Enum_Two);
-        Assertions.assertEquals(enums, configuredBean.getBuildTimeConfig().myEnums);
-        Assertions.assertEquals(MyEnum.OPTIONAL, configuredBean.getBuildTimeConfig().myEnum);
-        List<Integer> mapValues = new ArrayList<>(Arrays.asList(1, 2));
-        List<Integer> actualMapValues = new ArrayList<>(configuredBean.getBuildTimeConfig().mapOfNumbers.values());
-        Assertions.assertEquals(mapValues, actualMapValues);
-
     }
 
     /**
@@ -217,20 +193,6 @@ public class ConfiguredBeanTest {
         Assertions.assertEquals(Arrays.asList("value1", "value2", "value3"), stringListMap.get("key1"));
         Assertions.assertEquals(Arrays.asList("value4", "value5"), stringListMap.get("key2"));
         Assertions.assertEquals(Collections.singletonList("value6"), stringListMap.get("key3"));
-
-        //quarkus.rt.leaf-map.key.first=first-key-value
-        //quarkus.rt.leaf-map.key.second=second-key-value
-
-        final Map<String, Map<String, String>> leafMap = runTimeConfig.leafMap;
-        Assertions.assertEquals("first-key-value", leafMap.get("key").get("first"));
-        Assertions.assertEquals("second-key-value", leafMap.get("key").get("second"));
-
-        //quarkus.rt.config-group-map.key.group.nested-value=value
-        //quarkus.rt.config-group-map.key.group.oov=value2.1+value2.2
-        final Map<String, Map<String, NestedConfig>> configGroupMap = runTimeConfig.configGroupMap;
-        NestedConfig nestedConfigFromMap = configGroupMap.get("key").get("group");
-        Assertions.assertEquals("value", nestedConfigFromMap.nestedValue);
-        Assertions.assertEquals(new ObjectOfValue("value2.1", "value2.2"), nestedConfigFromMap.oov);
     }
 
     /**
@@ -259,107 +221,4 @@ public class ConfiguredBeanTest {
                 .body(is("/ping-ack"));
     }
 
-    @Test
-    public void testHyphenatedEnumConversion() {
-        List<MyEnum> enums = Arrays.asList(MyEnum.ENUM_ONE, MyEnum.Enum_Two);
-        Assertions.assertEquals(enums, configuredBean.getRunTimeConfig().myEnums);
-        Assertions.assertEquals(MyEnum.Enum_Two, configuredBean.getRunTimeConfig().myEnum);
-        Assertions.assertEquals(MyEnum.OPTIONAL, configuredBean.getRunTimeConfig().myOptionalEnums.get());
-        Assertions.assertEquals(MyEnum.ENUM_ONE, configuredBean.getRunTimeConfig().noHyphenateFirstEnum.get());
-        Assertions.assertEquals(MyEnum.Enum_Two, configuredBean.getRunTimeConfig().noHyphenateSecondEnum.get());
-    }
-
-    @Test
-    public void testConversionUsingConvertWith() {
-        Assertions.assertTrue(configuredBean.getRunTimeConfig().primitiveBoolean);
-        Assertions.assertFalse(configuredBean.getRunTimeConfig().objectBoolean);
-        Assertions.assertEquals(2, configuredBean.getRunTimeConfig().primitiveInteger);
-        Assertions.assertEquals(9, configuredBean.getRunTimeConfig().objectInteger);
-        List<Integer> oneToNine = IntStream.range(1, 10).mapToObj(Integer::new).collect(Collectors.toList());
-        Assertions.assertEquals(oneToNine, configuredBean.getRunTimeConfig().oneToNine);
-        List<Integer> mapValues = new ArrayList<>(Arrays.asList(1, 2));
-        List<Integer> actualMapValues = new ArrayList<>(configuredBean.getRunTimeConfig().mapOfNumbers.values());
-        Assertions.assertEquals(mapValues, actualMapValues);
-    }
-
-    @Test
-    public void testBtrtMapOfMap() {
-        Map<String, Map<String, String>> mapMap = configuredBean.getBuildTimeConfig().mapMap;
-        Assertions.assertFalse(mapMap.containsKey("inner-key"));
-        Assertions.assertTrue(mapMap.containsKey("outer-key"));
-        Map<String, String> map = mapMap.get("outer-key");
-        Assertions.assertTrue(map.containsKey("inner-key"));
-        Assertions.assertFalse(map.containsKey("outer-key"));
-        Assertions.assertEquals("1234", map.get("inner-key"));
-    }
-
-    @Test
-    public void testRtMapOfMap() {
-        Map<String, Map<String, String>> mapMap = configuredBean.getRunTimeConfig().mapMap;
-        Assertions.assertFalse(mapMap.containsKey("inner-key"));
-        Assertions.assertTrue(mapMap.containsKey("outer-key"));
-        Map<String, String> map = mapMap.get("outer-key");
-        Assertions.assertTrue(map.containsKey("inner-key"));
-        Assertions.assertFalse(map.containsKey("outer-key"));
-        Assertions.assertEquals("1234", map.get("inner-key"));
-    }
-
-    @Inject
-    TestBuildAndRunTimeConfig buildAndRunTimeConfig;
-
-    @Test
-    public void buildTimeDefaults() {
-        // Source is only initialized once in runtime.
-        Assertions.assertEquals(1, OverrideBuildTimeConfigSource.counter.get());
-        // Test that build configRoot are not overridden by properties in runtime.
-        Assertions.assertEquals(1234567891L, buildAndRunTimeConfig.allValues.longPrimitive);
-        Assertions.assertEquals(0, ConfigProvider.getConfig().getValue("quarkus.btrt.all-values.long-primitive", Long.class));
-    }
-
-    @Test
-    public void testBuiltTimeNamedMapWithProfiles() {
-        Map<String, Map<String, String>> mapMap = configuredBean.getBuildTimeConfig().mapMap;
-        Assertions.assertEquals("1234", mapMap.get("main-profile").get("property"));
-        Assertions.assertEquals("5678", mapMap.get("test-profile").get("property"));
-    }
-
-    @Test
-    public void testConfigDefaultValuesSourceOrdinal() {
-        ConfigSource defaultValues = null;
-        for (ConfigSource configSource : config.getConfigSources()) {
-            if (configSource.getName().contains("PropertiesConfigSource[source=Specified default values]")) {
-                defaultValues = configSource;
-                break;
-            }
-        }
-        assertNotNull(defaultValues);
-        assertEquals(Integer.MIN_VALUE + 100, defaultValues.getOrdinal());
-
-        // Should be the second, after RuntimeOverrideConfigSource
-        Iterator<ConfigSource> iterator = config.getConfigSources().iterator();
-        iterator.next();
-        ConfigSource applicationProperties = iterator.next();
-        assertNotNull(applicationProperties);
-        assertEquals(1000, applicationProperties.getOrdinal());
-
-        assertEquals("1234", defaultValues.getValue("my.prop"));
-        assertEquals("1234", applicationProperties.getValue("my.prop"));
-    }
-
-    @Test
-    public void testProfileDefaultValuesSource() {
-        ConfigSource defaultValues = null;
-        for (ConfigSource configSource : config.getConfigSources()) {
-            if (configSource.getName().contains("PropertiesConfigSource[source=Specified default values]")) {
-                defaultValues = configSource;
-                break;
-            }
-        }
-        assertNotNull(defaultValues);
-        assertEquals("1234", defaultValues.getValue("my.prop"));
-        assertEquals("1234", defaultValues.getValue("%prod.my.prop"));
-        assertEquals("5678", defaultValues.getValue("%dev.my.prop"));
-        assertEquals("1234", defaultValues.getValue("%test.my.prop"));
-        assertEquals("1234", config.getValue("my.prop", String.class));
-    }
 }
