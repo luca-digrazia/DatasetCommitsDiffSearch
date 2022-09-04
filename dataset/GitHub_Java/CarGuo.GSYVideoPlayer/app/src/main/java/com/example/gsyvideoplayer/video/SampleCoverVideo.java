@@ -18,8 +18,8 @@ import com.shuyu.gsyvideoplayer.video.base.GSYBaseVideoPlayer;
 import moe.codeest.enviews.ENDownloadView;
 
 /**
- 带封面
- Created by guoshuyu on 2017/9/3.
+ * 带封面
+ * Created by guoshuyu on 2017/9/3.
  */
 
 public class SampleCoverVideo extends StandardGSYVideoPlayer {
@@ -90,8 +90,9 @@ public class SampleCoverVideo extends StandardGSYVideoPlayer {
         return sampleCoverVideo;
     }
 
-
-    /******************* 下方两个重载方法，在播放开始前不屏蔽封面，不需要可屏蔽 ********************/
+    /**
+     * 下方两个重载方法，在播放开始前不屏蔽封面
+     */
     @Override
     public void onSurfaceUpdated(Surface surface) {
         super.onSurfaceUpdated(surface);
@@ -109,7 +110,9 @@ public class SampleCoverVideo extends StandardGSYVideoPlayer {
     }
 
 
-    /******************* 下方重载方法，在播放开始不显示底部进度和按键，不需要可屏蔽 ********************/
+    /**
+     * 下方重载方法，在播放开始不显示底部进度和按键
+     */
 
     protected boolean byStartedClick;
 
@@ -164,7 +167,6 @@ public class SampleCoverVideo extends StandardGSYVideoPlayer {
         Debuger.printfLog("Sample startAfterPrepared");
         setViewShowState(mBottomContainer, INVISIBLE);
         setViewShowState(mStartButton, INVISIBLE);
-        setViewShowState(mBottomProgressBar, VISIBLE);
     }
 
     @Override
