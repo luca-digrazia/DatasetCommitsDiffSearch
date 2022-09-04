@@ -107,9 +107,9 @@ public class BenchmarkOutput implements MessageOutput {
         messagesWritten.mark(messages.size());
     }
 
-    public interface Factory extends MessageOutput.Factory<BenchmarkOutput> {
+    public interface Factory extends MessageOutput.Factory<GelfOutput> {
         @Override
-        BenchmarkOutput create(Stream stream, Configuration configuration);
+        GelfOutput create(Stream stream, Configuration configuration);
 
         @Override
         Config getConfig();

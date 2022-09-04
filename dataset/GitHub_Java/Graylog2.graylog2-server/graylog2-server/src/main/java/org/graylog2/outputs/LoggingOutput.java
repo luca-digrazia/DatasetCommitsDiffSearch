@@ -1,5 +1,22 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.outputs;
 
+import com.google.inject.assistedinject.Assisted;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
@@ -7,43 +24,73 @@ import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.TextField;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
+import org.graylog2.plugin.streams.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Map;
+import javax.inject.Inject;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 public class LoggingOutput implements MessageOutput {
-    private final Logger LOG = LoggerFactory.getLogger(this.getClass());
-    private Configuration configuration;
+    private static final Logger LOG = LoggerFactory.getLogger(LoggingOutput.class);
+    private final AtomicBoolean isRunning = new AtomicBoolean(false);
+    private final Configuration configuration;
+
+    @Inject
+    public LoggingOutput(@Assisted Configuration config) throws MessageOutputConfigurationException {
+        LOG.info("Initializing");
+        configuration = config;
+        isRunning.set(true);
+    }
 
     @Override
-    public void initialize(Configuration config) throws MessageOutputConfigurationException {
-        LOG.info("Initializing");
-        this.configuration = configuration;
+    public void stop() {
+        isRunning.set(false);
+        LOG.info("Stopping");
+    }
+
+    @Override
+    public boolean isRunning() {
+        return isRunning.get();
     }
 
     @Override
     public void write(Message message) throws Exception {
-        LOG.info("Writing message {}", message);
+        LOG.info("{} {}", configuration.getString("prefix"), message);
     }
 
     @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        ConfigurationRequest configurationRequest = new ConfigurationRequest();
-        configurationRequest.addField(new TextField("sample_field", "Sample Field", "A default value", "This ist just a sample field", ConfigurationField.Optional.OPTIONAL));
-        return configurationRequest;
+    public void write(List<Message> messages) throws Exception {
+        for (Message message : messages) {
+            write(message);
+        }
     }
 
-    @Override
-    public Map<String, String> getRequestedStreamConfiguration() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
+    public interface Factory extends MessageOutput.Factory<LoggingOutput> {
+        @Override
+        LoggingOutput create(Stream stream, Configuration configuration);
+
+        @Override
+        Config getConfig();
+
+        @Override
+        Descriptor getDescriptor();
     }
 
-    @Override
-    public String getName() {
-        return "A logging only output.";
+    public static class Descriptor extends MessageOutput.Descriptor {
+        public Descriptor() {
+            super("STDOUT Output", false, "", "An output writing every message to STDOUT.");
+        }
+    }
+
+
+    public static class Config extends MessageOutput.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            ConfigurationRequest configurationRequest = new ConfigurationRequest();
+            configurationRequest.addField(new TextField("prefix", "Prefix", "Writing message: ", "How to prefix the message before logging it", ConfigurationField.Optional.OPTIONAL));
+            return configurationRequest;
+        }
     }
 }
