@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.starlarkbuildapi.stubs.ProviderStub;
 import com.google.devtools.build.lib.starlarkbuildapi.stubs.StarlarkAspectStub;
 import com.google.devtools.build.lib.starlarkbuildapi.test.TestingBootstrap;
 import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.util.Classpath;
 import com.google.devtools.build.lib.util.Classpath.ClassPathException;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeActionsInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeBuildApiGlobals;
@@ -102,6 +103,9 @@ import java.util.Map;
  * builtin types.
  */
 public class SymbolFamilies {
+  // Common prefix of packages that may contain Starlark modules.
+  private static final String MODULES_PACKAGE_PREFIX = "com/google/devtools/build";
+
   private final ImmutableList<RuleDocumentation> nativeRules;
   private final ImmutableMap<String, StarlarkBuiltinDoc> types;
 
@@ -118,7 +122,7 @@ public class SymbolFamilies {
         ImmutableList.copyOf(collectNativeRules(productName, provider, inputDirs, blackList));
     this.globals = Starlark.UNIVERSE;
     this.bzlGlobals = ImmutableMap.copyOf(collectBzlGlobals());
-    this.types = StarlarkDocumentationCollector.getAllModules();
+    this.types = ImmutableMap.copyOf(collectTypes());
   }
 
   /*
@@ -147,6 +151,15 @@ public class SymbolFamilies {
   // Returns a mapping between type names and module/type documentation.
   public Map<String, StarlarkBuiltinDoc> getTypes() {
     return types;
+  }
+
+  /*
+   * Collects a mapping between type names and module/type documentation that are available both
+   * in BZL and BUILD files.
+   */
+  private Map<String, StarlarkBuiltinDoc> collectTypes() throws ClassPathException {
+    return StarlarkDocumentationCollector.collectModules(
+        Classpath.findClasses(MODULES_PACKAGE_PREFIX));
   }
 
   /*
