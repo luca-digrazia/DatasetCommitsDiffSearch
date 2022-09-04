@@ -70,9 +70,7 @@ public class ConfigDefinition extends CompoundConfigType {
     private static final List<String> FALSE_POSITIVE_QUARKUS_CONFIG_MISSES = Arrays
             .asList(QUARKUS_NAMESPACE + ".live-reload.password", QUARKUS_NAMESPACE + ".live-reload.url",
                     QUARKUS_NAMESPACE + ".debug.generated-classes-dir", QUARKUS_NAMESPACE + ".debug.reflection",
-                    QUARKUS_NAMESPACE + ".build.skip",
-                    QUARKUS_NAMESPACE + ".version", QUARKUS_NAMESPACE + ".profile", QUARKUS_NAMESPACE + ".test.profile",
-                    QUARKUS_NAMESPACE + ".test.native-image-wait-time");
+                    QUARKUS_NAMESPACE + ".version", QUARKUS_NAMESPACE + ".profile", QUARKUS_NAMESPACE + ".test.profile");
 
     private final TreeMap<String, Object> rootObjectsByContainingName = new TreeMap<>();
     private final HashMap<Class<?>, Object> rootObjectsByClass = new HashMap<>();
@@ -491,15 +489,13 @@ public class ConfigDefinition extends CompoundConfigType {
                                 boolean old = ExpandingConfigSource.setExpanding(false);
                                 try {
                                     leafType.acceptConfigurationValue(name, cache, config);
-                                    definition.loadedProperties.put(nameString,
-                                            config.getOptionalValue(nameString, String.class).orElse(""));
+                                    definition.loadedProperties.put(nameString, config.getValue(nameString, String.class));
                                 } finally {
                                     ExpandingConfigSource.setExpanding(old);
                                 }
                             } else {
                                 leafType.acceptConfigurationValue(name, cache, config);
-                                definition.loadedProperties.put(nameString,
-                                        config.getOptionalValue(nameString, String.class).orElse(""));
+                                definition.loadedProperties.put(nameString, config.getValue(nameString, String.class));
                             }
                             continue outer;
                         }
