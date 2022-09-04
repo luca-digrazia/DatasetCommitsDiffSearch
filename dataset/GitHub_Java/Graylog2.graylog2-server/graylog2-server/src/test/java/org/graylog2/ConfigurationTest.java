@@ -26,7 +26,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -76,18 +75,14 @@ public class ConfigurationTest {
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        assertThat(configuration.getRestListenUri()).isEqualTo(URI.create("http://www.example.com:12900/"));
     }
 
     @Test
     public void testWebListenUriIsAbsoluteURI() throws RepositoryException, ValidationException {
-        validProperties.put("web_listen_uri", "http://www.example.com:12900/web");
+        validProperties.put("rest_listen_uri", "http://www.example.com:12900/web");
 
         Configuration configuration = new Configuration();
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        assertThat(configuration.getWebListenUri()).isEqualTo(URI.create("http://www.example.com:12900/web/"));
     }
 
     @Test
@@ -164,30 +159,6 @@ public class ConfigurationTest {
     }
 
     @Test
-    public void testApiListenerOnRootAndWebListenerOnSubPath() throws ValidationException, RepositoryException {
-        validProperties.put("rest_listen_uri", "http://0.0.0.0:12900/");
-        validProperties.put("web_listen_uri", "http://0.0.0.0:12900/web/");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        assertThat(configuration.getRestListenUri()).isEqualTo(URI.create("http://0.0.0.0:12900/"));
-        assertThat(configuration.getWebListenUri()).isEqualTo(URI.create("http://0.0.0.0:12900/web/"));
-    }
-
-    @Test
-    public void testWebListenerOnRootAndApiListenerOnSubPath() throws ValidationException, RepositoryException {
-        validProperties.put("rest_listen_uri", "http://0.0.0.0:9000/api/");
-        validProperties.put("web_listen_uri", "http://0.0.0.0:9000/");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-
-        assertThat(configuration.getRestListenUri()).isEqualTo(URI.create("http://0.0.0.0:9000/api/"));
-        assertThat(configuration.getWebListenUri()).isEqualTo(URI.create("http://0.0.0.0:9000/"));
-    }
-
-    @Test
     public void testPasswordSecretIsValid() throws ValidationException, RepositoryException {
         validProperties.put("password_secret", "abcdefghijklmnopqrstuvwxyz");
 
@@ -195,29 +166,5 @@ public class ConfigurationTest {
         new JadConfig(new InMemoryRepository(validProperties), configuration).process();
 
         assertThat(configuration.getPasswordSecret()).isEqualTo("abcdefghijklmnopqrstuvwxyz");
-    }
-
-    @Test
-    public void testRestApiListeningOnWildcardOnSamePortAsWebInterface() throws ValidationException, RepositoryException {
-        validProperties.put("rest_listen_uri", "http://0.0.0.0:9000/api/");
-        validProperties.put("web_listen_uri", "http://127.0.0.1:9000/");
-
-        expectedException.expect(ValidationException.class);
-        expectedException.expectMessage("Wildcard IP addresses cannot be used if the Graylog REST API and web interface listen on the same port.");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
-    }
-
-    @Test
-    public void testWebInterfaceListeningOnWildcardOnSamePortAsRestApi() throws ValidationException, RepositoryException {
-        validProperties.put("rest_listen_uri", "http://127.0.0.1:9000/api/");
-        validProperties.put("web_listen_uri", "http://0.0.0.0:9000/");
-
-        expectedException.expect(ValidationException.class);
-        expectedException.expectMessage("Wildcard IP addresses cannot be used if the Graylog REST API and web interface listen on the same port.");
-
-        Configuration configuration = new Configuration();
-        new JadConfig(new InMemoryRepository(validProperties), configuration).process();
     }
 }

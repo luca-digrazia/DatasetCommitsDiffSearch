@@ -38,7 +38,9 @@ import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Set;
 
-import static org.graylog2.plugin.Tools.normalizeURI;
+import static org.graylog2.plugin.Tools.getUriWithDefaultPath;
+import static org.graylog2.plugin.Tools.getUriWithPort;
+import static org.graylog2.plugin.Tools.getUriWithScheme;
 
 /**
  * Helper class to hold configuration of Graylog
@@ -52,10 +54,10 @@ public class Configuration extends BaseConfiguration {
     private String passwordSecret;
 
     @Parameter(value = "rest_listen_uri", required = true, validator = URIAbsoluteValidator.class)
-    private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_PORT + "/api/");
+    private URI restListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_PORT + "/");
 
     @Parameter(value = "web_listen_uri", required = true, validator = URIAbsoluteValidator.class)
-    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_WEB_PORT + "/");
+    private URI webListenUri = URI.create("http://127.0.0.1:" + GRAYLOG_DEFAULT_WEB_PORT + "/web");
 
     @Parameter(value = "output_batch_size", required = true, validator = PositiveIntegerValidator.class)
     private int outputBatchSize = 500;
@@ -206,12 +208,12 @@ public class Configuration extends BaseConfiguration {
 
     @Override
     public URI getRestListenUri() {
-        return normalizeURI(restListenUri, getRestUriScheme(), GRAYLOG_DEFAULT_PORT, "/");
+        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(restListenUri, getRestUriScheme()), GRAYLOG_DEFAULT_PORT), "/");
     }
 
     @Override
     public URI getWebListenUri() {
-        return normalizeURI(webListenUri, getWebUriScheme(), GRAYLOG_DEFAULT_WEB_PORT, "/");
+        return getUriWithDefaultPath(getUriWithPort(getUriWithScheme(webListenUri, getWebUriScheme()), GRAYLOG_DEFAULT_WEB_PORT), "/");
     }
 
     public String getRootUsername() {
@@ -319,24 +321,10 @@ public class Configuration extends BaseConfiguration {
     }
 
     @ValidatorMethod
-    @SuppressWarnings("unused")
     public void validatePasswordSecret() throws ValidationException {
         final String passwordSecret = getPasswordSecret();
         if (passwordSecret == null || passwordSecret.length() < 16) {
             throw new ValidationException("The minimum length for \"password_secret\" is 16 characters.");
-        }
-    }
-
-    @ValidatorMethod
-    @SuppressWarnings("unused")
-    public void validateNetworkInterfaces() throws ValidationException {
-        final URI restListenUri = getRestListenUri();
-        final URI webListenUri = getWebListenUri();
-
-        if ((restListenUri.getPort() == webListenUri.getPort()) &&
-                !restListenUri.getHost().equals(webListenUri.getHost()) &&
-                ("0.0.0.0".equals(restListenUri.getHost()) || "0.0.0.0".equals(webListenUri.getHost()))) {
-            throw new ValidationException("Wildcard IP addresses cannot be used if the Graylog REST API and web interface listen on the same port.");
         }
     }
 }
