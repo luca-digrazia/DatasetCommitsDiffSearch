@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.manifold;
 
@@ -164,7 +164,7 @@ public class LLE implements Serializable {
             }
 
             Arrays.fill(b, 1.0);
-            Matrix.LU lu = C.lu(true);
+            Matrix.LU lu = C.lu();
             b = lu.solve(b);
 
             double sum = MathEx.sum(b);
