@@ -64,7 +64,7 @@ public class TemplateVariableInfoTest extends BuildViewTestCase {
 
     @SuppressWarnings("unchecked")
     Map<String, String> makeVariables = (Map<String, String>) ct.get("variables");
-    assertThat(makeVariables).containsKey("CC");
+    assertThat(makeVariables).containsKey("CC_FLAGS");
   }
 
   @Test
