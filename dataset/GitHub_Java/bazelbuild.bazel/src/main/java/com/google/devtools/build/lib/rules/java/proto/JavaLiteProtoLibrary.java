@@ -14,28 +14,28 @@
 
 package com.google.devtools.build.lib.rules.java.proto;
 
-import static com.google.common.collect.Iterables.transform;
-import static com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode.TARGET;
 import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
-import static com.google.devtools.build.lib.rules.java.proto.JavaLiteProtoAspect.LITE_PROTO_RUNTIME_ATTR;
+import static com.google.devtools.build.lib.rules.java.proto.JplCcLinkParams.createCcLinkingInfo;
+import static com.google.devtools.build.lib.rules.java.proto.StrictDepsUtils.constructJcapFromAspectDeps;
 
-import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.Iterables;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.OutputGroupProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
+import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
+import com.google.devtools.build.lib.rules.java.JavaCcInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
+import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRunfilesProvider;
-import com.google.devtools.build.lib.rules.java.JavaSkylarkApiProvider;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.java.ProguardLibrary;
 import com.google.devtools.build.lib.rules.java.ProguardSpecProvider;
@@ -45,57 +45,79 @@ public class JavaLiteProtoLibrary implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(final RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException {
+      throws InterruptedException, RuleErrorException, ActionConflictException {
 
-    JavaCompilationArgsProvider dependencyArgsProviders =
-        JavaCompilationArgsProvider.merge(
-            Iterables.<JavaCompilationArgsAspectProvider, JavaCompilationArgsProvider>transform(
-                getDeps(ruleContext, JavaCompilationArgsAspectProvider.class),
-                JavaCompilationArgsAspectProvider.GET_PROVIDER));
-
-    if (!StrictDepsUtils.isStrictDepsJavaProtoLibrary(ruleContext)) {
-      dependencyArgsProviders = StrictDepsUtils.makeNonStrict(dependencyArgsProviders);
+    if (ruleContext.attributes().has("strict_deps")
+        && ruleContext.attributes().isAttributeValueExplicitlySpecified("strict_deps")) {
+      ruleContext.attributeError("strict_deps", "The strict_deps attribute has been removed.");
+      return null;
     }
 
-    Runfiles runfiles = new Runfiles.Builder(ruleContext.getWorkspaceName()).addArtifacts(
-        dependencyArgsProviders.getRecursiveJavaCompilationArgs().getRuntimeJars()).build();
+    Iterable<JavaProtoLibraryAspectProvider> javaProtoLibraryAspectProviders =
+        ruleContext.getPrerequisites("deps", JavaProtoLibraryAspectProvider.class);
+
+    JavaCompilationArgsProvider dependencyArgsProviders =
+        constructJcapFromAspectDeps(
+            ruleContext, javaProtoLibraryAspectProviders, /* alwaysStrict= */ true);
+
+    // We assume that the runtime jars will not have conflicting artifacts
+    // with the same root relative path
+    Runfiles runfiles =
+        new Runfiles.Builder(ruleContext.getWorkspaceName())
+            .addTransitiveArtifactsWrappedInStableOrder(dependencyArgsProviders.getRuntimeJars())
+            .build();
 
     JavaSourceJarsProvider sourceJarsProvider =
         JavaSourceJarsProvider.merge(
-            transform(
-                getDeps(ruleContext, JavaSourceJarsAspectProvider.class),
-                JavaSourceJarsAspectProvider.GET_PROVIDER));
+            ruleContext.getPrerequisites("deps", JavaSourceJarsProvider.class));
 
     NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
 
     filesToBuild.addAll(sourceJarsProvider.getSourceJars());
 
-    for (JavaProtoLibraryTransitiveFilesToBuildProvider provider : ruleContext.getPrerequisites(
-        "deps", Mode.TARGET, JavaProtoLibraryTransitiveFilesToBuildProvider.class)) {
+    for (JavaProtoLibraryAspectProvider provider : javaProtoLibraryAspectProviders) {
       filesToBuild.addTransitive(provider.getJars());
     }
 
-    return new RuleConfiguredTargetBuilder(ruleContext)
+    RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
+
+    JavaInfo javaInfo =
+        JavaInfo.Builder.create()
+            .addProvider(JavaCompilationArgsProvider.class, dependencyArgsProviders)
+            .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
+            .addProvider(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.EMPTY)
+            .addProvider(
+                JavaCcInfoProvider.class, createCcLinkingInfo(ruleContext, ImmutableList.of()))
+            .setJavaConstraints(ImmutableList.of("android"))
+            .build();
+
+    return builder
         .setFilesToBuild(filesToBuild.build())
-        .addProvider(RunfilesProvider.class, RunfilesProvider.withData(Runfiles.EMPTY, runfiles))
-        .addOutputGroup(
-            OutputGroupProvider.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
-        .add(JavaCompilationArgsProvider.class, dependencyArgsProviders)
-        .add(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .add(JavaRunfilesProvider.class, new JavaRunfilesProvider(runfiles))
-        .add(
-            ProguardSpecProvider.class,
-            new ProguardSpecProvider(
-                new ProguardLibrary(ruleContext)
-                    .collectProguardSpecs(
-                        ImmutableMultimap.of(Mode.TARGET, LITE_PROTO_RUNTIME_ATTR))))
-        .add(JavaRuleOutputJarsProvider.class, JavaRuleOutputJarsProvider.builder().build())
-        .addSkylarkTransitiveInfo(JavaSkylarkApiProvider.NAME, new JavaSkylarkApiProvider())
+        .addProvider(RunfilesProvider.simple(runfiles))
+        .addOutputGroup(OutputGroupInfo.DEFAULT, NestedSetBuilder.<Artifact>emptySet(STABLE_ORDER))
+        .addNativeDeclaredProvider(getJavaLiteRuntimeSpec(ruleContext))
+        .addNativeDeclaredProvider(javaInfo)
         .build();
   }
 
-  private <C extends TransitiveInfoProvider> Iterable<C> getDeps(
-      RuleContext ruleContext, Class<C> clazz) {
-    return ruleContext.getPrerequisites("deps", TARGET, clazz);
+  private ProguardSpecProvider getJavaLiteRuntimeSpec(RuleContext ruleContext) {
+    NestedSet<Artifact> specs =
+        new ProguardLibrary(ruleContext).collectProguardSpecs(ImmutableSet.of());
+
+    TransitiveInfoCollection runtime =
+        JavaProtoAspectCommon.getLiteProtoToolchainProvider(ruleContext).runtime();
+    if (runtime == null) {
+      return new ProguardSpecProvider(specs);
+    }
+
+    ProguardSpecProvider specProvider = runtime.get(ProguardSpecProvider.PROVIDER);
+    if (specProvider == null) {
+      return new ProguardSpecProvider(specs);
+    }
+
+    return new ProguardSpecProvider(
+        NestedSetBuilder.fromNestedSet(specs)
+            .addTransitive(specProvider.getTransitiveProguardSpecs())
+            .build());
   }
 }
