@@ -29,7 +29,7 @@ import javax.annotation.Nullable;
  * all clients of the Starlark interpreter.
  */
 // TODO(adonovan): move these here:
-// equal, compare, getattr, index, slice, parse, exec, eval, and so on.
+// len, str, iterate, equal, compare, getattr, index, slice, parse, exec, eval, and so on.
 public final class Starlark {
 
   private Starlark() {} // uninstantiable
@@ -214,36 +214,6 @@ public final class Starlark {
   }
 
   /**
-   * Calls the function-like value {@code fn} in the specified thread, passing the given positional
-   * and named arguments, as if by the Starlark expression {@code fn(*args, **kwargs)}.
-   */
-  public static Object call(
-      StarlarkThread thread,
-      Object fn,
-      @Nullable FuncallExpression call,
-      List<Object> args,
-      Map<String, Object> kwargs)
-      throws EvalException, InterruptedException {
-    StarlarkCallable callable;
-    if (fn instanceof StarlarkCallable) {
-      callable = (StarlarkCallable) fn;
-    } else {
-      // @SkylarkCallable(selfCall)?
-      MethodDescriptor desc =
-          CallUtils.getSelfCallMethodDescriptor(thread.getSemantics(), fn.getClass());
-      if (desc == null) {
-        throw new EvalException(
-            call != null ? call.getLocation() : null,
-            "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
-      }
-      callable = new BuiltinCallable(fn, desc.getName(), desc);
-    }
-
-    // TODO(adonovan): do push/pop, profiling, and exception handling here.
-    return callable.callImpl(thread, call, args, ImmutableMap.copyOf(kwargs));
-  }
-
-  /**
    * Adds to the environment {@code env} all {@code StarlarkCallable}-annotated fields and methods
    * of value {@code v}. The class of {@code v} must have or inherit a {@code SkylarkModule} or
    * {@code SkylarkGlobalLibrary} annotation.
@@ -258,11 +228,7 @@ public final class Starlark {
     // TODO(adonovan): logically this should be a parameter.
     StarlarkSemantics semantics = StarlarkSemantics.DEFAULT_SEMANTICS;
     for (String name : CallUtils.getMethodNames(semantics, v.getClass())) {
-      // We pass desc=null instead of the descriptor that CallUtils.getMethod would
-      // return because DEFAULT_SEMANTICS is probably incorrect for the call.
-      // The effect is that the default semantics determine which methods appear in
-      // env, but the thread's semantics determine which method calls succeed.
-      env.put(name, new BuiltinCallable(v, name, /*desc=*/ null));
+      env.put(name, CallUtils.getBuiltinCallable(semantics, v, name));
     }
   }
 
