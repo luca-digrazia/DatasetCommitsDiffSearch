@@ -20,20 +20,21 @@ public class HttpConfiguration {
     @Valid
     @NotNull
     @JsonProperty
-    protected RequestLogConfiguration requestLog = new RequestLogConfiguration();
+    private RequestLogConfiguration requestLog = new RequestLogConfiguration();
 
     @Valid
     @NotNull
     @JsonProperty
-    protected GzipConfiguration gzip = new GzipConfiguration();
+    private GzipConfiguration gzip = new GzipConfiguration();
 
     @Valid
+    @NotNull
     @JsonProperty
-    protected SslConfiguration ssl = null;
+    private SslConfiguration ssl = new SslConfiguration();
 
     @NotNull
     @JsonProperty
-    protected ImmutableMap<String, String> contextParameters = ImmutableMap.of();
+    private ImmutableMap<String, String> contextParameters = ImmutableMap.of();
     
     public enum ConnectorType {
         SOCKET,
@@ -46,115 +47,108 @@ public class HttpConfiguration {
     @Min(1025)
     @Max(65535)
     @JsonProperty
-    protected int port = 8080;
+    private int port = 8080;
 
     @Min(1025)
     @Max(65535)
     @JsonProperty
-    protected int adminPort = 8081;
+    private int adminPort = 8081;
 
     @Min(2)
     @Max(1000000)
     @JsonProperty
-    protected int maxThreads = 254;
+    private int maxThreads = 254;
 
     @Min(1)
     @Max(1000000)
     @JsonProperty
-    protected int minThreads = 8;
+    private int minThreads = 8;
 
     @NotNull
     @JsonProperty
-    protected String rootPath = "/*";
+    private String rootPath = "/*";
     
     @NotNull
-    @Pattern(regexp = "^(blocking|nonblocking|nonblocking\\+ssl|legacy|legacy\\+ssl)$",
+    @Pattern(regexp = "(blocking?|nonblocking(?:\\+ssl)?|legacy|socket\\+ssl)",
              flags = {Pattern.Flag.CASE_INSENSITIVE})
     @JsonProperty
-    protected String connectorType = "blocking";
+    private String connectorType = "blocking";
 
     @NotNull
     @JsonProperty
-    protected Duration maxIdleTime = Duration.seconds(200);
+    private Duration maxIdleTime = Duration.seconds(200);
 
     @Min(1)
     @Max(128)
     @JsonProperty
-    protected int acceptorThreadCount = 1;
+    private int acceptorThreadCount = 1;
 
     @Min(-Thread.NORM_PRIORITY)
     @Max(Thread.NORM_PRIORITY)
     @JsonProperty
-    protected int acceptorThreadPriorityOffset = 0;
+    private int acceptorThreadPriorityOffset = 0;
 
     @Min(-1)
     @JsonProperty
-    protected int acceptQueueSize = -1;
+    private int acceptQueueSize = -1;
 
     @Min(1)
     @JsonProperty
-    protected int maxBufferCount = 1024;
+    private int maxBufferCount = 1024;
 
     @NotNull
     @JsonProperty
-    protected Size requestBufferSize = Size.kilobytes(16);
+    private Size requestBufferSize = Size.kilobytes(16);
 
     @NotNull
     @JsonProperty
-    protected Size requestHeaderBufferSize = Size.kilobytes(6);
+    private Size requestHeaderBufferSize = Size.kilobytes(6);
 
     @NotNull
     @JsonProperty
-    protected Size responseBufferSize = Size.kilobytes(32);
+    private Size responseBufferSize = Size.kilobytes(32);
 
     @NotNull
     @JsonProperty
-    protected Size responseHeaderBufferSize = Size.kilobytes(6);
+    private Size responseHeaderBufferSize = Size.kilobytes(6);
 
     @JsonProperty
-    protected boolean reuseAddress = true;
+    private boolean reuseAddress = true;
 
     @JsonProperty
-    protected Duration soLingerTime = null;
+    private Duration soLingerTime = null;
 
     @JsonProperty
-    protected int lowResourcesConnectionThreshold = 0;
+    private int lowResourcesConnectionThreshold = 0;
 
     @NotNull
     @JsonProperty
-    protected Duration lowResourcesMaxIdleTime = Duration.seconds(0);
+    private Duration lowResourcesMaxIdleTime = Duration.seconds(0);
 
     @NotNull
     @JsonProperty
-    protected Duration shutdownGracePeriod = Duration.seconds(2);
+    private Duration shutdownGracePeriod = Duration.seconds(2);
 
     @JsonProperty
-    protected boolean useServerHeader = false;
+    private boolean useServerHeader = false;
 
     @JsonProperty
-    protected boolean useDateHeader = true;
+    private boolean useDateHeader = true;
 
     @JsonProperty
-    protected boolean useForwardedHeaders = true;
+    private boolean useForwardedHeaders = true;
 
     @JsonProperty
-    protected boolean useDirectBuffers = true;
+    private boolean useDirectBuffers = true;
 
     @JsonProperty
-    protected String bindHost = null;
+    private String bindHost = null;
 
     @JsonProperty
-    protected String adminUsername = null;
+    private String adminUsername = null;
 
     @JsonProperty
-    protected String adminPassword = null;
-
-    @ValidationMethod(message = "must have an SSL configuration when using SSL connection")
-    public boolean isSslConfigured() {
-        final ConnectorType type = getConnectorType();
-        return !((ssl == null) && ((type == ConnectorType.SOCKET_SSL) ||
-                                   (type == ConnectorType.SELECT_CHANNEL_SSL)));
-    }
+    private String adminPassword = null;
 
     @ValidationMethod(message = "must have a smaller minThreads than maxThreads")
     public boolean isThreadPoolSizedCorrectly() {
@@ -187,10 +181,10 @@ public class HttpConfiguration {
             return ConnectorType.BLOCKING_CHANNEL;
         } else if ("legacy".equalsIgnoreCase(connectorType)) {
             return ConnectorType.SOCKET;
-        } else if ("legacy+ssl".equalsIgnoreCase(connectorType)) {
-            return ConnectorType.SOCKET_SSL;
         } else if ("nonblocking".equalsIgnoreCase(connectorType)) {
             return ConnectorType.SELECT_CHANNEL;
+        } else if ("socket+ssl".equalsIgnoreCase(connectorType)) {
+            return ConnectorType.SOCKET_SSL;
         } else if ("nonblocking+ssl".equalsIgnoreCase(connectorType)) {
             return ConnectorType.SELECT_CHANNEL_SSL;
         } else {
