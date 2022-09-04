@@ -38,8 +38,6 @@ import com.android.aapt.Resources.XmlNamespace;
 import com.android.aapt.Resources.XmlNode;
 import com.android.resources.ResourceType;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Supplier;
-import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.io.ByteStreams;
@@ -51,7 +49,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UncheckedIOException;
 import java.io.UnsupportedEncodingException;
 import java.net.URI;
 import java.nio.ByteBuffer;
@@ -91,22 +88,10 @@ public class ProtoApk implements Closeable {
 
   private final URI uri;
   private final FileSystem apkFileSystem;
-  private final Supplier<ResourceTable> resourceTableSupplier;
 
   private ProtoApk(URI uri, FileSystem apkFileSystem) {
     this.uri = uri;
     this.apkFileSystem = apkFileSystem;
-    this.resourceTableSupplier =
-        Suppliers.memoize(
-            () -> {
-              try {
-                return ResourceTable.parseFrom(
-                    Files.newInputStream(apkFileSystem.getPath(RESOURCE_TABLE)),
-                    ExtensionRegistry.getEmptyRegistry());
-              } catch (IOException e) {
-                throw new UncheckedIOException(e);
-              }
-            });
   }
 
   /** Reads a ProtoApk from a path and verifies that it is in the expected format. */
@@ -137,7 +122,10 @@ public class ProtoApk implements Closeable {
     final URI dstZipUri = URI.create("jar:" + destination.toUri());
     try (final ZipFile srcZip = new ZipFile(uri.getPath());
         final UniqueZipBuilder dstZip = UniqueZipBuilder.createFor(destination)) {
-      final ResourceTable resourceTable = getResourceTable();
+      final ResourceTable resourceTable =
+          ResourceTable.parseFrom(
+              Files.newInputStream(apkFileSystem.getPath(RESOURCE_TABLE)),
+              ExtensionRegistry.getEmptyRegistry());
       final ResourceTable.Builder dstTableBuilder =
           resourceTable.toBuilder()
               .addToolFingerprint(
@@ -238,10 +226,6 @@ public class ProtoApk implements Closeable {
     try (InputStream in = Files.newInputStream(apkFileSystem.getPath(MANIFEST))) {
       return XmlNode.parseFrom(in, ExtensionRegistry.getEmptyRegistry());
     }
-  }
-
-  ResourceTable getResourceTable() throws IOException {
-    return resourceTableSupplier.get();
   }
 
   /** Copy manifest as xml to an external directory. */
@@ -394,7 +378,11 @@ public class ProtoApk implements Closeable {
     visitXmlResource(apkFileSystem.getPath(MANIFEST), visitor.enteringManifest());
 
     // visit resource table and associated files.
-    final ResourceTable resourceTable = getResourceTable();
+    final ResourceTable resourceTable =
+        ResourceTable.parseFrom(
+            Files.newInputStream(apkFileSystem.getPath(RESOURCE_TABLE)),
+            ExtensionRegistry.getEmptyRegistry());
+
     final List<String> sourcePool =
         resourceTable.hasSourcePool()
             ? decodeSourcePool(resourceTable.getSourcePool().getData().toByteArray())
