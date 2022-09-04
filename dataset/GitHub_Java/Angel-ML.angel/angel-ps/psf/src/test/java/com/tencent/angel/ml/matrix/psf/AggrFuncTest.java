@@ -28,23 +28,26 @@ import com.tencent.angel.ml.matrix.psf.update.RandomNormal;
 import com.tencent.angel.ml.matrix.psf.update.RandomUniform;
 import com.tencent.angel.psagent.matrix.MatrixClient;
 import com.tencent.angel.psagent.matrix.MatrixClientFactory;
-import org.junit.Assert;
-import org.junit.BeforeClass;
-import org.junit.Test;
+import org.apache.log4j.PropertyConfigurator;
+import org.junit.*;
 
 import java.util.Arrays;
 import java.util.concurrent.ExecutionException;
 
-public class AggrFuncTest extends SharedAngelTest {
+public class AggrFuncTest {
   private static MatrixClient w2Client = null;
   private static double[] localArray0 = null;
   private static double[] localArray1 = null;
   private static double delta = 1e-6;
   private static int dim = -1;
 
+  static {
+    PropertyConfigurator.configure("../conf/log4j.properties");
+  }
+
   @BeforeClass
-  public static void setup() throws Exception {
-    SharedAngelTest.setup();
+  public static  void setup() throws Exception {
+    LocalClusterHelper.setup();
     w2Client = MatrixClientFactory.get("w2", 0);
     // row 0 is a random uniform
     w2Client.update(new RandomUniform(w2Client.getMatrixId(), 0, 0.0, 1.0)).get();
@@ -185,5 +188,10 @@ public class AggrFuncTest extends SharedAngelTest {
   private static double[] pull(MatrixClient client, int rowId) {
     GetRowResult rowResult = (GetRowResult) client.get(new Pull(client.getMatrixId(), rowId));
     return ((DenseDoubleVector)rowResult.getRow()).getValues();
+  }
+
+  @AfterClass
+  public static void stop() throws Exception{
+    LocalClusterHelper.cleanup();
   }
 }
