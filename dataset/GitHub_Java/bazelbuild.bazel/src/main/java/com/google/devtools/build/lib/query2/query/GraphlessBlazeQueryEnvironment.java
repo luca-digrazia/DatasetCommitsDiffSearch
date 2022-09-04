@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.query;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -26,10 +25,10 @@ import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.pkgcache.QueryTransitivePackagePreloader;
 import com.google.devtools.build.lib.pkgcache.TargetEdgeObserver;
 import com.google.devtools.build.lib.pkgcache.TargetPatternPreloader;
 import com.google.devtools.build.lib.pkgcache.TargetProvider;
+import com.google.devtools.build.lib.pkgcache.TransitivePackageLoader;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.query2.common.AbstractBlazeQueryEnvironment;
@@ -46,6 +45,7 @@ import com.google.devtools.build.lib.query2.engine.QueryUtil.ThreadSafeMutableKe
 import com.google.devtools.build.lib.query2.engine.QueryUtil.UniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.SkyframeRestartQueryException;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
+import com.google.devtools.build.lib.skyframe.SkyframeLabelVisitor;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -75,7 +75,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
   private final Map<String, Collection<Target>> resolvedTargetPatterns = new HashMap<>();
   private final TargetPatternPreloader targetPatternPreloader;
   private final PathFragment relativeWorkingDirectory;
-  private final QueryTransitivePackagePreloader queryTransitivePackagePreloader;
+  private final TransitivePackageLoader transitivePackageLoader;
   private final TargetProvider targetProvider;
   private final CachingPackageLocator cachingPackageLocator;
   private final ErrorPrintingTargetEdgeErrorObserver errorObserver;
@@ -97,7 +97,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
    * @param settings a set of enabled settings
    */
   public GraphlessBlazeQueryEnvironment(
-      QueryTransitivePackagePreloader queryTransitivePackagePreloader,
+      TransitivePackageLoader transitivePackageLoader,
       TargetProvider targetProvider,
       CachingPackageLocator cachingPackageLocator,
       TargetPatternPreloader targetPatternPreloader,
@@ -112,7 +112,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
     super(keepGoing, strictScope, labelFilter, eventHandler, settings, extraFunctions);
     this.targetPatternPreloader = targetPatternPreloader;
     this.relativeWorkingDirectory = relativeWorkingDirectory;
-    this.queryTransitivePackagePreloader = queryTransitivePackagePreloader;
+    this.transitivePackageLoader = transitivePackageLoader;
     this.targetProvider = targetProvider;
     this.cachingPackageLocator = cachingPackageLocator;
     this.errorObserver = new ErrorPrintingTargetEdgeErrorObserver(this.eventHandler);
@@ -154,8 +154,6 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
 
   private void getTargetsMatchingPatternImpl(String pattern, Callback<Target> callback)
       throws QueryException, InterruptedException {
-    Set<Target> targets = ImmutableSet.copyOf(resolvedTargetPatterns.get(pattern));
-    validateScopeOfTargets(targets);
     callback.process(resolvedTargetPatterns.get(pattern));
   }
 
@@ -165,7 +163,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
     try {
       return getTargetOrThrow(label);
     } catch (NoSuchThingException e) {
-      throw new TargetNotFoundException(e, e.getDetailedExitCode());
+      throw new TargetNotFoundException(e);
     }
   }
 
@@ -229,10 +227,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
               });
     }
     if (errorObserver.hasErrors()) {
-      handleError(
-          caller,
-          "errors were encountered while computing transitive closure",
-          errorObserver.getDetailedExitCode());
+      reportBuildFileError(caller, "errors were encountered while computing transitive closure");
     }
     callback.process(result);
   }
@@ -305,10 +300,7 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
     }
 
     if (errorObserver.hasErrors()) {
-      handleError(
-          caller,
-          "errors were encountered while computing transitive closure",
-          errorObserver.getDetailedExitCode());
+      reportBuildFileError(caller, "errors were encountered while computing transitive closure");
     }
   }
 
@@ -342,15 +334,15 @@ public class GraphlessBlazeQueryEnvironment extends AbstractBlazeQueryEnvironmen
 
   private void preloadTransitiveClosure(Iterable<Target> targets, int maxDepth)
       throws InterruptedException {
-    if (maxDepth >= MAX_DEPTH_FULL_SCAN_LIMIT && queryTransitivePackagePreloader != null) {
+    if (maxDepth >= MAX_DEPTH_FULL_SCAN_LIMIT && transitivePackageLoader != null) {
       // Only do the full visitation if "maxDepth" is large enough. Otherwise, the benefits of
       // preloading will be outweighed by the cost of doing more work than necessary.
       Set<Label> labels = CompactHashSet.create();
       for (Target t : targets) {
         labels.add(t.getLabel());
       }
-      queryTransitivePackagePreloader.preloadTransitiveTargets(
-          eventHandler, labels, keepGoing, loadingPhaseThreads);
+      ((SkyframeLabelVisitor) transitivePackageLoader)
+          .sync(eventHandler, labels, keepGoing, loadingPhaseThreads, /* errorOnCycles= */ false);
     }
   }
 

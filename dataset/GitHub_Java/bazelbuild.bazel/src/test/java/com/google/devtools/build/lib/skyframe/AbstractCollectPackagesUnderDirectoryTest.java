@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildFileName;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestPackageFactoryBuilderFactory;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -77,7 +76,7 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
 
   @Before
   public void setUp() throws IOException {
-    fileSystem = new InMemoryFileSystem(DigestHashFunction.SHA256);
+    fileSystem = new InMemoryFileSystem();
     workingDir = fileSystem.getPath(getWorkspacePathString());
     workingDir.createDirectoryAndParents();
     root = Root.fromPath(workingDir);
@@ -278,7 +277,6 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
         new ConfiguredRuleClassProvider.Builder()
             .setRunfilesPrefix("workspace")
             .setPrelude("//tools:empty_prelude.bzl")
-            .useDummyBuiltinsBzl()
             .build();
     SkyframeExecutor skyframeExecutor =
         makeSkyframeExecutorFactory()
@@ -307,7 +305,7 @@ public abstract class AbstractCollectPackagesUnderDirectoryTest {
         reporter,
         packageOptions,
         pathPackageLocator,
-        Options.getDefaults(BuildLanguageOptions.class),
+        Options.getDefaults(StarlarkSemanticsOptions.class),
         UUID.randomUUID(),
         /*clientEnv=*/ ImmutableMap.of(),
         new TimestampGranularityMonitor(BlazeClock.instance()),

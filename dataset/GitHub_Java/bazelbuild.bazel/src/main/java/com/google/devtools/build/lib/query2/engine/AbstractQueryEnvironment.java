@@ -13,16 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.engine;
 
+import static com.google.common.util.concurrent.MoreExecutors.directExecutor;
+
 import com.google.common.base.Function;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
-import com.google.common.util.concurrent.AsyncFunction;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskCallable;
-import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryTaskFuture;
-import com.google.devtools.build.lib.util.Preconditions;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
@@ -82,10 +80,9 @@ public abstract class AbstractQueryEnvironment<T> implements QueryEnvironment<T>
 
     @Override
     public T getIfSuccessful() {
-      Preconditions.checkState(delegate.isDone());
       try {
-        return delegate.get();
-      } catch (CancellationException | InterruptedException | ExecutionException e) {
+        return Futures.getDone(delegate);
+      } catch (CancellationException | ExecutionException e) {
         throw new IllegalStateException(e);
       }
     }
@@ -121,12 +118,28 @@ public abstract class AbstractQueryEnvironment<T> implements QueryEnvironment<T>
 
   @Override
   public QueryTaskFuture<Void> eval(
-      QueryExpression expr, VariableContext<T> context, Callback<T> callback) {
-    return expr.eval(this, context, callback);
+      QueryExpression expr, QueryExpressionContext<T> context, final Callback<T> callback) {
+    // Not all QueryEnvironment implementations embrace the async+streaming evaluation framework. In
+    // particular, the streaming callbacks employed by functions like 'deps' use
+    // QueryEnvironment#buildTransitiveClosure. So if the implementation of that method does some
+    // heavyweight blocking work, then it's best to do this blocking work in a single batch.
+    // Importantly, the callback we pass in needs to maintain order.
+    final QueryUtil.AggregateAllCallback<T, ?> aggregateAllCallback =
+        QueryUtil.newOrderedAggregateAllOutputFormatterCallback(this);
+    QueryTaskFuture<Void> evalAllFuture = expr.eval(this, context, aggregateAllCallback);
+    return whenSucceedsCall(
+        evalAllFuture,
+        new QueryTaskCallable<Void>() {
+          @Override
+          public Void call() throws QueryException, InterruptedException {
+            callback.process(aggregateAllCallback.getResult());
+            return null;
+          }
+        });
   }
 
   @Override
-  public <R> QueryTaskFuture<R> executeAsync(QueryTaskCallable<R> callable) {
+  public <R> QueryTaskFuture<R> execute(QueryTaskCallable<R> callable) {
     try {
       return immediateSuccessfulFuture(callable.call());
     } catch (QueryException e) {
@@ -134,6 +147,11 @@ public abstract class AbstractQueryEnvironment<T> implements QueryEnvironment<T>
     } catch (InterruptedException e) {
       return immediateCancelledFuture();
     }
+  }
+
+  @Override
+  public <R> QueryTaskFuture<R> executeAsync(QueryTaskAsyncCallable<R> callable) {
+    return callable.call();
   }
 
   @Override
@@ -162,33 +180,21 @@ public abstract class AbstractQueryEnvironment<T> implements QueryEnvironment<T>
   public <R> QueryTaskFuture<R> whenAllSucceedCall(
       Iterable<? extends QueryTaskFuture<?>> futures, QueryTaskCallable<R> callable) {
     return QueryTaskFutureImpl.ofDelegate(
-        Futures.whenAllSucceed(cast(futures)).call(callable));
+        Futures.whenAllSucceed(cast(futures)).call(callable, directExecutor()));
   }
 
   @Override
   public <T1, T2> QueryTaskFuture<T2> transformAsync(
-      QueryTaskFuture<T1> future,
-      final Function<T1, QueryTaskFuture<T2>> function) {
+      QueryTaskFuture<T1> future, Function<T1, QueryTaskFuture<T2>> function) {
     return QueryTaskFutureImpl.ofDelegate(
         Futures.transformAsync(
             (QueryTaskFutureImpl<T1>) future,
-            new AsyncFunction<T1, T2>() {
-              @Override
-              public ListenableFuture<T2> apply(T1 input) throws Exception {
-                return (QueryTaskFutureImpl<T2>) function.apply(input);
-              }
-            }));
+            input -> (QueryTaskFutureImpl<T2>) function.apply(input),
+            directExecutor()));
   }
 
   protected static Iterable<QueryTaskFutureImpl<?>> cast(
       Iterable<? extends QueryTaskFuture<?>> futures) {
-    return Iterables.transform(
-        futures,
-        new Function<QueryTaskFuture<?>, QueryTaskFutureImpl<?>>() {
-          @Override
-          public QueryTaskFutureImpl<?> apply(QueryTaskFuture<?> future) {
-            return (QueryTaskFutureImpl<?>) future;
-          }
-        });
+    return Iterables.transform(futures, QueryTaskFutureImpl.class::cast);
   }
 }

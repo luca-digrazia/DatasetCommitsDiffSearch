@@ -30,11 +30,10 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
-import com.google.devtools.build.lib.packages.PackageValidator;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleVisibility;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
@@ -67,20 +66,18 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
 
   protected LoadingMock loadingMock;
   private PackageOptions packageOptions;
-  private BuildLanguageOptions buildLanguageOptions;
+  private StarlarkSemanticsOptions starlarkSemanticsOptions;
   protected ConfiguredRuleClassProvider ruleClassProvider;
   protected PackageFactory packageFactory;
   protected SkyframeExecutor skyframeExecutor;
   protected BlazeDirectories directories;
-  protected PackageValidator validator = null;
-
   protected final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Before
   public final void initializeSkyframeExecutor() throws Exception {
     loadingMock = LoadingMock.get();
     packageOptions = parsePackageOptions();
-    buildLanguageOptions = parseBuildLanguageOptions();
+    starlarkSemanticsOptions = parseStarlarkSemanticsOptions();
     List<RuleDefinition> extraRules = getExtraRules();
     if (!extraRules.isEmpty()) {
       ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
@@ -102,13 +99,6 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
         loadingMock
             .getPackageFactoryBuilderForTesting(directories)
             .setEnvironmentExtensions(getEnvironmentExtensions())
-            .setPackageValidator(
-                (pkg, handler) -> {
-                  // Delegate to late-bound this.validator.
-                  if (validator != null) {
-                    validator.validate(pkg, handler);
-                  }
-                })
             .build(ruleClassProvider, fileSystem);
     skyframeExecutor = createSkyframeExecutor();
     setUpSkyframe();
@@ -156,7 +146,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
             ImmutableList.of(Root.fromPath(rootDirectory)),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
         packageOptions,
-        Options.getDefaults(BuildLanguageOptions.class),
+        Options.getDefaults(StarlarkSemanticsOptions.class),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
@@ -177,7 +167,7 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
         packageOptions,
-        buildLanguageOptions,
+        starlarkSemanticsOptions,
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
         new TimestampGranularityMonitor(BlazeClock.instance()));
@@ -192,12 +182,12 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     return parser.getOptions(PackageOptions.class);
   }
 
-  private static BuildLanguageOptions parseBuildLanguageOptions(String... options)
+  private static StarlarkSemanticsOptions parseStarlarkSemanticsOptions(String... options)
       throws Exception {
     OptionsParser parser =
-        OptionsParser.builder().optionsClasses(BuildLanguageOptions.class).build();
+        OptionsParser.builder().optionsClasses(StarlarkSemanticsOptions.class).build();
     parser.parse(options);
-    return parser.getOptions(BuildLanguageOptions.class);
+    return parser.getOptions(StarlarkSemanticsOptions.class);
   }
 
   protected void setPackageOptions(String... options) throws Exception {
@@ -205,8 +195,8 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
     setUpSkyframe();
   }
 
-  protected void setBuildLanguageOptions(String... options) throws Exception {
-    buildLanguageOptions = parseBuildLanguageOptions(options);
+  protected void setStarlarkSemanticsOptions(String... options) throws Exception {
+    starlarkSemanticsOptions = parseStarlarkSemanticsOptions(options);
     setUpSkyframe();
   }
 
@@ -314,9 +304,10 @@ public abstract class PackageLoadingTestCase extends FoundationTestCase {
   }
 
   /**
-   * Called after files are modified to invalidate all file-system nodes below rootDirectory. It
-   * does not unconditionally invalidate PackageValue nodes; if no file-system nodes have changed,
-   * packages may not be reloaded.
+   * Invalidates all existing packages below the usual rootDirectory. Must be called _after_ the
+   * files are modified.
+   *
+   * @throws InterruptedException
    */
   protected void invalidatePackages() throws InterruptedException {
     skyframeExecutor.invalidateFilesUnderPathForTesting(
