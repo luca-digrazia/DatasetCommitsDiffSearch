@@ -148,7 +148,7 @@ public class RandomForest implements Regression<double[]> {
          */
         public Trainer setNumTrees(int ntrees) {
             if (ntrees < 1) {
-                throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+                throw new IllegalArgumentException("Invlaid number of trees: " + ntrees);
             }
 
             this.ntrees = ntrees;
@@ -458,7 +458,7 @@ public class RandomForest implements Regression<double[]> {
         int[] oob = new int[n];
         
         int[][] order = SmileUtils.sort(attributes, x);
-        List<TrainingTask> tasks = new ArrayList<>();
+        List<TrainingTask> tasks = new ArrayList<TrainingTask>();
         for (int i = 0; i < ntrees; i++) {
             tasks.add(new TrainingTask(attributes, x, y, maxNodes, nodeSize, mtry, subsample, order, prediction, oob));
         }
@@ -468,7 +468,7 @@ public class RandomForest implements Regression<double[]> {
         } catch (Exception ex) {
             ex.printStackTrace();
 
-            trees = new ArrayList<>(ntrees);
+            trees = new ArrayList<RegressionTree>(ntrees);
             for (int i = 0; i < ntrees; i++) {
                 trees.add(tasks.get(i).call());
             }
@@ -547,7 +547,7 @@ public class RandomForest implements Regression<double[]> {
             throw new IllegalArgumentException("Invalid new model size: " + ntrees);
         }
         
-        List<RegressionTree> model = new ArrayList<>(ntrees);
+        List<RegressionTree> model = new ArrayList<RegressionTree>(ntrees);
         for (int i = 0; i < ntrees; i++) {
             model.add(trees.get(i));
         }
