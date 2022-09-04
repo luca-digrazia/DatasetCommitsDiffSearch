@@ -35,7 +35,7 @@ import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -623,9 +623,7 @@ public final class CcCommon {
                 + "'. This will be an error in the future");
       }
       result.add(includesPath);
-      if (ruleContext.getConfiguration().hasSeparateGenfilesDirectory()) {
-        result.add(ruleContext.getConfiguration().getGenfilesFragment().getRelative(includesPath));
-      }
+      result.add(ruleContext.getConfiguration().getGenfilesFragment().getRelative(includesPath));
       result.add(ruleContext.getConfiguration().getBinFragment().getRelative(includesPath));
     }
     return result;
@@ -697,8 +695,9 @@ public final class CcCommon {
   }
 
   /** Provides support for instrumentation. */
-  public InstrumentedFilesInfo getInstrumentedFilesProvider(
-      Iterable<Artifact> files, boolean withBaselineCoverage) {
+  public InstrumentedFilesProvider getInstrumentedFilesProvider(
+      Iterable<Artifact> files,
+      boolean withBaselineCoverage) {
     return getInstrumentedFilesProvider(
         files,
         withBaselineCoverage,
@@ -706,7 +705,7 @@ public final class CcCommon {
         );
   }
 
-  public InstrumentedFilesInfo getInstrumentedFilesProvider(
+  public InstrumentedFilesProvider getInstrumentedFilesProvider(
       Iterable<Artifact> files,
       boolean withBaselineCoverage,
       NestedSet<Pair<String, String>> virtualToOriginalHeaders) {

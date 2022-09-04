@@ -88,7 +88,7 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
                 semantics,
                 featureConfiguration,
                 ccToolchain,
-                ccToolchain.getFdoContext())
+                ccToolchain.getFdoProvider())
             .addPublicHeaders(common.getHeaders())
             .setHeadersCheckingMode(HeadersCheckingMode.STRICT)
             .compile();
@@ -103,19 +103,17 @@ public abstract class CcImport implements RuleConfiguredTargetFactory {
                 ccToolchain,
                 targetWindows));
 
-    RuleConfiguredTargetBuilder result =
-        new RuleConfiguredTargetBuilder(ruleContext)
-            .addProvider(compilationInfo.getCppDebugFileProvider())
-            .addNativeDeclaredProvider(
-                CcInfo.builder()
-                    .setCcCompilationContext(compilationInfo.getCcCompilationContext())
-                    .setCcLinkingInfo(ccLinkingInfo)
-                    .build())
-            .addOutputGroups(compilationInfo.getOutputGroups())
-            .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY));
-
-    CcSkylarkApiProvider.maybeAdd(ruleContext, result);
-    return result.build();
+    return new RuleConfiguredTargetBuilder(ruleContext)
+        .addProvider(compilationInfo.getCppDebugFileProvider())
+        .addNativeDeclaredProvider(
+            CcInfo.builder()
+                .setCcCompilationContext(compilationInfo.getCcCompilationContext())
+                .setCcLinkingInfo(ccLinkingInfo)
+                .build())
+        .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
+        .addOutputGroups(compilationInfo.getOutputGroups())
+        .addProvider(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY))
+        .build();
   }
 
   private void performErrorChecks(
