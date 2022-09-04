@@ -142,10 +142,6 @@ public class TestRunnerAction extends AbstractAction
 
   private final boolean cancelConcurrentTestsOnSuccess;
 
-  private final boolean splitCoveragePostProcessing;
-  private final NestedSetBuilder<Artifact> lcovMergerFilesToRun;
-  private final RunfilesSupplier lcovMergerRunfilesSupplier;
-
   private static ImmutableSet<Artifact> nonNullAsSet(Artifact... artifacts) {
     ImmutableSet.Builder<Artifact> builder = ImmutableSet.builder();
     for (Artifact artifact : artifacts) {
@@ -184,10 +180,7 @@ public class TestRunnerAction extends AbstractAction
       String workspaceName,
       @Nullable PathFragment shExecutable,
       boolean cancelConcurrentTestsOnSuccess,
-      Iterable<Artifact> tools,
-      boolean splitCoveragePostProcessing,
-      NestedSetBuilder<Artifact> lcovMergerFilesToRun,
-      RunfilesSupplier lcovMergerRunfilesSupplier) {
+      Iterable<Artifact> tools) {
     super(
         owner,
         NestedSetBuilder.wrap(Order.STABLE_ORDER, tools),
@@ -243,13 +236,6 @@ public class TestRunnerAction extends AbstractAction
                 configuration.getActionEnvironment().getInheritedEnv(),
                 configuration.getTestActionEnvironment().getInheritedEnv()));
     this.cancelConcurrentTestsOnSuccess = cancelConcurrentTestsOnSuccess;
-    this.splitCoveragePostProcessing = splitCoveragePostProcessing;
-    this.lcovMergerFilesToRun = lcovMergerFilesToRun;
-    this.lcovMergerRunfilesSupplier = lcovMergerRunfilesSupplier;
-  }
-
-  public RunfilesSupplier getLcovMergerRunfilesSupplier() {
-    return lcovMergerRunfilesSupplier;
   }
 
   public BuildConfiguration getConfiguration() {
@@ -258,18 +244,6 @@ public class TestRunnerAction extends AbstractAction
 
   public final PathFragment getBaseDir() {
     return baseDir;
-  }
-
-  public boolean getSplitCoveragePostProcessing() {
-    return splitCoveragePostProcessing;
-  }
-
-  public NestedSetBuilder<Artifact> getLcovMergerFilesToRun() {
-    return lcovMergerFilesToRun;
-  }
-
-  public Artifact getCoverageDirectoryTreeArtifact() {
-    return coverageDirectory;
   }
 
   @Override
@@ -292,9 +266,7 @@ public class TestRunnerAction extends AbstractAction
     outputs.add(ActionInputHelper.fromPath(getUndeclaredOutputsManifestPath()));
     outputs.add(ActionInputHelper.fromPath(getUndeclaredOutputsAnnotationsPath()));
     if (isCoverageMode()) {
-      if (!splitCoveragePostProcessing) {
-        outputs.add(coverageData);
-      }
+      outputs.add(coverageData);
       if (coverageDirectory != null) {
         outputs.add(coverageDirectory);
       }
@@ -370,7 +342,7 @@ public class TestRunnerAction extends AbstractAction
       ActionKeyContext actionKeyContext,
       @Nullable Artifact.ArtifactExpander artifactExpander,
       Fingerprint fp)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
     // TODO(b/150305897): use addUUID?
     fp.addString(GUID);
     fp.addIterableStrings(executionSettings.getArgs().arguments());
@@ -635,8 +607,6 @@ public class TestRunnerAction extends AbstractAction
       env.put("COVERAGE_MANIFEST", getCoverageManifest().getExecPathString());
       env.put("COVERAGE_DIR", getCoverageDirectory().getPathString());
       env.put("COVERAGE_OUTPUT_FILE", getCoverageData().getExecPathString());
-      env.put("SPLIT_COVERAGE_POST_PROCESSING", splitCoveragePostProcessing ? "1" : "0");
-      env.put("IS_COVERAGE_SPAWN", "0");
     }
   }
 
@@ -947,7 +917,7 @@ public class TestRunnerAction extends AbstractAction
   }
 
   @Override
-  public List<String> getArguments() throws CommandLineExpansionException, InterruptedException {
+  public List<String> getArguments() throws CommandLineExpansionException {
     return TestStrategy.expandedArgsFromAction(this);
   }
 
@@ -1224,7 +1194,7 @@ public class TestRunnerAction extends AbstractAction
         TestRunnerSpawn testRunnerSpawn,
         int numAttempts,
         int maxAttempts)
-        throws ExecException, InterruptedException {
+        throws ExecException {
       checkState(result != Result.PASSED, "Should not compute retry runner if last result passed");
       if (result.canRetry() && numAttempts < maxAttempts) {
         TestRunnerSpawn nextRunner = testRunnerSpawn.getFlakyRetryRunner();

@@ -1,4 +1,3 @@
-
 // Copyright 2016 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -16,27 +15,35 @@
 package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.ArtifactPathResolver;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.server.FailureDetails.SymlinkAction;
+import com.google.devtools.build.lib.server.FailureDetails.SymlinkAction.Code;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.vfs.FileSystemUtils;
+import com.google.devtools.build.lib.vfs.BulkDeleter;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.IOException;
 import java.util.Map;
 import java.util.SortedMap;
+import javax.annotation.Nullable;
 
-/**
- * This action creates a set of symbolic links.
- */
+/** This action creates a set of symbolic links. */
+@AutoCodec
 @Immutable
 public final class CreateIncSymlinkAction extends AbstractAction {
   private final ImmutableSortedMap<Artifact, Artifact> symlinks;
@@ -49,31 +56,44 @@ public final class CreateIncSymlinkAction extends AbstractAction {
    */
   public CreateIncSymlinkAction(
       ActionOwner owner, Map<Artifact, Artifact> symlinks, Path includePath) {
-    super(owner, ImmutableList.copyOf(symlinks.values()), ImmutableList.copyOf(symlinks.keySet()));
+    super(
+        owner,
+        NestedSetBuilder.wrap(Order.STABLE_ORDER, symlinks.values()),
+        ImmutableSet.copyOf(symlinks.keySet()));
     this.symlinks = ImmutableSortedMap.copyOf(symlinks, Artifact.EXEC_PATH_COMPARATOR);
     this.includePath = includePath;
   }
 
   @Override
-  public void prepare(Path execRoot) throws IOException {
+  public void prepare(
+      Path execRoot, ArtifactPathResolver pathResolver, @Nullable BulkDeleter bulkDeleter)
+      throws IOException, InterruptedException {
     if (includePath.isDirectory(Symlinks.NOFOLLOW)) {
-      FileSystemUtils.deleteTree(includePath);
+      includePath.deleteTree();
     }
-    super.prepare(execRoot);
+    super.prepare(execRoot, pathResolver, bulkDeleter);
   }
 
   @Override
-  public void execute(ActionExecutionContext actionExecutionContext)
-  throws ActionExecutionException {
+  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException {
     try {
       for (Map.Entry<Artifact, Artifact> entry : symlinks.entrySet()) {
-        Path symlink = entry.getKey().getPath();
-        symlink.createSymbolicLink(entry.getValue().getPath());
+        Path symlink = actionExecutionContext.getInputPath(entry.getKey());
+        symlink.createSymbolicLink(actionExecutionContext.getInputPath(entry.getValue()));
       }
     } catch (IOException e) {
-      String message = "IO Error while creating symlink";
-      throw new ActionExecutionException(message, e, this, false);
+      String message = "IO Error while creating symlink: " + e.getMessage();
+      DetailedExitCode code =
+          DetailedExitCode.of(
+              FailureDetail.newBuilder()
+                  .setMessage(message)
+                  .setSymlinkAction(
+                      SymlinkAction.newBuilder().setCode(Code.LINK_CREATION_IO_EXCEPTION))
+                  .build());
+      throw new ActionExecutionException(message, e, this, false, code);
     }
+    return ActionResult.EMPTY;
   }
 
   @VisibleForTesting
@@ -82,22 +102,14 @@ public final class CreateIncSymlinkAction extends AbstractAction {
   }
 
   @Override
-  public ResourceSet estimateResourceConsumption(Executor executor) {
-    // We're mainly doing I/O, so CPU usage should be very low; most of the
-    // time we'll be blocked waiting for the OS.
-    // The only exception is the fingerprint digest calculation for the stamp
-    // file contents.
-    return ResourceSet.createWithRamCpuIo(/*memoryMb=*/0, /*cpuUsage=*/0.005, /*ioUsage=*/0.0);
-  }
-
-  @Override
-  public String computeKey() {
-    Fingerprint key = new Fingerprint();
+  public void computeKey(
+      ActionKeyContext actionKeyContext,
+      @Nullable Artifact.ArtifactExpander artifactExpander,
+      Fingerprint fp) {
     for (Map.Entry<Artifact, Artifact> entry : symlinks.entrySet()) {
-      key.addPath(entry.getKey().getPath());
-      key.addPath(entry.getValue().getPath());
+      fp.addPath(entry.getKey().getExecPath());
+      fp.addPath(entry.getValue().getExecPath());
     }
-    return key.hexDigestAndReset();
   }
 
   @Override
@@ -108,6 +120,11 @@ public final class CreateIncSymlinkAction extends AbstractAction {
   @Override
   public String getMnemonic() {
     return "Symlink";
+  }
+
+  @Override
+  public boolean mayInsensitivelyPropagateInputs() {
+    return true;
   }
 }
 
