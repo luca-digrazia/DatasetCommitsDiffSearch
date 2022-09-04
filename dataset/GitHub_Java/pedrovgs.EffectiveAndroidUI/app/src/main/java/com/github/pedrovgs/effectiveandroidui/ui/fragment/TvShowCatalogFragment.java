@@ -1,10 +1,22 @@
+/*
+ * Copyright (C) 2014 Pedro Vicente Gómez Sánchez.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.github.pedrovgs.effectiveandroidui.ui.fragment;
 
-import android.app.Activity;
 import android.os.Bundle;
-import android.view.LayoutInflater;
 import android.view.View;
-import android.view.ViewGroup;
 import android.widget.GridView;
 import android.widget.ProgressBar;
 import butterknife.InjectView;
@@ -25,57 +37,70 @@ import javax.inject.Inject;
  * logic. Review TvShowCatalogPresenter to get more info about the implementation.
  *
  * This fragment is going to notify to the activity every event that has to go out of this
- * fragment.
- * TvShowCatalogFragmentListener is the interface declared by this fragment and implemented by the
- * activity that contains this fragment.
+ * fragment. TvShowCatalogFragmentListener is the interface declared by this fragment and
+ * implemented by the activity that contains this fragment. This is a common implementation used to
+ * notify user actions to the fragment owner. Other approach could be based on a Bus event
+ * implementation.
  *
  * @author Pedro Vicente Gómez Sánchez
  */
 public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalogPresenter.View {
 
-  @Inject TvShowCatalogPresenter presenter;
+  private static final String EXTRA_TV_SHOW_CATALOG = "extra_tv_show_catalog";
+
+  @Inject TvShowCatalogPresenter tvShowCatalogPresenter;
   @Inject TvShowRendererAdapterFactory tvShowRendererAdapterFactory;
 
   private RendererAdapter<TvShow> adapter;
   private TvShowCollection tvShows = new TvShowCollection();
 
-  private Listener listener;
-
   @InjectView(R.id.pb_loading) ProgressBar pb_loading;
   @InjectView(R.id.gv_tv_shows) GridView gv_tv_shows;
   @InjectView(R.id.v_empty_case) View v_empty_case;
 
-  @Override public View onCreateView(LayoutInflater inflater, ViewGroup container,
-      Bundle savedInstanceState) {
-    return inflater.inflate(R.layout.fragment_tv_shows, container, false);
-  }
-
   @Override public void onViewCreated(View view, Bundle savedInstanceState) {
     super.onViewCreated(view, savedInstanceState);
     initializeGridView();
-    presenter.setView(this);
-    presenter.initialize();
-  }
-
-  @Override public void onAttach(Activity activity) {
-    super.onAttach(activity);
-    if (activity instanceof Listener) {
-      this.listener = (Listener) activity;
-    }
+    tvShowCatalogPresenter.setView(this);
+    tvShowCatalogPresenter.initialize();
   }
 
   @Override public void onResume() {
     super.onResume();
-    presenter.resume();
+    tvShowCatalogPresenter.resume();
   }
 
   @Override public void onPause() {
     super.onPause();
-    presenter.pause();
+    tvShowCatalogPresenter.pause();
+  }
+
+  /**
+   * We want to keep the catalog loaded in this fragment even if the user rotates the device. We
+   * are
+   * using different configurations for landscape and portrait and we have to use this approach
+   * instead of onConfigurationChanges.
+   */
+  @Override public void onSaveInstanceState(Bundle outState) {
+    super.onSaveInstanceState(outState);
+    outState.putSerializable(EXTRA_TV_SHOW_CATALOG, tvShowCatalogPresenter.getCurrentTvShows());
+  }
+
+  @Override public void onViewStateRestored(Bundle savedInstanceState) {
+    super.onViewStateRestored(savedInstanceState);
+    if (savedInstanceState != null) {
+      final TvShowCollection tvShowCollection =
+          (TvShowCollection) savedInstanceState.getSerializable(EXTRA_TV_SHOW_CATALOG);
+      updatePresenterWithSavedTvShow(tvShowCollection);
+    }
   }
 
   @Override public void hideLoading() {
     pb_loading.setVisibility(View.GONE);
+  }
+
+  @Override public void showLoading() {
+    pb_loading.setVisibility(View.VISIBLE);
   }
 
   @Override public void renderVideos(final Collection<TvShow> tvShows) {
@@ -84,7 +109,7 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
     refreshAdapter();
   }
 
-  @Override public void updateTitleWithCountOfVideow(final int counter) {
+  @Override public void updateTitleWithCountOfTvShows(final int counter) {
     String actionBarTitle = getString(R.string.app_name_with_chapter_counter, counter);
     getActivity().setTitle(actionBarTitle);
   }
@@ -102,14 +127,20 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
     getActivity().setTitle(R.string.app_name);
   }
 
-  @Override public void showTvShowInfo(TvShow tvShow) {
-    ToastUtils.showError(tvShow.getTitle(), getActivity());
+  @Override public void showTvShowTitleAsMessage(TvShow tvShow) {
+    ToastUtils.showShortMessage(tvShow.getTitle(), getActivity());
   }
 
-  @Override public void showTvShow(final TvShow tvShow) {
-    if (listener != null) {
-      listener.onTvShowClicked(tvShow);
-    }
+  @Override public boolean isReady() {
+    return isAdded();
+  }
+
+  @Override public boolean isAlreadyLoaded() {
+    return adapter.getCount() > 0;
+  }
+
+  @Override protected int getFragmentLayout() {
+    return R.layout.fragment_tv_shows;
   }
 
   private void initializeGridView() {
@@ -117,12 +148,13 @@ public class TvShowCatalogFragment extends BaseFragment implements TvShowCatalog
     gv_tv_shows.setAdapter(adapter);
   }
 
-  private void refreshAdapter() {
-    adapter.notifyDataSetChanged();
+  private void updatePresenterWithSavedTvShow(TvShowCollection tvShowCollection) {
+    if (tvShowCollection != null) {
+      tvShowCatalogPresenter.loadCatalog(tvShowCollection);
+    }
   }
 
-  public interface Listener {
-
-    void onTvShowClicked(final TvShow tvShow);
+  private void refreshAdapter() {
+    adapter.notifyDataSetChanged();
   }
 }
