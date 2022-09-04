@@ -79,7 +79,6 @@ public final class OptionsParser {
   private final List<String> classPath = new ArrayList<>();
   private final List<String> sourcePath = new ArrayList<>();
   private final List<String> bootClassPath = new ArrayList<>();
-  private String system;
 
   private final List<String> processorPath = new ArrayList<>();
   private final List<String> processorNames = new ArrayList<>();
@@ -174,9 +173,6 @@ public final class OptionsParser {
           break;
         case "--bootclasspath":
           collectFlagArguments(bootClassPath, argQueue, "-");
-          break;
-        case "--system":
-          system = getArgument(argQueue, arg);
           break;
         case "--processorpath":
           collectFlagArguments(processorPath, argQueue, "-");
@@ -418,10 +414,6 @@ public final class OptionsParser {
 
   public List<String> getBootClassPath() {
     return bootClassPath;
-  }
-
-  public String getSystem() {
-    return system;
   }
 
   public List<String> getSourcePath() {
