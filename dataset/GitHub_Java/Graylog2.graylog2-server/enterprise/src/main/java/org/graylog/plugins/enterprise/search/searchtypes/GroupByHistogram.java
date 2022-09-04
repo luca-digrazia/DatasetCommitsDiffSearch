@@ -28,7 +28,6 @@ public abstract class GroupByHistogram implements SearchType {
     @Override
     public abstract String type();
 
-    @Override
     @Nullable
     @JsonProperty
     public abstract String id();
@@ -106,12 +105,6 @@ public abstract class GroupByHistogram implements SearchType {
         @Override
         @JsonProperty
         public abstract String id();
-
-        @Override
-        @JsonProperty
-        public String type() {
-            return NAME;
-        }
 
         @JsonProperty
         public abstract Map<Long, Bucket> buckets();

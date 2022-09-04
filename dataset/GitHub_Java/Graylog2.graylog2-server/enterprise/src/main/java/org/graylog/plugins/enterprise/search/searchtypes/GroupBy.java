@@ -31,7 +31,6 @@ public abstract class GroupBy implements SearchType {
     @Override
     public abstract String type();
 
-    @Override
     @Nullable
     @JsonProperty
     public abstract String id();
@@ -102,12 +101,6 @@ public abstract class GroupBy implements SearchType {
         @Override
         @JsonProperty
         public abstract String id();
-
-        @Override
-        @JsonProperty
-        public String type() {
-            return NAME;
-        }
 
         @JsonProperty
         public abstract List<Group> groups();

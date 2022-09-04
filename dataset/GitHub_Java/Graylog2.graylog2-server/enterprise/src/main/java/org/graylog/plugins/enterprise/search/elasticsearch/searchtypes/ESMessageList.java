@@ -6,7 +6,6 @@ import org.elasticsearch.search.sort.SortOrder;
 import org.graylog.plugins.enterprise.search.Query;
 import org.graylog.plugins.enterprise.search.SearchJob;
 import org.graylog.plugins.enterprise.search.SearchType;
-import org.graylog.plugins.enterprise.search.elasticsearch.ESGeneratedQueryContext;
 import org.graylog.plugins.enterprise.search.searchtypes.MessageList;
 import org.graylog.plugins.enterprise.search.searchtypes.Sort;
 import org.graylog2.indexer.results.ResultMessage;
@@ -19,8 +18,7 @@ import java.util.stream.Collectors;
 
 public class ESMessageList implements ESSearchTypeHandler<MessageList> {
     @Override
-    public void doGenerateQueryPart(SearchJob job, Query query, MessageList messageList, ESGeneratedQueryContext queryContext) {
-        final SearchSourceBuilder searchSourceBuilder = queryContext.searchSourceBuilder();
+    public void doGenerateQueryPart(SearchJob job, Query query, MessageList messageList, SearchSourceBuilder searchSourceBuilder) {
         searchSourceBuilder
                 .size(messageList.limit() - messageList.offset())
                 .from(messageList.offset());
@@ -35,7 +33,7 @@ public class ESMessageList implements ESSearchTypeHandler<MessageList> {
     }
 
     @Override
-    public SearchType.Result doExtractResult(SearchJob job, Query query, MessageList searchType, SearchResult result, ESGeneratedQueryContext queryContext) {
+    public SearchType.Result doExtractResult(SearchJob job, Query query, MessageList searchType, SearchResult result) {
         //noinspection unchecked
         final List<ResultMessageSummary> messages = result.getHits(Map.class, false).stream()
                 .map(hit -> ResultMessage.parseFromSource(hit.id, hit.index, (Map<String, Object>) hit.source, hit.highlight))
