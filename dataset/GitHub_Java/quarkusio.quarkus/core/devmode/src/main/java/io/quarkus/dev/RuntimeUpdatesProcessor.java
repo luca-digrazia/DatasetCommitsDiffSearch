@@ -78,15 +78,14 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext {
         return DevModeMain.deploymentProblem;
     }
 
-    public boolean doScan() throws IOException {
+    public void doScan() throws IOException {
         final long startNanoseconds = System.nanoTime();
         final ConcurrentMap<String, byte[]> changedClasses = scanForChangedClasses();
         if (changedClasses == null)
-            return false;
+            return;
 
         DevModeMain.restartApp();
         log.infof("Hot replace total time: %ss ", Timing.convertToBigDecimalSeconds(System.nanoTime() - startNanoseconds));
-        return true;
     }
 
     ConcurrentMap<String, byte[]> scanForChangedClasses() throws IOException {
