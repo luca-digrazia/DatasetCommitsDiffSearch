@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.runtime.commands;
 
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.ConfigurationDiffForOutput;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.ConfigurationForOutput;
 import com.google.devtools.build.lib.runtime.commands.ConfigCommand.FragmentDiffForOutput;
@@ -24,7 +23,6 @@ import com.google.devtools.build.lib.util.Pair;
 import com.google.gson.Gson;
 import java.io.PrintWriter;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Formats output for {@link ConfigCommand}.
@@ -42,7 +40,7 @@ abstract class ConfigCommandOutputFormatter {
   }
 
   /** Outputs a list of configuration hash IDs. * */
-  public abstract void writeConfigurationIDs(Iterable<ConfigurationForOutput> configurations);
+  public abstract void writeConfigurationIDs(Iterable<String> configurationIDs);
 
   /** Outputs a single configuration. * */
   public abstract void writeConfiguration(ConfigurationForOutput configuration);
@@ -60,15 +58,9 @@ abstract class ConfigCommandOutputFormatter {
     }
 
     @Override
-    public void writeConfigurationIDs(Iterable<ConfigurationForOutput> configurations) {
+    public void writeConfigurationIDs(Iterable<String> configurationIDs) {
       writer.println("Available configurations:");
-      configurations.forEach(
-          config ->
-              writer.printf(
-                  "%s%s%s%n",
-                  config.configHash,
-                  (config.isHost ? " (host)" : ""),
-                  (config.isExec ? " (exec)" : "")));
+      configurationIDs.forEach(id -> writer.println(id));
     }
 
     @Override
@@ -129,11 +121,7 @@ abstract class ConfigCommandOutputFormatter {
     }
 
     @Override
-    public void writeConfigurationIDs(Iterable<ConfigurationForOutput> configurations) {
-      Iterable<String> configurationIDs =
-          Streams.stream(configurations)
-              .map(config -> config.configHash)
-              .collect(Collectors.toList());
+    public void writeConfigurationIDs(Iterable<String> configurationIDs) {
       writer.println(gson.toJson(ImmutableMap.of("configuration-IDs", configurationIDs)));
     }
 
