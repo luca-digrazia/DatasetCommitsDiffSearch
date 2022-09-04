@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -31,15 +31,20 @@ import smile.math.matrix.Matrix;
  */
 public class KrigingInterpolation1D implements Interpolation {
 
-    private double[] x;
-    private double[] yvi;
-    private double alpha;
-    private double beta;
+    /** The control points. */
+    private final double[] x;
+    /** The linear weights. */
+    private final double[] yvi;
+    /** The parameter of power variogram. */
+    private final double alpha;
+    /** The parameter of power variogram. */
+    private final double beta;
 
     /**
      * Constructor. The power variogram is employed for interpolation.
-     * @param x the point set.
-     * @param y the function values at given points.
+     *
+     * @param x the tabulated points.
+     * @param y the function values at <code>x</code>.
      */
     public KrigingInterpolation1D(double[] x, double[] y) {
         this(x, y, 1.5);
@@ -47,10 +52,11 @@ public class KrigingInterpolation1D implements Interpolation {
 
     /**
      * Constructor. The power variogram is employed for interpolation.
-     * @param x the point set.
-     * @param y the function values at given points.
+     *
+     * @param x the tabulated points.
+     * @param y the function values at <code>x</code>.
      * @param beta the parameter of power variogram. The value of &beta;
-     *             should be in the range <code>1 &le; &beta; &lt; 2</code>.
+     *             should be in the range {@code 1 <=} &beta; {@code < 2}.
      *             A good general choice is 1.5, but for functions with
      *             a strong linear trend, we may experiment with values as
      *             large as 1.99.
@@ -66,15 +72,15 @@ public class KrigingInterpolation1D implements Interpolation {
 
         this.x = x;
         this.beta = beta;
-        pow(x, y);
+        this.alpha = pow(x, y);
 
         int n = x.length;
-        yvi = new double[n + 1];
+        double[] yv = new double[n + 1];
 
         Matrix v = new Matrix(n + 1, n + 1);
         v.uplo(UPLO.LOWER);
         for (int i = 0; i < n; i++) {
-            yvi[i] = y[i];
+            yv[i] = y[i];
 
             for (int j = i; j < n; j++) {
                 double var = variogram(Math.abs(x[i] - x[j]));
@@ -85,11 +91,11 @@ public class KrigingInterpolation1D implements Interpolation {
             v.set(i, n, 1.0);
         }
 
-        yvi[n] = 0.0;
+        yv[n] = 0.0;
         v.set(n, n, 0.0);
 
         Matrix.SVD svd = v.svd(true, true);
-        yvi = svd.solve(yvi);
+        yvi = svd.solve(yv);
     }
 
     @Override
@@ -102,20 +108,20 @@ public class KrigingInterpolation1D implements Interpolation {
         return y;
     }
 
-    private void pow(double[] x, double[] y) {
+    private double pow(double[] x, double[] y) {
         int n = x.length;
 
         double num = 0.0, denom = 0.0;
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
-                double rb = MathEx.sqr(x[i] - x[j]);
+                double rb = MathEx.pow2(x[i] - x[j]);
                 rb = Math.pow(rb, 0.5 * beta);
-                num += rb * 0.5 * MathEx.sqr(y[i] - y[j]);
+                num += rb * 0.5 * MathEx.pow2(y[i] - y[j]);
                 denom += rb * rb;
             }
         }
 
-        alpha = num / denom;
+        return num / denom;
     }
 
     private double variogram(double r) {

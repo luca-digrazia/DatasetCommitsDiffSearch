@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -27,13 +27,29 @@ package smile.interpolation;
  * @author Haifeng Li
  */
 public class CubicSplineInterpolation2D implements Interpolation2D {
-    private int m;
-    private double[] x1;
-    private double[] yv;
-    private CubicSplineInterpolation1D[] srp;
+    /**
+     * The number of control points on the first dimension.
+     */
+    private final int m;
+    /**
+     * The function values at xx.
+     */
+    private final double[]yv;
+    /**
+     * The first dimension of tabulated control points.
+     */
+    private final double[] x1;
+    /**
+     * The interpolation along the second dimension
+     * on every control point of first dimension.
+     */
+    private final CubicSplineInterpolation1D[] srp;
 
     /**
      * Constructor.
+     * @param x1 the 1st dimension of data points.
+     * @param x2 the 2nd dimension of data points.
+     * @param y the function values at <code>(x1, x2)</code>.
      */
     public CubicSplineInterpolation2D(double[] x1, double[] x2, double[][] y) {
         if (x1.length != y.length) {

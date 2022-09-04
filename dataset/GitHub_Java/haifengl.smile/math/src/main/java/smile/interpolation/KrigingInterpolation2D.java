@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -31,17 +31,22 @@ import smile.math.matrix.Matrix;
  */
 public class KrigingInterpolation2D implements Interpolation2D {
 
-    private double[] x1;
-    private double[] x2;
-    private double[] yvi;
-    private double alpha;
-    private double beta;
+    /** The first dimension of tabulated control points. */
+    private final double[] x1;
+    /** The second dimension of tabulated control points. */
+    private final double[] x2;
+    /** The linear weights. */
+    private final double[] yvi;
+    /** The parameter of power variogram. */
+    private final double alpha;
+    /** The parameter of power variogram. */
+    private final double beta;
 
     /**
      * Constructor. The power variogram is employed for interpolation.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values.
+     * @param y the function values at <code>(x1, x2)</code>.
      */
     public KrigingInterpolation2D(double[] x1, double[] x2, double[] y) {
         this(x1, x2, y, 1.5);
@@ -51,9 +56,9 @@ public class KrigingInterpolation2D implements Interpolation2D {
      * Constructor. The power variogram is employed for interpolation.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values.
+     * @param y the function values at <code>(x1, x2)</code>.
      * @param beta the parameter of power variogram. The value of &beta;
-     *             should be in the range <code>1 &le; &beta; &lt; 2</code>.
+     *             should be in the range {@code 1 <=} &beta; {@code < 2}.
      *             A good general choice is 1.5, but for functions with
      *             a strong linear trend, we may experiment with values as
      *             large as 1.99.
@@ -74,15 +79,15 @@ public class KrigingInterpolation2D implements Interpolation2D {
         this.x1 = x1;
         this.x2 = x2;
         this.beta = beta;
-        pow(x1, x2, y);
+        this.alpha = pow(x1, x2, y);
 
         int n = x1.length;
-        yvi = new double[n + 1];
+        double[] yv = new double[n + 1];
 
         Matrix v = new Matrix(n + 1, n + 1);
         v.uplo(UPLO.LOWER);
         for (int i = 0; i < n; i++) {
-            yvi[i] = y[i];
+            yv[i] = y[i];
 
             for (int j = i; j < n; j++) {
                 double d1 = x1[i] - x1[j];
@@ -97,11 +102,11 @@ public class KrigingInterpolation2D implements Interpolation2D {
             v.set(i, n, 1.0);
         }
 
-        yvi[n] = 0.0;
+        yv[n] = 0.0;
         v.set(n, n, 0.0);
 
         Matrix.SVD svd = v.svd(true, true);
-        yvi = svd.solve(yvi);
+        yvi = svd.solve(yv);
     }
 
     @Override
@@ -119,7 +124,7 @@ public class KrigingInterpolation2D implements Interpolation2D {
         return y;
     }
 
-    private void pow(double[] x1, double[] x2, double[] y) {
+    private double pow(double[] x1, double[] x2, double[] y) {
         int n = x1.length;
 
         double num = 0.0, denom = 0.0;
@@ -130,12 +135,12 @@ public class KrigingInterpolation2D implements Interpolation2D {
                 double d = d1 * d1 + d2 * d2;
 
                 double rb = Math.pow(d, beta/2);
-                num += rb * 0.5 * MathEx.sqr(y[i] - y[j]);
+                num += rb * 0.5 * MathEx.pow2(y[i] - y[j]);
                 denom += rb * rb;
             }
         }
 
-        alpha = num / denom;
+        return num / denom;
     }
 
     private double variogram(double r) {

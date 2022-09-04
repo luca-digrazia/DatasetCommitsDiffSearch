@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,16 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation.variogram;
 
 /**
  * Exponential variogram.
  * <p>
- * <pre>
  *     v(r) = c + b * (1 - e<sup>-3r/a</sup>)
- * </pre>
+ * <p>
  * where a is the range parameter and b is sill paramter. The distance of two
  * pairs increase, the variogram of those two pairs also increase. Eventually,
  * the increase of the distance can not cause the variogram increase. The
@@ -40,9 +39,12 @@ package smile.interpolation.variogram;
  * @author Haifeng Li
  */
 public class ExponentialVariogram implements Variogram {
-    private double a;
-    private double b;
-    private double c;
+    /** The range parameter. */
+    private final double a;
+    /** The sill parameter. */
+    private final double b;
+    /** The nugget effect parameter. */
+    private final double c;
 
     /**
      * Constructor. No nugget effect.

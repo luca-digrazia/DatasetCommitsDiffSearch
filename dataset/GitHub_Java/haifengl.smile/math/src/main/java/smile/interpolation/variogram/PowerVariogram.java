@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation.variogram;
 
@@ -22,12 +22,11 @@ import smile.math.MathEx;
 /**
  * Power variogram.
  * <p>
- * <pre>
  *     v(r) = c + &alpha; r<sup>&beta;</sup>
- * </pre>
+ * <p>
  * where &beta; is fixed and &alpha; is fitted by unweighted least squares
  * over all pairs of data points. The value of &beta; should be in the range
- * <code>1 &le; &beta; &lt; 2</code>. A good general choice is 1.5, but for
+ * {@code 1 <=} &beta; {@code < 2}. A good general choice is 1.5, but for
  * functions with a strong linear trend, we may experiment with values as
  * large as 1.99.
  * <p>
@@ -43,12 +42,17 @@ import smile.math.MathEx;
  */
 public class PowerVariogram implements Variogram {
 
-    private double alpha;
-    private double beta;
-    private double nugget;
+    /** The parameter fitted by unweighted least squares on data points. */
+    private final double alpha;
+    /** The fixed parameter {@code 1 <= beta < 2}. */
+    private final double beta;
+    /** The nugget effect parameter. */
+    private final double nugget;
 
     /**
      * Constructor. No nugget effect and &beta; = 1.5 and &alpha; will be estimated from x and y.
+     * @param x the training data.
+     * @param y the responsible variable.
      */
     public PowerVariogram(double[][] x, double[] y) {
         this(x, y, 1.5);
@@ -56,6 +60,9 @@ public class PowerVariogram implements Variogram {
 
     /**
      * Constructor. No nugget effect and &alpha; will be estimated from x and y.
+     * @param x the training data.
+     * @param y the responsible variable.
+     * @param beta the beta parameter {@code 1 <=} &beta; {@code < 2}.
      */
     public PowerVariogram(double[][] x, double[] y, double beta) {
         this(x, y, beta, 0.0);
@@ -63,6 +70,9 @@ public class PowerVariogram implements Variogram {
 
     /**
      * Constructor. &alpha; will be estimated from x and y.
+     * @param x the training data.
+     * @param y the responsible variable.
+     * @param beta the beta parameter {@code 1 <=} &beta; {@code < 2}.
      * @param nugget the nugget effect parameter. The height of the jump of
      * the variogram at the discontinuity at the origin.
      */
@@ -86,11 +96,11 @@ public class PowerVariogram implements Variogram {
             for (int j = i + 1; j < n; j++) {
                 double rb = 0.0;
                 for (int k = 0; k < dim; k++) {
-                    rb += MathEx.sqr(x[i][k] - x[j][k]);
+                    rb += MathEx.pow2(x[i][k] - x[j][k]);
                 }
 
                 rb = Math.pow(rb, 0.5 * beta);
-                num += rb * 0.5 * MathEx.sqr(y[i] - y[j] - nugget);
+                num += rb * 0.5 * MathEx.pow2(y[i] - y[j] - nugget);
                 denom += rb * rb;
             }
         }

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -36,6 +36,9 @@ package smile.interpolation;
  */
 public class BicubicInterpolation implements Interpolation2D {
 
+    /**
+     * The coefficients to obtain the 16 quantities c[4][4].
+     */
     private static final int[][] wt = {
         { 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
         { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0},
@@ -55,20 +58,49 @@ public class BicubicInterpolation implements Interpolation2D {
         { 4,-4, 4,-4, 2, 2,-2,-2, 2,-2,-2, 2, 1, 1, 1, 1}
     };
 
-    private int m, n;
-    private double[][] yv;
-    private double[] x1;
-    private double[] x2;
-    private LinearInterpolation x1terp, x2terp;
+    /**
+     * The number of control points on the first dimension.
+     */
+    private final int m;
+    /**
+     * The number of control points on the second dimension.
+     */
+    private final int n;
+    /**
+     * The function values at control points.
+     */
+    private final double[][] yv;
+    /**
+     * The first dimension of tabulated control points.
+     */
+    private final double[] x1;
+    /**
+     * The second dimension of tabulated control points.
+     */
+    private final double[] x2;
+    /**
+     * To locate the control point in the first dimension.
+     */
+    private final LinearInterpolation x1terp;
+    /**
+     * To locate the control point in the second dimension.
+     */
+    private final LinearInterpolation x2terp;
 
-    private double[] y = new double[4];
-    private double[] y1 = new double[4];
-    private double[] y2 = new double[4];
-    private double[] y12 = new double[4];
-
+    /** The workspace of function values. */
+    private final double[] y = new double[4];
+    /** The workspace of derivatives. */
+    private final double[] y1 = new double[4];
+    /** The workspace of derivatives. */
+    private final double[] y2 = new double[4];
+    /** The workspace of derivatives. */
+    private final double[] y12 = new double[4];
 
     /**
      * Constructor. The value in x1 and x2 must be monotonically increasing.
+     * @param x1 the 1st dimension value.
+     * @param x2 the 2nd dimension value.
+     * @param y the function values at <code>(x1, x2)</code>.
      */
     public BicubicInterpolation(double[] x1, double[] x2, double[][] y) {
         if (x1.length != y.length) {

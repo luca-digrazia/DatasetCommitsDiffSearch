@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,16 +13,15 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
 /**
  * The polynomial kernel.
  * <p>
- * <pre>
  *     k(u, v) = (&gamma; u<sup>T</sup>v - &lambda;)<sup>d</sup>
- * </pre>
+ * <p>
  * where &gamma; is the scale of the used inner product, &lambda; the offset of
  * the used inner product, and <i>d</i> the order of the polynomial kernel.
  *
@@ -31,21 +30,26 @@ package smile.math.kernel;
 public class Polynomial implements DotProductKernel {
     private static final long serialVersionUID = 2L;
 
-    private final int degree;
-    private final double scale;
-    private final double offset;
-
-    /**
-     * Constructor with scale 1 and bias 0.
-     */
-    public Polynomial(int degree) {
-        this(degree, 1.0, 0.0);
-    }
+    /** The degree of polynomial. */
+    final int degree;
+    /** The scale parameter. */
+    final double scale;
+    /** The offset parameter. */
+    final double offset;
+    /** The lower bound of scale and offset for hyperparameter tuning. */
+    final double[] lo;
+    /** The upper bound of scale and offset for hyperparameter tuning. */
+    final double[] hi;
 
     /**
      * Constructor.
+     * @param degree The degree of polynomial. The degree is fixed during hyperparameter tuning.
+     * @param scale The scale parameter.
+     * @param offset The offset parameter.
+     * @param lo The lower bound of scale and offset for hyperparameter tuning.
+     * @param hi The upper bound of scale and offset for hyperparameter tuning.
      */
-    public Polynomial(int degree, double scale, double offset) {
+    public Polynomial(int degree, double scale, double offset, double[] lo, double[] hi) {
         if (degree <= 0) {
             throw new IllegalArgumentException("Non-positive polynomial degree: " + degree);
         }
@@ -57,19 +61,30 @@ public class Polynomial implements DotProductKernel {
         this.degree = degree;
         this.scale = scale;
         this.offset = offset;
+        this.lo = lo;
+        this.hi = hi;
     }
 
-    /** Returns the degree of kernel. */
+    /**
+     * Returns the degree of polynomial.
+     * @return the degree of polynomial.
+     */
     public int degree() {
         return degree;
     }
 
-    /** Returns the scale of kernel. */
+    /**
+     * Returns the scale of kernel.
+     * @return the scale of kernel.
+     */
     public double scale() {
         return scale;
     }
 
-    /** Returns the offset of kernel. */
+    /**
+     * Returns the offset of kernel.
+     * @return the offset of kernel.
+     */
     public double offset() {
         return offset;
     }
@@ -82,5 +97,15 @@ public class Polynomial implements DotProductKernel {
     @Override
     public double k(double dot) {
         return Math.pow(scale * dot + offset, degree);
+    }
+
+    @Override
+    public double[] kg(double dot) {
+        double[] g = new double[3];
+        double pow = Math.pow(scale * dot + offset, degree-1);
+        g[0] = Math.pow(scale * dot + offset, degree);
+        g[1] = dot * pow;
+        g[2] = pow;
+        return g;
     }
 }

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -76,13 +76,19 @@ import smile.interpolation.variogram.Variogram;
  */
 public class KrigingInterpolation {
 
-    private double[][] x;
-    private Variogram variogram;
-    private double[] yvi;
+    /** The control points. */
+    private final double[][] x;
+    /** The variogram. */
+    private final Variogram variogram;
+    /** The linear weights. */
+    private final double[] yvi;
 
     /**
      * Constructor. The power variogram is employed. We assume no errors,
      * i.e. we are doing interpolation rather fitting.
+     *
+     * @param x the data points.
+     * @param y the function values at <code>x</code>.
      */
     public KrigingInterpolation(double[][] x, double[] y) {
         this(x, y, new PowerVariogram(x, y), null);
@@ -90,8 +96,9 @@ public class KrigingInterpolation {
 
     /**
      * Constructor.
-     * @param x the point set.
-     * @param y the function values at given points.
+     *
+     * @param x the data points.
+     * @param y the function values at <code>x</code>.
      * @param variogram the variogram function of offset distance to estimate
      * the mean square variation of function y(x).
      * @param error the measure error associated with y. It is the sqrt of diagonal
@@ -102,12 +109,12 @@ public class KrigingInterpolation {
         this.variogram = variogram;
 
         int n = x.length;
-        yvi = new double[n + 1];
+        double[] yv = new double[n + 1];
 
         Matrix v = new Matrix(n + 1, n + 1);
         v.uplo(UPLO.LOWER);
         for (int i = 0; i < n; i++) {
-            yvi[i] = y[i];
+            yv[i] = y[i];
 
             for (int j = i; j < n; j++) {
                 double var = variogram.f(rdist(x[i], x[j]));
@@ -118,7 +125,7 @@ public class KrigingInterpolation {
             v.set(i, n, 1.0);
         }
 
-        yvi[n] = 0.0;
+        yv[n] = 0.0;
         v.set(n, n, 0.0);
 
         if (error != null) {
@@ -128,11 +135,13 @@ public class KrigingInterpolation {
         }
 
         Matrix.SVD svd = v.svd(true, true);
-        yvi = svd.solve(yvi);
+        yvi = svd.solve(yv);
     }
 
     /**
      * Interpolate the function at given point.
+     * @param x a point.
+     * @return the interpolated function value.
      */
     public double interpolate(double... x) {
         if (x.length != this.x[0].length) {

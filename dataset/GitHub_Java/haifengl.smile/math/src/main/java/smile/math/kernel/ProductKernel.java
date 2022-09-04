@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
@@ -26,7 +26,9 @@ import java.util.stream.DoubleStream;
  * @author Haifeng Li
  */
 public class ProductKernel<T> implements MercerKernel<T> {
+    /** The kernel to combine. */
     private final MercerKernel<T> k1;
+    /** The kernel to combine. */
     private final MercerKernel<T> k2;
 
     /**
@@ -42,6 +44,28 @@ public class ProductKernel<T> implements MercerKernel<T> {
     @Override
     public double k(T x, T y) {
         return k1.k(x, y) * k2.k(x, y);
+    }
+
+    @Override
+    public double[] kg(T x, T y) {
+        double[] kg1 = k1.kg(x, y);
+        double[] kg2 = k2.kg(x, y);
+        double[] kg = new double[kg1.length + kg2.length - 1];
+
+        double k1 = kg1[0];
+        double k2 = kg2[0];
+        kg[0] = k1 + k2;
+
+        int n1 = kg1.length;
+        for (int i = 1; i < n1; i++) {
+            kg[i] = kg1[i] * k2;
+        }
+
+        int n2 = kg2.length;
+        for (int i = 1; i < n2; i++) {
+            kg[n1+i-1] = kg2[i] * k1;
+        }
+        return kg;
     }
 
     @Override

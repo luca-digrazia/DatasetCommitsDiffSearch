@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
@@ -27,9 +27,8 @@ import smile.math.rbf.RadialBasisFunction;
  * are irregularly distributed in space. In its basic form, radial basis
  * function interpolation is in the form
  * <p>
- * <pre>
  *     y(x) = &Sigma; w<sub>i</sub> &phi;(||x-c<sub>i</sub>||)
- * </pre>
+ * <p>
  * where the approximating function y(x) is represented as a sum of N radial
  * basis functions &phi;, each associated with a different center c<sub>i</sub>,
  * and weighted by an appropriate coefficient w<sub>i</sub>. For distance,
@@ -50,7 +49,7 @@ import smile.math.rbf.RadialBasisFunction;
  * a variational problem. The advantage of the thin plate splines is that
  * their conditioning is invariant under scaling. Gaussians, multi-quadrics
  * and inverse multi-quadrics are infinitely smooth and and involve a scale
- * or shape parameter, r<sub><small>0</small></sub> &gt; 0.
+ * or shape parameter, r<sub><small>0</small></sub> {@code > 0}.
  * Decreasing r<sub><small>0</small></sub> tends to
  * flatten the basis function. For a given function, the quality of
  * approximation may strongly depend on this parameter. In particular,
@@ -68,29 +67,32 @@ import smile.math.rbf.RadialBasisFunction;
 public class RBFInterpolation2D implements Interpolation2D {
 
     /**
-     * The control points.
+     * The first dimension of tabulated control points.
      */
-    private double[] x1;
-    private double[] x2;
+    private final double[] x1;
+    /**
+     * The second dimension of tabulated control points.
+     */
+    private final double[] x2;
     /**
      * The linear weights.
      */
-    private double[] w;
+    private final double[] w;
     /**
      * The radial basis function.
      */
-    private RadialBasisFunction rbf;
+    private final RadialBasisFunction rbf;
     /**
      * True to fit a normalized rbf interpolation.
      */
-    private boolean normalized;
+    private final boolean normalized;
 
     /**
      * Constructor. By default, it is a regular rbf interpolation without
      * normalization.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values.
+     * @param y the function values at <code>(x1, x2)</code>.
      * @param rbf the radial basis function used in the interpolation
      */
     public RBFInterpolation2D(double[] x1, double[] x2, double[] y, RadialBasisFunction rbf) {
@@ -101,7 +103,7 @@ public class RBFInterpolation2D implements Interpolation2D {
      * Constructor.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values.
+     * @param y the function values at <code>(x1, x2)</code>.
      * @param rbf the radial basis function used in the interpolation
      * @param normalized true for the normalized RBF interpolation.
      */

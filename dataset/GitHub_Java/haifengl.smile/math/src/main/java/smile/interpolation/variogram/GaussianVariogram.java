@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation.variogram;
 
@@ -22,9 +22,8 @@ import smile.math.MathEx;
 /**
  * Gaussian variogram.
  * <p>
- * <pre>
- *     v(r) = c + b * (1 - e<sup>-3r<sup>2</sup>/a<sup>2</sup></sup>)
- * </pre>
+ *     v(r) = c + b * (1 - exp(-3r<sup>2</sup>/a<sup>2</sup>))
+ * <p>
  * where a is the range parameter and b is sill parameter. The distance of two
  * pairs increase, the variogram of those two pairs also increase. Eventually,
  * the increase of the distance can not cause the variogram increase. The
@@ -42,9 +41,12 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class GaussianVariogram implements Variogram {
-    private double a;
-    private double b;
-    private double c;
+    /** The range parameter. */
+    private final double a;
+    /** The sill parameter. */
+    private final double b;
+    /** The nugget effect parameter. */
+    private final double c;
 
     /**
      * Constructor. No nugget effect.
@@ -78,7 +80,7 @@ public class GaussianVariogram implements Variogram {
 
     @Override
     public double f(double r) {
-        return c + b * (1 - Math.exp(-3.0* MathEx.sqr(r/a)));
+        return c + b * (1 - Math.exp(-3.0* MathEx.pow2(r/a)));
     }
 
     @Override

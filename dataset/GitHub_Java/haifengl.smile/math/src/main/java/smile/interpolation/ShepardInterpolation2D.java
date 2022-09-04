@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,19 +13,19 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.interpolation;
 
 /**
  * Shepard interpolation is a special case of normalized radial basis function
  * interpolation if the function &phi;(r) goes to infinity as r &rarr; 0, and is
- * finite for r &gt; 0. In this case, the weights w<sub>i</sub> are just equal to
+ * finite for {@code r > 0}. In this case, the weights w<sub>i</sub> are just equal to
  * the respective function values y<sub>i</sub>. So we need not solve linear
  * equations and thus it works for very large N.
  * <p>
  * An example of such &phi; is <code>&phi;(r) = r<sup>-p</sup></code> with
- * (typically) <code>1 &lt; p &le; 3</code>.
+ * (typically) {@code 1 < p <= 3}.
  * <p>
  * Shepard interpolation is rarely as accurate as the well-tuned application of
  * other radial basis functions. However, it is simple, fast, and often jut the
@@ -35,16 +35,20 @@ package smile.interpolation;
  */
 public class ShepardInterpolation2D implements Interpolation2D {
 
-    private double[] x1;
-    private double[] x2;
-    private double[] y;
-    private double p;
+    /** The first dimension of tabulated control points. */
+    private final double[] x1;
+    /** The second dimension of tabulated control points. */
+    private final double[] x2;
+    /** The function values. */
+    private final double[] y;
+    /** The parameter in the radial basis function. */
+    private final double p;
 
     /**
      * Constructor. By default p = 2.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values.
+     * @param y the function values at <code>(x1, x2)</code>.
      */
     public ShepardInterpolation2D(double[] x1, double[] x2, double[] y) {
         this(x1, x2, y, 2);
@@ -54,7 +58,7 @@ public class ShepardInterpolation2D implements Interpolation2D {
      * Constructor.
      * @param x1 the 1st dimension of data points.
      * @param x2 the 2nd dimension of data points.
-     * @param y the function values.
+     * @param y the function values at <code>(x1, x2)</code>.
      * @param p the parameter in the radial basis function &phi;(r) = r<sup>-p</sup>.
      */
     public ShepardInterpolation2D(double[] x1, double[] x2, double[] y, double p) {
