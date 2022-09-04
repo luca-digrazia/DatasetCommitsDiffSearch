@@ -18,9 +18,9 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
+import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -37,14 +37,13 @@ public class CcHostToolchainAliasTest extends BuildViewTestCase {
     CcToolchainProvider toolchainProvider =
         (CcToolchainProvider) target.get(ToolchainInfo.PROVIDER);
 
-    assertThat(toolchainProvider.isToolConfiguration()).isTrue();
+    assertThat(toolchainProvider.isHostConfiguration()).isTrue();
   }
 
   @Test
   public void testThatHostCrosstoolTopCommandLineArgumentWorks() throws Exception {
     scratch.file(
         "b/BUILD",
-        "load(':cc_toolchain_config.bzl', 'cc_toolchain_config')",
         "cc_toolchain_suite(",
         "  name = 'my_custom_toolchain_suite',",
         "  toolchains = {",
@@ -56,8 +55,8 @@ public class CcHostToolchainAliasTest extends BuildViewTestCase {
         "})",
         "cc_toolchain(",
         "    name = 'toolchain_b',",
-        "    toolchain_identifier = 'mock-llvm-toolchain-k8',",
-        "    toolchain_config = ':mock_config',",
+        "    toolchain_identifier = 'toolchain-identifier-k8',",
+        "    cpu = 'ED-E',",
         "    all_files = ':banana',",
         "    ar_files = ':empty',",
         "    as_files = ':empty',",
@@ -65,10 +64,10 @@ public class CcHostToolchainAliasTest extends BuildViewTestCase {
         "    dwp_files = ':empty',",
         "    linker_files = ':empty',",
         "    strip_files = ':empty',",
-        "    objcopy_files = ':empty')",
-        "cc_toolchain_config(name='mock_config')");
-
-    scratch.file("b/cc_toolchain_config.bzl", MockCcSupport.EMPTY_CC_TOOLCHAIN);
+        "    objcopy_files = ':empty',",
+        "    dynamic_runtime_libs = [':empty'],",
+        "    static_runtime_libs = [':empty'])");
+    scratch.file("b/CROSSTOOL", AnalysisMock.get().ccSupport().readCrosstoolFile());
 
     scratch.file("a/BUILD", "cc_host_toolchain_alias(name='current_cc_host_toolchain')");
 

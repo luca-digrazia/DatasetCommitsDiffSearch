@@ -90,6 +90,15 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
     ConfiguredTarget c = getConfiguredTarget("//a:b");
     CppConfiguration config = getConfiguration(c).getFragment(CppConfiguration.class);
     assertThat(config.getRuleProvidingCcToolchainProvider().toString()).isEqualTo("//cc:suite");
+
+    useConfiguration(
+        "--crosstool_top=//cc:suite",
+        "--cpu=k8",
+        "--host_cpu=k8",
+        "--incompatible_provide_cc_toolchain_info_from_cc_toolchain_suite");
+    c = getConfiguredTarget("//a:b");
+    config = getConfiguration(c).getFragment(CppConfiguration.class);
+    assertThat(config.getRuleProvidingCcToolchainProvider().toString()).isEqualTo("//cc:suite");
   }
 
   @Test
@@ -165,6 +174,15 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
     useConfiguration("--crosstool_top=//cc:suite", "--cpu=k8", "--host_cpu=k8");
     ConfiguredTarget c = getConfiguredTarget("//a:b");
     CppConfiguration config = getConfiguration(c).getFragment(CppConfiguration.class);
+    assertThat(config.getToolchainIdentifier()).isEqualTo("toolchain-identifier-fruitie");
+
+    useConfiguration(
+        "--crosstool_top=//cc:suite",
+        "--cpu=k8",
+        "--host_cpu=k8",
+        "--incompatible_provide_cc_toolchain_info_from_cc_toolchain_suite");
+    c = getConfiguredTarget("//a:b");
+    config = getConfiguration(c).getFragment(CppConfiguration.class);
     assertThat(config.getToolchainIdentifier()).isEqualTo("toolchain-identifier-fruitie");
   }
 }
