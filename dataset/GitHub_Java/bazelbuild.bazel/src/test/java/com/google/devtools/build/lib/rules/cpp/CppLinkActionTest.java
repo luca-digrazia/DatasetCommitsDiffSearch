@@ -20,7 +20,6 @@ import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.primitives.Ints;
@@ -60,7 +59,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.EnvEntry;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -110,7 +108,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
         masterConfig);
   }
 
-  private FeatureConfiguration getMockFeatureConfiguration(ImmutableMap<String, String> envVars) {
+  private FeatureConfiguration getMockFeatureConfiguration() throws Exception {
     CToolchain.FlagGroup flagGroup =
         CToolchain.FlagGroup.newBuilder().addFlag("-lcpp_standard_library").build();
     CToolchain.FlagSet flagSet =
@@ -118,23 +116,11 @@ public class CppLinkActionTest extends BuildViewTestCase {
             .addAction("c++-link-executable")
             .addFlagGroup(flagGroup)
             .build();
-    CToolchain.EnvSet.Builder envSet =
-        CToolchain.EnvSet.newBuilder()
-            .addAction("c++-link-executable")
-            .addAction("c++-link-static-library")
-            .addAction("c++-link-dynamic-library")
-            .addAction("c++-link-nodeps-dynamic-library");
-    for (String envVar : envVars.keySet()) {
-      envSet.addEnvEntry(
-          EnvEntry.newBuilder().setKey(envVar).setValue(envVars.get(envVar)).build());
-    }
-
     CToolchain.Feature linkCppStandardLibrary =
         CToolchain.Feature.newBuilder()
             .setName("link_cpp_standard_library")
             .setEnabled(true)
             .addFlagSet(flagSet)
-            .addEnvSet(envSet.build())
             .build();
     ImmutableList<CToolchain.Feature> features =
         new ImmutableList.Builder<CToolchain.Feature>()
@@ -161,18 +147,14 @@ public class CppLinkActionTest extends BuildViewTestCase {
             /* supportsInterfaceSharedLibraries= */ false,
             /* existingActionConfigNames= */ ImmutableSet.of());
 
-    try {
-      return CcToolchainFeaturesTest.buildFeatures(features, actionConfigs)
-          .getFeatureConfiguration(
-              ImmutableSet.of(
-                  "link_cpp_standard_library",
-                  LinkTargetType.EXECUTABLE.getActionName(),
-                  LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName(),
-                  LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
-                  LinkTargetType.STATIC_LIBRARY.getActionName()));
-    } catch (Exception e) {
-      throw new RuntimeException(e);
-    }
+    return CcToolchainFeaturesTest.buildFeatures(features, actionConfigs)
+        .getFeatureConfiguration(
+            ImmutableSet.of(
+                "link_cpp_standard_library",
+                Link.LinkTargetType.EXECUTABLE.getActionName(),
+                Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY.getActionName(),
+                Link.LinkTargetType.DYNAMIC_LIBRARY.getActionName(),
+                Link.LinkTargetType.STATIC_LIBRARY.getActionName()));
   }
 
   @Test
@@ -463,8 +445,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     NATIVE_DEPS,
     USE_TEST_ONLY_FLAGS,
     FAKE,
-    RUNTIME_SOLIB_DIR,
-    ENVIRONMENT,
+    RUNTIME_SOLIB_DIR
   }
 
   /**
@@ -478,6 +459,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     final PathFragment dynamicOutputPath = PathFragment.create("dummyRuleContext/output/path.so");
     final Artifact staticOutputFile = getBinArtifactWithNoOwner(exeOutputPath.getPathString());
     final Artifact dynamicOutputFile = getBinArtifactWithNoOwner(dynamicOutputPath.getPathString());
+    final FeatureConfiguration featureConfiguration = getMockFeatureConfiguration();
 
     ActionTester.runTest(
         NonStaticAttributes.class,
@@ -499,10 +481,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     ruleContext.getConfiguration(),
                     toolchain,
                     toolchain.getFdoContext(),
-                    getMockFeatureConfiguration(
-                        attributesToFlip.contains(NonStaticAttributes.ENVIRONMENT)
-                            ? ImmutableMap.of("var", "value")
-                            : ImmutableMap.of()),
+                    featureConfiguration,
                     MockCppSemantics.INSTANCE);
             if (attributesToFlip.contains(NonStaticAttributes.OUTPUT_FILE)) {
               builder.setLinkType(LinkTargetType.NODEPS_DYNAMIC_LIBRARY);
@@ -528,7 +507,6 @@ public class CppLinkActionTest extends BuildViewTestCase {
 
   private enum StaticKeyAttributes {
     OUTPUT_FILE,
-    ENVIRONMENT,
   }
 
   /**
@@ -542,6 +520,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
     final PathFragment dynamicOutputPath = PathFragment.create("dummyRuleContext/output/path.so");
     final Artifact staticOutputFile = getBinArtifactWithNoOwner(staticOutputPath.getPathString());
     final Artifact dynamicOutputFile = getBinArtifactWithNoOwner(dynamicOutputPath.getPathString());
+    final FeatureConfiguration featureConfiguration = getMockFeatureConfiguration();
 
     ActionTester.runTest(
         StaticKeyAttributes.class,
@@ -563,10 +542,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                     ruleContext.getConfiguration(),
                     toolchain,
                     toolchain.getFdoContext(),
-                    getMockFeatureConfiguration(
-                        attributes.contains(StaticKeyAttributes.ENVIRONMENT)
-                            ? ImmutableMap.of("var", "value")
-                            : ImmutableMap.of()),
+                    featureConfiguration,
                     MockCppSemantics.INSTANCE);
             builder.setLinkType(
                 attributes.contains(StaticKeyAttributes.OUTPUT_FILE)
@@ -651,7 +627,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "dummyRuleContext/binary2",
                 objects.build(),
                 ImmutableList.<LibraryToLink>of(),
-                getMockFeatureConfiguration(/* envVars= */ ImmutableMap.of()))
+                getMockFeatureConfiguration())
             .setFake(true)
             .build();
 
@@ -718,7 +694,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
         output.getPathString(),
         ImmutableList.<Artifact>of(),
         ImmutableList.<LibraryToLink>of(),
-        getMockFeatureConfiguration(/* envVars= */ ImmutableMap.of()));
+        getMockFeatureConfiguration());
   }
 
   public Artifact getOutputArtifact(String relpath) {
@@ -993,7 +969,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                   output.getExecPathString(),
                   ImmutableList.<Artifact>of(),
                   ImmutableList.<LibraryToLink>of(),
-                  getMockFeatureConfiguration(/* envVars= */ ImmutableMap.of()))
+                  getMockFeatureConfiguration())
               .setLibraryIdentifier("foo")
               .addObjectFiles(ImmutableList.of(testTreeArtifact))
               .addObjectFile(objectFile)
@@ -1022,7 +998,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "dummyRuleContext/out.so",
                 ImmutableList.of(),
                 ImmutableList.of(),
-                getMockFeatureConfiguration(/* envVars= */ ImmutableMap.of()))
+                getMockFeatureConfiguration())
             .setLinkingMode(Link.LinkingMode.STATIC)
             .addLinkopts(ImmutableList.of("-pie", "-other", "-pie"))
             .setLibraryIdentifier("foo")
@@ -1045,7 +1021,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "dummyRuleContext/out",
                 ImmutableList.of(),
                 ImmutableList.of(),
-                getMockFeatureConfiguration(/* envVars= */ ImmutableMap.of()))
+                getMockFeatureConfiguration())
             .setLinkingMode(Link.LinkingMode.STATIC)
             .addLinkopts(ImmutableList.of("-pie", "-other", "-pie"))
             .build();
@@ -1076,7 +1052,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 "dummyRuleContext/out",
                 ImmutableList.of(),
                 ImmutableList.copyOf(linkerInputs),
-                getMockFeatureConfiguration(/* envVars= */ ImmutableMap.of()))
+                getMockFeatureConfiguration())
             .addLinkopts(ImmutableList.of("FakeLinkopt1", "FakeLinkopt2"))
             .build();
 
@@ -1137,8 +1113,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             CcToolchainConfig.builder().withFeatures(CppRuleClasses.DO_NOT_SPLIT_LINKING_CMDLINE));
     RuleContext ruleContext = createDummyRuleContext();
 
-    FeatureConfiguration featureConfiguration =
-        getMockFeatureConfiguration(/* envVars= */ ImmutableMap.of());
+    FeatureConfiguration featureConfiguration = getMockFeatureConfiguration();
 
     CppLinkAction linkAction =
         createLinkBuilder(

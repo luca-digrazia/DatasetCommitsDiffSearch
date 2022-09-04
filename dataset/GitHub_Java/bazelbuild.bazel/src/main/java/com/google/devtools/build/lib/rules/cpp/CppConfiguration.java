@@ -164,7 +164,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   private final boolean stripBinaries;
   private final CompilationMode compilationMode;
   private final boolean collectCodeCoverage;
-  private final boolean isToolConfigurationDoNotUseWillBeRemovedFor129045294;
+  private final boolean isThisHostConfigurationDoNotUseWillBeRemovedFor129045294;
 
   static CppConfiguration create(CpuTransformer cpuTransformer, BuildOptions options)
       throws InvalidConfigurationException {
@@ -235,7 +235,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
                 && compilationMode == CompilationMode.FASTBUILD)),
         compilationMode,
         commonOptions.collectCodeCoverage,
-        commonOptions.isHost || commonOptions.isExec);
+        commonOptions.isHost);
   }
 
   private CppConfiguration(
@@ -254,7 +254,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
       boolean stripBinaries,
       CompilationMode compilationMode,
       boolean collectCodeCoverage,
-      boolean isToolConfiguration) {
+      boolean isHostConfiguration) {
     this.transformedCpuFromOptions = transformedCpuFromOptions;
     this.desiredCpu = desiredCpu;
     this.fdoPath = fdoPath;
@@ -270,7 +270,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     this.stripBinaries = stripBinaries;
     this.compilationMode = compilationMode;
     this.collectCodeCoverage = collectCodeCoverage;
-    this.isToolConfigurationDoNotUseWillBeRemovedFor129045294 = isToolConfiguration;
+    this.isThisHostConfigurationDoNotUseWillBeRemovedFor129045294 = isHostConfiguration;
   }
 
   /** Returns the label of the <code>cc_compiler</code> rule for the C++ configuration. */
@@ -536,7 +536,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   }
 
   String getFdoInstrument() {
-    if (isToolConfigurationDoNotUseWillBeRemovedFor129045294()) {
+    if (isThisHostConfigurationDoNotUseWillBeRemovedFor129045294()) {
       // We don't want FDO in the host configuration
       return null;
     }
@@ -570,7 +570,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   }
 
   Label getFdoPrefetchHintsLabel() {
-    if (isToolConfigurationDoNotUseWillBeRemovedFor129045294()) {
+    if (isThisHostConfigurationDoNotUseWillBeRemovedFor129045294()) {
       // We don't want FDO in the host configuration
       return null;
     }
@@ -671,8 +671,8 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   /** @deprecated this is only a temporary workaround, will be removed by b/129045294. */
   // TODO(b/129045294): Remove at first opportunity
   @Deprecated
-  boolean isToolConfigurationDoNotUseWillBeRemovedFor129045294() {
-    return isToolConfigurationDoNotUseWillBeRemovedFor129045294;
+  boolean isThisHostConfigurationDoNotUseWillBeRemovedFor129045294() {
+    return isThisHostConfigurationDoNotUseWillBeRemovedFor129045294;
   }
 
   public boolean enableCcToolchainResolution() {
@@ -693,13 +693,5 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
 
   public boolean disableNoCopts() {
     return cppOptions.disableNoCopts;
-  }
-
-  public boolean loadCcRulesFromBzl() {
-    return cppOptions.loadCcRulesFromBzl;
-  }
-
-  public boolean validateTopLevelHeaderInclusions() {
-    return cppOptions.validateTopLevelHeaderInclusions;
   }
 }
