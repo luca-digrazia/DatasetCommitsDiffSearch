@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.sql.ClientInfoStatus;
 import java.util.concurrent.TimeUnit;
 
 import static org.fest.assertions.api.Assertions.assertThat;
@@ -35,19 +34,13 @@ public class PermissiveEnumDeserializingModuleTest {
 
     @Test
     public void mapsPaddedEnums() throws Exception {
-        assertThat(mapper.readValue("\"   MINUTES \"", TimeUnit.class))
+        assertThat(mapper.readValue("\"   minutes \"", TimeUnit.class))
                 .isEqualTo(TimeUnit.MINUTES);
     }
 
     @Test
     public void mapsSpacedEnums() throws Exception {
-        assertThat(mapper.readValue("\"   MILLI SECONDS \"", TimeUnit.class))
+        assertThat(mapper.readValue("\"   milli seconds \"", TimeUnit.class))
                 .isEqualTo(TimeUnit.MILLISECONDS);
-    }
-
-    @Test
-    public void mapsDashedEnums() throws Exception {
-        assertThat(mapper.readValue("\"REASON-UNKNOWN\"", ClientInfoStatus.class))
-                .isEqualTo(ClientInfoStatus.REASON_UNKNOWN);
     }
 }
