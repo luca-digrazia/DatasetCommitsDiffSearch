@@ -5,8 +5,6 @@ import static java.util.stream.Collectors.toMap;
 
 import java.io.File;
 import java.io.IOException;
-import java.io.Reader;
-import java.io.StringReader;
 import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -73,10 +71,7 @@ import io.quarkus.qute.ResultNode;
 import io.quarkus.qute.SectionHelper;
 import io.quarkus.qute.SectionHelperFactory;
 import io.quarkus.qute.Template;
-import io.quarkus.qute.TemplateException;
 import io.quarkus.qute.TemplateInstance;
-import io.quarkus.qute.TemplateLocator;
-import io.quarkus.qute.Variant;
 import io.quarkus.qute.api.ResourcePath;
 import io.quarkus.qute.api.VariantTemplate;
 import io.quarkus.qute.deployment.TemplatesAnalysisBuildItem.TemplateAnalysis;
@@ -102,8 +97,6 @@ public class QuteProcessor {
     static final DotName STREAM = DotName.createSimple(Stream.class.getName());
     static final DotName MAP = DotName.createSimple(Map.class.getName());
     static final DotName MAP_ENTRY = DotName.createSimple(Entry.class.getName());
-
-    private static final String MATCH_NAME = "matchName";
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -168,37 +161,15 @@ public class QuteProcessor {
                     };
                 }
             };
-        }).addLocator(new TemplateLocator() {
-            @Override
-            public Optional<TemplateLocation> locate(String id) {
-                TemplatePathBuildItem found = templatePaths.stream().filter(p -> p.getPath().equals(id)).findAny().orElse(null);
-                if (found != null) {
-                    try {
-                        byte[] content = Files.readAllBytes(found.getFullPath());
-                        return Optional.of(new TemplateLocation() {
-                            @Override
-                            public Reader read() {
-                                return new StringReader(new String(content, StandardCharsets.UTF_8));
-                            }
-
-                            @Override
-                            public Optional<Variant> getVariant() {
-                                return Optional.empty();
-                            }
-                        });
-                    } catch (IOException e) {
-                        LOGGER.warn("Unable to read the template from path: " + found.getFullPath(), e);
-                    }
-                }
-                ;
-                return Optional.empty();
-            }
         }).build();
 
         for (TemplatePathBuildItem path : templatePaths) {
-            Template template = dummyEngine.getTemplate(path.getPath());
-            if (template != null) {
+            try {
+                Template template = dummyEngine
+                        .parse(new String(Files.readAllBytes(path.getFullPath()), StandardCharsets.UTF_8));
                 analysis.add(new TemplateAnalysis(template.getGeneratedId(), template.getExpressions(), path));
+            } catch (IOException e) {
+                LOGGER.warn("Unable to analyze the template from path: " + path.getFullPath(), e);
             }
         }
         LOGGER.debugf("Finished analysis of %s templates  in %s ms",
@@ -290,51 +261,23 @@ public class QuteProcessor {
             BuildProducer<TemplateExtensionMethodBuildItem> extensionMethods) {
 
         IndexView index = beanArchiveIndex.getIndex();
-        Map<MethodInfo, AnnotationInstance> methods = new HashMap<>();
-        Map<ClassInfo, AnnotationInstance> classes = new HashMap<>();
 
         for (AnnotationInstance templateExtension : index.getAnnotations(ExtensionMethodGenerator.TEMPLATE_EXTENSION)) {
             if (templateExtension.target().kind() == Kind.METHOD) {
-                methods.put(templateExtension.target().asMethod(), templateExtension);
-            } else if (templateExtension.target().kind() == Kind.CLASS) {
-                classes.put(templateExtension.target().asClass(), templateExtension);
-            }
-        }
-
-        for (Entry<MethodInfo, AnnotationInstance> entry : methods.entrySet()) {
-            MethodInfo method = entry.getKey();
-            ExtensionMethodGenerator.validate(method);
-            produceExtensionMethod(index, extensionMethods, method, entry.getValue());
-            LOGGER.debugf("Found template extension method %s declared on %s", method,
-                    method.declaringClass().name());
-        }
-
-        for (Entry<ClassInfo, AnnotationInstance> entry : classes.entrySet()) {
-            ClassInfo clazz = entry.getKey();
-            for (MethodInfo method : clazz.methods()) {
-                if (!Modifier.isStatic(method.flags()) || method.returnType().kind() == org.jboss.jandex.Type.Kind.VOID
-                        || method.parameters().isEmpty() || Modifier.isPrivate(method.flags()) || methods.containsKey(method)) {
-                    continue;
+                MethodInfo method = templateExtension.target().asMethod();
+                ExtensionMethodGenerator.validate(method);
+                String matchName = null;
+                AnnotationValue matchNameValue = templateExtension.value("matchName");
+                if (matchNameValue != null) {
+                    matchName = matchNameValue.asString();
                 }
-                produceExtensionMethod(index, extensionMethods, method, entry.getValue());
-                LOGGER.debugf("Found template extension method %s declared on %s", method,
-                        method.declaringClass().name());
+                if (matchName == null) {
+                    matchName = method.name();
+                }
+                extensionMethods.produce(new TemplateExtensionMethodBuildItem(method, matchName,
+                        index.getClassByName(method.parameters().get(0).name())));
             }
         }
-    }
-
-    private void produceExtensionMethod(IndexView index, BuildProducer<TemplateExtensionMethodBuildItem> extensionMethods,
-            MethodInfo method, AnnotationInstance extensionAnnotation) {
-        String matchName = null;
-        AnnotationValue matchNameValue = extensionAnnotation.value(MATCH_NAME);
-        if (matchNameValue != null) {
-            matchName = matchNameValue.asString();
-        }
-        if (matchName == null) {
-            matchName = method.name();
-        }
-        extensionMethods.produce(new TemplateExtensionMethodBuildItem(method, matchName,
-                index.getClassByName(method.parameters().get(0).name())));
     }
 
     @BuildStep
@@ -480,9 +423,6 @@ public class QuteProcessor {
                     idx = name.lastIndexOf(ValueResolverGenerator.SUFFIX);
                 }
                 String className = name.substring(0, idx).replace("/", ".");
-                if (className.contains(ValueResolverGenerator.NESTED_SEPARATOR)) {
-                    className = className.replace(ValueResolverGenerator.NESTED_SEPARATOR, "$");
-                }
                 boolean appClass = appClassPredicate.test(className);
                 LOGGER.debugf("Writing %s [appClass=%s]", name, appClass);
                 generatedClass.produce(new GeneratedClassBuildItem(appClass, name, data));
@@ -523,7 +463,7 @@ public class QuteProcessor {
 
         ExtensionMethodGenerator extensionMethodGenerator = new ExtensionMethodGenerator(classOutput);
         for (TemplateExtensionMethodBuildItem templateExtension : templateExtensionMethods) {
-            extensionMethodGenerator.generate(templateExtension.getMethod(), templateExtension.getMatchName());
+            extensionMethodGenerator.generate(templateExtension.getMethod());
         }
         generatedTypes.addAll(extensionMethodGenerator.getGeneratedTypes());
 

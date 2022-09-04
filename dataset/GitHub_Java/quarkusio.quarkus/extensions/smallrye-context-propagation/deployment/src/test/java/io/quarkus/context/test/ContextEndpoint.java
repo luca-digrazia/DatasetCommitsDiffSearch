@@ -23,6 +23,7 @@ import javax.ws.rs.core.UriInfo;
 
 import org.eclipse.microprofile.context.ManagedExecutor;
 import org.eclipse.microprofile.context.ThreadContext;
+import org.eclipse.microprofile.reactive.streams.operators.ReactiveStreams;
 import org.jboss.resteasy.annotations.Stream;
 import org.jboss.resteasy.annotations.Stream.MODE;
 import org.junit.jupiter.api.Assertions;
@@ -32,7 +33,6 @@ import org.wildfly.common.Assert;
 import io.quarkus.arc.Arc;
 import io.quarkus.hibernate.orm.panache.Panache;
 import io.reactivex.Single;
-import io.smallrye.mutiny.Multi;
 
 @Path("/context")
 @Produces(MediaType.TEXT_PLAIN)
@@ -335,8 +335,8 @@ public class ContextEndpoint {
     @Transactional
     @GET
     @Path("/transaction-publisher2")
-    public Publisher<String> transactionPublisher2() {
-        Publisher<String> ret = Multi.createFrom().item("OK");
+    public Publisher<String> transactionPublisher2() throws SystemException {
+        Publisher<String> ret = ReactiveStreams.of("OK").buildRs();
         // now delete both entities
         Assertions.assertEquals(2, ContextEntity.deleteAll());
         return ret;
