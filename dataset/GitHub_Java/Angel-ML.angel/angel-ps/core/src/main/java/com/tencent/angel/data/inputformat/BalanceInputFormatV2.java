@@ -125,19 +125,15 @@ public class BalanceInputFormatV2 extends CombineTextInputFormat {
   }
 
   private long adjustMaxSize(long totalFileSize, int needSplitNum) {
-    if(needSplitNum <= 1) {
-      return totalFileSize;
-    }
-
-    long a = totalFileSize / (needSplitNum - 1);
-    long b = totalFileSize - a * (needSplitNum - 1);
+    long a = totalFileSize / needSplitNum;
+    long b = totalFileSize - a * needSplitNum;
 
     if(b == 0 || b > 0.98 * a){
       return a;
     }
 
     while(true) {
-      long delta = (a - b) / needSplitNum;
+      long delta = (a - b) / (needSplitNum + 1);
       if(delta <= 0) {
         break;
       }
