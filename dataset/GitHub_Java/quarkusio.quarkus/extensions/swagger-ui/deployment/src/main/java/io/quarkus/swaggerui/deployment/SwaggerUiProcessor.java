@@ -77,8 +77,7 @@ public class SwaggerUiProcessor {
 
                 swaggerUiBuildProducer.produce(new SwaggerUiBuildItem(tempPath.toAbsolutePath().toString(),
                         nonApplicationRootPathBuildItem.adjustPath(swaggerUiConfig.path)));
-                displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(
-                        nonApplicationRootPathBuildItem.adjustPath(swaggerUiConfig.path + "/"), "Open API UI"));
+                displayableEndpoints.produce(new NotFoundPageDisplayableEndpointBuildItem(swaggerUiConfig.path + "/"));
             } else {
                 Map<String, byte[]> files = WebJarUtil.copyResourcesForProduction(curateOutcomeBuildItem, artifact,
                         SWAGGER_UI_WEBJAR_PREFIX);

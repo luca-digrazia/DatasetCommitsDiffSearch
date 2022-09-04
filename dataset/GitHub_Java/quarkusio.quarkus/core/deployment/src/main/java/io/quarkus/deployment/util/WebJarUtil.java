@@ -71,23 +71,18 @@ public class WebJarUtil {
                     Enumeration<JarEntry> entries = jarFile.entries();
                     while (entries.hasMoreElements()) {
                         JarEntry entry = entries.nextElement();
-                        if (entry.getName().startsWith(rootFolderInJar)) {
-                            String fileName = entry.getName().replace(rootFolderInJar, "");
-                            Path filePath = path.resolve(fileName);
-                            if (entry.isDirectory()) {
-                                Files.createDirectories(filePath);
-                            } else {
-                                try (InputStream inputStream = jarFile.getInputStream(entry)) {
-                                    String modulename = getModuleOverrideName(artifact, fileName);
-                                    if (IGNORE_LIST.contains(fileName)
-                                            && isOverride(userApplication.getPaths(), classLoader, fileName, modulename)) {
-                                        try (InputStream override = getOverride(userApplication.getPaths(), classLoader,
-                                                fileName, modulename)) {
-                                            createFile(override, filePath);
-                                        }
-                                    } else {
-                                        createFile(inputStream, filePath);
+                        if (entry.getName().startsWith(rootFolderInJar) && !entry.isDirectory()) {
+                            try (InputStream inputStream = jarFile.getInputStream(entry)) {
+                                String filename = entry.getName().replace(rootFolderInJar, "");
+                                String modulename = getModuleOverrideName(artifact, filename);
+                                if (IGNORE_LIST.contains(filename)
+                                        && isOverride(userApplication.getPaths(), classLoader, filename, modulename)) {
+                                    try (InputStream override = getOverride(userApplication.getPaths(), classLoader, filename,
+                                            modulename)) {
+                                        createFile(override, path, filename);
                                     }
+                                } else {
+                                    createFile(inputStream, path, filename);
                                 }
                             }
                         }
@@ -269,6 +264,10 @@ public class WebJarUtil {
             }
         }
         return Optional.empty();
+    }
+
+    private static void createFile(InputStream source, Path targetDir, String filename) throws IOException {
+        createFile(source, targetDir.resolve(filename));
     }
 
     private static void createFile(InputStream source, Path targetFile) throws IOException {
