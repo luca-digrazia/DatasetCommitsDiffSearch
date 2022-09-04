@@ -51,6 +51,7 @@ import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -58,7 +59,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorAr
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.LocalMetadataCollector;
@@ -74,7 +74,6 @@ import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.XcodeConfig;
-import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchain;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
@@ -342,9 +341,8 @@ public abstract class CompilationSupport {
     this.usePch = usePch;
     // TODO(b/62143697): Remove this check once all rules are using the crosstool support.
     if (ruleContext
-            .attributes()
-            .has(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)
-        || ruleContext.attributes().has(":j2objc_cc_toolchain", BuildType.LABEL)) {
+        .attributes()
+        .has(CcToolchain.CC_TOOLCHAIN_DEFAULT_ATTRIBUTE_NAME, BuildType.LABEL)) {
       if (toolchain == null) {
         toolchain =  CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
       }
@@ -1129,8 +1127,7 @@ public abstract class CompilationSupport {
               ISO_8859_1));
       ruleContext.registerAction(
           ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                  XcodeConfigProvider.fromRuleContext(ruleContext),
-                  appleConfiguration.getSingleArchPlatform())
+                  appleConfiguration, appleConfiguration.getSingleArchPlatform())
               .setMnemonic("DummyPruner")
               .setExecutable(pruner)
               .addInput(dummyArchive)
@@ -1231,8 +1228,7 @@ public abstract class CompilationSupport {
 
     ruleContext.registerAction(
         ObjcRuleClasses.spawnAppleEnvActionBuilder(
-                XcodeConfigProvider.fromRuleContext(ruleContext),
-                appleConfiguration.getSingleArchPlatform())
+                appleConfiguration, appleConfiguration.getSingleArchPlatform())
             .setMnemonic("ObjcBinarySymbolStrip")
             .setExecutable(xcrunwrapper(ruleContext))
             .addCommandLine(symbolStripCommandLine(stripArgs, binaryToLink, strippedBinary))

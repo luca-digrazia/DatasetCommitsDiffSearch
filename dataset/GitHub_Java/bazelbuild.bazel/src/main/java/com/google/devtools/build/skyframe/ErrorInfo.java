@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -127,15 +126,8 @@ public class ErrorInfo {
 
   @Override
   public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("exception", exception)
-        .add("rootCauses", rootCauses)
-        .add("cycles", cycles)
-        .add("isCatastrophic", isCatastrophic)
-        .add("rootCauseOfException", rootCauseOfException)
-        .add("isDirectlyTransient", isDirectlyTransient)
-        .add("isTransitivelyTransient", isTransitivelyTransient)
-        .toString();
+    return String.format("<ErrorInfo exception=%s rootCauses=%s cycles=%s>",
+        exception, rootCauses, cycles);
   }
 
   /**

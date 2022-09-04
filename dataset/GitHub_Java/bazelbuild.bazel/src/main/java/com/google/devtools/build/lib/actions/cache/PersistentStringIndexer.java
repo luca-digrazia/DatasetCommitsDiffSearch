@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.actions.cache;
 
+import com.google.common.collect.MapMaker;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ConditionallyThreadSafe;
 import com.google.devtools.build.lib.util.CanonicalStringIndexer;
@@ -24,7 +25,6 @@ import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -149,7 +149,7 @@ final class PersistentStringIndexer extends CanonicalStringIndexer {
   }
 
   private static <K, V> ConcurrentMap<K, V> newConcurrentMap(int expectedCapacity) {
-    return new ConcurrentHashMap<>(expectedCapacity);
+    return new MapMaker().initialCapacity(expectedCapacity).makeMap();
   }
 
 }

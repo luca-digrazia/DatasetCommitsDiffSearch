@@ -54,11 +54,13 @@ import com.google.devtools.build.lib.analysis.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.ExtraActionArtifactsProvider;
+import com.google.devtools.build.lib.analysis.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.LabelAndConfiguration;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
@@ -78,8 +80,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Options.
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.PatchTransition;
-import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
 import com.google.devtools.build.lib.analysis.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
@@ -222,7 +222,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             ImmutableMap.<RepositoryName, PathFragment>of()));
     pkgFactory =
         analysisMock
-            .getPackageFactoryBuilderForTesting(directories)
+            .getPackageFactoryBuilderForTesting()
             .setExtraPrecomputeValues(extraPrecomputedValues)
             .setEnvironmentExtensions(getEnvironmentExtensions())
             .setPlatformSetRegexps(getPlatformSetRegexps())
@@ -237,7 +237,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             ruleClassProvider.getBuildInfoFactories(),
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
-            analysisMock.getSkyFunctions(directories),
+            analysisMock.getSkyFunctions(),
             ImmutableList.of(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
             PathFragment.EMPTY_FRAGMENT,

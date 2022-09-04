@@ -334,7 +334,6 @@ public class CommandTest {
           case 2: assertThat(status.toShortString()).isEqualTo("Interrupt"); break;
           case 9: assertThat(status.toShortString()).isEqualTo("Killed"); break;
           case 15: assertThat(status.toShortString()).isEqualTo("Terminated"); break;
-          default: // fall out
         }
       }
     }

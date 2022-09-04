@@ -16,8 +16,6 @@ package com.google.devtools.build.lib.shell;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
-import com.google.common.flogger.LazyArgs;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.lib.shell.Consumers.OutErrConsumers;
 import java.io.File;
@@ -27,6 +25,8 @@ import java.io.OutputStream;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -46,7 +46,7 @@ import javax.annotation.Nullable;
  * <p>The most basic use-case for this class is as follows:
  * <pre>
  *   String[] args = { "/bin/du", "-s", directory };
- *   BlazeCommandResult result = new Command(args).execute();
+ *   CommandResult result = new Command(args).execute();
  *   String output = new String(result.getStdout());
  * </pre>
  * which writes the output of the {@code du(1)} command into {@code output}. More complex cases
@@ -78,7 +78,7 @@ import javax.annotation.Nullable;
  * <p>To execute a shell command directly, use the following pattern:
  * <pre>
  *   String[] args = { "/bin/sh", "-c", shellCommand };
- *   BlazeCommandResult result = new Command(args).execute();
+ *   CommandResult result = new Command(args).execute();
  * </pre>
  * {@code shellCommand} is a complete Bourne shell program, possibly containing all kinds of
  * unescaped metacharacters.  For example, here's a shell command that enumerates the working
@@ -113,7 +113,8 @@ import javax.annotation.Nullable;
  */
 public final class Command {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger =
+      Logger.getLogger("com.google.devtools.build.lib.shell.Command");
 
   /** Pass this value to {@link #execute} to indicate that no input should be written to stdin. */
   public static final InputStream NO_INPUT = new NullInputStream();
@@ -150,24 +151,23 @@ public final class Command {
    * Creates a new {@link Command} for the given command line elements. The command line is executed
    * without a shell.
    *
-   * <p>The given environment variables and working directory are used in subsequent calls to {@link
-   * #execute()}.
+   * <p>The given environment variables and working directory are used in subsequent calls to
+   * {@link #execute()}.
    *
-   * <p>This command treats the 0-th element of {@code commandLineElement} (the name of an
+   * <p>This command treats the  0-th element of {@code commandLineElement} (the name of an
    * executable to run) specially.
-   *
    * <ul>
-   *   <li>If it is an absolute path, it is used as it
-   *   <li>If it is a single file name, the PATH lookup is performed
-   *   <li>If it is a relative path that is not a single file name, the command will attempt to
-   *       execute the binary at that path relative to {@code workingDirectory}.
+   *  <li>If it is an absolute path, it is used as it</li>
+   *  <li>If it is a single file name, the PATH lookup is performed</li>
+   *  <li>If it is a relative path that is not a single file name, the command will attempt to
+   *       execute the the binary at that path relative to {@code workingDirectory}.</li>
    * </ul>
    *
    * @param commandLineElements elements of raw command line to execute
    * @param environmentVariables environment variables to replace JVM's environment variables; may
-   *     be null
+   *    be null
    * @param workingDirectory working directory for execution; if null, the VM's current working
-   *     directory is used
+   *    directory is used
    * @param timeout timeout; a value less than or equal to 0 is treated as no timeout
    * @throws IllegalArgumentException if commandLine is null or empty
    */
@@ -393,7 +393,9 @@ public final class Command {
   }
 
   private static void processInput(InputStream stdinInput, Subprocess process) {
-    logger.atFiner().log(stdinInput.toString());
+    if (logger.isLoggable(Level.FINER)) {
+      logger.finer(stdinInput.toString());
+    }
     try (OutputStream out = process.getOutputStream()) {
       ByteStreams.copy(stdinInput, out);
     } catch (IOException ioe) {
@@ -409,6 +411,9 @@ public final class Command {
   }
 
   private void logCommand() {
-    logger.atFine().log("%s", LazyArgs.lazy(this::toDebugString));
+    if (!logger.isLoggable(Level.FINE)) {
+      return;
+    }
+    logger.fine(toDebugString());
   }
 }

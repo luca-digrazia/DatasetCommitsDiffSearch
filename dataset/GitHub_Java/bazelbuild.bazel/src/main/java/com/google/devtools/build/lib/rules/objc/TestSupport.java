@@ -16,19 +16,18 @@ package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles.Builder;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.analysis.test.TestEnvironmentInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.objc.ObjcRuleClasses.SimulatorRule;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.List;
 import javax.annotation.Nullable;
 
@@ -109,7 +109,11 @@ public class TestSupport {
           .add(Substitution.of("%(test_host_path)s", ""));
     }
 
-    substitutions.add(Substitution.of("%(test_type)s", "XCTEST"));
+    if (ruleContext.attributes().get(IosTest.IS_XCTEST_ATTR, Type.BOOLEAN)) {
+      substitutions.add(Substitution.of("%(test_type)s", "XCTEST"));
+    } else {
+      substitutions.add(Substitution.of("%(test_type)s", "KIF"));
+    }
 
     Artifact template;
     if (!runWithLabDevice()) {
@@ -261,11 +265,12 @@ public class TestSupport {
         ruleContext.getPrerequisite(
             IosTest.TARGET_DEVICE, Mode.TARGET, IosDeviceProvider.SKYLARK_CONSTRUCTOR);
     DottedVersion xcodeVersion = deviceProvider.getXcodeVersion();
+    AppleConfiguration configuration = ruleContext.getFragment(AppleConfiguration.class);
 
     ImmutableMap.Builder<String, String> envBuilder = ImmutableMap.builder();
 
     if (xcodeVersion != null) {
-      envBuilder.putAll(AppleConfiguration.getXcodeVersionEnv(xcodeVersion));
+      envBuilder.putAll(configuration.getXcodeVersionEnv(xcodeVersion));
     }
 
     if (ruleContext.getConfiguration().isCodeCoverageEnabled()) {

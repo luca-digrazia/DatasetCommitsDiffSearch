@@ -13,12 +13,13 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 
-/** Implementation for the java_plugin rule. */
+/**
+ * Implementation for the java_plugin rule.
+ */
 public class JavaPlugin implements RuleConfiguredTargetFactory {
 
   private final JavaSemantics semantics;
@@ -29,8 +30,7 @@ public class JavaPlugin implements RuleConfiguredTargetFactory {
 
   @Override
   public final ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
-    JavaCommon.checkRuleLoadedThroughMacro(ruleContext);
+      throws InterruptedException, RuleErrorException {
     return new JavaLibrary(semantics)
         .init(
             ruleContext,

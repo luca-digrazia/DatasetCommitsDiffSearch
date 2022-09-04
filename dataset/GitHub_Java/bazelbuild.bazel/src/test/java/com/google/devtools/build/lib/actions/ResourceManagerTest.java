@@ -19,7 +19,6 @@ import static org.junit.Assert.fail;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.testutil.TestThread;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import java.util.concurrent.CyclicBarrier;
@@ -484,11 +483,6 @@ public class ResourceManagerTest {
     }
 
     @Override
-    public boolean isShareable() {
-      throw new IllegalStateException();
-    }
-
-    @Override
     public String prettyPrint() {
       throw new IllegalStateException();
     }
@@ -555,7 +549,7 @@ public class ResourceManagerTest {
   }
 
     @Override
-    public String getKey(ActionKeyContext actionKeyContext) {
+    public String getKey() {
       throw new IllegalStateException();
     }
 
@@ -563,11 +557,6 @@ public class ResourceManagerTest {
     @Nullable
     public String describeKey() {
       throw new IllegalStateException();
-    }
-
-    @Override
-    public String describe() {
-      return "ResourceOwnerStubAction";
     }
 
     @Override
@@ -582,12 +571,6 @@ public class ResourceManagerTest {
 
     @Override
     public MiddlemanType getActionType() {
-      throw new IllegalStateException();
-    }
-
-    @Nullable
-    @Override
-    public PlatformInfo getExecutionPlatform() {
       throw new IllegalStateException();
     }
   }
