@@ -130,6 +130,8 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean experimentalPlatformsApi();
 
+  public abstract boolean experimentalUseToolchainResolutionForJavaRules();
+
   public abstract boolean experimentalStarlarkConfigTransitions();
 
   public abstract boolean incompatibleBzlDisallowLoadAfterStatement();
@@ -211,6 +213,7 @@ public abstract class SkylarkSemantics {
           .experimentalRemapMainRepo(false)
           .experimentalPlatformsApi(false)
           .experimentalStarlarkConfigTransitions(false)
+          .experimentalUseToolchainResolutionForJavaRules(false)
           .incompatibleBzlDisallowLoadAfterStatement(false)
           .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(false)
@@ -261,6 +264,8 @@ public abstract class SkylarkSemantics {
     public abstract Builder experimentalPlatformsApi(boolean value);
 
     public abstract Builder experimentalStarlarkConfigTransitions(boolean value);
+
+    public abstract Builder experimentalUseToolchainResolutionForJavaRules(boolean value);
 
     public abstract Builder incompatibleBzlDisallowLoadAfterStatement(boolean value);
 
