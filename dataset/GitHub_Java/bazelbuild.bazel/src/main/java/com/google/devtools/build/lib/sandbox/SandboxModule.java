@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsBase;
@@ -144,7 +145,7 @@ public final class SandboxModule extends BlazeModule {
       sandboxfsProcess = null;
     }
     if (sandboxBase.exists()) {
-      sandboxBase.deleteTree();
+      FileSystemUtils.deleteTree(sandboxBase);
     }
 
     sandboxBase.createDirectoryAndParents();
@@ -367,7 +368,7 @@ public final class SandboxModule extends BlazeModule {
 
     if (shouldCleanupSandboxBase) {
       try {
-        sandboxBase.deleteTree();
+        FileSystemUtils.deleteTree(sandboxBase);
       } catch (IOException e) {
         env.getReporter().handle(Event.warn("Failed to delete sandbox base " + sandboxBase
             + ": " + e));

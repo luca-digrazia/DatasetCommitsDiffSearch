@@ -21,16 +21,15 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.io.ByteStreams;
-import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
+import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.Spawns;
-import com.google.devtools.build.lib.exec.TreeDeleter;
+import com.google.devtools.build.lib.exec.apple.XcodeLocalEnvProvider;
 import com.google.devtools.build.lib.exec.local.LocalEnvProvider;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -38,6 +37,7 @@ import com.google.devtools.build.lib.shell.CommandResult;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
@@ -113,7 +113,6 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   private final Duration timeoutKillDelay;
   private final @Nullable SandboxfsProcess sandboxfsProcess;
   private final boolean sandboxfsMapSymlinkTargets;
-  private final TreeDeleter treeDeleter;
 
   /**
    * The set of directories that always should be writable, independent of the Spawn itself.
@@ -139,20 +138,18 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
       Path sandboxBase,
       Duration timeoutKillDelay,
       @Nullable SandboxfsProcess sandboxfsProcess,
-      boolean sandboxfsMapSymlinkTargets,
-      TreeDeleter treeDeleter)
+      boolean sandboxfsMapSymlinkTargets)
       throws IOException {
     super(cmdEnv);
     this.execRoot = cmdEnv.getExecRoot();
     this.allowNetwork = SandboxHelpers.shouldAllowNetwork(cmdEnv.getOptions());
     this.alwaysWritableDirs = getAlwaysWritableDirs(cmdEnv.getRuntime().getFileSystem());
     this.processWrapper = ProcessWrapperUtil.getProcessWrapper(cmdEnv);
-    this.localEnvProvider = LocalEnvProvider.forCurrentOs(cmdEnv.getClientEnv());
+    this.localEnvProvider = new XcodeLocalEnvProvider(cmdEnv.getClientEnv());
     this.sandboxBase = sandboxBase;
     this.timeoutKillDelay = timeoutKillDelay;
     this.sandboxfsProcess = sandboxfsProcess;
     this.sandboxfsMapSymlinkTargets = sandboxfsMapSymlinkTargets;
-    this.treeDeleter = treeDeleter;
   }
 
   private static void addPathToSetIfExists(FileSystem fs, Set<Path> paths, String path)
@@ -213,8 +210,8 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
   }
 
   @Override
-  protected SandboxedSpawn prepareSpawn(Spawn spawn, SpawnExecutionContext context)
-      throws IOException, ExecException {
+  protected SpawnResult actuallyExec(Spawn spawn, SpawnExecutionContext context)
+      throws IOException, InterruptedException {
     // Each invocation of "exec" gets its own sandbox base.
     // Note that the value returned by context.getId() is only unique inside one given SpawnRunner,
     // so we have to prefix our name to turn it into a globally unique value.
@@ -267,59 +264,59 @@ final class DarwinSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
         allowNetwork
             || Spawns.requiresNetwork(spawn, getSandboxOptions().defaultSandboxAllowNetwork);
 
-    SandboxInputs inputs =
+    Map<PathFragment, Path> inputs =
         SandboxHelpers.processInputFiles(
             spawn,
             context,
             execRoot,
             getSandboxOptions().symlinkedSandboxExpandsTreeArtifactsInRunfilesTree);
 
+    SandboxedSpawn sandbox;
     if (sandboxfsProcess != null) {
-      return new SandboxfsSandboxedSpawn(
-          sandboxfsProcess,
-          sandboxPath,
-          commandLine,
-          environment,
-          inputs,
-          outputs,
-          ImmutableSet.of(),
-          sandboxfsMapSymlinkTargets,
-          treeDeleter,
-          statisticsPath) {
-        @Override
-        public void createFileSystem() throws IOException {
-          super.createFileSystem();
-          writeConfig(
-              sandboxConfigPath,
-              writableDirs,
-              getInaccessiblePaths(),
-              allowNetworkForThisSpawn,
-              statisticsPath);
-        }
-      };
+      sandbox =
+          new SandboxfsSandboxedSpawn(
+              sandboxfsProcess,
+              sandboxPath,
+              commandLine,
+              environment,
+              inputs,
+              outputs,
+              ImmutableSet.of(),
+              sandboxfsMapSymlinkTargets) {
+            @Override
+            public void createFileSystem() throws IOException {
+              super.createFileSystem();
+              writeConfig(
+                  sandboxConfigPath,
+                  writableDirs,
+                  getInaccessiblePaths(),
+                  allowNetworkForThisSpawn,
+                  statisticsPath);
+            }
+          };
     } else {
-      return new SymlinkedSandboxedSpawn(
-          sandboxPath,
-          sandboxExecRoot,
-          commandLine,
-          environment,
-          inputs,
-          outputs,
-          writableDirs,
-          treeDeleter,
-          statisticsPath) {
-        @Override
-        public void createFileSystem() throws IOException {
-          super.createFileSystem();
-          writeConfig(
-              sandboxConfigPath,
-              writableDirs,
-              getInaccessiblePaths(),
-              allowNetworkForThisSpawn,
-              statisticsPath);
-        }
-      };
+      sandbox =
+          new SymlinkedSandboxedSpawn(
+              sandboxPath,
+              sandboxExecRoot,
+              commandLine,
+              environment,
+              inputs,
+              outputs,
+              writableDirs) {
+            @Override
+            public void createFileSystem() throws IOException {
+              super.createFileSystem();
+              writeConfig(
+                  sandboxConfigPath,
+                  writableDirs,
+                  getInaccessiblePaths(),
+                  allowNetworkForThisSpawn,
+                  statisticsPath);
+            }
+          };
     }
+    return runSpawn(spawn, sandbox, context, execRoot, timeout, statisticsPath);
   }
 
   private void writeConfig(
