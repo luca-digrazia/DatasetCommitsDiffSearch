@@ -1168,7 +1168,7 @@ public class RuleClass {
       Attribute... attributes) {
     this.name = name;
     this.isSkylark = isSkylark;
-    this.targetKind = name + Rule.targetKindSuffix();
+    this.targetKind = name + " rule";
     this.skylarkExecutable = skylarkExecutable;
     this.skylarkTestable = skylarkTestable;
     this.documented = documented;

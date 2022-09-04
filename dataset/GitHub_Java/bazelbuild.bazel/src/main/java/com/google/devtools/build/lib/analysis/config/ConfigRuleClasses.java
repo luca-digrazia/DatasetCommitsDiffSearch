@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -15,15 +15,19 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
+import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
 
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
-import com.google.devtools.build.lib.analysis.BlazeRule;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
+import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.syntax.Type;
+import java.util.Set;
 
 /**
  * Definitions for rule classes that specify or manipulate configuration settings.
@@ -40,9 +44,6 @@ public class ConfigRuleClasses {
   /**
    * Common settings for all configurability rules.
    */
-  @BlazeRule(name = "$config_base_rule",
-               type = RuleClass.Builder.RuleClassType.ABSTRACT,
-               ancestors = { BaseRuleClasses.BaseRule.class })
   public static final class ConfigBaseRule implements RuleDefinition {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
@@ -53,6 +54,15 @@ public class ConfigRuleClasses {
               .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON))
           .exemptFromConstraintChecking(
               "these rules don't include content that gets built into their dependers")
+          .build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name("$config_base_rule")
+          .type(RuleClass.Builder.RuleClassType.ABSTRACT)
+          .ancestors(BaseRuleClasses.BaseRule.class)
           .build();
     }
   }
@@ -85,15 +95,26 @@ public class ConfigRuleClasses {
    * themselves inputs to that map. So Bazel has special logic to read and properly apply
    * config_setting instances. See {@link ConfiguredTargetFunction#getConfigConditions} for details.
    */
-  @BlazeRule(name = "config_setting",
-               type = RuleClass.Builder.RuleClassType.NORMAL,
-               ancestors = { ConfigBaseRule.class },
-               factoryClass = ConfigSetting.class)
   public static final class ConfigSettingRule implements RuleDefinition {
+    /**
+     * The name of this rule.
+     */
+    public static final String RULE_NAME = "config_setting";
+
     /**
      * The name of the attribute that declares flag bindings.
      */
     public static final String SETTINGS_ATTRIBUTE = "values";
+
+    private static final Function<Rule, Set<String>> CONFIG_SETTING_OPTION_REFERENCE =
+        new Function<Rule, Set<String>>() {
+          @Override
+          public Set<String> apply(Rule rule) {
+            return NonconfigurableAttributeMapper.of(rule)
+                .get(SETTINGS_ATTRIBUTE, Type.STRING_DICT)
+                .keySet();
+          }
+        };
 
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
@@ -132,23 +153,32 @@ public class ConfigRuleClasses {
           <p>This attribute cannot be empty.
           </p>
           <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-          .add(attr(SETTINGS_ATTRIBUTE, STRING_DICT).mandatory()
-              .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON))
+          .add(
+              attr(SETTINGS_ATTRIBUTE, STRING_DICT)
+                  .mandatory()
+                  .nonconfigurable(NONCONFIGURABLE_ATTRIBUTE_REASON))
+          .setIsConfigMatcherForConfigSettingOnly()
+          .setOptionReferenceFunctionForConfigSettingOnly(CONFIG_SETTING_OPTION_REFERENCE)
+          .build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name(RULE_NAME)
+          .type(RuleClass.Builder.RuleClassType.NORMAL)
+          .ancestors(ConfigBaseRule.class)
+          .factoryClass(ConfigSetting.class)
           .build();
     }
   }
-
 /*<!-- #BLAZE_RULE (NAME = config_setting, TYPE = OTHER, FAMILY = General)[GENERIC_RULE] -->
-
-${ATTRIBUTE_SIGNATURE}
 
 <p>
   Matches an expected configuration state (expressed as Blaze flags) for the purpose of triggering
-  configurable attributes. See <a href="#select">select</a> for how to consume this rule and
-  <a href="#configurable-attributes">Configurable attributes</a> for an overview of
-  the general feature.
-
-${ATTRIBUTE_DEFINITION}
+  configurable attributes. See <a href="${link select}">select</a> for how to consume this
+  rule and <a href="${link common-definitions#configurable-attributes}">
+  Configurable attributes</a> for an overview of the general feature.
 
 <h4 id="config_setting_examples">Examples</h4>
 
@@ -165,7 +195,7 @@ config_setting(
 </pre>
 
 <p>The following matches any Blaze invocation that builds for ARM and applies a custom define
-   (e.g. <code>blaze build --cpu=armeabi --define FOO=bar ...</code>), , when applied to a target
+   (e.g. <code>blaze build --cpu=armeabi --define FOO=bar ...</code>), when applied to a target
    configuration rule:
 </p>
 
@@ -181,8 +211,8 @@ config_setting(
 
 <h4 id="config_setting_notes">Notes</h4>
 
-<p>See <a href="#select">select</a> for policies on what happens depending on how many rules match
-   an invocation.
+<p>See <a href="${link select}">select</a> for policies on what happens depending on how
+   many rules match an invocation.
 </p>
 
 <p>For flags that support shorthand forms (e.g. <code>--compilation_mode</code> vs.
@@ -193,7 +223,8 @@ config_setting(
 <p>The currently endorsed method for creating custom conditions that can't be expressed through
   dedicated build flags is through the --define flag. Use this flag with caution: it's not ideal
   and only endorsed for lack of a currently better workaround. See the
-  <a href="#configurable-attributes">Configurable attributes</a> section for more discussion.
+  <a href="${link common-definitions#configurable-attributes}">
+  Configurable attributes</a> section for more discussion.
 </p>
 
 <p>Try to consolidate <code>config_setting</code> definitions as much as possible. In other words,

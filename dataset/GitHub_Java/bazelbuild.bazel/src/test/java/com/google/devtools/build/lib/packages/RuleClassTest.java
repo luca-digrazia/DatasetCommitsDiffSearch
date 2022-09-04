@@ -437,12 +437,10 @@ public class RuleClassTest extends PackageLoadingTestCase {
             ImmutableSet.<Class<?>>of(),
             MissingFragmentPolicy.FAIL_ANALYSIS,
             true,
-            attr("name", STRING).build(),
             attr("outs", OUTPUT_LIST).build());
 
     Map<String, Object> attributeValues = new HashMap<>();
     attributeValues.put("outs", Collections.singletonList("explicit_out"));
-    attributeValues.put("name", "myrule");
 
     Rule rule = createRule(ruleClassC, "myrule", attributeValues, testRuleLocation);
 
@@ -679,12 +677,10 @@ public class RuleClassTest extends PackageLoadingTestCase {
             ImmutableSet.<Class<?>>of(),
             MissingFragmentPolicy.FAIL_ANALYSIS,
             true,
-            attr("name", STRING).build(),
             attr("outs", OUTPUT_LIST).build());
 
     Map<String, Object> attributeValues = new HashMap<>();
     attributeValues.put("outs", ImmutableList.of("third", "fourth"));
-    attributeValues.put("name", "myrule");
 
     Rule rule = createRule(ruleClassC, "myrule", attributeValues, testRuleLocation);
 

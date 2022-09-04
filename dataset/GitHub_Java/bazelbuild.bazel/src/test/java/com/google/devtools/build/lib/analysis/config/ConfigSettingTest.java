@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,16 +13,113 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.config;
 
+import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.syntax.Label;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
+import com.google.devtools.build.lib.rules.java.Jvm;
+import com.google.devtools.build.lib.rules.python.PythonConfiguration;
+import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
+import com.google.devtools.common.options.Option;
+import java.util.Map;
+
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.JUnit4;
 
 /**
  * Tests for {@link ConfigSetting}.
  */
+@RunWith(JUnit4.class)
 public class ConfigSettingTest extends BuildViewTestCase {
 
+  /**
+   * Test option that has its null default overridden by its fragment.
+   */
+  public static class LateBoundTestOptions extends FragmentOptions {
+    public LateBoundTestOptions() {}
+
+    @Option(name = "opt_with_default", defaultValue = "null")
+    public String optwithDefault;
+  }
+
+  private static class LateBoundTestOptionsFragment extends BuildConfiguration.Fragment {
+    @Override
+    public Map<String, Object> lateBoundOptionDefaults() {
+      return ImmutableMap.<String, Object>of("opt_with_default", "overridden");
+    }
+  }
+
+  private static class LateBoundTestOptionsLoader implements ConfigurationFragmentFactory {
+    @Override
+    public BuildConfiguration.Fragment create(ConfigurationEnvironment env,
+        BuildOptions buildOptions) throws InvalidConfigurationException {
+      return new LateBoundTestOptionsFragment();
+    }
+
+    @Override
+    public Class<? extends BuildConfiguration.Fragment> creates() {
+      return LateBoundTestOptionsFragment.class;
+    }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.<Class<? extends FragmentOptions>>of(LateBoundTestOptions.class);
+    }
+  }
+
+  /**
+   * Test option which is private.
+   */
+  public static class InternalTestOptions extends FragmentOptions {
+    public InternalTestOptions() {}
+
+    @Option(name = "internal_option", defaultValue = "super secret", category = "internal")
+    public String optwithDefault;
+  }
+
+  private static class InternalTestOptionsFragment extends BuildConfiguration.Fragment {}
+
+  private static class InternalTestOptionsLoader implements ConfigurationFragmentFactory {
+    @Override
+    public BuildConfiguration.Fragment create(ConfigurationEnvironment env,
+        BuildOptions buildOptions) throws InvalidConfigurationException {
+      return new InternalTestOptionsFragment();
+    }
+
+    @Override
+    public Class<? extends BuildConfiguration.Fragment> creates() {
+      return InternalTestOptionsFragment.class;
+    }
+
+    @Override
+    public ImmutableSet<Class<? extends FragmentOptions>> requiredOptions() {
+      return ImmutableSet.<Class<? extends FragmentOptions>>of(InternalTestOptions.class);
+    }
+  }
+
+  @Override
+  protected ConfiguredRuleClassProvider getRuleClassProvider() {
+    ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
+    TestRuleClassProvider.addStandardRules(builder);
+    builder.addConfigurationOptions(LateBoundTestOptions.class);
+    builder.addConfigurationFragment(new LateBoundTestOptionsLoader());
+    builder.addConfigurationOptions(InternalTestOptions.class);
+    builder.addConfigurationFragment(new InternalTestOptionsLoader());
+    return builder.build();
+  }
+
   private void writeSimpleExample() throws Exception {
-    scratchFile("pkg/BUILD",
+    scratch.file("pkg/BUILD",
         "config_setting(",
         "    name = 'foo',",
         "    values = {",
@@ -39,7 +136,8 @@ public class ConfigSettingTest extends BuildViewTestCase {
    * Tests that a config_setting only matches build configurations where *all* of
    * its flag specifications match.
    */
-  public void testMatchingCriteria() throws Exception {
+  @Test
+  public void matchingCriteria() throws Exception {
     writeSimpleExample();
 
     // First flag mismatches:
@@ -62,7 +160,8 @@ public class ConfigSettingTest extends BuildViewTestCase {
   /**
    * Tests that {@link ConfigMatchingProvider#label} is correct.
    */
-  public void testLabel() throws Exception {
+  @Test
+  public void labelGetter() throws Exception {
     writeSimpleExample();
     assertEquals(
         Label.parseAbsolute("//pkg:foo"),
@@ -72,7 +171,8 @@ public class ConfigSettingTest extends BuildViewTestCase {
   /**
    * Tests that rule analysis fails on unknown options.
    */
-  public void testUnknownOption() throws Exception {
+  @Test
+  public void unknownOption() throws Exception {
     checkError("foo", "badoption",
         "unknown option: 'not_an_option'",
         "config_setting(",
@@ -81,9 +181,22 @@ public class ConfigSettingTest extends BuildViewTestCase {
   }
 
   /**
+   * Tests that rule analysis fails on internal options.
+   */
+  @Test
+  public void internalOption() throws Exception {
+    checkError("foo", "badoption",
+        "unknown option: 'internal_option'",
+        "config_setting(",
+        "    name = 'badoption',",
+        "    values = {'internal_option': 'bar'})");
+  }
+
+  /**
    * Tests that rule analysis fails on invalid option values.
    */
-  public void testInvalidOptionValue() throws Exception {
+  @Test
+  public void invalidOptionValue() throws Exception {
     checkError("foo", "badvalue",
         "Not a valid compilation mode: 'baz'",
         "config_setting(",
@@ -95,7 +208,8 @@ public class ConfigSettingTest extends BuildViewTestCase {
    * Tests that when the first option is valid but the config_setting doesn't match,
    * remaining options are still validity-checked.
    */
-  public void testInvalidOptionFartherDown() throws Exception {
+  @Test
+  public void invalidOptionFartherDown() throws Exception {
     checkError("foo", "badoption",
         "unknown option: 'not_an_option'",
         "config_setting(",
@@ -109,7 +223,8 @@ public class ConfigSettingTest extends BuildViewTestCase {
   /**
    * Tests that *some* settings must be specified.
    */
-  public void testEmptySettings() throws Exception {
+  @Test
+  public void emptySettings() throws Exception {
     checkError("foo", "empty",
         "//foo:empty: no settings specified",
         "config_setting(",
@@ -122,22 +237,22 @@ public class ConfigSettingTest extends BuildViewTestCase {
    * that take alternative defaults from what's specified in {@link
    * com.google.devtools.common.options.Option#defaultValue}).
    */
-  public void testLateBoundOptionDefaults() throws Exception {
-    scratchFile("test/BUILD",
+  @Test
+  public void lateBoundOptionDefaults() throws Exception {
+    scratch.file("test/BUILD",
         "config_setting(",
         "    name = 'match',",
-        "    values = {",
-        "        'cpu': 'k8',",
-        "    })");
-    useConfiguration("--cpu=k8");
+        "    values = { 'opt_with_default': 'overridden' }",
+        ")");
     assertTrue(getConfigMatchingProvider("//test:match").matches());
   }
 
   /**
    * Tests matching on multi-value attributes with key=value entries (e.g. --define).
    */
-  public void testMultiValueDict() throws Exception {
-    scratchFile("test/BUILD",
+  @Test
+  public void multiValueDict() throws Exception {
+    scratch.file("test/BUILD",
         "config_setting(",
         "    name = 'match',",
         "    values = {",
@@ -161,8 +276,9 @@ public class ConfigSettingTest extends BuildViewTestCase {
   /**
    * Tests matching on multi-value attributes with primitive values.
    */
-  public void testMultiValueList() throws Exception {
-    scratchFile("test/BUILD",
+  @Test
+  public void multiValueList() throws Exception {
+    scratch.file("test/BUILD",
         "config_setting(",
         "    name = 'match',",
         "    values = {",
@@ -179,5 +295,40 @@ public class ConfigSettingTest extends BuildViewTestCase {
     assertTrue(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--copt", "-Dbar", "--copt", "-Dfoo");
     assertTrue(getConfigMatchingProvider("//test:match").matches());
+  }
+
+  @Test
+  public void selectForDefaultCrosstoolTop() throws Exception {
+    String crosstoolTop = TestConstants.TOOLS_REPOSITORY + "//tools/cpp:toolchain";
+    scratchConfiguredTarget("a", "a",
+        "config_setting(name='cs', values={'crosstool_top': '" + crosstoolTop + "'})",
+        "sh_library(name='a', srcs=['a.sh'], deps=select({':cs': []}))");
+  }
+
+  @Test
+  public void selectForDefaultGrteTop() throws Exception {
+    scratchConfiguredTarget("a", "a",
+        "config_setting(name='cs', values={'grte_top': 'default'})",
+        "sh_library(name='a', srcs=['a.sh'], deps=select({':cs': []}))");
+  }
+
+  @Test
+  public void requiredConfigFragmentMatcher() throws Exception {
+    scratch.file("test/BUILD",
+        "config_setting(",
+        "    name = 'match',",
+        "    values = {",
+        "        'copt': '-Dfoo',",
+        "        'javacopt': '-Dbar'",
+        "    })");
+
+    Map<String, Class<? extends BuildConfiguration.Fragment>> map = ImmutableMap.of(
+        "copt", CppConfiguration.class,
+        "unused", PythonConfiguration.class,
+        "javacopt", Jvm.class
+    );
+    Rule target = (Rule) getTarget("//test:match");
+    assertThat(target.getRuleClassObject().getOptionReferenceFunction().apply(target))
+        .containsExactly("copt", "javacopt");
   }
 }
