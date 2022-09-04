@@ -33,6 +33,7 @@ public class KrigingInterpolation1D implements Interpolation {
 
     private double[] x;
     private double[] yvi;
+    private ThreadLocal<double[]> vstar;
     private double alpha;
     private double beta;
 
@@ -62,6 +63,11 @@ public class KrigingInterpolation1D implements Interpolation {
 
         int n = x.length;
         yvi = new double[n + 1];
+        vstar = new ThreadLocal<double[]>() {
+            protected synchronized double[] initialValue() {
+                return new double[n + 1];
+            }
+        };
 
         Matrix v = new Matrix(n + 1, n + 1);
         v.uplo(UPLO.LOWER);
@@ -87,9 +93,15 @@ public class KrigingInterpolation1D implements Interpolation {
     @Override
     public double interpolate(double x) {
         int n = this.x.length;
-        double y = yvi[n];
+        double[] vstar = this.vstar.get();
         for (int i = 0; i < n; i++) {
-            y += yvi[i] * variogram(Math.abs(x - this.x[i]));
+            vstar[i] = variogram(Math.abs(x - this.x[i]));
+        }
+        vstar[n] = 1.0;
+        
+        double y = 0.0;
+        for (int i = 0; i <= n; i++) {
+            y += yvi[i] * vstar[i];
         }
         return y;
     }

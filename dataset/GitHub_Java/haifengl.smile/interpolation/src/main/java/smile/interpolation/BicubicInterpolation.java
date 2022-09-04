@@ -1,27 +1,31 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
 
 package smile.interpolation;
 
 /**
- * Bicubic interpolation in a two-dimensional regular grid. Bicubic interpolation
- * is an extension of cubic interpolation for interpolating data points on a
- * two dimensional regular grid. The interpolated surface is smoother than
- * corresponding surfaces obtained by bilinear interpolation or nearest-neighbor
- * interpolation.
+ * Bicubic interpolation in a two-dimensional regular grid. Bicubic
+ * spline interpolation guarantees the continuity of the first derivatives,
+ * as well as the continuity of a cross-derivative.
+ * <p>
+ * Note that CubicSplineInterpolation2D guarantees the continuity of the
+ * first and second function derivatives but bicubic spline guarantees
+ * continuity of only gradient and cross-derivative. Second derivatives
+ * could be discontinuous.
  * <p>
  * In image processing, bicubic interpolation is often chosen over bilinear
  * interpolation or nearest neighbor in image resampling, when speed is not
@@ -57,16 +61,24 @@ public class BicubicInterpolation implements Interpolation2D {
     private double[] x2;
     private LinearInterpolation x1terp, x2terp;
 
-    private double[] y;
-    private double[] y1;
-    private double[] y2;
-    private double[] y12;
+    private double[] y = new double[4];
+    private double[] y1 = new double[4];
+    private double[] y2 = new double[4];
+    private double[] y12 = new double[4];
 
 
     /**
      * Constructor. The value in x1 and x2 must be monotonically increasing.
      */
     public BicubicInterpolation(double[] x1, double[] x2, double[][] y) {
+        if (x1.length != y.length) {
+            throw new IllegalArgumentException("x1.length != y.length");
+        }
+
+        if (x2.length != y[0].length) {
+            throw new IllegalArgumentException("x2.length != y[0].length");
+        }
+
         m = x1.length;
         n = x2.length;
         x1terp = new LinearInterpolation(x1, x1);
@@ -75,11 +87,6 @@ public class BicubicInterpolation implements Interpolation2D {
         this.x1 = x1;
         this.x2 = x2;
         this.yv = y;
-
-        this.y = new double[4];
-        y1 = new double[4];
-        y2 = new double[4];
-        y12 = new double[4];
     }
 
     /**
@@ -104,17 +111,15 @@ public class BicubicInterpolation implements Interpolation2D {
             x[i + 12] = y12[i] * d1d2;
         }
 
-        double xx;
         for (int i = 0; i < 16; i++) {
-            xx = 0.0;
+            double xx = 0.0;
             for (int k = 0; k < 16; k++) {
                 xx += wt[i][k] * x[k];
             }
             cl[i] = xx;
         }
 
-        int l = 0;
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0, l = 0; i < 4; i++) {
             for (int j = 0; j < 4; j++) {
                 c[i][j] = cl[l++];
             }
@@ -137,11 +142,12 @@ public class BicubicInterpolation implements Interpolation2D {
             throw new IllegalArgumentException("Nearby control points take same value: " + x2u);
         }
 
-        double t, u, d1 = x1u - x1l, d2 = x2u - x2l;
+        double d1 = x1u - x1l;
+        double d2 = x2u - x2l;
         double[][] c = bcucof(y, y1, y2, y12, d1, d2);
 
-        t = (x1p - x1l) / d1;
-        u = (x2p - x2l) / d2;
+        double t = (x1p - x1l) / d1;
+        double u = (x2p - x2l) / d2;
 
         double ansy = 0.0;
 
@@ -225,5 +231,10 @@ public class BicubicInterpolation implements Interpolation2D {
         }
 
         return bcuint(y, y1, y2, y12, x1l, x1u, x2l, x2u, x1p, x2p);
+    }
+
+    @Override
+    public String toString() {
+        return "BiCubic Interpolation";
     }
 }

@@ -1,31 +1,31 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- *******************************************************************************/
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ ******************************************************************************/
+
 package smile.interpolation;
 
-import smile.math.Math;
-
 /**
- * Shepard interplation is a special case of normalized radial basis function
+ * Shepard interpolation is a special case of normalized radial basis function
  * interpolation if the function &phi;(r) goes to infinity as r &rarr; 0, and is
  * finite for r &gt; 0. In this case, the weights w<sub>i</sub> are just equal to
  * the respective function values y<sub>i</sub>. So we need not solve linear
  * equations and thus it works for very large N.
  * <p>
- * An example of such &phi; is &phi;(r) = r<sup>-p</sup> with (typically)
- * 1 &lt; p &le; 3.
+ * An example of such &phi; is <code>&phi;(r) = r<sup>-p</sup></code> with
+ * (typically) <code>1 &lt; p &le; 3</code>.
  * <p>
  * Shepard interpolation is rarely as accurate as the well-tuned application of
  * other radial basis functions. However, it is simple, fast, and often jut the
@@ -55,6 +55,14 @@ public class ShepardInterpolation1D implements Interpolation {
      * @param p the parameter in the radial basis function &phi;(r) = r<sup>-p</sup>.
      */
     public ShepardInterpolation1D(double[] x, double[] y, double p) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException("x.length != y.length");
+        }
+
+        if (p <= 0.0) {
+            throw new IllegalArgumentException("Invalid p = " + p);
+        }
+
         this.x = x;
         this.y = y;
         this.p = -p;
@@ -74,5 +82,10 @@ public class ShepardInterpolation1D implements Interpolation {
         }
 
         return sum / weight;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("Shepard Interpolation(p = %.4f)", -p);
     }
 }
