@@ -386,7 +386,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
 
   @Option(
       name = "incompatible_disallow_rule_execution_platform_constraints_allowed",
-      defaultValue = "True",
+      defaultValue = "False",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -397,6 +397,18 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
           "If set to true, disallow the use of the execution_platform_constraints_allowed "
               + "attribute on rule().")
   public boolean incompatibleDisallowRuleExecutionPlatformConstraintsAllowed;
+
+  @Option(
+      name = "incompatible_disallow_split_empty_separator",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help = "If set to true, `string.split` will fail if `sep` is the empty string.")
+  public boolean incompatibleDisallowSplitEmptySeparator;
 
   @Option(
       name = "incompatible_string_join_requires_strings",
@@ -753,6 +765,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleDoNotSplitLinkingCmdline(incompatibleDoNotSplitLinkingCmdline)
             .incompatibleDepsetForLibrariesToLinkGetter(incompatibleDepsetForLibrariesToLinkGetter)
             .incompatibleRestrictStringEscapes(incompatibleRestrictStringEscapes)
+            .incompatibleDisallowSplitEmptySeparator(incompatibleDisallowSplitEmptySeparator)
             .incompatibleDisallowDictLookupUnhashableKeys(
                 incompatibleDisallowDictLookupUnhashableKeys)
             .incompatibleDisablePartitionDefaultParameter(

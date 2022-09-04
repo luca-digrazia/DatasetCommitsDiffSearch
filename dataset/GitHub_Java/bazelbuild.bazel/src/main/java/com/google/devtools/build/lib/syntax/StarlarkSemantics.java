@@ -210,6 +210,8 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean incompatibleRestrictStringEscapes();
 
+  public abstract boolean incompatibleDisallowSplitEmptySeparator();
+
   public abstract boolean incompatibleDisallowDictLookupUnhashableKeys();
 
   public abstract boolean incompatibleDisablePartitionDefaultParameter();
@@ -274,7 +276,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDisallowLegacyJavaProvider(false)
           .incompatibleDisallowLegacyJavaInfo(false)
           .incompatibleDisallowOldStyleArgsAdd(true)
-          .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(true)
+          .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(false)
           .incompatibleDisallowStructProviderSyntax(false)
           .incompatibleDisallowUnverifiedHttpDownloads(true)
           .incompatibleExpandDirectories(true)
@@ -296,6 +298,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDoNotSplitLinkingCmdline(true)
           .incompatibleDepsetForLibrariesToLinkGetter(true)
           .incompatibleRestrictStringEscapes(false)
+          .incompatibleDisallowSplitEmptySeparator(false)
           .incompatibleDisallowDictLookupUnhashableKeys(false)
           .incompatibleDisablePartitionDefaultParameter(false)
           .incompatibleAllowTagsPropagation(false)
@@ -396,6 +399,8 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDepsetForLibrariesToLinkGetter(boolean value);
 
     public abstract Builder incompatibleRestrictStringEscapes(boolean value);
+
+    public abstract Builder incompatibleDisallowSplitEmptySeparator(boolean value);
 
     public abstract Builder incompatibleDisallowDictLookupUnhashableKeys(boolean value);
 
