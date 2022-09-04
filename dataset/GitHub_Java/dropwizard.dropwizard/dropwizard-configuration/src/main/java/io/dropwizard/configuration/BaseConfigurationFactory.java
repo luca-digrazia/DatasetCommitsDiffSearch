@@ -1,5 +1,18 @@
 package io.dropwizard.configuration;
 
+import static java.util.Objects.requireNonNull;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
+import javax.validation.ConstraintViolation;
+import javax.validation.Validator;
+
 import com.fasterxml.jackson.core.JsonFactory;
 import com.fasterxml.jackson.core.JsonParseException;
 import com.fasterxml.jackson.core.JsonParser;
@@ -12,21 +25,8 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 import com.fasterxml.jackson.databind.node.TreeTraversingParser;
-
-import javax.annotation.Nullable;
-import javax.validation.ConstraintViolation;
-import javax.validation.Validator;
-import java.io.IOException;
-import java.io.InputStream;
-import java.lang.reflect.InvocationTargetException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import static java.util.Objects.requireNonNull;
+import com.google.common.base.Joiner;
+import com.google.common.base.Splitter;
 
 /**
  * A generic factory class for loading configuration files, binding them to configuration objects, and
@@ -37,17 +37,14 @@ import static java.util.Objects.requireNonNull;
 public abstract class BaseConfigurationFactory<T> implements ConfigurationFactory<T> {
 
     private static final Pattern ESCAPED_COMMA_PATTERN = Pattern.compile("\\\\,");
-    private static final Pattern ESCAPED_COMMA_SPLIT_PATTERN = Pattern.compile("(?<!\\\\),");
+    private static final Splitter ESCAPED_COMMA_SPLITTER = Splitter.on(Pattern.compile("(?<!\\\\),")).trimResults();
     private static final Pattern ESCAPED_DOT_PATTERN = Pattern.compile("\\\\\\.");
-    private static final Pattern ESCAPED_DOT_SPLIT_PATTERN = Pattern.compile("(?<!\\\\)\\.");
+    private static final Splitter ESCAPED_DOT_SPLITTER = Splitter.on(Pattern.compile("(?<!\\\\)\\.")).trimResults();
 
     private final Class<T> klass;
     private final String propertyPrefix;
     protected final ObjectMapper mapper;
-
-    @Nullable
     private final Validator validator;
-
     private final String formatName;
     private final JsonFactory parserFactory;
 
@@ -63,14 +60,21 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
     public BaseConfigurationFactory(JsonFactory parserFactory,
                                     String formatName,
                                     Class<T> klass,
-                                    @Nullable Validator validator,
+                                    Validator validator,
                                     ObjectMapper objectMapper,
                                     String propertyPrefix) {
         this.klass = klass;
         this.formatName = formatName;
-        this.propertyPrefix = propertyPrefix.endsWith(".") ? propertyPrefix : propertyPrefix + '.';
-        this.mapper = objectMapper;
-        this.parserFactory = parserFactory;
+        this.propertyPrefix = (propertyPrefix == null || propertyPrefix.endsWith("."))
+            ? propertyPrefix : (propertyPrefix + '.');
+        // Sub-classes may choose to omit data-binding; if so, null ObjectMapper passed:
+        if (objectMapper == null) { // sub-class has no need for mapper
+            this.mapper = null;
+            this.parserFactory = null;
+        } else {
+            this.mapper = objectMapper;
+            this.parserFactory = parserFactory;
+        }
         this.validator = validator;
     }
 
@@ -103,12 +107,10 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
     @Override
     public T build() throws IOException, ConfigurationException {
         try {
-            final T instance = klass.getDeclaredConstructor().newInstance();
-            final JsonNode node = mapper.valueToTree(instance);
+            final JsonNode node = mapper.valueToTree(klass.newInstance());
             return build(node, "default configuration");
-        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | SecurityException
-                | NoSuchMethodException | InvocationTargetException e) {
-            throw new IllegalArgumentException("Unable to create an instance " +
+        } catch (InstantiationException | IllegalAccessException | IllegalArgumentException | SecurityException e) {
+            throw new IllegalArgumentException("Unable create an instance " +
                 "of the configuration class: '" + klass.getCanonicalName() + "'", e);
         }
     }
@@ -158,10 +160,9 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
 
     protected void addOverride(JsonNode root, String name, String value) {
         JsonNode node = root;
-        final List<String> parts = Arrays.stream(ESCAPED_DOT_SPLIT_PATTERN.split(name))
-                .map(String::trim)
-                .map(key -> ESCAPED_DOT_PATTERN.matcher(key).replaceAll("."))
-                .collect(Collectors.toList());
+        final List<String> parts = ESCAPED_DOT_SPLITTER.splitToList(name).stream()
+            .map(key -> ESCAPED_DOT_PATTERN.matcher(key).replaceAll("."))
+            .collect(Collectors.toList());
         for (int i = 0; i < parts.size(); i++) {
             final String key = parts.get(i);
 
@@ -170,8 +171,7 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
             }
             final ObjectNode obj = (ObjectNode) node;
 
-            final String remainingPath = parts.subList(i, parts.size()).stream()
-                    .collect(Collectors.joining("."));
+            final String remainingPath = Joiner.on('.').join(parts.subList(i, parts.size()));
             if (obj.has(remainingPath) && !remainingPath.equals(key)) {
                 if (obj.get(remainingPath).isValueNode()) {
                     obj.put(remainingPath, value);
@@ -222,10 +222,9 @@ public abstract class BaseConfigurationFactory<T> implements ConfigurationFactor
                 if (node.get(key) != null && node.get(key).isArray()) {
                     final ArrayNode arrayNode = (ArrayNode) obj.get(key);
                     arrayNode.removeAll();
-                    Arrays.stream(ESCAPED_COMMA_SPLIT_PATTERN.split(value))
-                            .map(String::trim)
-                            .map(val -> ESCAPED_COMMA_PATTERN.matcher(val).replaceAll(","))
-                            .forEach(arrayNode::add);
+                    for (String val : ESCAPED_COMMA_SPLITTER.split(value)) {
+                        arrayNode.add(ESCAPED_COMMA_PATTERN.matcher(val).replaceAll(","));
+                    }
                 } else {
                     obj.put(key, value);
                 }
