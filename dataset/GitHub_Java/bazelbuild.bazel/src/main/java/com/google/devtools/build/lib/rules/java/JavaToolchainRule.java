@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.ExecutionTransitionFactory;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.util.List;
@@ -116,7 +115,7 @@ public final class JavaToolchainRule<C extends JavaToolchain> implements RuleDef
         /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(javac_supports_multiplex_workers) -->
         True if JavaBuilder supports running as a multiplex persistent worker, false if it doesn't.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(attr("javac_supports_multiplex_workers", BOOLEAN).value(true))
+        .add(attr("javac_supports_multiplex_workers", BOOLEAN).value(false))
         /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(javac) -->
         Label of the javac jar.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
@@ -282,22 +281,7 @@ public final class JavaToolchainRule<C extends JavaToolchain> implements RuleDef
                 // This needs to be in the execution configuration.
                 .cfg(ExecutionTransitionFactory.create())
                 .allowedFileTypes(FileTypeSet.ANY_FILE)
-                // TODO(b/170769708): set explicitly in Bazel and remove this default
-                .value(env.getToolsLabel("//tools/jdk:proguard_whitelister"))
                 .exec())
-        /* <!-- #BLAZE_RULE(java_toolchain).ATTRIBUTE(java_runtime) -->
-        The java_runtime to use with this toolchain. It defaults to java_runtime
-        in execution configuration.
-        <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
-        .add(
-            attr("java_runtime", LABEL)
-                .cfg(ExecutionTransitionFactory.create())
-                // TODO(b/171140578): remove default value and set to mandatory after it is set on
-                // all toolchains
-                .value(JavaSemantics.hostJdkAttribute(env))
-                .mandatoryProviders(ToolchainInfo.PROVIDER.id())
-                .allowedFileTypes(FileTypeSet.ANY_FILE)
-                .useOutputLicenses())
         .build();
   }
 

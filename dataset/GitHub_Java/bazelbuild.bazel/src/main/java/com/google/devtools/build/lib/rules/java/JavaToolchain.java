@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -55,6 +54,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
+    JavaCommon.checkRuleLoadedThroughMacro(ruleContext);
     ImmutableList<String> javacopts = getJavacOpts(ruleContext);
     BootClassPathInfo bootclasspath = getBootClassPathInfo(ruleContext);
     boolean javacSupportsWorkers =
@@ -122,9 +122,6 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
 
     FilesToRunProvider jacocoRunner = ruleContext.getExecutablePrerequisite("jacocorunner");
 
-    JavaRuntimeInfo javaRuntime =
-        (JavaRuntimeInfo) ruleContext.getPrerequisite("java_runtime").get(ToolchainInfo.PROVIDER);
-
     JavaToolchainProvider provider =
         JavaToolchainProvider.create(
             ruleContext.getLabel(),
@@ -154,8 +151,7 @@ public class JavaToolchain implements RuleConfiguredTargetFactory {
             packageConfiguration,
             jacocoRunner,
             proguardAllowlister,
-            semantics,
-            javaRuntime);
+            semantics);
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
             .addStarlarkTransitiveInfo(JavaToolchainProvider.LEGACY_NAME, provider)
