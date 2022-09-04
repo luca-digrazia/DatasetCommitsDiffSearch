@@ -27,7 +27,7 @@ import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
-import org.graylog2.indexer.searches.Searches;
+import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.KeywordRange;
@@ -77,7 +77,7 @@ public class BundleImporter {
     private final DashboardRegistry dashboardRegistry;
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
-    private final Searches searches;
+    private final Indexer indexer;
 
     private final Map<String, MessageInput> createdInputs = new HashMap<>();
     private final Map<String, org.graylog2.plugin.streams.Output> createdOutputs = new HashMap<>();
@@ -97,7 +97,7 @@ public class BundleImporter {
                           final DashboardRegistry dashboardRegistry,
                           final ServerStatus serverStatus,
                           final MetricRegistry metricRegistry,
-                          final Searches searches) {
+                          final Indexer indexer) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
@@ -108,7 +108,7 @@ public class BundleImporter {
         this.dashboardRegistry = dashboardRegistry;
         this.serverStatus = serverStatus;
         this.metricRegistry = metricRegistry;
-        this.searches = searches;
+        this.indexer = indexer;
     }
 
     public void runImport(final ConfigurationBundle bundle, final String userName) {
@@ -454,7 +454,7 @@ public class BundleImporter {
             dashboardService.addWidget(dashboard, widget);
 
             final WidgetPositionRequest widgetPosition = new WidgetPositionRequest(widget.getId(),
-                    dashboardWidget.getCol(), dashboardWidget.getRow());
+                    dashboardWidget.getRow(), dashboardWidget.getCol());
             widgetPositions.add(widgetPosition);
         }
 
@@ -518,7 +518,7 @@ public class BundleImporter {
         }
 
         final String widgetId = UUID.randomUUID().toString();
-        return org.graylog2.dashboards.widgets.DashboardWidget.buildDashboardWidget(type, metricRegistry, searches,
+        return org.graylog2.dashboards.widgets.DashboardWidget.buildDashboardWidget(type, metricRegistry, indexer,
                 widgetId, dashboardWidget.getDescription(), dashboardWidget.getCacheTime(),
                 config, (String) config.get("query"), timeRange, userName);
     }
