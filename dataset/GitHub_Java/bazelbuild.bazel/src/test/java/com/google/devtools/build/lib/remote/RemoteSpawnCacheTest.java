@@ -201,7 +201,6 @@ public class RemoteSpawnCacheTest {
     return new RemoteSpawnCache(
         execRoot,
         options,
-        /* verboseFailures=*/ true,
         remoteCache,
         "build-req-id",
         "command-id",

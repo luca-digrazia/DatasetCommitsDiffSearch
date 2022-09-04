@@ -35,13 +35,11 @@ import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
-import com.google.devtools.build.lib.actions.cache.VirtualActionInput;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
 import com.google.devtools.build.lib.exec.util.FakeActionInputFileCache;
 import com.google.devtools.build.lib.exec.util.SpawnBuilder;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -65,7 +63,7 @@ public class SpawnInputExpanderTest {
   private static final ArtifactExpander NO_ARTIFACT_EXPANDER =
       (a, b) -> fail("expected no interactions");
 
-  private final FileSystem fs = new InMemoryFileSystem(DigestHashFunction.SHA256);
+  private final FileSystem fs = new InMemoryFileSystem();
   private final Path execRoot = fs.getPath("/root");
   private final ArtifactRoot rootDir = ArtifactRoot.asDerivedRoot(execRoot, "out");
 
@@ -252,7 +250,7 @@ public class SpawnInputExpanderTest {
     // directory gets created.
     assertThat(inputMappings)
         .containsEntry(
-            PathFragment.create("runfiles/workspace/.runfile"), VirtualActionInput.EMPTY_MARKER);
+            PathFragment.create("runfiles/workspace/.runfile"), SpawnInputExpander.EMPTY_FILE);
   }
 
   @Test

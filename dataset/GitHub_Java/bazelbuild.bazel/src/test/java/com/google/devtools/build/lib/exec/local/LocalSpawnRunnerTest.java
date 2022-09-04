@@ -160,11 +160,6 @@ public class LocalSpawnRunnerTest {
     }
 
     @Override
-    public boolean isAlive() {
-      return false;
-    }
-
-    @Override
     public boolean timedout() {
       return false;
     }
@@ -259,7 +254,7 @@ public class LocalSpawnRunnerTest {
     }
 
     @Override
-    public SortedMap<PathFragment, ActionInput> getInputMapping(PathFragment baseDirectory) {
+    public SortedMap<PathFragment, ActionInput> getInputMapping() {
       return inputMapping;
     }
 
@@ -313,14 +308,12 @@ public class LocalSpawnRunnerTest {
     SubprocessBuilder.setDefaultSubprocessFactory(new SubprocessInterceptor());
     resourceManager.setAvailableResources(
         ResourceSet.create(/*memoryMb=*/1, /*cpuUsage=*/1, /*localTestCount=*/1));
-    return new InMemoryFileSystem(DigestHashFunction.SHA256);
+    return new InMemoryFileSystem();
   }
 
   private static ProcessWrapper makeProcessWrapper(FileSystem fs, LocalExecutionOptions options) {
     return new ProcessWrapper(
-        fs.getPath("/process-wrapper"),
-        options.getLocalSigkillGraceSeconds(),
-        /*gracefulSigterm=*/ false);
+        fs.getPath("/process-wrapper"), options.getLocalSigkillGraceSeconds(), ImmutableList.of());
   }
 
   /**
@@ -640,7 +633,10 @@ public class LocalSpawnRunnerTest {
   public void interruptWaitsForProcessExit() throws Exception {
     assumeTrue(OS.getCurrent() != OS.WINDOWS);
 
-    Path tempDir = TestUtils.createUniqueTmpDir(new JavaIoFileSystem(DigestHashFunction.SHA256));
+    File tempDirFile = TestUtils.makeTempDir();
+    tempDirFile.deleteOnExit();
+    FileSystem fs = new JavaIoFileSystem(DigestHashFunction.getDefaultUnchecked());
+    Path tempDir = fs.getPath(tempDirFile.getPath());
 
     LocalSpawnRunner runner =
         new LocalSpawnRunner(
@@ -849,7 +845,10 @@ public class LocalSpawnRunnerTest {
   }
 
   private Path getTemporaryRoot(FileSystem fs, String name) throws IOException {
-    Path tempDirPath = TestUtils.createUniqueTmpDir(fs);
+    File tempDirFile = TestUtils.makeTempDir();
+    tempDirFile.deleteOnExit();
+
+    Path tempDirPath = fs.getPath(tempDirFile.getPath());
     assertThat(tempDirPath.exists()).isTrue();
 
     Path root = tempDirPath.getRelative(name);
@@ -878,7 +877,7 @@ public class LocalSpawnRunnerTest {
     // TODO(b/62588075) Currently no process-wrapper or execution statistics support in Windows.
     assumeTrue(OS.getCurrent() != OS.WINDOWS);
 
-    FileSystem fs = new UnixFileSystem(DigestHashFunction.SHA256, /*hashAttributeName=*/ "");
+    FileSystem fs = new UnixFileSystem(DigestHashFunction.getDefaultUnchecked());
 
     LocalExecutionOptions options = Options.getDefaults(LocalExecutionOptions.class);
     options.collectLocalExecutionStatistics = true;
@@ -911,7 +910,9 @@ public class LocalSpawnRunnerTest {
             LocalSpawnRunnerTest::keepLocalEnvUnchanged,
             binTools,
             new ProcessWrapper(
-                processWrapperPath, /*killDelay=*/ Duration.ZERO, /*gracefulSigterm=*/ false),
+                processWrapperPath,
+                /*killDelay=*/ Duration.ZERO,
+                /*extraFlags=*/ ImmutableList.of()),
             Mockito.mock(RunfilesTreeUpdater.class));
 
     Spawn spawn =
@@ -950,7 +951,7 @@ public class LocalSpawnRunnerTest {
     // TODO(b/62588075) Currently no process-wrapper or execution statistics support in Windows.
     assumeTrue(OS.getCurrent() != OS.WINDOWS);
 
-    FileSystem fs = new UnixFileSystem(DigestHashFunction.SHA256, /*hashAttributeName=*/ "");
+    FileSystem fs = new UnixFileSystem(DigestHashFunction.getDefaultUnchecked());
 
     LocalExecutionOptions options = Options.getDefaults(LocalExecutionOptions.class);
     options.collectLocalExecutionStatistics = false;
@@ -976,7 +977,9 @@ public class LocalSpawnRunnerTest {
             LocalSpawnRunnerTest::keepLocalEnvUnchanged,
             binTools,
             new ProcessWrapper(
-                processWrapperPath, /*killDelay=*/ Duration.ZERO, /*gracefulSigterm=*/ false),
+                processWrapperPath,
+                /*killDelay=*/ Duration.ZERO,
+                /*extraFlags=*/ ImmutableList.of()),
             Mockito.mock(RunfilesTreeUpdater.class));
 
     Spawn spawn =

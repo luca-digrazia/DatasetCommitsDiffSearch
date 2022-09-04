@@ -184,7 +184,7 @@ public interface SpawnRunner {
      * to any of the output file locations. This method is used to coordinate - implementations must
      * throw an {@link InterruptedException} for all but one caller.
      */
-    void lockOutputFiles() throws InterruptedException;
+    void lockOutputFiles() throws InterruptedException, IOException;
 
     /**
      * Returns whether this spawn may be executing concurrently under multiple spawn runners. If so,
@@ -198,19 +198,7 @@ public interface SpawnRunner {
     /** The files to which to write stdout and stderr. */
     FileOutErr getFileOutErr();
 
-    /**
-     * Returns a sorted map from input paths to action inputs.
-     *
-     * <p>Resolves cases where a single input of the {@link Spawn} gives rise to multiple files in
-     * the input tree, for example, tree artifacts, runfiles trees and {@code Fileset} input
-     * manifests.
-     *
-     * <p>{@code baseDirectory} is prepended to every path in the input key. This is useful if the
-     * mapping is used in a context where the directory relative to which the keys are interpreted
-     * is not the same as the execroot.
-     */
-    SortedMap<PathFragment, ActionInput> getInputMapping(PathFragment baseDirectory)
-        throws IOException;
+    SortedMap<PathFragment, ActionInput> getInputMapping() throws IOException;
 
     /** Reports a progress update to the Spawn strategy. */
     void report(ProgressStatus state, String name);

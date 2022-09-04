@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Symlinks;
 import java.io.File;
 import java.io.IOException;
@@ -59,7 +58,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
    * Returns whether the linux sandbox is supported on the local machine by running a small command
    * in it.
    */
-  public static boolean isSupported(final CommandEnvironment cmdEnv) throws InterruptedException {
+  public static boolean isSupported(final CommandEnvironment cmdEnv) {
     if (OS.getCurrent() != OS.LINUX) {
       return false;
     }
@@ -67,20 +66,11 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
       return false;
     }
     Path linuxSandbox = LinuxSandboxUtil.getLinuxSandbox(cmdEnv);
-    Boolean isSupported;
-    synchronized (isSupportedMap) {
-      isSupported = isSupportedMap.get(linuxSandbox);
-      if (isSupported != null) {
-        return isSupported;
-      }
-      isSupported = computeIsSupported(cmdEnv, linuxSandbox);
-      isSupportedMap.put(linuxSandbox, isSupported);
-    }
-    return isSupported;
+    return isSupportedMap.computeIfAbsent(
+        linuxSandbox, linuxSandboxPath -> computeIsSupported(cmdEnv, linuxSandboxPath));
   }
 
-  private static boolean computeIsSupported(CommandEnvironment cmdEnv, Path linuxSandbox)
-      throws InterruptedException {
+  private static boolean computeIsSupported(CommandEnvironment cmdEnv, Path linuxSandbox) {
     ImmutableList<String> linuxSandboxArgv =
         LinuxSandboxUtil.commandLineBuilder(linuxSandbox, ImmutableList.of("/bin/true")).build();
     ImmutableMap<String, String> env = ImmutableMap.of();
@@ -154,7 +144,7 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
 
   @Override
   protected SandboxedSpawn prepareSpawn(Spawn spawn, SpawnExecutionContext context)
-      throws IOException, ExecException, InterruptedException {
+      throws IOException, ExecException {
     // Each invocation of "exec" gets its own sandbox base.
     // Note that the value returned by context.getId() is only unique inside one given SpawnRunner,
     // so we have to prefix our name to turn it into a globally unique value.
@@ -177,17 +167,13 @@ final class LinuxSandboxedSpawnRunner extends AbstractSandboxSpawnRunner {
 
     SandboxInputs inputs =
         helpers.processInputFiles(
-            context.getInputMapping(PathFragment.EMPTY_FRAGMENT),
-            spawn,
-            context.getArtifactExpander(),
-            execRoot);
+            context.getInputMapping(), spawn, context.getArtifactExpander(), execRoot);
     SandboxOutputs outputs = helpers.getOutputs(spawn);
 
     Duration timeout = context.getTimeout();
 
     LinuxSandboxUtil.CommandLineBuilder commandLineBuilder =
         LinuxSandboxUtil.commandLineBuilder(linuxSandbox, spawn.getArguments())
-            .addExecutionInfo(spawn.getExecutionInfo())
             .setWritableFilesAndDirectories(writableDirs)
             .setTmpfsDirectories(getTmpfsPaths())
             .setBindMounts(getReadOnlyBindMounts(blazeDirs, sandboxExecRoot))
