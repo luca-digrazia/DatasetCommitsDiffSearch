@@ -6,7 +6,6 @@ import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.Partial1;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.Partial2;
 import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.PartialExample;
 import io.dropwizard.jersey.params.IntParam;
-import io.dropwizard.jersey.params.LongParam;
 import io.dropwizard.jersey.params.NonEmptyStringParam;
 import io.dropwizard.validation.Validated;
 import org.hibernate.validator.constraints.Email;
@@ -46,7 +45,7 @@ public class ValidatingResource {
 
     @QueryParam("sort")
     @Pattern(regexp = "^(asc|desc)$")
-    private String sortParam = "";
+    private String sortParam;
 
     @POST
     @Path("foo")
@@ -77,24 +76,6 @@ public class ValidatingResource {
     }
 
     @GET
-    @Path("paramValidation")
-    public String paramValidation(@UnwrapValidatedValue @NotNull @Min(2) @Max(5) @QueryParam("length") LongParam length) {
-        return Long.toString(length.get());
-    }
-
-    @GET
-    @Path("messageValidation")
-    public String messageValidation(
-        @UnwrapValidatedValue
-        @NotNull
-        @Min(value = 2, message = "The value ${validatedValue} is less then {value}")
-        @QueryParam("length")
-            LongParam length
-    ) {
-        return Long.toString(length.get());
-    }
-
-    @GET
     @Path("barter")
     public String isnt(@QueryParam("name") @Length(min = 3) @UnwrapValidatedValue NonEmptyStringParam name) {
         return name.get().orElse(null);
@@ -103,11 +84,7 @@ public class ValidatingResource {
     @POST
     @Path("validatedPartialExampleBoth")
     public PartialExample validatedPartialExampleBoth(
-            @NotNull
-            @Valid
-            @Validated({Partial1.class, Partial2.class})
-            PartialExample obj
-    ) {
+            @Validated({Partial1.class, Partial2.class}) @Valid PartialExample obj) {
         return obj;
     }
 
@@ -150,11 +127,7 @@ public class ValidatingResource {
     @POST
     @Path("validatedPartialExample")
     public PartialExample validatedPartialExample(
-            @NotNull(groups = Partial1.class)
-            @Valid
-            @Validated({Partial1.class})
-            PartialExample obj
-    ) {
+            @Validated({Partial1.class}) @Valid PartialExample obj) {
         return obj;
     }
 
@@ -274,11 +247,4 @@ public class ValidatingResource {
     public FailingExample valmeth(@Valid FailingExample exam) {
         return exam;
     }
-
-    @GET
-    @Path("enumParam")
-    public String enumParam(@NotNull @QueryParam("choice") Choice choice) {
-        return choice.toString();
-    }
-
 }
