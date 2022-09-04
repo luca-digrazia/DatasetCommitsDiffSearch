@@ -25,9 +25,9 @@ import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
-import com.google.devtools.build.lib.rules.cpp.CcModule.NonCcDepInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -72,15 +72,15 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    NestedSet<String> imports = common.collectImports(ruleContext, semantics);
+    NestedSet<PathFragment> imports = common.collectImports(ruleContext, semantics);
     if (ruleContext.hasErrors()) {
       return null;
     }
 
-    CcInfo ccInfo =
-        semantics.buildCcInfoProvider(ruleContext.getPrerequisites("deps", Mode.TARGET));
+    CcLinkingInfo ccLinkingInfo =
+        semantics.buildCcLinkingInfoProvider(ruleContext.getPrerequisites("deps", Mode.TARGET));
 
-    Runfiles commonRunfiles = collectCommonRunfiles(ruleContext, common, semantics, ccInfo);
+    Runfiles commonRunfiles = collectCommonRunfiles(ruleContext, common, semantics, ccLinkingInfo);
 
     Runfiles.Builder defaultRunfilesBuilder = new Runfiles.Builder(
         ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles())
@@ -118,23 +118,26 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
 
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext);
-    common.addCommonTransitiveInfoProviders(builder, semantics, common.getFilesToBuild(), imports);
+    common.addCommonTransitiveInfoProviders(builder, semantics, common.getFilesToBuild());
 
     semantics.postInitBinary(ruleContext, runfilesSupport, common);
 
-    Artifact realExecutable = semantics.createExecutable(ruleContext, common, ccInfo, imports);
+    Artifact realExecutable =
+        semantics.createExecutable(ruleContext, common, ccLinkingInfo, imports);
 
     return builder
         .setFilesToBuild(common.getFilesToBuild())
         .add(RunfilesProvider.class, runfilesProvider)
         .setRunfilesSupport(runfilesSupport, realExecutable)
-        .addNativeDeclaredProvider(ccInfo)
-        .addNativeDeclaredProvider(new NonCcDepInfo())
+        .addNativeDeclaredProvider(ccLinkingInfo)
         .add(PythonImportsProvider.class, new PythonImportsProvider(imports));
   }
 
   private static Runfiles collectCommonRunfiles(
-      RuleContext ruleContext, PyCommon common, PythonSemantics semantics, CcInfo ccInfo)
+      RuleContext ruleContext,
+      PyCommon common,
+      PythonSemantics semantics,
+      CcLinkingInfo ccLinkingInfo)
       throws InterruptedException {
     Runfiles.Builder builder = new Runfiles.Builder(
         ruleContext.getWorkspaceName(), ruleContext.getConfiguration().legacyExternalRunfiles());
@@ -151,7 +154,7 @@ public abstract class PyBinary implements RuleConfiguredTargetFactory {
         || ruleContext.attributes().get("legacy_create_init", Type.BOOLEAN)) {
       builder.setEmptyFilesSupplier(PythonUtils.GET_INIT_PY_FILES);
     }
-    semantics.collectRunfilesForBinary(ruleContext, builder, common, ccInfo);
+    semantics.collectRunfilesForBinary(ruleContext, builder, common, ccLinkingInfo);
     return builder.build();
   }
 }

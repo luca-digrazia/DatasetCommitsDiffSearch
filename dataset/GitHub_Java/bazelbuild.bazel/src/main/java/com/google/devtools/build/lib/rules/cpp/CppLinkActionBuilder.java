@@ -1077,15 +1077,11 @@ public class CppLinkActionBuilder {
     // If the crosstool uses action_configs to configure cc compilation, collect execution info
     // from there, otherwise, use no execution info.
     // TODO(b/27903698): Assert that the crosstool has an action_config for this action.
-    Map<String, String> executionRequirements = new HashMap<>();
-
+    ImmutableSet.Builder<String> executionRequirements = ImmutableSet.builder();
     if (featureConfiguration.actionIsConfigured(getActionName())) {
-      for (String req : featureConfiguration.getToolRequirementsForAction(getActionName())) {
-        executionRequirements.put(req, "");
-      }
+      executionRequirements.addAll(
+          featureConfiguration.getToolRequirementsForAction(getActionName()));
     }
-    configuration.modifyExecutionInfo(
-        executionRequirements, CppLinkAction.getMnemonic(mnemonic, isLtoIndexing));
 
     if (!isLtoIndexing) {
       for (Map.Entry<Linkstamp, Artifact> linkstampEntry : linkstampMap.entrySet()) {
@@ -1137,13 +1133,15 @@ public class CppLinkActionBuilder {
         fake,
         fakeLinkerInputArtifacts,
         isLtoIndexing,
-        linkstampMap.keySet().stream()
+        linkstampMap
+            .keySet()
+            .stream()
             .map(Linkstamp::getArtifact)
             .collect(ImmutableList.toImmutableList()),
         linkCommandLine,
         configuration.getActionEnvironment(),
         toolchainEnv,
-        ImmutableMap.copyOf(executionRequirements),
+        executionRequirements.build(),
         toolchain.getToolPathFragment(Tool.LD),
         toolchain.getHostSystemName(),
         toolchain.getTargetCpu());
@@ -1497,9 +1495,6 @@ public class CppLinkActionBuilder {
       throws InterruptedException, RuleErrorException {
     addLinkopts(linkParams.flattenedLinkopts());
     addLibraries(linkParams.getLibraries());
-    if (linkParams.getNonCodeInputs() != null) {
-      addNonCodeInputs(linkParams.getNonCodeInputs());
-    }
     ExtraLinkTimeLibraries extraLinkTimeLibraries = linkParams.getExtraLinkTimeLibraries();
     if (extraLinkTimeLibraries != null) {
       for (ExtraLinkTimeLibrary extraLibrary : extraLinkTimeLibraries.getExtraLibraries()) {

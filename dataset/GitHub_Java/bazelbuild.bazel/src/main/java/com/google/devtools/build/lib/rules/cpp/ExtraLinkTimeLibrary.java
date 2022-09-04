@@ -31,8 +31,7 @@ import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
  */
 public interface ExtraLinkTimeLibrary {
   /** Build the LibraryToLink inputs to pass to the C++ linker. */
-  NestedSet<LibraryToLink> buildLibraries(
-      RuleContext context, boolean staticMode, boolean forDynamicLibrary)
+  NestedSet<LibraryToLink> buildLibraries(RuleContext context)
       throws InterruptedException, RuleErrorException;
 
   /**

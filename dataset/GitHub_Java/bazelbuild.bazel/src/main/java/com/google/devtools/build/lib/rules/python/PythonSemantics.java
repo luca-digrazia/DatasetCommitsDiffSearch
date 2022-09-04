@@ -21,7 +21,8 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
-import com.google.devtools.build.lib.rules.cpp.CcInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collection;
 import java.util.List;
 
@@ -39,7 +40,10 @@ public interface PythonSemantics {
 
   /** Extends for the default and data runfiles of {@code py_binary} rules with custom elements. */
   void collectRunfilesForBinary(
-      RuleContext ruleContext, Runfiles.Builder builder, PyCommon common, CcInfo ccInfo)
+      RuleContext ruleContext,
+      Runfiles.Builder builder,
+      PyCommon common,
+      CcLinkingInfo ccLinkingInfo)
       throws InterruptedException;
 
   /** Extends the default runfiles of {@code py_binary} rules with custom elements. */
@@ -60,8 +64,10 @@ public interface PythonSemantics {
   Collection<Artifact> precompiledPythonFiles(
       RuleContext ruleContext, Collection<Artifact> sources, PyCommon common);
 
-  /** Returns a list of PathFragments for the import paths specified in the imports attribute. */
-  List<String> getImports(RuleContext ruleContext);
+  /**
+   * Returns a list of PathFragments for the import paths specified in the imports attribute.
+   */
+  List<PathFragment> getImports(RuleContext ruleContext);
 
   /**
    * Create the actual executable artifact.
@@ -71,9 +77,8 @@ public interface PythonSemantics {
   Artifact createExecutable(
       RuleContext ruleContext,
       PyCommon common,
-      CcInfo ccInfo,
-      NestedSet<String> imports,
-      Runfiles.Builder runfilesBuilder)
+      CcLinkingInfo ccLinkingInfo,
+      NestedSet<PathFragment> imports)
       throws InterruptedException, RuleErrorException;
 
   /**
@@ -83,5 +88,5 @@ public interface PythonSemantics {
   void postInitBinary(RuleContext ruleContext, RunfilesSupport runfilesSupport,
       PyCommon common) throws InterruptedException;
 
-  CcInfo buildCcInfoProvider(Iterable<? extends TransitiveInfoCollection> deps);
+  CcLinkingInfo buildCcLinkingInfoProvider(Iterable<? extends TransitiveInfoCollection> deps);
 }
