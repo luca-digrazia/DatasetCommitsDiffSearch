@@ -240,7 +240,8 @@ public final class ApplicationManifest {
 
   public ApplicationManifest mergeWith(
       RuleContext ruleContext, ResourceDependencies resourceDeps, boolean legacy) {
-    Map<Artifact, Label> mergeeManifests = getMergeeManifests(resourceDeps.getResourceContainers());
+    Map<Artifact, Label> mergeeManifests =
+        getMergeeManifests(resourceDeps.getResourceContainers());
 
     if (legacy) {
       if (!mergeeManifests.isEmpty()) {
@@ -619,8 +620,8 @@ public final class ApplicationManifest {
             // have checked its dependencies.
             ruleContext);
 
-    AndroidConfiguration androidConfiguration =
-        ruleContext.getConfiguration().getFragment(AndroidConfiguration.class);
+    AndroidConfiguration androidConfiguration = ruleContext.getConfiguration()
+        .getFragment(AndroidConfiguration.class);
 
     boolean skipParsingAction =
         targetAaptVersion == AndroidAaptVersion.AAPT2 && androidConfiguration.skipParsingAction();
@@ -733,8 +734,8 @@ public final class ApplicationManifest {
     Artifact rJavaClassJar =
         ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR);
 
-    AndroidConfiguration androidConfiguration =
-        ruleContext.getConfiguration().getFragment(AndroidConfiguration.class);
+    AndroidConfiguration androidConfiguration = ruleContext.getConfiguration()
+        .getFragment(AndroidConfiguration.class);
 
     boolean skipParsingAction =
         targetAaptVersion == AndroidAaptVersion.AAPT2 && androidConfiguration.skipParsingAction();
@@ -901,9 +902,8 @@ public final class ApplicationManifest {
         ResourceFilterFactory.fromRuleContext(ruleContext);
 
     List<String> uncompressedExtensions;
-    if (ruleContext
-        .getRule()
-        .isAttrDefined(AndroidRuleClasses.NOCOMPRESS_EXTENSIONS_ATTR, Type.STRING_LIST)) {
+    if (ruleContext.getRule().isAttrDefined(
+        AndroidRuleClasses.NOCOMPRESS_EXTENSIONS_ATTR, Type.STRING_LIST)) {
       uncompressedExtensions =
           ruleContext
               .getExpander()

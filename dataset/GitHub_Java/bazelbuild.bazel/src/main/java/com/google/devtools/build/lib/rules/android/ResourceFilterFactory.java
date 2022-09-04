@@ -30,13 +30,11 @@ import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -57,13 +55,9 @@ import javax.annotation.Nullable;
  * and {@link #hashCode()} methods. Failure to do so isn't just bad practice; it could seriously
  * interfere with Bazel's caching performance.
  */
-@AutoCodec
 public class ResourceFilterFactory {
   public static final String RESOURCE_CONFIGURATION_FILTERS_NAME = "resource_configuration_filters";
   public static final String DENSITIES_NAME = "densities";
-
-  public static final ObjectCodec<ResourceFilterFactory> CODEC =
-      new ResourceFilterFactory_AutoCodec();
 
   /**
    * Locales used for pseudolocation.
@@ -131,6 +125,7 @@ public class ResourceFilterFactory {
    * @param densities the density filters, as a list of strings.
    * @param filterBehavior the behavior of this filter.
    */
+  @VisibleForTesting
   ResourceFilterFactory(
       ImmutableList<String> configFilters,
       ImmutableList<String> densities,
@@ -147,6 +142,10 @@ public class ResourceFilterFactory {
 
     List<String> values = attrs.get(attrName, Type.STRING_LIST);
     return values != null && !values.isEmpty();
+  }
+
+  static boolean hasFilters(RuleContext ruleContext) {
+    return hasFilters(ruleContext.attributes());
   }
 
   static boolean hasFilters(AttributeMap attrs) {
@@ -254,7 +253,7 @@ public class ResourceFilterFactory {
     ImmutableList.Builder<FolderConfiguration> filterBuilder = ImmutableList.builder();
     for (String filter : configFilters) {
       addIfNotNull(
-          getFolderConfiguration(filter),
+          getFolderConfiguration(ruleErrorConsumer, filter),
           filter,
           filterBuilder,
           ruleErrorConsumer,
@@ -264,12 +263,13 @@ public class ResourceFilterFactory {
     return filterBuilder.build();
   }
 
-  private FolderConfiguration getFolderConfiguration(String filter) {
+  private FolderConfiguration getFolderConfiguration(
+      RuleErrorConsumer ruleErrorConsumer, String filter) {
 
     // Clean up deprecated representations of resource qualifiers that FolderConfiguration can't
     // handle.
     for (DeprecatedQualifierHandler handler : deprecatedQualifierHandlers) {
-      filter = handler.fixAttributeIfNeeded(filter);
+      filter = handler.fixAttributeIfNeeded(ruleErrorConsumer, filter);
     }
 
     return FolderConfiguration.getConfigForQualifierString(filter);
@@ -280,6 +280,7 @@ public class ResourceFilterFactory {
     private final String replacement;
     private final String description;
 
+    private boolean warnedForAttribute = false;
     private boolean warnedForResources = false;
 
     private DeprecatedQualifierHandler(String pattern, String replacement, String description) {
@@ -288,14 +289,26 @@ public class ResourceFilterFactory {
       this.description = description;
     }
 
-    private String fixAttributeIfNeeded(String qualifier) {
+    private String fixAttributeIfNeeded(RuleErrorConsumer ruleErrorConsumer, String qualifier) {
       Matcher matcher = pattern.matcher(qualifier);
 
       if (!matcher.matches()) {
         return qualifier;
       }
 
-      return matcher.replaceFirst(replacement);
+      String fixed = matcher.replaceFirst(replacement);
+      // We don't want to spam users. Only warn about this kind of issue once per target.
+      // TODO(asteinb): Will this cause problems when settings are propagated via dynamic
+      // configuration?
+      if (!warnedForAttribute) {
+        ruleErrorConsumer.attributeWarning(
+            RESOURCE_CONFIGURATION_FILTERS_NAME,
+            String.format(
+                "When referring to %s, use of qualifier '%s' is deprecated. Use '%s' instead.",
+                description, matcher.group(), fixed));
+        warnedForAttribute = true;
+      }
+      return fixed;
     }
 
     private String fixResourceIfNeeded(
@@ -325,16 +338,7 @@ public class ResourceFilterFactory {
     }
   }
 
-  /**
-   * List of deprecated qualifiers that are not supported by {@link FolderConfiguration}.
-   *
-   * For resources, we should warn if these qualifiers are encountered, since aapt supports the
-   * fixed version (and aapt2 only supports that version).
-   *
-   * For resource filters, however, aapt only supports this old version. Convert the qualifiers so
-   * that they can be parsed by FolderConfiguration, but do not warn (since they are, actually, what
-   * aapt expects) and save the original qualifier strings to be passed to aapt.
-   */
+  /** List of deprecated qualifiers that should currently by handled with a warning */
   private final List<DeprecatedQualifierHandler> deprecatedQualifierHandlers =
       ImmutableList.of(
           /*
@@ -657,10 +661,6 @@ public class ResourceFilterFactory {
     return Joiner.on(',').join(configFilters);
   }
 
-  ImmutableList<String> getConfigFilters() {
-    return configFilters;
-  }
-
   /**
    * Returns if this object contains a non-empty density filter.
    *
@@ -675,7 +675,7 @@ public class ResourceFilterFactory {
     return Joiner.on(',').join(densities);
   }
 
-  ImmutableList<String> getDensities() {
+  List<String> getDensities() {
     return densities;
   }
 
@@ -685,10 +685,6 @@ public class ResourceFilterFactory {
 
   boolean hasFilters() {
     return hasConfigurationFilters() || hasDensities();
-  }
-
-  FilterBehavior getFilterBehavior() {
-    return filterBehavior;
   }
 
   public String getOutputDirectorySuffix() {
