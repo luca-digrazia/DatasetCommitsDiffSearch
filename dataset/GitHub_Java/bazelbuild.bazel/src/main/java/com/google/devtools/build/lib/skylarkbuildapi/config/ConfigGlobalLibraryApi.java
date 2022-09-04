@@ -14,16 +14,15 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.config;
 
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
-import com.google.devtools.build.lib.syntax.BaseFunction;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkSemantics;
-import java.util.List;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
  * A collection of top-level Starlark functions pertaining to configuration.
@@ -32,61 +31,109 @@ import java.util.List;
 public interface ConfigGlobalLibraryApi {
   @SkylarkCallable(
       name = "transition",
-      // TODO(cparsons): Improve documentation with an example once this feature is
-      // non-experimental.
       doc =
-          "<b>Experimental. This type is experimental and subject to change at any time. Do "
-              + "not depend on it.</b><p> Creates a configuration transition to be applied across"
-              + " a dependency edge.",
+          "A transition that reads a set of input build settings and writes a set of output build "
+              + "settings."
+              + "<p>Example:</p>"
+              + "<p><pre class=\"language-python\">\n"
+              + "def _transition_impl(settings, attr):\n"
+              + "    # This transition just reads the current CPU value as a demonstration.\n"
+              + "    # A real transition could incorporate this into its followup logic.\n"
+              + "    current_cpu = settings[\"//command_line_option:cpu\"]\n"
+              + "    return {\"//command_line_option:compilation_mode\": \"dbg\"}\n"
+              + "\n"
+              + "build_in_debug_mode = transition(\n"
+              + "    implementation = _transition_impl,\n"
+              + "    inputs = [\"//command_line_option:cpu\"],\n"
+              + "    outputs = [\"//command_line_option:compilation_mode\"],\n"
+              + ")"
+              + "</pre></p>"
+              + "<p>For more details see <a href=\"../config.html#user-defined-transitions\">"
+              + "here</a>.</p>",
       parameters = {
-          @Param(
-              name = "implementation",
-              type = BaseFunction.class,
-              positional = false,
-              named = true,
-              // TODO(cparsons): The settings dict should take actual Label objects as keys and not
-              // strings. Update the documentation.
-              doc = "The function implementing this transition. This function always has the "
-                  + "parameter <code>settings</code>, a dictionary whose set of keys is defined by "
-                  + "the inputs parameter. So, for each build setting <code>--//foo=bar</code>, if "
-                  + "<code>inputs</code> contains <code>//foo</code>, <code>settings</code> will "
-                  + "have an entry <code>settings['//foo']='bar'</code>.<p>"
-                  // TODO(cparsons): Consider making this parameter mandatory, and determine
-                  // what to do with attributes which are defined with select().
-                  + "This function also optionally takes a parameter <code>attr</code> which is "
-                  + "a reference to <code>ctx.attr</code> but pre-analysis-phase. This gives the "
-                  + "implementation function access to the rule's attributes to make "
-                  + "attribute-parameterized transitions possible.<p>"
-                  // TODO(cparsons): Mention the expected output for split transitions.
-                  + "This function must return a <code>dict</code> from build setting identifier "
-                  + "to build setting value; this represents the configuration transition: for "
-                  + "each entry in the returned <code>dict</code>, the transition updates that "
-                  + "setting to the new value. All other settings are unchanged."),
-          @Param(
-              name = "inputs",
-              type = SkylarkList.class,
-              generic1 = String.class,
-              positional = false,
-              named = true,
-              doc = "List of build settings that can be read by this transition. This becomes the "
-                  + "key set of the settings parameter of the implementation function parameter."),
-          @Param(
-              name = "outputs",
-              type = SkylarkList.class,
-              generic1 = String.class,
-              positional = false,
-              named = true,
-              doc = "List of build settings that can be written by this transition. This must be "
-                  + "a superset of the key set of the dictionary returned by this transition."),
+        @Param(
+            name = "implementation",
+            type = StarlarkCallable.class,
+            positional = false,
+            named = true,
+            // TODO(cparsons): The settings dict should take actual Label objects as keys and not
+            // strings. Update the documentation.
+            doc =
+                "The function implementing this transition. This function always has two "
+                    + "parammeters: <code>settings</code> and <code>attr</code>. The "
+                    + "<code>settings</code> param is a dictionary whose set of keys is defined "
+                    + "by the inputs parameter. So, for each build setting "
+                    + "<code>--//foo=bar</code>, if <code>inputs</code> contains "
+                    + "<code>//foo</code>, <code>settings</code> will "
+                    + "have an entry <code>settings['//foo']='bar'</code>.<p>"
+                    + "The <code>attr</code> param is a reference to <code>ctx.attr</code>. This "
+                    + "gives the implementation function access to the rule's attributes to make "
+                    + "attribute-parameterized transitions possible.<p>"
+                    + "This function must return a <code>dict</code> from build setting identifier "
+                    + "to build setting value; this represents the configuration transition: for "
+                    + "each entry in the returned <code>dict</code>, the transition updates that "
+                    + "setting to the new value. All other settings are unchanged. This function "
+                    + "can also return a <code>list</code> of <code>dict</code>s or a "
+                    + "<code>dict</code> of <code>dict</code>s in the case of a "
+                    + "split transition."),
+        @Param(
+            name = "inputs",
+            type = Sequence.class,
+            generic1 = String.class,
+            positional = false,
+            named = true,
+            doc =
+                "List of build settings that can be read by this transition. This becomes the "
+                    + "key set of the settings parameter of the implementation function "
+                    + "parameter."),
+        @Param(
+            name = "outputs",
+            type = Sequence.class,
+            generic1 = String.class,
+            positional = false,
+            named = true,
+            doc =
+                "List of build settings that can be written by this transition. This must be "
+                    + "a superset of the key set of the dictionary returned by this transition."),
       },
-      useLocation = true,
-      useSkylarkSemantics = true)
+      useStarlarkThread = true)
   @SkylarkConstructor(objectType = ConfigurationTransitionApi.class)
-  public ConfigurationTransitionApi transition(
-      BaseFunction implementation,
-      List<String> inputs,
-      List<String> outputs,
-      Location location,
-      SkylarkSemantics semantics)
+  ConfigurationTransitionApi transition(
+      StarlarkCallable implementation,
+      Sequence<?> inputs, // <String> expected
+      Sequence<?> outputs, // <String> expected
+      StarlarkThread thread)
+      throws EvalException;
+
+  @SkylarkCallable(
+      name = "analysis_test_transition",
+      doc =
+          "<p> Creates a configuration transition to be applied on "
+              + "an analysis-test rule's dependencies. This transition may only be applied "
+              + "on attributes of rules with <code>analysis_test = True</code>. Such rules are "
+              + "restricted in capabilities (for example, the size of their dependency tree is "
+              + "limited), so transitions created using this function are limited in potential "
+              + "scope as compared to transitions created using "
+              + "<a href=\"transition.html\">transition</a>. "
+              + "<p>This function is primarily designed to facilitate the "
+              + "<a href=\"../testing.html\">Analysis Test Framework</a> core library. See its "
+              + "documentation (or its implementation) for best practices.",
+      parameters = {
+        @Param(
+            name = "settings",
+            type = Dict.class,
+            positional = false,
+            named = true,
+            doc =
+                "A dictionary containing information about configuration settings which "
+                    + "should be set by this configuration transition. Keys are build setting "
+                    + "labels and values are their new post-transition values. All other settings "
+                    + "are unchanged. Use this to declare specific configuration settings that "
+                    + "an analysis test requires to be set in order to pass."),
+      },
+      useStarlarkThread = true)
+  ConfigurationTransitionApi analysisTestTransition(
+      Dict<?, ?> changedSettings, // <String, String> expected
+      StarlarkThread thread)
       throws EvalException;
 }
