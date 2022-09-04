@@ -16,20 +16,20 @@
 
 package org.jboss.shamrock.agroal;
 
-import static org.jboss.shamrock.annotations.ExecutionTime.STATIC_INIT;
+import static org.jboss.shamrock.deployment.annotations.ExecutionTime.STATIC_INIT;
 
-import java.util.Optional;
-
-import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
 import org.jboss.shamrock.agroal.runtime.DataSourceConfig;
 import org.jboss.shamrock.agroal.runtime.DataSourceProducer;
 import org.jboss.shamrock.agroal.runtime.DataSourceTemplate;
-import org.jboss.shamrock.annotations.BuildProducer;
-import org.jboss.shamrock.annotations.BuildStep;
-import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.arc.deployment.AdditionalBeanBuildItem;
 import org.jboss.shamrock.arc.deployment.BeanContainerListenerBuildItem;
+import org.jboss.shamrock.deployment.annotations.BuildProducer;
+import org.jboss.shamrock.deployment.annotations.BuildStep;
+import org.jboss.shamrock.deployment.annotations.Record;
+import org.jboss.shamrock.deployment.builditem.ExtensionSslNativeSupportBuildItem;
+import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
+import org.jboss.shamrock.deployment.builditem.SslNativeConfigBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 
 class AgroalProcessor {
@@ -39,19 +39,29 @@ class AgroalProcessor {
     /**
      * The datasource configuration
      */
-    @ConfigProperty(name = "shamrock.datasource")
-    Optional<DataSourceConfig> dataSourceConfig;
-
+    DataSourceConfig datasource;
 
     @BuildStep
     AdditionalBeanBuildItem registerBean() {
-        return new AdditionalBeanBuildItem(DataSourceProducer.class);
+        return new AdditionalBeanBuildItem(false, DataSourceProducer.class);
     }
 
     @Record(STATIC_INIT)
     @BuildStep
     BeanContainerListenerBuildItem build(
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass, DataSourceTemplate template) throws Exception {
+        BuildProducer<FeatureBuildItem> feature,
+        BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+        BuildProducer<DataSourceDriverBuildItem> datasourceDriver,
+        SslNativeConfigBuildItem sslNativeConfig, BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
+        DataSourceTemplate template
+    ) throws Exception {
+        if (! datasource.url.isPresent() || ! datasource.driver.isPresent()) {
+            log.warn("Agroal extension was included in build however no data source URL and/or driver class has been defined");
+            return null;
+        }
+
+        feature.produce(new FeatureBuildItem(FeatureBuildItem.AGROAL));
+
         reflectiveClass.produce(new ReflectiveClassBuildItem(false, false,
                 io.agroal.pool.ConnectionHandler[].class.getName(),
                 io.agroal.pool.ConnectionHandler.class.getName(),
@@ -60,14 +70,13 @@ class AgroalProcessor {
                 java.sql.ResultSet.class.getName(),
                 java.sql.ResultSet[].class.getName()
         ));
-        if (!dataSourceConfig.isPresent()) {
-            log.warn("Agroal extension was included in build however no data source has been defined");
-            return null;
-        }
+        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, datasource.driver.get()));
 
-        reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, dataSourceConfig.get().driver));
-        return new BeanContainerListenerBuildItem(template.addDatasource(dataSourceConfig.get()));
+        datasourceDriver.produce(new DataSourceDriverBuildItem(datasource.driver.get()));
 
+        sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.AGROAL));
+
+        return new BeanContainerListenerBuildItem(template.addDatasource(datasource, sslNativeConfig.isExplicitlyDisabled()));
     }
 
 }

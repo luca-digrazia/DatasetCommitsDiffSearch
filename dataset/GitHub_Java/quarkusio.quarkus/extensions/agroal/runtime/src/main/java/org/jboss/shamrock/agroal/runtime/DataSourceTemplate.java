@@ -23,7 +23,7 @@ import org.jboss.shamrock.runtime.annotations.Template;
 @Template
 public class DataSourceTemplate {
 
-    public BeanContainerListener addDatasource(DataSourceConfig config) {
+    public BeanContainerListener addDatasource(DataSourceConfig config, boolean disableSslSupport) {
         return new BeanContainerListener() {
             @Override
             public void created(BeanContainer beanContainer) {
@@ -40,8 +40,11 @@ public class DataSourceTemplate {
                 if (config.password.isPresent()) {
                     producer.setPassword(config.password.get());
                 }
-                producer.setMinSize(Integer.valueOf(config.minSize));
-                producer.setMaxSize(Integer.valueOf(config.maxSize));
+                producer.setMinSize(config.minSize);
+                producer.setMaxSize(config.maxSize);
+                if (disableSslSupport) {
+                    producer.disableSslSupport();
+                }
             }
         };
     }
