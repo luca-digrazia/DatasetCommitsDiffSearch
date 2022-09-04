@@ -16,16 +16,19 @@
  */
 package org.graylog2.shared.journal;
 
+import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.AbstractIdleService;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * NoopJournal is used when disk journalling is turned off. In order to avoid propagating the knowledge about whether
  * journalling is happening or not, we inject a no-op journal.
- * <p><strong>Any use</strong> of this journal will throw an IllegalStateException.</p>
  */
 public class NoopJournal extends AbstractIdleService implements Journal {
+
+    public static final ArrayList<JournalReadEntry> JOURNAL_READ_ENTRIES = Lists.newArrayList();
 
     @Override
     public Entry createEntry(byte[] idBytes, byte[] messageBytes) {
@@ -34,17 +37,17 @@ public class NoopJournal extends AbstractIdleService implements Journal {
 
     @Override
     public long write(List<Entry> entries) {
-        throw new IllegalStateException("Invalid use of NoopJournal. Writing to this journal is always a programming error.");
+        return Long.MIN_VALUE;
     }
 
     @Override
     public long write(byte[] idBytes, byte[] messageBytes) {
-        throw new IllegalStateException("Invalid use of NoopJournal. Writing to this journal is always a programming error.");
+        return Long.MIN_VALUE;
     }
 
     @Override
-    public List<JournalReadEntry> read(long maximumCount) {
-        throw new IllegalStateException("Invalid use of NoopJournal. Reading from this journal is always a programming error.");
+    public List<JournalReadEntry> read() {
+        return JOURNAL_READ_ENTRIES;
     }
 
     @Override
