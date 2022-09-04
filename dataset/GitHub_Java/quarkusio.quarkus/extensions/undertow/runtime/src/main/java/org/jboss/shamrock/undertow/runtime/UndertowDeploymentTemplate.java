@@ -34,6 +34,8 @@ import javax.servlet.ServletException;
 import org.jboss.logging.Logger;
 import org.jboss.protean.arc.ManagedContext;
 import org.jboss.shamrock.arc.runtime.BeanContainer;
+import org.jboss.shamrock.runtime.InjectionFactory;
+import org.jboss.shamrock.runtime.InjectionInstance;
 import org.jboss.shamrock.runtime.LaunchMode;
 import org.jboss.shamrock.runtime.RuntimeValue;
 import org.jboss.shamrock.runtime.ShutdownContext;
@@ -53,6 +55,7 @@ import io.undertow.server.session.SessionIdGenerator;
 import io.undertow.servlet.ServletExtension;
 import io.undertow.servlet.Servlets;
 import io.undertow.servlet.api.ClassIntrospecter;
+import io.undertow.servlet.api.Deployment;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.DeploymentManager;
 import io.undertow.servlet.api.FilterInfo;
@@ -62,7 +65,6 @@ import io.undertow.servlet.api.ListenerInfo;
 import io.undertow.servlet.api.ServletContainer;
 import io.undertow.servlet.api.ServletInfo;
 import io.undertow.servlet.api.ServletSecurityInfo;
-import io.undertow.servlet.api.ServletStackTraces;
 import io.undertow.servlet.api.ThreadSetupHandler;
 import io.undertow.servlet.handlers.DefaultServlet;
 import io.undertow.servlet.handlers.ServletPathMatches;
@@ -112,15 +114,11 @@ public class UndertowDeploymentTemplate {
             //todo: cache configuration
             resourceManager = new CachingResourceManager(1000, 0, null, resourceManager, 2000);
         }
+
         d.setResourceManager(resourceManager);
 
-        if(launchMode == LaunchMode.DEVELOPMENT) {
-            d.setServletStackTraces(ServletStackTraces.LOCAL_ONLY);
-        } else {
-            d.setServletStackTraces(ServletStackTraces.NONE);
-        }
-        d.addWelcomePages("index.html", "index.htm");
 
+        d.addWelcomePages("index.html", "index.htm");
 
         d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
 
@@ -146,13 +144,17 @@ public class UndertowDeploymentTemplate {
         return null;
     }
 
+    public <T> InstanceFactory<T> createInstanceFactory(InjectionInstance<T> injectionInstance) {
+        return new ShamrockInstanceFactory<T>(injectionInstance);
+    }
+
     public RuntimeValue<ServletInfo> registerServlet(RuntimeValue<DeploymentInfo> deploymentInfo,
                                                      String name,
                                                      Class<?> servletClass,
                                                      boolean asyncSupported,
                                                      int loadOnStartup,
-                                                     BeanContainer beanContainer) throws Exception {
-        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass, new ShamrockInstanceFactory(beanContainer.instanceFactory(servletClass)));
+                                                     InjectionFactory instanceFactory) throws Exception {
+        ServletInfo servletInfo = new ServletInfo(name, (Class<? extends Servlet>) servletClass, new ShamrockInstanceFactory(instanceFactory.create(servletClass)));
         deploymentInfo.getValue().addServlet(servletInfo);
         servletInfo.setAsyncSupported(asyncSupported);
         if (loadOnStartup > 0) {
@@ -195,8 +197,8 @@ public class UndertowDeploymentTemplate {
     public RuntimeValue<FilterInfo> registerFilter(RuntimeValue<DeploymentInfo> info,
                                                    String name, Class<?> filterClass,
                                                    boolean asyncSupported,
-                                                   BeanContainer beanContainer) throws Exception {
-        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, new ShamrockInstanceFactory(beanContainer.instanceFactory(filterClass)));
+                                                   InjectionFactory instanceFactory) throws Exception {
+        FilterInfo filterInfo = new FilterInfo(name, (Class<? extends Filter>) filterClass, new ShamrockInstanceFactory(instanceFactory.create(filterClass)));
         info.getValue().addFilter(filterInfo);
         filterInfo.setAsyncSupported(asyncSupported);
         return new RuntimeValue<>(filterInfo);
@@ -214,16 +216,15 @@ public class UndertowDeploymentTemplate {
         info.getValue().addFilterServletNameMapping(name, mapping, dispatcherType);
     }
 
-    public void registerListener(RuntimeValue<DeploymentInfo> info, Class<?> listenerClass, BeanContainer factory) {
-        info.getValue().addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass, (InstanceFactory<? extends EventListener>) new ShamrockInstanceFactory<>(factory.instanceFactory(listenerClass))));
+    public void registerListener(RuntimeValue<DeploymentInfo> info, Class<?> listenerClass, InjectionFactory factory) {
+        info.getValue().addListener(new ListenerInfo((Class<? extends EventListener>) listenerClass, (InstanceFactory<? extends EventListener>) new ShamrockInstanceFactory<>(factory.create(listenerClass))));
     }
 
     public void addServltInitParameter(RuntimeValue<DeploymentInfo> info, String name, String value) {
         info.getValue().addInitParameter(name, value);
     }
 
-    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, DeploymentManager manager, HttpConfig config, List<HandlerWrapper> wrappers, LaunchMode launchMode) throws ServletException {
-
+    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, Deployment deployment, HttpConfig config, List<HandlerWrapper> wrappers, LaunchMode launchMode) throws ServletException {
         if (undertow == null) {
             startUndertowEagerly(config, null, launchMode);
 
@@ -236,18 +237,7 @@ public class UndertowDeploymentTemplate {
                 }
             });
         }
-        shutdown.addShutdownTask(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    manager.stop();
-                } catch (ServletException e) {
-                    log.error("Failed to stop deployment", e);
-                }
-                manager.undeploy();
-            }
-        });
-        HttpHandler main = manager.getDeployment().getHandler();
+        HttpHandler main = deployment.getHandler();
         for (HandlerWrapper i : wrappers) {
             main = i.wrap(main);
         }
@@ -265,7 +255,7 @@ public class UndertowDeploymentTemplate {
      */
     public static void startUndertowEagerly(HttpConfig config, HandlerWrapper hotDeploymentWrapper, LaunchMode launchMode) throws ServletException {
         if (undertow == null) {
-            int port = config.determinePort(launchMode);
+            int port = launchMode == LaunchMode.TEST ? config.testPort : config.port;
             log.debugf("Starting Undertow on port %d", port);
             HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
             if (hotDeploymentWrapper != null) {
@@ -277,13 +267,15 @@ public class UndertowDeploymentTemplate {
                     .setHandler(rootHandler);
             if (config.ioThreads.isPresent()) {
                 builder.setIoThreads(config.ioThreads.getAsInt());
-            } else if(launchMode.isDevOrTest()) {
-                //we limit the number of IO and worker threads in development and testing mode
+            } else if(launchMode == LaunchMode.TEST
+                    || launchMode == LaunchMode.DEVELOPMENT) {
+                //we limit the numner of IO and worker threads in development and testing mode
                 builder.setIoThreads(2);
             }
             if (config.workerThreads.isPresent()) {
                 builder.setWorkerThreads(config.workerThreads.getAsInt());
-            } else if(launchMode.isDevOrTest()) {
+            } else if(launchMode == LaunchMode.TEST
+                    || launchMode == LaunchMode.DEVELOPMENT) {
                 builder.setWorkerThreads(6);
             }
             undertow = builder
@@ -292,29 +284,29 @@ public class UndertowDeploymentTemplate {
         }
     }
 
-    public DeploymentManager bootServletContainer(RuntimeValue<DeploymentInfo> info, BeanContainer beanContainer) {
+    public Deployment bootServletContainer(RuntimeValue<DeploymentInfo> info, InjectionFactory injectionFactory) {
         try {
             ClassIntrospecter defaultVal = info.getValue().getClassIntrospecter();
             info.getValue().setClassIntrospecter(new ClassIntrospecter() {
                 @Override
                 public <T> InstanceFactory<T> createInstanceFactory(Class<T> clazz) throws NoSuchMethodException {
-                    BeanContainer.Factory<T> res = beanContainer.instanceFactory(clazz);
+                    InjectionInstance<T> res = injectionFactory.create(clazz);
                     if (res == null) {
                         return defaultVal.createInstanceFactory(clazz);
                     }
                     return new InstanceFactory<T>() {
                         @Override
                         public InstanceHandle<T> createInstance() throws InstantiationException {
-                            BeanContainer.Instance<T> ih = res.create();
+                            T ih = res.newInstance();
                             return new InstanceHandle<T>() {
                                 @Override
                                 public T getInstance() {
-                                    return ih.get();
+                                    return ih;
                                 }
 
                                 @Override
                                 public void release() {
-                                    ih.close();
+
                                 }
                             };
                         }
@@ -325,7 +317,7 @@ public class UndertowDeploymentTemplate {
             DeploymentManager manager = servletContainer.addDeployment(info.getValue());
             manager.deploy();
             manager.start();
-            return manager;
+            return manager.getDeployment();
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
