@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.query2.ParallelSkyQueryUtils.DepAndRdep;
 import com.google.devtools.build.lib.query2.ParallelSkyQueryUtils.DepAndRdepAtDepth;
 import com.google.devtools.build.lib.query2.engine.Callback;
 import com.google.devtools.build.lib.query2.engine.MinDepthUniquifier;
-import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.UniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -212,7 +211,7 @@ class RdepsBoundedVisitor extends AbstractEdgeVisitor<DepAndRdepAtDepth> {
 
   @Override
   protected ImmutableList<DepAndRdepAtDepth> getUniqueValues(
-      Iterable<DepAndRdepAtDepth> depAndRdepAtDepths) throws QueryException {
+      Iterable<DepAndRdepAtDepth> depAndRdepAtDepths) {
     // See the comment in RdepsUnboundedVisitor#getUniqueValues.
     return depAndRdepAtDepthUniquifier.unique(
         Iterables.filter(

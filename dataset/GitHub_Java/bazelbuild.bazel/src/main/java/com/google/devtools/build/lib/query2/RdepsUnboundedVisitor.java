@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.concurrent.MultisetSemaphore;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.query2.ParallelSkyQueryUtils.DepAndRdep;
 import com.google.devtools.build.lib.query2.engine.Callback;
-import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryUtil.UniquifierImpl;
 import com.google.devtools.build.lib.query2.engine.Uniquifier;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -110,8 +109,7 @@ class RdepsUnboundedVisitor extends AbstractEdgeVisitor<DepAndRdep> {
   }
 
   @Override
-  protected Visit getVisitResult(Iterable<DepAndRdep> depAndRdeps)
-      throws QueryException, InterruptedException {
+  protected Visit getVisitResult(Iterable<DepAndRdep> depAndRdeps) throws InterruptedException {
     Collection<SkyKey> validRdeps = new ArrayList<>();
 
     // Multimap of dep to all the reverse deps in this visitation. Used to filter out the
@@ -152,13 +150,11 @@ class RdepsUnboundedVisitor extends AbstractEdgeVisitor<DepAndRdep> {
       packageSemaphore.releaseAll(pkgIdsNeededForTargetification);
     }
 
-    ImmutableList.Builder<SkyKey> uniqueValidRdepsbuilder = ImmutableList.builder();
-    for (SkyKey rdep : validRdeps) {
-      if (validRdepUniquifier.unique(rdep)) {
-        uniqueValidRdepsbuilder.add(rdep);
-      }
-    }
-    ImmutableList<SkyKey> uniqueValidRdeps = uniqueValidRdepsbuilder.build();
+    ImmutableList<SkyKey> uniqueValidRdeps =
+        validRdeps
+            .stream()
+            .filter(validRdepUniquifier::unique)
+            .collect(ImmutableList.toImmutableList());
 
     // Retrieve the reverse deps as SkyKeys and defer the targetification and filtering to next
     // recursive visitation.
@@ -192,8 +188,7 @@ class RdepsUnboundedVisitor extends AbstractEdgeVisitor<DepAndRdep> {
   }
 
   @Override
-  protected ImmutableList<DepAndRdep> getUniqueValues(Iterable<DepAndRdep> depAndRdeps)
-      throws QueryException {
+  protected ImmutableList<DepAndRdep> getUniqueValues(Iterable<DepAndRdep> depAndRdeps) {
     // See the javadoc for 'validRdepUniquifier'.
     //
     // N.B. - Except for the visitation roots, 'depAndRdepUniquifier' is actually completely
