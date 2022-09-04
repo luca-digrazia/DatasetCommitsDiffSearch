@@ -27,7 +27,6 @@ import java.util.Set;
 import java.util.function.Function;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
-import static java.util.Objects.requireNonNull;
 
 /**
  * A test support class for starting and stopping your application at the start and end of a test class.
@@ -41,8 +40,6 @@ import static java.util.Objects.requireNonNull;
  */
 public class DropwizardTestSupport<C extends Configuration> {
     protected final Class<? extends Application<C>> applicationClass;
-
-    @Nullable
     protected final String configPath;
     protected final Set<ConfigOverride> configOverrides;
     protected final Optional<String> customPropertyPrefix;
@@ -55,16 +52,9 @@ public class DropwizardTestSupport<C extends Configuration> {
      */
     protected final boolean explicitConfig;
 
-    @Nullable
     protected C configuration;
-
-    @Nullable
     protected Application<C> application;
-
-    @Nullable
     protected Environment environment;
-
-    @Nullable
     protected Server jettyServer;
     protected List<ServiceListener<C>> listeners = new ArrayList<>();
 
@@ -74,12 +64,12 @@ public class DropwizardTestSupport<C extends Configuration> {
         this(applicationClass, configPath, Optional.empty(), configOverrides);
     }
 
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, @Nullable String configPath,
+    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, String configPath,
                                  Optional<String> customPropertyPrefix, ConfigOverride... configOverrides) {
         this(applicationClass, configPath, customPropertyPrefix, ServerCommand::new, configOverrides);
     }
 
-    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, @Nullable String configPath,
+    public DropwizardTestSupport(Class<? extends Application<C>> applicationClass, String configPath,
                                  Optional<String> customPropertyPrefix,
                                  Function<Application<C>, Command> commandInstantiator,
                                  ConfigOverride... configOverrides) {
@@ -176,9 +166,6 @@ public class DropwizardTestSupport<C extends Configuration> {
                 jettyServer = null;
             }
         }
-
-        // Don't leak appenders into other test cases
-        requireNonNull(configuration).getLoggingFactory().reset();
     }
 
     private void applyConfigOverrides() {
@@ -201,7 +188,7 @@ public class DropwizardTestSupport<C extends Configuration> {
         try {
             application = newApplication();
 
-            final Bootstrap<C> bootstrap = new Bootstrap<C>(getApplication()) {
+            final Bootstrap<C> bootstrap = new Bootstrap<C>(application) {
                 @Override
                 public void run(C configuration, Environment environment) throws Exception {
                     environment.lifecycle().addServerLifecycleListener(server -> jettyServer = server);
@@ -219,13 +206,13 @@ public class DropwizardTestSupport<C extends Configuration> {
             };
             if (explicitConfig) {
                 bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
-                    new POJOConfigurationFactory<>(getConfiguration()));
+                    new POJOConfigurationFactory<>(configuration));
             } else if (customPropertyPrefix.isPresent()) {
                 bootstrap.setConfigurationFactoryFactory((klass, validator, objectMapper, propertyPrefix) ->
                     new YamlConfigurationFactory<>(klass, validator, objectMapper, customPropertyPrefix.get()));
             }
 
-            getApplication().initialize(bootstrap);
+            application.initialize(bootstrap);
             final Command command = commandInstantiator.apply(application);
 
             final ImmutableMap.Builder<String, Object> file = ImmutableMap.builder();
@@ -242,20 +229,20 @@ public class DropwizardTestSupport<C extends Configuration> {
     }
 
     public C getConfiguration() {
-        return requireNonNull(configuration);
+        return configuration;
     }
 
     public int getLocalPort() {
-        return ((ServerConnector) requireNonNull(jettyServer).getConnectors()[0]).getLocalPort();
+        return ((ServerConnector) jettyServer.getConnectors()[0]).getLocalPort();
     }
 
     public int getAdminPort() {
-        final Connector[] connectors = requireNonNull(jettyServer).getConnectors();
+        final Connector[] connectors = jettyServer.getConnectors();
         return ((ServerConnector) connectors[connectors.length - 1]).getLocalPort();
     }
 
     public int getPort(int connectorIndex) {
-        return ((ServerConnector) requireNonNull(jettyServer).getConnectors()[connectorIndex]).getLocalPort();
+        return ((ServerConnector) jettyServer.getConnectors()[connectorIndex]).getLocalPort();
     }
 
     public Application<C> newApplication() {
@@ -266,13 +253,13 @@ public class DropwizardTestSupport<C extends Configuration> {
         }
     }
 
-    @SuppressWarnings({"unchecked", "TypeParameterUnusedInFormals"})
+    @SuppressWarnings("unchecked")
     public <A extends Application<C>> A getApplication() {
-        return (A) requireNonNull(application);
+        return (A) application;
     }
 
     public Environment getEnvironment() {
-        return requireNonNull(environment);
+        return environment;
     }
 
     public ObjectMapper getObjectMapper() {

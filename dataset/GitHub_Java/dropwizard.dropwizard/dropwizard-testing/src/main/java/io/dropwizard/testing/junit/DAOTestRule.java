@@ -124,7 +124,7 @@ public class DAOTestRule extends ExternalResource {
             config.setProperty("jadira.usertype.autoRegisterUserTypes", "true");
 
             entityClasses.forEach(config::addAnnotatedClass);
-            properties.forEach(config::setProperty);
+            properties.entrySet().forEach(e -> config.setProperty(e.getKey(), e.getValue()));
 
             return new DAOTestRule(config.buildSessionFactory());
         }
