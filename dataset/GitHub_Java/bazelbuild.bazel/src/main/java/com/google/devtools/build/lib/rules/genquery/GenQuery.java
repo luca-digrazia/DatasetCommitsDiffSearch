@@ -46,7 +46,6 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
@@ -277,8 +276,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
 
     ImmutableMap<PackageIdentifier, Package> packageMap = closureInfo.first;
     ImmutableMap<Label, Target> validTargetsMap = closureInfo.second;
-    PreloadedMapPackageProvider packageProvider =
-        new PreloadedMapPackageProvider(packageMap, validTargetsMap);
+    PackageProvider packageProvider = new PreloadedMapPackageProvider(packageMap, validTargetsMap);
     TargetPatternEvaluator evaluator = new SkyframeEnvTargetPatternEvaluator(env);
     Predicate<Label> labelFilter = Predicates.in(validTargetsMap.keySet());
 
@@ -289,7 +287,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   @Nullable
   private ByteString doQuery(
       QueryOptions queryOptions,
-      PreloadedMapPackageProvider packageProvider,
+      PackageProvider packageProvider,
       Predicate<Label> labelFilter,
       TargetPatternEvaluator evaluator,
       String query,
@@ -313,13 +311,6 @@ public class GenQuery implements RuleConfiguredTargetFactory {
       formatter =
           OutputFormatter.getFormatter(
               OutputFormatter.getDefaultFormatters(), queryOptions.outputFormat);
-      if (formatter == null) {
-        ruleContext.ruleError(String.format(
-            "Invalid output format '%s'. Valid values are: %s",
-            queryOptions.outputFormat,
-            OutputFormatter.formatterNames(OutputFormatter.getDefaultFormatters())));
-        return null;
-      }
       // All the packages are already loaded at this point, so there is no need
       // to start up many threads. 4 are started up to make good use of multiple
       // cores.
@@ -530,8 +521,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
   /**
    * Provide packages and targets to the query operations using precomputed transitive closure.
    */
-  private static final class PreloadedMapPackageProvider
-      implements PackageProvider, CachingPackageLocator {
+  private static final class PreloadedMapPackageProvider implements PackageProvider {
 
     private final ImmutableMap<PackageIdentifier, Package> pkgMap;
     private final ImmutableMap<Label, Target> labelToTarget;
