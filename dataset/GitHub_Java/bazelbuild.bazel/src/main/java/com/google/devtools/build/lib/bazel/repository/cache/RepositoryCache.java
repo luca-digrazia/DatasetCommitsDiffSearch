@@ -148,12 +148,7 @@ public class RepositoryCache {
     } else {
       FileSystemUtils.copyFile(cacheValue, targetPath);
     }
-
-    try {
-      FileSystemUtils.touchFile(cacheValue);
-    } catch (IOException e) {
-      // Ignore, because the cache might be on a read-only volume.
-    }
+    FileSystemUtils.touchFile(cacheValue);
 
     return targetPath;
   }
