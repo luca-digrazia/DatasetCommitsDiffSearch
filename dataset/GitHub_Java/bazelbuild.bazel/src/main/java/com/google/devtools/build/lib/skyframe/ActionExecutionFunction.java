@@ -238,12 +238,10 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         runfilesDepOwners = ActionInputDepOwners.EMPTY_INSTANCE;
       }
 
-      Iterable<SkyKey> failedActionDeps =
-          state.discoveredInputs != null
-              ? Iterables.concat(inputDepKeys, state.discoveredInputs)
-              : inputDepKeys;
+      // TODO(b/19539699): discovered deps aren't necessarily in inputDepKeys. They're discovered
+      // under checkCacheAndExecuteIfNeeded. Thread them through to here.
       RewindPlan rewindPlan =
-          actionRewindStrategy.getRewindPlan(action, failedActionDeps, e, runfilesDepOwners, env);
+          actionRewindStrategy.getRewindPlan(action, inputDepKeys, e, runfilesDepOwners, env);
       for (Action actionToRestart : rewindPlan.getActionsToRestart()) {
         skyframeActionExecutor.resetActionExecution(actionToRestart);
       }
