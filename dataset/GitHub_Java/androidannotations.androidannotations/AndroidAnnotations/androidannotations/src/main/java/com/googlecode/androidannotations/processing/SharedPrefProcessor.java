@@ -1,13 +1,13 @@
-/**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
- *
+/*
+ * Copyright 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
+ * 
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
  * the License at
- *
+ * 
  * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
+ * 
+ * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
  * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
  * License for the specific language governing permissions and limitations under
@@ -26,11 +26,11 @@ import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.util.ElementFilter;
+import javax.lang.model.util.Elements;
 
 import com.googlecode.androidannotations.annotations.sharedpreferences.DefaultBoolean;
 import com.googlecode.androidannotations.annotations.sharedpreferences.DefaultFloat;
 import com.googlecode.androidannotations.annotations.sharedpreferences.DefaultInt;
-import com.googlecode.androidannotations.annotations.sharedpreferences.DefaultLong;
 import com.googlecode.androidannotations.annotations.sharedpreferences.DefaultString;
 import com.googlecode.androidannotations.annotations.sharedpreferences.SharedPref;
 import com.googlecode.androidannotations.annotations.sharedpreferences.SharedPref.Scope;
@@ -42,7 +42,6 @@ import com.googlecode.androidannotations.api.sharedpreferences.FloatPrefField;
 import com.googlecode.androidannotations.api.sharedpreferences.IntPrefEditorField;
 import com.googlecode.androidannotations.api.sharedpreferences.IntPrefField;
 import com.googlecode.androidannotations.api.sharedpreferences.LongPrefEditorField;
-import com.googlecode.androidannotations.api.sharedpreferences.LongPrefField;
 import com.googlecode.androidannotations.api.sharedpreferences.SharedPreferencesHelper;
 import com.googlecode.androidannotations.api.sharedpreferences.StringPrefEditorField;
 import com.googlecode.androidannotations.api.sharedpreferences.StringPrefField;
@@ -91,7 +90,7 @@ public class SharedPrefProcessor extends AnnotationHelper implements ElementProc
     }
 
     @Override
-    public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
+    public void process(Element element, JCodeModel codeModel, ActivitiesHolder activitiesHolder) throws Exception {
 
         TypeElement typeElement = (TypeElement) element;
 
@@ -104,11 +103,14 @@ public class SharedPrefProcessor extends AnnotationHelper implements ElementProc
         helperClass._extends(SharedPreferencesHelper.class);
 
         // Extracting valid methods
-        List<? extends Element> members = typeElement.getEnclosedElements();
-        List<ExecutableElement> methods = ElementFilter.methodsIn(members);
+        Elements elements = processingEnv.getElementUtils();
+        List<? extends Element> inheritedMembers = elements.getAllMembers(typeElement);
+        List<ExecutableElement> inheritedMethods = ElementFilter.methodsIn(inheritedMembers);
         List<ExecutableElement> validMethods = new ArrayList<ExecutableElement>();
-        for (ExecutableElement method : methods) {
-            validMethods.add(method);
+        for (ExecutableElement method : inheritedMethods) {
+            if (!method.getEnclosingElement().asType().toString().equals("java.lang.Object")) {
+                validMethods.add(method);
+            }
         }
 
         // Static editor class
@@ -195,7 +197,8 @@ public class SharedPrefProcessor extends AnnotationHelper implements ElementProc
                     defaultValue = JExpr.lit(false);
                 }
                 addFieldHelperMethod(helperClass, fieldName, defaultValue, BooleanPrefField.class, "booleanField");
-            } else if ("float".equals(returnType)) {
+            }
+            if ("float".equals(returnType)) {
                 JExpression defaultValue;
                 DefaultFloat defaultAnnotation = method.getAnnotation(DefaultFloat.class);
                 if (defaultAnnotation != null) {
@@ -204,7 +207,8 @@ public class SharedPrefProcessor extends AnnotationHelper implements ElementProc
                     defaultValue = JExpr.lit(0f);
                 }
                 addFieldHelperMethod(helperClass, fieldName, defaultValue, FloatPrefField.class, "floatField");
-            } else if ("int".equals(returnType)) {
+            }
+            if ("int".equals(returnType)) {
                 JExpression defaultValue;
                 DefaultInt defaultAnnotation = method.getAnnotation(DefaultInt.class);
                 if (defaultAnnotation != null) {
@@ -213,16 +217,8 @@ public class SharedPrefProcessor extends AnnotationHelper implements ElementProc
                     defaultValue = JExpr.lit(0);
                 }
                 addFieldHelperMethod(helperClass, fieldName, defaultValue, IntPrefField.class, "intField");
-            } else if ("long".equals(returnType)) {
-                JExpression defaultValue;
-                DefaultLong defaultAnnotation = method.getAnnotation(DefaultLong.class);
-                if (defaultAnnotation != null) {
-                    defaultValue = JExpr.lit(defaultAnnotation.value());
-                } else {
-                    defaultValue = JExpr.lit(0l);
-                }
-                addFieldHelperMethod(helperClass, fieldName, defaultValue, LongPrefField.class, "longField");
-            } else if ("java.lang.String".equals(returnType)) {
+            }
+            if ("java.lang.String".equals(returnType)) {
                 JExpression defaultValue;
                 DefaultString defaultAnnotation = method.getAnnotation(DefaultString.class);
                 if (defaultAnnotation != null) {
