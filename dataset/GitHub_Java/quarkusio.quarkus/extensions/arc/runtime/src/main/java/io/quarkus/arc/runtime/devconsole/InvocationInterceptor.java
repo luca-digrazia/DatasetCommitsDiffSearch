@@ -58,6 +58,7 @@ public class InvocationInterceptor {
     Object proceed(Invocation.Builder builder, InvocationContext context, ManagedContext requestContext, InvocationTree tree)
             throws Exception {
         long nanoTime = System.nanoTime();
+        // Object result;
         try {
             return context.proceed();
         } catch (Exception e) {
