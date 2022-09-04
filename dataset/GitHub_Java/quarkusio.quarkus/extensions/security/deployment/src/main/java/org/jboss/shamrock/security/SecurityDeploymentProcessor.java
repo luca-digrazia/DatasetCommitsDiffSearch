@@ -18,17 +18,19 @@ package org.jboss.shamrock.security;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.jboss.logging.Logger;
-import org.jboss.shamrock.deployment.annotations.BuildProducer;
-import org.jboss.shamrock.deployment.annotations.BuildStep;
-import org.jboss.shamrock.deployment.annotations.ExecutionTime;
-import org.jboss.shamrock.deployment.annotations.Record;
+import org.jboss.shamrock.annotations.BuildProducer;
+import org.jboss.shamrock.annotations.BuildStep;
+import org.jboss.shamrock.annotations.ExecutionTime;
+import org.jboss.shamrock.annotations.Record;
 import org.jboss.shamrock.deployment.ShamrockConfig;
-import org.jboss.shamrock.deployment.builditem.FeatureBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import org.jboss.shamrock.jaxrs.JaxrsProviderBuildItem;
 import org.jboss.shamrock.runtime.RuntimeValue;
 import org.jboss.shamrock.undertow.ServletExtensionBuildItem;
 import org.wildfly.security.auth.server.SecurityDomain;
@@ -51,12 +53,16 @@ import org.wildfly.security.auth.server.SecurityRealm;
 class SecurityDeploymentProcessor {
     private static final Logger log = Logger.getLogger(SecurityDeploymentProcessor.class.getName());
 
-    SecurityConfig security;
-
-    @BuildStep
-    void registerFeature(BuildProducer<FeatureBuildItem> feature) {
-        feature.produce(new FeatureBuildItem(FeatureBuildItem.SECURITY));
-    }
+    /**
+     * The configuration for the {@linkplain org.wildfly.security.auth.realm.LegacyPropertiesSecurityRealm}
+     */
+    @ConfigProperty(name = "shamrock.security.file")
+    Optional<PropertiesRealmConfig> propertiesRealmConfig;
+    /**
+     * The configuration for the {@linkplain org.wildfly.security.auth.realm.SimpleMapBackedSecurityRealm}
+     */
+    @ConfigProperty(name = "shamrock.security.embedded")
+    Optional<MPRealmConfig> mpRealmConfig;
 
     /**
      * Register the Elytron-provided password factory SPI implementation
@@ -83,14 +89,14 @@ class SecurityDeploymentProcessor {
     AuthConfigBuildItem configureFileRealmAuthConfig(SecurityTemplate template,
                                                     BuildProducer<SubstrateResourceBuildItem> resources,
                                                     BuildProducer<SecurityRealmBuildItem> securityRealm) throws Exception {
-        if (security.file.enabled) {
-            PropertiesRealmConfig realmConfig = security.file;
+        if (propertiesRealmConfig.isPresent() && propertiesRealmConfig.get().isEnabled()) {
+            PropertiesRealmConfig realmConfig = propertiesRealmConfig.get();
             log.debugf("Configuring from PropertiesRealmConfig, users=%s, roles=%s", realmConfig.getUsers(), realmConfig.getRoles());
             // Add the users/roles properties files resource names to build artifact
             resources.produce(new SubstrateResourceBuildItem(realmConfig.users, realmConfig.roles));
             // Have the runtime template create the LegacyPropertiesSecurityRealm and create the build item
-            RuntimeValue<SecurityRealm> realm = template.createRealm(realmConfig);
-            securityRealm.produce(new SecurityRealmBuildItem(realm, realmConfig.getAuthConfig()));
+            RuntimeValue<SecurityRealm> realm = template.createRealm(propertiesRealmConfig.get());
+            securityRealm.produce(new SecurityRealmBuildItem(realm, propertiesRealmConfig.get().getAuthConfig()));
             // Return the realm authentication mechanism build item
             return new AuthConfigBuildItem(realmConfig.getAuthConfig());
         }
@@ -113,8 +119,8 @@ class SecurityDeploymentProcessor {
     AuthConfigBuildItem configureMPRealmConfig(SecurityTemplate template,
                                  BuildProducer<SubstrateResourceBuildItem> resources,
                                  BuildProducer<SecurityRealmBuildItem> securityRealm) throws Exception {
-        if (security.embedded.enabled) {
-            MPRealmConfig realmConfig = security.embedded;
+        if (mpRealmConfig.isPresent() && mpRealmConfig.get().isEnabled()) {
+            MPRealmConfig realmConfig = mpRealmConfig.get();
             log.info("Configuring from MPRealmConfig");
             // These are not being populated correctly by the core config Map logic for some reason, so reparse them here
             log.debugf("MPRealmConfig.users: %s", realmConfig.users);
@@ -157,7 +163,7 @@ class SecurityDeploymentProcessor {
     SecurityDomainBuildItem build(SecurityTemplate template, BuildProducer<ServletExtensionBuildItem> extension,
                                   List<SecurityRealmBuildItem> realms,
                                   List<AuthConfigBuildItem> authConfigs) throws Exception {
-        log.debugf("build, hasFile=%s, hasMP=%s", Boolean.valueOf(security.file.enabled), Boolean.valueOf(security.embedded.enabled));
+        log.debugf("build, hasFile=%s, hasMP=%s", propertiesRealmConfig.isPresent(), mpRealmConfig.isPresent());
         if(realms.size() > 0) {
             // Configure the SecurityDomain.Builder from the main realm
             SecurityRealmBuildItem realmBuildItem = realms.get(0);
@@ -201,14 +207,21 @@ class SecurityDeploymentProcessor {
         for(SecurityRealmBuildItem realm : realms) {
             AuthConfig authConfig = realm.getAuthConfig();
             if(authConfig.getType().isAssignableFrom(PropertiesRealmConfig.class)) {
-                template.loadRealm(realm.getRealm(), security.file);
+                template.loadRealm(realm.getRealm(), propertiesRealmConfig.get());
             }
             else if(authConfig.getType().isAssignableFrom(MPRealmConfig.class)) {
-                template.loadRealm(realm.getRealm(), security.embedded);
+                template.loadRealm(realm.getRealm(), mpRealmConfig.get());
             }
         }
     }
 
-
+    /**
+     * Install the JAXRS security provider
+     * @param providers - the JaxrsProviderBuildItem providers producer to use
+     */
+    @BuildStep
+    void setupFilter(BuildProducer<JaxrsProviderBuildItem> providers) {
+        providers.produce(new JaxrsProviderBuildItem(RolesFilterRegistrar.class.getName()));
+    }
 
 }
