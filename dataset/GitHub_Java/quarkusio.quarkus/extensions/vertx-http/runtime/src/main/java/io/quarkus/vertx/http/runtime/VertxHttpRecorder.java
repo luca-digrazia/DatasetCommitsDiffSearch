@@ -123,7 +123,6 @@ public class VertxHttpRecorder {
     private static volatile int actualHttpPort = -1;
     private static volatile int actualHttpsPort = -1;
 
-    public static final String GET = "GET";
     private static final Handler<HttpServerRequest> ACTUAL_ROOT = new Handler<HttpServerRequest>() {
         @Override
         public void handle(HttpServerRequest httpServerRequest) {
@@ -136,7 +135,7 @@ public class VertxHttpRecorder {
             //as it is possible filters such as the auth filter can do blocking tasks
             //as the underlying handler has not had a chance to install a read handler yet
             //and data that arrives while the blocking task is being processed will be lost
-            if (!httpServerRequest.rawMethod().equals(GET)) {
+            if (!httpServerRequest.method().equals(HttpMethod.GET)) {
                 //we don't pause for GET requests, as there is no data
                 httpServerRequest.pause();
             }
