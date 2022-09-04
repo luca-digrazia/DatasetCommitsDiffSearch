@@ -3,6 +3,7 @@ package io.quarkus.vertx.runtime.graal;
 import java.io.FileDescriptor;
 import java.io.IOException;
 import java.net.URL;
+import java.security.AccessControlContext;
 import java.util.function.BooleanSupplier;
 
 import com.oracle.svm.core.annotate.Alias;
@@ -21,27 +22,40 @@ final class Target_sun_misc_URLClassPath$Loader {
 final class Target_sun_misc_URLClassPath$FileLoader {
 
     @Alias
-    public Target_sun_misc_URLClassPath$FileLoader(URL url) throws IOException {
+    public Target_sun_misc_URLClassPath$FileLoader(URL url) {
     }
 }
 
 @TargetClass(className = "sun.misc.URLClassPath")
 final class Target_sun_misc_URLClassPath {
 
+    @Alias
+    private AccessControlContext acc;
+
     @Substitute
     private Target_sun_misc_URLClassPath$Loader getLoader(final URL url) throws IOException {
-        String file = url.getFile();
-        if (file != null && file.endsWith("/")) {
-            if ("file".equals(url.getProtocol())) {
-                return (Target_sun_misc_URLClassPath$Loader) (Object) new Target_sun_misc_URLClassPath$FileLoader(
-                        url);
-            } else {
-                return new Target_sun_misc_URLClassPath$Loader(url);
-            }
-        } else {
-            // that must be wrong, but JarLoader is deleted by SVM
-            return (Target_sun_misc_URLClassPath$Loader) (Object) new Target_sun_misc_URLClassPath$FileLoader(
-                    url);
+        try {
+            return java.security.AccessController.doPrivileged(
+                    new java.security.PrivilegedExceptionAction<Target_sun_misc_URLClassPath$Loader>() {
+                        @Override
+                        public Target_sun_misc_URLClassPath$Loader run() throws IOException {
+                            String file = url.getFile();
+                            if (file != null && file.endsWith("/")) {
+                                if ("file".equals(url.getProtocol())) {
+                                    return (Target_sun_misc_URLClassPath$Loader) (Object) new Target_sun_misc_URLClassPath$FileLoader(
+                                            url);
+                                } else {
+                                    return new Target_sun_misc_URLClassPath$Loader(url);
+                                }
+                            } else {
+                                // that must be wrong, but JarLoader is deleted by SVM
+                                return (Target_sun_misc_URLClassPath$Loader) (Object) new Target_sun_misc_URLClassPath$FileLoader(
+                                        url);
+                            }
+                        }
+                    }, acc);
+        } catch (java.security.PrivilegedActionException pae) {
+            throw (IOException) pae.getException();
         }
     }
 
