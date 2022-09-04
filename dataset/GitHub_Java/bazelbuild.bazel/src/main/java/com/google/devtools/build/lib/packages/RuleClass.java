@@ -151,6 +151,8 @@ public class RuleClass {
 
   public static final PathFragment THIRD_PARTY_PREFIX = PathFragment.create("third_party");
   public static final PathFragment EXPERIMENTAL_PREFIX = PathFragment.create("experimental");
+  public static final String EXEC_COMPATIBLE_WITH_ATTR = "exec_compatible_with";
+  public static final String EXEC_PROPERTIES = "exec_properties";
   /*
    * The attribute that declares the set of license labels which apply to this target.
    */
@@ -337,21 +339,9 @@ public class RuleClass {
 
   /**
    * For Bazel's constraint system: the attribute that declares the list of constraints that the
-   * target platform must satisfy to be considered compatible.
+   * target must satisfy to be considered compatible.
    */
-  public static final String TARGET_COMPATIBLE_WITH_ATTR = "target_compatible_with";
-
-  /**
-   * For Bazel's constraint system: the attribute that declares the list of constraints that the
-   * execution platform must satisfy to be considered compatible.
-   */
-  public static final String EXEC_COMPATIBLE_WITH_ATTR = "exec_compatible_with";
-
-  /**
-   * The attribute that declares execution properties that should be added to actions created by
-   * this target.
-   */
-  public static final String EXEC_PROPERTIES_ATTR = "exec_properties";
+  public static final String TARGET_RESTRICTED_TO_ATTR = "target_compatible_with";
 
   /**
    * For Bazel's constraint system: the implicit attribute used to store rule class restriction
@@ -1489,7 +1479,7 @@ public class RuleClass {
       this.supportsConstraintChecking = false;
       attributes.remove(RuleClass.COMPATIBLE_ENVIRONMENT_ATTR);
       attributes.remove(RuleClass.RESTRICTED_ENVIRONMENT_ATTR);
-      attributes.remove(RuleClass.TARGET_COMPATIBLE_WITH_ATTR);
+      attributes.remove(RuleClass.TARGET_RESTRICTED_TO_ATTR);
       return this;
     }
 
