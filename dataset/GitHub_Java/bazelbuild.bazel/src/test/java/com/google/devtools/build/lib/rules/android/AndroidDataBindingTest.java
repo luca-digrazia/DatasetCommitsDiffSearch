@@ -19,9 +19,11 @@ import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirs
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.extra.JavaCompileInfo;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import java.util.List;
@@ -90,6 +92,13 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
         ")");
     scratch.file("java/android/binary/MyApp.java",
         "package android.binary; public class MyApp {};");
+  }
+
+  /** Returns the .params file contents of a {@link JavaCompileAction} */
+  private Iterable<String> getParamFileContents(JavaCompileAction action)
+      throws CommandLineExpansionException {
+    Artifact paramFile = getFirstArtifactEndingWith(action.getInputs(), "-2.params");
+    return ((ParameterFileWriteAction) getGeneratingAction(paramFile)).getContents();
   }
 
   @Test
@@ -185,7 +194,7 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
             "-Aandroid.databinding.modulePackage=android.binary",
             "-Aandroid.databinding.minApi=14",
             "-Aandroid.databinding.printEncodedErrors=0");
-    assertThat(paramFileArgsForAction(binCompileAction)).containsAllIn(expectedJavacopts);
+    assertThat(getParamFileContents(binCompileAction)).containsAllIn(expectedJavacopts);
 
     // Regression test for b/63134122
     JavaCompileInfo javaCompileInfo =
@@ -242,9 +251,9 @@ public class AndroidDataBindingTest extends AndroidBuildViewTestCase {
     JavaCompileAction libCompileAction = (JavaCompileAction) getGeneratingAction(
         getFirstArtifactEndingWith(libArtifacts, "lib_no_resource_files.jar"));
     // The annotation processor is attached to the Java compilation:
-    assertThat(paramFileArgsForAction(libCompileAction))
-        .containsAllOf(
-            "--processors", "android.databinding.annotationprocessor.ProcessDataBinding");
+    assertThat(getParamFileContents(libCompileAction)).containsAllOf(
+        "--processors",
+        "android.databinding.annotationprocessor.ProcessDataBinding");
     // The dummy .java file with annotations that trigger the annotation process is present:
     assertThat(ActionsTestUtil.prettyArtifactNames(libCompileAction.getInputs()))
         .contains("java/android/lib_no_resource_files/databinding/lib_no_resource_files/"
