@@ -121,13 +121,18 @@ public interface TestActionContext extends ActionContext {
   interface TestRunnerSpawn {
     ActionExecutionContext getActionExecutionContext();
 
+    /** Execute the test, and handle the test runner protocol. */
+    TestAttemptResult execute() throws InterruptedException, IOException, ExecException;
+
     /**
      * Begin the test attempt execution. This may block until the test attempt is complete and
      * return a completed result, or it may return a continuation with a non-null future
      * representing asynchronous execution.
      */
-    TestAttemptContinuation beginExecution()
-        throws InterruptedException, IOException, ExecException;
+    default TestAttemptContinuation beginExecution()
+        throws InterruptedException, IOException, ExecException {
+      return TestAttemptContinuation.of(execute());
+    }
 
     /**
      * After the first attempt has run, this method is called to determine the maximum number of
