@@ -52,7 +52,6 @@ import static com.lordofthejars.nosqlunit.elasticsearch2.ElasticsearchRule.Elast
 import static com.lordofthejars.nosqlunit.elasticsearch2.EmbeddedElasticsearch.EmbeddedElasticsearchRuleBuilder.newEmbeddedElasticsearchRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assume.assumeTrue;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class CountsTest {
@@ -230,12 +229,5 @@ public class CountsTest {
         assertThat(counts.total()).isEqualTo(count1 + count2);
         assertThat(counts.total(indexSet1)).isEqualTo(count1);
         assertThat(counts.total(indexSet2)).isEqualTo(count2);
-    }
-
-    @Test
-    public void totalReturnsMinusOneIfIndexDoesNotExist() throws Exception {
-        final IndexSet indexSet = mock(IndexSet.class);
-        when(indexSet.getManagedIndicesNames()).thenReturn(new String[]{"does_not_exist"});
-        assertThat(counts.total(indexSet)).isEqualTo(-1L);
     }
 }
