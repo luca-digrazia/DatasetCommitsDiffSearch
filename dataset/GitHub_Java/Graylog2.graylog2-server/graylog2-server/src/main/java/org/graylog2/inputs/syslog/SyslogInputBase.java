@@ -72,7 +72,6 @@ public class SyslogInputBase {
         r.addField(
                 new TextField(
                         CK_BIND_ADDRESS,
-                        "Bind address",
                         "0.0.0.0",
                         "Address to listen on. For example 0.0.0.0 or 127.0.0.1.",
                         TextField.Attribute.IS_SOCKET_ADDRESS
@@ -82,7 +81,6 @@ public class SyslogInputBase {
         r.addField(
                 new NumberField(
                         CK_PORT,
-                        "Port",
                         514,
                         "Port to listen on.",
                         NumberField.Attribute.IS_PORT_NUMBER
@@ -92,7 +90,6 @@ public class SyslogInputBase {
         r.addField(
                 new BooleanField(
                         CK_FORCE_RDNS,
-                        "Force rDNS?",
                         false,
                         "Force rDNS resolution of hostname? Use if hostname cannot be parsed."
                 )
@@ -101,7 +98,6 @@ public class SyslogInputBase {
         r.addField(
                 new BooleanField(
                         CK_ALLOW_OVERRIDE_DATE,
-                        "Allow overriding date?",
                         true,
                         "Allow to override with current date if date could not be parsed?"
                 )
@@ -110,7 +106,6 @@ public class SyslogInputBase {
         r.addField(
                 new BooleanField(
                         CK_STORE_FULL_MESSAGE,
-                        "Store full message?",
                         false,
                         "Store the full original syslog message as full_message?"
                 )

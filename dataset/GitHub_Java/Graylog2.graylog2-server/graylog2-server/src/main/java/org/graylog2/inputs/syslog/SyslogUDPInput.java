@@ -20,7 +20,6 @@
 
 package org.graylog2.inputs.syslog;
 
-import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.Core;
 import org.graylog2.plugin.inputs.*;
@@ -34,7 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
-import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.graylog2.plugin.GraylogServer;
@@ -42,11 +40,14 @@ import org.graylog2.plugin.GraylogServer;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class SyslogUDPInput extends SyslogInputBase {
+public class SyslogUDPInput extends SyslogInputBase implements MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogUDPInput.class);
 
     public static final String NAME = "Syslog UDP";
+
+    private String inputId;
+    private ConnectionlessBootstrap bootstrap;
 
     @Override
     public void launch() throws MisfireException {
@@ -78,6 +79,16 @@ public class SyslogUDPInput extends SyslogInputBase {
     }
 
     @Override
+    public void setId(String id) {
+        this.inputId = id;
+    }
+
+    @Override
+    public String getId() {
+        return inputId;
+    }
+
+    @Override
     public boolean isExclusive() {
         return false;
     }
@@ -85,11 +96,6 @@ public class SyslogUDPInput extends SyslogInputBase {
     @Override
     public String getName() {
         return NAME;
-    }
-
-    @Override
-    public Map<String, String> getAttributes() {
-        return Maps.newHashMap();
     }
 
 }
