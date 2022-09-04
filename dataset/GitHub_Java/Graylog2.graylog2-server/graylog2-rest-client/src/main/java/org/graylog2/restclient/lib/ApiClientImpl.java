@@ -425,7 +425,7 @@ class ApiClientImpl implements ApiClient {
 
             final Request request = requestBuilder.build();
             if (LOG.isDebugEnabled()) {
-                LOG.debug("API Request: {}", request);
+                LOG.debug("API Request: {}", request.toString());
             }
 
             // Set 200 OK as standard if not defined.
@@ -759,7 +759,7 @@ class ApiClientImpl implements ApiClient {
 
             final Request request = requestBuilder.build();
             if (LOG.isDebugEnabled()) {
-                LOG.debug("API Request: {}", request);
+                LOG.debug("API Request: {}", request.toString());
             }
 
             // Set 200 OK as standard if not defined.
