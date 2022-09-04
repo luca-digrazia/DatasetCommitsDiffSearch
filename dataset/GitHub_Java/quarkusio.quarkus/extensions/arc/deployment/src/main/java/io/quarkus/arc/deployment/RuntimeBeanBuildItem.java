@@ -8,11 +8,12 @@ import java.util.function.Supplier;
 
 import javax.enterprise.context.Dependent;
 
-import io.quarkus.builder.item.MultiBuildItem;
+import org.jboss.builder.item.MultiBuildItem;
+
 import io.quarkus.runtime.RuntimeValue;
 
 /**
- * Represents a bean that can be easily produced through a recorder (or other runtime Supplier implementation)
+ * Represents a bean that can be easily produced through a template (or other runtime Supplier implementation)
  */
 public final class RuntimeBeanBuildItem extends MultiBuildItem {
 
