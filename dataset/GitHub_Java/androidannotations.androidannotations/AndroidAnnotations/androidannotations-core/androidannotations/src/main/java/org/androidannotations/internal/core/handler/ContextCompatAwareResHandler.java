@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -16,7 +16,6 @@
 package org.androidannotations.internal.core.handler;
 
 import static com.helger.jcodemodel.JExpr.invoke;
-import static com.helger.jcodemodel.JExpr.ref;
 
 import javax.lang.model.element.TypeElement;
 
@@ -25,6 +24,8 @@ import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.internal.core.model.AndroidRes;
 
+import com.helger.jcodemodel.IJAssignmentTarget;
+import com.helger.jcodemodel.IJExpression;
 import com.helger.jcodemodel.JBlock;
 import com.helger.jcodemodel.JConditional;
 import com.helger.jcodemodel.JFieldRef;
@@ -43,16 +44,17 @@ abstract class ContextCompatAwareResHandler extends AbstractResHandler {
 	}
 
 	@Override
-	protected void makeCall(String fieldName, EComponentHolder holder, JBlock methodBody, JFieldRef idRef) {
-		JFieldRef ref = ref(fieldName);
-		if (hasContextCompatInClasspath()) {
-			methodBody.assign(ref, getClasses().CONTEXT_COMPAT.staticInvoke(androidRes.getResourceMethodName()).arg(holder.getContextRef()).arg(idRef));
-		} else if (shouldUseContextMethod() && !hasContextCompatInClasspath()) {
-			methodBody.assign(ref, holder.getContextRef().invoke(androidRes.getResourceMethodName()).arg(idRef));
-		} else if (!shouldUseContextMethod() && hasTargetMethodInContext() && !hasContextCompatInClasspath()) {
-			createCallWithIfGuard(holder, ref, methodBody, idRef);
+	protected IJExpression getInstanceInvocation(EComponentHolder holder, JFieldRef idRef, IJAssignmentTarget fieldRef, JBlock targetBlock) {
+		if (hasTargetMethodInAndroidxContextCompat()) {
+			return getClasses().ANDROIDX_CONTEXT_COMPAT.staticInvoke(androidRes.getResourceMethodName()).arg(holder.getContextRef()).arg(idRef);
+		} else if (hasTargetMethodInContextCompat()) {
+			return getClasses().CONTEXT_COMPAT.staticInvoke(androidRes.getResourceMethodName()).arg(holder.getContextRef()).arg(idRef);
+		} else if (shouldUseContextMethod()) {
+			return holder.getContextRef().invoke(androidRes.getResourceMethodName()).arg(idRef);
+		} else if (!shouldUseContextMethod() && hasTargetMethodInContext()) {
+			return createCallWithIfGuard(holder, idRef, fieldRef, targetBlock);
 		} else {
-			methodBody.assign(ref, invoke(holder.getResourcesRef(), androidRes.getResourceMethodName()).arg(idRef));
+			return invoke(holder.getResourcesRef(), androidRes.getResourceMethodName()).arg(idRef);
 		}
 	}
 
@@ -66,17 +68,26 @@ abstract class ContextCompatAwareResHandler extends AbstractResHandler {
 		return hasTargetMethod(context, androidRes.getResourceMethodName());
 	}
 
-	private void createCallWithIfGuard(EComponentHolder holder, JFieldRef ref, JBlock methodBody, JFieldRef idRef) {
-		JVar resourcesRef = holder.getResourcesRef();
-		JConditional guardIf = methodBody._if(getClasses().BUILD_VERSION.staticRef("SDK_INT").gte(getClasses().BUILD_VERSION_CODES.staticRef(minSdkPlatformName)));
-		JBlock ifBlock = guardIf._then();
-		ifBlock.assign(ref, holder.getContextRef().invoke(androidRes.getResourceMethodName()).arg(idRef));
+	private boolean hasTargetMethodInContextCompat() {
+		TypeElement contextCompat = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.CONTEXT_COMPAT);
 
-		JBlock elseBlock = guardIf._else();
-		elseBlock.assign(ref, resourcesRef.invoke(androidRes.getResourceMethodName()).arg(idRef));
+		return hasTargetMethod(contextCompat, androidRes.getResourceMethodName());
 	}
 
-	protected boolean hasContextCompatInClasspath() {
-		return getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.CONTEXT_COMPAT) != null;
+	private boolean hasTargetMethodInAndroidxContextCompat() {
+		TypeElement contextCompat = getProcessingEnvironment().getElementUtils().getTypeElement(CanonicalNameConstants.ANDROIDX_CONTEXT_COMPAT);
+
+		return hasTargetMethod(contextCompat, androidRes.getResourceMethodName());
+	}
+
+	private IJExpression createCallWithIfGuard(EComponentHolder holder, JFieldRef idRef, IJAssignmentTarget fieldRef, JBlock targetBlock) {
+		JVar resourcesRef = holder.getResourcesRef();
+		IJExpression buildVersionCondition = getClasses().BUILD_VERSION.staticRef("SDK_INT").gte(getClasses().BUILD_VERSION_CODES.staticRef(minSdkPlatformName));
+
+		JConditional conditional = targetBlock._if(buildVersionCondition);
+		conditional._then().add(fieldRef.assign(holder.getContextRef().invoke(androidRes.getResourceMethodName()).arg(idRef)));
+		conditional._else().add(fieldRef.assign(resourcesRef.invoke(androidRes.getResourceMethodName()).arg(idRef)));
+
+		return null;
 	}
 }
