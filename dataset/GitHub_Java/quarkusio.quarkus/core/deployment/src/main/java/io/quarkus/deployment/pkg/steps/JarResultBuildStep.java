@@ -24,7 +24,6 @@ import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Enumeration;
@@ -94,7 +93,7 @@ import io.quarkus.deployment.pkg.builditem.UberJarRequiredBuildItem;
  */
 public class JarResultBuildStep {
 
-    private static final Collection<String> IGNORED_ENTRIES = Arrays.asList(
+    private static final Set<String> IGNORED_ENTRIES = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "META-INF/INDEX.LIST",
             "META-INF/MANIFEST.MF",
             "module-info.class",
@@ -118,7 +117,7 @@ public class JarResultBuildStep {
             "META-INF/quarkus-extension.yaml",
             "META-INF/quarkus-deployment-dependency.graph",
             "META-INF/jandex.idx",
-            "LICENSE");
+            "LICENSE")));
 
     private static final Logger log = Logger.getLogger(JarResultBuildStep.class);
     // we shouldn't have to specify these flags when opening a ZipFS (since they are the default ones), but failure to do so
@@ -426,14 +425,8 @@ public class JarResultBuildStep {
 
         boolean rebuild = outputTargetBuildItem.isRebuild();
 
-        Path buildDir;
-
-        if (packageConfig.outputDirectory.isPresent()) {
-            buildDir = outputTargetBuildItem.getOutputDirectory();
-        } else {
-            buildDir = outputTargetBuildItem.getOutputDirectory().resolve(DEFAULT_FAST_JAR_DIRECTORY_NAME);
-        }
-
+        Path buildDir = outputTargetBuildItem.getOutputDirectory()
+                .resolve(packageConfig.outputDirectory.orElse(DEFAULT_FAST_JAR_DIRECTORY_NAME));
         //unmodified 3rd party dependencies
         Path libDir = buildDir.resolve(LIB);
         Path mainLib = libDir.resolve(MAIN);
