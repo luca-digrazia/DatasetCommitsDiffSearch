@@ -220,10 +220,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         testDir = initProject("projects/classic-inst", "projects/project-intrumentation-reload");
         runAndCheck();
 
-        // Enable instrumentation based reload to begin with
-        DevModeTestUtils.getHttpResponse("/app/enable");
-
-        //if there is an instrumentation based reload this will stay the same
+        //if there is an insturmentation based reload this will stay the same
         String firstUuid = DevModeTestUtils.getHttpResponse("/app/uuid");
 
         // Edit the "Hello" message.
@@ -1030,13 +1027,5 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         assertThat(running.log()).doesNotContain("Skipping Quarkus code generation");
         assertThat(running.log()).contains("Copying 1 resource"); // maven-resource-plugin
         assertThat(running.log()).contains("Compiling 2 source files"); // maven-compiler-plugin
-    }
-
-    @Test
-    public void testPropertyExpansion() throws IOException, MavenInvocationException {
-        testDir = initProject("projects/property-expansion");
-        runAndCheck();
-        assertThat(DevModeTestUtils.getHttpResponse("/app/hello/")).isEqualTo("hello");
-        assertThat(DevModeTestUtils.getHttpResponse("/app/hello/applicationName")).isEqualTo("myapp");
     }
 }

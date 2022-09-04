@@ -10,14 +10,9 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.instrument.ClassDefinition;
-import java.nio.file.FileSystems;
-import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -123,7 +118,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     public Path getClassesDir() {
         //TODO: fix all these
         for (DevModeContext.ModuleInfo i : context.getAllModules()) {
-            return Paths.get(i.getClassesPath());
+            return Paths.get(i.getResourcePath());
         }
         return null;
     }
@@ -199,7 +194,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
 
         ClassScanResult changedClassResults = checkForChangedClasses();
         Set<String> filesChanged = checkForFileChange();
+
         boolean configFileRestartNeeded = filesChanged.stream().map(watchedFilePaths::get).anyMatch(Boolean.TRUE::equals);
+
         boolean instrumentationChange = false;
         if (ClassChangeAgent.getInstrumentation() != null && lastStartIndex != null && !configFileRestartNeeded
                 && devModeType != DevModeType.REMOTE_LOCAL_SIDE) {
@@ -619,7 +616,7 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     public RuntimeUpdatesProcessor setWatchedFilePaths(Map<String, Boolean> watchedFilePaths) {
         this.watchedFilePaths = watchedFilePaths;
         watchedFileTimestamps.clear();
-        Map<String, Boolean> extraWatchedFilePaths = new HashMap<>();
+
         for (DevModeContext.ModuleInfo module : context.getAllModules()) {
             String rootPath = module.getResourcePath();
 
@@ -641,15 +638,9 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
                     }
                 } else {
                     watchedFileTimestamps.put(config, 0L);
-                    Map<Path, Long> extraWatchedFileTimestamps = expandGlobPattern(root, config);
-                    watchedFileTimestamps.putAll(extraWatchedFileTimestamps);
-                    for (Path extraPath : extraWatchedFileTimestamps.keySet()) {
-                        extraWatchedFilePaths.put(root.relativize(extraPath).toString(), this.watchedFilePaths.get(path));
-                    }
                 }
             }
         }
-        this.watchedFilePaths.putAll(extraWatchedFilePaths);
         return this;
     }
 
@@ -673,30 +664,6 @@ public class RuntimeUpdatesProcessor implements HotReplacementContext, Closeable
     public void close() throws IOException {
         compiler.close();
         FSWatchUtil.shutdown();
-    }
-
-    private Map<Path, Long> expandGlobPattern(Path root, Path configFile) {
-        PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher("glob:" + configFile.toString());
-        Map<Path, Long> files = new HashMap<>();
-        try {
-            Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
-                @Override
-                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
-                    if (pathMatcher.matches(file)) {
-                        files.put(file, attrs.lastModifiedTime().toMillis());
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-
-                @Override
-                public FileVisitResult visitFileFailed(Path file, IOException exc) {
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-        return files;
     }
 
 }
