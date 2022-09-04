@@ -16,6 +16,7 @@
  */
 package org.graylog2.plugin;
 
+import com.google.common.io.Resources;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -152,18 +153,6 @@ public class Version implements Comparable<Version> {
     }
 
     /**
-     * Try to read the version from the {@literal graylog-plugin.properties} file included in a plugin.
-     *
-     * @param pluginClass     Class where the class loader should be obtained from.
-     * @param path            Path of the properties file on the classpath which contains the version information.
-     * @param propertyName    The name of the property to read as project version ("major.minor.patch-preReleaseVersion").
-     * @param defaultVersion  The {@link Version} to return if reading the information from the properties files failed.
-     */
-    public static Version fromPluginProperties(Class<?> pluginClass, String path, String propertyName, Version defaultVersion) {
-        return fromClasspathProperties(pluginClass, path, propertyName, null, null, defaultVersion);
-    }
-
-    /**
      * Try to read the version from {@literal version.properties} ({@code project.version} property)
      * and {@literal git.properties} ({@code git.commit.id} property) from the classpath.
      *
@@ -196,23 +185,8 @@ public class Version implements Comparable<Version> {
      * @param defaultVersion  The {@link Version} to return if reading the information from the properties files failed.
      */
     public static Version fromClasspathProperties(String path, String propertyName, String gitPath, String gitPropertyName, Version defaultVersion) {
-        return fromClasspathProperties(Version.class, path, propertyName, gitPath, gitPropertyName, defaultVersion);
-    }
-
-    /**
-     * Try to read the version from {@code path} ({@code propertyName} property)
-     * and {@code gitPath} ({@code gitPropertyName} property) from the classpath.
-     *
-     * @param clazz           Class where the class loader should be obtained from.
-     * @param path            Path of the properties file on the classpath which contains the version information.
-     * @param propertyName    The name of the property to read as project version ("major.minor.patch-preReleaseVersion").
-     * @param gitPath         Path of the properties file on the classpath which contains the SCM information.
-     * @param gitPropertyName The name of the property to read as git commit SHA.
-     * @param defaultVersion  The {@link Version} to return if reading the information from the properties files failed.
-     */
-    public static Version fromClasspathProperties(@Nonnull Class<?> clazz, String path, String propertyName, String gitPath, String gitPropertyName, Version defaultVersion) {
         try {
-            final URL resource = getResource(clazz, path);
+            final URL resource = Resources.getResource(path);
             final Properties versionProperties = new Properties();
             versionProperties.load(resource.openStream());
 
@@ -225,7 +199,7 @@ public class Version implements Comparable<Version> {
             String commitSha = null;
             try {
                 final Properties git = new Properties();
-                final URL gitResource = getResource(clazz, gitPath);
+                final URL gitResource = Resources.getResource(gitPath);
                 git.load(gitResource.openStream());
                 commitSha = git.getProperty(gitPropertyName);
                 // abbreviate if present and looks like a long sha
@@ -241,12 +215,6 @@ public class Version implements Comparable<Version> {
             LOG.error("Unable to read " + path + ", this build has no version number.", e);
         }
         return defaultVersion;
-    }
-
-    private static URL getResource(Class<?> clazz, String path) {
-        final URL url = requireNonNull(clazz, "Class argument is null!").getClassLoader().getResource(path);
-
-        return requireNonNull(url, "Resource <" + path + "> not found.");
     }
 
     /**
