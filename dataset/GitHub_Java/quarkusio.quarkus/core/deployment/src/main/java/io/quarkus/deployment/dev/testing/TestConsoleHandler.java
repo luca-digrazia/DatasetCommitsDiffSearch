@@ -7,14 +7,10 @@ import static io.quarkus.deployment.dev.testing.TestConsoleHandler.MessageFormat
 import static io.quarkus.deployment.dev.testing.TestConsoleHandler.MessageFormat.helpOption;
 import static io.quarkus.deployment.dev.testing.TestConsoleHandler.MessageFormat.statusFooter;
 import static io.quarkus.deployment.dev.testing.TestConsoleHandler.MessageFormat.statusHeader;
+import static io.quarkus.deployment.dev.testing.TestConsoleHandler.MessageFormat.toggleStatus;
 
 import java.io.IOException;
-import java.nio.file.Path;
-import java.text.SimpleDateFormat;
-import java.util.Date;
-import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
@@ -23,7 +19,6 @@ import org.junit.platform.engine.TestExecutionResult;
 import org.junit.platform.launcher.TestIdentifier;
 
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
-import io.quarkus.deployment.dev.ClassScanResult;
 import io.quarkus.deployment.dev.RuntimeUpdatesProcessor;
 import io.quarkus.dev.console.InputHandler;
 import io.quarkus.dev.console.QuarkusConsole;
@@ -39,7 +34,6 @@ public class TestConsoleHandler implements TestListener {
 
     boolean firstRun = true;
     boolean disabled = true;
-    boolean currentlyFailing = false;
     volatile InputHandler.ConsoleStatus promptHandler;
     volatile TestController testController;
     private String lastStatus;
@@ -171,43 +165,17 @@ public class TestConsoleHandler implements TestListener {
             @Override
             public void runComplete(TestRunResults results) {
                 firstRun = false;
-                SimpleDateFormat df = new SimpleDateFormat("kk:mm:ss");
-
-                String end = " Tests completed at " + df.format(new Date());
-                if (results.getTrigger() != null) {
-                    ClassScanResult trigger = results.getTrigger();
-                    Set<Path> paths = new LinkedHashSet<>();
-                    paths.addAll(trigger.getChangedClasses());
-                    paths.addAll(trigger.getAddedClasses());
-                    paths.addAll(trigger.getDeletedClasses());
-                    if (paths.size() == 1) {
-                        end = end + " due to changes to " + paths.iterator().next().getFileName() + ".";
-                    } else if (paths.size() > 1) {
-                        end = end + " due to changes to " + paths.iterator().next().getFileName() + " and " + (paths.size() - 1)
-                                + " other files.";
-                    } else {
-                        //should never happen
-                        end = end + ".";
-                    }
-                } else {
-                    end = end + ".";
-                }
-                if (results.getTotalCount() == 0) {
+                if (results.getCurrentTotalCount() == 0) {
                     lastStatus = YELLOW + "No tests found" + RESET;
                 } else if (results.getFailedCount() == 0 && results.getPassedCount() == 0) {
                     lastStatus = String.format(YELLOW + "All %d tests were skipped" + RESET, results.getSkippedCount());
                 } else if (results.getCurrentFailing().isEmpty()) {
-                    if (currentlyFailing) {
-                        log.info(GREEN + "All tests are now passing" + RESET);
-                    }
-                    currentlyFailing = false;
                     lastStatus = String.format(
-                            GREEN + "All %d tests are passing (%d skipped), %d tests were run in %dms." + end + RESET,
+                            GREEN + "All %d tests are passing (%d skipped), %d tests were run in %dms." + RESET,
                             results.getPassedCount(),
                             results.getSkippedCount(),
-                            results.getCurrentTotalCount() - results.getSkippedCount(), results.getTotalTime());
+                            results.getCurrentTotalCount(), results.getTotalTime());
                 } else {
-                    currentlyFailing = true;
                     //TODO: this should not use the logger, it should print a nicer status
                     log.error(statusHeader("TEST REPORT #" + results.getId()));
                     for (Map.Entry<String, TestClassResult> classEntry : results.getCurrentFailing().entrySet()) {
@@ -221,7 +189,7 @@ public class TestConsoleHandler implements TestListener {
                             statusFooter(RED + results.getCurrentFailedCount() + " TESTS FAILED"));
                     lastStatus = String.format(
                             RED + "%d tests failed" + RESET + " (" + GREEN + "%d passing" + RESET + ", " + YELLOW + "%d skipped"
-                                    + RESET + "), %d tests were run in %dms." + end + RESET,
+                                    + RESET + "), %d tests were run in %dms." + RESET,
                             results.getCurrentFailedCount(), results.getPassedCount(), results.getSkippedCount(),
                             results.getCurrentTotalCount(), results.getTotalTime());
                 }
@@ -232,7 +200,10 @@ public class TestConsoleHandler implements TestListener {
 
             @Override
             public void noTests(TestRunResults results) {
-                runComplete(results);
+                firstRun = false;
+                lastStatus = "No tests to run";
+                promptHandler.setStatus(lastStatus);
+                promptHandler.setPrompt(RUNNING_PROMPT);
             }
 
             @Override
