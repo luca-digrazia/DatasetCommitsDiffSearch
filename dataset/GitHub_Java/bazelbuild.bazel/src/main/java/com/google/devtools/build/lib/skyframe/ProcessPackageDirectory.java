@@ -13,41 +13,44 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
+
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.actions.FileValue;
+import com.google.devtools.build.lib.actions.InconsistentFilesystemException;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
-import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Dirent;
-import com.google.devtools.build.lib.vfs.Dirent.Type;
-import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.ValueOrException4;
+import com.google.devtools.build.skyframe.ValueOrException2;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
  * Processes a directory that may contain a package and subdirectories for the benefit of processes
  * that traverse directories recursively, looking for packages.
  */
-public class ProcessPackageDirectory {
+public final class ProcessPackageDirectory {
   private static final String SENTINEL_FILE_NAME_FOR_NOT_TRAVERSING_SYMLINKS =
       "DONT_FOLLOW_SYMLINKS_WHEN_TRAVERSING_THIS_DIRECTORY_VIA_A_RECURSIVE_TARGET_PATTERN";
 
-  interface SkyKeyTransformer {
+  /** Produces a {@link SkyKey} for the recursive traversal into the specified subdirectory. */
+  public interface SkyKeyTransformer {
     SkyKey makeSkyKey(
         RepositoryName repository,
         RootedPath subdirectory,
@@ -57,7 +60,8 @@ public class ProcessPackageDirectory {
   private final BlazeDirectories directories;
   private final SkyKeyTransformer skyKeyTransformer;
 
-  ProcessPackageDirectory(BlazeDirectories directories, SkyKeyTransformer skyKeyTransformer) {
+  public ProcessPackageDirectory(
+      BlazeDirectories directories, SkyKeyTransformer skyKeyTransformer) {
     this.directories = directories;
     this.skyKeyTransformer = skyKeyTransformer;
   }
@@ -68,25 +72,19 @@ public class ProcessPackageDirectory {
    * ProcessPackageDirectoryResult}, or {@code null} if required dependencies were missing.
    */
   @Nullable
-  ProcessPackageDirectoryResult getPackageExistenceAndSubdirDeps(
+  public ProcessPackageDirectoryResult getPackageExistenceAndSubdirDeps(
       RootedPath rootedPath,
       RepositoryName repositoryName,
-      SkyFunction.Environment env,
-      Set<PathFragment> excludedPaths)
+      ImmutableSet<PathFragment> excludedPaths,
+      SkyFunction.Environment env)
       throws InterruptedException {
-    PathFragment rootRelativePath = rootedPath.getRelativePath();
+    PathFragment rootRelativePath = rootedPath.getRootRelativePath();
 
     SkyKey fileKey = FileValue.key(rootedPath);
     FileValue fileValue;
     try {
-      fileValue =
-          (FileValue)
-              env.getValueOrThrow(
-                  fileKey,
-                  InconsistentFilesystemException.class,
-                  FileSymlinkException.class,
-                  IOException.class);
-    } catch (InconsistentFilesystemException | FileSymlinkException | IOException e) {
+      fileValue = (FileValue) env.getValueOrThrow(fileKey, IOException.class);
+    } catch (IOException e) {
       return reportErrorAndReturn(
           "Failed to get information about path", e, rootRelativePath, env.getListener());
     }
@@ -104,10 +102,10 @@ public class ProcessPackageDirectory {
         && fileValue.isSymlink()
         && fileValue
             .getUnresolvedLinkTarget()
-            .startsWith(directories.getOutputBase().asFragment())) {
-      // Symlinks back to the output base are not traversed so that we avoid convenience symlinks.
-      // Note that it's not enough to just check for the convenience symlinks themselves, because
-      // if the value of --symlink_prefix changes, the old symlinks are left in place. This
+            .startsWith(directories.getExecRootBase().asFragment())) {
+      // Symlinks back to the execroot are not traversed so that we avoid convenience symlinks.
+      // Note that it's not enough to just check for the convenience symlinks themselves,
+      // because if the value of --symlink_prefix changes, the old symlinks are left in place. This
       // algorithm also covers more creative use cases where people create convenience symlinks
       // somewhere in the directory tree manually.
       return ProcessPackageDirectoryResult.EMPTY_RESULT;
@@ -117,15 +115,12 @@ public class ProcessPackageDirectory {
     SkyKey dirListingKey = DirectoryListingValue.key(rootedPath);
     Map<
             SkyKey,
-            ValueOrException4<
-                NoSuchPackageException, InconsistentFilesystemException, FileSymlinkException,
-                IOException>>
+            ValueOrException2<
+                NoSuchPackageException, IOException>>
         pkgLookupAndDirectoryListingDeps =
             env.getValuesOrThrow(
                 ImmutableList.of(pkgLookupKey, dirListingKey),
                 NoSuchPackageException.class,
-                InconsistentFilesystemException.class,
-                FileSymlinkException.class,
                 IOException.class);
     if (env.valuesMissing()) {
       return null;
@@ -142,7 +137,7 @@ public class ProcessPackageDirectory {
                   pkgLookupKey);
     } catch (NoSuchPackageException | InconsistentFilesystemException e) {
       return reportErrorAndReturn("Failed to load package", e, rootRelativePath, env.getListener());
-    } catch (IOException | FileSymlinkException e) {
+    } catch (IOException e) {
       throw new IllegalStateException(e);
     }
     DirectoryListingValue dirListingValue;
@@ -155,35 +150,37 @@ public class ProcessPackageDirectory {
                   rootedPath,
                   repositoryName,
                   dirListingKey);
-    } catch (InconsistentFilesystemException | IOException e) {
-      return reportErrorAndReturn(
-          "Failed to list directory contents", e, rootRelativePath, env.getListener());
     } catch (FileSymlinkException e) {
       // DirectoryListingFunction only throws FileSymlinkCycleException when FileFunction throws it,
       // but FileFunction was evaluated for rootedPath above, and didn't throw there. It shouldn't
       // be able to avoid throwing there but throw here.
       throw new IllegalStateException(
           "Symlink cycle found after not being found for \"" + rootedPath + "\"");
+    } catch (IOException e) {
+      return reportErrorAndReturn(
+          "Failed to list directory contents", e, rootRelativePath, env.getListener());
     } catch (NoSuchPackageException e) {
       throw new IllegalStateException(e);
     }
     return new ProcessPackageDirectoryResult(
         pkgLookupValue.packageExists() && pkgLookupValue.getRoot().equals(rootedPath.getRoot()),
-        getSubdirDeps(dirListingValue, rootedPath, repositoryName, excludedPaths));
+        getSubdirDeps(dirListingValue, rootedPath, repositoryName, excludedPaths),
+        /** additionalValuesToAggregate= */
+        ImmutableMap.of());
   }
 
   private Iterable<SkyKey> getSubdirDeps(
       DirectoryListingValue dirListingValue,
       RootedPath rootedPath,
       RepositoryName repositoryName,
-      Set<PathFragment> excludedPaths) {
-    Path root = rootedPath.getRoot();
-    PathFragment rootRelativePath = rootedPath.getRelativePath();
+      ImmutableSet<PathFragment> excludedPaths) {
+    Root root = rootedPath.getRoot();
+    PathFragment rootRelativePath = rootedPath.getRootRelativePath();
     boolean followSymlinks = shouldFollowSymlinksWhenTraversing(dirListingValue.getDirents());
     List<SkyKey> childDeps = new ArrayList<>();
     for (Dirent dirent : dirListingValue.getDirents()) {
-      Type type = dirent.getType();
-      if (type != Type.DIRECTORY && (type != Type.SYMLINK || !followSymlinks)) {
+      Dirent.Type type = dirent.getType();
+      if (type != Dirent.Type.DIRECTORY && (type != Dirent.Type.SYMLINK || !followSymlinks)) {
         // Non-directories can never host packages. Symlinks to non-directories are weeded out at
         // the next level of recursion when we check if its FileValue is a directory. This is slower
         // if there are a lot of symlinks in the tree, but faster if there are only a few, which is
@@ -194,12 +191,8 @@ public class ProcessPackageDirectory {
         continue;
       }
       String basename = dirent.getName();
-      if (rootRelativePath.equals(PathFragment.EMPTY_FRAGMENT)
-          && PathPackageLocator.DEFAULT_TOP_LEVEL_EXCLUDES.contains(basename)) {
-        continue;
-      }
       PathFragment subdirectory = rootRelativePath.getRelative(basename);
-      if (subdirectory.equals(Label.EXTERNAL_PACKAGE_NAME)) {
+      if (subdirectory.equals(LabelConstants.EXTERNAL_PACKAGE_NAME)) {
         // Not a real package.
         continue;
       }
@@ -209,35 +202,40 @@ public class ProcessPackageDirectory {
         continue;
       }
 
-      // If we have an excluded path that isn't below this subdirectory, we shouldn't pass that
-      // excluded path to our evaluation of the subdirectory, because the exclusion can't
-      // possibly match anything beneath the subdirectory.
-      //
-      // For example, if we're currently evaluating directory "a", are looking at its subdirectory
-      // "a/b", and we have an excluded path "a/c/d", there's no need to pass the excluded path
-      // "a/c/d" to our evaluation of "a/b".
-      //
-      // This strategy should help to get more skyframe sharing. Consider the example above. A
-      // subsequent request of "a/b/...", without any excluded paths, will be a cache hit.
-      //
-      // TODO(bazel-team): Replace the excludedPaths set with a trie or a SortedSet for better
-      // efficiency.
-      ImmutableSet<PathFragment> excludedSubdirectoriesBeneathThisSubdirectory =
-          PathFragment.filterPathsStartingWith(excludedPaths, subdirectory);
-      RootedPath subdirectoryRootedPath = RootedPath.toRootedPath(root, subdirectory);
       childDeps.add(
           skyKeyTransformer.makeSkyKey(
               repositoryName,
-              subdirectoryRootedPath,
-              excludedSubdirectoriesBeneathThisSubdirectory));
+              RootedPath.toRootedPath(root, subdirectory),
+              getExcludedSubdirectoriesBeneathSubdirectory(subdirectory, excludedPaths)));
     }
     return childDeps;
+  }
+
+  /**
+   * Returns the 'excludedPaths' set to use when recursing below this subdirectory. If we have an
+   * excluded path that isn't below this subdirectory, we shouldn't pass that excluded path to our
+   * evaluation of the subdirectory, because the exclusion can't possibly match anything beneath the
+   * subdirectory.
+   *
+   * <p>For example, if we're currently evaluating directory "a", are looking at its subdirectory
+   * "a/b", and we have an excluded path "a/c/d", there's no need to pass the excluded path "a/c/d"
+   * to our evaluation of "a/b". This strategy should help to get more skyframe sharing. In our
+   * example, a subsequent request of "a/b/...", without any excluded paths, will be a cache hit.
+   *
+   * <p>TODO(bazel-team): Replace the excludedPaths set with a trie or a SortedSet for better
+   * efficiency.
+   */
+  public static ImmutableSet<PathFragment> getExcludedSubdirectoriesBeneathSubdirectory(
+      PathFragment subdirectory, ImmutableSet<PathFragment> excludedPaths) {
+    return excludedPaths.stream()
+        .filter(pathFragment -> pathFragment.startsWith(subdirectory))
+        .collect(toImmutableSet());
   }
 
   private static ProcessPackageDirectoryResult reportErrorAndReturn(
       String errorPrefix, Exception e, PathFragment rootRelativePath, EventHandler handler) {
     handler.handle(
-        Event.warn(errorPrefix + ", for " + rootRelativePath + ", skipping: " + e.getMessage()));
+        Event.error(errorPrefix + ", for " + rootRelativePath + ", skipping: " + e.getMessage()));
     return ProcessPackageDirectoryResult.EMPTY_RESULT;
   }
 
