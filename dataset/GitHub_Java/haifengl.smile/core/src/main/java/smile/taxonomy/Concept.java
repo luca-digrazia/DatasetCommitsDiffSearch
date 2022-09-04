@@ -1,18 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2019 Haifeng Li
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  *******************************************************************************/
+
 package smile.taxonomy;
 
 import java.util.ArrayList;
@@ -54,113 +56,29 @@ public class Concept {
     }
 
     /**
-     * Constructor. Create a concept with an empty set of synonyms.
-     *
-     * @param parent the parent concept
-     */
-    public Concept(Concept parent) {
-        if (parent == null) {
-            throw new NullPointerException("Parent concept cannot be null.");
-        }
-
-        this.parent = parent;
-
-        if (parent.children == null) {
-            parent.children = new ArrayList<Concept>();
-        }
-
-        parent.children.add(this);
-        taxonomy = parent.taxonomy;
-    }
-
-    /**
-     * Constructor.
-     *
-     * @param keyword a keyword of this concept
-     * @param parent the parent concept
-     */
-    public Concept(Concept parent, String keyword) {
-        if (parent == null) {
-            throw new NullPointerException("Parent concept cannot be null.");
-        }
-
-        this.parent = parent;
-
-        synset = new TreeSet<String>();
-        synset.add(keyword);
-
-        if (parent.children == null) {
-            parent.children = new ArrayList<Concept>();
-        }
-
-        parent.children.add(this);
-        taxonomy = parent.taxonomy;
-
-        if (taxonomy.concepts.containsKey(keyword)) {
-            throw new IllegalArgumentException(String.format("Concept %s already exists.", keyword));
-        }
-
-        taxonomy.concepts.put(keyword, this);
-    }
-
-    /**
      * Constructor.
      *
      * @param keywords a list of keywords of this concept
      * @param parent the parent concept
      */
-    public Concept(Concept parent, String[] keywords) {
+    public Concept(Concept parent, String... keywords) {
         if (parent == null) {
             throw new NullPointerException("Parent concept cannot be null.");
         }
 
         this.parent = parent;
 
-        synset = new TreeSet<String>();
+        synset = new TreeSet<>();
         for (String keyword : keywords) {
             synset.add(keyword);
         }
 
         if (parent.children == null) {
-            parent.children = new ArrayList<Concept>();
+            parent.children = new ArrayList<>();
         }
 
         parent.children.add(this);
 
-        taxonomy = parent.taxonomy;
-        for (String keyword : keywords) {
-            if (taxonomy.concepts.containsKey(keyword)) {
-                throw new IllegalArgumentException(String.format("Concept %s already exists.", keyword));
-            }
-        }
-
-        for (String keyword : keywords) {
-            taxonomy.concepts.put(keyword, this);
-        }
-    }
-
-    /**
-     * Constructor.
-     *
-     * @param keywords a list of keywords of this concept
-     * @param parent the parent concept
-     */
-    public Concept(Concept parent, List<String> keywords) {
-        if (parent == null) {
-            throw new NullPointerException("Parent concept cannot be null.");
-        }
-
-        this.parent = parent;
-
-        synset = new TreeSet<String>();
-        synset.addAll(keywords);
-
-        if (parent.children == null) {
-            parent.children = new ArrayList<Concept>();
-        }
-
-        parent.children.add(this);
-        
         taxonomy = parent.taxonomy;
         for (String keyword : keywords) {
             if (taxonomy.concepts.containsKey(keyword)) {
@@ -190,26 +108,9 @@ public class Concept {
     }
 
     /**
-     * Add a keyword to the concept synset.
-     */
-    public void addKeyword(String keyword) {
-        if (taxonomy.concepts.containsKey(keyword)) {
-            throw new IllegalArgumentException(String.format("Concept %s already exists.", keyword));
-        }
-
-        taxonomy.concepts.put(keyword, this);
-
-        if (synset == null) {
-            synset = new TreeSet<String>();
-        }
-
-        synset.add(keyword);
-    }
-
-    /**
      * Add a list of synomym to the concept synset.
      */
-    public void addKeywords(String[] keywords) {
+    public void addKeywords(String... keywords) {
         for (String keyword : keywords) {
             if (taxonomy.concepts.containsKey(keyword)) {
                 throw new IllegalArgumentException(String.format("Concept %s already exists.", keyword));
@@ -221,33 +122,12 @@ public class Concept {
         }
 
         if (synset == null) {
-            synset = new TreeSet<String>();
+            synset = new TreeSet<>();
         }
 
         for (String keyword : keywords) {
             synset.add(keyword);
         }
-    }
-
-    /**
-     * Add a list of synomym to the concept synset.
-     */
-    public void addKeywords(List<String> keywords) {
-        for (String keyword : keywords) {
-            if (taxonomy.concepts.containsKey(keyword)) {
-                throw new IllegalArgumentException(String.format("Concept %s already exists.", keyword));
-            }
-        }
-
-        for (String keyword : keywords) {
-            taxonomy.concepts.put(keyword, this);
-        }
-
-        if (synset == null) {
-            synset = new TreeSet<String>();
-        }
-
-        synset.addAll(keywords);
     }
 
     /**
@@ -290,7 +170,7 @@ public class Concept {
         }
 
         if (children == null) {
-            children = new ArrayList<Concept>();
+            children = new ArrayList<>();
         }
         
         children.add(concept);
@@ -337,7 +217,7 @@ public class Concept {
      * Returns the path from root to the given node.
      */
     public List<Concept> getPathFromRoot() {
-        LinkedList<Concept> path = new LinkedList<Concept>();
+        LinkedList<Concept> path = new LinkedList<>();
 
         Concept node = this;
         while (node != null) {
@@ -352,7 +232,7 @@ public class Concept {
      * Returns the path from the given node to the root.
      */
     public List<Concept> getPathToRoot() {
-        LinkedList<Concept> path = new LinkedList<Concept>();
+        LinkedList<Concept> path = new LinkedList<>();
 
         Concept node = this;
         while (node != null) {
@@ -366,7 +246,7 @@ public class Concept {
     @Override
     public String toString() {
         String displayName = "anonymous";
-        if (synset != null && synset.size() > 0) {
+        if (synset != null && !synset.isEmpty()) {
             StringBuilder builder = new StringBuilder();
             builder.append('(');
             Iterator<String> iter = synset.iterator();
