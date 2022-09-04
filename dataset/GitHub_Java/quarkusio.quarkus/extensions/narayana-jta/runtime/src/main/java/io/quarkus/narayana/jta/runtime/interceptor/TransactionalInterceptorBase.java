@@ -28,13 +28,14 @@ import javax.transaction.Transaction;
 import javax.transaction.TransactionManager;
 import javax.transaction.Transactional;
 
+import org.jboss.resteasy.core.ResteasyContext;
+import org.jboss.resteasy.spi.HttpRequest;
 import org.jboss.tm.usertx.client.ServerVMClientUserTransaction;
 
 import com.arjuna.ats.jta.logging.jtaLogger;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.runtime.InterceptorBindings;
+import io.undertow.servlet.handlers.ServletRequestContext;
 
 /**
  * @author paul.robinson@redhat.com 02/05/2013
@@ -93,16 +94,13 @@ public abstract class TransactionalInterceptorBase implements Serializable {
 
         tm.begin();
         Transaction tx = tm.getTransaction();
-        boolean throwing = false;
 
         try {
             return ic.proceed();
         } catch (Exception e) {
             handleException(ic, e, tx);
-            throwing = true;
         } finally {
-            // do not listen to async notifications if we're throwing
-            if (throwing || !handleIfAsyncStarted(tm, tx, ic)) {
+            if (!handleIfAsyncStarted(tm, tx, ic)) {
                 endTransaction(tm, tx);
             }
         }
@@ -110,18 +108,27 @@ public abstract class TransactionalInterceptorBase implements Serializable {
     }
 
     protected boolean handleIfAsyncStarted(TransactionManager tm, Transaction tx, InvocationContext ic) {
-        ArcContainer arcContainer = Arc.container();
-        if (arcContainer.isCurrentRequestAsync()) {
-            arcContainer.getAsyncRequestNotifier().handle((v, t) -> {
-                try {
-                    if (t != null)
-                        handleExceptionNoThrow(ic, t, tx);
-                    endTransaction(tm, tx);
-                } catch (Exception e) {
-                    jtaLogger.logger.error("Failed to end async transaction", e);
-                }
-                return null;
-            });
+        TransactionAsyncListener asyncListener = new TransactionAsyncListener(() -> {
+            try {
+                endTransaction(tm, tx);
+            } catch (Exception e) {
+                jtaLogger.logger.error("Failed to end async transaction", e);
+            }
+        }, t -> {
+            try {
+                handleExceptionNoThrow(ic, t, tx);
+            } catch (IllegalStateException | SystemException e) {
+                jtaLogger.logger.error("Failed to handle async transaction exception", e);
+            }
+        });
+
+        ServletRequestContext req = ServletRequestContext.current();
+        if (req != null && req.getServletRequest().isAsyncStarted()) {
+            HttpRequest resteasyHttpRequest = ResteasyContext.getContextData(HttpRequest.class);
+            if (resteasyHttpRequest != null && resteasyHttpRequest.getAsyncContext().isSuspended()) {
+                resteasyHttpRequest.getAsyncContext().getAsyncResponse().register(asyncListener);
+            }
+            req.getServletRequest().getAsyncContext().addListener(asyncListener);
             return true;
         }
         return false;
