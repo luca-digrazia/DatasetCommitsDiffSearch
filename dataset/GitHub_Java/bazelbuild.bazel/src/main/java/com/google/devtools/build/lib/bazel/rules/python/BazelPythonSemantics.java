@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles.Builder;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
-import com.google.devtools.build.lib.analysis.ShToolchain;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction.LaunchInfo;
@@ -108,8 +107,8 @@ public class BazelPythonSemantics implements PythonSemantics {
             "ignoring invalid absolute path '" + importsAttr + "'");
         continue;
       }
-      PathFragment importsPath = packageFragment.getRelative(importsAttr);
-      if (importsPath.containsUplevelReferences()) {
+      PathFragment importsPath = packageFragment.getRelative(importsAttr).normalize();
+      if (!importsPath.isNormalized()) {
         ruleContext.attributeError("imports",
             "Path " + importsAttr + " references a path above the execution root");
       }
@@ -170,13 +169,11 @@ public class BazelPythonSemantics implements PythonSemantics {
               true));
 
       if (OS.getCurrent() != OS.WINDOWS) {
-        PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
         ruleContext.registerAction(
             new SpawnAction.Builder()
                 .addInput(zipFile)
                 .addOutput(executable)
                 .setShellCommand(
-                    shExecutable,
                     "echo '#!/usr/bin/env python' | cat - "
                         + zipFile.getExecPathString()
                         + " > "
@@ -242,10 +239,10 @@ public class BazelPythonSemantics implements PythonSemantics {
     String zipRunfilesPath;
     if (isUnderWorkspace(path)) {
       // If the file is under workspace, add workspace name as prefix
-      zipRunfilesPath = workspaceName.getRelative(path).toString();
+      zipRunfilesPath = workspaceName.getRelative(path).normalize().toString();
     } else {
       // If the file is in external package, strip "external"
-      zipRunfilesPath = path.relativeTo(Label.EXTERNAL_PATH_PREFIX).toString();
+      zipRunfilesPath = path.relativeTo(Label.EXTERNAL_PATH_PREFIX).normalize().toString();
     }
     // We put the whole runfiles tree under the ZIP_RUNFILES_DIRECTORY_NAME directory, by doing this
     // , we avoid the conflict between default workspace name "__main__" and __main__.py file.

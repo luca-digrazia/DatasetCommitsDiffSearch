@@ -85,11 +85,15 @@ public final class RunfilesSupport {
    * Creates the RunfilesSupport helper with the given executable and runfiles.
    *
    * @param ruleContext the rule context to create the runfiles support for
-   * @param executable the executable for whose runfiles this runfiles support is responsible
+   * @param executable the executable for whose runfiles this runfiles support is responsible, may
+   *     be null
    * @param runfiles the runfiles
    */
   private RunfilesSupport(
-      RuleContext ruleContext, Artifact executable, Runfiles runfiles, CommandLine args) {
+      RuleContext ruleContext,
+      Artifact executable,
+      Runfiles runfiles,
+      CommandLine args) {
     owningExecutable = Preconditions.checkNotNull(executable);
     boolean createManifest = ruleContext.getConfiguration().buildRunfilesManifests();
     createSymlinks = createManifest && ruleContext.getConfiguration().buildRunfiles();
@@ -112,7 +116,7 @@ public final class RunfilesSupport {
     Preconditions.checkState(!runfiles.isEmpty());
 
     Map<PathFragment, Artifact> symlinks = getRunfilesSymlinks();
-    if (!symlinks.containsValue(executable)) {
+    if (executable != null && !symlinks.containsValue(executable)) {
       throw new IllegalStateException("main program " + executable + " not included in runfiles");
     }
 
@@ -138,8 +142,9 @@ public final class RunfilesSupport {
   }
 
   /**
-   * Returns the exec path of the directory where the runfiles contained in this RunfilesSupport are
-   * generated.
+   * Returns the exec path of the directory where the runfiles contained in this
+   * RunfilesSupport are generated. When the owning rule has no executable,
+   * returns null.
    */
   public PathFragment getRunfilesDirectoryExecPath() {
     PathFragment executablePath = owningExecutable.getExecPath();
@@ -171,7 +176,10 @@ public final class RunfilesSupport {
   }
 
   private Artifact createRunfilesInputManifestArtifact(RuleContext context) {
-    PathFragment relativePath = owningExecutable.getRootRelativePath();
+    // The executable may be null for emptyRunfiles
+    PathFragment relativePath = (owningExecutable != null)
+        ? owningExecutable.getRootRelativePath()
+        : context.getPackageDirectory().getRelative(context.getLabel().getName());
     String basename = relativePath.getBaseName();
     PathFragment inputManifestPath = relativePath.replaceName(basename + ".runfiles_manifest");
     return context.getDerivedArtifact(inputManifestPath,

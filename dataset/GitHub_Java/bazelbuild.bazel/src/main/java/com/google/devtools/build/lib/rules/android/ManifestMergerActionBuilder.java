@@ -18,11 +18,11 @@ import com.google.common.base.Functions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
+import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -99,16 +99,14 @@ public class ManifestMergerActionBuilder {
             .getRunfilesSupport()
             .getRunfilesArtifacts());
 
-    if (manifest != null) {
-      builder.addExecPath("--manifest", manifest);
-      inputs.add(manifest);
-    }
+    builder.addExecPath("--manifest", manifest);
+    inputs.add(manifest);
 
     if (mergeeManifests != null && !mergeeManifests.isEmpty()) {
       builder.add(
           "--mergeeManifests",
           mapToDictionaryString(
-              mergeeManifests, Artifact::getExecPathString, /* valueConverter= */ null));
+              mergeeManifests, Artifact::getExecPathString, null /* valueConverter */));
       inputs.addAll(mergeeManifests.keySet());
     }
 
