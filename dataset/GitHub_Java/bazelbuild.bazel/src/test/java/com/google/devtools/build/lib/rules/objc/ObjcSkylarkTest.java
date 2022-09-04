@@ -30,7 +30,7 @@ import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import org.junit.Test;
@@ -43,7 +43,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ObjcSkylarkTest extends ObjcRuleTestCase {
   private static ObjcProvider.Builder objcProviderBuilder() {
-    return new ObjcProvider.Builder(StarlarkSemantics.DEFAULT_SEMANTICS);
+    return new ObjcProvider.Builder(SkylarkSemantics.DEFAULT_SEMANTICS);
   }
 
   @Test
@@ -1079,7 +1079,6 @@ public class ObjcSkylarkTest extends ObjcRuleTestCase {
 
   @Test
   public void testSkylarkCanAccessProvidedBundleFiles() throws Exception {
-    useConfiguration("--incompatible_disable_objc_library_resources=false");
     // Since the collections of structs with Artifact values are extremely difficult to test with
     // Truth, we fudge them in the Skylark side to return easily comparable dictionaries instead.
     scratch.file("examples/rule/BUILD");

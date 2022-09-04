@@ -226,7 +226,7 @@ public abstract class SkylarkSemantics {
           .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(false)
           .incompatibleDisallowOldStyleArgsAdd(false)
           .incompatibleExpandDirectories(true)
-          .incompatibleGenerateJavaCommonSourceJar(true)
+          .incompatibleGenerateJavaCommonSourceJar(false)
           .incompatibleNewActionsApi(false)
           .incompatibleNoAttrLicense(false)
           .incompatibleNoOutputAttrDefault(false)
