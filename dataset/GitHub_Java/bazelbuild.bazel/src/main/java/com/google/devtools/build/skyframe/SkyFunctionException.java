@@ -14,6 +14,7 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.base.Preconditions;
+import javax.annotation.Nullable;
 
 /**
  * Base class of exceptions thrown by {@link SkyFunction#compute} on failure.
@@ -59,11 +60,27 @@ public abstract class SkyFunctionException extends Exception {
   }
 
   private final Transience transience;
+  @Nullable private final SkyKey rootCause;
 
   public SkyFunctionException(Exception cause, Transience transience) {
+    this(cause, transience, null);
+  }
+
+  /** Used to rethrow a child error that the parent cannot handle. */
+  public SkyFunctionException(Exception cause, SkyKey childKey) {
+    this(cause, Transience.PERSISTENT, childKey);
+  }
+
+  private SkyFunctionException(Exception cause, Transience transience, SkyKey rootCause) {
     super(Preconditions.checkNotNull(cause));
     SkyFunctionException.validateExceptionType(cause.getClass());
     this.transience = transience;
+    this.rootCause = rootCause;
+  }
+
+  @Nullable
+  public final SkyKey getRootCauseSkyKey() {
+    return rootCause;
   }
 
   public final boolean isTransient() {
@@ -106,15 +123,17 @@ public abstract class SkyFunctionException extends Exception {
     private final boolean isCatastrophic;
     private final SkyFunctionException originalException;
 
-    public ReifiedSkyFunctionException(SkyFunctionException e) {
-      this(e, e.transience, e.isCatastrophic());
+    public ReifiedSkyFunctionException(SkyFunctionException e, SkyKey key) {
+      this(e, e.transience, key, e.getRootCauseSkyKey(), e.isCatastrophic());
     }
 
     protected ReifiedSkyFunctionException(
         SkyFunctionException e,
         Transience transience,
+        SkyKey key,
+        @Nullable SkyKey rootCauseSkyKey,
         boolean isCatastrophic) {
-      super(e.getCause(), transience);
+      super(e.getCause(), transience, rootCauseSkyKey == null ? key : rootCauseSkyKey);
       this.isCatastrophic = isCatastrophic;
       this.originalException = e;
     }
