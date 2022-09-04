@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
@@ -86,8 +87,10 @@ public final class CcCompilationHelper {
    * Configures a compile action builder by setting up command line options and auxiliary inputs
    * according to the FDO configuration. This method does nothing If FDO is disabled.
    */
-  private static void configureFdoBuildVariables(
-      Map<String, String> variablesBuilder,
+  @ThreadSafe
+  public static void configureFdoBuildVariables(
+      ImmutableMap.Builder<String, String> variablesBuilder,
+      CppCompileActionBuilder builder,
       FeatureConfiguration featureConfiguration,
       FdoContext fdoContext,
       String fdoInstrument,
@@ -114,10 +117,13 @@ public final class CcCompilationHelper {
           fdoContext.getPrefetchHintsArtifact().getExecPathString());
     }
 
+    Iterable<Artifact> auxiliaryInputs = getAuxiliaryFdoInputs(fdoContext);
+    builder.addMandatoryInputs(auxiliaryInputs);
+
     FdoContext.BranchFdoProfile branchFdoProfile = fdoContext.getBranchFdoProfile();
     // Optimization phase
     if (branchFdoProfile != null) {
-      if (!Iterables.isEmpty(getAuxiliaryFdoInputs(fdoContext))) {
+      if (!Iterables.isEmpty(auxiliaryInputs)) {
         if (featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)
             || featureConfiguration.isEnabled(CppRuleClasses.XBINARYFDO)) {
           variablesBuilder.put(
@@ -249,8 +255,6 @@ public final class CcCompilationHelper {
 
   private final SourceCategory sourceCategory;
   private final List<VariablesExtension> variablesExtensions = new ArrayList<>();
-  private CcToolchainVariables prebuiltParent;
-  private CcToolchainVariables prebuiltParentWithFdo;
   @Nullable private CppModuleMap cppModuleMap;
   private boolean propagateModuleMapToCompileAction = true;
 
@@ -1357,7 +1361,7 @@ public final class CcCompilationHelper {
             builder,
             /* sourceLabel= */ null,
             usePic,
-            /* needsFdoBuildVariables= */ false,
+            /* ccRelativeName= */ null,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
             /* isUsingFission= */ false,
@@ -1419,7 +1423,7 @@ public final class CcCompilationHelper {
       CppCompileActionBuilder builder,
       Label sourceLabel,
       boolean usePic,
-      boolean needsFdoBuildVariables,
+      PathFragment ccRelativeName,
       CppModuleMap cppModuleMap,
       Artifact gcnoFile,
       boolean isUsingFission,
@@ -1431,92 +1435,49 @@ public final class CcCompilationHelper {
     if (builder.getDotdFile() != null) {
       dotdFileExecPath = builder.getDotdFile().getExecPathString();
     }
-    if (needsFdoBuildVariables && fdoContext.hasArtifacts(cppConfiguration)) {
-      // This modifies the passed-in builder, which is a surprising side-effect, and makes it unsafe
-      // to call this method multiple times for the same builder.
-      builder.addMandatoryInputs(getAuxiliaryFdoInputs(fdoContext));
-    }
-    CcToolchainVariables parent = needsFdoBuildVariables ? prebuiltParentWithFdo : prebuiltParent;
-    // We use the prebuilt parent variables if and only if the passed in cppModuleMap is the
-    // identical to the one returned from ccCompilationContext.getCppModuleMap(): there is exactly
-    // one caller which passes in any other value (the verification module map), so this should be
-    // fine for now.
-    boolean usePrebuiltParent =
-        cppModuleMap == ccCompilationContext.getCppModuleMap()
-            // Only use the prebuilt parent if there are enough sources to make it worthwhile. The
-            // threshold was chosen by looking at a heap dump.
-            && (compilationUnitSources.size() > 1);
-    CcToolchainVariables.Builder buildVariables;
-    if (parent != null && usePrebuiltParent) {
-      // If we have a pre-built parent and we are allowed to use it, then do so.
-      buildVariables = CcToolchainVariables.builder(parent);
-    } else {
-      Map<String, String> genericAdditionalBuildVariables = new LinkedHashMap<>();
-      if (needsFdoBuildVariables) {
-        configureFdoBuildVariables(
-            genericAdditionalBuildVariables,
-            featureConfiguration,
-            fdoContext,
-            cppConfiguration.getFdoInstrument(),
-            cppConfiguration.getCSFdoInstrument(),
-            cppConfiguration);
-      }
-      buildVariables =
-          CcToolchainVariables.builder(
-              ccToolchain.getBuildVariables(configuration.getOptions(), cppConfiguration));
-      CompileBuildVariables.setupCommonVariables(
-          buildVariables,
+    ImmutableMap.Builder<String, String> allAdditionalBuildVariables = ImmutableMap.builder();
+    allAdditionalBuildVariables.putAll(additionalBuildVariables);
+    if (ccRelativeName != null) {
+      configureFdoBuildVariables(
+          allAdditionalBuildVariables,
+          builder,
           featureConfiguration,
-          ImmutableList.of(),
-          cppModuleMap,
-          CppHelper.getFdoBuildStamp(cppConfiguration, fdoContext, featureConfiguration),
-          variablesExtensions,
-          genericAdditionalBuildVariables,
-          ccCompilationContext.getDirectModuleMaps(),
-          ccCompilationContext.getIncludeDirs(),
-          ccCompilationContext.getQuoteIncludeDirs(),
-          ccCompilationContext.getSystemIncludeDirs(),
-          ccCompilationContext.getFrameworkIncludeDirs(),
-          ccCompilationContext.getDefines());
-
-      if (usePrebuiltParent) {
-        parent = buildVariables.build();
-        if (needsFdoBuildVariables) {
-          prebuiltParentWithFdo = parent;
-        } else {
-          prebuiltParent = parent;
-        }
-        buildVariables = CcToolchainVariables.builder(parent);
-      }
+          fdoContext,
+          cppConfiguration.getFdoInstrument(),
+          cppConfiguration.getCSFdoInstrument(),
+          cppConfiguration);
     }
-    if (usePic
-        && !featureConfiguration.isEnabled(CppRuleClasses.PIC)
-        && !featureConfiguration.isEnabled(CppRuleClasses.SUPPORTS_PIC)) {
-      ruleErrorConsumer.ruleError(CcCommon.PIC_CONFIGURATION_ERROR);
-    }
-
-    CompileBuildVariables.setupSpecificVariables(
-        buildVariables,
+    return CompileBuildVariables.setupVariablesOrReportRuleError(
+        ruleErrorConsumer,
+        featureConfiguration,
+        ccToolchain,
+        configuration.getOptions(),
+        cppConfiguration,
         toPathString(sourceFile),
         toPathString(builder.getOutputFile()),
         toPathString(gcnoFile),
-        toPathString(dwoFile),
         isUsingFission,
+        toPathString(dwoFile),
         toPathString(ltoIndexingFile),
+        ImmutableList.of(),
         getCopts(builder.getSourceFile(), sourceLabel),
-        toPathString(builder.getTempOutputFile()),
-        dotdFileExecPath,
+        cppModuleMap,
         usePic,
-        additionalBuildVariables);
-    return buildVariables.build();
+        builder.getTempOutputFile(),
+        CppHelper.getFdoBuildStamp(cppConfiguration, fdoContext, featureConfiguration),
+        dotdFileExecPath,
+        ImmutableList.copyOf(variablesExtensions),
+        allAdditionalBuildVariables.build(),
+        ccCompilationContext.getDirectModuleMaps(),
+        ccCompilationContext.getIncludeDirs(),
+        ccCompilationContext.getQuoteIncludeDirs(),
+        ccCompilationContext.getSystemIncludeDirs(),
+        ccCompilationContext.getFrameworkIncludeDirs(),
+        ccCompilationContext.getDefines());
   }
 
   private static String toPathString(Artifact a) {
     return a == null ? null : a.getExecPathString();
-  }
-
-  private static String toPathString(PathFragment a) {
-    return a == null ? null : a.getSafePathString();
   }
 
   /**
@@ -1583,7 +1544,7 @@ public final class CcCompilationHelper {
             builder,
             sourceLabel,
             /* usePic= */ pic,
-            /* needsFdoBuildVariables= */ ccRelativeName != null,
+            ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             gcnoFile,
             generateDwo,
@@ -1637,7 +1598,7 @@ public final class CcCompilationHelper {
             builder,
             sourceLabel,
             generatePicAction,
-            /* needsFdoBuildVariables= */ false,
+            /* ccRelativeName= */ null,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
             /* isUsingFission= */ false,
@@ -1731,7 +1692,7 @@ public final class CcCompilationHelper {
                 picBuilder,
                 sourceLabel,
                 /* usePic= */ true,
-                /* needsFdoBuildVariables= */ ccRelativeName != null,
+                ccRelativeName,
                 ccCompilationContext.getCppModuleMap(),
                 gcnoFile,
                 generateDwo,
@@ -1806,7 +1767,7 @@ public final class CcCompilationHelper {
                 builder,
                 sourceLabel,
                 /* usePic= */ false,
-                /* needsFdoBuildVariables= */ ccRelativeName != null,
+                ccRelativeName,
                 cppModuleMap,
                 gcnoFile,
                 generateDwo,
@@ -1919,7 +1880,7 @@ public final class CcCompilationHelper {
             builder,
             sourceLabel,
             usePic,
-            /* needsFdoBuildVariables= */ ccRelativeName != null,
+            ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
             /* isUsingFission= */ false,
@@ -2035,7 +1996,7 @@ public final class CcCompilationHelper {
             dBuilder,
             sourceLabel,
             usePic,
-            /* needsFdoBuildVariables= */ ccRelativeName != null,
+            ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
             /* isUsingFission= */ false,
@@ -2061,7 +2022,7 @@ public final class CcCompilationHelper {
             sdBuilder,
             sourceLabel,
             usePic,
-            /* needsFdoBuildVariables= */ ccRelativeName != null,
+            ccRelativeName,
             ccCompilationContext.getCppModuleMap(),
             /* gcnoFile= */ null,
             /* isUsingFission= */ false,
