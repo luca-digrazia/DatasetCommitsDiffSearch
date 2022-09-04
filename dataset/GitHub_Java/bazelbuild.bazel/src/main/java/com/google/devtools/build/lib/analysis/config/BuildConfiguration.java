@@ -14,6 +14,8 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
+import static java.util.Comparator.comparing;
+import static java.util.stream.Collectors.joining;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Suppliers;
@@ -34,9 +36,8 @@ import com.google.devtools.build.lib.actions.CommandLines.CommandLineLimits;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
@@ -205,6 +206,34 @@ public class BuildConfiguration implements BuildConfigurationApi {
 
   private int computeHashCode() {
     return Objects.hash(fragments, buildOptions.getNativeOptions());
+  }
+
+  public void describe(StringBuilder sb) {
+    sb.append("BuildConfiguration ").append(checksum()).append(":\n");
+    // Fragments.
+    sb.append("  fragments: ")
+        .append(
+            getFragmentsMap().keySet().stream()
+                .sorted(comparing(Class::getName))
+                .map(Class::getName)
+                .collect(joining(",")))
+        .append("\n");
+    // Options.
+    getOptions().getFragmentClasses().stream()
+        .sorted(comparing(Class::getName))
+        .map(optionsClass -> getOptions().get(optionsClass))
+        .forEach(options -> options.describe(sb));
+    // User-defined options.
+    sb.append("Fragment user-defined {\n");
+    buildOptions.getStarlarkOptions().entrySet().stream()
+        .sorted(Comparator.comparing(Map.Entry::getKey))
+        .forEach(
+            entry ->
+                sb.append("  ")
+                    .append(entry.getKey().toString())
+                    .append(": ")
+                    .append(entry.getValue()));
+    sb.append("\n}");
   }
 
   @Override
@@ -846,10 +875,6 @@ public class BuildConfiguration implements BuildConfigurationApi {
     return options.inprocessSymlinkCreation;
   }
 
-  public boolean enableAggregatingMiddleman() {
-    return options.enableAggregatingMiddleman;
-  }
-
   public boolean skipRunfilesManifests() {
     return options.skipRunfilesManifests;
   }
@@ -907,7 +932,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
   }
 
   public BuildEventId getEventId() {
-    return BuildEventIdUtil.configurationId(checksum());
+    return BuildEventId.configurationId(checksum());
   }
 
   public BuildConfigurationEvent toBuildEvent() {
@@ -919,7 +944,7 @@ public class BuildConfiguration implements BuildConfigurationApi {
     BuildEventStreamProtos.BuildEvent.Builder builder =
         BuildEventStreamProtos.BuildEvent.newBuilder();
     builder
-        .setId(eventId)
+        .setId(eventId.asStreamProto())
         .setConfiguration(
             BuildEventStreamProtos.Configuration.newBuilder()
                 .setMnemonic(getMnemonic())
