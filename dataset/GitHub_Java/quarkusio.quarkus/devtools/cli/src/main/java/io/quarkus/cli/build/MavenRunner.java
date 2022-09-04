@@ -20,7 +20,6 @@ import io.quarkus.devtools.commands.data.QuarkusCommandOutcome;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
 import io.quarkus.devtools.project.buildfile.MavenProjectBuildFile;
-import io.quarkus.registry.config.RegistriesConfigLocator;
 import picocli.CommandLine;
 
 public class MavenRunner implements BuildSystemRunner {
@@ -164,9 +163,6 @@ public class MavenRunner implements BuildSystemRunner {
         if (output.isAnsiEnabled() && !batchMode) {
             args.addFirst("-Dstyle.color=always");
         }
-        ExecuteUtil.propagatePropertyIfSet("maven.repo.local", args);
-        ExecuteUtil.propagatePropertyIfSet(RegistriesConfigLocator.CONFIG_FILE_PATH_PROPERTY, args);
-        ExecuteUtil.propagatePropertyIfSet("io.quarkus.maven.secondary-local-repo", args);
     }
 
     void verifyBuildFile() {
