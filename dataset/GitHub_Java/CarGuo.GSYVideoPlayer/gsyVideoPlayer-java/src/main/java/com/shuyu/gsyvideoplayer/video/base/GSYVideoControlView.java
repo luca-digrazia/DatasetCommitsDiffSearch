@@ -1067,10 +1067,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         }
     }
 
-    public View getThumbImageView() {
-        return mThumbImageView;
-    }
-
 
     /**
      * title
