@@ -86,6 +86,16 @@ public class Aapt2ResourcePackagingAction {
       final Path compiledResources = Files.createDirectories(tmp.resolve("compiled"));
       final Path linkedOut = Files.createDirectories(tmp.resolve("linked"));
 
+      final List<String> densities;
+      if (options.densities.isEmpty()) {
+        // aapt2 always needs to filter on densities, as the resource filtering from analysis is
+        // disregarded.
+        // TODO(b/70335064): Remove this once we never filter in analysis when building for aapt2.
+        densities = options.densitiesForManifest;
+      } else {
+        densities = options.densities;
+      }
+
       profiler.recordEndOf("setup").startTask("merging");
 
       AndroidDataDeserializer dataDeserializer =
@@ -110,9 +120,8 @@ public class Aapt2ResourcePackagingAction {
                   options.throwOnResourceConflict,
                   executorService)
               .filter(
-                  new DensitySpecificResourceFilter(
-                      options.densities, filteredResources, mergedResources),
-                  new DensitySpecificManifestProcessor(options.densities, densityManifest));
+                  new DensitySpecificResourceFilter(densities, filteredResources, mergedResources),
+                  new DensitySpecificManifestProcessor(densities, densityManifest));
 
       profiler.recordEndOf("merging");
 
@@ -142,7 +151,7 @@ public class Aapt2ResourcePackagingAction {
                                 processedManifest))
                 .processManifest(
                     manifest ->
-                        new DensitySpecificManifestProcessor(options.densities, densityManifest)
+                        new DensitySpecificManifestProcessor(densities, densityManifest)
                             .process(manifest));
         profiler.recordEndOf("compile").startTask("link");
         // Write manifestOutput now before the dummy manifest is created.
@@ -173,7 +182,7 @@ public class Aapt2ResourcePackagingAction {
                 .withAssets(assetDirs)
                 .buildVersion(aaptConfigOptions.buildToolsVersion)
                 .conditionalKeepRules(aaptConfigOptions.conditionalKeepRules == TriState.YES)
-                .filterToDensity(options.densities)
+                .filterToDensity(densities)
                 .includeOnlyConfigs(aaptConfigOptions.resourceConfigs)
                 .link(compiled)
                 .copyPackageTo(options.packagePath)
