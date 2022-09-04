@@ -16,12 +16,12 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.devtools.starlark.spelling.SpellChecker;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.spelling.SpellChecker;
 
 /** A syntax-tree-walking evaluator for StarlarkFunction bodies. */
 final class Eval {
@@ -55,7 +55,7 @@ final class Eval {
         return flow;
       }
 
-      // Hack for BzlLoadFunction's "export" semantics.
+      // Hack for StarlarkImportLookupFunction's "export" semantics.
       // We enable it only for statements outside any function (isToplevelFunction)
       // and outside any if- or for- statements (!indented).
       if (isToplevelFunction && !indented && fr.thread.postAssignHook != null) {
@@ -63,7 +63,7 @@ final class Eval {
           AssignmentStatement assign = (AssignmentStatement) stmt;
           for (Identifier id : Identifier.boundIdentifiers(assign.getLHS())) {
             String name = id.getName();
-            Object value = fn(fr).getModule().getGlobal(name);
+            Object value = fn(fr).getModule().lookup(name);
             fr.thread.postAssignHook.assign(name, value);
           }
         }
@@ -181,7 +181,7 @@ final class Eval {
                   + "Make sure the 'load' statement appears in the global scope in your file",
               moduleName));
     }
-    Map<String, Object> globals = module.getExportedGlobals();
+    Map<String, Object> globals = module.getExportedBindings();
 
     for (LoadStatement.Binding binding : node.getBindings()) {
       // Extract symbol.
@@ -202,9 +202,13 @@ final class Eval {
       // loads bind file-locally. Either way, the resolver should designate
       // the proper scope of binding.getLocalName() and this should become
       // simply assign(binding.getLocalName(), value).
-      // Currently, we update the module but not module.exportedGlobals;
+      // Currently, we update the module but not module.exportedBindings;
       // changing it to fr.locals.put breaks a test. TODO(adonovan): find out why.
-      fn(fr).getModule().setGlobal(binding.getLocalName().getName(), value);
+      try {
+        fn(fr).getModule().put(binding.getLocalName().getName(), value);
+      } catch (EvalException ex) {
+        throw new AssertionError(ex);
+      }
     }
   }
 
@@ -282,6 +286,11 @@ final class Eval {
     } else if (lhs instanceof ListExpression) {
       // a, b, c = ...
       ListExpression list = (ListExpression) lhs;
+      // Reject assignment to empty tuple/list.
+      // See https://github.com/bazelbuild/starlark/issues/93.
+      if (list.getElements().isEmpty()) {
+        throw Starlark.errorf("can't assign to %s", list);
+      }
       assignSequence(fr, list.getElements(), value);
 
     } else {
@@ -318,10 +327,14 @@ final class Eval {
       case GLOBAL:
         // Updates a module binding and sets its 'exported' flag.
         // (Only load bindings are not exported.
-        // But exportedGlobals does at run time what should be done in the resolver.)
+        // But exportedBindings does at run time what should be done in the resolver.)
         Module module = fn(fr).getModule();
-        module.setGlobal(name, value);
-        module.exportedGlobals.add(name);
+        try {
+          module.put(name, value);
+          module.exportedBindings.add(name);
+        } catch (EvalException ex) {
+          throw new IllegalStateException(ex);
+        }
         break;
       default:
         throw new IllegalStateException(scope.toString());
@@ -646,10 +659,10 @@ final class Eval {
         result = fr.locals.get(name);
         break;
       case GLOBAL:
-        result = fn(fr).getModule().getGlobal(name);
+        result = fn(fr).getModule().lookup(name);
         break;
       case PREDECLARED:
-        // TODO(adonovan): call getPredeclared
+        // TODO(laurentlb): look only at predeclared (not module globals).
         result = fn(fr).getModule().get(name);
         break;
       default:

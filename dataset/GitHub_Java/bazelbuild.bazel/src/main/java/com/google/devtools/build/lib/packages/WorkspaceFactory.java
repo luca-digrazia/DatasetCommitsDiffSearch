@@ -184,7 +184,8 @@ public class WorkspaceFactory {
             /*fragmentNameToClass=*/ null,
             /*repoMapping=*/ ImmutableMap.of(),
             new SymbolGenerator<>(workspaceFileKey),
-            /*analysisRuleLabel=*/ null)
+            /*analysisRuleLabel=*/ null,
+            /*transitiveDigest=*/ new byte[] {}) // dummy value used for repository rules
         .storeInThread(thread);
 
     Resolver.resolveFile(file, thread.getGlobals());
@@ -382,7 +383,7 @@ public class WorkspaceFactory {
   private static ClassObject newNativeModule(
       ImmutableMap<String, Object> workspaceFunctions, String version) {
     ImmutableMap.Builder<String, Object> env = new ImmutableMap.Builder<>();
-    Starlark.addMethods(env, new StarlarkNativeModule());
+    Starlark.addMethods(env, new SkylarkNativeModule());
     for (Map.Entry<String, Object> entry : workspaceFunctions.entrySet()) {
       String name = entry.getKey();
       if (name.startsWith("$")) {

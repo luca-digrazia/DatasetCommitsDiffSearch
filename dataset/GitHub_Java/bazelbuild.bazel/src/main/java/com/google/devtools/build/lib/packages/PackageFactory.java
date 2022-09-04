@@ -628,7 +628,7 @@ public final class PackageFactory {
    */
   private ClassObject newNativeModule() {
     ImmutableMap.Builder<String, Object> builder = new ImmutableMap.Builder<>();
-    builder.putAll(StarlarkNativeModule.BINDINGS_FOR_BUILD_FILES);
+    builder.putAll(SkylarkNativeModule.BINDINGS_FOR_BUILD_FILES);
     builder.putAll(ruleFunctions);
     builder.put("package", newPackageFunction(packageArguments));
     for (EnvironmentExtension ext : environmentExtensions) {
@@ -640,7 +640,7 @@ public final class PackageFactory {
   private void populateEnvironment(ImmutableMap.Builder<String, Object> env) {
     env.putAll(Starlark.UNIVERSE);
     env.putAll(StarlarkLibrary.BUILD); // e.g. rule, select, depset
-    env.putAll(StarlarkNativeModule.BINDINGS_FOR_BUILD_FILES);
+    env.putAll(SkylarkNativeModule.BINDINGS_FOR_BUILD_FILES);
     env.put("package", newPackageFunction(packageArguments));
     env.putAll(ruleFunctions);
 
@@ -832,7 +832,8 @@ public final class PackageFactory {
               /*fragmentNameToClass=*/ null,
               pkgBuilder.getRepositoryMapping(),
               new SymbolGenerator<>(packageId),
-              /*analysisRuleLabel=*/ null)
+              /*analysisRuleLabel=*/ null,
+              /*transitiveDigest=*/ null)
           .storeInThread(thread);
 
       // TODO(adonovan): save this as a field in BazelSkylarkContext.
