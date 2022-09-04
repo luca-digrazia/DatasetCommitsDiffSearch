@@ -78,7 +78,7 @@ public class Indexer {
             obj.put("created_at", message.getCreatedAt());
         }
 
-        ////// XXX ELASTIC: required to manually convert to string? caused strange problems without it.
+        ////// REQUIRED?
         List<String> streamIds = new ArrayList<String>();
         for (ObjectId id : message.getStreamIds()) {
             streamIds.add(id.toString());
