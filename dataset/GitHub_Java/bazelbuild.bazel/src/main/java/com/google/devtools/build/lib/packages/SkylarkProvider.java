@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.packages;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
@@ -48,48 +46,21 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
    *
    * <p>Needs to be exported later.
    */
-  public SkylarkProvider(String name,
-      @Nullable Iterable<String> fields,
-      Location location) {
-    this(name, buildSignature(fields), location);
+  public SkylarkProvider(String name, Location location) {
+    this(name, SIGNATURE, location);
   }
 
-  private SkylarkProvider(
-      String name,
-      FunctionSignature.WithValues<Object, SkylarkType> signature, Location location) {
+  public SkylarkProvider(
+      String name, FunctionSignature.WithValues<Object, SkylarkType> signature, Location location) {
     super(name, signature, location);
     this.errorMessageFormatForInstances = DEFAULT_ERROR_MESSAFE;
   }
 
-  private static FunctionSignature.WithValues<Object, SkylarkType> buildSignature(
-      @Nullable  Iterable<String> fields) {
-    if (fields == null) {
-      return SIGNATURE;
-    }
-    return
-        FunctionSignature.WithValues.create(
-        FunctionSignature.namedOnly(0, ImmutableList.copyOf(fields).toArray(new String[0]))
-    );
-  }
-
   @Override
   protected Info createInstanceFromSkylark(Object[] args, Location loc) throws EvalException {
-    if (signature.getSignature().getShape().hasKwArg()) {
-      @SuppressWarnings("unchecked")
-      Map<String, Object> kwargs = (Map<String, Object>) args[0];
-      return new SkylarkInfo(this, kwargs, loc);
-    } else {
-      // todo(dslomov): implement shape sharing.
-      ImmutableList<String> names = signature.getSignature().getNames();
-      Preconditions.checkState(names.size() == args.length);
-      ImmutableMap.Builder<String, Object> fields = ImmutableMap.builder();
-      for (int i = 0; i < args.length; i++) {
-        if (args[i] != null) {
-          fields.put(names.get(i), args[i]);
-        }
-      }
-      return new SkylarkInfo(this, fields.build(), loc);
-    }
+    @SuppressWarnings("unchecked")
+    Map<String, Object> kwargs = (Map<String, Object>) args[0];
+    return new SkylarkInfo(this, kwargs, loc);
   }
 
   @Override
@@ -104,13 +75,8 @@ public class SkylarkProvider extends Provider implements SkylarkExportable {
   }
 
   @Override
-  public String getName() {
-    return key != null ? key.getExportedName() : "<no name>";
-  }
-
-  @Override
   public String getPrintableName() {
-    return getName();
+    return key != null ? key.getExportedName() : getName();
   }
 
   @Override

@@ -29,22 +29,22 @@ public class NativeInfo extends Info {
   }
 
   @Override
-  public boolean hasField(String name) {
+  public boolean hasKey(String name) {
     return values.containsKey(name);
   }
 
   @Override
-  public ImmutableCollection<String> getFieldNames() {
+  public ImmutableCollection<String> getKeys() {
     return values.keySet();
   }
 
   public NativeInfo(NativeProvider<?> provider) {
-    super(provider, Location.BUILTIN, /*errorMessageFormatForUnknownField=*/ null);
+    super(provider, Location.BUILTIN);
     this.values = ImmutableMap.of();
   }
 
   public NativeInfo(NativeProvider<?> provider, Map<String, Object> values, Location loc) {
-    super(provider, loc, /*errorMessageFormatForUnknownField=*/ null);
+    super(provider, loc);
     this.values = copyValues(values);
   }
 

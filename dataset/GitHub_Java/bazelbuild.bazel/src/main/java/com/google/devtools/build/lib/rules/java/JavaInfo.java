@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.rules.java;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -25,9 +26,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProviderMapBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -35,16 +33,11 @@ import java.util.List;
 import javax.annotation.Nullable;
 
 /** A Skylark declared provider that encapsulates all providers that are needed by Java rules. */
-@SkylarkModule(
-    name = "JavaInfo",
-    doc = "Encapsulates all information provided by Java rules",
-    category = SkylarkModuleCategory.PROVIDER
-)
 @Immutable
 public final class JavaInfo extends NativeInfo {
 
   public static final NativeProvider<JavaInfo> PROVIDER =
-      new NativeProvider<JavaInfo>(JavaInfo.class, "JavaInfo") {};
+      new NativeProvider<JavaInfo>(JavaInfo.class, "java_common.provider") {};
 
   private static final ImmutableSet<Class<? extends TransitiveInfoProvider>> ALLOWED_PROVIDERS =
       ImmutableSet.of(
@@ -182,62 +175,21 @@ public final class JavaInfo extends NativeInfo {
   }
 
   private JavaInfo(TransitiveInfoProviderMap providers) {
-    super(PROVIDER);
+    super(PROVIDER, ImmutableMap.<String, Object>of(
+        "transitive_runtime_jars", SkylarkNestedSet.of(
+            Artifact.class,
+            providers.getProvider(JavaCompilationArgsProvider.class)
+                .getRecursiveJavaCompilationArgs().getRuntimeJars()),
+        "transitive_compile_time_jars", SkylarkNestedSet.of(
+            Artifact.class,
+            providers.getProvider(JavaCompilationArgsProvider.class)
+                .getRecursiveJavaCompilationArgs().getCompileTimeJars()),
+        "compile_jars", SkylarkNestedSet.of(
+            Artifact.class,
+            providers.getProvider(JavaCompilationArgsProvider.class)
+                .getJavaCompilationArgs().getCompileTimeJars())
+    ));
     this.providers = providers;
-  }
-
-  @SkylarkCallable(
-      name = "transitive_runtime_jars",
-      doc = "Depset of runtime jars required by this target",
-      structField = true
-  )
-  public SkylarkNestedSet getTransitiveRuntimeJars() {
-    return SkylarkNestedSet.of(
-        Artifact.class,
-        providers.getProvider(JavaCompilationArgsProvider.class)
-            .getRecursiveJavaCompilationArgs().getRuntimeJars());
-  }
-
-  @SkylarkCallable(
-      name = "transitive_compile_time_jars",
-      doc = "Depset of compile time jars recusrively required by this target",
-      structField = true
-  )
-  public SkylarkNestedSet getTransitiveCompileTimeJars() {
-    return SkylarkNestedSet.of(
-        Artifact.class,
-        providers.getProvider(JavaCompilationArgsProvider.class)
-            .getRecursiveJavaCompilationArgs().getCompileTimeJars());
-  }
-
-  @SkylarkCallable(
-      name = "compile_jars",
-      doc = "Depset of compile time jars required by this target directly",
-      structField = true
-  )
-  public SkylarkNestedSet getCompileTimeJars() {
-    return SkylarkNestedSet.of(
-        Artifact.class,
-        providers.getProvider(JavaCompilationArgsProvider.class)
-            .getJavaCompilationArgs().getCompileTimeJars());
-  }
-
-  @Override
-  public boolean equals(Object otherObject) {
-    if (this == otherObject) {
-      return true;
-    }
-    if (!(otherObject instanceof JavaInfo)) {
-      return false;
-    }
-
-    JavaInfo other = (JavaInfo) otherObject;
-    return providers.equals(other.providers);
-  }
-
-  @Override
-  public int hashCode() {
-    return providers.hashCode();
   }
 
   /**

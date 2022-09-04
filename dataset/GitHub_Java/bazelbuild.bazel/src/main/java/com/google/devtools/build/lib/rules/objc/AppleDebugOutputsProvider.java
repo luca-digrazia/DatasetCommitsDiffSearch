@@ -16,11 +16,9 @@ package com.google.devtools.build.lib.rules.objc;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.packages.NativeProvider;
 import java.util.HashMap;
 import java.util.Map.Entry;
 
@@ -33,22 +31,25 @@ import java.util.Map.Entry;
  * Artifact, output_type: Artifact, ... } }
  *
  * <p>Where {@code arch} is any Apple architecture such as "arm64" or "armv7", {@code output_type}
- * is currently "bitcode_symbols", and the artifact is an instance of the {@link
- * Artifact} class.
+ * can currently be "bitcode_symbols" or "dsym_binary", and the artifact is an instance of the
+ * {@link Artifact} class.
  *
- * <p>Example: { "arm64": { "bitcode_symbols": Artifact } }
+ * <p>Example: { "arm64": { "bitcode_symbols": Artifact, "dsym_binary": Artifact } }
  */
 @Immutable
-public final class AppleDebugOutputsProvider extends SkylarkClassObject
-    implements TransitiveInfoProvider {
+public final class AppleDebugOutputsProvider extends NativeInfo {
 
   /** Expected types of debug outputs. */
   enum OutputType {
 
-    // TODO(b/33839914): Add DWARF binaries for dSYM outputs.
-
     /** A Bitcode symbol map, per architecture. */
-    BITCODE_SYMBOLS;
+    BITCODE_SYMBOLS,
+
+    /** A single-architecture DWARF binary with debug symbols. */
+    DSYM_BINARY,
+
+    /** A single-architecture linkmap. */
+    LINKMAP;
 
     @Override
     public String toString() {
@@ -56,8 +57,13 @@ public final class AppleDebugOutputsProvider extends SkylarkClassObject
     }
   }
 
-  public static final ClassObjectConstructor SKYLARK_PROVIDER =
-      new NativeClassObjectConstructor("AppleDebugOutputs") { };
+  /** Skylark name for the AppleDebugOutputsProvider. */
+  public static final String SKYLARK_NAME = "AppleDebugOutputs";
+
+  /** Skylark constructor and identifier for AppleDebugOutputsProvider. */
+  public static final NativeProvider<AppleDebugOutputsProvider> SKYLARK_CONSTRUCTOR =
+      new NativeProvider<AppleDebugOutputsProvider>(
+          AppleDebugOutputsProvider.class, SKYLARK_NAME) {};
 
   /**
    * Creates a new provider instance.
@@ -75,7 +81,7 @@ public final class AppleDebugOutputsProvider extends SkylarkClassObject
    *     </ul>
    */
   private AppleDebugOutputsProvider(ImmutableMap<String, ImmutableMap<String, Artifact>> map) {
-    super(SKYLARK_PROVIDER, ImmutableMap.<String, Object>of("outputs_map", map));
+    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of("outputs_map", map));
   }
 
   /** A builder for {@link AppleDebugOutputsProvider}. */
@@ -97,9 +103,7 @@ public final class AppleDebugOutputsProvider extends SkylarkClassObject
      * @return this builder.
      */
     public Builder addOutput(String arch, OutputType outputType, Artifact artifact) {
-      if (!outputsByArch.containsKey(arch)) {
-        outputsByArch.put(arch, new HashMap<String, Artifact>());
-      }
+      outputsByArch.computeIfAbsent(arch, k -> new HashMap<String, Artifact>());
 
       outputsByArch.get(arch).put(outputType.toString(), artifact);
       return this;

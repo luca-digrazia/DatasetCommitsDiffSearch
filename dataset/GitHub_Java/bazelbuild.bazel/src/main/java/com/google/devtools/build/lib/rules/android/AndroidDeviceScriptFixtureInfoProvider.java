@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
+import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -38,7 +39,7 @@ public class AndroidDeviceScriptFixtureInfoProvider extends NativeInfo {
 
   public AndroidDeviceScriptFixtureInfoProvider(
       Artifact fixtureScript, NestedSet<Artifact> supportApks, boolean daemon, boolean strictExit) {
-    super(SKYLARK_CONSTRUCTOR);
+    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of());
     this.fixtureScript = fixtureScript;
     this.supportApks = supportApks;
     this.daemon = daemon;

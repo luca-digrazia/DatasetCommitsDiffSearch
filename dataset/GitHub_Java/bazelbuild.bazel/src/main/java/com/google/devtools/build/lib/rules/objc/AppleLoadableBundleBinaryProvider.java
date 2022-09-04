@@ -38,19 +38,15 @@ public final class AppleLoadableBundleBinaryProvider extends NativeInfo {
           AppleLoadableBundleBinaryProvider.class, SKYLARK_NAME) {};
 
   private final Artifact appleLoadableBundleBinary;
-  private final ObjcProvider depsObjcProvider;
 
   /**
    * Creates a new AppleLoadableBundleBinaryProvider provider that propagates the given apple_binary
    * configured as a loadable bundle binary.
    */
-  public AppleLoadableBundleBinaryProvider(Artifact appleLoadableBundleBinary,
-      ObjcProvider depsObjcProvider) {
-    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of(
-        "binary", appleLoadableBundleBinary,
-        "objc", depsObjcProvider));
+  public AppleLoadableBundleBinaryProvider(Artifact appleLoadableBundleBinary) {
+    super(SKYLARK_CONSTRUCTOR,
+        ImmutableMap.<String, Object>of("binary", appleLoadableBundleBinary));
     this.appleLoadableBundleBinary = appleLoadableBundleBinary;
-    this.depsObjcProvider = depsObjcProvider;
   }
 
   /**
@@ -58,13 +54,5 @@ public final class AppleLoadableBundleBinaryProvider extends NativeInfo {
    */
   public Artifact getAppleLoadableBundleBinary() {
     return appleLoadableBundleBinary;
-  }
-
-  /**
-   * Returns the {@link ObjcProvider} which contains information about the transitive dependencies
-   * linked into the dylib.
-   */
-  public ObjcProvider getDepsObjcProvider() {
-    return depsObjcProvider;
   }
 }
