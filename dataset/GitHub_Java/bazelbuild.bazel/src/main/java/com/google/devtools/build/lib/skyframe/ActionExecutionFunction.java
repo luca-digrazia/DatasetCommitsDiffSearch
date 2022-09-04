@@ -53,6 +53,7 @@ import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.collect.compacthashset.CompactHashSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -68,7 +69,6 @@ import com.google.devtools.build.lib.rules.cpp.IncludeScannable;
 import com.google.devtools.build.lib.skyframe.ActionRewindStrategy.RewindPlan;
 import com.google.devtools.build.lib.skyframe.ArtifactFunction.MissingFileArtifactValue;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionPostprocessing;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -228,10 +228,11 @@ public class ActionExecutionFunction implements SkyFunction {
     ImmutableSet<Artifact> mandatoryInputs =
         action.discoversInputs() ? action.getMandatoryInputs().toSet() : null;
 
+    int nestedSetSizeThreshold = ArtifactNestedSetFunction.getSizeThreshold();
     NestedSet<Artifact> allInputs = state.allInputs.getAllInputs();
 
     Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>> inputDeps =
-        getInputDeps(env, allInputs, state);
+        getInputDeps(env, nestedSetSizeThreshold, allInputs, state);
     // If there's a missing value.
     if (inputDeps == null) {
       return null;
@@ -341,17 +342,18 @@ public class ActionExecutionFunction implements SkyFunction {
    */
   private static Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>> getInputDeps(
       Environment env,
+      int nestedSetSizeThreshold,
       NestedSet<Artifact> allInputs,
       ContinuationState state)
       throws InterruptedException {
-    if (evalInputsAsNestedSet(allInputs)) {
+    if (evalInputsAsNestedSet(nestedSetSizeThreshold, allInputs)) {
       // We "unwrap" the NestedSet and evaluate the first layer of direct Artifacts here in order
       // to save memory:
       // - This top layer costs 1 extra ArtifactNestedSetKey node.
       // - It's uncommon that 2 actions share the exact same set of inputs
       //   => the top layer offers little in terms of reusability.
       // More details: b/143205147.
-      NestedSetView<Artifact> nestedSetView = new NestedSetView<>(allInputs);
+      NestedSetView<Artifact> nestedSetView = new NestedSetView<>((NestedSet<Artifact>) allInputs);
 
       Map<SkyKey, ValueOrException2<IOException, ActionExecutionException>>
           directArtifactValuesOrExceptions =
@@ -388,8 +390,8 @@ public class ActionExecutionFunction implements SkyFunction {
    * necessary. The default case (without --experimental_nestedset_as_skykey_threshold) will ignore
    * this path.
    */
-  public static boolean evalInputsAsNestedSet(NestedSet<Artifact> inputs) {
-    int nestedSetSizeThreshold = ArtifactNestedSetFunction.getSizeThreshold();
+  private static boolean evalInputsAsNestedSet(
+      int nestedSetSizeThreshold, NestedSet<Artifact> inputs) {
     if (nestedSetSizeThreshold == 1) {
       // Don't even flatten in this case.
       return true;
@@ -665,13 +667,6 @@ public class ActionExecutionFunction implements SkyFunction {
           "resolver should only be called once: %s %s",
           keysRequested,
           execPaths);
-      StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
-      if (starlarkSemantics == null) {
-        return null;
-      }
-
-      boolean siblingRepositoryLayout = starlarkSemantics.experimentalSiblingRepositoryLayout();
-
       // Create SkyKeys list based on execPaths.
       Map<PathFragment, SkyKey> depKeys = new HashMap<>();
       for (PathFragment path : execPaths) {
@@ -679,11 +674,19 @@ public class ActionExecutionFunction implements SkyFunction {
             Preconditions.checkNotNull(
                 path.getParentDirectory(), "Must pass in files, not root directory");
         Preconditions.checkArgument(!parent.isAbsolute(), path);
-        SkyKey depKey =
-            ContainingPackageLookupValue.key(
-                PackageIdentifier.discoverFromExecPath(path, true, siblingRepositoryLayout));
-        depKeys.put(path, depKey);
-        keysRequested.add(depKey);
+        try {
+          SkyKey depKey =
+              ContainingPackageLookupValue.key(PackageIdentifier.discoverFromExecPath(path, true));
+          depKeys.put(path, depKey);
+          keysRequested.add(depKey);
+        } catch (LabelSyntaxException e) {
+          // This code is only used to do action cache checks. If one of the file names we got from
+          // the action cache is corrupted, or if the action cache is from a different Bazel
+          // binary, then the path may not be valid for this Bazel binary, and trigger this
+          // exception. In that case, it's acceptable for us to ignore the exception - we'll get an
+          // action cache miss and re-execute the action, which is what we should do.
+          continue;
+        }
       }
 
       Map<SkyKey, SkyValue> values = env.getValues(depKeys.values());

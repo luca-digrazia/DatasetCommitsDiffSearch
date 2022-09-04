@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -38,14 +37,9 @@ public class ArtifactNestedSetKey implements SkyKey {
    *
    * @param rawChildren the underlying members of the nested set.
    */
-  public ArtifactNestedSetKey(Object rawChildren) {
+  ArtifactNestedSetKey(Object rawChildren) {
     Preconditions.checkState(rawChildren instanceof Object[] || rawChildren instanceof Artifact);
     this.rawChildren = rawChildren;
-  }
-
-  @VisibleForTesting
-  public Object getRawChildrenForTesting() {
-    return rawChildren;
   }
 
   @Override
