@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.maven;
 
 import java.io.File;
@@ -104,9 +88,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "true")
     private boolean fullStackTraces;
 
-    @Parameter
-    private List<String> additionalBuildArgs;
-
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
 
@@ -159,9 +140,6 @@ public class NativeImageMojo extends AbstractMojo {
                     }
                 }
             }
-            if (additionalBuildArgs != null) {
-                additionalBuildArgs.forEach(command::add);
-            }
             command.add("-H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime"); //the default collection policy results in full GC's 50% of the time
             command.add("-jar");
             command.add(finalName + "-runner.jar");
@@ -174,6 +152,9 @@ public class NativeImageMojo extends AbstractMojo {
                 command.add("-g");
             }
             if (debugBuildProcess) {
+                command.add("-J-Xdebug");
+                command.add("-J-Xnoagent");
+                command.add("-J-Djava.compiler=NONE");
                 command.add("-J-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=y");
             }
             if (dumpProxies) {
