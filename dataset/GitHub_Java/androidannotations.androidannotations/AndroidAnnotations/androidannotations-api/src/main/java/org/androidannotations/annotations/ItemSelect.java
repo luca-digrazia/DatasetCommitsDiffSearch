@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,22 +21,52 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Should be used on item selected listener methods for AdapterView classes
+ * This annotation is intended to be used on methods to receive events defined
+ * by {@link
+ * android.widget.AdapterView.OnItemSelectedListener#onItemSelected(android.
+ * widget. AdapterView<?>, android.view.View, int, long)} when a list item has
+ * been selected by the user.
+ * <p/>
+ * The annotation value should be one or several of R.id.* fields. If not set,
+ * the method name will be used as the R.id.* field name.
+ * <p/>
+ * The method MAY have one or two parameters :
+ * <ul>
+ * <li>A <code>boolean</code> to know if the item selected or not</li>
+ * <li>An <code>int</code> parameter to know the position of the long clicked
+ * item. Or, a parameter of the type of the Adapter linked to the listview.</li>
+ * </ul>
+ * <p/>
+ * <blockquote>
  * 
- * The method may have 1 or 2 parameters. The first parameter must be a boolean,
- * and the second is the object from the adapter, at the selected position. It
- * may be of any type, so be careful about potential ClassCastException.
+ * Example :
  * 
- * If the second parameter is an int, it will be the position instead of the object from the adapter.
+ * <pre>
+ * &#064;ItemSelect(R.id.myList)
+ * public void itemSelectedOnMyList() {
+ * 	// ...
+ * }
  * 
- * The first boolean parameter indicates if something has been selected or not.
- * If nothing was selected, the second parameter will be null.
+ * &#064;ItemSelect(R.id.myList)
+ * public void myListItemPositionSelected(int position) {
+ * 	// ...
+ * }
  * 
- * The annotation value should be one of R.id.* fields. If not set, the method
- * name will be used as the R.id.* field name.
+ * &#064;ItemSelect
+ * public void myListItemSelect(MyItem clickedItem) {
+ * 	// ...
+ * }
  * 
- * @author Pierre-Yves Ricau
- * @author Mathieu Boniface
+ * &#064;ItemSelect(R.id.myList)
+ * public void myListItemPositionSelected(boolean selected, int position) {
+ * 	// ...
+ * }
+ * </pre>
+ * 
+ * </blockquote>
+ * 
+ * @see ItemClick
+ * @see ItemLongClick
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
