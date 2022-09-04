@@ -23,7 +23,7 @@ import com.facebook.stetho.inspector.elements.DescriptorMap;
 import javax.annotation.Nullable;
 
 final class FragmentDescriptor
-    extends AbstractChainedDescriptor<Object> implements HighlightableDescriptor<Object> {
+    extends AbstractChainedDescriptor<Object> implements HighlightableDescriptor {
   private static final String ID_ATTRIBUTE_NAME = "id";
   private static final String TAG_ATTRIBUTE_NAME = "tag";
 

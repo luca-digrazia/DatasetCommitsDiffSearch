@@ -16,7 +16,6 @@ import com.facebook.stetho.common.Accumulator;
 import com.facebook.stetho.inspector.elements.AbstractChainedDescriptor;
 import com.facebook.stetho.inspector.elements.NodeType;
 
-import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -53,13 +52,10 @@ final class ApplicationDescriptor extends AbstractChainedDescriptor<Application>
   @Override
   protected void onGetChildren(Application element, Accumulator<Object> children) {
     ElementContext context = getContext(element);
-    List<WeakReference<Activity>> activities = context.getActivitiesList();
+    List<Activity> activities = context.getActivitiesList();
     // We report these in reverse order so that the newer ones show up on top
     for (int i = activities.size() - 1; i >= 0; --i) {
-      Activity activity = activities.get(i).get();
-      if (activity != null) {
-        children.store(activity);
-      }
+      children.store(activities.get(i));
     }
   }
 
@@ -79,7 +75,7 @@ final class ApplicationDescriptor extends AbstractChainedDescriptor<Application>
       mElement = null;
     }
 
-    public List<WeakReference<Activity>> getActivitiesList() {
+    public List<Activity> getActivitiesList() {
       return mActivityTracker.getActivitiesView();
     }
 

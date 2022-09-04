@@ -15,21 +15,21 @@ import android.view.View;
 import javax.annotation.Nullable;
 
 public interface FragmentAccessor<FRAGMENT, FRAGMENT_MANAGER> {
-  int NO_ID = 0;
+  public static final int NO_ID = 0;
 
   @Nullable
-  FRAGMENT_MANAGER getFragmentManager(FRAGMENT fragment);
+  public FRAGMENT_MANAGER getFragmentManager(FRAGMENT fragment);
 
-  Resources getResources(FRAGMENT fragment);
+  public Resources getResources(FRAGMENT fragment);
 
-  int getId(FRAGMENT fragment);
-
-  @Nullable
-  String getTag(FRAGMENT fragment);
+  public int getId(FRAGMENT fragment);
 
   @Nullable
-  View getView(FRAGMENT fragment);
+  public String getTag(FRAGMENT fragment);
 
   @Nullable
-  FRAGMENT_MANAGER getChildFragmentManager(FRAGMENT fragment);
+  public View getView(FRAGMENT fragment);
+
+  @Nullable
+  public FRAGMENT_MANAGER getChildFragmentManager(FRAGMENT fragment);
 }

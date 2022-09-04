@@ -35,8 +35,6 @@ import com.facebook.stetho.inspector.elements.DescriptorMap;
 import com.facebook.stetho.inspector.elements.NodeDescriptor;
 import com.facebook.stetho.inspector.elements.ObjectDescriptor;
 
-import javax.annotation.Nullable;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -50,7 +48,7 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
   private final AndroidDOMRoot mDOMRoot;
   private final ViewHighlighter mHighlighter;
   private final InspectModeHandler mInspectModeHandler;
-  private @Nullable Listener mListener;
+  private Listener mListener;
 
   // We don't yet have an an implementation for reliably detecting fine-grained changes in the
   // View tree. So, for now at least, we have a timer that runs every so often and just reports
@@ -149,7 +147,7 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
     if (mListener == null && mIsReportChangesTimerPosted) {
       mIsReportChangesTimerPosted = false;
       removeCallbacks(mReportChangesTimer);
-    } else if (mListener != null && !mIsReportChangesTimerPosted) {
+    } else  if (mListener != null && !mIsReportChangesTimerPosted) {
       mIsReportChangesTimerPosted = true;
       postDelayed(mReportChangesTimer, REPORT_CHANGED_INTERVAL_MS);
     }
@@ -215,16 +213,12 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
 
   @Override
   public void onAttributeModified(Object element, String name, String value) {
-    if (mListener != null) {
-      mListener.onAttributeModified(element, name, value);
-    }
+    mListener.onAttributeModified(element, name, value);
   }
 
   @Override
   public void onAttributeRemoved(Object element, String name) {
-    if (mListener != null) {
-      mListener.onAttributeRemoved(element, name);
-    }
+    mListener.onAttributeRemoved(element, name);
   }
 
   // AndroidDescriptorHost implementation
@@ -355,9 +349,7 @@ final class AndroidDOMProvider implements DOMProvider, AndroidDescriptorHost {
               mHighlighter.setHighlightedView(view, INSPECT_HOVER_COLOR);
 
               if (event.getAction() == MotionEvent.ACTION_UP) {
-                if (mListener != null) {
-                  mListener.onInspectRequested(view);
-                }
+                mListener.onInspectRequested(view);
               }
             }
           }

@@ -19,7 +19,7 @@ import com.facebook.stetho.inspector.elements.Descriptor;
 import javax.annotation.Nullable;
 
 final class DialogDescriptor
-    extends AbstractChainedDescriptor<Dialog> implements HighlightableDescriptor<Dialog> {
+    extends AbstractChainedDescriptor<Dialog> implements HighlightableDescriptor {
   @Override
   protected void onGetChildren(Dialog element, Accumulator<Object> children) {
     Window window = element.getWindow();
@@ -30,10 +30,11 @@ final class DialogDescriptor
 
   @Nullable
   @Override
-  public View getViewForHighlighting(Dialog element) {
+  public View getViewForHighlighting(Object element) {
     final Descriptor.Host host = getHost();
     if (host instanceof AndroidDescriptorHost) {
-      return ((AndroidDescriptorHost) host).getHighlightingView(element.getWindow());
+      final Dialog dialog = (Dialog) element;
+      return ((AndroidDescriptorHost) host).getHighlightingView(dialog.getWindow());
     }
 
     return null;

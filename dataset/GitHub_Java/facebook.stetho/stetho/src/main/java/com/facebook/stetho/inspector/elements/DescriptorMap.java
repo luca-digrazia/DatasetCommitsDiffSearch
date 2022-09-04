@@ -16,7 +16,7 @@ import java.util.Map;
 
 import javax.annotation.Nullable;
 
-public final class DescriptorMap implements DescriptorRegistrar {
+public final class DescriptorMap {
   private final Map<Class<?>, Descriptor> mMap = new IdentityHashMap<>();
   private boolean mIsInitializing;
   private Descriptor.Host mHost;
@@ -27,8 +27,7 @@ public final class DescriptorMap implements DescriptorRegistrar {
     return this;
   }
 
-  @Override
-  public DescriptorMap registerDescriptor(Class<?> elementClass, Descriptor descriptor) {
+  public DescriptorMap register(Class<?> elementClass, Descriptor descriptor) {
     Util.throwIfNull(elementClass);
     Util.throwIfNull(descriptor);
     Util.throwIf(descriptor.isInitialized());
