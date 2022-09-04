@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.devtools.build.lib.collect.nestedset.Order.STABLE_ORDER;
 import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.JAVA_LAUNCHER_LINK;
 import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.STATIC_LINKING_MODE;
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.COMPRESSED;
@@ -120,7 +119,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         Lists.newArrayList(common.targetsTreatedAsDeps(ClasspathType.COMPILE_ONLY));
     helper.addLibrariesToAttributes(deps);
     attributesBuilder.addNativeLibraries(
-        collectNativeLibraries(ruleContext, common.targetsTreatedAsDeps(ClasspathType.BOTH)));
+        collectNativeLibraries(common.targetsTreatedAsDeps(ClasspathType.BOTH)));
 
     // deploy_env is valid for java_binary, but not for java_test.
     if (ruleContext.getRule().isAttrDefined("deploy_env", BuildType.LABEL_LIST)) {
@@ -480,19 +479,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
             .maybeTransitiveOnlyRuntimeJarsToJavaInfo(common.getDependencies(), true)
             .build();
 
-    Artifact validation =
-        AndroidLintActionBuilder.create(
-            ruleContext,
-            javaConfig,
-            attributes,
-            helper.getBootclasspathOrDefault(),
-            common,
-            outputs);
-    if (validation != null) {
-      builder.addOutputGroup(
-          OutputGroupInfo.VALIDATION, NestedSetBuilder.create(STABLE_ORDER, validation));
-    }
-
     return builder
         .setFilesToBuild(filesToBuild)
         .addNativeDeclaredProvider(javaInfo)
@@ -674,14 +660,13 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
   /**
    * Collects the native libraries in the transitive closure of the deps.
    *
-   * @param ruleContext rule context
    * @param deps the dependencies to be included as roots of the transitive closure.
    * @return the native libraries found in the transitive closure of the deps.
    */
   public static Collection<Artifact> collectNativeLibraries(
-      RuleContext ruleContext, Iterable<? extends TransitiveInfoCollection> deps) {
+      Iterable<? extends TransitiveInfoCollection> deps) {
     NestedSet<LibraryToLink> linkerInputs =
-        new NativeLibraryNestedSetBuilder(ruleContext).addJavaTargets(deps).build();
+        new NativeLibraryNestedSetBuilder().addJavaTargets(deps).build();
     return LibraryToLink.getDynamicLibrariesForLinking(linkerInputs);
   }
 
