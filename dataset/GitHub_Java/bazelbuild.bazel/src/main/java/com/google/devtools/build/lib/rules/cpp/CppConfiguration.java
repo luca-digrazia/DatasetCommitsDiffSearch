@@ -667,8 +667,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                   gccToolPath,
                   linkerToolPath,
                   arToolPath,
-                  supportsEmbeddedRuntimes,
-                  toolchain.getSupportsInterfaceSharedObjects()),
+                  supportsEmbeddedRuntimes),
               toolchainBuilder);
         }
 
