@@ -35,9 +35,7 @@ import org.glassfish.jersey.server.internal.scanning.PackageNamesScanner;
 import org.graylog2.alerts.AlertService;
 import org.graylog2.alerts.AlertServiceImpl;
 import org.graylog2.blacklists.BlacklistCache;
-import org.graylog2.buffers.Buffers;
 import org.graylog2.buffers.OutputBuffer;
-import org.graylog2.buffers.OutputBufferWatermark;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.cluster.NodeServiceImpl;
@@ -51,12 +49,8 @@ import org.graylog2.indexer.IndexFailureServiceImpl;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.indexer.ranges.IndexRangeServiceImpl;
-import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
 import org.graylog2.initializers.Initializers;
-import org.graylog2.inputs.Cache;
-import org.graylog2.inputs.InputService;
-import org.graylog2.inputs.InputServiceImpl;
-import org.graylog2.inputs.ServerInputRegistry;
+import org.graylog2.inputs.*;
 import org.graylog2.inputs.gelf.gelf.GELFChunkManager;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.metrics.MongoDbMetricsReporter;
@@ -73,6 +67,7 @@ import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.transports.Transport;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.indexer.MessageGateway;
 import org.graylog2.plugin.initializers.Initializer;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.lifecycles.Lifecycle;
@@ -94,10 +89,8 @@ import org.graylog2.security.ldap.LdapSettingsService;
 import org.graylog2.security.ldap.LdapSettingsServiceImpl;
 import org.graylog2.security.realm.LdapUserAuthenticator;
 import org.graylog2.shared.ProcessingHost;
-import org.graylog2.shared.ProcessingPauseLockedException;
 import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.buffers.ProcessBuffer;
-import org.graylog2.shared.buffers.ProcessBufferWatermark;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.filters.FilterRegistry;
 import org.graylog2.shared.inputs.InputRegistry;
@@ -110,7 +103,6 @@ import org.graylog2.system.activities.Activity;
 import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.activities.SystemMessageService;
 import org.graylog2.system.activities.SystemMessageServiceImpl;
-import org.graylog2.system.jobs.SystemJobFactory;
 import org.graylog2.system.jobs.SystemJobManager;
 import org.graylog2.system.shutdown.GracefulShutdown;
 import org.graylog2.users.UserService;
@@ -134,6 +126,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -168,7 +161,6 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     public static final Version GRAYLOG2_VERSION = ServerVersion.VERSION;
     public static final String GRAYLOG2_CODENAME = "Moose";
 
-    @Inject
     private Indexer indexer;
 
     private Counter benchmarkCounter = new Counter();
@@ -178,6 +170,7 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     @Inject
     private FilterRegistry filterRegistry;
 
+    private List<MessageFilter> filters = Lists.newArrayList();
     private List<Transport> transports = Lists.newArrayList();
     private List<AlarmCallback> alarmCallbacks = Lists.newArrayList();
 
@@ -186,31 +179,29 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
     @Inject
     private OutputRegistry outputs;
-    @Inject
     private Periodicals periodicals;
 
-    @Inject
     private ProcessBuffer processBuffer;
-    @Inject
     private OutputBuffer outputBuffer;
-
-    @Inject
-    private OutputBufferWatermark outputBufferWatermark;
-    @Inject
-    private ProcessBufferWatermark processBufferWatermark;
+    private AtomicInteger outputBufferWatermark = new AtomicInteger();
+    private AtomicInteger processBufferWatermark = new AtomicInteger();
     
-    @Inject
+    private Cache inputCache;
+    private Cache outputCache;
+    
     private Deflector deflector;
     
     @Inject
     private ActivityWriter activityWriter;
 
-    @Inject
     private SystemJobManager systemJobManager;
 
     private boolean localMode = false;
     private boolean statsMode = false;
 
+    private AtomicBoolean isProcessing = new AtomicBoolean(true);
+    private AtomicBoolean processingPauseLocked = new AtomicBoolean(false);
+    
     @Inject
     private MetricRegistry metricRegistry;
     private LdapUserAuthenticator ldapUserAuthenticator;
@@ -231,15 +222,6 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
     @Inject
     private DashboardRegistry dashboardRegistry;
-
-    @Inject
-    private Buffers bufferSynchronizer;
-
-    @Inject
-    private SystemJobFactory systemJobFactory;
-
-    @Inject
-    private RebuildIndexRangesJob.Factory rebuildIndexRangesJobFactory;
 
     public void initialize() {
         if (configuration.isMetricsCollectionEnabled()) {
@@ -263,11 +245,18 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
         initializers = new Initializers(this);
         inputs = new ServerInputRegistry(this);
+        periodicals = new Periodicals(this, scheduler, daemonScheduler);
 
-        if (serverStatus.hasCapability(ServerStatus.Capability.MASTER)) {
+        if (isMaster()) {
             dashboardRegistry.loadPersisted(this);
         }
 
+        systemJobManager = new SystemJobManager(this);
+
+        inputCache = new BasicCache();
+        outputCache = new BasicCache();
+
+        outputBuffer = outputBufferFactory.create(this, outputCache);
         outputBuffer.initialize();
 
         int processBufferProcessorCount = configuration.getProcessBufferProcessors();
@@ -275,9 +264,10 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
         ProcessBufferProcessor[] processors = new ProcessBufferProcessor[processBufferProcessorCount];
 
         for (int i = 0; i < processBufferProcessorCount; i++) {
-            processors[i] = processBufferProcessorFactory.create(outputBuffer, this, processBufferWatermark, i, processBufferProcessorCount);
+            processors[i] = processBufferProcessorFactory.create(this, outputBuffer, i, processBufferProcessorCount);
         }
 
+        processBuffer = processBufferFactory.create(this, inputCache);
         processBuffer.initialize(processors, this.getConfiguration().getRingSize(),
                 this.getConfiguration().getProcessorWaitStrategy(),
                 this.getConfiguration().getProcessBufferProcessors()
@@ -285,6 +275,7 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
         gelfChunkManager = new GELFChunkManager(this);
 
+        indexer = new Indexer(this);
         indexer.start();
 
         final Core core = this;
@@ -295,7 +286,7 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
                 LOG.info(msg);
                 activityWriter.write(new Activity(msg, Core.class));
 
-                GracefulShutdown gs = new GracefulShutdown(core, bufferSynchronizer);
+                GracefulShutdown gs = new GracefulShutdown(core);
                 gs.run();
             }
         });
@@ -317,7 +308,8 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
         // Set up deflector.
         LOG.info("Setting up deflector.");
-        deflector.setUp(indexer);
+        deflector = new Deflector(this);
+        deflector.setUp();
 
         // Load and register plugins.
         registerPlugins(MessageInput.class, "inputs");
@@ -328,6 +320,19 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
         // Load persisted inputs.
         inputs().launchAllPersisted();
+
+        /*
+        // Initialize all registered inputs.
+        for (MessageInput input : this.inputs) {
+            try {
+                // This is a plugin. Initialize with custom config from Mongo.
+                input.initialize(PluginConfiguration.load(this, input.getClass().getCanonicalName()), this);
+                LOG.debug("Initialized input: {}", input.getName());
+            } catch (MessageInputConfigurationException e) {
+                LOG.error("Could not initialize input <{}>.", input.getClass().getCanonicalName(), e);
+            }
+        }}
+        */
     }
 
     public void setLdapConnector(LdapConnector ldapConnector) {
@@ -372,6 +377,7 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     }
 
     private class Graylog2Binder extends AbstractBinder {
+
         @Override
         protected void configure() {
             bind(Core.this).to(Core.class);
@@ -393,16 +399,6 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
             bind(new IndexFailureServiceImpl(mongoConnection)).to(IndexFailureService.class);
             bind(dashboardRegistry).to(DashboardRegistry.class);
             bind(activityWriter).to(ActivityWriter.class);
-            bind(serverStatus).to(ServerStatus.class);
-            bind(outputBufferWatermark).to(OutputBufferWatermark.class);
-            bind(processBufferWatermark).to(ProcessBufferWatermark.class);
-            bind(deflector).to(Deflector.class);
-            bind(indexer).to(Indexer.class);
-            bind(systemJobFactory).to(SystemJobFactory.class);
-            bind(bufferSynchronizer).to(Buffers.class);
-            bind(configuration).to(Configuration.class);
-            bind(systemJobManager).to(SystemJobManager.class);
-            bind(rebuildIndexRangesJobFactory).to(RebuildIndexRangesJob.Factory.class);
         }
     }
 
@@ -570,12 +566,17 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
     @Override
     public boolean isMaster() {
-        return serverStatus.hasCapability(ServerStatus.Capability.MASTER);
+        return this.configuration.isMaster();
     }
     
     @Override
     public String getNodeId() {
         return serverStatus.getNodeId().toString();
+    }
+    
+    @Override
+    public MessageGateway getMessageGateway() {
+        return this.indexer.getMessageGateway();
     }
     
     public void setLocalMode(boolean mode) {
@@ -595,11 +596,11 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     }
     
     public Cache getInputCache() {
-        return processBuffer.getMasterCache();
+        return inputCache;
     }
     
     public Cache getOutputCache() {
-        return outputBuffer.getOverflowCache();
+        return outputCache;
     }
     
     public DateTime getStartedAt() {
@@ -607,23 +608,35 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     }
 
     public void pauseMessageProcessing(boolean locked) {
-        serverStatus.pauseMessageProcessing(locked);
+        isProcessing.set(false);
+        setLifecycle(Lifecycle.PAUSED);
+
+        // Never override pause lock if already locked.
+        if (!processingPauseLocked.get()) {
+            processingPauseLocked.set(locked);
+        }
     }
 
     public void resumeMessageProcessing() throws ProcessingPauseLockedException {
-        serverStatus.resumeMessageProcessing();
+        if (processingPauseLocked()) {
+            throw new ProcessingPauseLockedException("Processing pause is locked. Wait until the locking task has finished " +
+                    "or manually unlock if you know what you are doing.");
+        }
+
+        isProcessing.set(true);
+        setLifecycle(Lifecycle.RUNNING);
     }
 
     public boolean processingPauseLocked() {
-        return serverStatus.processingPauseLocked();
+        return processingPauseLocked.get();
     }
 
     public void unlockProcessingPause() {
-        serverStatus.unlockProcessingPause();
+        processingPauseLocked.set(false);
     }
 
     public boolean isProcessing() {
-        return serverStatus.isProcessing();
+        return isProcessing.get();
     }
 
     public MetricRegistry metrics() {
@@ -668,12 +681,12 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
     @Override
     public boolean isServer() {
-        return serverStatus.hasCapability(ServerStatus.Capability.SERVER);
+        return true;
     }
 
     @Override
     public boolean isRadio() {
-        return serverStatus.hasCapability(ServerStatus.Capability.RADIO);
+        return false;
     }
 
     public Lifecycle getLifecycle() {

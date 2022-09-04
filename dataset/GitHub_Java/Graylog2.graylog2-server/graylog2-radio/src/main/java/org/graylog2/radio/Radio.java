@@ -39,6 +39,7 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.Version;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.indexer.MessageGateway;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.plugin.rest.AnyExceptionClassMapper;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
@@ -95,10 +96,7 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     private RadioInputRegistry inputs;
     private Cache inputCache;
     private ProcessBuffer processBuffer;
-
-    @Inject
-    @Named("processBufferWatermark")
-    private AtomicInteger processBufferWatermark;
+    private AtomicInteger processBufferWatermark = new AtomicInteger();
 
     private Ping.Pinger pinger;
 
@@ -134,10 +132,10 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
         ProcessBufferProcessor[] processors = new ProcessBufferProcessor[processBufferProcessorCount];
 
         for (int i = 0; i < processBufferProcessorCount; i++) {
-            processors[i] = processBufferProcessorFactory.create(this.processBufferWatermark, i, processBufferProcessorCount, transport);
+            processors[i] = processBufferProcessorFactory.create(this, i, processBufferProcessorCount, transport);
         }
 
-        processBuffer = processBufferFactory.create(inputCache, processBufferWatermark);
+        processBuffer = processBufferFactory.create(this, inputCache);
         processBuffer.initialize(processors, configuration.getRingSize(),
                 configuration.getProcessorWaitStrategy(),
                 configuration.getProcessBufferProcessors()
@@ -247,7 +245,6 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
             bind(metricRegistry).to(MetricRegistry.class);
             bind(throughputStats).to(ThroughputStats.class);
             bind(configuration).to(Configuration.class);
-            bind(serverStatus).to(ServerStatus.class);
         }
 
     }
@@ -309,6 +306,11 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
     }
 
     @Override
+    public MessageGateway getMessageGateway() {
+        return null;
+    }
+
+    @Override
     public boolean isMaster() {
         return false;
     }
@@ -324,12 +326,12 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
 
     @Override
     public boolean isServer() {
-        return serverStatus.hasCapability(ServerStatus.Capability.SERVER);
+        return false;
     }
 
     @Override
     public boolean isRadio() {
-        return serverStatus.hasCapability(ServerStatus.Capability.RADIO);
+        return true;
     }
 
     public Lifecycle getLifecycle() {

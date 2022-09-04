@@ -31,8 +31,6 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.indexer.Indexer;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.alarms.AlertCondition;
-import org.graylog2.plugin.database.Persisted;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.resources.streams.alerts.requests.CreateConditionRequest;
 import org.joda.time.DateTime;
@@ -118,18 +116,12 @@ public class AlertServiceImpl extends PersistedServiceImpl implements AlertServi
         return collection(AlertImpl.class).count();
     }
 
-    @Override
-    public long totalCountForStream(String streamId) {
-        DBObject qry = new BasicDBObject("stream_id", streamId);
-        return collection(AlertImpl.class).count(qry);
-    }
-
-    public AlertCondition fromPersisted(Map<String, Object> fields, Stream stream) throws AbstractAlertCondition.NoSuchAlertConditionTypeException {
-        AbstractAlertCondition.Type type;
+    public AlertCondition fromPersisted(Map<String, Object> fields, Stream stream) throws AlertCondition.NoSuchAlertConditionTypeException {
+        AlertCondition.Type type;
         try {
-            type = AbstractAlertCondition.Type.valueOf(((String) fields.get("type")).toUpperCase());
+            type = AlertCondition.Type.valueOf(((String) fields.get("type")).toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new AbstractAlertCondition.NoSuchAlertConditionTypeException("No such alert condition type: [" + fields.get("type") + "]");
+            throw new AlertCondition.NoSuchAlertConditionTypeException("No such alert condition type: [" + fields.get("type") + "]");
         }
 
         switch(type) {
@@ -151,16 +143,16 @@ public class AlertServiceImpl extends PersistedServiceImpl implements AlertServi
                 );
         }
 
-        throw new AbstractAlertCondition.NoSuchAlertConditionTypeException("Unhandled alert condition type: " + type);
+        throw new AlertCondition.NoSuchAlertConditionTypeException("Unhandled alert condition type: " + type);
     }
 
-    public AbstractAlertCondition fromRequest(CreateConditionRequest ccr, Stream stream) throws AbstractAlertCondition.NoSuchAlertConditionTypeException {
-        AbstractAlertCondition.Type type;
+    public AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream) throws AlertCondition.NoSuchAlertConditionTypeException {
+        AlertCondition.Type type;
         try {
             Integer Type;
-            type = AbstractAlertCondition.Type.valueOf(ccr.type.toUpperCase());
+            type = AlertCondition.Type.valueOf(ccr.type.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new AbstractAlertCondition.NoSuchAlertConditionTypeException("No such alert condition type: [" + ccr.type + "]");
+            throw new AlertCondition.NoSuchAlertConditionTypeException("No such alert condition type: [" + ccr.type + "]");
         }
 
         Map<String, Object> parameters = ccr.parameters;
@@ -184,7 +176,7 @@ public class AlertServiceImpl extends PersistedServiceImpl implements AlertServi
                 );
         }
 
-        throw new AbstractAlertCondition.NoSuchAlertConditionTypeException("Unhandled alert condition type: " + type);
+        throw new AlertCondition.NoSuchAlertConditionTypeException("Unhandled alert condition type: " + type);
     }
 
     public boolean inGracePeriod(AlertCondition alertCondition) {
@@ -199,7 +191,7 @@ public class AlertServiceImpl extends PersistedServiceImpl implements AlertServi
 
     public AlertCondition.CheckResult triggeredNoGrace(AlertCondition alertCondition, Indexer indexer) {
         LOG.debug("Checking alert condition [{}] and not accounting grace time.", this);
-        return ((AbstractAlertCondition)alertCondition).runCheck(indexer);
+        return alertCondition.runCheck(indexer);
     }
 
     public AlertCondition.CheckResult triggered(AlertCondition alertCondition, Indexer indexer) {
@@ -207,18 +199,18 @@ public class AlertServiceImpl extends PersistedServiceImpl implements AlertServi
 
         if(inGracePeriod(alertCondition)) {
             LOG.debug("Alert condition [{}] is in grace period. Not triggered.", this);
-            return new AbstractAlertCondition.CheckResult(false);
+            return new AlertCondition.CheckResult(false);
         }
 
-        return ((AbstractAlertCondition)alertCondition).runCheck(indexer);
+        return alertCondition.runCheck(indexer);
     }
 
     public Map<String, Object> asMap(final AlertCondition alertCondition) {
         return new HashMap<String, Object>() {{
             put("id", alertCondition.getId());
-            put("type", alertCondition.getTypeString().toLowerCase());
-            put("creator_user_id", alertCondition.getCreatorUserId());
-            put("created_at", Tools.getISO8601String(alertCondition.getCreatedAt()));
+            put("type", alertCondition.getType().toString().toLowerCase());
+            put("creator_user_id", alertCondition.creatorUserId);
+            put("created_at", Tools.getISO8601String(alertCondition.createdAt));
             put("parameters", alertCondition.getParameters());
             put("in_grace", inGracePeriod(alertCondition));
         }};

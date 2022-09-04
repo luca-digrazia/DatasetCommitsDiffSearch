@@ -13,13 +13,14 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
- *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.inputs.gelf.gelf;
 
+import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -33,6 +34,7 @@ import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
 import java.util.Iterator;
 import java.util.Map;
 
@@ -46,6 +48,9 @@ public class GELFProcessor {
     private static final Logger LOG = LoggerFactory.getLogger(GELFProcessor.class);
     private InputHost server;
 
+    @Inject
+    private MetricRegistry metricRegistry;
+
     private final ObjectMapper objectMapper;
 
     public GELFProcessor(InputHost server) {
@@ -58,7 +63,7 @@ public class GELFProcessor {
     public void messageReceived(GELFMessage message, MessageInput sourceInput) throws BufferOutOfCapacityException {
         String metricName = sourceInput.getUniqueReadableId();
 
-        server.metrics().meter(name(metricName, "incomingMessages")).mark();
+        metricRegistry.meter(name(metricName, "incomingMessages")).mark();
 
         // Convert to LogMessage
         Message lm = null;
@@ -70,19 +75,19 @@ public class GELFProcessor {
         }
 
         if (lm == null || !lm.isComplete()) {
-            server.metrics().meter(name(metricName, "incompleteMessages")).mark();
-            LOG.debug("Skipping incomplete message: {}", lm.getValidationErrors());
+            metricRegistry.meter(name(metricName, "incompleteMessages")).mark();
+            LOG.debug("Skipping incomplete message.");
             return;
         }
 
         // Add to process buffer.
         LOG.debug("Adding received GELF message <{}> to process buffer: {}", lm.getId(), lm);
-        server.metrics().meter(name(metricName, "processedMessages")).mark();
+        metricRegistry.meter(name(metricName, "processedMessages")).mark();
         server.getProcessBuffer().insertCached(lm, sourceInput);
     }
 
     private Message parse(String message, MessageInput sourceInput) {
-        Timer.Context tcx = server.metrics().timer(name(sourceInput.getUniqueReadableId(), "gelfParsedTime")).time();
+        Timer.Context tcx = metricRegistry.timer(name(sourceInput.getUniqueReadableId(), "gelfParsedTime")).time();
 
         JsonNode json;
 
@@ -90,7 +95,6 @@ public class GELFProcessor {
             json = objectMapper.readTree(message);
         } catch (Exception e) {
             LOG.error("Could not parse JSON!", e);
-            LOG.debug("This is the failed message: ", message);
             json = null;
         }
 
