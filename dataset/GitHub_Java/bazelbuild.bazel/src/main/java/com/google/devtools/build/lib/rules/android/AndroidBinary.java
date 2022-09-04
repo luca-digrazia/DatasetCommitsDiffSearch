@@ -653,7 +653,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     return androidCommon.getInstrumentedJar();
   }
 
-  public static NestedSet<Artifact> getLibraryResourceJars(RuleContext ruleContext) {
+  private static NestedSet<Artifact> getLibraryResourceJars(RuleContext ruleContext) {
     Iterable<AndroidLibraryResourceClassJarProvider> libraryResourceJarProviders =
         AndroidCommon.getTransitivePrerequisites(
             ruleContext, Mode.TARGET, AndroidLibraryResourceClassJarProvider.PROVIDER);
