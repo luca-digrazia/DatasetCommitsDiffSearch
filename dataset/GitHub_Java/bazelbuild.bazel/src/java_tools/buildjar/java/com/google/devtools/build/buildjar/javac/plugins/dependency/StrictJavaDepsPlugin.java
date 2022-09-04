@@ -440,7 +440,7 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
 
                       @Override
                       public Void visitArray(List<? extends AnnotationValue> vals, Void aVoid) {
-                        vals.forEach(v -> v.accept(this, null));
+                        vals.stream().forEachOrdered(v -> v.accept(this, null));
                         return super.visitArray(vals, aVoid);
                       }
                     },
