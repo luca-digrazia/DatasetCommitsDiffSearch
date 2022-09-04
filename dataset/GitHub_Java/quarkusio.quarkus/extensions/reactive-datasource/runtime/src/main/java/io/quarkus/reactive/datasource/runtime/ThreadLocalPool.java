@@ -3,10 +3,8 @@ package io.quarkus.reactive.datasource.runtime;
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
 
 import io.vertx.core.AsyncResult;
-import io.vertx.core.Future;
 import io.vertx.core.Handler;
 import io.vertx.core.Vertx;
 import io.vertx.sqlclient.Pool;
@@ -16,6 +14,7 @@ import io.vertx.sqlclient.Query;
 import io.vertx.sqlclient.Row;
 import io.vertx.sqlclient.RowSet;
 import io.vertx.sqlclient.SqlConnection;
+import io.vertx.sqlclient.Transaction;
 
 /**
  * This Pool implementation wraps the Vert.x Pool into thread-locals,
@@ -31,7 +30,7 @@ import io.vertx.sqlclient.SqlConnection;
  * of threads requesting one makes this not honour the limit of
  * connections to the database.
  * </p>
- * <p>
+ *
  * In particular the second limitation will need to be addressed.
  *
  * @param <PoolType> useful for implementations to produce typed pools
@@ -116,27 +115,19 @@ public abstract class ThreadLocalPool<PoolType extends Pool> implements Pool {
     }
 
     @Override
-    public Future<SqlConnection> getConnection() {
-        return pool().getConnection();
+    public void begin(Handler<AsyncResult<Transaction>> handler) {
+        pool().begin(handler);
     }
 
     @Override
-    public void close(Handler<AsyncResult<Void>> handler) {
-        handler.handle(close());
-    }
-
-    @Override
-    public Future<Void> close() {
+    public void close() {
         synchronized (allConnections) {
             this.closed = true;
-            ArrayList<CompletableFuture<Void>> tasks = new ArrayList<>(allConnections.size());
             for (PoolAndThread pair : allConnections) {
-                tasks.add(pair.close().toCompletionStage().toCompletableFuture());
+                pair.close();
             }
-            final CompletableFuture<Void> combinedCloseTask = CompletableFuture.allOf(tasks.toArray(new CompletableFuture[0]));
             allConnections.clear();
             threadLocal.remove();
-            return Future.fromCompletionStage(combinedCloseTask);
         }
     }
 
@@ -151,14 +142,13 @@ public abstract class ThreadLocalPool<PoolType extends Pool> implements Pool {
      * Removes references to the instance without closing it.
      * This assumes the instance was created via this pool
      * and that it's now closed, so no longer needing tracking.
-     *
+     * 
      * @param instance
      */
     protected void removeSelfFromTracking(final PoolType instance) {
         synchronized (allConnections) {
-            if (closed) {
+            if (closed)
                 return;
-            }
             for (PoolAndThread pair : allConnections) {
                 if (pair.pool == instance) {
                     allConnections.remove(pair);
@@ -190,11 +180,9 @@ public abstract class ThreadLocalPool<PoolType extends Pool> implements Pool {
 
         /**
          * Closes the connection
-         * 
-         * @return
          */
-        Future<Void> close() {
-            return pool.close();
+        void close() {
+            pool.close();
         }
 
         /**
