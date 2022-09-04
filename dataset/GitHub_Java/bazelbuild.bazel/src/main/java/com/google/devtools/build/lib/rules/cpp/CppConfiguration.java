@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
 import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
@@ -43,7 +42,7 @@ import javax.annotation.Nullable;
  * architecture, target architecture, compiler version, and a standard library version.
  */
 @Immutable
-public final class CppConfiguration extends Fragment
+public final class CppConfiguration extends BuildConfiguration.Fragment
     implements CppConfigurationApi<InvalidConfigurationException> {
   /**
    * String indicating a Mac system, for example when used in a crosstool configuration's host or
