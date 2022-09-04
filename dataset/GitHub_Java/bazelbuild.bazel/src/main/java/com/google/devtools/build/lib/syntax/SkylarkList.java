@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.syntax;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
@@ -23,6 +22,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.SkylarkMutable.BaseMutableList;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -114,7 +114,7 @@ public abstract class SkylarkList<E> extends BaseMutableList<E>
   @Override
   public boolean equals(Object object) {
     return (this == object)
-        || ((object != null) && (this.getClass() == object.getClass())
+        || ((this.getClass() == object.getClass())
             && getContentsUnsafe().equals(((SkylarkList) object).getContentsUnsafe()));
   }
 
