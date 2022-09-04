@@ -94,6 +94,11 @@ public class MemoizingEvaluatorTest {
     initializeReporter();
   }
 
+  @After
+  public void assertNoTrackedErrors() {
+    TrackingAwaiter.INSTANCE.assertNoErrors();
+  }
+
   private void initializeTester(@Nullable TrackingProgressReceiver customProgressReceiver) {
     emittedEventState = new MemoizingEvaluator.EmittedEventState();
     tester = new MemoizingEvaluatorTester();
@@ -101,11 +106,6 @@ public class MemoizingEvaluatorTest {
       tester.setProgressReceiver(customProgressReceiver);
     }
     tester.initialize(true);
-  }
-
-  @After
-  public void assertNoTrackedErrors() {
-    TrackingAwaiter.INSTANCE.assertNoErrors();
   }
 
   protected RecordingDifferencer getRecordingDifferencer() {
@@ -358,7 +358,7 @@ public class MemoizingEvaluatorTest {
                   Thread.sleep(TestUtils.WAIT_TIMEOUT_MILLISECONDS);
                   throw new AssertionError("Shouldn't have slept so long");
                 } catch (InterruptedException e) {
-                  throw new RuntimeException("I don't like being woken up!", e);
+                  throw new RuntimeException("I don't like being woken up!");
                 }
               }
 
