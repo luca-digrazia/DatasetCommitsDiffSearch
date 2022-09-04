@@ -14,14 +14,14 @@
 package com.google.devtools.build.lib.remote;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static java.lang.String.format;
-import static java.util.Collections.singletonMap;
+import static java.util.Collections.singletonList;
 import static java.util.concurrent.TimeUnit.SECONDS;
 
+import build.bazel.remote.execution.v2.Digest;
 import com.google.bytestream.ByteStreamGrpc;
-import com.google.bytestream.ByteStreamGrpc.ByteStreamFutureStub;
-import com.google.bytestream.ByteStreamProto.QueryWriteStatusRequest;
 import com.google.bytestream.ByteStreamProto.WriteRequest;
 import com.google.bytestream.ByteStreamProto.WriteResponse;
 import com.google.common.annotations.VisibleForTesting;
@@ -32,7 +32,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.devtools.build.lib.remote.RemoteRetrier.ProgressiveBackoff;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import io.grpc.CallCredentials;
 import io.grpc.CallOptions;
@@ -41,7 +40,6 @@ import io.grpc.ClientCall;
 import io.grpc.Context;
 import io.grpc.Metadata;
 import io.grpc.Status;
-import io.grpc.Status.Code;
 import io.grpc.StatusRuntimeException;
 import io.netty.util.AbstractReferenceCounted;
 import io.netty.util.ReferenceCounted;
@@ -53,9 +51,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.annotation.Nullable;
@@ -86,7 +84,7 @@ class ByteStreamUploader extends AbstractReferenceCounted {
   private final Set<HashCode> uploadedBlobs = new HashSet<>();
 
   @GuardedBy("lock")
-  private final Map<HashCode, ListenableFuture<Void>> uploadsInProgress = new HashMap<>();
+  private final Map<Digest, ListenableFuture<Void>> uploadsInProgress = new HashMap<>();
 
   @GuardedBy("lock")
   private boolean isShutdown;
@@ -128,15 +126,14 @@ class ByteStreamUploader extends AbstractReferenceCounted {
    * <p>Trying to upload the same BLOB multiple times concurrently, results in only one upload being
    * performed. This is transparent to the user of this API.
    *
-   * @param hash the hash of the data to upload.
    * @param chunker the data to upload.
    * @param forceUpload if {@code false} the blob is not uploaded if it has previously been
-   *     uploaded, if {@code true} the blob is uploaded.
+   *        uploaded, if {@code true} the blob is uploaded.
    * @throws IOException when reading of the {@link Chunker}s input source fails
    */
-  public void uploadBlob(HashCode hash, Chunker chunker, boolean forceUpload)
-      throws IOException, InterruptedException {
-    uploadBlobs(singletonMap(hash, chunker), forceUpload);
+  public void uploadBlob(Chunker chunker, boolean forceUpload) throws IOException,
+      InterruptedException {
+    uploadBlobs(singletonList(chunker), forceUpload);
   }
 
   /**
@@ -156,12 +153,12 @@ class ByteStreamUploader extends AbstractReferenceCounted {
    *     uploaded, if {@code true} the blob is uploaded.
    * @throws IOException when reading of the {@link Chunker}s input source or uploading fails
    */
-  public void uploadBlobs(Map<HashCode, Chunker> chunkers, boolean forceUpload)
+  public void uploadBlobs(Iterable<Chunker> chunkers, boolean forceUpload)
       throws IOException, InterruptedException {
     List<ListenableFuture<Void>> uploads = new ArrayList<>();
 
-    for (Map.Entry<HashCode, Chunker> chunkerEntry : chunkers.entrySet()) {
-      uploads.add(uploadBlobAsync(chunkerEntry.getKey(), chunkerEntry.getValue(), forceUpload));
+    for (Chunker chunker : chunkers) {
+      uploads.add(uploadBlobAsync(chunker, forceUpload));
     }
 
     try {
@@ -172,6 +169,9 @@ class ByteStreamUploader extends AbstractReferenceCounted {
       Throwable cause = e.getCause();
       Throwables.propagateIfInstanceOf(cause, IOException.class);
       Throwables.propagateIfInstanceOf(cause, InterruptedException.class);
+      if (cause instanceof StatusRuntimeException) {
+        throw new IOException(cause);
+      }
       Throwables.propagate(cause);
     }
   }
@@ -210,14 +210,15 @@ class ByteStreamUploader extends AbstractReferenceCounted {
    * <p>Trying to upload the same BLOB multiple times concurrently, results in only one upload being
    * performed. This is transparent to the user of this API.
    *
-   * @param hash the hash of the data to upload.
    * @param chunker the data to upload.
    * @param forceUpload if {@code false} the blob is not uploaded if it has previously been
-   *     uploaded, if {@code true} the blob is uploaded.
+   *        uploaded, if {@code true} the blob is uploaded.
    * @throws IOException when reading of the {@link Chunker}s input source fails
    */
-  public ListenableFuture<Void> uploadBlobAsync(
-      HashCode hash, Chunker chunker, boolean forceUpload) {
+  public ListenableFuture<Void> uploadBlobAsync(Chunker chunker, boolean forceUpload) {
+    Digest digest = checkNotNull(chunker.digest());
+    HashCode hash = HashCode.fromString(digest.getHash());
+
     synchronized (lock) {
       checkState(!isShutdown, "Must not call uploadBlobs after shutdown.");
 
@@ -225,14 +226,15 @@ class ByteStreamUploader extends AbstractReferenceCounted {
         return Futures.immediateFuture(null);
       }
 
-      ListenableFuture<Void> inProgress = uploadsInProgress.get(hash);
+      ListenableFuture<Void> inProgress = uploadsInProgress.get(digest);
       if (inProgress != null) {
         return inProgress;
       }
 
+      Context ctx = Context.current();
       ListenableFuture<Void> uploadResult =
           Futures.transform(
-              startAsyncUpload(hash, chunker),
+              retrier.executeAsync(() -> ctx.call(() -> startAsyncUpload(chunker))),
               (v) -> {
                 synchronized (lock) {
                   uploadedBlobs.add(hash);
@@ -240,24 +242,35 @@ class ByteStreamUploader extends AbstractReferenceCounted {
                 return null;
               },
               MoreExecutors.directExecutor());
-
-      uploadResult =
-          Futures.catchingAsync(
-              uploadResult,
-              StatusRuntimeException.class,
-              (sre) -> Futures.immediateFailedFuture(new IOException(sre)),
-              MoreExecutors.directExecutor());
-
-      uploadsInProgress.put(hash, uploadResult);
-      uploadResult.addListener(
+      // A future that only completes once the upload and internal state updates have
+      // been completed.
+      SettableFuture<Void> uploadAndBookkeepingComplete = SettableFuture.create();
+      uploadsInProgress.put(digest, uploadAndBookkeepingComplete);
+      uploadAndBookkeepingComplete.addListener(
           () -> {
-            synchronized (lock) {
-              uploadsInProgress.remove(hash);
+            if (uploadAndBookkeepingComplete.isCancelled()) {
+              uploadResult.cancel(true);
             }
           },
           MoreExecutors.directExecutor());
-
-      return uploadResult;
+      uploadResult.addListener(
+          () -> {
+            synchronized (lock) {
+              uploadsInProgress.remove(digest);
+              try {
+                uploadResult.get();
+                uploadAndBookkeepingComplete.set(null);
+              } catch (ExecutionException e) {
+                uploadAndBookkeepingComplete.setException(e.getCause());
+              } catch (CancellationException e) {
+                uploadAndBookkeepingComplete.cancel(true);
+              } catch (Throwable e) {
+                uploadAndBookkeepingComplete.setException(e);
+              }
+            }
+          },
+          MoreExecutors.directExecutor());
+      return uploadAndBookkeepingComplete;
     }
   }
 
@@ -268,28 +281,18 @@ class ByteStreamUploader extends AbstractReferenceCounted {
     }
   }
 
-  private static String uploadResourceName(
-      String instanceName, UUID uuid, HashCode hash, long size) {
-    String resourceName = format("uploads/%s/blobs/%s/%d", uuid, hash, size);
-    if (!Strings.isNullOrEmpty(instanceName)) {
-      resourceName = instanceName + "/" + resourceName;
-    }
-    return resourceName;
-  }
-
   /** Starts a file upload an returns a future representing the upload. */
-  private ListenableFuture<Void> startAsyncUpload(HashCode hash, Chunker chunker) {
+  private ListenableFuture<Void> startAsyncUpload(Chunker chunker) {
     try {
       chunker.reset();
     } catch (IOException e) {
       return Futures.immediateFailedFuture(e);
     }
 
-    UUID uploadId = UUID.randomUUID();
-    String resourceName = uploadResourceName(instanceName, uploadId, hash, chunker.getSize());
+    SettableFuture<Void> currUpload = SettableFuture.create();
     AsyncUpload newUpload =
-        new AsyncUpload(channel, callCredentials, callTimeoutSecs, retrier, resourceName, chunker);
-    ListenableFuture<Void> currUpload = newUpload.start();
+        new AsyncUpload(
+            channel, callCredentials, callTimeoutSecs, instanceName, chunker, currUpload);
     currUpload.addListener(
         () -> {
           if (currUpload.isCancelled()) {
@@ -297,6 +300,7 @@ class ByteStreamUploader extends AbstractReferenceCounted {
           }
         },
         MoreExecutors.directExecutor());
+    newUpload.start();
     return currUpload;
   }
 
@@ -326,9 +330,9 @@ class ByteStreamUploader extends AbstractReferenceCounted {
     private final Channel channel;
     private final CallCredentials callCredentials;
     private final long callTimeoutSecs;
-    private final Retrier retrier;
-    private final String resourceName;
+    private final String instanceName;
     private final Chunker chunker;
+    private final SettableFuture<Void> uploadResult;
 
     private ClientCall<WriteRequest, WriteResponse> call;
 
@@ -336,160 +340,33 @@ class ByteStreamUploader extends AbstractReferenceCounted {
         Channel channel,
         CallCredentials callCredentials,
         long callTimeoutSecs,
-        Retrier retrier,
-        String resourceName,
-        Chunker chunker) {
+        String instanceName,
+        Chunker chunker,
+        SettableFuture<Void> uploadResult) {
       this.channel = channel;
       this.callCredentials = callCredentials;
       this.callTimeoutSecs = callTimeoutSecs;
-      this.retrier = retrier;
-      this.resourceName = resourceName;
+      this.instanceName = instanceName;
       this.chunker = chunker;
+      this.uploadResult = uploadResult;
     }
 
-    ListenableFuture<Void> start() {
-      Context ctx = Context.current();
-      ProgressiveBackoff progressiveBackoff = new ProgressiveBackoff(retrier::newBackoff);
-      AtomicLong committedOffset = new AtomicLong(0);
-      return Futures.transformAsync(
-          retrier.executeAsync(
-              () -> ctx.call(() -> callAndQueryOnFailure(committedOffset, progressiveBackoff)),
-              progressiveBackoff),
-          (result) -> {
-            long committedSize = committedOffset.get();
-            long expected = chunker.getSize();
-            if (committedSize != expected) {
-              String message =
-                  format(
-                      "write incomplete: committed_size %d for %d total", committedSize, expected);
-              return Futures.immediateFailedFuture(new IOException(message));
-            }
-            return Futures.immediateFuture(null);
-          },
-          MoreExecutors.directExecutor());
-    }
-
-    private ByteStreamFutureStub bsFutureStub() {
-      return ByteStreamGrpc.newFutureStub(channel)
-          .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
-          .withCallCredentials(callCredentials)
-          .withDeadlineAfter(callTimeoutSecs, SECONDS);
-    }
-
-    private ListenableFuture<Void> callAndQueryOnFailure(
-        AtomicLong committedOffset, ProgressiveBackoff progressiveBackoff) {
-      return Futures.catchingAsync(
-          call(committedOffset),
-          Exception.class,
-          (e) -> guardQueryWithSuppression(e, committedOffset, progressiveBackoff),
-          Context.current().fixedContextExecutor(MoreExecutors.directExecutor()));
-    }
-
-    private ListenableFuture<Void> guardQueryWithSuppression(
-        Exception e, AtomicLong committedOffset, ProgressiveBackoff progressiveBackoff) {
-      // we are destined to return this, avoid recreating it
-      ListenableFuture<Void> exceptionFuture = Futures.immediateFailedFuture(e);
-
-      // TODO(buchgr): we should also return immediately without the query if
-      // we were out of retry attempts for the underlying backoff. This
-      // is meant to be an only in-between-retries query request.
-      if (!retrier.isRetriable(e)) {
-        return exceptionFuture;
-      }
-
-      ListenableFuture<Void> suppressedQueryFuture =
-          Futures.catchingAsync(
-              query(committedOffset, progressiveBackoff),
-              Exception.class,
-              (queryException) -> {
-                // if the query threw an exception, add it to the suppressions
-                // for the destined exception
-                e.addSuppressed(queryException);
-                return exceptionFuture;
-              },
-              MoreExecutors.directExecutor());
-      return Futures.transformAsync(
-          suppressedQueryFuture, (result) -> exceptionFuture, MoreExecutors.directExecutor());
-    }
-
-    private ListenableFuture<Void> query(
-        AtomicLong committedOffset, ProgressiveBackoff progressiveBackoff) {
-      ListenableFuture<Long> committedSizeFuture =
-          Futures.transform(
-              bsFutureStub()
-                  .queryWriteStatus(
-                      QueryWriteStatusRequest.newBuilder().setResourceName(resourceName).build()),
-              (response) -> response.getCommittedSize(),
-              MoreExecutors.directExecutor());
-      ListenableFuture<Long> guardedCommittedSizeFuture =
-          Futures.catchingAsync(
-              committedSizeFuture,
-              Exception.class,
-              (e) -> {
-                Status status = Status.fromThrowable(e);
-                if (status.getCode() == Code.UNIMPLEMENTED) {
-                  // if the bytestream server does not implement the query, insist
-                  // that we should reset the upload
-                  return Futures.immediateFuture(0L);
-                }
-                return Futures.immediateFailedFuture(e);
-              },
-              MoreExecutors.directExecutor());
-      return Futures.transformAsync(
-          guardedCommittedSizeFuture,
-          (committedSize) -> {
-            if (committedSize > committedOffset.get()) {
-              // we have made progress on this upload in the last request,
-              // reset the backoff so that this request has a full deck of retries
-              progressiveBackoff.reset();
-            }
-            committedOffset.set(committedSize);
-            return Futures.immediateFuture(null);
-          },
-          MoreExecutors.directExecutor());
-    }
-
-    private ListenableFuture<Void> call(AtomicLong committedOffset) {
+    void start() {
       CallOptions callOptions =
           CallOptions.DEFAULT
               .withCallCredentials(callCredentials)
               .withDeadlineAfter(callTimeoutSecs, SECONDS);
       call = channel.newCall(ByteStreamGrpc.getWriteMethod(), callOptions);
 
-      try {
-        chunker.seek(committedOffset.get());
-      } catch (IOException e) {
-        try {
-          chunker.reset();
-        } catch (IOException resetException) {
-          e.addSuppressed(resetException);
-        }
-        return Futures.immediateFailedFuture(e);
-      }
-
-      SettableFuture<Void> uploadResult = SettableFuture.create();
       ClientCall.Listener<WriteResponse> callListener =
           new ClientCall.Listener<WriteResponse>() {
 
             private final WriteRequest.Builder requestBuilder = WriteRequest.newBuilder();
             private boolean callHalfClosed = false;
 
-            void halfClose() {
-              // call.halfClose() may only be called once. Guard against it being called more
-              // often.
-              // See: https://github.com/grpc/grpc-java/issues/3201
-              if (!callHalfClosed) {
-                callHalfClosed = true;
-                // Every chunk has been written. No more work to do.
-                call.halfClose();
-              }
-            }
-
             @Override
             public void onMessage(WriteResponse response) {
-              // upload was completed either by us or someone else
-              committedOffset.set(response.getCommittedSize());
-              halfClose();
+              // TODO(buchgr): The ByteStream API allows to resume the upload at the committedSize.
             }
 
             @Override
@@ -505,11 +382,14 @@ class ByteStreamUploader extends AbstractReferenceCounted {
             public void onReady() {
               while (call.isReady()) {
                 if (!chunker.hasNext()) {
-                  halfClose();
-                  return;
-                }
-
-                if (callHalfClosed) {
+                  // call.halfClose() may only be called once. Guard against it being called more
+                  // often.
+                  // See: https://github.com/grpc/grpc-java/issues/3201
+                  if (!callHalfClosed) {
+                    callHalfClosed = true;
+                    // Every chunk has been written. No more work to do.
+                    call.halfClose();
+                  }
                   return;
                 }
 
@@ -517,9 +397,9 @@ class ByteStreamUploader extends AbstractReferenceCounted {
                   requestBuilder.clear();
                   Chunker.Chunk chunk = chunker.next();
 
-                  if (chunk.getOffset() == committedOffset.get()) {
+                  if (chunk.getOffset() == 0) {
                     // Resource name only needs to be set on the first write for each file.
-                    requestBuilder.setResourceName(resourceName);
+                    requestBuilder.setResourceName(newResourceName(chunk.getDigest()));
                   }
 
                   boolean isLastChunk = !chunker.hasNext();
@@ -545,10 +425,20 @@ class ByteStreamUploader extends AbstractReferenceCounted {
                 }
               }
             }
+
+            private String newResourceName(Digest digest) {
+              String resourceName =
+                  format(
+                      "uploads/%s/blobs/%s/%d",
+                      UUID.randomUUID(), digest.getHash(), digest.getSizeBytes());
+              if (!Strings.isNullOrEmpty(instanceName)) {
+                resourceName = instanceName + "/" + resourceName;
+              }
+              return resourceName;
+            }
           };
       call.start(callListener, TracingMetadataUtils.headersFromCurrentContext());
       call.request(1);
-      return uploadResult;
     }
 
     void cancel() {
