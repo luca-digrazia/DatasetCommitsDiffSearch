@@ -20,7 +20,6 @@ import java.util.Base64;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
@@ -46,7 +45,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
-import io.quarkus.deployment.builditem.LogHandlerBuildItem;
 import io.quarkus.deployment.builditem.ObjectSubstitutionBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
@@ -59,7 +57,6 @@ import io.quarkus.extest.runtime.TestAnnotation;
 import io.quarkus.extest.runtime.TestRecorder;
 import io.quarkus.extest.runtime.beans.CommandServlet;
 import io.quarkus.extest.runtime.beans.PublicKeyProducer;
-import io.quarkus.extest.runtime.config.FooRuntimeConfig;
 import io.quarkus.extest.runtime.config.ObjectOfValue;
 import io.quarkus.extest.runtime.config.ObjectValueOf;
 import io.quarkus.extest.runtime.config.TestBuildAndRunTimeConfig;
@@ -67,7 +64,6 @@ import io.quarkus.extest.runtime.config.TestBuildTimeConfig;
 import io.quarkus.extest.runtime.config.TestConfigRoot;
 import io.quarkus.extest.runtime.config.TestRunTimeConfig;
 import io.quarkus.extest.runtime.config.XmlConfig;
-import io.quarkus.extest.runtime.logging.AdditionalLogHandlerValueFactory;
 import io.quarkus.extest.runtime.subst.DSAPublicKeyObjectSubstitution;
 import io.quarkus.extest.runtime.subst.KeyProxy;
 import io.quarkus.runtime.RuntimeValue;
@@ -111,17 +107,6 @@ public final class TestProcessor {
     @BuildStep
     BeanDefiningAnnotationBuildItem registerBeanDefiningAnnotations() {
         return new BeanDefiningAnnotationBuildItem(TEST_ANNOTATION, TEST_ANNOTATION_SCOPE);
-    }
-
-    /**
-     * Register an additional log handler
-     *
-     * @return LogHandlerBuildItem
-     */
-    @BuildStep
-    @Record(RUNTIME_INIT)
-    LogHandlerBuildItem registerAdditionalLogHandler(final AdditionalLogHandlerValueFactory factory) {
-        return new LogHandlerBuildItem(factory.create());
     }
 
     @BuildStep
@@ -275,14 +260,14 @@ public final class TestProcessor {
                     + buildTimeConfig.btStringOptWithDefault);
         }
         if (!buildTimeConfig.allValues.oov.equals(new ObjectOfValue("configPart1", "configPart2"))) {
-            throw new IllegalStateException("buildTimeConfig.oov != configPart1+configPart2; " + buildTimeConfig.allValues.oov);
+            throw new IllegalStateException("buildTimeConfig.oov != configPart1+onfigPart2; " + buildTimeConfig.allValues.oov);
         }
         if (!buildTimeConfig.allValues.oovWithDefault.equals(new ObjectOfValue("defaultPart1", "defaultPart2"))) {
             throw new IllegalStateException(
                     "buildTimeConfig.oovWithDefault != defaultPart1+defaultPart2; " + buildTimeConfig.allValues.oovWithDefault);
         }
         if (!buildTimeConfig.allValues.ovo.equals(new ObjectValueOf("configPart1", "configPart2"))) {
-            throw new IllegalStateException("buildTimeConfig.oov != configPart1+configPart2; " + buildTimeConfig.allValues.oov);
+            throw new IllegalStateException("buildTimeConfig.oov != configPart1+onfigPart2; " + buildTimeConfig.allValues.oov);
         }
         if (!buildTimeConfig.allValues.ovoWithDefault.equals(new ObjectValueOf("defaultPart1", "defaultPart2"))) {
             throw new IllegalStateException(
@@ -366,8 +351,7 @@ public final class TestProcessor {
                         .stream()
                         .anyMatch(dotName -> dotName.equals(DotName.createSimple(IConfigConsumer.class.getName())));
                 if (isConfigConsumer) {
-                    Class<IConfigConsumer> beanClass = (Class<IConfigConsumer>) Class.forName(beanClassInfo.name().toString(),
-                            true, Thread.currentThread().getContextClassLoader());
+                    Class<IConfigConsumer> beanClass = (Class<IConfigConsumer>) Class.forName(beanClassInfo.name().toString());
                     testBeanProducer.produce(new TestBeanBuildItem(beanClass));
                     log.infof("The configured bean: %s", beanClass);
                 }
@@ -389,11 +373,10 @@ public final class TestProcessor {
     @Record(RUNTIME_INIT)
     void configureBeans(TestRecorder recorder, List<TestBeanBuildItem> testBeans,
             BeanContainerBuildItem beanContainer,
-            TestRunTimeConfig runTimeConfig, FooRuntimeConfig fooRuntimeConfig) {
+            TestRunTimeConfig runTimeConfig) {
         for (TestBeanBuildItem testBeanBuildItem : testBeans) {
             Class<IConfigConsumer> beanClass = testBeanBuildItem.getConfigConsumer();
-            recorder.configureBeans(beanContainer.getValue(), beanClass, buildAndRunTimeConfig, runTimeConfig,
-                    fooRuntimeConfig);
+            recorder.configureBeans(beanContainer.getValue(), beanClass, buildAndRunTimeConfig, runTimeConfig);
         }
     }
 
@@ -460,16 +443,6 @@ public final class TestProcessor {
                 .finalFieldsWritable(true)
                 .build();
         classes.produce(finalField);
-    }
-
-    @BuildStep
-    void checkMapMap(TestBuildAndRunTimeConfig btrt, TestBuildTimeConfig bt, BuildProducer<ReflectiveClassBuildItem> unused) {
-        if (!Objects.equals("1234", btrt.mapMap.get("outer-key").get("inner-key"))) {
-            throw new AssertionError("BTRT map map failed");
-        }
-        if (!Objects.equals("1234", bt.mapMap.get("outer-key").get("inner-key"))) {
-            throw new AssertionError("BT map map failed");
-        }
     }
 
     @BuildStep(onlyIf = Never.class)

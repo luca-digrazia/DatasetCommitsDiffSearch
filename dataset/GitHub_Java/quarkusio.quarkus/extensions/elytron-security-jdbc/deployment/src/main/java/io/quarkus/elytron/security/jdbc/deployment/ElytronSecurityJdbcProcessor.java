@@ -46,7 +46,7 @@ class ElytronSecurityJdbcProcessor {
      * @throws Exception - on any failure
      */
     @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
+    @Record(ExecutionTime.STATIC_INIT)
     void configureJdbcRealmAuthConfig(JdbcRecorder recorder,
             BuildProducer<SecurityRealmBuildItem> securityRealm,
             BeanContainerBuildItem beanContainerBuildItem, //we need this to make sure ArC is initialized

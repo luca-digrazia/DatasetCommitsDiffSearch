@@ -27,7 +27,6 @@ import org.jboss.jandex.IndexView;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
-import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.processor.BeanInfo;
 import io.quarkus.deployment.Capabilities;
@@ -136,7 +135,12 @@ public class JsonbProcessor {
             return;
         }
 
-        ClassOutput classOutput = new GeneratedBeanGizmoAdaptor(generatedBeans);
+        ClassOutput classOutput = new ClassOutput() {
+            @Override
+            public void write(String name, byte[] data) {
+                generatedBeans.produce(new GeneratedBeanBuildItem(name, data));
+            }
+        };
 
         try (ClassCreator classCreator = ClassCreator.builder().classOutput(classOutput)
                 .className("io.quarkus.jsonb.customizer.RegisterSerializersAndDeserializersCustomizer")
@@ -147,7 +151,8 @@ public class JsonbProcessor {
             try (MethodCreator customize = classCreator.getMethodCreator("customize", void.class, JsonbConfig.class)) {
                 ResultHandle jsonbConfig = customize.getMethodParam(0);
                 if (!customSerializerClasses.isEmpty()) {
-                    ResultHandle serializersArray = customize.newArray(JsonbSerializer.class, customSerializerClasses.size());
+                    ResultHandle serializersArray = customize.newArray(JsonbSerializer.class,
+                            customize.load(customSerializerClasses.size()));
                     int i = 0;
                     for (String customSerializerClass : customSerializerClasses) {
                         customize.writeArrayValue(serializersArray, i,
@@ -161,7 +166,7 @@ public class JsonbProcessor {
                 }
                 if (!customDeserializerClasses.isEmpty()) {
                     ResultHandle deserializersArray = customize.newArray(JsonbDeserializer.class,
-                            customDeserializerClasses.size());
+                            customize.load(customDeserializerClasses.size()));
                     int i = 0;
                     for (String customDeserializerClass : customDeserializerClasses) {
                         customize.writeArrayValue(deserializersArray, i,

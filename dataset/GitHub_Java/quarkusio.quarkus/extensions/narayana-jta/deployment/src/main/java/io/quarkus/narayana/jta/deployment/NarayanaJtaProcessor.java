@@ -41,6 +41,11 @@ import io.quarkus.narayana.jta.runtime.interceptor.TransactionalInterceptorSuppo
 
 class NarayanaJtaProcessor {
 
+    /**
+     * The transactions configuration.
+     */
+    TransactionManagerConfiguration transactions;
+
     @BuildStep
     public NativeImageSystemPropertyBuildItem nativeImageSystemPropertyBuildItem() {
         return new NativeImageSystemPropertyBuildItem("CoordinatorEnvironmentBean.transactionStatusManagerEnable", "false");
@@ -57,8 +62,7 @@ class NarayanaJtaProcessor {
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<RuntimeInitializedClassBuildItem> runtimeInit,
-            BuildProducer<FeatureBuildItem> feature,
-            TransactionManagerConfiguration transactions) {
+            BuildProducer<FeatureBuildItem> feature) {
         feature.produce(new FeatureBuildItem(FeatureBuildItem.NARAYANA_JTA));
         additionalBeans.produce(new AdditionalBeanBuildItem(NarayanaJtaProducers.class));
         additionalBeans.produce(new AdditionalBeanBuildItem(CDIDelegatingTransactionManager.class));

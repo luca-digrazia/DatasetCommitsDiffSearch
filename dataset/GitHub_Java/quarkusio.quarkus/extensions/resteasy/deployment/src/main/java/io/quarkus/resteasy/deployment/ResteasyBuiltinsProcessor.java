@@ -2,7 +2,6 @@ package io.quarkus.resteasy.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
-import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -22,8 +21,6 @@ import io.quarkus.resteasy.runtime.NotFoundExceptionMapper;
 import io.quarkus.resteasy.runtime.UnauthorizedExceptionMapper;
 import io.quarkus.resteasy.server.common.deployment.ResteasyDeploymentBuildItem;
 import io.quarkus.undertow.deployment.StaticResourceFilesBuildItem;
-import io.quarkus.vertx.http.deployment.HttpRootPathBuildItem;
-import io.quarkus.vertx.http.deployment.devmode.NotFoundPageDisplayableEndpointBuildItem;
 
 public class ResteasyBuiltinsProcessor {
 
@@ -57,8 +54,8 @@ public class ResteasyBuiltinsProcessor {
         providers.produce(new ResteasyJaxrsProviderBuildItem(NotFoundExceptionMapper.class.getName()));
     }
 
-    @Record(STATIC_INIT)
     @BuildStep(onlyIf = IsDevelopment.class)
+    @Record(STATIC_INIT)
     void addStaticResourcesExceptionMapper(StaticResourceFilesBuildItem paths, ExceptionMapperRecorder recorder) {
         //limit to 1000 to not have to many files to display
         Set<String> staticResources = paths.files.stream().filter(this::isHtmlFileName).limit(1000).collect(Collectors.toSet());
@@ -72,17 +69,4 @@ public class ResteasyBuiltinsProcessor {
         return fileName.endsWith(".html") || fileName.endsWith(".htm");
     }
 
-    @Record(STATIC_INIT)
-    @BuildStep(onlyIf = IsDevelopment.class)
-    void addAdditionalEndpointsExceptionMapper(List<NotFoundPageDisplayableEndpointBuildItem> displayableEndpoints,
-            ExceptionMapperRecorder recorder, HttpRootPathBuildItem httpRoot) {
-        List<String> endpoints = displayableEndpoints
-                .stream()
-                .map(displayableAdditionalBuildItem -> httpRoot.adjustPath(displayableAdditionalBuildItem.getEndpoint())
-                        .substring(1))
-                .sorted()
-                .collect(Collectors.toList());
-
-        recorder.setAdditionalEndpoints(endpoints);
-    }
 }

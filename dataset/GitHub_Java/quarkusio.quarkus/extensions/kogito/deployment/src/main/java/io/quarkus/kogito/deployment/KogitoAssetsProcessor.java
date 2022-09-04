@@ -134,7 +134,7 @@ public class KogitoAssetsProcessor {
         return result;
     }
 
-    @BuildStep(loadsApplicationClasses = true)
+    @BuildStep
     public void generateModel(ArchiveRootBuildItem root,
             BuildProducer<GeneratedBeanBuildItem> generatedBeans,
             CombinedIndexBuildItem combinedIndexBuildItem,
