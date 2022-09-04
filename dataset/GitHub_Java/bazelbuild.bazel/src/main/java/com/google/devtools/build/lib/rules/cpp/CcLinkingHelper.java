@@ -377,8 +377,7 @@ public final class CcLinkingHelper {
                   linkopts.isEmpty()
                       ? ImmutableList.of()
                       : ImmutableList.of(
-                          CcLinkingContext.LinkOptions.of(
-                              ImmutableList.copyOf(linkopts), symbolGenerator)))
+                          CcLinkingContext.LinkOptions.of(linkopts, symbolGenerator)))
               .addLibraries(librariesToLink)
               .addNonCodeInputs(nonCodeLinkerInputs)
               .addLinkstamps(linkstampBuilder.build())
