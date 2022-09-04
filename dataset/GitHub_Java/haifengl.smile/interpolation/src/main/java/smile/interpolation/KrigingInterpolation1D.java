@@ -15,10 +15,10 @@
  *******************************************************************************/
 package smile.interpolation;
 
-import smile.math.MathEx;
-import smile.math.matrix.Matrix;
+import smile.math.Math;
+import smile.math.matrix.ColumnMajorMatrix;
 import smile.math.matrix.DenseMatrix;
-import smile.math.matrix.LU;
+import smile.math.matrix.LUDecomposition;
 
 /**
  * Kriging interpolation for the data points irregularly distributed in space.
@@ -48,7 +48,7 @@ public class KrigingInterpolation1D implements Interpolation {
         int n = x.length;
         yvi = new double[n + 1];
         vstar = new double[n + 1];
-        DenseMatrix v = Matrix.zeros(n + 1, n + 1);
+        DenseMatrix v = new ColumnMajorMatrix(n + 1, n + 1);
 
         for (int i = 0; i < n; i++) {
             yvi[i] = y[i];
@@ -65,7 +65,7 @@ public class KrigingInterpolation1D implements Interpolation {
         yvi[n] = 0.0;
         v.set(n, n, 0.0);
 
-        LU lu = v.lu(true);
+        LUDecomposition lu = new LUDecomposition(v);
         lu.solve(yvi);
     }
 
@@ -91,9 +91,9 @@ public class KrigingInterpolation1D implements Interpolation {
         double num = 0.0, denom = 0.0;
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
-                double rb = MathEx.sqr(x[i] - x[j]);
+                double rb = Math.sqr(x[i] - x[j]);
                 rb = Math.pow(rb, 0.5 * beta);
-                num += rb * 0.5 * MathEx.sqr(y[i] - y[j]);
+                num += rb * 0.5 * Math.sqr(y[i] - y[j]);
                 denom += rb * rb;
             }
         }

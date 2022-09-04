@@ -154,7 +154,6 @@ public class BandMatrix implements IMatrix {
      * Returns the matrix transpose.
      * @return the transpose of matrix.
      */
-    @Override
     public BandMatrix transpose() {
         BandMatrix at = new BandMatrix(n, m2, m1);
         for (int i = 0; i < n; i++) {
@@ -166,16 +165,6 @@ public class BandMatrix implements IMatrix {
         }
 
         return at;
-    }
-
-    @Override
-    public BandMatrix ata() {
-        throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public BandMatrix aat() {
-        throw new UnsupportedOperationException();
     }
 
     /**

@@ -15,7 +15,6 @@
  *******************************************************************************/
 package smile.projection;
 
-import java.io.Serializable;
 import smile.math.Math;
 import smile.math.matrix.EigenValueDecomposition;
 import smile.math.matrix.LUDecomposition;
@@ -41,8 +40,7 @@ import smile.math.matrix.LUDecomposition;
  *
  * @author Haifeng Li
  */
-public class PPCA implements Projection<double[]>, Serializable {
-    private static final long serialVersionUID = 1L;
+public class PPCA implements Projection<double[]> {
 
     /**
      * The sample mean.

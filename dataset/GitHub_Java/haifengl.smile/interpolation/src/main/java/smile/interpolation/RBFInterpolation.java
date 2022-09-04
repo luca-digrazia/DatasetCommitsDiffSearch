@@ -127,7 +127,7 @@ public class RBFInterpolation {
                 }
             }
 
-            CholeskyDecomposition cholesky = new CholeskyDecomposition(G);
+            CholeskyDecomposition cholesky = new CholeskyDecomposition(G, true);
             cholesky.solve(rhs);
             w = rhs;
         } else {
