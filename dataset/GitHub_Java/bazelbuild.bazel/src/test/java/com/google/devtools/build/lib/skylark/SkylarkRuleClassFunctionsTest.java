@@ -1127,7 +1127,8 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testStructAccessingNonFunctionFieldWithArgs() throws Exception {
-    checkErrorContains("'int' object is not callable", "x = struct(a = 1, b = 2)", "x1 = x.a(1)");
+    checkErrorContains(
+        "struct field 'a' is not a function", "x = struct(a = 1, b = 2)", "x1 = x.a(1)");
   }
 
   @Test
@@ -1139,7 +1140,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testStructPosArgs() throws Exception {
     checkErrorContains(
-        "expected no more than 0 positional arguments, but got 1", "x = struct(1, b = 2)");
+        "struct(**kwargs) does not accept positional arguments, but got 1", "x = struct(1, b = 2)");
   }
 
   @Test
