@@ -20,6 +20,7 @@ import org.objectweb.asm.Opcodes;
 
 import io.quarkus.arc.processor.BeanDeploymentValidator;
 import io.quarkus.arc.processor.BuiltinScope;
+import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionTargetInfo;
 import io.quarkus.arc.processor.InjectionTargetInfo.TargetKind;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -70,7 +71,7 @@ public class NoArgsConstructorProcessor {
         Set<DotName> transformedClasses = new HashSet<>();
         for (ClassInfo targetClass : targetClasses) {
             String superClassName;
-            if (targetClass.superName() == null) {
+            if (DotNames.OBJECT.equals(targetClass.superName())) {
                 // Bean class extends java.lang.Object
                 superClassName = "java/lang/Object";
             } else {
@@ -90,7 +91,7 @@ public class NoArgsConstructorProcessor {
                         new BiFunction<String, ClassVisitor, ClassVisitor>() {
                             @Override
                             public ClassVisitor apply(String className, ClassVisitor classVisitor) {
-                                ClassVisitor cv = new ClassVisitor(Opcodes.ASM6, classVisitor) {
+                                ClassVisitor cv = new ClassVisitor(Opcodes.ASM7, classVisitor) {
 
                                     @Override
                                     public void visit(int version, int access, String name, String signature, String superName,

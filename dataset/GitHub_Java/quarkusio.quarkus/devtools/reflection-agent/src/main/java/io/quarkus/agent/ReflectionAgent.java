@@ -34,7 +34,6 @@ public class ReflectionAgent {
                 if (className.startsWith("io/quarkus/agent")
                         || className.startsWith("java/")
                         || className.startsWith("javax/")
-                        || className.startsWith("jakarta/")
                         || className.startsWith("jdk/")
                         || className.startsWith("sun/")
                         || className.startsWith("org/jboss/log")) {
