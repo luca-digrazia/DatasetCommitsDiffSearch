@@ -33,9 +33,9 @@ import org.jboss.shamrock.deployment.builditem.SystemPropertyBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ServiceProviderBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
+import org.jboss.shamrock.runtime.logging.LogConfig;
 import org.jboss.shamrock.runtime.logging.InitialConfigurator;
 import org.jboss.shamrock.runtime.logging.LevelConverter;
-import org.jboss.shamrock.runtime.logging.LogConfig;
 import org.jboss.shamrock.runtime.logging.LoggingSetupTemplate;
 
 /**
@@ -54,7 +54,7 @@ public final class LoggingResourceProcessor {
                 new RunTimeConfigurationDefaultBuildItem(
                     "shamrock.log.categories.\"" + category.getCategory() + "\".level",
                     category.getLevel().toString()
-                    )
+                )
             );
         }
     }
@@ -62,12 +62,19 @@ public final class LoggingResourceProcessor {
     @BuildStep
     void miscSetup(
         Consumer<RuntimeInitializedClassBuildItem> runtimeInit,
+        Consumer<GeneratedResourceBuildItem> generatedResource,
         Consumer<SubstrateSystemPropertyBuildItem> systemProp,
         Consumer<ServiceProviderBuildItem> provider
     ) {
         runtimeInit.accept(new RuntimeInitializedClassBuildItem("org.jboss.logmanager.formatters.TrueColorHolder"));
         systemProp.accept(new SubstrateSystemPropertyBuildItem("java.util.logging.manager", "org.jboss.logmanager.LogManager"));
         provider.accept(new ServiceProviderBuildItem(EmbeddedConfigurator.class.getName(), InitialConfigurator.class.getName()));
+        generatedResource.accept(
+            new GeneratedResourceBuildItem(
+                "META-INF/services/org.jboss.logmanager.EmbeddedConfigurator",
+                InitialConfigurator.class.getName().getBytes(StandardCharsets.UTF_8)
+            )
+        );
     }
 
     @BuildStep
