@@ -19,8 +19,9 @@ import org.apache.commons.io.FileUtils;
 import org.apache.maven.shared.invoker.MavenInvocationException;
 import org.junit.jupiter.api.Test;
 
+import com.google.common.collect.ImmutableMap;
+
 import io.quarkus.maven.it.verifier.RunningInvoker;
-import io.quarkus.test.devmode.util.DevModeTestUtils;
 
 /**
  * @author <a href="http://escoffier.me">Clement Escoffier</a>
@@ -33,26 +34,16 @@ import io.quarkus.test.devmode.util.DevModeTestUtils;
 public class DevMojoIT extends RunAndCheckMojoTestBase {
 
     @Test
-    public void testPropertyOverridesTest() throws MavenInvocationException, IOException {
-        testDir = getTargetDir("projects/property-overrides");
-        runAndCheck("-Dlocal-dep.version=1.0-SNAPSHOT");
-    }
-
-    @Test
     public void testThatClassAppCanRun() throws MavenInvocationException, IOException {
         testDir = initProject("projects/classic", "projects/project-classic-run");
         runAndCheck();
 
         //make sure that the Class.getPackage() works for app classes
-        String pkg = DevModeTestUtils.getHttpResponse("/app/hello/package");
+        String pkg = getHttpResponse("/app/hello/package");
         assertThat(pkg).isEqualTo("org.acme");
 
-        //make sure the proper profile is set
-        String profile = DevModeTestUtils.getHttpResponse("/app/hello/profile");
-        assertThat(profile).isEqualTo("dev");
-
         //make sure webjars work
-        DevModeTestUtils.getHttpResponse("webjars/bootstrap/3.1.0/css/bootstrap.min.css");
+        getHttpResponse("webjars/bootstrap/3.1.0/css/bootstrap.min.css");
 
         assertThatOutputWorksCorrectly(running.log());
 
@@ -66,7 +57,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         //make sure that a simple HTTP GET request always works
         IntStream.range(0, 10).forEach(i -> {
-            assertThat(DevModeTestUtils.getStrictHttpResponse("/hello", 200)).isTrue();
+            assertThat(getStrictHttpResponse("/hello", 200)).isTrue();
         });
     }
 
@@ -78,24 +69,24 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Edit the "Hello" message.
         File source = new File(testDir, "src/main/java/org/acme/HelloResource.java");
         String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("return \"hello\";", "return \"" + uuid + "\";"));
+        filter(source, ImmutableMap.of("return \"hello\";", "return \"" + uuid + "\";"));
 
         // Wait until we get "uuid"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains(uuid));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains(uuid));
 
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
 
-        filter(source, Collections.singletonMap(uuid, "carambar"));
+        filter(source, ImmutableMap.of(uuid, "carambar"));
 
         // Wait until we get "carambar"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("carambar"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
     }
 
     @Test
@@ -105,7 +96,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Edit the pom.xml.
         File source = new File(testDir, "pom.xml");
-        filter(source, Collections.singletonMap("<!-- insert test dependencies here -->",
+        filter(source, ImmutableMap.of("<!-- insert test dependencies here -->",
                 "        <dependency>\n" +
                         "            <groupId>io.quarkus</groupId>\n" +
                         "            <artifactId>quarkus-smallrye-openapi</artifactId>\n" +
@@ -114,7 +105,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Wait until we get "uuid"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/openapi").contains("hello"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/openapi").contains("hello"));
     }
 
     @Test
@@ -125,24 +116,24 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Edit the "Hello" message.
         File source = new File(testDir, "rest/src/main/java/org/acme/HelloResource.java");
         final String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("return \"hello\";", "return \"" + uuid + "\";"));
+        filter(source, ImmutableMap.of("return \"hello\";", "return \"" + uuid + "\";"));
 
         // Wait until we get "uuid"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains(uuid));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains(uuid));
 
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
 
-        filter(source, Collections.singletonMap(uuid, "carambar"));
+        filter(source, ImmutableMap.of(uuid, "carambar"));
 
         // Wait until we get "carambar"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("carambar"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
 
         // Create a new resource
         source = new File(testDir, "html/src/main/resources/META-INF/resources/lorem.txt");
@@ -152,21 +143,21 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/lorem.txt").contains("Lorem ipsum"));
+                .until(() -> getHttpResponse("/lorem.txt").contains("Lorem ipsum"));
 
         // Update the resource
         FileUtils.write(source, uuid, "UTF-8");
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/lorem.txt").contains(uuid));
+                .until(() -> getHttpResponse("/lorem.txt").contains(uuid));
 
         // Delete the resource
         source.delete();
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/lorem.txt", 404));
+                .until(() -> getHttpResponse("/lorem.txt", 404));
     }
 
     @Test
@@ -174,49 +165,25 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         testDir = initProject("projects/multimodule", "projects/multimodule-nodeps");
         runAndCheck("-DnoDeps");
 
-        String greeting = DevModeTestUtils.getHttpResponse("/app/hello/greeting");
+        String greeting = getHttpResponse("/app/hello/greeting");
         assertThat(greeting).containsIgnoringCase("bonjour");
 
         // Edit the "Hello" message.
         File source = new File(testDir, "rest/src/main/java/org/acme/HelloResource.java");
-        filter(source, Collections.singletonMap("return \"hello\";", "return \"" + UUID.randomUUID().toString() + "\";"));
+        filter(source, ImmutableMap.of("return \"hello\";", "return \"" + UUID.randomUUID().toString() + "\";"));
 
         // Edit the greeting property.
         source = new File(testDir, "runner/src/main/resources/application.properties");
         final String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("greeting=bonjour", "greeting=" + uuid + ""));
+        filter(source, ImmutableMap.of("greeting=bonjour", "greeting=" + uuid + ""));
 
         // Wait until we get "uuid"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/greeting").contains(uuid));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
 
-        greeting = DevModeTestUtils.getHttpResponse("/app/hello");
+        greeting = getHttpResponse("/app/hello");
         assertThat(greeting).containsIgnoringCase("hello");
-    }
-
-    @Test
-    public void testMultiModuleProjectWithRevisionVersion() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/multimodule-revision-prop");
-        final String projectVersion = System.getProperty("project.version");
-        runAndCheck("-Dquarkus.platform.version=" + projectVersion,
-                "-Dquarkus-plugin.version=" + projectVersion);
-
-        // Edit the "Hello" message.
-        File source = new File(testDir, "rest/src/main/java/org/acme/HelloResource.java");
-        final String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("return \"hello\";", "return \"" + uuid + "\";"));
-
-        // Wait until we get "uuid"
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains(uuid));
-
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .pollInterval(1, TimeUnit.SECONDS)
-                .until(source::isFile);
     }
 
     @Test
@@ -246,7 +213,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Wait until we get "bar"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/foo").contains("bar"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/foo").contains("bar"));
     }
 
     @Test
@@ -282,10 +249,10 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/deletion").contains("to be deleted"));
+                .until(() -> getHttpResponse("/app/deletion").contains("to be deleted"));
 
         // Remove InnerClass
-        filter(source, Collections.singletonMap("public static class InnerClass {}", ""));
+        filter(source, ImmutableMap.of("public static class InnerClass {}", ""));
 
         File helloClassFile = new File(testDir, "target/classes/org/acme/Hello.class");
         File innerClassFile = new File(testDir, "target/classes/org/acme/ClassDeletionResource$InnerClass.class");
@@ -295,7 +262,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/package", 200));
+                .until(() -> getHttpResponse("/app/hello/package", 200));
 
         // Verify that only ClassDeletionResource$InnerClass.class to be deleted
         assertThat(innerClassFile).doesNotExist();
@@ -309,7 +276,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(1, TimeUnit.SECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/deletion", 404));
+                .until(() -> getHttpResponse("/app/deletion", 404));
 
         // Make sure that class files for the deleted source file have also been deleted
         assertThat(helloClassFile).doesNotExist();
@@ -324,10 +291,10 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         File source = new File(testDir, "src/main/java/org/acme/HelloResource.java");
         // Edit the "Hello" message and provide a random string.
         String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("return \"hello\";", "return \"" + uuid + "\";"));
+        filter(source, ImmutableMap.of("return \"hello\";", "return \"" + uuid + "\";"));
 
         // Check that the random string is returned
-        String greeting = DevModeTestUtils.getHttpResponse("/app/hello");
+        String greeting = getHttpResponse("/app/hello");
         assertThat(greeting).containsIgnoringCase(uuid);
     }
 
@@ -340,12 +307,12 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         mvnRunProps.setProperty("debug", "false");
         running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap(), mvnRunProps);
 
-        String resp = DevModeTestUtils.getHttpResponse();
+        String resp = getHttpResponse();
 
         assertThat(resp).containsIgnoringCase("ready").containsIgnoringCase("application").containsIgnoringCase("org.acme")
                 .containsIgnoringCase("1.0-SNAPSHOT");
 
-        String greeting = DevModeTestUtils.getHttpResponse("/app/hello/greeting");
+        String greeting = getHttpResponse("/app/hello/greeting");
         assertThat(greeting).containsIgnoringCase("bonjour");
 
         File source = new File(testDir, "src/main/resources/application.properties");
@@ -355,13 +322,13 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 .until(source::isFile);
 
         String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("bonjour", uuid));
+        filter(source, ImmutableMap.of("bonjour", uuid));
 
         // Wait until we get "uuid"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/greeting").contains(uuid));
+                .until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
     }
 
     @Test
@@ -373,12 +340,12 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         mvnRunProps.setProperty("debug", "false");
         running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap(), mvnRunProps);
 
-        String resp = DevModeTestUtils.getHttpResponse();
+        String resp = getHttpResponse();
 
         assertThat(resp).containsIgnoringCase("ready").containsIgnoringCase("application").containsIgnoringCase("org.acme")
                 .containsIgnoringCase("1.0-SNAPSHOT");
 
-        String greeting = DevModeTestUtils.getHttpResponse("/app/hello/greeting");
+        String greeting = getHttpResponse("/app/hello/greeting");
         assertThat(greeting).contains("initialValue");
 
         File configurationFile = new File(testDir, "src/main/resources/application.properties");
@@ -398,7 +365,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(10, TimeUnit.SECONDS)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/greeting").contains(uuid));
+                .until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
     }
 
     @Test
@@ -423,7 +390,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(60, TimeUnit.SECONDS)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/greeting").contains(uuid));
+                .until(() -> getHttpResponse("/app/hello/greeting").contains(uuid));
     }
 
     @Test
@@ -439,7 +406,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/lorem.txt").contains("Lorem ipsum"));
+                .until(() -> getHttpResponse("/lorem.txt").contains("Lorem ipsum"));
 
         // Update the resource
         String uuid = UUID.randomUUID().toString();
@@ -447,14 +414,14 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/lorem.txt").contains(uuid));
+                .until(() -> getHttpResponse("/lorem.txt").contains(uuid));
 
         // Delete the resource
         source.delete();
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/lorem.txt", 404));
+                .until(() -> getHttpResponse("/lorem.txt", 404));
     }
 
     @Test
@@ -465,14 +432,14 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Edit the "Hello" message.
         File source = new File(testDir, "src/main/java/org/acme/HelloResource.java");
         String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("return \"hello\";", "return \"" + uuid + "\"")); // No semi-colon
+        filter(source, ImmutableMap.of("return \"hello\";", "return \"" + uuid + "\"")); // No semi-colon
 
         // Wait until we get "uuid"
         AtomicReference<String> last = new AtomicReference<>();
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> {
-                    String content = DevModeTestUtils.getHttpResponse("/app/hello", true);
+                    String content = getHttpResponse("/app/hello", true);
                     last.set(content);
                     return content.contains(uuid);
                 });
@@ -485,12 +452,12 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
-        filter(source, Collections.singletonMap("\"" + uuid + "\"", "\"carambar\";"));
+        filter(source, ImmutableMap.of("\"" + uuid + "\"", "\"carambar\";"));
 
         // Wait until we get "uuid"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("carambar"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("carambar"));
     }
 
     @Test
@@ -499,7 +466,7 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
 
         // Edit the JAX-RS resource to be package private
         File source = new File(testDir, "src/main/java/org/acme/HelloResource.java");
-        filter(source, Collections.singletonMap("public class HelloResource", "class HelloResource"));
+        filter(source, ImmutableMap.of("public class HelloResource", "class HelloResource"));
 
         runAndExpectError();
         // Wait until we get the error page
@@ -507,19 +474,19 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> {
-                    String content = DevModeTestUtils.getHttpResponse("/app/hello", true);
+                    String content = getHttpResponse("/app/hello", true);
                     last.set(content);
                     return content.contains("Error restarting Quarkus");
                 });
 
         assertThat(last.get()).containsIgnoringCase("Error restarting Quarkus");
 
-        filter(source, Collections.singletonMap("class HelloResource", "public class HelloResource"));
+        filter(source, ImmutableMap.of("class HelloResource", "public class HelloResource"));
 
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .atMost(1, TimeUnit.MINUTES).until(() -> {
-                    String content = DevModeTestUtils.getHttpResponse("/app/hello", true);
+                    String content = getHttpResponse("/app/hello", true);
                     last.set(content);
                     return content.equals("hello");
                 });
@@ -555,18 +522,18 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         // Wait until we get "uuid"
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("message"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("message"));
 
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
                 .pollInterval(1, TimeUnit.SECONDS)
                 .until(source::isFile);
 
-        filter(source, Collections.singletonMap("message", "foobarbaz"));
+        filter(source, ImmutableMap.of("message", "foobarbaz"));
 
         await()
                 .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES).until(() -> DevModeTestUtils.getHttpResponse("/app/hello").contains("foobarbaz"));
+                .atMost(1, TimeUnit.MINUTES).until(() -> getHttpResponse("/app/hello").contains("foobarbaz"));
     }
 
     @Test
@@ -585,55 +552,5 @@ public class DevMojoIT extends RunAndCheckMojoTestBase {
         FileUtils.deleteQuietly(new File(testDir, "target/classes"));
 
         runAndCheck();
-    }
-
-    @Test
-    public void testThatTheApplicationIsReloadedOnDotEnvConfigChange() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic", "projects/project-dotenv");
-        assertThat(testDir).isDirectory();
-        running = new RunningInvoker(testDir, false);
-        final Properties mvnRunProps = new Properties();
-        mvnRunProps.setProperty("debug", "false");
-        running.execute(Arrays.asList("compile", "quarkus:dev"), Collections.emptyMap(), mvnRunProps);
-
-        String resp = DevModeTestUtils.getHttpResponse();
-
-        assertThat(resp).containsIgnoringCase("ready").containsIgnoringCase("application").containsIgnoringCase("org.acme")
-                .containsIgnoringCase("1.0-SNAPSHOT");
-
-        String greeting = DevModeTestUtils.getHttpResponse("/app/hello/otherGreeting");
-        assertThat(greeting).containsIgnoringCase("Hola");
-
-        File source = new File(testDir, ".env");
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .pollInterval(1, TimeUnit.SECONDS)
-                .until(source::isFile);
-
-        String uuid = UUID.randomUUID().toString();
-        filter(source, Collections.singletonMap("Hola", uuid));
-
-        // Wait until we get "uuid"
-        await()
-                .pollDelay(100, TimeUnit.MILLISECONDS)
-                .atMost(1, TimeUnit.MINUTES)
-                .until(() -> DevModeTestUtils.getHttpResponse("/app/hello/otherGreeting").contains(uuid));
-    }
-
-    @Test
-    public void testDevModeWithoutJavaSrc() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/classic-no-java-src");
-        run(true);
-        getHttpResponse();
-
-        assertThat(running.log()).contains("The project's sources directory does not exist");
-    }
-
-    @Test
-    public void testMultiModuleDevModeWithoutJavaSrc() throws MavenInvocationException, IOException {
-        testDir = initProject("projects/multimodule", "projects/multimodule-no-java-src");
-        runAndCheck();
-
-        assertThat(running.log()).doesNotContain("The project's sources directory does not exist");
     }
 }
