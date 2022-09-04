@@ -40,6 +40,7 @@ import org.slf4j.LoggerFactory;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.Response;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
@@ -191,7 +192,7 @@ public class RadiosResource extends RestResource {
             Map<String, Object> inputSummary = Maps.newHashMap();
 
             inputSummary.put("type", input.getType());
-            inputSummary.put("id", input.getId());
+            inputSummary.put("id", input.getId().toStringMongod());
             inputSummary.put("title", input.getTitle());
             inputSummary.put("configuration", input.getConfiguration());
             inputSummary.put("creator_user_id", input.getCreatorUserId());
