@@ -8,8 +8,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 
-import io.vertx.core.net.impl.URIDecoder;
-
 public class RequestMapper<T> {
 
     /**
@@ -69,7 +67,7 @@ public class RequestMapper<T> {
                     }
                     matchPos = matcher.end();
                     for (String name : segment.names) {
-                        params[paramCount++] = URIDecoder.decodeURIComponent(matcher.group(name), false);
+                        params[paramCount++] = matcher.group(name);
                     }
                 } else if (segment.type == URITemplate.Type.LITERAL) {
                     //make sure the literal text is the same
@@ -92,7 +90,7 @@ public class RequestMapper<T> {
                     while (matchPos < pathLength && path.charAt(matchPos) != '/') {
                         matchPos++;
                     }
-                    params[paramCount++] = URIDecoder.decodeURIComponent(path.substring(start, matchPos), false);
+                    params[paramCount++] = path.substring(start, matchPos);
                 }
             }
             if (paramCount < params.length) {
