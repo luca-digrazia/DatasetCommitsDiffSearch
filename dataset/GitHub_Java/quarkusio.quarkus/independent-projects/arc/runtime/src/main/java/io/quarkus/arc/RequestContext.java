@@ -90,8 +90,6 @@ class RequestContext implements ManagedContext {
     public void activate(ContextState initialState) {
         if (initialState == null) {
             currentContext.set(new ConcurrentHashMap<>());
-            // Fire an event with qualifier @Initialized(RequestScoped.class) if there are any observers for it
-            fireIfNotEmpty(initializedNotifier);
         } else {
             if (initialState instanceof RequestContextState) {
                 currentContext.set(((RequestContextState) initialState).value);
@@ -99,6 +97,8 @@ class RequestContext implements ManagedContext {
                 throw new IllegalArgumentException("Invalid inital state: " + initialState);
             }
         }
+        // Fire an event with qualifier @Initialized(RequestScoped.class) if there are any observers for it
+        fireIfNotEmpty(initializedNotifier);
     }
 
     @Override

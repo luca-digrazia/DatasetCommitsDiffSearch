@@ -1,7 +1,7 @@
 package io.quarkus.undertow.runtime;
 
 import java.io.IOException;
-import java.math.BigInteger;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.file.Path;
 import java.security.SecureRandom;
@@ -9,12 +9,13 @@ import java.util.ArrayList;
 import java.util.EventListener;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import javax.net.ssl.SSLContext;
 import javax.servlet.AsyncEvent;
 import javax.servlet.AsyncListener;
 import javax.servlet.DispatcherType;
@@ -26,25 +27,26 @@ import javax.servlet.ServletContext;
 import javax.servlet.ServletException;
 
 import org.jboss.logging.Logger;
+import org.wildfly.common.net.Inet;
+import org.xnio.Xnio;
+import org.xnio.XnioWorker;
 
-import io.netty.buffer.ByteBuf;
-import io.netty.buffer.PooledByteBufAllocator;
 import io.quarkus.arc.InjectableContext;
 import io.quarkus.arc.ManagedContext;
 import io.quarkus.arc.runtime.BeanContainer;
+import io.quarkus.runtime.ExecutorRecorder;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
+import io.quarkus.runtime.ThreadPoolConfig;
+import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.annotations.Recorder;
-import io.quarkus.runtime.configuration.MemorySize;
-import io.quarkus.vertx.http.runtime.HttpConfiguration;
-import io.undertow.httpcore.BufferAllocator;
-import io.undertow.httpcore.StatusCodes;
-import io.undertow.server.DefaultExchangeHandler;
+import io.quarkus.runtime.configuration.ConfigInstantiator;
+import io.undertow.Undertow;
 import io.undertow.server.HandlerWrapper;
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.server.handlers.PathHandler;
+import io.undertow.server.handlers.CanonicalPathHandler;
 import io.undertow.server.handlers.ResponseCodeHandler;
 import io.undertow.server.handlers.resource.CachingResourceManager;
 import io.undertow.server.handlers.resource.ClassPathResourceManager;
@@ -71,9 +73,7 @@ import io.undertow.servlet.handlers.ServletPathMatches;
 import io.undertow.servlet.handlers.ServletRequestContext;
 import io.undertow.servlet.spec.HttpServletRequestImpl;
 import io.undertow.util.AttachmentKey;
-import io.undertow.vertx.VertxHttpExchange;
-import io.vertx.core.Handler;
-import io.vertx.core.http.HttpServerRequest;
+import io.undertow.util.StatusCodes;
 
 /**
  * Provides the runtime methods to bootstrap Undertow. This class is present in the final uber-jar,
@@ -91,6 +91,7 @@ public class UndertowDeploymentRecorder {
         }
     };
 
+    private static volatile Undertow undertow;
     private static final List<HandlerWrapper> hotDeploymentWrappers = new CopyOnWriteArrayList<>();
     private static volatile List<Path> hotDeploymentResourcePaths;
     private static volatile HttpHandler currentRoot = ResponseCodeHandler.HANDLE_404;
@@ -99,40 +100,33 @@ public class UndertowDeploymentRecorder {
     private static final AttachmentKey<InjectableContext.ContextState> REQUEST_CONTEXT = AttachmentKey
             .create(InjectableContext.ContextState.class);
 
-    protected static final int DEFAULT_BUFFER_SIZE;
-    protected static final boolean DEFAULT_DIRECT_BUFFERS;
-
-    static {
-        long maxMemory = Runtime.getRuntime().maxMemory();
-        //smaller than 64mb of ram we use 512b buffers
-        if (maxMemory < 64 * 1024 * 1024) {
-            //use 512b buffers
-            DEFAULT_DIRECT_BUFFERS = false;
-            DEFAULT_BUFFER_SIZE = 512;
-        } else if (maxMemory < 128 * 1024 * 1024) {
-            //use 1k buffers
-            DEFAULT_DIRECT_BUFFERS = true;
-            DEFAULT_BUFFER_SIZE = 1024;
-        } else {
-            //use 16k buffers for best performance
-            //as 16k is generally the max amount of data that can be sent in a single write() call
-            DEFAULT_DIRECT_BUFFERS = true;
-            DEFAULT_BUFFER_SIZE = 1024 * 16 - 20; //the 20 is to allow some space for protocol headers, see UNDERTOW-1209
-        }
-
-    }
-
     public static void setHotDeploymentResources(List<Path> resources) {
         hotDeploymentResourcePaths = resources;
     }
 
+    public static void startServerAfterFailedStart() {
+        try {
+            HttpConfig config = new HttpConfig();
+            ConfigInstantiator.handleObject(config);
+
+            ThreadPoolConfig threadPoolConfig = new ThreadPoolConfig();
+            ConfigInstantiator.handleObject(threadPoolConfig);
+
+            ExecutorService service = ExecutorRecorder.createDevModeExecutorForFailedStart(threadPoolConfig);
+            //we can't really do
+            doServerStart(config, LaunchMode.DEVELOPMENT, config.ssl.toSSLContext(), service);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories,
-            LaunchMode launchMode, ShutdownContext context, String contextPath) {
+            LaunchMode launchMode, ShutdownContext context) {
         DeploymentInfo d = new DeploymentInfo();
         d.setSessionIdGenerator(new QuarkusSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
         d.setDeploymentName(name);
-        d.setContextPath(contextPath);
+        d.setContextPath("/");
         d.setEagerFilterInit(true);
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
         if (cl == null) {
@@ -163,9 +157,7 @@ public class UndertowDeploymentRecorder {
         d.addWelcomePages("index.html", "index.htm");
 
         d.addServlet(new ServletInfo(ServletPathMatches.DEFAULT_SERVLET_NAME, DefaultServlet.class).setAsyncSupported(true));
-        for (HandlerWrapper i : hotDeploymentWrappers) {
-            d.addOuterHandlerChainWrapper(i);
-        }
+
         context.addShutdownTask(new Runnable() {
             @Override
             public void run() {
@@ -180,6 +172,11 @@ public class UndertowDeploymentRecorder {
     }
 
     public static SocketAddress getHttpAddress() {
+        for (Undertow.ListenerInfo info : undertow.getListenerInfo()) {
+            if (info.getProtcol().equals("http") && info.getSslContext() == null) {
+                return info.getAddress();
+            }
+        }
         return null;
     }
 
@@ -282,10 +279,27 @@ public class UndertowDeploymentRecorder {
         info.getValue().addInitParameter(name, value);
     }
 
-    public Handler<HttpServerRequest> startUndertow(ShutdownContext shutdown, ExecutorService executorService,
-            DeploymentManager manager, List<HandlerWrapper> wrappers, HttpConfiguration httpConfiguration,
-            ServletRuntimeConfig servletRuntimeConfig) throws Exception {
+    public RuntimeValue<Undertow> startUndertow(ShutdownContext shutdown, ExecutorService executorService,
+            DeploymentManager manager, HttpConfig config,
+            List<HandlerWrapper> wrappers, LaunchMode launchMode) throws Exception {
 
+        if (undertow == null) {
+            SSLContext context = config.ssl.toSSLContext();
+            doServerStart(config, launchMode, context, executorService);
+
+            if (launchMode != LaunchMode.DEVELOPMENT) {
+                //in development mode undertow should not be shut down
+                shutdown.addShutdownTask(new Runnable() {
+                    @Override
+                    public void run() {
+                        XnioWorker worker = undertow.getWorker();
+                        undertow.stop();
+                        worker.shutdown();
+                        undertow = null;
+                    }
+                });
+            }
+        }
         shutdown.addShutdownTask(new Runnable() {
             @Override
             public void run() {
@@ -301,33 +315,69 @@ public class UndertowDeploymentRecorder {
         for (HandlerWrapper i : wrappers) {
             main = i.wrap(main);
         }
-        if (!manager.getDeployment().getDeploymentInfo().getContextPath().equals("/")) {
-            PathHandler pathHandler = new PathHandler()
-                    .addPrefixPath(manager.getDeployment().getDeploymentInfo().getContextPath(), main);
-            main = pathHandler;
-        }
         currentRoot = main;
 
-        DefaultExchangeHandler defaultHandler = new DefaultExchangeHandler(ROOT_HANDLER);
+        Timing.setHttpServer(String.format(
+                "Listening on: " + undertow.getListenerInfo().stream().map(l -> {
+                    String address;
+                    if (l.getAddress() instanceof InetSocketAddress) {
+                        InetSocketAddress inetAddress = (InetSocketAddress) l.getAddress();
+                        address = Inet.toURLString(inetAddress.getAddress(), true) + ":" + inetAddress.getPort();
+                    } else {
+                        address = l.getAddress().toString();
+                    }
+                    return l.getProtcol() + "://" + address;
+                }).collect(Collectors.joining(", "))));
 
-        UndertowBufferAllocator allocator = new UndertowBufferAllocator(
-                servletRuntimeConfig.directBuffers.orElse(DEFAULT_DIRECT_BUFFERS), (int) servletRuntimeConfig.bufferSize
-                        .orElse(new MemorySize(BigInteger.valueOf(DEFAULT_BUFFER_SIZE))).asLongValue());
-        return new Handler<HttpServerRequest>() {
-            @Override
-            public void handle(HttpServerRequest event) {
-                VertxHttpExchange exchange = new VertxHttpExchange(event, allocator, executorService);
-                Optional<MemorySize> maxBodySize = httpConfiguration.limits.maxBodySize;
-                if (maxBodySize.isPresent()) {
-                    exchange.setMaxEntitySize(maxBodySize.get().asLongValue());
-                }
-                defaultHandler.handle(exchange);
-            }
-        };
+        return new RuntimeValue<>(undertow);
     }
 
     public static void addHotDeploymentWrapper(HandlerWrapper handlerWrapper) {
         hotDeploymentWrappers.add(handlerWrapper);
+    }
+
+    /**
+     * Used for quarkus:run, where we want undertow to start very early in the process.
+     * <p>
+     * This enables recovery from errors on boot. In a normal boot undertow is one of the last things start, so there would
+     * be no chance to use hot deployment to fix the error. In development mode we start Undertow early, so any error
+     * on boot can be corrected via the hot deployment handler
+     */
+    private static void doServerStart(HttpConfig config, LaunchMode launchMode, SSLContext sslContext, ExecutorService executor)
+            throws ServletException {
+        if (undertow == null) {
+            int port = config.determinePort(launchMode);
+            int sslPort = config.determineSslPort(launchMode);
+            log.debugf("Starting Undertow on port %d", port);
+            HttpHandler rootHandler = new CanonicalPathHandler(ROOT_HANDLER);
+            for (HandlerWrapper i : hotDeploymentWrappers) {
+                rootHandler = i.wrap(rootHandler);
+            }
+
+            XnioWorker.Builder workerBuilder = Xnio.getInstance().createWorkerBuilder()
+                    .setExternalExecutorService(executor);
+
+            Undertow.Builder builder = Undertow.builder()
+                    .addHttpListener(port, config.host)
+                    .setHandler(rootHandler);
+            if (config.ioThreads.isPresent()) {
+                workerBuilder.setWorkerIoThreads(config.ioThreads.getAsInt());
+            } else if (launchMode.isDevOrTest()) {
+                //we limit the number of IO and worker threads in development and testing mode
+                workerBuilder.setWorkerIoThreads(2);
+            } else {
+                workerBuilder.setWorkerIoThreads(Runtime.getRuntime().availableProcessors() * 2);
+            }
+            XnioWorker worker = workerBuilder.build();
+            builder.setWorker(worker);
+            if (sslContext != null) {
+                log.debugf("Starting Undertow HTTPS listener on port %d", sslPort);
+                builder.addHttpsListener(sslPort, config.host, sslContext);
+            }
+            undertow = builder
+                    .build();
+            undertow.start();
+        }
     }
 
     public Supplier<ServletContext> servletContextSupplier() {
@@ -569,50 +619,6 @@ public class UndertowDeploymentRecorder {
         @Override
         public ServletContext get() {
             return servletContext;
-        }
-    }
-
-    private static class UndertowBufferAllocator implements BufferAllocator {
-
-        private final boolean defaultDirectBuffers;
-        private final int defaultBufferSize;
-
-        private UndertowBufferAllocator(boolean defaultDirectBuffers, int defaultBufferSize) {
-            this.defaultDirectBuffers = defaultDirectBuffers;
-            this.defaultBufferSize = defaultBufferSize;
-        }
-
-        @Override
-        public ByteBuf allocateBuffer() {
-            return allocateBuffer(defaultDirectBuffers);
-        }
-
-        @Override
-        public ByteBuf allocateBuffer(boolean direct) {
-            if (direct) {
-                return PooledByteBufAllocator.DEFAULT.directBuffer(defaultBufferSize);
-            } else {
-                return PooledByteBufAllocator.DEFAULT.heapBuffer(defaultBufferSize);
-            }
-        }
-
-        @Override
-        public ByteBuf allocateBuffer(int bufferSize) {
-            return allocateBuffer(defaultDirectBuffers, bufferSize);
-        }
-
-        @Override
-        public ByteBuf allocateBuffer(boolean direct, int bufferSize) {
-            if (direct) {
-                return PooledByteBufAllocator.DEFAULT.directBuffer(bufferSize);
-            } else {
-                return PooledByteBufAllocator.DEFAULT.heapBuffer(bufferSize);
-            }
-        }
-
-        @Override
-        public int getBufferSize() {
-            return defaultBufferSize;
         }
     }
 }
