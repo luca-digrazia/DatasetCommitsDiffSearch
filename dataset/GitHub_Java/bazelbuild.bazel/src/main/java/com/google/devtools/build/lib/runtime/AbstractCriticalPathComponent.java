@@ -13,13 +13,12 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionOwner;
-import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-import java.time.Duration;
+import com.google.devtools.build.lib.util.Clock;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.concurrent.TimeUnit;
 import javax.annotation.Nullable;
 
@@ -127,8 +126,8 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   }
 
   /** To be used only in debugging: skips state invariance checks to avoid crash-looping. */
-  protected Duration getElapsedTimeNoCheck() {
-    return Duration.ofNanos(getElapsedTimeNanosNoCheck());
+  protected long getElapsedTimeMillisNoCheck() {
+    return TimeUnit.NANOSECONDS.toMillis(getElapsedTimeNanosNoCheck());
   }
 
   private long getElapsedTimeNanosNoCheck() {
@@ -136,12 +135,12 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   }
 
   /**
-   * Returns the current critical path for the action.
+   * Returns the current critical path for the action in nanoseconds.
    *
    * <p>Critical path is defined as : action_execution_time + max(child_critical_path).
    */
-  public Duration getAggregatedElapsedTime() {
-    return Duration.ofNanos(getAggregatedElapsedTimeNanos());
+  public long getAggregatedElapsedTimeMillis() {
+    return TimeUnit.NANOSECONDS.toMillis(getAggregatedElapsedTimeNanos());
   }
 
   long getAggregatedElapsedTimeNanos() {
@@ -172,7 +171,7 @@ public class AbstractCriticalPathComponent<C extends AbstractCriticalPathCompone
   public String toString() {
     String currentTime = "still running ";
     if (!isRunning) {
-      currentTime = String.format("%.2f", getElapsedTimeNoCheck().toMillis() / 1000.0) + "s ";
+      currentTime = String.format("%.2f", getElapsedTimeMillisNoCheck() / 1000.0) + "s ";
     }
     return currentTime + getActionString();
   }
