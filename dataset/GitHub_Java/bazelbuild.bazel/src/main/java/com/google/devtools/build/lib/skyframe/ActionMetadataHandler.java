@@ -16,9 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
-import static java.util.concurrent.TimeUnit.MINUTES;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -305,8 +303,7 @@ final class ActionMetadataHandler implements MetadataHandler {
     store.putArtifactData(artifact, FileArtifactValue.createProxy(digest));
   }
 
-  @Override
-  public TreeArtifactValue getTreeArtifactValue(SpecialArtifact artifact) throws IOException {
+  private TreeArtifactValue getTreeArtifactValue(SpecialArtifact artifact) throws IOException {
     checkState(artifact.isTreeArtifact(), "%s is not a tree artifact", artifact);
 
     TreeArtifactValue value = store.getTreeArtifactData(artifact);
@@ -367,19 +364,8 @@ final class ActionMetadataHandler implements MetadataHandler {
     if (archivedTreeArtifactsEnabled) {
       ArchivedTreeArtifact archivedTreeArtifact =
           ArchivedTreeArtifact.create(parent, derivedPathPrefix);
-      FileStatus statNoFollow =
-          artifactPathResolver.toPath(archivedTreeArtifact).statIfFound(Symlinks.NOFOLLOW);
-      if (statNoFollow != null) {
-        tree.setArchivedRepresentation(
-            archivedTreeArtifact,
-            constructFileArtifactValue(
-                archivedTreeArtifact,
-                FileStatusWithDigestAdapter.adapt(statNoFollow),
-                /*injectedDigest=*/ null));
-      } else {
-        logger.atInfo().atMostEvery(5, MINUTES).log(
-            "Archived tree artifact: %s not created", archivedTreeArtifact);
-      }
+      tree.setArchivedRepresentation(
+          archivedTreeArtifact, constructFileArtifactValueFromFilesystem(archivedTreeArtifact));
     }
 
     return tree.build();
@@ -482,15 +468,6 @@ final class ActionMetadataHandler implements MetadataHandler {
    */
   OutputStore getOutputStore() {
     return store;
-  }
-
-  @Override
-  public String toString() {
-    return MoreObjects.toStringHelper(this)
-        .add("outputs", outputs)
-        .add("store", store)
-        .add("inputArtifactDataSize", inputArtifactData.size())
-        .toString();
   }
 
   /** Constructs a new {@link FileArtifactValue} by reading from the file system. */
