@@ -60,7 +60,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -1834,11 +1833,10 @@ public class RuleClass {
       AttributeValues<T> attributeValues,
       EventHandler eventHandler,
       Location location,
-      List<StarlarkThread.CallStackEntry> callstack,
       AttributeContainer attributeContainer,
       boolean checkThirdPartyRulesHaveLicenses)
       throws LabelSyntaxException, InterruptedException, CannotPrecomputeDefaultsException {
-    Rule rule = pkgBuilder.createRule(ruleLabel, this, location, callstack, attributeContainer);
+    Rule rule = pkgBuilder.createRule(ruleLabel, this, location, attributeContainer);
     populateRuleAttributeValues(rule, pkgBuilder, attributeValues, eventHandler);
     checkAspectAllowedValues(rule, eventHandler);
     rule.populateOutputFiles(eventHandler, pkgBuilder);
@@ -1872,13 +1870,15 @@ public class RuleClass {
       Label ruleLabel,
       AttributeValues<T> attributeValues,
       Location location,
-      List<StarlarkThread.CallStackEntry> callstack,
       AttributeContainer attributeContainer,
       ImplicitOutputsFunction implicitOutputsFunction)
       throws InterruptedException, CannotPrecomputeDefaultsException {
-    Rule rule =
-        pkgBuilder.createRule(
-            ruleLabel, this, location, callstack, attributeContainer, implicitOutputsFunction);
+    Rule rule = pkgBuilder.createRule(
+        ruleLabel,
+        this,
+        location,
+        attributeContainer,
+        implicitOutputsFunction);
     populateRuleAttributeValues(rule, pkgBuilder, attributeValues, NullEventHandler.INSTANCE);
     rule.populateOutputFilesUnchecked(NullEventHandler.INSTANCE, pkgBuilder);
     return rule;
