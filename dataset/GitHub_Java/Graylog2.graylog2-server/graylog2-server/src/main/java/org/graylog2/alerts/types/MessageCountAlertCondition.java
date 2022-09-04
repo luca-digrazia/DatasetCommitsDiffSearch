@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,20 +15,20 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.alerts.types;
 
-import com.google.common.collect.Lists;
-import org.graylog2.alerts.AbstractAlertCondition;
+import org.elasticsearch.search.SearchHits;
+import org.graylog2.Core;
+import org.graylog2.alerts.AlertCondition;
 import org.graylog2.indexer.IndexHelper;
-import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.CountResult;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.results.SearchResult;
 import org.graylog2.indexer.searches.Sorting;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
-import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
@@ -41,7 +41,7 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class MessageCountAlertCondition extends AbstractAlertCondition {
+public class MessageCountAlertCondition extends AlertCondition {
 
     private static final Logger LOG = LoggerFactory.getLogger(MessageCountAlertCondition.class);
 
@@ -49,14 +49,16 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
         MORE, LESS
     }
 
+    private final int grace;
     private final int time;
     private final ThresholdType thresholdType;
     private final int threshold;
-    private List<Message> searchHits = null;
+    private List<ResultMessage> searchHits = null;
 
-    public MessageCountAlertCondition(Stream stream, String id, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
-        super(stream, id, Type.MESSAGE_COUNT, createdAt, creatorUserId, parameters);
+    public MessageCountAlertCondition(Core core, Stream stream, String id, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
+        super(core, stream, id, Type.MESSAGE_COUNT, createdAt, creatorUserId, parameters);
 
+        this.grace = (Integer) parameters.get("grace");
         this.time = (Integer) parameters.get("time");
         this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase());
         this.threshold = (Integer) parameters.get("threshold");
@@ -73,11 +75,11 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
     }
 
     @Override
-    protected CheckResult runCheck(Indexer indexer) {
+    protected CheckResult runCheck() {
         this.searchHits = null;
         try {
             String filter = "streams:"+stream.getId();
-            CountResult result = indexer.searches().count("*", new RelativeRange(time * 60), filter);
+            CountResult result = core.getIndexer().searches().count("*", new RelativeRange(time * 60), filter);
             long count = result.getCount();
 
             LOG.debug("Alert check <{}> result: [{}]", id, count);
@@ -95,11 +97,8 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
             if (triggered) {
                 Integer backlogSize = getBacklog();
                 if (backlogSize != null && backlogSize > 0) {
-                    SearchResult backlogResult = indexer.searches().search("*", filter, new RelativeRange(time * 60), backlogSize, 0, new Sorting("timestamp", Sorting.Direction.DESC));
-                    this.searchHits = Lists.newArrayList();
-                    for (ResultMessage resultMessage : backlogResult.getResults()) {
-                        searchHits.add(new Message(resultMessage.getMessage()));
-                    }
+                    SearchResult backlogResult = core.getIndexer().searches().search("*", filter, new RelativeRange(time * 60), 0, backlogSize, new Sorting("timestamp", Sorting.Direction.DESC));
+                    this.searchHits = backlogResult.getResults();
                 }
 
                 StringBuilder resultDescription = new StringBuilder();
@@ -126,7 +125,7 @@ public class MessageCountAlertCondition extends AbstractAlertCondition {
     }
 
     @Override
-    public List<Message> getSearchHits() {
+    public List<ResultMessage> getSearchHits() {
         return this.searchHits;
     }
 }

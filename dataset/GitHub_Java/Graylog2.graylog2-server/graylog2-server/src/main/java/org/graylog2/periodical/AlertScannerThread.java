@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,23 +15,19 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.periodical;
-
 import com.beust.jcommander.internal.Lists;
-import com.google.inject.Inject;
-import org.graylog2.alerts.*;
+import org.elasticsearch.search.SearchHit;
+import org.graylog2.alerts.Alert;
+import org.graylog2.alerts.AlertCondition;
+import org.graylog2.alerts.AlertSender;
 import org.graylog2.indexer.results.ResultMessage;
-import org.graylog2.notifications.Notification;
-import org.graylog2.notifications.NotificationImpl;
-import org.graylog2.notifications.NotificationService;
-import org.graylog2.notifications.NotificationServiceImpl;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.alarms.transports.TransportConfigurationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.streams.StreamImpl;
-import org.graylog2.streams.StreamService;
-import org.graylog2.streams.StreamServiceImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,19 +39,12 @@ import java.util.List;
 public class AlertScannerThread extends Periodical {
 
     private static final Logger LOG = LoggerFactory.getLogger(AlertScannerThread.class);
-    private AlertService alertService;
-
-    @Inject
-    public AlertScannerThread(AlertService alertService) {
-        this.alertService = alertService;
-    }
-
+    
     @Override
     public void run() {
         LOG.debug("Running alert checks.");
-        final StreamService streamService = new StreamServiceImpl(core.getMongoConnection());
 
-        List<Stream> alertedStreams = streamService.loadAllWithConfiguredAlertConditions();
+        List<Stream> alertedStreams = StreamImpl.loadAllWithConfiguredAlertConditions(core);
 
         LOG.debug("There are {} streams with configured alert conditions.", alertedStreams.size());
 
@@ -63,20 +52,19 @@ public class AlertScannerThread extends Periodical {
         for (Stream streamIF : alertedStreams) {
             StreamImpl stream = (StreamImpl) streamIF;
 
-            LOG.debug("Stream [{}] has [{}] configured alert conditions.", stream, streamService.getAlertConditions(stream).size());
+            LOG.debug("Stream [{}] has [{}] configured alert conditions.", stream, stream.getAlertConditions().size());
 
             // Check if a threshold is reached.
-            for (AlertCondition alertCondition : streamService.getAlertConditions(stream)) {
+            for (AlertCondition alertCondition : stream.getAlertConditions()) {
                 try {
-                    AlertCondition.CheckResult result = alertService.triggered(alertCondition, core.getIndexer());
+                    AlertCondition.CheckResult result = alertCondition.triggered();
                     if (result.isTriggered()) {
                         // Alert is triggered!
                         LOG.info("Alert condition [{}] is triggered. Sending alerts.", alertCondition);
 
                         // Persist alert.
-                        final AlertService alertService = new AlertServiceImpl(core.getMongoConnection());
-                        Alert alert = alertService.factory(result);
-                        alertService.save(alert);
+                        Alert alert = Alert.factory(result, core);
+                        alert.save();
 
                         // Send alerts.
                         if (stream.getAlertReceivers().size() > 0) {
@@ -99,23 +87,9 @@ public class AlertScannerThread extends Periodical {
                                     sender.sendEmails(stream, result);
                                 }
                             } catch (TransportConfigurationException e) {
-                                final NotificationService notificationService = new NotificationServiceImpl(core.getMongoConnection());
-                                Notification notification = notificationService.buildNow()
-                                        .addThisNode(core)
-                                        .addType(NotificationImpl.Type.EMAIL_TRANSPORT_CONFIGURATION_INVALID)
-                                        .addDetail("stream_id", stream.getId())
-                                        .addDetail("exception", e);
-                                notificationService.publishIfFirst(notification);
                                 LOG.warn("Stream [{}] has alert receivers and is triggered, but email transport is not configured.", stream);
                             } catch (Exception e) {
-                                final NotificationService notificationService = new NotificationServiceImpl(core.getMongoConnection());
-                                Notification notification = notificationService.buildNow()
-                                        .addThisNode(core)
-                                        .addType(NotificationImpl.Type.EMAIL_TRANSPORT_FAILED)
-                                        .addDetail("stream_id", stream.getId())
-                                        .addDetail("exception", e);
-                                notificationService.publishIfFirst(notification);
-                                LOG.error("Stream [{}] has alert receivers and is triggered, but sending emails failed", stream, e);
+                                LOG.error("Stream [{}] has alert receivers and is triggered, but sending emails failed: ", stream, e);
                             }
                         }
                     } else {

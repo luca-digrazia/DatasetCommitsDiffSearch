@@ -1,4 +1,6 @@
 /**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -13,10 +15,11 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.indexer.results;
 
-import com.google.common.collect.Lists;
+import com.beust.jcommander.internal.Lists;
 import org.elasticsearch.common.bytes.BytesReference;
 import org.elasticsearch.common.unit.TimeValue;
 import org.elasticsearch.common.xcontent.XContentHelper;
@@ -24,12 +27,14 @@ import org.elasticsearch.search.SearchHit;
 import org.elasticsearch.search.SearchHits;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
 public class IndexQueryResult {
+
     private final String originalQuery;
     private final TimeValue took;
     private final BytesReference builtQuery;
@@ -60,9 +65,11 @@ public class IndexQueryResult {
     protected List<ResultMessage> buildResults(SearchHits hits) {
         List<ResultMessage> r = Lists.newArrayList();
 
-        for (SearchHit hit : hits) {
-            r.add(ResultMessage.parseFromSource(hit));
+        Iterator<SearchHit> i = hits.iterator();
+        while(i.hasNext()) {
+            r.add(ResultMessage.parseFromSource(i.next()));
         }
+
         return r;
     }
 }

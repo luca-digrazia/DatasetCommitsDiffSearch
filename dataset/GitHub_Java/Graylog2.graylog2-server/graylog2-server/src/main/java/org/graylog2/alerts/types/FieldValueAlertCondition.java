@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,19 +15,19 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.alerts.types;
 
-import com.google.common.collect.Lists;
-import org.graylog2.alerts.AbstractAlertCondition;
+import org.elasticsearch.search.SearchHits;
+import org.graylog2.Core;
+import org.graylog2.alerts.AlertCondition;
 import org.graylog2.indexer.IndexHelper;
-import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.FieldStatsResult;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
-import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.streams.Stream;
 import org.joda.time.DateTime;
@@ -40,10 +40,10 @@ import java.util.Map;
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class FieldValueAlertCondition extends AbstractAlertCondition {
+public class FieldValueAlertCondition extends AlertCondition {
 
     private static final Logger LOG = LoggerFactory.getLogger(FieldValueAlertCondition.class);
-    private List<Message> searchHits = null;
+    private List<ResultMessage> searchHits = null;
 
     public enum CheckType {
         MEAN, MIN, MAX, SUM, STDDEV
@@ -53,15 +53,17 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
         LOWER, HIGHER
     }
 
+    private final int grace;
     private final int time;
     private final ThresholdType thresholdType;
     private final Number threshold;
     private final CheckType type;
     private final String field;
 
-    public FieldValueAlertCondition(Stream stream, String id, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
-        super(stream, id, Type.FIELD_VALUE, createdAt, creatorUserId, parameters);
+    public FieldValueAlertCondition(Core core, Stream stream, String id, DateTime createdAt, String creatorUserId, Map<String, Object> parameters) {
+        super(core, stream, id, Type.FIELD_VALUE, createdAt, creatorUserId, parameters);
 
+        this.grace = (Integer) parameters.get("grace");
         this.time = (Integer) parameters.get("time");
         this.thresholdType = ThresholdType.valueOf(((String) parameters.get("threshold_type")).toUpperCase());
         this.threshold = (Number) parameters.get("threshold");
@@ -82,17 +84,13 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
     }
 
     @Override
-    protected CheckResult runCheck(Indexer indexer) {
+    protected CheckResult runCheck() {
         this.searchHits = null;
         try {
             String filter = "streams:"+stream.getId();
-            FieldStatsResult fieldStatsResult = indexer.searches().fieldStats(field, "*", filter, new RelativeRange(time * 60));
-            if (getBacklog() != null && getBacklog() > 0) {
-                this.searchHits = Lists.newArrayList();
-                for (ResultMessage resultMessage : fieldStatsResult.getSearchHits()) {
-                    this.searchHits.add(new Message(resultMessage.getMessage()));
-                }
-            }
+            FieldStatsResult fieldStatsResult = core.getIndexer().searches().fieldStats(field, "*", filter, new RelativeRange(time * 60));
+            if (getBacklog() != null && getBacklog() > 0)
+                this.searchHits = fieldStatsResult.getSearchHits();
 
             if (fieldStatsResult.getCount() == 0) {
                 LOG.debug("Alert check <{}> did not match any messages. Returning not triggered.", type);
@@ -169,7 +167,7 @@ public class FieldValueAlertCondition extends AbstractAlertCondition {
     }
 
     @Override
-    public List<Message> getSearchHits() {
+    public List<ResultMessage> getSearchHits() {
         return this.searchHits;
     }
 }

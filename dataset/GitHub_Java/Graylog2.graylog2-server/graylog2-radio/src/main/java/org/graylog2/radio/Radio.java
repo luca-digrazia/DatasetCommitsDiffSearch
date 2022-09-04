@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -23,7 +23,6 @@ import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
-import com.google.inject.name.Named;
 import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
@@ -62,6 +61,7 @@ import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.jboss.netty.handler.codec.http.HttpRequestDecoder;
 import org.jboss.netty.handler.codec.http.HttpResponseEncoder;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,8 +89,7 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
 
     private GELFChunkManager gelfChunkManager;
 
-    @Inject
-    @Named("scheduler")
+    private static final int SCHEDULED_THREADS_POOL_SIZE = 10;
     private ScheduledExecutorService scheduler;
 
     private RadioInputRegistry inputs;
@@ -162,7 +161,10 @@ public class Radio implements InputHost, GraylogServer, ProcessingHost {
 
         pinger = new Ping.Pinger(httpClient, serverStatus.getNodeId().toString(), configuration.getRestTransportUri(), configuration.getGraylog2ServerUri());
 
-        // TODO: fix this.
+        scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
+                new ThreadFactoryBuilder().setNameFormat("scheduled-%d").build()
+        );
+
         /*ThroughputCounterManagerThread tt = throughputCounterThreadFactory.create();
         scheduler.scheduleAtFixedRate(tt, 0, 1, TimeUnit.SECONDS);*/
 
