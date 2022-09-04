@@ -17,7 +17,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
-import java.util.*;
+import java.util.Collections;
+import java.util.Set;
 
 /**
  * A Jersey provider which enables using Jackson to parse request entities into objects and generate
@@ -74,39 +75,14 @@ public class JacksonMessageBodyProvider extends JacksonJaxbJsonProvider {
         final Class<?>[] classes = findValidationGroups(annotations);
 
         if (classes != null) {
-            Set<ConstraintViolation<Object>> violations = null;
-
-            if(value instanceof Map) {
-                violations = validate(((Map)value).values(), classes);
-            } else if(value instanceof Iterable) {
-                violations = validate((Iterable)value, classes);
-            } else if(value.getClass().isArray()) {
-                violations = new HashSet<>();
-
-                Object[] values = (Object[]) value;
-                for(Object item : values) {
-                    violations.addAll(validator.validate(item, classes));
-                }
-            } else {
-                violations = validator.validate(value, classes);
-            }
-
-            if (violations != null && !violations.isEmpty()) {
+            final Set<ConstraintViolation<Object>> violations = validator.validate(value, classes);
+            if (!violations.isEmpty()) {
                 throw new ConstraintViolationException("The request entity had the following errors:",
-                        ConstraintViolations.copyOf(violations));
+                                                       ConstraintViolations.copyOf(violations));
             }
         }
 
         return value;
-    }
-
-    private Set<ConstraintViolation<Object>> validate(Iterable values, Class<?>[] classes) {
-        Set<ConstraintViolation<Object>> violations = new HashSet<>();
-        for(Object value : values) {
-            violations.addAll(validator.validate(value, classes));
-        }
-
-        return violations;
     }
 
     private Class<?>[] findValidationGroups(Annotation[] annotations) {
