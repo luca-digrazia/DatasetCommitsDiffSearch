@@ -37,8 +37,6 @@ public interface AuthServiceBackend {
 
     String backendTitle();
 
-    AuthServiceBackendDTO prepareConfigUpdate(AuthServiceBackendDTO existingBackend, AuthServiceBackendDTO newBackend);
-
     AuthServiceBackendTestResult testConnection(@Nullable AuthServiceBackendDTO existingConfig);
 
     AuthServiceBackendTestResult testLogin(AuthServiceCredentials credentials, @Nullable AuthServiceBackendDTO existingConfig);
