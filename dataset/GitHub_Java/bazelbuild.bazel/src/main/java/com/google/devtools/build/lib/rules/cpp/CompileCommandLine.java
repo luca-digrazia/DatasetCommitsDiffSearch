@@ -161,12 +161,7 @@ public final class CompileCommandLine {
     // Unfiltered compiler options contain system include paths. These must be added after
     // the user provided options, otherwise users adding include paths will not pick up their
     // own include paths first.
-    if (isObjcCompile(actionName)) {
-      PathFragment sysroot = cppProvider.getSysroot();
-      if (sysroot != null) {
-        options.add(toolchain.getSysrootCompilerOption(sysroot));
-      }
-    } else {
+    if (!isObjcCompile(actionName)) {
       options.addAll(cppProvider.getUnfilteredCompilerOptions(features));
     }
 
