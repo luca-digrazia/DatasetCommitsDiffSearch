@@ -1,27 +1,29 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
- *   
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *  
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Copyright (c) 2010-2019 Haifeng Li
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
+ *
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  *******************************************************************************/
+
 package smile.wavelet;
 
 import java.util.Arrays;
-import smile.math.Math;
+import smile.math.MathEx;
 
 /**
  * A wavelet is a wave-like oscillation with an amplitude that starts out at
  * zero, increases, and then decreases back to zero. Like the fast Fourier
- * transform (FFT), the discrete wavelet trainsform (DWT) is a fast, linear
+ * transform (FFT), the discrete wavelet transform (DWT) is a fast, linear
  * operation that operates on a data vector whose length is an integer power
  * of 2, transforming it into a numerically different vector of the same length.
  * The wavelet transform is invertible and in fact orthogonal. Both FFT and DWT
@@ -50,25 +52,21 @@ public class Wavelet {
      */
     private double[] workspace = new double[1024];
 
-
     /**
      * Constructor. Create a wavelet with given coefficients.
      */
     public Wavelet(double[] coefficients) {
-        if (coefficients != null) {
-            ncof = coefficients.length;
+        ncof = coefficients.length;
 
-            ioff = joff = -(ncof >> 1);
-            // ioff = -2; joff = -ncof + 2; // Alternative centering, used by D4.
+        ioff = joff = -(ncof >> 1);
 
-            cc = coefficients;
+        cc = coefficients;
 
-            double sig = -1.0;
-            cr = new double[ncof];
-            for (int i = 0; i < ncof; i++) {
-                cr[ncof - 1 - i] = sig * cc[i];
-                sig = -sig;
-            }
+        double sig = -1.0;
+        cr = new double[ncof];
+        for (int i = 0; i < ncof; i++) {
+            cr[ncof - 1 - i] = sig * cc[i];
+            sig = -sig;
         }
     }
 
@@ -76,7 +74,7 @@ public class Wavelet {
      * Applies the wavelet filter to a data vector a[0, n-1].
      */
     void forward(double[] a, int n) {
-        if (n < 4) {
+        if (n < ncof) {
             return;
         }
 
@@ -108,7 +106,7 @@ public class Wavelet {
      * Applies the inverse wavelet filter to a data vector a[0, n-1].
      */
     void backward(double[] a, int n) {
-        if (n < 4) {
+        if (n < ncof) {
             return;
         }
 
@@ -144,15 +142,15 @@ public class Wavelet {
     public void transform(double[] a) {
         int n = a.length;
 
-        if (!Math.isPower2(n)) {
+        if (!MathEx.isPower2(n)) {
             throw new IllegalArgumentException("The data vector size is not a power of 2.");
         }
 
-        if (n < 4) {
-            throw new IllegalArgumentException("The data vector size is less than 4.");
+        if (n < ncof) {
+            throw new IllegalArgumentException("The data vector size is less than wavelet coefficient size.");
         }
 
-        for (int nn = n; nn >= 4; nn >>= 1) {
+        for (int nn = n; nn >= ncof; nn >>= 1) {
             forward(a, nn);
         }
     }
@@ -163,15 +161,16 @@ public class Wavelet {
     public void inverse(double[] a) {
         int n = a.length;
 
-        if (!Math.isPower2(n)) {
+        if (!MathEx.isPower2(n)) {
             throw new IllegalArgumentException("The data vector size is not a power of 2.");
         }
 
-        if (n < 4) {
-            throw new IllegalArgumentException("The data vector size is less than 4.");
+        if (n < ncof) {
+            throw new IllegalArgumentException("The data vector size is less than wavelet coefficient size.");
         }
 
-        for (int nn = 4; nn <= n; nn <<= 1) {
+        int start = n >> (int) Math.floor(MathEx.log2(n/(ncof-1)));
+        for (int nn = start; nn <= n; nn <<= 1) {
             backward(a, nn);
         }
     }
