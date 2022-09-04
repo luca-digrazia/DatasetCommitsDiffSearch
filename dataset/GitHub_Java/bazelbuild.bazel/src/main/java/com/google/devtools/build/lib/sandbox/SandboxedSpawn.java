@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.sandbox;
 
+import com.google.common.io.Files;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -80,7 +81,7 @@ interface SandboxedSpawn {
         // have already been created, but the spawn outputs may be different from the overall action
         // outputs. This is the case for test actions.
         target.getParentDirectory().createDirectoryAndParents();
-        FileSystemUtils.moveFile(source, target);
+        Files.move(source.getPathFile(), target.getPathFile());
       } else if (source.isDirectory()) {
         try {
           source.renameTo(target);
