@@ -36,12 +36,10 @@ import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
-import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -55,7 +53,6 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -137,18 +134,16 @@ public class JavaHeaderCompileAction extends SpawnAction {
   }
 
   @Override
-  protected Set<SpawnResult> internalExecute(ActionExecutionContext actionExecutionContext)
+  protected void internalExecute(ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException {
     SpawnActionContext context = getContext(actionExecutionContext);
     try {
-      return context.exec(getDirectSpawn(), actionExecutionContext);
+      context.exec(getDirectSpawn(), actionExecutionContext);
     } catch (ExecException e) {
       // if the direct input spawn failed, try again with transitive inputs to produce better
       // better messages
       try {
-        return context.exec(
-            getSpawn(actionExecutionContext.getClientEnv()),
-            actionExecutionContext);
+        context.exec(getSpawn(actionExecutionContext.getClientEnv()), actionExecutionContext);
       } catch (CommandLineExpansionException commandLineExpansionException) {
         throw new UserExecException(commandLineExpansionException);
       }
@@ -390,15 +385,12 @@ public class JavaHeaderCompileAction extends SpawnAction {
       if ((noFallback || directJars.isEmpty()) && !requiresAnnotationProcessing) {
         SpawnAction.Builder builder = new SpawnAction.Builder();
         NestedSet<Artifact> classpath;
-        final ParamFileInfo paramFileInfo;
         if (!directJars.isEmpty() || classpathEntries.isEmpty()) {
           classpath = directJars;
-          paramFileInfo = null;
         } else {
           classpath = classpathEntries;
           // Transitive classpath actions may exceed the command line length limit.
-          paramFileInfo =
-              ParamFileInfo.builder(ParameterFileType.UNQUOTED).setUseAlways(true).build();
+          builder.alwaysUseParameterFile(ParameterFileType.UNQUOTED);
         }
         CustomCommandLine.Builder commandLine =
             baseCommandLine(CustomCommandLine.builder(), classpath);
@@ -410,7 +402,7 @@ public class JavaHeaderCompileAction extends SpawnAction {
             .addTransitiveInputs(baseInputs)
             .addTransitiveInputs(classpath)
             .addOutputs(outputs)
-            .addCommandLine(commandLine.build(), paramFileInfo)
+            .setCommandLine(commandLine.build())
             .setJarExecutable(
                 JavaCommon.getHostJavaExecutable(ruleContext),
                 javaToolchain.getHeaderCompiler(),

@@ -14,14 +14,13 @@
 
 package com.google.devtools.build.lib.rules.java;
 
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.devtools.build.lib.packages.Aspect.INJECTING_RULE_KIND_PARAMETER_KEY;
+import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.ImmutableCollection;
@@ -34,14 +33,13 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
+import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Root;
-import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.JavaCompileInfo;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
-import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -60,6 +58,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.util.LazyString;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -192,8 +191,7 @@ public final class JavaCompileAction extends SpawnAction {
       Map<String, String> executionInfo,
       StrictDepsMode strictJavaDeps,
       NestedSet<Artifact> compileTimeDependencyArtifacts,
-      CharSequence progressMessage,
-      RunfilesSupplier runfiles) {
+      CharSequence progressMessage) {
     super(
         owner,
         tools,
@@ -206,7 +204,7 @@ public final class JavaCompileAction extends SpawnAction {
         UTF8_ACTION_ENVIRONMENT,
         ImmutableMap.copyOf(executionInfo),
         progressMessage,
-        runfiles,
+        EmptyRunfilesSupplier.INSTANCE,
         "Javac",
         false /*executeUnconditionally*/,
         null /*extraActionInfoSupplier*/);
@@ -440,11 +438,6 @@ public final class JavaCompileAction extends SpawnAction {
       public Iterable<String> argv() {
         checkNotNull(javaBuilderJar);
 
-        if (!javaBuilderJar.getExtension().equals("jar")) {
-          // JavaBuilder is a non-deploy.jar executable.
-          return ImmutableList.of(javaBuilderJar.getExecPathString());
-        }
-
         CustomCommandLine.Builder builder =
             CustomCommandLine.builder().addPath(javaExecutable).addAll(javaBuilderJvmFlags);
         if (!instrumentationJars.isEmpty()) {
@@ -524,7 +517,7 @@ public final class JavaCompileAction extends SpawnAction {
     private ImmutableList<Artifact> bootclasspathEntries = ImmutableList.of();
     private ImmutableList<Artifact> sourcePathEntries = ImmutableList.of();
     private ImmutableList<Artifact> extdirInputs = ImmutableList.of();
-    private FilesToRunProvider javaBuilder;
+    private Artifact javaBuilderJar;
     private Artifact langtoolsJar;
     private NestedSet<Artifact> toolsJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
     private ImmutableList<Artifact> instrumentationJars = ImmutableList.of();
@@ -616,7 +609,7 @@ public final class JavaCompileAction extends SpawnAction {
       CustomMultiArgv spawnCommandLineBase =
           spawnCommandLineBase(
               javaExecutable,
-              javaBuilder.getExecutable(),
+              javaBuilderJar,
               instrumentationJars,
               javacJvmOpts,
               semantics.getJavaBuilderMainClass(),
@@ -633,7 +626,7 @@ public final class JavaCompileAction extends SpawnAction {
           NestedSetBuilder.<Artifact>stableOrder()
               .add(langtoolsJar)
               .addTransitive(toolsJars)
-              .addTransitive(javaBuilder.getFilesToRun())
+              .add(javaBuilderJar)
               .addAll(instrumentationJars)
               .build();
 
@@ -674,8 +667,7 @@ public final class JavaCompileAction extends SpawnAction {
           executionInfo,
           strictJavaDeps,
           compileTimeDependencyArtifacts,
-          getProgressMessage(),
-          javaBuilder.getRunfilesSupplier());
+          getProgressMessage());
     }
 
     private CustomCommandLine buildParamFileContents(Collection<String> javacOpts) {
@@ -993,8 +985,8 @@ public final class JavaCompileAction extends SpawnAction {
       return this;
     }
 
-    public Builder setJavaBuilder(FilesToRunProvider javaBuilder) {
-      this.javaBuilder = javaBuilder;
+    public Builder setJavaBuilderJar(Artifact javaBuilderJar) {
+      this.javaBuilderJar = javaBuilderJar;
       return this;
     }
 

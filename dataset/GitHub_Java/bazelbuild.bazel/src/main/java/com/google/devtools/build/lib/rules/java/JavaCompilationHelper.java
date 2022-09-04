@@ -459,7 +459,7 @@ public final class JavaCompilationHelper {
                     JavaCommon.getHostJavaExecutable(ruleContext),
                     getGenClassJar(ruleContext),
                     javaToolchain.getJvmOptions())
-                .addCommandLine(
+                .setCommandLine(
                     CustomCommandLine.builder()
                         .addExecPath("--manifest_proto", manifestProto)
                         .addExecPath("--class_jar", classJar)
@@ -588,8 +588,7 @@ public final class JavaCompilationHelper {
    */
   public void createSourceJarAction(Artifact outputJar, @Nullable Artifact gensrcJar) {
     JavaTargetAttributes attributes = getAttributes();
-    NestedSetBuilder<Artifact> resourceJars = NestedSetBuilder.stableOrder();
-    resourceJars.addAll(attributes.getSourceJars());
+    Collection<Artifact> resourceJars = new ArrayList<>(attributes.getSourceJars());
     if (gensrcJar != null) {
       resourceJars.add(gensrcJar);
     }
@@ -597,8 +596,7 @@ public final class JavaCompilationHelper {
     for (Artifact sourceFile : attributes.getSourceFiles()) {
       resources.put(semantics.getDefaultJavaResourcePath(sourceFile.getRootRelativePath()), sourceFile);
     }
-    SingleJarActionBuilder.createSourceJarAction(
-        ruleContext, resources, resourceJars.build(), outputJar);
+    SingleJarActionBuilder.createSourceJarAction(ruleContext, resources, resourceJars, outputJar);
   }
 
   /**
@@ -807,7 +805,7 @@ public final class JavaCompilationHelper {
               .useDefaultShellEnvironment()
               .setProgressMessage("Extracting interface %s", ruleContext.getLabel())
               .setMnemonic("JavaIjar")
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder()
                       .addExecPath(inputJar)
                       .addExecPath(interfaceJar)

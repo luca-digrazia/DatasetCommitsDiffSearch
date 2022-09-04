@@ -22,6 +22,8 @@ import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
@@ -31,10 +33,7 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
-import com.google.devtools.build.lib.analysis.whitelisting.Whitelist;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -114,8 +113,6 @@ public class AndroidCommon {
     }
     return builder.build();
   }
-
-  public static final String RESOURCES_WHITELIST_NAME = "android_resources";
 
   private final RuleContext ruleContext;
   private final JavaCommon javaCommon;
@@ -230,7 +227,7 @@ public class AndroidCommon {
             .addOutput(classesDex)
             .setProgressMessage("Converting %s to dex format", jarToDex.getExecPathString())
             .setMnemonic("AndroidDexer")
-            .addCommandLine(commandLine.build())
+            .setCommandLine(commandLine.build())
             .setResources(ResourceSet.createWithRamCpuIo(4096.0, 5.0, 0.0));
     if (mainDexList != null) {
       builder.addInput(mainDexList);
@@ -419,7 +416,7 @@ public class AndroidCommon {
     // We don't actually use the ijar. That is almost the same as the resource class jar
     // except for <clinit>, but it takes time to build and waiting for that to build would
     // just delay building the rest of the library.
-    artifactsBuilder.addCompileTimeJarAsFullJar(resourceClassJar);
+    artifactsBuilder.addCompileTimeJar(resourceClassJar);
 
     // Add the compiled resource jar as a declared output of the rule.
     filesBuilder.add(resourceSourceJar);
@@ -508,7 +505,7 @@ public class AndroidCommon {
               .addInput(jarJarRuleFile)
               .addInput(binaryResourcesJar)
               .addOutput(resourcesJar)
-              .addCommandLine(
+              .setCommandLine(
                   CustomCommandLine.builder()
                       .add("process")
                       .addExecPath(jarJarRuleFile)
@@ -541,7 +538,7 @@ public class AndroidCommon {
       boolean addCoverageSupport,
       boolean collectJavaCompilationArgs,
       boolean isBinary,
-      NestedSet<Artifact> excludedRuntimeArtifacts)
+      boolean includeLibraryResourceJars)
       throws InterruptedException, RuleErrorException {
 
     classJar = ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_LIBRARY_CLASS_JAR);
@@ -572,10 +569,6 @@ public class AndroidCommon {
       DataBinding.addAnnotationProcessor(ruleContext, attributes);
     }
 
-    if (excludedRuntimeArtifacts != null) {
-      attributes.addExcludedArtifacts(excludedRuntimeArtifacts);
-    }
-
     JavaCompilationArtifacts.Builder artifactsBuilder = new JavaCompilationArtifacts.Builder();
     NestedSetBuilder<Artifact> jarsProducedForRuntime = NestedSetBuilder.<Artifact>stableOrder();
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.<Artifact>stableOrder();
@@ -590,10 +583,14 @@ public class AndroidCommon {
       compileResources(javaSemantics, resourceApk, resourcesJar, artifactsBuilder, attributes,
           filesBuilder, useRClassGenerator);
 
-      // Combined resource constants needs to come even before our own classes that may contain
-      // local resource constants.
-      artifactsBuilder.addRuntimeJar(resourceClassJar);
-      jarsProducedForRuntime.add(resourceClassJar);
+      // In binary targets, add the resource jar as a runtime dependency. In libraries, the resource
+      // jar from the appropriate binary will be used, but add this jar anyway if requested.
+      if (isBinary || includeLibraryResourceJars) {
+        // Combined resource constants needs to come even before our own classes that may contain
+        // local resource constants.
+        artifactsBuilder.addRuntimeJar(resourceClassJar);
+        jarsProducedForRuntime.add(resourceClassJar);
+      }
 
       if (resourceApk.isLegacy()) {
         // Repackages the R.java for each dependency package and places the resultant jars before
@@ -988,7 +985,7 @@ public class AndroidCommon {
       // binding didn't reprocess a library's data binding expressions redundantly up the dependency
       // chain (meaning each depender processes them again as if they were its own), this problem
       // wouldn't happen.
-      Artifact annotationFile = DataBinding.createAnnotationFile(ruleContext);
+      Artifact annotationFile = DataBinding.createAnnotationFile(ruleContext, isLibrary);
       if (annotationFile != null) {
         srcs = ImmutableList.<Artifact>builder().addAll(srcs).add(annotationFile).build();
       }
@@ -1034,15 +1031,5 @@ public class AndroidCommon {
       }
     }
     return supportApks.build();
-  }
-
-  public static void validateResourcesAttribute(RuleContext ruleContext) throws RuleErrorException {
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("resources")
-        && !ruleContext.getFragment(AndroidConfiguration.class).allowResourcesAttr()
-        && !Whitelist.isAvailable(ruleContext, RESOURCES_WHITELIST_NAME)) {
-      ruleContext.throwWithAttributeError(
-          "resources",
-          "The resources attribute has been removed. Please use resource_files instead.");
-    }
   }
 }
