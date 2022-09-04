@@ -1,4 +1,4 @@
-// Copyright 2015 Google Inc. All rights reserved.
+// Copyright 2015 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,59 +13,81 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
+import com.google.devtools.build.lib.query2.common.UniverseSkyKey;
+import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
-
-import java.io.Serializable;
 import java.util.Objects;
 
 /**
- * The value returned by {@link PrepareDepsOfPatternsFunction}. Because that function is
- * invoked only for its side effect (i.e. ensuring the graph contains targets matching the
- * pattern sequence and their transitive dependencies), this value carries no information.
+ * The value returned by {@link PrepareDepsOfPatternsFunction}. Although that function is invoked
+ * primarily for its side effect (i.e. ensuring the graph contains targets matching the pattern
+ * sequence and their transitive dependencies), this value contains the {@link TargetPatternKey}
+ * arguments of the {@link PrepareDepsOfPatternFunction}s evaluated in service of it.
+ *
+ * <p>Because the returned value may remain the same when the side-effects of this function
+ * evaluation change, this value and the {@link PrepareDepsOfPatternsFunction} which computes it are
+ * incompatible with change pruning. It should only be requested by consumers who do not require
+ * reevaluation when {@link PrepareDepsOfPatternsFunction} is reevaluated. Safe consumers include,
+ * e.g., top-level consumers, and other functions which invoke {@link PrepareDepsOfPatternsFunction}
+ * solely for its side-effects and which do not behave differently depending on those side-effects.
  */
 @Immutable
 @ThreadSafe
 public final class PrepareDepsOfPatternsValue implements SkyValue {
-  public static final PrepareDepsOfPatternsValue INSTANCE = new PrepareDepsOfPatternsValue();
+  private final ImmutableList<TargetPatternKey> targetPatternKeys;
 
-  private PrepareDepsOfPatternsValue() {
+  public PrepareDepsOfPatternsValue(ImmutableList<TargetPatternKey> targetPatternKeys) {
+    this.targetPatternKeys = Preconditions.checkNotNull(targetPatternKeys);
+  }
+
+  public ImmutableList<TargetPatternKey> getTargetPatternKeys() {
+    return targetPatternKeys;
   }
 
   @ThreadSafe
-  public static SkyKey key(ImmutableList<String> patterns, FilteringPolicy policy,
-      String offset) {
-    return new SkyKey(SkyFunctions.PREPARE_DEPS_OF_PATTERNS,
-        new TargetPatternSequence(patterns, policy, offset));
+  public static TargetPatternSequence key(ImmutableList<String> patterns, PathFragment offset) {
+    return TargetPatternSequence.create(patterns, offset);
   }
 
-  /** The argument value for SkyKeys of {@link PrepareDepsOfPatternsFunction}. */
+  /** The argument value for {@link SkyKey}s of {@link PrepareDepsOfPatternsFunction}. */
   @ThreadSafe
-  public static class TargetPatternSequence implements Serializable {
+  @AutoCodec.VisibleForSerialization
+  @AutoCodec
+  static class TargetPatternSequence implements UniverseSkyKey {
+    private static final Interner<TargetPatternSequence> interner =
+        BlazeInterners.newWeakInterner();
+
     private final ImmutableList<String> patterns;
-    private final FilteringPolicy policy;
-    private final String offset;
+    private final PathFragment offset;
 
-    public TargetPatternSequence(ImmutableList<String> patterns,
-        FilteringPolicy policy, String offset) {
-      this.patterns = patterns;
-      this.policy = policy;
-      this.offset = offset;
+    private TargetPatternSequence(ImmutableList<String> patterns, PathFragment offset) {
+      this.patterns = Preconditions.checkNotNull(patterns);
+      this.offset = Preconditions.checkNotNull(offset);
     }
 
+    @AutoCodec.VisibleForSerialization
+    @AutoCodec.Instantiator
+    static TargetPatternSequence create(ImmutableList<String> patterns, PathFragment offset) {
+      return interner.intern(new TargetPatternSequence(patterns, offset));
+    }
+
+    @Override
     public ImmutableList<String> getPatterns() {
       return patterns;
     }
 
-    public FilteringPolicy getPolicy() {
-      return policy;
-    }
-
-    public String getOffset() {
+    public PathFragment getOffset() {
       return offset;
     }
 
@@ -78,13 +100,36 @@ public final class PrepareDepsOfPatternsValue implements SkyValue {
         return false;
       }
       TargetPatternSequence that = (TargetPatternSequence) o;
-      return offset.equals(that.offset) && patterns.equals(that.patterns)
-          && policy.equals(that.policy);
+      return Objects.equals(offset, that.offset) && Objects.equals(patterns, that.patterns);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(patterns, policy, offset);
+      return Objects.hash(patterns, offset);
     }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("patterns", patterns)
+          .add("offset", offset)
+          .toString();
+    }
+
+    @Override
+    public SkyFunctionName functionName() {
+      return SkyFunctions.PREPARE_DEPS_OF_PATTERNS;
+    }
+  }
+
+  @Override
+  public boolean equals(Object other) {
+    return other instanceof PrepareDepsOfPatternsValue
+        && targetPatternKeys.equals(((PrepareDepsOfPatternsValue) other).getTargetPatternKeys());
+  }
+
+  @Override
+  public int hashCode() {
+    return targetPatternKeys.hashCode();
   }
 }
