@@ -18,7 +18,6 @@ import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 
-import com.fasterxml.jackson.core.JsonGenerator.Feature;
 import org.jboss.resteasy.reactive.server.spi.ResteasyReactiveResourceInfo;
 import org.jboss.resteasy.reactive.server.spi.ServerMessageBodyWriter;
 import org.jboss.resteasy.reactive.server.spi.ServerRequestContext;
@@ -44,21 +43,14 @@ public class JacksonMessageBodyWriter implements ServerMessageBodyWriter<Object>
     public JacksonMessageBodyWriter(ObjectMapper mapper) {
         this.originalMapper = mapper;
         // we don't want the ObjectWriter to close the stream automatically, as we want to handle closing manually at the proper points
-        JsonFactory jsonFactory = mapper.getFactory();
-        if (needsNewFactory(jsonFactory)) {
-            jsonFactory = jsonFactory.copy();
-            jsonFactory.configure(Feature.AUTO_CLOSE_TARGET, false);
-            jsonFactory.configure(Feature.FLUSH_PASSED_TO_STREAM, false);
+        if (mapper.getFactory().isEnabled(JsonGenerator.Feature.AUTO_CLOSE_TARGET)) {
+            JsonFactory jsonFactory = mapper.getFactory().copy();
+            jsonFactory.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
             this.defaultWriter = mapper.writer().with(jsonFactory);
         } else {
             this.defaultWriter = mapper.writer();
         }
     }
-
-    private boolean needsNewFactory(JsonFactory jsonFactory) {
-        return jsonFactory.isEnabled(Feature.AUTO_CLOSE_TARGET) || jsonFactory.isEnabled(Feature.FLUSH_PASSED_TO_STREAM);
-    }
-
 
     @Override
     public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
