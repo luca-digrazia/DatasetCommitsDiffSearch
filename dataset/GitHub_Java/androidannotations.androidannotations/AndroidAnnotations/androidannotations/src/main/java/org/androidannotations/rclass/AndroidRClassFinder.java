@@ -40,9 +40,6 @@ public class AndroidRClassFinder {
 			LOGGER.error("The android.R class cannot be found");
 			return Option.absent();
 		}
-
-		LOGGER.info("Found Android class: {}", androidRType.toString());
-
 		return Option.<IRClass> of(new RClass(androidRType));
 	}
 }

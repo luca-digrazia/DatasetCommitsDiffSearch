@@ -41,10 +41,6 @@ public class Logger {
 		warn(message, null, null, args);
 	}
 
-	public void warn(String message, Throwable thr, Object... args) {
-		warn(message, null, thr, args);
-	}
-
 	public void warn(String message, Element element, Object... args) {
 		warn(message, element, null, args);
 	}
@@ -59,10 +55,6 @@ public class Logger {
 
 	public void error(String message, Element element, Object... args) {
 		error(message, element, null, args);
-	}
-
-	public void error(String message, Throwable thr, Object... args) {
-		error(message, null, thr, args);
 	}
 
 	public void error(String message, Element element, Throwable thr, Object... args) {

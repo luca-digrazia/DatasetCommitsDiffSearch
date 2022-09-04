@@ -15,24 +15,9 @@
  */
 package org.androidannotations.helper;
 
-import com.sun.codemodel.JFieldRef;
-import org.androidannotations.annotations.OnActivityResult;
-import org.androidannotations.annotations.OptionsItem;
-import org.androidannotations.annotations.ResId;
-import org.androidannotations.logger.Level;
-import org.androidannotations.logger.Logger;
-import org.androidannotations.logger.LoggerFactory;
-import org.androidannotations.process.ProcessHolder;
-import org.androidannotations.rclass.IRInnerClass;
-import org.androidannotations.rclass.RInnerClass;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
+import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_COMPONENT_ANNOTATIONS;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.*;
-import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.MirroredTypeException;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -40,8 +25,31 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
-import static org.androidannotations.helper.ModelConstants.VALID_ENHANCED_COMPONENT_ANNOTATIONS;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.AnnotationMirror;
+import javax.lang.model.element.AnnotationValue;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
+import javax.lang.model.element.NestingKind;
+import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.MirroredTypeException;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+
+import org.androidannotations.annotations.OnActivityResult;
+import org.androidannotations.annotations.OptionsItem;
+import org.androidannotations.annotations.ResId;
+import org.androidannotations.logger.Level;
+import org.androidannotations.logger.Logger;
+import org.androidannotations.logger.LoggerFactory;
+import org.androidannotations.processing.EBeanHolder;
+import org.androidannotations.rclass.IRInnerClass;
+import org.androidannotations.rclass.RInnerClass;
+
+import com.sun.codemodel.JFieldRef;
 
 public class AnnotationHelper {
 
@@ -71,16 +79,6 @@ public class AnnotationHelper {
 	 */
 	public TypeElement typeElementFromQualifiedName(String qualifiedName) {
 		return processingEnv.getElementUtils().getTypeElement(qualifiedName);
-	}
-
-	public String generatedClassQualifiedNameFromQualifiedName(String qualifiedName) {
-		TypeElement type = typeElementFromQualifiedName(qualifiedName);
-		if (type.getNestingKind() == NestingKind.MEMBER) {
-			String parentGeneratedClass = generatedClassQualifiedNameFromQualifiedName(type.getEnclosingElement().asType().toString());
-			return parentGeneratedClass+"."+type.getSimpleName().toString()+GENERATION_SUFFIX;
-		} else {
-			return qualifiedName+GENERATION_SUFFIX;
-		}
 	}
 
 	public AnnotationMirror findAnnotationMirror(Element annotatedElement, String annotationName) {
@@ -160,9 +158,9 @@ public class AnnotationHelper {
 	 * Returns a list of {@link JFieldRef} linking to the R class, based on the
 	 * given annotation
 	 * 
-	 * @see #extractAnnotationResources(Element, String, IRInnerClass, boolean)
+	 * @see #extractAnnotationResources(Element, Class, IRInnerClass, boolean)
 	 */
-	public List<JFieldRef> extractAnnotationFieldRefs(ProcessHolder holder, Element element, String annotationName, IRInnerClass rInnerClass, boolean useElementName) {
+	public List<JFieldRef> extractAnnotationFieldRefs(EBeanHolder holder, Element element, String annotationName, IRInnerClass rInnerClass, boolean useElementName) {
 		List<JFieldRef> fieldRefs = new ArrayList<JFieldRef>();
 
 		for (String refQualifiedName : extractAnnotationResources(element, annotationName, rInnerClass, useElementName)) {
@@ -180,7 +178,7 @@ public class AnnotationHelper {
 	 * 
 	 * @param element
 	 *            the annotated element
-	 * @param annotationName
+	 * @param target
 	 *            the annotation on the element
 	 * @param rInnerClass
 	 *            the R innerClass the resources belong to
@@ -380,7 +378,9 @@ public class AnnotationHelper {
 
 				AnnotationValue annotationValue = entry.getValue();
 
-				return (DeclaredType) annotationValue.getValue();
+				DeclaredType annotationClass = (DeclaredType) annotationValue.getValue();
+
+				return annotationClass;
 			}
 		}
 
@@ -389,6 +389,14 @@ public class AnnotationHelper {
 
 	public DeclaredType extractAnnotationClassParameter(Element element, String annotationName) {
 		return extractAnnotationClassParameter(element, annotationName, "value");
+	}
+
+	public boolean enclosingElementIsGenerated(Element element) {
+		/*
+		 * TODO This isn't really safe, can we find a better way?
+		 */
+		Element enclosingElement = element.getEnclosingElement();
+		return enclosingElement.getSimpleName().toString().endsWith(GENERATION_SUFFIX);
 	}
 
 	public boolean enclosingElementHasEnhancedComponentAnnotation(Element element) {

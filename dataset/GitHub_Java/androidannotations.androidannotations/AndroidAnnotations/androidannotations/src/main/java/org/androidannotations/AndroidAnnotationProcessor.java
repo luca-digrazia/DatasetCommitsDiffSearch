@@ -320,7 +320,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		String coreVersion = getAAProcessorVersion();
 
 		if (!apiVersion.equals(coreVersion)) {
-			LOGGER.error("AndroidAnnotation version for API ({}) and core ({}) doesn't match. Please check your classpath", apiVersion, coreVersion);
 			throw new VersionMismatchException("AndroidAnnotation version for API (" + apiVersion + ") and core (" + coreVersion + ") doesn't match. Please check your classpath");
 		}
 	}
@@ -360,8 +359,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 			URL url = getClass().getClassLoader().getResource(filename);
 			properties.load(url.openStream());
 		} catch (Exception e) {
-			LOGGER.error("Core property file {} couldn't be parse");
-			throw new FileNotFoundException("Core property file " + filename + " couldn't be parsed.");
+			throw new FileNotFoundException(filename + " couldn't be parsed.");
 		}
 	}
 
@@ -371,8 +369,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 			URL url = EActivity.class.getClassLoader().getResource(filename);
 			propertiesApi.load(url.openStream());
 		} catch (Exception e) {
-			LOGGER.error("API property file {} couldn't be parse");
-			throw new FileNotFoundException("API property file " + filename + " couldn't be parsed. Please check your classpath and verify that AA-API's version is at least 3.0");
+			throw new FileNotFoundException(filename + " couldn't be parsed. Please check your classpath and verify that AA-API's version is at least 3.0");
 		}
 	}
 
@@ -392,23 +389,27 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		AnnotationElementsHolder extractedModel = extractAnnotations(annotations, roundEnv);
 
 		Option<AndroidManifest> androidManifestOption = extractAndroidManifest();
+
 		if (androidManifestOption.isAbsent()) {
 			return;
 		}
+
 		AndroidManifest androidManifest = androidManifestOption.get();
 
-		LOGGER.info("AndroidManifest.xml found: {}", androidManifest);
-
 		Option<IRClass> rClassOption = findRClasses(androidManifest);
+
 		if (rClassOption.isAbsent()) {
 			return;
 		}
+
 		IRClass rClass = rClassOption.get();
 
 		AndroidSystemServices androidSystemServices = new AndroidSystemServices();
 
 		AnnotationElements validatedModel = validateAnnotations(extractedModel, rClass, androidSystemServices, androidManifest);
+
 		ProcessResult processResult = processAnnotations(validatedModel, rClass, androidSystemServices, androidManifest);
+
 		generateSources(processResult);
 	}
 
