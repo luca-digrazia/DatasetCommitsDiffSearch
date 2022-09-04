@@ -17,7 +17,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.shell.TerminationStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.ByteString;
@@ -143,13 +142,6 @@ public interface SpawnResult {
   int exitCode();
 
   /**
-   * A detailed representation of what failed if {@link #status} is not {@link Status#SUCCESS}, and
-   * {@code null} otherwise.
-   */
-  @Nullable
-  FailureDetail failureDetail();
-
-  /**
    * Returns the host name of the executor or {@code null}. This information is intended for
    * debugging purposes, especially for remote execution systems. Remote caches usually do not store
    * the original host name, so this is generally {@code null} for cache hits.
@@ -162,9 +154,6 @@ public interface SpawnResult {
    * unless isCacheHit is true, in which case the spawn was not actually run.
    */
   String getRunnerName();
-
-  /** Returns optional details about the runner. */
-  String getRunnerSubtype();
 
   /**
    * Returns the wall time taken by the {@link Spawn}'s execution.
@@ -238,14 +227,12 @@ public interface SpawnResult {
   String getDetailMessage(
       String messagePrefix,
       String message,
+      boolean verboseFailures,
       boolean catastrophe,
       boolean forciblyRunRemotely);
 
   /** Returns a file path to the action metadata log. */
   Optional<MetadataLog> getActionMetadataLog();
-
-  /** Whether the spawn result was obtained through remote strategy. */
-  boolean wasRemote();
 
   /** Basic implementation of {@link SpawnResult}. */
   @Immutable
@@ -253,10 +240,8 @@ public interface SpawnResult {
   final class SimpleSpawnResult implements SpawnResult {
     private final int exitCode;
     private final Status status;
-    @Nullable private final FailureDetail failureDetail;
     private final String executorHostName;
     private final String runnerName;
-    private final String runnerSubtype;
     private final SpawnMetrics spawnMetrics;
     private final Optional<Duration> wallTime;
     private final Optional<Duration> userTime;
@@ -271,15 +256,12 @@ public interface SpawnResult {
     // Invariant: Either both have a value or both are null.
     @Nullable private final ActionInput inMemoryOutputFile;
     @Nullable private final ByteString inMemoryContents;
-    private final boolean remote;
 
     SimpleSpawnResult(Builder builder) {
       this.exitCode = builder.exitCode;
       this.status = Preconditions.checkNotNull(builder.status);
-      this.failureDetail = builder.failureDetail;
       this.executorHostName = builder.executorHostName;
       this.runnerName = builder.runnerName;
-      this.runnerSubtype = builder.runnerSubtype;
       this.spawnMetrics = builder.spawnMetrics != null
           ? builder.spawnMetrics
           : SpawnMetrics.forLocalExecution(builder.wallTime.orElse(Duration.ZERO));
@@ -294,7 +276,6 @@ public interface SpawnResult {
       this.inMemoryOutputFile = builder.inMemoryOutputFile;
       this.inMemoryContents = builder.inMemoryContents;
       this.actionMetadataLog = builder.actionMetadataLog;
-      this.remote = builder.remote;
     }
 
     @Override
@@ -308,12 +289,6 @@ public interface SpawnResult {
     }
 
     @Override
-    @Nullable
-    public FailureDetail failureDetail() {
-      return failureDetail;
-    }
-
-    @Override
     public String getExecutorHostName() {
       return executorHostName;
     }
@@ -321,11 +296,6 @@ public interface SpawnResult {
     @Override
     public String getRunnerName() {
       return runnerName;
-    }
-
-    @Override
-    public String getRunnerSubtype() {
-      return runnerSubtype;
     }
 
     @Override
@@ -377,12 +347,15 @@ public interface SpawnResult {
     public String getDetailMessage(
         String messagePrefix,
         String message,
+        boolean verboseFailures,
         boolean catastrophe,
         boolean forciblyRunRemotely) {
       TerminationStatus status = new TerminationStatus(
           exitCode(), status() == Status.TIMEOUT);
       String reason = " (" + status.toShortString() + ")"; // e.g " (Exit 1)"
-      String explanation = Strings.isNullOrEmpty(message) ? "" : ": " + message;
+      // Include the command line as error message if --verbose_failures is enabled or
+      // the command line didn't exit normally.
+      String explanation = verboseFailures || !status.exited() ? ": " + message : "";
 
       if (!status().isConsideredUserError()) {
         String errorDetail = status().name().toLowerCase(Locale.US)
@@ -425,21 +398,14 @@ public interface SpawnResult {
     public Optional<MetadataLog> getActionMetadataLog() {
       return actionMetadataLog;
     }
-
-    @Override
-    public boolean wasRemote() {
-      return remote;
-    }
   }
 
   /** Builder class for {@link SpawnResult}. */
   final class Builder {
     private int exitCode;
     private Status status;
-    private FailureDetail failureDetail;
     private String executorHostName;
     private String runnerName = "";
-    private String runnerSubtype = "";
     private SpawnMetrics spawnMetrics;
     private Optional<Duration> wallTime = Optional.empty();
     private Optional<Duration> userTime = Optional.empty();
@@ -454,23 +420,16 @@ public interface SpawnResult {
     // Invariant: Either both have a value or both are null.
     @Nullable private ActionInput inMemoryOutputFile;
     @Nullable private ByteString inMemoryContents;
-    private boolean remote;
 
     public SpawnResult build() {
       Preconditions.checkArgument(!runnerName.isEmpty());
-
       if (status == Status.SUCCESS) {
-        Preconditions.checkArgument(exitCode == 0, exitCode);
+        Preconditions.checkArgument(exitCode == 0);
       } else if (status == Status.TIMEOUT) {
-        Preconditions.checkArgument(exitCode == POSIX_TIMEOUT_EXIT_CODE, exitCode);
+        Preconditions.checkArgument(exitCode == POSIX_TIMEOUT_EXIT_CODE);
       } else if (status == Status.NON_ZERO_EXIT || status == Status.OUT_OF_MEMORY) {
-        Preconditions.checkArgument(exitCode != 0, exitCode);
+        Preconditions.checkArgument(exitCode != 0);
       }
-
-      // TODO(mschaller): Once SimpleSpawnResult.Builder's uses have picked up FailureDetails for
-      //  unsuccessful spawns, add a precondition that asserts failureDetail's nullity is the same
-      //  as whether status is SUCCESS.
-
       return new SimpleSpawnResult(this);
     }
 
@@ -484,11 +443,6 @@ public interface SpawnResult {
       return this;
     }
 
-    public Builder setFailureDetail(FailureDetail failureDetail) {
-      this.failureDetail = failureDetail;
-      return this;
-    }
-
     public Builder setExecutorHostname(String executorHostName) {
       this.executorHostName = executorHostName;
       return this;
@@ -496,11 +450,6 @@ public interface SpawnResult {
 
     public Builder setRunnerName(String runnerName) {
       this.runnerName = runnerName;
-      return this;
-    }
-
-    public Builder setRunnerSubtype(String runnerSubtype) {
-      this.runnerSubtype = runnerSubtype;
       return this;
     }
 
@@ -557,11 +506,6 @@ public interface SpawnResult {
 
     Builder setActionMetadataLog(MetadataLog actionMetadataLog) {
       this.actionMetadataLog = Optional.of(actionMetadataLog);
-      return this;
-    }
-
-    public Builder setRemote(boolean remote) {
-      this.remote = remote;
       return this;
     }
   }
