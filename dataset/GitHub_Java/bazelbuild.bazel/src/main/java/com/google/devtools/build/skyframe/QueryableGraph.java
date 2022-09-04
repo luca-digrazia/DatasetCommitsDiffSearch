@@ -80,11 +80,6 @@ public interface QueryableGraph {
         Iterables.filter(request.oldDeps, Predicates.not(Predicates.in(request.excludedKeys))));
   }
 
-  /** Checks whether this graph stores reverse dependencies. */
-  default boolean storesReverseDeps() {
-    return true;
-  }
-
   /**
    * The reason that a node is being looked up in the Skyframe graph.
    *
