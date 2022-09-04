@@ -18,10 +18,10 @@ package com.tencent.angel.ml.matrix.transport;
 
 import com.tencent.angel.PartitionKey;
 import com.tencent.angel.ml.matrix.MatrixMeta;
-import com.tencent.angel.protobuf.generated.MLProtos.RowType;
 import com.tencent.angel.ps.ParameterServerId;
 import com.tencent.angel.ps.impl.matrix.ServerRow;
 import com.tencent.angel.psagent.PSAgentContext;
+import com.tencent.angel.protobuf.generated.MLProtos.RowType;
 import io.netty.buffer.ByteBuf;
 
 /**
@@ -109,7 +109,13 @@ public class GetRowSplitRequest extends PartitionRequest {
           return 4 * ((int) partKey.getEndCol() - (int) partKey.getStartCol());
 
         default: {
-          return 0;
+          ServerRow row = PSAgentContext.get().getMatricesCache()
+            .getRowSplit(partKey.getMatrixId(), partKey, rowIndex);
+          if (row != null) {
+            return row.bufferLen();
+          } else {
+            return 0;
+          }
         }
       }
     }
