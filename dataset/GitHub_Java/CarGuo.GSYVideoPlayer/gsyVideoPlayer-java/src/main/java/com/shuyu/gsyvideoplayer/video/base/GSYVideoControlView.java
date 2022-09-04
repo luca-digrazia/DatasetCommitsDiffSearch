@@ -5,11 +5,9 @@ import android.content.Context;
 import android.media.AudioManager;
 import android.os.Handler;
 import android.os.Looper;
-
 import androidx.annotation.AttrRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
-
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
@@ -23,7 +21,6 @@ import android.widget.ProgressBar;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
 import android.widget.TextView;
-
 import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.listener.GSYVideoProgressListener;
 import com.shuyu.gsyvideoplayer.listener.LockClickListener;
@@ -130,9 +127,6 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     //seek touch
     protected boolean mHadSeekTouch = false;
 
-    protected boolean mPostProgress = false;
-    protected boolean mPostDismiss = false;
-
     //播放按键
     protected View mStartButton;
 
@@ -169,8 +163,20 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     //底部进度调
     protected ProgressBar mBottomProgressBar;
 
+    //进度定时器
+    protected Timer updateProcessTimer;
+
+    //触摸显示消失定时
+    protected Timer mDismissControlViewTimer;
+
+    //定时器任务
+    protected ProgressTimerTask mProgressTimerTask;
+
     //点击锁屏的回调
     protected LockClickListener mLockClickListener;
+
+    //触摸显示消失定时任务
+    protected DismissControlViewTimerTask mDismissControlViewTimerTask;
 
     protected GSYVideoProgressListener mGSYVideoProgressListener;
 
@@ -267,7 +273,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             });
         }
 
-        if (getActivityContext() != null) {
+        if (getActivityContext()!=null) {
             mSeekEndOffset = CommonUtil.dip2px(getActivityContext(), 50);
         }
     }
@@ -367,7 +373,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     protected void setSmallVideoTextureView(View.OnTouchListener onTouchListener) {
         super.setSmallVideoTextureView(onTouchListener);
         //小窗口播放停止了也可以移动
-        if (mThumbImageViewLayout != null) {
+        if(mThumbImageViewLayout != null) {
             mThumbImageViewLayout.setOnTouchListener(onTouchListener);
         }
     }
@@ -665,9 +671,9 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     protected void touchSurfaceMove(float deltaX, float deltaY, float y) {
         int curWidth = 0;
         int curHeight = 0;
-        if (getActivityContext() != null) {
-            curWidth = CommonUtil.getCurrentScreenLand((Activity) getActivityContext()) ? mScreenHeight : mScreenWidth;
-            curHeight = CommonUtil.getCurrentScreenLand((Activity) getActivityContext()) ? mScreenWidth : mScreenHeight;
+        if (getActivityContext()!=null) {
+             curWidth = CommonUtil.getCurrentScreenLand((Activity) getActivityContext()) ? mScreenHeight : mScreenWidth;
+             curHeight = CommonUtil.getCurrentScreenLand((Activity) getActivityContext()) ? mScreenWidth : mScreenHeight;
         }
         if (mChangePosition) {
             int totalTimeDuration = getDuration();
@@ -685,7 +691,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
             int volumePercent = (int) (mGestureDownVolume * 100 / max + deltaY * 3 * 100 / curHeight);
 
             showVolumeDialog(-deltaY, volumePercent);
-        } else if (mBrightness) {
+        } else if (!mChangePosition && mBrightness) {
             if (Math.abs(deltaY) > mThreshold) {
                 float percent = (-deltaY / curHeight);
                 onBrightnessSlide(percent);
@@ -696,7 +702,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
     protected void touchSurfaceMoveFullLogic(float absDeltaX, float absDeltaY) {
         int curWidth = 0;
-        if (getActivityContext() != null) {
+        if (getActivityContext()!=null) {
             curWidth = CommonUtil.getCurrentScreenLand((Activity) getActivityContext()) ? mScreenHeight : mScreenWidth;
         }
         if (absDeltaX > mThreshold || absDeltaY > mThreshold) {
@@ -888,13 +894,21 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
     protected void startProgressTimer() {
         cancelProgressTimer();
-        mPostProgress = true;
-        postDelayed(progressTask, 300);
+        updateProcessTimer = new Timer();
+        mProgressTimerTask = new ProgressTimerTask();
+        updateProcessTimer.schedule(mProgressTimerTask, 0, 300);
     }
 
     protected void cancelProgressTimer() {
-        mPostProgress = false;
-        removeCallbacks(progressTask);
+        if (updateProcessTimer != null) {
+            updateProcessTimer.cancel();
+            updateProcessTimer = null;
+        }
+        if (mProgressTimerTask != null) {
+            mProgressTimerTask.cancel();
+            mProgressTimerTask = null;
+        }
+
     }
 
     protected void setTextAndProgress(int secProgress) {
@@ -914,7 +928,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
         if (mProgressBar == null || mTotalTimeTextView == null || mCurrentTimeTextView == null) {
             return;
         }
-        if (mHadSeekTouch) {
+        if(mHadSeekTouch) {
             return;
         }
         if (!mTouchingProgressBar) {
@@ -936,7 +950,7 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
     }
 
     protected void setSecondaryProgress(int secProgress) {
-        if (mProgressBar != null) {
+        if (mProgressBar != null ) {
             if (secProgress != 0 && !getGSYVideoManager().isCacheFile()) {
                 mProgressBar.setSecondaryProgress(secProgress);
             }
@@ -979,13 +993,21 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
 
     protected void startDismissControlViewTimer() {
         cancelDismissControlViewTimer();
-        mPostDismiss = true;
-        postDelayed(dismissControlTask, mDismissControlTime);
+        mDismissControlViewTimer = new Timer();
+        mDismissControlViewTimerTask = new DismissControlViewTimerTask();
+        mDismissControlViewTimer.schedule(mDismissControlViewTimerTask, mDismissControlTime);
     }
 
     protected void cancelDismissControlViewTimer() {
-        mPostDismiss = false;
-        removeCallbacks(dismissControlTask);
+        if (mDismissControlViewTimer != null) {
+            mDismissControlViewTimer.cancel();
+            mDismissControlViewTimer = null;
+        }
+        if (mDismissControlViewTimerTask != null) {
+            mDismissControlViewTimerTask.cancel();
+            mDismissControlViewTimerTask = null;
+        }
+
     }
 
 
@@ -1036,37 +1058,46 @@ public abstract class GSYVideoControlView extends GSYVideoView implements View.O
                 && mNeedShowWifiTip && !getGSYVideoManager().cachePreview(mContext.getApplicationContext(), mCachePath, mOriginUrl);
     }
 
-    Runnable progressTask = new Runnable() {
+    private class ProgressTimerTask extends TimerTask {
         @Override
         public void run() {
             if (mCurrentState == CURRENT_STATE_PLAYING || mCurrentState == CURRENT_STATE_PAUSE) {
-                setTextAndProgress(0);
-            }
-            if (mPostProgress) {
-                postDelayed(this, 1000);
+                new Handler(Looper.getMainLooper()).post(
+                        new Runnable() {
+                            @Override
+                            public void run() {
+                                setTextAndProgress(0);
+                            }
+                        }
+                );
             }
         }
-    };
+    }
 
-    Runnable dismissControlTask = new Runnable() {
+    private class DismissControlViewTimerTask extends TimerTask {
+
         @Override
         public void run() {
             if (mCurrentState != CURRENT_STATE_NORMAL
                     && mCurrentState != CURRENT_STATE_ERROR
                     && mCurrentState != CURRENT_STATE_AUTO_COMPLETE) {
                 if (getActivityContext() != null) {
-                    hideAllWidget();
-                    setViewShowState(mLockScreen, GONE);
-                    if (mHideKey && mIfCurrentIsFullscreen && mShowVKey) {
-                        hideNavKey(mContext);
-                    }
-                }
-                if (mPostDismiss) {
-                    postDelayed(this, mDismissControlTime);
+                    new Handler(Looper.getMainLooper()).post(
+                            new Runnable() {
+                                @Override
+                                public void run() {
+                                    hideAllWidget();
+                                    setViewShowState(mLockScreen, GONE);
+                                    if (mHideKey && mIfCurrentIsFullscreen && mShowVKey) {
+                                        hideNavKey(mContext);
+                                    }
+                                }
+                            }
+                    );
                 }
             }
         }
-    };
+    }
 
     /************************* 继承之后可自定义ui与显示隐藏 *************************/
 
