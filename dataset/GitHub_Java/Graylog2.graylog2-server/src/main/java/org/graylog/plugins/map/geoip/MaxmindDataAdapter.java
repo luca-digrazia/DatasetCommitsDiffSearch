@@ -14,7 +14,6 @@ import com.maxmind.geoip2.model.CityResponse;
 import com.maxmind.geoip2.model.CountryResponse;
 import org.graylog.autovalue.WithBeanGetter;
 import org.graylog.plugins.map.config.DatabaseType;
-import org.graylog2.plugin.lookup.LookupCachePurge;
 import org.graylog2.plugin.lookup.LookupDataAdapter;
 import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
 import org.graylog2.plugin.lookup.LookupResult;
@@ -25,6 +24,7 @@ import org.slf4j.Logger;
 
 import javax.annotation.Nullable;
 import javax.inject.Inject;
+import javax.inject.Named;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.io.File;
@@ -33,6 +33,7 @@ import java.net.InetAddress;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -50,8 +51,9 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
     @Inject
     protected MaxmindDataAdapter(@Assisted("id") String id,
                                  @Assisted("name") String name,
-                                 @Assisted LookupDataAdapterConfiguration config) {
-        super(id, name, config);
+                                 @Assisted LookupDataAdapterConfiguration config,
+                                 @Named("daemonScheduler") ScheduledExecutorService scheduler) {
+        super(id, name, config, scheduler);
         this.config = (Config) config;
     }
 
@@ -82,7 +84,7 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
     }
 
     @Override
-    public Duration refreshInterval() {
+    protected Duration refreshInterval() {
         if (config.checkIntervalUnit() == null || config.checkInterval() == 0) {
             return Duration.ZERO;
         }
@@ -91,7 +93,7 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
     }
 
     @Override
-    protected void doRefresh(LookupCachePurge cachePurge) throws Exception {
+    protected void doRefresh() throws Exception {
         try {
             clearError();
             final FileInfo.Change databaseFileCheck = fileInfo.checkForChange();
@@ -104,7 +106,7 @@ public class MaxmindDataAdapter extends LookupDataAdapter {
             final DatabaseReader oldReader = this.databaseReader.get();
             try {
                 this.databaseReader.set(loadReader(Paths.get(config.path()).toFile()));
-                cachePurge.purgeAll();
+                getLookupTable().cache().purge();
                 if (oldReader != null) {
                     oldReader.close();
                 }
