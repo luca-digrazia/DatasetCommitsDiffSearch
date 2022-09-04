@@ -25,7 +25,6 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.AggregationWidget;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.RandomUUIDProvider;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.TimeRange;
 import org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport.ViewWidget;
@@ -90,13 +89,13 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
     }
 
     @Override
-    public Set<ViewWidget> toViewWidgets(Widget widget, RandomUUIDProvider randomUUIDProvider) {
+    public Set<ViewWidget> toViewWidgets(RandomUUIDProvider randomUUIDProvider) {
         final ImmutableSet.Builder<ViewWidget> viewWidgets = ImmutableSet.builder();
         final AggregationConfig.Builder baseConfigBuilder = AggregationConfig.builder()
                 .sort(Collections.singletonList(sort()))
                 .series(Collections.singletonList(series()));
         if (showPieChart()) {
-            final ViewWidget pieChart = createAggregationWidget(randomUUIDProvider.get())
+            final ViewWidget pieChart = createViewWidget(randomUUIDProvider.get())
                     .config(
                             baseConfigBuilder
                                     .rowPivots(ImmutableList.<Pivot>builder().add(piePivot()).addAll(stackedFieldPivots()).build())
@@ -107,7 +106,7 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
             viewWidgets.add(pieChart);
         }
         if (showDataTable()) {
-            final ViewWidget dataTable = createAggregationWidget(randomUUIDProvider.get())
+            final ViewWidget dataTable = createViewWidget(randomUUIDProvider.get())
                     .config(
                             baseConfigBuilder
                                     .rowPivots(ImmutableList.<Pivot>builder().add(dataTablePivot()).addAll(stackedFieldPivots()).build())
@@ -127,9 +126,7 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
             return super.toViewWidgetPositions(viewWidgets, widgetPosition);
         }
 
-        final AggregationWidget pieWidget = viewWidgets.stream()
-                .filter(viewWidget -> viewWidget instanceof AggregationWidget)
-                .map(viewWidget -> (AggregationWidget)viewWidget)
+        final ViewWidget pieWidget = viewWidgets.stream()
                 .filter(viewWidget -> viewWidget.config().visualization().equals(VISUALIZATION_PIE))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Unable to retrieve pie widget again."));
@@ -142,9 +139,7 @@ public abstract class QuickValuesConfig extends WidgetConfigBase implements Widg
                 .width(widgetPosition.width())
                 .build();
 
-        final AggregationWidget tableWidget = viewWidgets.stream()
-                .filter(viewWidget -> viewWidget instanceof AggregationWidget)
-                .map(viewWidget -> (AggregationWidget)viewWidget)
+        final ViewWidget tableWidget = viewWidgets.stream()
                 .filter(viewWidget -> viewWidget.config().visualization().equals(VISUALIZATION_TABLE))
                 .findFirst()
                 .orElseThrow(() -> new RuntimeException("Unable to retrieve table widget again."));

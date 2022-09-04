@@ -17,6 +17,7 @@
 package org.graylog.plugins.views.migrations.V20191125144500_MigrateDashboardsToViewsSupport;
 
 import com.google.common.collect.Sets;
+import org.bson.types.ObjectId;
 import org.graylog2.migrations.Migration;
 import org.graylog2.plugin.cluster.ClusterConfigService;
 import org.joda.time.DateTime;
@@ -26,14 +27,18 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.time.ZonedDateTime;
 import java.util.AbstractMap;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -74,23 +79,38 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
             return;
         }
 
-        final Map<String, String> dashboardIdToViewId = new HashMap<>();
-        final BiFunction<String, String, String> recordMigratedDashboardIds = dashboardIdToViewId::put;
+        final Set<String> dashboardIdToViewId = new HashSet<>();
+        final Consumer<String> recordMigratedDashboardIds = dashboardIdToViewId::add;
         final Map<String, Set<String>> widgetIdMigrationMapping = new HashMap<>();
         final Consumer<Map<String, Set<String>>> recordMigratedWidgetIds = widgetIdMigrationMapping::putAll;
 
         final Map<View, Search> newViews = this.dashboardsService.streamAll()
+                .sorted(Comparator.comparing(Dashboard::id))
                 .map(dashboard -> migrateDashboard(dashboard, recordMigratedDashboardIds, recordMigratedWidgetIds))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-        newViews.forEach((view, search) -> {
-            searchService.save(search);
-            viewService.save(view);
-        });
+        writeViews(newViews);
 
         final MigrationCompleted migrationCompleted = MigrationCompleted.create(dashboardIdToViewId, widgetIdMigrationMapping);
 
         writeMigrationCompleted(migrationCompleted);
+    }
+
+    private void writeViews(Map<View, Search> newViews) {
+        final List<ObjectId> writtenSearches = new ArrayList<>(newViews.size());
+        final List<ObjectId> writtenViews = new ArrayList<>(newViews.size());
+
+        try {
+            newViews.forEach((view, search) -> {
+                writtenSearches.add(searchService.save(search));
+                writtenViews.add(viewService.save(view));
+            });
+        } catch (Exception e) {
+            LOG.warn("Exception caught while writing new views to database, rolling back: ", e);
+            writtenSearches.forEach(searchService::remove);
+            writtenViews.forEach(viewService::remove);
+            throw e;
+        }
     }
 
     private void writeMigrationCompleted(MigrationCompleted migrationCompleted) {
@@ -102,7 +122,7 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
     }
 
     private Map.Entry<View, Search> migrateDashboard(Dashboard dashboard,
-                                  BiFunction<String, String, String> recordMigratedDashboardIds,
+                                  Consumer<String> recordMigratedDashboardIds,
                                   Consumer<Map<String, Set<String>>> recordMigratedWidgetMap) {
         final Map<String, Set<String>> migratedWidgetIds = new HashMap<>(dashboard.widgets().size());
         final BiConsumer<String, String> recordMigratedWidgetIds = (String before, String after) -> migratedWidgetIds
@@ -112,8 +132,10 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
         final BiConsumer<String, String> recordWidgetTitle = newWidgetTitles::put;
 
         final Set<ViewWidget> newViewWidgets = dashboard.widgets().stream()
-                .flatMap(widget -> migrateWidget(widget, recordMigratedWidgetIds, recordWidgetTitle).stream())
-                .collect(Collectors.toSet());
+                .sorted(Comparator.comparing(Widget::id))
+                .flatMap(widget -> migrateWidget(widget, recordMigratedWidgetIds, recordWidgetTitle)
+                        .stream())
+                .collect(Collectors.toCollection(LinkedHashSet::new));
 
         final Map<String, ViewWidgetPosition> newViewWidgetPositions = migrateWidgetPositions(
                 dashboard,
@@ -142,19 +164,18 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
         );
 
         final View newView = View.create(
-                randomObjectIdProvider.get(),
+                dashboard.id(),
                 View.Type.DASHBOARD,
                 dashboard.title(),
                 "This dashboard was migrated automatically.",
                 dashboard.description(),
                 newSearch.id(),
-                dashboard.contentPack(),
                 Collections.singletonMap(newQuery.id(), newViewState),
                 Optional.ofNullable(dashboard.creatorUserId()),
                 createdAt
         );
 
-        recordMigratedDashboardIds.apply(dashboard.id(), newView.id());
+        recordMigratedDashboardIds.accept(dashboard.id());
         recordMigratedWidgetMap.accept(migratedWidgetIds);
 
         return new AbstractMap.SimpleEntry<>(newView, newSearch);
@@ -196,7 +217,7 @@ public class V20191125144500_MigrateDashboardsToViews extends Migration {
                             .filter(widget -> widget.id().equals(entry.getKey()))
                             .findFirst()
                             .orElseThrow(() -> new RuntimeException("Unable to find widget with id <" + entry.getKey()));
-                    return dashboardWidget.config().toViewWidgetPositions(newViewWidgets, dashboardWidget, widgetPosition)
+                    return dashboardWidget.config().toViewWidgetPositions(newViewWidgets, widgetPosition)
                             .entrySet()
                             .stream();
                 }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
