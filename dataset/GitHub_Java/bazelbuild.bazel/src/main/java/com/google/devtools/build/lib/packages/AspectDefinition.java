@@ -147,10 +147,13 @@ public final class AspectDefinition {
     return requiredProvidersForAspects;
   }
 
-  /** Returns the set of required aspects for a given attribute. */
-  public boolean propagateAlong(String attributeName) {
+
+  /**
+   * Returns the set of required aspects for a given attribute.
+   */
+  public boolean propagateAlong(Attribute attribute) {
     if (restrictToAttributes != null) {
-      return restrictToAttributes.contains(attributeName);
+      return restrictToAttributes.contains(attribute.getName());
     }
     return true;
   }

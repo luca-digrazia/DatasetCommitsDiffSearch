@@ -123,26 +123,13 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
     return builder.build();
   }
 
-  private static ImmutableSet.Builder<Label> addDuplicateLabels(
-      ImmutableSet.Builder<Label> builder, List<Label> labels) {
-    Set<Label> duplicates = CollectionUtils.duplicatedElementsOf(labels);
-    if (duplicates.isEmpty()) {
-      return builder;
-    }
-    if (builder == null) {
-      builder = ImmutableSet.builderWithExpectedSize(duplicates.size());
-    }
-    builder.addAll(duplicates);
-    return builder;
-  }
-
   /**
    * Returns the labels that might appear multiple times in the same attribute value.
    */
   public Set<Label> checkForDuplicateLabels(Attribute attribute) {
     String attrName = attribute.getName();
     Type<?> attrType = attribute.getType();
-    ImmutableSet.Builder<Label> duplicates = null;
+    ImmutableSet.Builder<Label> duplicates = ImmutableSet.builder();
 
     SelectorList<?> selectorList = getSelectorList(attribute.getName(), attrType);
     if (selectorList == null || selectorList.getSelectors().size() == 1) {
@@ -156,7 +143,7 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         if (value != null) {
           // TODO(bazel-team): Calculate duplicates directly using attrType.visitLabels in order to
           // avoid intermediate collections here.
-          duplicates = addDuplicateLabels(duplicates, extractLabels(attrType, value));
+          duplicates.addAll(CollectionUtils.duplicatedElementsOf(extractLabels(attrType, value)));
         }
       }
     } else {
@@ -173,15 +160,15 @@ public class AggregatingAttributeMapper extends AbstractAttributeMapper {
         for (Object selectorValue : selector.getEntries().values()) {
           List<Label> labelsInSelectorValue = extractLabels(attrType, selectorValue);
           // Duplicates within a single path are not okay.
-          duplicates = addDuplicateLabels(duplicates, labelsInSelectorValue);
+          duplicates.addAll(CollectionUtils.duplicatedElementsOf(labelsInSelectorValue));
           Iterables.addAll(selectorLabels, labelsInSelectorValue);
         }
         combinedLabels.addAll(selectorLabels);
       }
-      duplicates = addDuplicateLabels(duplicates, combinedLabels);
+      duplicates.addAll(CollectionUtils.duplicatedElementsOf(combinedLabels));
     }
 
-    return duplicates == null ? ImmutableSet.of() : duplicates.build();
+    return duplicates.build();
   }
 
   /**
