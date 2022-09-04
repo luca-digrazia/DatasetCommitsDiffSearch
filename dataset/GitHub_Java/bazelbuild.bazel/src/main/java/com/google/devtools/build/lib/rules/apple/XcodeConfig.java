@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
-import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
@@ -172,7 +171,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
    */
   static XcodeVersionProperties resolveXcodeVersion(
       boolean requireDefinedVersions,
-      String xcodeVersionOverrideFlag,
+      DottedVersion xcodeVersionOverrideFlag,
       Iterable<XcodeVersionRuleData> xcodeVersions,
       @Nullable XcodeVersionRuleData defaultVersion)
       throws XcodeConfigException {
@@ -181,16 +180,11 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
 
     if (xcodeVersion != null) {
       return xcodeVersion.getXcodeVersionProperties();
+    } else if (xcodeVersionOverrideFlag != null) {
+      return new XcodeVersionProperties(xcodeVersionOverrideFlag);
+    } else {
+      return XcodeVersionProperties.unknownXcodeVersionProperties();
     }
-    // TODO(b/64576392): Remove this fallback logic. An xcode_version target should be explicitly
-    // matched in all cases where --xcode_version is specified.
-    try {
-      DottedVersion dottedVersion = DottedVersion.fromString(xcodeVersionOverrideFlag);
-      return new XcodeVersionProperties(dottedVersion);
-    } catch (IllegalArgumentException e) {
-      // The --xcode_version flag is not a valid DottedVersion, so there is nothing to go on.
-    }
-    return XcodeVersionProperties.unknownXcodeVersionProperties();
   }
 
   /**
@@ -206,16 +200,16 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
       boolean requireDefinedVersions,
       Iterable<XcodeVersionRuleData> xcodeVersionRules,
       @Nullable XcodeVersionRuleData defaultVersion,
-      String versionOverrideFlag)
+      DottedVersion versionOverrideFlag)
       throws XcodeConfigException {
 
     Map<String, XcodeVersionRuleData> aliasesToVersionMap = aliasesToVersionMap(xcodeVersionRules);
 
-    if (!Strings.isNullOrEmpty(versionOverrideFlag)) {
+    if (versionOverrideFlag != null) {
       // The version override flag is not necessarily an actual version - it may be a version
       // alias.
       XcodeVersionRuleData explicitVersion =
-          aliasesToVersionMap.get(versionOverrideFlag);
+          aliasesToVersionMap.get(versionOverrideFlag.toString());
       if (explicitVersion != null) {
         return explicitVersion;
       }
@@ -223,7 +217,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
       // No override specified. Use default.
       return defaultVersion;
     }
-
+    
     if (requireDefinedVersions) {
       throw new XcodeConfigException(
           "xcode version config required an explicitly defined version, but none was available");

@@ -102,6 +102,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
   private final ImmutableList<String> macosCpus;
   private final AppleBitcodeMode bitcodeMode;
   private final Label xcodeConfigLabel;
+  private final DottedVersion xcodeVersionCommandLineFlag;
   private final boolean enableAppleCrosstool;
   private final AppleCommandLineOptions options;
   @Nullable private final String xcodeToolchain;
@@ -156,6 +157,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     this.bitcodeMode = options.appleBitcodeMode;
     this.xcodeConfigLabel =
         Preconditions.checkNotNull(options.xcodeVersionConfig, "xcodeConfigLabel");
+    this.xcodeVersionCommandLineFlag = options.xcodeVersion;
     this.enableAppleCrosstool = options.enableAppleCrosstoolTransition;
     this.defaultProvisioningProfileLabel = options.defaultProvisioningProfile;
     this.xcodeToolchain = options.xcodeToolchain;
@@ -466,11 +468,6 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     return ApplePlatform.forTarget(applePlatformType, getSingleArchitecture());
   }
 
-  private boolean hasValidSingleArchPlatform() {
-    return ApplePlatform.isApplePlatform(
-        ApplePlatform.cpuStringForTarget(applePlatformType, getSingleArchitecture()));
-  }
-
   /**
    * Gets the current configuration {@link ApplePlatform} for the given {@link PlatformType}.
    * ApplePlatform is determined via a combination between the given platform type and the
@@ -584,7 +581,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     structField = true
   )
   public AppleBitcodeMode getBitcodeMode() {
-    if (hasValidSingleArchPlatform() && getSingleArchPlatform().isDevice()) {
+    if (getSingleArchPlatform().isDevice()) {
       return bitcodeMode;
     } else {
       return AppleBitcodeMode.NONE;
@@ -596,6 +593,13 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
    */
   public Label getXcodeConfigLabel() {
     return xcodeConfigLabel;
+  }
+
+  /**
+   * Returns the explicit Xcode version specified on the command line.
+   */
+  public DottedVersion getXcodeVersionCommandLineFlag() {
+    return xcodeVersionCommandLineFlag;
   }
 
   /**
@@ -667,7 +671,7 @@ public class AppleConfiguration extends BuildConfiguration.Fragment {
     ImmutableMap.Builder<String, Object> mapBuilder = ImmutableMap.builder();
 
     if (xcodeVersion != null) {
-      mapBuilder.put("xcode_version", xcodeVersion.toString());
+      mapBuilder.put("xcode_version", xcodeVersion);
     }
     return mapBuilder
         .put("ios_sdk_version", iosSdkVersion)
