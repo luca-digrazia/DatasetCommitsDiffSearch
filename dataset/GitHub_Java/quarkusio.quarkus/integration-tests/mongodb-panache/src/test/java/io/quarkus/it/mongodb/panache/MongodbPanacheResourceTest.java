@@ -14,8 +14,6 @@ import java.util.List;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnOs;
-import org.junit.jupiter.api.condition.OS;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
@@ -26,7 +24,6 @@ import io.quarkus.it.mongodb.panache.book.BookDetail;
 import io.quarkus.it.mongodb.panache.person.Person;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.mongodb.MongoReplicaSetTestResource;
 import io.restassured.RestAssured;
 import io.restassured.common.mapper.TypeRef;
 import io.restassured.config.ObjectMapperConfig;
@@ -34,8 +31,7 @@ import io.restassured.parsing.Parser;
 import io.restassured.response.Response;
 
 @QuarkusTest
-@QuarkusTestResource(MongoReplicaSetTestResource.class)
-@DisabledOnOs(OS.WINDOWS)
+@QuarkusTestResource(MongoTestResource.class)
 class MongodbPanacheResourceTest {
     private static final TypeRef<List<BookDTO>> LIST_OF_BOOK_TYPE_REF = new TypeRef<List<BookDTO>>() {
     };

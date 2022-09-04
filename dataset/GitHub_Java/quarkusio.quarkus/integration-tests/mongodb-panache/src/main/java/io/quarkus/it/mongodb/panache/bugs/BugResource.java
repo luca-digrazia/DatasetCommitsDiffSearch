@@ -5,10 +5,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Date;
+import java.util.Optional;
 
 import javax.inject.Inject;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.GET;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
@@ -21,6 +23,9 @@ public class BugResource {
 
     @Inject
     Bug5274EntityRepository bug5274EntityRepository;
+
+    @Inject
+    Bug13301Repository bug13301Repository;
 
     @GET
     @Path("5274")
@@ -78,5 +83,34 @@ public class BugResource {
             return Response.status(404).build();
         }
         return Response.ok().build();
+    }
+
+    @GET
+    @Path("7415")
+    public Response testForeignObjectId() {
+        LinkedEntity link = new LinkedEntity();
+        link.name = "toto";
+        link.persist();
+
+        LinkedEntity entity = new LinkedEntity();
+        entity.name = "tata";
+        entity.myForeignId = link.id;
+        entity.persist();
+
+        // we should be able to retrieve `entity` from the foreignId ...
+        LinkedEntity.find("myForeignId", link.id).firstResultOptional().orElseThrow(() -> new NotFoundException());
+        return Response.ok().build();
+    }
+
+    @GET
+    @Path("13301")
+    public Response testReflectiveHierarchy() {
+        NeedReflectionChild me = new NeedReflectionChild();
+        me.parent = "François";
+        me.child = "Loïc";
+        bug13301Repository.persist(me);
+
+        Optional<NeedReflectionChild> result = bug13301Repository.find("parent", "François").firstResultOptional();
+        return result.isPresent() ? Response.ok().build() : Response.serverError().build();
     }
 }

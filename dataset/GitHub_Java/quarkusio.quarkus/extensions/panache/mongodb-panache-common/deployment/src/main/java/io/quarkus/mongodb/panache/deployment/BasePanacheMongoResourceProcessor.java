@@ -1,8 +1,10 @@
 package io.quarkus.mongodb.panache.deployment;
 
 import static io.quarkus.deployment.util.JandexUtil.resolveTypeParameters;
+import static io.quarkus.panache.common.deployment.PanacheConstants.META_INF_PANACHE_ARCHIVE_MARKER;
 import static org.jboss.jandex.DotName.createSimple;
 
+import java.lang.reflect.Modifier;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -20,15 +22,15 @@ import org.bson.types.ObjectId;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
-import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
+import io.quarkus.bootstrap.classloading.ClassPathElement;
+import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.builder.BuildException;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -36,13 +38,12 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.bean.JavaBeanUtil;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
-import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.BytecodeTransformerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
-import io.quarkus.deployment.index.IndexingUtil;
 import io.quarkus.deployment.util.JandexUtil;
+import io.quarkus.gizmo.DescriptorUtils;
 import io.quarkus.jackson.spi.JacksonModuleBuildItem;
 import io.quarkus.jsonb.spi.JsonbDeserializerBuildItem;
 import io.quarkus.jsonb.spi.JsonbSerializerBuildItem;
@@ -53,11 +54,16 @@ import io.quarkus.mongodb.panache.PanacheMongoRecorder;
 import io.quarkus.mongodb.panache.ProjectionFor;
 import io.quarkus.mongodb.panache.jackson.ObjectIdDeserializer;
 import io.quarkus.mongodb.panache.jackson.ObjectIdSerializer;
+import io.quarkus.panache.common.deployment.EntityField;
+import io.quarkus.panache.common.deployment.EntityModel;
+import io.quarkus.panache.common.deployment.MetamodelInfo;
 import io.quarkus.panache.common.deployment.PanacheEntityClassesBuildItem;
 import io.quarkus.panache.common.deployment.PanacheEntityEnhancer;
+import io.quarkus.panache.common.deployment.PanacheFieldAccessEnhancer;
 import io.quarkus.panache.common.deployment.PanacheMethodCustomizer;
 import io.quarkus.panache.common.deployment.PanacheMethodCustomizerBuildItem;
 import io.quarkus.panache.common.deployment.PanacheRepositoryEnhancer;
+import io.quarkus.panache.common.deployment.TypeBundle;
 
 public abstract class BasePanacheMongoResourceProcessor {
     public static final DotName BSON_ID = createSimple(BsonId.class.getName());
@@ -65,38 +71,41 @@ public abstract class BasePanacheMongoResourceProcessor {
     public static final DotName BSON_PROPERTY = createSimple(BsonProperty.class.getName());
     public static final DotName MONGO_ENTITY = createSimple(MongoEntity.class.getName());
     public static final DotName OBJECT_ID = createSimple(ObjectId.class.getName());
-    public static final String OBJECT_SIGNATURE = toBinarySignature(Object.class);
     public static final DotName PROJECTION_FOR = createSimple(ProjectionFor.class.getName());
 
-    protected static String toBinarySignature(Class<?> type) {
-        return org.objectweb.asm.Type.getType(type).getDescriptor();
-    }
-
     @BuildStep
-    public void buildImperative(CombinedIndexBuildItem index, ApplicationIndexBuildItem applicationIndex,
+    public void buildImperative(CombinedIndexBuildItem index,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             List<PanacheMethodCustomizerBuildItem> methodCustomizersBuildItems) {
 
         List<PanacheMethodCustomizer> methodCustomizers = methodCustomizersBuildItems.stream()
                 .map(bi -> bi.getMethodCustomizer()).collect(Collectors.toList());
 
-        processTypes(index, transformers, reflectiveClass, propertyMappingClass, getImperativeTypeBundle(),
-                createRepositoryEnhancer(index), createEntityEnhancer(index, methodCustomizers));
+        MetamodelInfo modelInfo = new MetamodelInfo();
+        processTypes(index, transformers, reflectiveClass, reflectiveHierarchy, propertyMappingClass, getImperativeTypeBundle(),
+                createRepositoryEnhancer(index, methodCustomizers),
+                createEntityEnhancer(index, methodCustomizers, modelInfo),
+                modelInfo);
     }
 
     @BuildStep
     public void buildReactive(CombinedIndexBuildItem index,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             List<PanacheMethodCustomizerBuildItem> methodCustomizersBuildItems) {
         List<PanacheMethodCustomizer> methodCustomizers = methodCustomizersBuildItems.stream()
                 .map(bi -> bi.getMethodCustomizer()).collect(Collectors.toList());
 
-        processTypes(index, transformers, reflectiveClass, propertyMappingClass, getReactiveTypeBundle(),
-                createReactiveRepositoryEnhancer(index), createReactiveEntityEnhancer(index, methodCustomizers));
+        MetamodelInfo modelInfo = new MetamodelInfo();
+        processTypes(index, transformers, reflectiveClass, reflectiveHierarchy, propertyMappingClass, getReactiveTypeBundle(),
+                createReactiveRepositoryEnhancer(index, methodCustomizers),
+                createReactiveEntityEnhancer(index, methodCustomizers, modelInfo),
+                modelInfo);
     }
 
     @BuildStep
@@ -142,15 +151,17 @@ public abstract class BasePanacheMongoResourceProcessor {
         return replacementMap.isEmpty() ? Collections.emptyMap() : replacementMap;
     }
 
-    protected abstract PanacheEntityEnhancer<?> createEntityEnhancer(CombinedIndexBuildItem index,
+    protected abstract PanacheEntityEnhancer createEntityEnhancer(CombinedIndexBuildItem index,
+            List<PanacheMethodCustomizer> methodCustomizers, MetamodelInfo modelInfo);
+
+    protected abstract PanacheEntityEnhancer createReactiveEntityEnhancer(CombinedIndexBuildItem index,
+            List<PanacheMethodCustomizer> methodCustomizers, MetamodelInfo modelInfo);
+
+    protected abstract PanacheRepositoryEnhancer createReactiveRepositoryEnhancer(CombinedIndexBuildItem index,
             List<PanacheMethodCustomizer> methodCustomizers);
 
-    protected abstract PanacheEntityEnhancer<?> createReactiveEntityEnhancer(CombinedIndexBuildItem index,
+    protected abstract PanacheRepositoryEnhancer createRepositoryEnhancer(CombinedIndexBuildItem index,
             List<PanacheMethodCustomizer> methodCustomizers);
-
-    protected abstract PanacheRepositoryEnhancer createReactiveRepositoryEnhancer(CombinedIndexBuildItem index);
-
-    protected abstract PanacheRepositoryEnhancer createRepositoryEnhancer(CombinedIndexBuildItem index);
 
     private void extractMappings(Map<String, String> classPropertyMapping, ClassInfo target, CombinedIndexBuildItem index) {
         for (FieldInfo fieldInfo : target.fields()) {
@@ -240,9 +251,11 @@ public abstract class BasePanacheMongoResourceProcessor {
     }
 
     protected void processEntities(CombinedIndexBuildItem index,
-            BuildProducer<BytecodeTransformerBuildItem> transformers, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<BytecodeTransformerBuildItem> transformers,
+            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
-            PanacheEntityEnhancer<?> entityEnhancer, TypeBundle typeBundle) {
+            PanacheEntityEnhancer entityEnhancer, TypeBundle typeBundle,
+            MetamodelInfo modelInfo) {
 
         Set<String> modelClasses = new HashSet<>();
         // Note that we do this in two passes because for some reason Jandex does not give us subtypes
@@ -252,11 +265,11 @@ public abstract class BasePanacheMongoResourceProcessor {
                 continue;
             }
             if (modelClasses.add(classInfo.name().toString()))
-                entityEnhancer.collectFields(classInfo);
+                modelInfo.addEntityModel(createEntityModel(classInfo));
         }
         for (ClassInfo classInfo : index.getIndex().getAllKnownSubclasses(typeBundle.entity().dotName())) {
             if (modelClasses.add(classInfo.name().toString()))
-                entityEnhancer.collectFields(classInfo);
+                modelInfo.addEntityModel(createEntityModel(classInfo));
         }
 
         // iterate over all the entity classes
@@ -269,17 +282,64 @@ public abstract class BasePanacheMongoResourceProcessor {
             // Register for building the property mapping cache
             propertyMappingClass.produce(new PropertyMappingClassBuildStep(modelClass));
         }
+
+        replaceFieldAccesses(transformers, modelInfo);
+    }
+
+    private void replaceFieldAccesses(BuildProducer<BytecodeTransformerBuildItem> transformers, MetamodelInfo modelInfo) {
+        Set<String> entitiesWithPublicFields = modelInfo.getEntitiesWithPublicFields();
+        if (entitiesWithPublicFields.isEmpty()) {
+            // There are no public fields to be accessed in the first place.
+            return;
+        }
+
+        Set<String> entityClassNamesInternal = new HashSet<>();
+        for (String entityClassName : entitiesWithPublicFields) {
+            entityClassNamesInternal.add(entityClassName.replace(".", "/"));
+        }
+
+        PanacheFieldAccessEnhancer panacheFieldAccessEnhancer = new PanacheFieldAccessEnhancer(modelInfo);
+        QuarkusClassLoader tccl = (QuarkusClassLoader) Thread.currentThread().getContextClassLoader();
+        Set<String> produced = new HashSet<>();
+
+        for (ClassPathElement i : tccl.getElementsWithResource(META_INF_PANACHE_ARCHIVE_MARKER)) {
+            for (String res : i.getProvidedResources()) {
+                if (res.endsWith(".class")) {
+                    String cn = res.replace("/", ".").substring(0, res.length() - 6);
+                    if (produced.contains(cn)) {
+                        continue;
+                    }
+                    produced.add(cn);
+                    transformers.produce(
+                            new BytecodeTransformerBuildItem(cn, panacheFieldAccessEnhancer, entityClassNamesInternal));
+                }
+            }
+        }
+    }
+
+    private EntityModel createEntityModel(ClassInfo classInfo) {
+        EntityModel entityModel = new EntityModel(classInfo);
+        for (FieldInfo fieldInfo : classInfo.fields()) {
+            String name = fieldInfo.name();
+            if (Modifier.isPublic(fieldInfo.flags())
+                    && !Modifier.isStatic(fieldInfo.flags())
+                    && !fieldInfo.hasAnnotation(BSON_IGNORE)) {
+                entityModel.addField(new EntityField(name, DescriptorUtils.typeToString(fieldInfo.type())));
+            }
+        }
+        return entityModel;
     }
 
     protected void processRepositories(CombinedIndexBuildItem index,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             PanacheRepositoryEnhancer repositoryEnhancer, TypeBundle typeBundle) {
 
         Set<String> daoClasses = new HashSet<>();
         Set<Type> daoTypeParameters = new HashSet<>();
-        for (ClassInfo classInfo : index.getIndex().getAllKnownImplementors(typeBundle.repositoryBase().dotName())) {
+        DotName dotName = typeBundle.repositoryBase().dotName();
+        for (ClassInfo classInfo : index.getIndex().getAllKnownImplementors(dotName)) {
             // Skip PanacheMongoRepository and abstract repositories
             if (classInfo.name().equals(typeBundle.repository().dotName()) || repositoryEnhancer.skipRepository(classInfo)) {
                 continue;
@@ -302,7 +362,7 @@ public abstract class BasePanacheMongoResourceProcessor {
 
         for (Type parameterType : daoTypeParameters) {
             // Register for reflection the type parameters of the repository: this should be the entity class and the ID class
-            reflectiveClass.produce(new ReflectiveClassBuildItem(true, true, parameterType.name().toString()));
+            reflectiveHierarchy.produce(new ReflectiveHierarchyBuildItem.Builder().type(parameterType).build());
 
             // Register for building the property mapping cache
             propertyMappingClass.produce(new PropertyMappingClassBuildStep(parameterType.name().toString()));
@@ -312,25 +372,19 @@ public abstract class BasePanacheMongoResourceProcessor {
     protected void processTypes(CombinedIndexBuildItem index,
             BuildProducer<BytecodeTransformerBuildItem> transformers,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
+            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
             BuildProducer<PropertyMappingClassBuildStep> propertyMappingClass,
             TypeBundle typeBundle, PanacheRepositoryEnhancer repositoryEnhancer,
-            PanacheEntityEnhancer<?> entityEnhancer) {
-
-        processRepositories(index, transformers, reflectiveClass, propertyMappingClass,
+            PanacheEntityEnhancer entityEnhancer, MetamodelInfo modelInfo) {
+        processRepositories(index, transformers, reflectiveHierarchy, propertyMappingClass,
                 repositoryEnhancer, typeBundle);
         processEntities(index, transformers, reflectiveClass, propertyMappingClass,
-                entityEnhancer, typeBundle);
+                entityEnhancer, typeBundle, modelInfo);
     }
 
     @BuildStep
-    protected ReflectiveHierarchyBuildItem registerForReflection(CombinedIndexBuildItem index) {
-        Indexer indexer = new Indexer();
-        Set<DotName> additionalIndex = new HashSet<>();
-        IndexingUtil.indexClass(ObjectId.class.getName(), indexer, index.getIndex(), additionalIndex,
-                BasePanacheMongoResourceProcessor.class.getClassLoader());
-        CompositeIndex compositeIndex = CompositeIndex.create(index.getIndex(), indexer.complete());
-        Type type = Type.create(OBJECT_ID, Type.Kind.CLASS);
-        return new ReflectiveHierarchyBuildItem(type, compositeIndex);
+    ReflectiveClassBuildItem registerForReflection() {
+        return new ReflectiveClassBuildItem(true, true, OBJECT_ID.toString());
     }
 
     @BuildStep
