@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.java;
 import static com.google.devtools.build.lib.rules.cpp.CppRuleClasses.STATIC_LINKING_MODE;
 import static com.google.devtools.build.lib.rules.java.DeployArchiveBuilder.Compression.COMPRESSED;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
@@ -132,6 +133,10 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
             .addSourceJar(srcJar)
             .addAllTransitiveSourceJars(common.collectTransitiveSourceJars(srcJar));
     Artifact classJar = ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_CLASS_JAR);
+    Artifact manifestProtoOutput = helper.createManifestProtoOutput(classJar);
+    JavaRuleOutputJarsProvider.Builder ruleOutputJarsProviderBuilder =
+        JavaRuleOutputJarsProvider.builder()
+            .addOutputJar(classJar, null /* iJar */, manifestProtoOutput, ImmutableList.of(srcJar));
 
     CppConfiguration cppConfiguration =
         ruleContext.getConfiguration().getFragment(CppConfiguration.class);
@@ -190,15 +195,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       filesBuilder.add(classJar);
     }
 
-    JavaCompileOutputs<Artifact> outputs = helper.createOutputs(classJar);
-    JavaRuleOutputJarsProvider.Builder ruleOutputJarsProviderBuilder =
-        JavaRuleOutputJarsProvider.builder()
-            .addOutputJar(
-                /* classJar= */ classJar,
-                /* iJar= */ null,
-                /* manifestProto= */ outputs.manifestProto(),
-                /* sourceJars= */ ImmutableList.of(srcJar));
-
     JavaTargetAttributes attributes = helper.getAttributes();
     List<Artifact> nativeLibraries = attributes.getNativeLibraries();
     if (!nativeLibraries.isEmpty()) {
@@ -227,14 +223,29 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
             javaArtifactsBuilder,
             ruleOutputJarsProviderBuilder,
             javaSourceJarsProviderBuilder);
-    javaArtifactsBuilder.setCompileTimeDependencies(outputs.depsProto());
-    ruleOutputJarsProviderBuilder.setJdeps(outputs.depsProto());
+    Artifact outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
+    ruleOutputJarsProviderBuilder.setJdeps(outputDepsProto);
 
     JavaCompilationArtifacts javaArtifacts = javaArtifactsBuilder.build();
     common.setJavaCompilationArtifacts(javaArtifacts);
 
-    helper.createCompileAction(outputs);
-    helper.createSourceJarAction(srcJar, outputs.genSource());
+    // The gensrc jar is created only if the target uses annotation processing. Otherwise,
+    // it is null, and the source jar action will not depend on the compile action.
+    Artifact genSourceJar = null;
+    Artifact genClassJar = null;
+    if (helper.usesAnnotationProcessing()) {
+      genClassJar = helper.createGenJar(classJar);
+      genSourceJar = helper.createGensrcJar(classJar);
+    }
+
+    helper.createCompileAction(
+        classJar,
+        manifestProtoOutput,
+        outputDepsProto,
+        genSourceJar,
+        genClassJar,
+        /* nativeHeaderOutput= */ null);
+    helper.createSourceJarAction(srcJar, genSourceJar);
 
     common.setClassPathFragment(
         new ClasspathConfiguredFragment(
@@ -242,7 +253,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     // Collect the action inputs for the runfiles collector here because we need to access the
     // analysis environment, and that may no longer be safe when the runfiles collector runs.
-    NestedSet<Artifact> dynamicRuntimeActionInputs =
+    Iterable<Artifact> dynamicRuntimeActionInputs =
         CppHelper.getDefaultCcToolchainDynamicRuntimeInputs(ruleContext);
 
     Iterables.addAll(
@@ -274,6 +285,11 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       if (!executableToRun.equals(executableForRunfiles)) {
         filesBuilder.add(executableToRun);
         runfilesBuilder.addArtifact(executableToRun);
+      }
+
+      Optional<Artifact> classpathsFile = semantics.createClasspathsFile(ruleContext, common);
+      if (classpathsFile.isPresent()) {
+        filesBuilder.add(classpathsFile.get());
       }
     }
 
@@ -448,7 +464,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         classJar,
         coverageEnvironment.build(),
         coverageSupportFiles.build());
-    common.addGenJarsProvider(builder, javaInfoBuilder, outputs.genClass(), outputs.genSource());
+    common.addGenJarsProvider(builder, javaInfoBuilder, genClassJar, genSourceJar);
 
     JavaInfo javaInfo =
         javaInfoBuilder
@@ -509,9 +525,9 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       JavaCompilationArtifacts javaArtifacts,
       NestedSet<Artifact> filesToBuild,
       Artifact launcher,
-      NestedSet<Artifact> dynamicRuntimeActionInputs) {
+      Iterable<Artifact> dynamicRuntimeActionInputs) {
     // Convert to iterable: filesToBuild has a different order.
-    builder.addArtifacts(filesToBuild.toList());
+    builder.addArtifacts((Iterable<Artifact>) filesToBuild);
     builder.addArtifacts(javaArtifacts.getRuntimeJars());
     if (launcher != null) {
       final TransitiveInfoCollection defaultLauncher =
@@ -531,7 +547,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         Runfiles runfiles =
             defaultLauncher.getProvider(RunfilesProvider.class).getDefaultRunfiles();
         NestedSetBuilder<Artifact> unconditionalArtifacts = NestedSetBuilder.compileOrder();
-        for (Artifact a : runfiles.getUnconditionalArtifacts().toList()) {
+        for (Artifact a : runfiles.getUnconditionalArtifacts()) {
           if (!a.equals(defaultLauncherArtifact)) {
             unconditionalArtifacts.add(a);
           }
@@ -554,7 +570,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
     builder.addTargets(runtimeDeps, JavaRunfilesProvider.TO_RUNFILES);
     builder.addTargets(runtimeDeps, RunfilesProvider.DEFAULT_RUNFILES);
 
-    builder.addArtifacts(common.getRuntimeClasspath().toList());
+    builder.addArtifacts((Iterable<Artifact>) common.getRuntimeClasspath());
 
     // Add the JDK files if it comes from the source repository (see java_stub_template.txt).
     JavaRuntimeInfo javaRuntime = JavaRuntimeInfo.from(ruleContext);
@@ -565,7 +581,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
         // Add symlinks to the C++ runtime libraries under a path that can be built
         // into the Java binary without having to embed the crosstool, gcc, and grte
         // version information contained within the libraries' package paths.
-        for (Artifact lib : dynamicRuntimeActionInputs.toList()) {
+        for (Artifact lib : dynamicRuntimeActionInputs) {
           PathFragment path = CPP_RUNTIMES.getRelative(lib.getExecPath().getBaseName());
           builder.addSymlink(path, lib);
         }
@@ -583,7 +599,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
       Iterable<? extends TransitiveInfoCollection> deps) {
     NestedSet<LibraryToLink> linkerInputs =
         new NativeLibraryNestedSetBuilder().addJavaTargets(deps).build();
-    return LibraryToLink.getDynamicLibrariesForLinking(linkerInputs.toList());
+    return LibraryToLink.getDynamicLibrariesForLinking(linkerInputs);
   }
 
   private static boolean isJavaTestRule(RuleContext ruleContext) {

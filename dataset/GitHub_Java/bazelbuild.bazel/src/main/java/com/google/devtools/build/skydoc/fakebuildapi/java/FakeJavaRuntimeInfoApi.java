@@ -14,10 +14,11 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.java;
 
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.java.JavaRuntimeInfoApi;
-import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 
 final class FakeJavaRuntimeInfoApi implements JavaRuntimeInfoApi {
 
@@ -42,22 +43,22 @@ final class FakeJavaRuntimeInfoApi implements JavaRuntimeInfoApi {
   }
 
   @Override
-  public Depset skylarkJavaBaseInputs() {
+  public SkylarkNestedSet skylarkJavaBaseInputs() {
     return null;
   }
 
   @Override
-  public String toProto() throws EvalException {
+  public String toProto(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public String toJson() throws EvalException {
+  public String toJson(Location loc) throws EvalException {
     return "";
   }
 
   @Override
-  public void repr(Printer printer) {}
+  public void repr(SkylarkPrinter printer) {}
 
   private FakeJavaRuntimeInfoApi() {}
 }

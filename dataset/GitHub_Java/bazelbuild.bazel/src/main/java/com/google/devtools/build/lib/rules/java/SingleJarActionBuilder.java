@@ -120,7 +120,7 @@ public final class SingleJarActionBuilder {
     SpawnAction.Builder builder =
         singleJarActionBuilder(toolchainProvider, hostJavabase)
             .addOutput(outputJar)
-            .addTransitiveInputs(resources)
+            .addInputs(resources)
             .addTransitiveInputs(resourceJars)
             .addCommandLine(
                 sourceJarCommandLine(outputJar, semantics, resources, resourceJars),
@@ -146,7 +146,7 @@ public final class SingleJarActionBuilder {
         singleJarActionBuilder(
                 JavaToolchainProvider.from(ruleContext), JavaRuntimeInfo.forHost(ruleContext))
             .addOutput(output)
-            .addTransitiveInputs(jars)
+            .addInputs(jars)
             .addCommandLine(
                 sourceJarCommandLine(
                     output,

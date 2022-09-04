@@ -969,7 +969,7 @@ public class JavaCommon {
     return javacOpts;
   }
 
-  public NestedSet<Artifact> getBootClasspath() {
+  public ImmutableList<Artifact> getBootClasspath() {
     return classpathFragment.getBootClasspath();
   }
 
