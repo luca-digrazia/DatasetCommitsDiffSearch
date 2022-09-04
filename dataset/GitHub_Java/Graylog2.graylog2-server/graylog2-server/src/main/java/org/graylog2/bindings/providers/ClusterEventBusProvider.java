@@ -18,8 +18,10 @@ package org.graylog2.bindings.providers;
 
 import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.MetricRegistry;
+import com.google.common.eventbus.AsyncEventBus;
+import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.graylog2.events.ClusterEventBus;
+import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.shared.events.DeadEventLoggingListener;
 
 import javax.inject.Inject;
@@ -31,7 +33,7 @@ import java.util.concurrent.ThreadFactory;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
-public class ClusterEventBusProvider implements Provider<ClusterEventBus> {
+public class ClusterEventBusProvider implements Provider<EventBus> {
     private final int asyncEventbusProcessors;
     private final MetricRegistry metricRegistry;
 
@@ -43,9 +45,9 @@ public class ClusterEventBusProvider implements Provider<ClusterEventBus> {
     }
 
     @Override
-    public ClusterEventBus get() {
-        final ClusterEventBus eventBus = new ClusterEventBus("cluster-eventbus", executorService(asyncEventbusProcessors));
-        eventBus.registerClusterEventSubscriber(new DeadEventLoggingListener());
+    public EventBus get() {
+        final EventBus eventBus = new AsyncEventBus("cluster-eventbus", executorService(asyncEventbusProcessors));
+        eventBus.register(new DeadEventLoggingListener());
 
         return eventBus;
     }

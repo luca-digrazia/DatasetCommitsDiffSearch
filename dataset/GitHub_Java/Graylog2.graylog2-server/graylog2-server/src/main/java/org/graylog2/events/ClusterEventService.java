@@ -136,7 +136,7 @@ public class ClusterEventService extends AbstractExecutionThreadService {
         final WriteResult<ClusterEvent, String> writeResult = dbCollection.updateById(eventId, DBUpdate.addToSet("consumers", nodeId.toString()));
     }
 
-    private Object extractPayload(Object payload, String eventClass) {
+    private Object extractPayload(Map<String, Object> payload, String eventClass) {
         try {
             final Class<?> clazz = Class.forName(eventClass);
             return objectMapper.convertValue(payload, clazz);
@@ -182,7 +182,9 @@ public class ClusterEventService extends AbstractExecutionThreadService {
     @Subscribe
     public void publishClusterEvent(Object event) {
         final String className = event.getClass().getCanonicalName();
-        final ClusterEvent clusterEvent = ClusterEvent.create(nodeId.toString(), className, event);
+        final Map<String, Object> payload = objectMapper.convertValue(event, new TypeReference<Map<String, Object>>() {
+        });
+        final ClusterEvent clusterEvent = ClusterEvent.create(nodeId.toString(), className, payload);
         final String id = dbCollection.save(clusterEvent).getSavedId();
         LOG.debug("Published cluster event with ID <{}> and type <{}>", id, className);
     }
