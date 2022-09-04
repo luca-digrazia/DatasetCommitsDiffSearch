@@ -42,6 +42,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import javax.inject.Named;
 
 import static com.google.common.base.Preconditions.checkNotNull;
 
@@ -62,7 +63,7 @@ public class ClusterEventPeriodical extends Periodical {
                                   final NodeId nodeId,
                                   final ObjectMapper objectMapper,
                                   final EventBus serverEventBus,
-                                  @ClusterEventBus final EventBus clusterEventBus) {
+                                  @Named("cluster_event_bus") final EventBus clusterEventBus) {
         this(JacksonDBCollection.wrap(prepareCollection(mongoConnection), ClusterEvent.class, String.class, mapperProvider.get()),
                 nodeId, objectMapper, serverEventBus, clusterEventBus);
     }
@@ -86,7 +87,7 @@ public class ClusterEventPeriodical extends Periodical {
 
         DBCollection coll = db.getCollection(COLLECTION_NAME);
 
-        if (coll.isCapped()) {
+        if(coll.isCapped()) {
             LOG.warn("The \"{}\" collection in MongoDB is capped which will cause problems. Please drop the collection.", COLLECTION_NAME);
         }
 
@@ -146,7 +147,7 @@ public class ClusterEventPeriodical extends Periodical {
             LOG.debug("Opening MongoDB cursor on \"{}\"", COLLECTION_NAME);
 
             final DBCursor<ClusterEvent> cursor = eventCursor(nodeId);
-            if (LOG.isTraceEnabled()) {
+            if(LOG.isTraceEnabled()) {
                 LOG.trace("MongoDB query plan: {}", cursor.explain());
             }
 
