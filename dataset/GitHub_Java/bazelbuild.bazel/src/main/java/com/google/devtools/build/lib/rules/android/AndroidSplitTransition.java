@@ -28,12 +28,12 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
-import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidSplitTransitionApi;
+import com.google.devtools.build.lib.starlarkbuildapi.android.AndroidSplitTransititionApi;
 import java.util.List;
 import net.starlark.java.eval.Printer;
 
 /** Android Split configuration transition for properly handling native dependencies */
-final class AndroidSplitTransition implements SplitTransition, AndroidSplitTransitionApi {
+final class AndroidSplitTransition implements SplitTransition, AndroidSplitTransititionApi {
 
   @Override
   public ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
