@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -27,10 +27,8 @@ import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.TextChange;
 import com.googlecode.androidannotations.helper.APTCodeModelHelper;
-import com.googlecode.androidannotations.helper.CanonicalNameConstants;
 import com.googlecode.androidannotations.helper.TextWatcherHelper;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpression;
@@ -42,7 +40,7 @@ import com.sun.codemodel.JVar;
 /**
  * @author Mathieu Boniface
  */
-public class TextChangeProcessor implements DecoratingElementProcessor {
+public class TextChangeProcessor implements ElementProcessor {
 
 	private final TextWatcherHelper helper;
 
@@ -59,7 +57,9 @@ public class TextChangeProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
 		String methodName = element.getSimpleName().toString();
 
@@ -78,9 +78,9 @@ public class TextChangeProcessor implements DecoratingElementProcessor {
 			String parameterName = parameter.toString();
 			TypeMirror parameterType = parameter.asType();
 
-			if (CanonicalNameConstants.CHAR_SEQUENCE.equals(parameterType.toString())) {
+			if ("java.lang.CharSequence".equals(parameterType.toString())) {
 				charSequenceParameterPosition = i;
-			} else if (parameterType.getKind() == TypeKind.INT || CanonicalNameConstants.INTEGER.equals(parameterType.toString())) {
+			} else if (parameterType.getKind() == TypeKind.INT || "java.lang.integer".equals(parameterType.toString())) {
 				if ("start".equals(parameterName)) {
 					startParameterPosition = i;
 				} else if ("count".equals(parameterName)) {
@@ -89,7 +89,7 @@ public class TextChangeProcessor implements DecoratingElementProcessor {
 					beforeParameterPosition = i;
 				}
 			} else {
-				TypeMirror textViewType = helper.typeElementFromQualifiedName(CanonicalNameConstants.TEXT_VIEW).asType();
+				TypeMirror textViewType = helper.typeElementFromQualifiedName("android.widget.TextView").asType();
 				if (helper.isSubtype(parameterType, textViewType)) {
 					viewParameterPosition = i;
 					viewParameterType = parameterType;
@@ -97,7 +97,9 @@ public class TextChangeProcessor implements DecoratingElementProcessor {
 			}
 		}
 
-		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
+		TextChange annotation = element.getAnnotation(TextChange.class);
+
+		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "TextChanged", holder);
 
 		for (JFieldRef idRef : idsRefs) {
 			TextWatcherHolder textWatcherHolder = helper.getOrCreateListener(codeModel, holder, idRef, viewParameterType);
