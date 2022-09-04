@@ -12,10 +12,10 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.keycloak.pep.runtime.KeycloakPolicyEnforcerAuthorizer;
 import io.quarkus.keycloak.pep.runtime.KeycloakPolicyEnforcerConfig;
 import io.quarkus.keycloak.pep.runtime.KeycloakPolicyEnforcerRecorder;
+import io.quarkus.oidc.OIDCException;
 import io.quarkus.oidc.runtime.OidcBuildTimeConfig;
 import io.quarkus.oidc.runtime.OidcConfig;
 import io.quarkus.vertx.http.deployment.RequireBodyHandlerBuildItem;
-import io.quarkus.vertx.http.runtime.HttpConfiguration;
 
 public class KeycloakPolicyEnforcerBuildStep {
 
@@ -70,11 +70,13 @@ public class KeycloakPolicyEnforcerBuildStep {
 
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
-    public void setup(OidcBuildTimeConfig oidcBuildTimeConfig, OidcConfig oidcRunTimeConfig,
-            KeycloakPolicyEnforcerConfig keycloakConfig, KeycloakPolicyEnforcerRecorder recorder, BeanContainerBuildItem bc,
-            HttpConfiguration httpConfiguration) {
-        if (oidcBuildTimeConfig.enabled && keycloakConfig.policyEnforcer.enable) {
-            recorder.setup(oidcRunTimeConfig, keycloakConfig, bc.getValue(), httpConfiguration);
+    public void setup(OidcBuildTimeConfig buildTimeConfig, KeycloakPolicyEnforcerConfig keycloakConfig,
+            OidcConfig runTimeConfig, KeycloakPolicyEnforcerRecorder recorder, BeanContainerBuildItem bc) {
+        if (!buildTimeConfig.applicationType.equals(OidcBuildTimeConfig.ApplicationType.SERVICE)) {
+            throw new OIDCException("Application type [" + buildTimeConfig.applicationType + "] not supported");
+        }
+        if (keycloakConfig.policyEnforcer.enable) {
+            recorder.setup(runTimeConfig, keycloakConfig, bc.getValue());
         }
     }
 }
