@@ -1,121 +1,108 @@
 package io.quarkus.smallrye.jwt.runtime.auth;
 
-import static io.vertx.core.http.HttpHeaders.COOKIE;
+import static io.undertow.util.Headers.AUTHORIZATION;
+import static io.undertow.util.Headers.COOKIE;
+import static io.undertow.util.Headers.WWW_AUTHENTICATE;
+import static io.undertow.util.StatusCodes.UNAUTHORIZED;
 
-import java.util.Collections;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionStage;
+import java.util.Locale;
 
-import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.inject.spi.CDI;
-import javax.inject.Inject;
 
 import org.eclipse.microprofile.jwt.JsonWebToken;
 
-import io.netty.handler.codec.http.HttpHeaderNames;
-import io.netty.handler.codec.http.HttpResponseStatus;
-import io.netty.handler.codec.http.cookie.ServerCookieDecoder;
-import io.quarkus.security.credential.TokenCredential;
-import io.quarkus.security.identity.IdentityProviderManager;
-import io.quarkus.security.identity.SecurityIdentity;
-import io.quarkus.security.identity.request.AuthenticationRequest;
-import io.quarkus.security.identity.request.TokenAuthenticationRequest;
-import io.quarkus.vertx.http.runtime.security.ChallengeData;
-import io.quarkus.vertx.http.runtime.security.HttpAuthenticationMechanism;
-import io.quarkus.vertx.http.runtime.security.HttpCredentialTransport;
-import io.smallrye.jwt.auth.AbstractBearerTokenExtractor;
 import io.smallrye.jwt.auth.cdi.PrincipalProducer;
 import io.smallrye.jwt.auth.principal.JWTAuthContextInfo;
-import io.vertx.ext.web.Cookie;
-import io.vertx.ext.web.RoutingContext;
+import io.undertow.UndertowLogger;
+import io.undertow.security.api.AuthenticationMechanism;
+import io.undertow.security.api.SecurityContext;
+import io.undertow.security.idm.Account;
+import io.undertow.security.idm.IdentityManager;
+import io.undertow.server.HttpServerExchange;
+import io.undertow.server.handlers.Cookie;
 
 /**
  * An AuthenticationMechanism that validates a caller based on a MicroProfile JWT bearer token
  */
-@ApplicationScoped
-public class JWTAuthMechanism implements HttpAuthenticationMechanism {
-    protected static final String COOKIE_HEADER = "Cookie";
-    protected static final String AUTHORIZATION_HEADER = "Authorization";
-    protected static final String BEARER = "Bearer";
+public class JWTAuthMechanism implements AuthenticationMechanism {
 
-    @Inject
     private JWTAuthContextInfo authContextInfo;
+    private IdentityManager identityManager;
+
+    public JWTAuthMechanism(JWTAuthContextInfo authContextInfo, IdentityManager identityManager) {
+        this.authContextInfo = authContextInfo;
+        this.identityManager = identityManager;
+    }
+
+    /**
+     * Extract the Authorization header and validate the bearer token if it exists. If it does, and is validated, this
+     * builds the org.jboss.security.SecurityContext authenticated Subject that drives the container APIs as well as
+     * the authorization layers.
+     *
+     * @param exchange - the http request exchange object
+     * @param securityContext - the current security context that
+     * @return one of AUTHENTICATED, NOT_AUTHENTICATED or NOT_ATTEMPTED depending on the header and authentication outcome.
+     */
+    @Override
+    public AuthenticationMechanismOutcome authenticate(HttpServerExchange exchange, SecurityContext securityContext) {
+        String jwtToken = getJwtToken(exchange);
+        if (jwtToken != null) {
+            try {
+                JWTCredential credential = new JWTCredential(jwtToken, authContextInfo);
+                if (UndertowLogger.SECURITY_LOGGER.isTraceEnabled()) {
+                    UndertowLogger.SECURITY_LOGGER.tracef("Bearer token: %s", jwtToken);
+                }
+                // Install the JWT principal as the caller
+                Account account = identityManager.verify(credential.getName(), credential);
+                if (account != null) {
+                    preparePrincipalProducer((JsonWebToken) account.getPrincipal());
+                    securityContext.authenticationComplete(account, "MP-JWT", false);
+                    UndertowLogger.SECURITY_LOGGER.debugf("Authenticated caller(%s) for path(%s) with roles: %s",
+                            credential.getName(), exchange.getRequestPath(), account.getRoles());
+                    return AuthenticationMechanismOutcome.AUTHENTICATED;
+                } else {
+                    UndertowLogger.SECURITY_LOGGER.info("Failed to authenticate JWT bearer token");
+                    return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+                }
+            } catch (Exception e) {
+                UndertowLogger.SECURITY_LOGGER.infof(e, "Failed to validate JWT bearer token");
+                return AuthenticationMechanismOutcome.NOT_AUTHENTICATED;
+            }
+        }
+
+        // No suitable header has been found in this request,
+        return AuthenticationMechanismOutcome.NOT_ATTEMPTED;
+    }
 
     private void preparePrincipalProducer(JsonWebToken jwtPrincipal) {
         PrincipalProducer principalProducer = CDI.current().select(PrincipalProducer.class).get();
         principalProducer.setJsonWebToken(jwtPrincipal);
     }
 
-    @Override
-    public CompletionStage<SecurityIdentity> authenticate(RoutingContext context,
-            IdentityProviderManager identityProviderManager) {
-        String jwtToken = new VertxBearerTokenExtractor(authContextInfo, context).getBearerToken();
-        if (jwtToken != null) {
-            return identityProviderManager
-                    .authenticate(new TokenAuthenticationRequest(new TokenCredential(jwtToken, "bearer")));
-        }
-        return CompletableFuture.completedFuture(null);
-    }
-
-    @Override
-    public CompletionStage<ChallengeData> getChallenge(RoutingContext context) {
-        ChallengeData result = new ChallengeData(
-                HttpResponseStatus.UNAUTHORIZED.code(),
-                HttpHeaderNames.WWW_AUTHENTICATE,
-                "Bearer {token}");
-        return CompletableFuture.completedFuture(result);
-    }
-
-    private static class VertxBearerTokenExtractor extends AbstractBearerTokenExtractor {
-        private RoutingContext httpExchange;
-
-        VertxBearerTokenExtractor(JWTAuthContextInfo authContextInfo, RoutingContext exchange) {
-            super(authContextInfo);
-            this.httpExchange = exchange;
-        }
-
-        @Override
-        protected String getHeaderValue(String headerName) {
-            return httpExchange.request().headers().get(headerName);
-        }
-
-        @Override
-        protected String getCookieValue(String cookieName) {
-            String cookieHeader = httpExchange.request().headers().get(COOKIE);
-
-            if (cookieHeader != null && httpExchange.cookieCount() == 0) {
-                Set<io.netty.handler.codec.http.cookie.Cookie> nettyCookies = ServerCookieDecoder.STRICT.decode(cookieHeader);
-                for (io.netty.handler.codec.http.cookie.Cookie cookie : nettyCookies) {
-                    if (cookie.name().equals(cookieName)) {
-                        return cookie.value();
-                    }
-                }
+    private String getJwtToken(HttpServerExchange exchange) {
+        String bearerToken = null;
+        if (AUTHORIZATION.toString().equals(authContextInfo.getTokenHeader())) {
+            String authScheme = exchange.getRequestHeaders().getFirst(authContextInfo.getTokenHeader());
+            if (authScheme != null && authScheme.toLowerCase(Locale.ENGLISH).startsWith("bearer ")) {
+                bearerToken = authScheme.substring(7);
             }
-            Cookie cookie = httpExchange.getCookie(cookieName);
-            return cookie != null ? cookie.getValue() : null;
-        }
-    }
-
-    @Override
-    public Set<Class<? extends AuthenticationRequest>> getCredentialTypes() {
-        return Collections.singleton(TokenAuthenticationRequest.class);
-    }
-
-    @Override
-    public HttpCredentialTransport getCredentialTransport() {
-        final String tokenHeaderName = authContextInfo.getTokenHeader();
-        if (COOKIE_HEADER.equals(tokenHeaderName)) {
-            String tokenCookieName = authContextInfo.getTokenCookie();
-
-            if (tokenCookieName == null) {
-                tokenCookieName = BEARER;
+        } else if (COOKIE.toString().equals(authContextInfo.getTokenHeader())
+                && authContextInfo.getTokenCookie() != null) {
+            Cookie cookie = exchange.getRequestCookies().get(authContextInfo.getTokenCookie());
+            if (cookie != null) {
+                bearerToken = cookie.getValue();
             }
-            return new HttpCredentialTransport(HttpCredentialTransport.Type.COOKIE, tokenCookieName);
-        } else if (AUTHORIZATION_HEADER.equals(tokenHeaderName)) {
-            return new HttpCredentialTransport(HttpCredentialTransport.Type.AUTHORIZATION, BEARER);
         } else {
-            return new HttpCredentialTransport(HttpCredentialTransport.Type.OTHER_HEADER, tokenHeaderName);
+            bearerToken = exchange.getRequestHeaders().getFirst(authContextInfo.getTokenHeader());
         }
+        return bearerToken;
     }
+
+    @Override
+    public ChallengeResult sendChallenge(HttpServerExchange exchange, SecurityContext securityContext) {
+        exchange.getResponseHeaders().add(WWW_AUTHENTICATE, "Bearer {token}");
+        UndertowLogger.SECURITY_LOGGER.debugf("Sending Bearer {token} challenge for %s", exchange);
+        return new ChallengeResult(true, UNAUTHORIZED);
+    }
+
 }
