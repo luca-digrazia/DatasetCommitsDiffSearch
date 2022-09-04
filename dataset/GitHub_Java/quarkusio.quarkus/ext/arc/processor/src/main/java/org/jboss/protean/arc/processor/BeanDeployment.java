@@ -185,7 +185,6 @@ public class BeanDeployment {
 
     private List<BeanInfo> findBeans(List<DotName> beanDefiningAnnotations, List<ObserverInfo> observers) {
 
-        Set<DotName> processed = new HashSet<>();
         Set<ClassInfo> beanClasses = new HashSet<>();
         Set<MethodInfo> producerMethods = new HashSet<>();
         Set<MethodInfo> disposerMethods = new HashSet<>();
@@ -197,9 +196,6 @@ public class BeanDeployment {
                 if (Kind.CLASS.equals(annotation.target().kind())) {
 
                     ClassInfo beanClass = annotation.target().asClass();
-                    if (!processed.add(beanClass.name())) {
-                        continue;
-                    }
 
                     if (beanClass.annotations().containsKey(DotNames.INTERCEPTOR)) {
                         // Skip interceptors
@@ -215,15 +211,19 @@ public class BeanDeployment {
 
                     for (MethodInfo method : beanClass.methods()) {
                         if (method.hasAnnotation(DotNames.PRODUCES)) {
+                            // Producers are not inherited
                             producerMethods.add(method);
                         } else if (method.hasAnnotation(DotNames.DISPOSES)) {
+                            // Disposers are not inherited
                             disposerMethods.add(method);
                         } else if (method.hasAnnotation(DotNames.OBSERVES)) {
+                            // TODO observers are inherited
                             observerMethods.add(method);
                         }
                     }
                     for (FieldInfo field : beanClass.fields()) {
                         if (field.annotations().stream().anyMatch(a -> a.name().equals(DotNames.PRODUCES))) {
+                            // Producer fields are not inherited
                             producerFields.add(field);
                         }
                     }

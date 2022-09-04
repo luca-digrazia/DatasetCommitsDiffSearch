@@ -40,8 +40,6 @@ public class InterceptorGenerator extends BeanGenerator {
 
     private static final Logger LOGGER = Logger.getLogger(InterceptorGenerator.class);
 
-    protected static final String FIELD_NAME_BINDINGS = "bindings";
-
     /**
      *
      * @param annotationLiterals
@@ -53,10 +51,9 @@ public class InterceptorGenerator extends BeanGenerator {
     /**
      *
      * @param interceptor bean
-     * @param reflectionRegistration
      * @return a collection of resources
      */
-    Collection<Resource> generate(InterceptorInfo interceptor, ReflectionRegistration reflectionRegistration) {
+    Collection<Resource> generate(InterceptorInfo interceptor, AnnotationLiteralProcessor annotationLiterals, ReflectionRegistration reflectionRegistration) {
 
         Type providerType = interceptor.getProviderType();
         ClassInfo interceptorClass = interceptor.getTarget().asClass();
@@ -69,7 +66,7 @@ public class InterceptorGenerator extends BeanGenerator {
         ClassInfo providerClass = interceptor.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
         String targetPackage = DotNames.packageName(providerType.name());
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
+        String generatedName = targetPackage.replace(".", "/") + "/" + baseName + BEAN_SUFFIX;
 
         ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.INTERCEPTOR_BEAN : null);
 
@@ -78,8 +75,8 @@ public class InterceptorGenerator extends BeanGenerator {
                 .build();
 
         // Fields
-        FieldCreator beanTypes = interceptorCreator.getFieldCreator(FIELD_NAME_BEAN_TYPES, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
-        FieldCreator bindings = interceptorCreator.getFieldCreator(FIELD_NAME_BINDINGS, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+        FieldCreator beanTypes = interceptorCreator.getFieldCreator("beanTypes", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+        FieldCreator bindings = interceptorCreator.getFieldCreator("bindings", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
 
         Map<InjectionPointInfo, String> injectionPointToProviderField = new HashMap<>();
         Map<InterceptorInfo, String> interceptorToProviderField = new HashMap<>();
@@ -197,9 +194,9 @@ public class InterceptorGenerator extends BeanGenerator {
                         interceptorMethod.declaringClass().name(), interceptorMethod.name());
                 // Use reflection fallback
                 ResultHandle paramTypesArray = trueBranch.newArray(Class.class, trueBranch.load(1));
-                trueBranch.writeArrayValue(paramTypesArray, 0, trueBranch.loadClass(InvocationContext.class));
+                trueBranch.writeArrayValue(paramTypesArray, trueBranch.load(0), trueBranch.loadClass(InvocationContext.class));
                 ResultHandle argsArray = trueBranch.newArray(Object.class, trueBranch.load(1));
-                trueBranch.writeArrayValue(argsArray, 0, intercept.getMethodParam(2));
+                trueBranch.writeArrayValue(argsArray, trueBranch.load(0), intercept.getMethodParam(2));
                 reflectionRegistration.registerMethod(interceptorMethod);
                 ret = trueBranch.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
                         trueBranch.loadClass(interceptorMethod.declaringClass().name().toString()), trueBranch.load(interceptorMethod.name()), paramTypesArray,
