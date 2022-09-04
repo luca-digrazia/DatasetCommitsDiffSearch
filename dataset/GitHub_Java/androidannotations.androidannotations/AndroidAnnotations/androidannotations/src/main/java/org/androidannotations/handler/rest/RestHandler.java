@@ -32,7 +32,6 @@ import org.androidannotations.annotations.EBean;
 import org.androidannotations.annotations.rest.Rest;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.handler.GeneratingAnnotationHandler;
-import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.holder.EBeanHolder;
 import org.androidannotations.holder.RestHolder;
@@ -50,12 +49,10 @@ import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 public class RestHandler extends BaseAnnotationHandler<RestHolder> implements GeneratingAnnotationHandler<RestHolder> {
 
 	private final AnnotationHelper annotationHelper;
-	private final APTCodeModelHelper codeModelHelper;
 
 	public RestHandler(ProcessingEnvironment processingEnvironment) {
 		super(Rest.class, processingEnvironment);
 		annotationHelper = new AnnotationHelper(processingEnv);
-		codeModelHelper = new APTCodeModelHelper();
 	}
 
 	@Override
@@ -104,8 +101,8 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 		JFieldVar restTemplateField = holder.getRestTemplateField();
 		JBlock init = holder.getInit().body();
 		for (DeclaredType converterType : converters) {
-			JInvocation newConverter = codeModelHelper.newBeanOrEBean(holder, converterType, holder.getInitContextParam());
-			init.add(invoke(restTemplateField, "getMessageConverters").invoke("add").arg(newConverter));
+			JClass converterClass = refClass(converterType.toString());
+			init.add(invoke(restTemplateField, "getMessageConverters").invoke("add").arg(_new(converterClass)));
 		}
 	}
 
@@ -119,8 +116,16 @@ public class RestHandler extends BaseAnnotationHandler<RestHolder> implements Ge
 			JBlock init = holder.getInit().body();
 			init.add(invoke(restTemplateField, "setInterceptors").arg(_new(listClass)));
 			for (DeclaredType interceptorType : interceptors) {
-				JInvocation newInterceptor = codeModelHelper.newBeanOrEBean(holder, interceptorType, holder.getInitContextParam());
-				init.add(invoke(restTemplateField, "getInterceptors").invoke("add").arg(newInterceptor));
+				JInvocation interceptor;
+				if (interceptorType.asElement().getAnnotation(EBean.class) != null) {
+					String typeQualifiedName = interceptorType.toString();
+					JClass injectedClass = refClass(typeQualifiedName + GENERATION_SUFFIX);
+					interceptor = injectedClass.staticInvoke(EBeanHolder.GET_INSTANCE_METHOD_NAME).arg(holder.getInitContextParam());
+				} else {
+					JClass interceptorClass = refClass(interceptorType.toString());
+					interceptor = _new(interceptorClass);
+				}
+				init.add(invoke(restTemplateField, "getInterceptors").invoke("add").arg(interceptor));
 			}
 		}
 	}
