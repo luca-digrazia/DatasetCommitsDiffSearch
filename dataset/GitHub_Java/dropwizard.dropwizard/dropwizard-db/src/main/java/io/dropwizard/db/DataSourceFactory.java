@@ -250,7 +250,7 @@ import java.util.concurrent.TimeUnit;
  *     </tr>
  * </table>
  */
-public class DataSourceFactory implements PooledDataSourceFactory {
+public class DataSourceFactory {
     @SuppressWarnings("UnusedDeclaration")
     public enum TransactionIsolation {
         NONE(Connection.TRANSACTION_NONE),
@@ -355,7 +355,6 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     private Duration validationInterval = Duration.seconds(30);
 
     @JsonProperty
-    @Override
     public boolean isAutoCommentsEnabled() {
         return autoCommentsEnabled;
     }
@@ -366,7 +365,6 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     }
 
     @JsonProperty
-    @Override
     public String getDriverClass() {
         return driverClass;
     }
@@ -407,7 +405,6 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     }
 
     @JsonProperty
-    @Override
     public Map<String, String> getProperties() {
         return properties;
     }
@@ -429,11 +426,6 @@ public class DataSourceFactory implements PooledDataSourceFactory {
 
     @JsonProperty
     public String getValidationQuery() {
-        return validationQuery;
-    }
-
-    @Override
-    public String getHealthCheckValidationQuery() {
         return validationQuery;
     }
 
@@ -697,24 +689,11 @@ public class DataSourceFactory implements PooledDataSourceFactory {
         return Optional.fromNullable(validationQueryTimeout);
     }
 
-    @Override
-    public Optional<Duration> getHealthCheckValidationTimeout() {
-        return Optional.fromNullable(validationQueryTimeout);
-    }
-
     @JsonProperty
     public void setValidationQueryTimeout(Duration validationQueryTimeout) {
         this.validationQueryTimeout = validationQueryTimeout;
     }
 
-    @Override
-    public void asSingleConnectionPool() {
-        minSize = 1;
-        maxSize = 1;
-        initialSize = 1;
-    }
-
-    @Override
     public ManagedDataSource build(MetricRegistry metricRegistry, String name) {
         final Properties properties = new Properties();
         for (Map.Entry<String, String> property : this.properties.entrySet()) {
