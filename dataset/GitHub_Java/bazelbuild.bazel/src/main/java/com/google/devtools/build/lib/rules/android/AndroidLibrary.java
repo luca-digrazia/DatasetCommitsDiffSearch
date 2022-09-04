@@ -56,13 +56,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       ruleContext.throwWithRuleError("Data binding doesn't work with the \"resources\" attribute. "
           + "Use \"resource_files\" instead.");
     }
-
-    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("resources")
-        && !ruleContext.getFragment(AndroidConfiguration.class).allowResourcesAttr()) {
-      ruleContext.throwWithAttributeError(
-          "resources",
-          "The resources attribute has been removed. Please use resource_files instead.");
-    }
   }
 
   /**
@@ -77,14 +70,13 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
    * attributes are used, we can error out if an android_library is specified in a resources
    * attribute despite having information incompatible with that output.
    *
-   * <p>TODO(b/30307842): Remove this support once the resources attribute is completely removed.
+   * TODO(b/30307842): Remove this support once the resources attribute is completely removed.
    *
-   * <p>With the exception of 'resource_files' and the generator attributes, these attributes are
-   * simply those provided by both android_library and android_resources. android_resources does
-   * provide the 'resources' attribute, but its behavior is like the android_library
-   * 'resource_files' attribute, not the android_library 'resources' attribute (which indicates a
-   * dependency on an android_resources target). The generator_* attributes are included when the
-   * rule is created by a macro.
+   * <p>With the exception of 'resource_files', these attributes are simply those provided by both
+   * android_library and android_resources. android_resources does provide the 'resources'
+   * attribute, but its behavior is like the android_library 'resource_files' attribute, not the
+   * android_library 'resources' attribute (which indicates a dependency on an android_resources
+   * target).
    */
   private static final ImmutableSet<String> ATTRS_COMPATIBLE_WITH_ANDROID_RESOURCES =
       ImmutableSet.of(
@@ -106,10 +98,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
           "restricted_to",
           "tags",
           "testonly",
-          "visibility",
-          "generator_name",
-          "generator_function",
-          "generator_location");
+          "visibility");
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)

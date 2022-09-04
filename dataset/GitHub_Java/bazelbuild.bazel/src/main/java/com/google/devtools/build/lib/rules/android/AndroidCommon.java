@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
@@ -48,7 +47,7 @@ import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
+import com.google.devtools.build.lib.rules.cpp.CcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
 import com.google.devtools.build.lib.rules.java.JavaCcLinkParamsProvider;
@@ -71,6 +70,7 @@ import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import javax.annotation.Nullable;
@@ -197,36 +197,35 @@ public class AndroidCommon {
       RuleContext ruleContext,
       Artifact jarToDex, Artifact classesDex, List<String> dexOptions, boolean multidex,
       Artifact mainDexList) {
-    CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
-    commandLine.add("--dex");
+    List<String> args = new ArrayList<>();
+    args.add("--dex");
 
     // Multithreaded dex does not work when using --multi-dex.
     if (!multidex) {
       // Multithreaded dex tends to run faster, but only up to about 5 threads (at which point the
       // law of diminishing returns kicks in). This was determined experimentally, with 5-thread dex
       // performing about 25% faster than 1-thread dex.
-      commandLine.add("--num-threads=5");
+      args.add("--num-threads=5");
     }
 
-    commandLine.addAll(dexOptions);
+    args.addAll(dexOptions);
     if (multidex) {
-      commandLine.add("--multi-dex");
+      args.add("--multi-dex");
       if (mainDexList != null) {
-        commandLine.addPrefixedExecPath("--main-dex-list=", mainDexList);
+        args.add("--main-dex-list=" + mainDexList.getExecPathString());
       }
     }
-    commandLine.addPrefixedExecPath("--output=", classesDex);
-    commandLine.addExecPath(jarToDex);
+    args.add("--output=" + classesDex.getExecPathString());
+    args.add(jarToDex.getExecPathString());
 
     SpawnAction.Builder builder =
         new SpawnAction.Builder()
-            .useDefaultShellEnvironment()
             .setExecutable(AndroidSdkProvider.fromRuleContext(ruleContext).getDx())
             .addInput(jarToDex)
             .addOutput(classesDex)
+            .addArguments(args)
             .setProgressMessage("Converting %s to dex format", jarToDex.getExecPathString())
             .setMnemonic("AndroidDexer")
-            .setCommandLine(commandLine.build())
             .setResources(ResourceSet.createWithRamCpuIo(4096.0, 5.0, 0.0));
     if (mainDexList != null) {
       builder.addInput(mainDexList);
@@ -448,11 +447,12 @@ public class AndroidCommon {
       } else {
         Artifact outputDepsProto =
             javacHelper.createOutputDepsProtoArtifact(resourceClassJar, javaArtifactsBuilder);
-        javacHelper.createCompileAction(
+        javacHelper.createCompileActionWithInstrumentation(
             resourceClassJar,
             null /* manifestProtoOutput */,
             null /* genSourceJar */,
-            outputDepsProto);
+            outputDepsProto,
+            javaArtifactsBuilder);
       }
     } else {
       // Otherwise, it should have been the AndroidRuleClasses.ANDROID_RESOURCES_CLASS_JAR.
@@ -494,23 +494,15 @@ public class AndroidCommon {
       FilesToRunProvider jarjar =
           ruleContext.getExecutablePrerequisite("$jarjar_bin", Mode.HOST);
 
-      ruleContext.registerAction(
-          new SpawnAction.Builder()
-              .useDefaultShellEnvironment()
-              .setExecutable(jarjar)
-              .setProgressMessage("Repackaging jar")
-              .setMnemonic("AndroidRepackageJar")
-              .addInput(jarJarRuleFile)
-              .addInput(binaryResourcesJar)
-              .addOutput(resourcesJar)
-              .setCommandLine(
-                  CustomCommandLine.builder()
-                      .add("process")
-                      .addExecPath(jarJarRuleFile)
-                      .addExecPath(binaryResourcesJar)
-                      .addExecPath(resourcesJar)
-                      .build())
-              .build(ruleContext));
+      ruleContext.registerAction(new SpawnAction.Builder()
+          .setExecutable(jarjar)
+          .addArgument("process")
+          .addInputArgument(jarJarRuleFile)
+          .addInputArgument(binaryResourcesJar)
+          .addOutputArgument(resourcesJar)
+          .setProgressMessage("Repackaging jar")
+          .setMnemonic("AndroidRepackageJar")
+          .build(ruleContext));
       jarsProducedForRuntime.add(resourcesJar);
     }
   }
@@ -698,7 +690,8 @@ public class AndroidCommon {
     helper.createSourceJarAction(srcJar, genSourceJar);
 
     outputDepsProto = helper.createOutputDepsProtoArtifact(classJar, javaArtifactsBuilder);
-    helper.createCompileAction(classJar, manifestProtoOutput, genSourceJar, outputDepsProto);
+    helper.createCompileActionWithInstrumentation(classJar, manifestProtoOutput, genSourceJar,
+        outputDepsProto, javaArtifactsBuilder);
 
     if (isBinary) {
       generatedExtensionRegistryProvider =
@@ -879,10 +872,6 @@ public class AndroidCommon {
     return javaCommon.getJavacOpts();
   }
 
-  public Artifact getClassJar() {
-    return classJar;
-  }
-
   public Artifact getGenClassJar() {
     return genClassJar;
   }
@@ -906,6 +895,10 @@ public class AndroidCommon {
    */
   public NestedSet<Artifact> getJarsProducedForRuntime() {
     return jarsProducedForRuntime;
+  }
+
+  public Artifact getInstrumentedJar() {
+    return javaCommon.getJavaCompilationArtifacts().getInstrumentedJar();
   }
 
   public NestedSet<Artifact> getTransitiveNeverLinkLibraries() {
@@ -934,7 +927,7 @@ public class AndroidCommon {
             // Link in Android-specific C++ code (e.g., android_libraries) in the transitive closure
             AndroidCcLinkParamsProvider.TO_LINK_PARAMS,
             // Link in non-language-specific C++ code in the transitive closure
-            CcLinkParamsInfo.TO_LINK_PARAMS);
+            CcLinkParamsProvider.TO_LINK_PARAMS);
         builder.addLinkOpts(linkOpts);
       }
     };
