@@ -1,4 +1,6 @@
-/**
+/*
+ * Copyright 2012-2014 TORCH GmbH
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -14,6 +16,7 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
+
 package org.graylog2.indexer.results;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -36,7 +39,7 @@ import static org.graylog2.plugin.Tools.ES_DATE_FORMAT_FORMATTER;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ResultMessage {
-    private static final Logger LOG = LoggerFactory.getLogger(ResultMessage.class);
+    private static final Logger log = LoggerFactory.getLogger(ResultMessage.class);
 
     private Map<String, Object> message;
     private String index;
@@ -81,7 +84,7 @@ public class ResultMessage {
                                  ES_DATE_FORMAT_FORMATTER.parseDateTime(String.valueOf(tsField)));
             } catch (IllegalArgumentException e) {
                 // could not parse date string, this is likely a bug, but we will leave the original value alone
-                LOG.warn("Could not parse timestamp of message {}", message.get("id"), e);
+                log.warn("Could not parse timestamp of message {}", message.get("id"), e);
             }
         }
     }
@@ -107,7 +110,7 @@ public class ResultMessage {
                     highlightRanges.put(hlEntry.getKey(), highlightPosition);
                 }
             }
-            LOG.debug("Highlight positions for message {}: {}", message.get("_id"), highlightRanges);
+            log.debug("Highlight positions for message {}: {}", message.get("_id"), highlightRanges);
         }
     }
 	

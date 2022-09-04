@@ -225,7 +225,6 @@ public class SearchResource extends RestResource {
         result.put("results", histogram.getResults());
         result.put("time", histogram.took().millis());
         result.put("built_query", histogram.getBuiltQuery());
-        result.put("queried_timerange", histogram.getHistogramBoundaries().getLimits());
 
         return result;
     }
