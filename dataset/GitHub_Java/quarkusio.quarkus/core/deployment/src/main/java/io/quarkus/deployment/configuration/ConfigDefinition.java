@@ -45,7 +45,6 @@ import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
-import io.quarkus.runtime.configuration.ExpandingConfigSource;
 import io.quarkus.runtime.configuration.NameIterator;
 import io.smallrye.config.SmallRyeConfig;
 
@@ -72,36 +71,31 @@ public class ConfigDefinition extends CompoundConfigType {
         this.rootField = rootField;
     }
 
-    void acceptConfigurationValueIntoLeaf(final LeafConfigType leafType, final NameIterator name,
-            final ExpandingConfigSource.Cache cache, final SmallRyeConfig config) {
+    void acceptConfigurationValueIntoLeaf(final LeafConfigType leafType, final NameIterator name, final SmallRyeConfig config) {
         // primitive/leaf values without a config group
         throw Assert.unsupported();
     }
 
     void generateAcceptConfigurationValueIntoLeaf(final BytecodeCreator body, final LeafConfigType leafType,
-            final ResultHandle name, final ResultHandle cache, final ResultHandle config) {
+            final ResultHandle name, final ResultHandle config) {
         // primitive/leaf values without a config group
         throw Assert.unsupported();
     }
 
-    Object getChildObject(final NameIterator name, final ExpandingConfigSource.Cache cache, final SmallRyeConfig config,
-            final Object self, final String childName) {
+    Object getChildObject(final NameIterator name, final SmallRyeConfig config, final Object self, final String childName) {
         return rootObjectsByContainingName.get(childName);
     }
 
-    ResultHandle generateGetChildObject(final BytecodeCreator body, final ResultHandle name, final ResultHandle cache,
-            final ResultHandle config,
+    ResultHandle generateGetChildObject(final BytecodeCreator body, final ResultHandle name, final ResultHandle config,
             final ResultHandle self, final String childName) {
         return body.readInstanceField(rootTypesByContainingName.get(childName).getFieldDescriptor(), self);
     }
 
-    TreeMap<String, Object> getOrCreate(final NameIterator name, final ExpandingConfigSource.Cache cache,
-            final SmallRyeConfig config) {
+    TreeMap<String, Object> getOrCreate(final NameIterator name, final SmallRyeConfig config) {
         return rootObjectsByContainingName;
     }
 
-    ResultHandle generateGetOrCreate(final BytecodeCreator body, final ResultHandle name, final ResultHandle cache,
-            final ResultHandle config) {
+    ResultHandle generateGetOrCreate(final BytecodeCreator body, final ResultHandle name, final ResultHandle config) {
         return body.readStaticField(rootField);
     }
 
@@ -122,18 +116,17 @@ public class ConfigDefinition extends CompoundConfigType {
         throw Assert.unsupported();
     }
 
-    void getDefaultValueIntoEnclosingGroup(final Object enclosing, final ExpandingConfigSource.Cache cache,
-            final SmallRyeConfig config, final Field field) {
+    void getDefaultValueIntoEnclosingGroup(final Object enclosing, final SmallRyeConfig config, final Field field) {
         throw Assert.unsupported();
     }
 
     void generateGetDefaultValueIntoEnclosingGroup(final BytecodeCreator body, final ResultHandle enclosing,
-            final MethodDescriptor setter, final ResultHandle cache, final ResultHandle config) {
+            final MethodDescriptor setter, final ResultHandle config) {
         throw Assert.unsupported();
     }
 
     public ResultHandle writeInitialization(final BytecodeCreator body, final AccessorFinder accessorFinder,
-            final ResultHandle cache, final ResultHandle smallRyeConfig) {
+            final ResultHandle smallRyeConfig) {
         throw Assert.unsupported();
     }
 
@@ -141,12 +134,12 @@ public class ConfigDefinition extends CompoundConfigType {
         loadFrom(leafPatterns);
     }
 
-    public void initialize(final SmallRyeConfig config, final ExpandingConfigSource.Cache cache) {
+    public void initialize(final SmallRyeConfig config) {
         for (Map.Entry<String, RootInfo> entry : rootTypesByContainingName.entrySet()) {
             final RootInfo rootInfo = entry.getValue();
             // name iterator and config are always ignored because no root types are ever stored in a map node and no conversion is ever done
             // TODO: make a separate create method for root types just to avoid this kind of thing
-            rootInfo.getRootType().getOrCreate(new NameIterator("ignored", true), cache, config);
+            rootInfo.getRootType().getOrCreate(new NameIterator("ignored", true), config);
         }
     }
 
@@ -335,7 +328,6 @@ public class ConfigDefinition extends CompoundConfigType {
                 final ResultHandle self = ctor.getThis();
                 final ResultHandle config = ctor.getMethodParam(0);
                 ctor.invokeSpecialMethod(MethodDescriptor.ofConstructor(Object.class), self);
-                final ResultHandle cache = ctor.newInstance(ECS_CACHE_CTOR);
                 // initialize all fields to defaults
                 for (RootInfo value : rootTypesByContainingName.values()) {
                     if (value.getConfigPhase().isAvailableAtRun()) {
@@ -344,7 +336,7 @@ public class ConfigDefinition extends CompoundConfigType {
                         final FieldDescriptor fieldDescriptor = cc.getFieldCreator(containingName, Object.class)
                                 .setModifiers(Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL).getFieldDescriptor();
                         ctor.writeInstanceField(fieldDescriptor, self,
-                                rootType.writeInitialization(ctor, accessorFinder, cache, config));
+                                rootType.writeInitialization(ctor, accessorFinder, config));
                     }
                 }
                 ctor.returnValue(null);
@@ -352,11 +344,10 @@ public class ConfigDefinition extends CompoundConfigType {
         }
     }
 
-    public static void loadConfiguration(final ExpandingConfigSource.Cache cache, SmallRyeConfig config,
-            final Set<String> unmatched,
+    public static void loadConfiguration(SmallRyeConfig config, final Set<String> unmatched,
             ConfigDefinition... definitions) {
         for (ConfigDefinition definition : definitions) {
-            definition.initialize(config, cache);
+            definition.initialize(config);
         }
         outer: for (String propertyName : config.getPropertyNames()) {
             final NameIterator name = new NameIterator(propertyName);
@@ -367,7 +358,7 @@ public class ConfigDefinition extends CompoundConfigType {
                         final LeafConfigType leafType = definition.leafPatterns.match(name);
                         if (leafType != null) {
                             name.goToEnd();
-                            leafType.acceptConfigurationValue(name, cache, config);
+                            leafType.acceptConfigurationValue(name, config);
                             final String nameString = name.toString();
                             definition.loadedProperties.put(nameString, config.getValue(nameString, String.class));
                             continue outer;
