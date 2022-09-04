@@ -21,7 +21,6 @@
 package org.graylog2.periodical;
 
 import org.apache.log4j.Logger;
-import org.graylog2.GraylogServer;
 import org.graylog2.database.HostCounterCache;
 import org.graylog2.database.MongoBridge;
 
@@ -40,19 +39,13 @@ public class HostCounterCacheWriterThread implements Runnable {
     public static final int PERIOD = 5;
     public static final int INITIAL_DELAY = 5;
 
-    private final GraylogServer graylogServer;
-
-    public HostCounterCacheWriterThread(GraylogServer graylogServer) {
-        this.graylogServer = graylogServer;
-    }
-
     /**
      * Start the thread. Runs forever.
      */
     @Override
     public void run() {
         try {
-            final MongoBridge m = graylogServer.getMongoBridge();
+            MongoBridge m = new MongoBridge();
             for (String host : HostCounterCache.getInstance().getAllHosts()) {
                 m.upsertHostCount(host, HostCounterCache.getInstance().getCount(host));
                 HostCounterCache.getInstance().reset(host);

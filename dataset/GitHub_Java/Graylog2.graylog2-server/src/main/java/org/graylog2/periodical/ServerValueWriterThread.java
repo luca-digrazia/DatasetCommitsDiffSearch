@@ -22,10 +22,8 @@ package org.graylog2.periodical;
 
 import org.apache.log4j.Logger;
 import org.graylog2.HostSystem;
-import org.graylog2.ServerValue;
 import org.graylog2.Tools;
 import org.graylog2.database.MongoBridge;
-import org.graylog2.messagehandlers.common.MessageCounter;
 
 /**
  * ServerValueWriterThread.java
@@ -38,7 +36,7 @@ public class ServerValueWriterThread implements Runnable {
 
     private static final Logger LOG = Logger.getLogger(ServerValueWriterThread.class);
 
-    public static final int PERIOD = 5;
+    public static final int PERIOD = 60;
     public static final int INITIAL_DELAY = 0;
 
     /**
@@ -47,17 +45,14 @@ public class ServerValueWriterThread implements Runnable {
     @Override
     public void run() {
         try {
-            // ohai, we are alive. \o/
-            ServerValue.ping();
+            HostSystem.writeSystemHealthHistorically();
 
-            // Current throughput.
-            MessageCounter c = MessageCounter.getInstance();
-            ServerValue.writeThroughput(c.getFiveSecondThroughput(), c.getHighestFiveSecondThroughput());
+            // Ping. (Server is running.)
+            MongoBridge m = new MongoBridge();
+            m.setSimpleServerValue("ping", Tools.getUTCTimestamp());
 
-            // Reset five second throughput count.
-            c.resetFiveSecondThroughput();
         } catch (Exception e) {
-            LOG.warn("Error in ServerValueWriterThread: " + e.getMessage(), e);
+            LOG.warn("Error in SystemValueHistoryWriterThread: " + e.getMessage(), e);
         }
     }
 }

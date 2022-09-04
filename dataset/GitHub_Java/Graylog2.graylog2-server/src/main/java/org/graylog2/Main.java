@@ -34,7 +34,6 @@ import org.graylog2.indexer.Indexer;
 import org.graylog2.messagehandlers.amqp.AMQPBroker;
 import org.graylog2.messagehandlers.amqp.AMQPSubscribedQueue;
 import org.graylog2.messagehandlers.amqp.AMQPSubscriberThread;
-import org.graylog2.messagehandlers.gelf.ChunkedGELFClientManager;
 import org.graylog2.messagehandlers.gelf.GELFMainThread;
 import org.graylog2.messagehandlers.syslog.SyslogServerThread;
 import org.graylog2.periodical.ChunkedGELFClientManagerThread;
@@ -48,8 +47,6 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import org.graylog2.messagequeue.MessageQueueFlusher;
-import org.graylog2.periodical.BulkIndexerThread;
 
 /**
  * Main class of Graylog2.
@@ -62,7 +59,7 @@ public final class Main {
     private static final String GRAYLOG2_VERSION = "0.9.6-PREVIEW";
 
     public static RulesEngine drools = null;
-    private static final int SCHEDULED_THREADS_POOL_SIZE = 5;
+    private static final int SCHEDULED_THREADS_POOL_SIZE = 4;
 
     private Main() {
     }
@@ -153,9 +150,6 @@ public final class Main {
         // Start message counter thread.
         initializeMessageCounters(scheduler);
 
-        // Inizialize message queue.
-        initializeMessageQueue(scheduler, configuration);
-
         // Start GELF threads
         if (configuration.isUseGELF()) {
             initializeGELFThreads(configuration.getGelfListenPort(), scheduler);
@@ -166,9 +160,6 @@ public final class Main {
             initializeAMQP(configuration);
         }
 
-        // Add a shutdown hook that tries to flush the message queue.
-	Runtime.getRuntime().addShutdownHook(new MessageQueueFlusher());
-
         LOG.info("Graylog2 up and running.");
     }
 
@@ -177,13 +168,6 @@ public final class Main {
         scheduler.scheduleAtFixedRate(new HostCounterCacheWriterThread(), HostCounterCacheWriterThread.INITIAL_DELAY, HostCounterCacheWriterThread.PERIOD, TimeUnit.SECONDS);
 
         LOG.info("Host count cache is up.");
-    }
-
-    private static void initializeMessageQueue(ScheduledExecutorService scheduler, Configuration configuration) {
-
-        scheduler.scheduleAtFixedRate(new BulkIndexerThread(configuration), BulkIndexerThread.INITIAL_DELAY, configuration.getMessageQueuePollFrequency(), TimeUnit.SECONDS);
-
-        LOG.info("Message queue initialized .");
     }
 
     private static void initializeMessageCounters(ScheduledExecutorService scheduler) {
@@ -197,7 +181,7 @@ public final class Main {
         GELFMainThread gelfThread = new GELFMainThread(gelfPort);
         gelfThread.start();
 
-        scheduler.scheduleAtFixedRate(new ChunkedGELFClientManagerThread(ChunkedGELFClientManager.getInstance()), ChunkedGELFClientManagerThread.INITIAL_DELAY, ChunkedGELFClientManagerThread.PERIOD, TimeUnit.SECONDS);
+        scheduler.scheduleAtFixedRate(new ChunkedGELFClientManagerThread(), ChunkedGELFClientManagerThread.INITIAL_DELAY, ChunkedGELFClientManagerThread.PERIOD, TimeUnit.SECONDS);
 
         LOG.info("GELF threads started");
     }

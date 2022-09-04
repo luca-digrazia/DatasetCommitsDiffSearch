@@ -20,50 +20,66 @@
 
 package org.graylog2.periodical;
 
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Set;
-import org.graylog2.Log;
+import org.apache.log4j.Logger;
 import org.graylog2.messagehandlers.gelf.ChunkedGELFClientManager;
 import org.graylog2.messagehandlers.gelf.ChunkedGELFMessage;
+import org.graylog2.messagehandlers.gelf.EmptyGELFMessageException;
+
+import java.util.Map;
 
 /**
  * ChunkedGELFClientManagerThread.java: Sep 20, 2010 9:28:37 PM
- *
+ * <p/>
  * [description]
  *
- * @author: Lennart Koopmann <lennart@socketfeed.com>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class ChunkedGELFClientManagerThread extends Thread {
+public class ChunkedGELFClientManagerThread implements Runnable {
+
+    private static final Logger LOG = Logger.getLogger(ChunkedGELFClientManagerThread.class);
+
+    public static final int PERIOD = 10;
+    public static final int INITIAL_DELAY = 0;
+
 
     /**
      * Start the thread. Runs forever.
      */
-    @Override public void run() {
-        // Run forever.
-        while (true) {
-            try {
-                ////////// DEBUG ONLY
-                HashMap<String, ChunkedGELFMessage> messageMap = ChunkedGELFClientManager.getInstance().getMessageMap();
-                Set set = messageMap.keySet();
-                Iterator iter = set.iterator();
-                int i = 0;
-                while(iter.hasNext()) {
-                    String messageId = (String) iter.next();
-                    System.out.println("MESSAGE " + i + ": " + messageId);
-                    i++;
-                }
-                ////////////////////
+    @Override
+    public void run() {
+        try {
+            Map<String, ChunkedGELFMessage> messageMap = ChunkedGELFClientManager.getInstance().getMessageMap();
 
-                ////////Set invalidMesssage = ChunkedGELFClientManager.getInstance().getInvalidMessages();
-                
-            } catch (Exception e) {
-                Log.warn("Error in ChunkedGELFClientManagerThread: " + e.toString());
+            for (Map.Entry<String, ChunkedGELFMessage> entry : messageMap.entrySet()) {
+
+                String messageId = entry.getKey();
+                ChunkedGELFMessage message = entry.getValue();
+
+                int fiveSecondsAgo = (int) (System.currentTimeMillis() / 1000) - 5;
+
+                try {
+                    if (message.getFirstChunkArrival() < fiveSecondsAgo) {
+                        this.dropMessage(messageId, "Did not completely arrive in time.");
+                    }
+                } catch (EmptyGELFMessageException e) {
+                    // getFirstChunkArrival() did not work because first part did not arrive yet. Drop anyways.
+                    this.dropMessage(messageId, "First chunk did not arrive.");
+                }
             }
 
-           // Run every 10 seconds.
-           try { Thread.sleep(10000); } catch(InterruptedException e) {}
+        } catch (Exception e) {
+            LOG.warn("Error in ChunkedGELFClientManagerThread: " + e.getMessage(), e);
         }
     }
 
+    /**
+     * Drop a message from the ChunkedGELFClientManager message map. Also causes
+     * INFO log message
+     *
+     * @param messageId The message to delete
+     */
+    public void dropMessage(String messageId, String reason) {
+        LOG.info("Dropping incomplete chunked GELF message <" + messageId + "> (" + reason + ")");
+        ChunkedGELFClientManager.getInstance().dropMessage(messageId);
+    }
 }
