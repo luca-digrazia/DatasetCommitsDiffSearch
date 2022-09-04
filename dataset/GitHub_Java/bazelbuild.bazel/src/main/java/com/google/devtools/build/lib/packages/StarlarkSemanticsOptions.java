@@ -140,9 +140,11 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
               + "debugging.")
   public boolean experimentalPlatformsApi;
 
+  // TODO(cparsons): Resolve and finalize the transition() API. The transition implementation
+  // function should accept two mandatory parameters, 'settings' and 'attr'.
   @Option(
       name = "experimental_starlark_config_transitions",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
       metadataTags = {OptionMetadataTag.EXPERIMENTAL},

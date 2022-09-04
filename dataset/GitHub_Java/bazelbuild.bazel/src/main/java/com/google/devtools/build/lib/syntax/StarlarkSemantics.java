@@ -225,7 +225,7 @@ public abstract class StarlarkSemantics {
           .experimentalGoogleLegacyApi(false)
           .experimentalJavaCommonCreateProviderEnabledPackages(ImmutableList.of())
           .experimentalPlatformsApi(false)
-          .experimentalStarlarkConfigTransitions(true)
+          .experimentalStarlarkConfigTransitions(false)
           .experimentalStarlarkUnusedInputsList(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
           .incompatibleDepsetIsNotIterable(false)
