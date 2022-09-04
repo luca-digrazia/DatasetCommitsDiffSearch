@@ -34,6 +34,10 @@ public class ConfiguredCommandTest {
     
     private static class MyApplication extends Application<Configuration> {
         @Override
+        public void initialize(Bootstrap<Configuration> bootstrap) {
+        }
+
+        @Override
         public void run(Configuration configuration, Environment environment) throws Exception {
         }
     }

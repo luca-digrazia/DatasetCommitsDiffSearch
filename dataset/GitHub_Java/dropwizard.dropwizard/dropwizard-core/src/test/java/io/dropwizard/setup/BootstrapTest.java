@@ -1,6 +1,5 @@
 package io.dropwizard.setup;
 
-import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
 import io.dropwizard.configuration.DefaultConfigurationFactoryFactory;
@@ -56,19 +55,5 @@ public class BootstrapTest {
     public void defaultsToDefaultConfigurationFactoryFactory() throws Exception {
         assertThat(bootstrap.getConfigurationFactoryFactory())
                 .isInstanceOf(DefaultConfigurationFactoryFactory.class);
-    }
-    
-    @Test
-    public void testBYOMetrics() {
-        final MetricRegistry newRegistry = new MetricRegistry();
-        Bootstrap<Configuration> newBootstrap = new Bootstrap<Configuration>(application) {
-            @Override
-            public MetricRegistry getMetricRegistry() {
-                return super.getMetricRegistry();
-            }
-        };
-        
-        assertThat(newBootstrap.getMetricRegistry().getNames())
-                .contains("jvm.buffers.mapped.capacity", "jvm.threads.count", "jvm.memory.heap.usage");
     }
 }
