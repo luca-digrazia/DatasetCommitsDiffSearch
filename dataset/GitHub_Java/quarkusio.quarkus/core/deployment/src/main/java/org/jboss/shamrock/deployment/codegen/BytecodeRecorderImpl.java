@@ -30,10 +30,10 @@ import org.jboss.invocation.proxy.ProxyFactory;
 import org.jboss.protean.gizmo.BranchResult;
 import org.jboss.protean.gizmo.CatchBlockCreator;
 import org.jboss.protean.gizmo.ClassCreator;
+import org.jboss.protean.gizmo.ExceptionTable;
 import org.jboss.protean.gizmo.MethodCreator;
 import org.jboss.protean.gizmo.MethodDescriptor;
 import org.jboss.protean.gizmo.ResultHandle;
-import org.jboss.protean.gizmo.TryBlock;
 import org.jboss.shamrock.deployment.ClassOutput;
 import org.jboss.shamrock.deployment.ShamrockConfig;
 import org.jboss.shamrock.runtime.ConfiguredValue;
@@ -195,6 +195,16 @@ public class BytecodeRecorderImpl implements BytecodeRecorder {
         ClassCreator file = ClassCreator.builder().classOutput(ClassOutput.gizmoAdaptor(classOutput,  true)).className(className).superClass(Object.class).interfaces(StartupTask.class).build();
         MethodCreator method = file.getMethodCreator(this.method.getName(), this.method.getReturnType(), this.method.getParameterTypes());
 
+        //figure out where we can start using local variables
+        int localVarCounter = 1;
+        for (Class<?> t : this.method.getParameterTypes()) {
+            if (t == double.class || t == long.class) {
+                localVarCounter += 2;
+            } else {
+                localVarCounter++;
+            }
+        }
+
         //now create instances of all the classes we invoke on and store them in variables as well
         Map<Class, ResultHandle> classInstanceVariables = new HashMap<>();
         Map<Object, ResultHandle> returnValueResults = new IdentityHashMap<>();
@@ -317,10 +327,11 @@ public class BytecodeRecorderImpl implements BytecodeRecorder {
             }
         } else if (param instanceof URL) {
             String url = ((URL) param).toExternalForm();
-            TryBlock et = method.tryBlock();
-            out = et.newInstance(MethodDescriptor.ofConstructor(URL.class, String.class), et.load(url));
-            CatchBlockCreator malformed = et.addCatch(MalformedURLException.class);
+            ExceptionTable et = method.addTryCatch();
+            out = method.newInstance(MethodDescriptor.ofConstructor(URL.class, String.class), method.load(url));
+            CatchBlockCreator malformed = et.addCatchClause(MalformedURLException.class);
             malformed.throwException(RuntimeException.class, "Malformed URL", malformed.getCaughtException());
+            et.complete();
 
         } else if (param instanceof Enum) {
             Enum e = (Enum) param;
