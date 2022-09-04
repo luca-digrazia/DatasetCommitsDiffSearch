@@ -2,8 +2,7 @@ package io.dropwizard.jersey;
 
 import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.jersey.dummy.DummyResource;
-import io.dropwizard.logging.BootstrapLogging;
-
+import io.dropwizard.logging.LoggingFactory;
 import java.util.regex.Pattern;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.POST;
@@ -17,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 public class DropwizardResourceConfigTest {
     static {
-        BootstrapLogging.bootstrap();
+        LoggingFactory.bootstrap();
     }
 
     private DropwizardResourceConfig rc;
