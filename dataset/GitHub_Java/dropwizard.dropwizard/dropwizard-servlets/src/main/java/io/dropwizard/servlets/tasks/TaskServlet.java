@@ -200,21 +200,19 @@ public class TaskServlet extends HttpServlet {
             this.exceptionClass = exceptionClass;
         }
 
-        private boolean isReallyAssignableFrom(Exception e) {
-            return exceptionClass.isAssignableFrom(e.getClass()) ||
-                (e.getCause() != null && exceptionClass.isAssignableFrom(e.getCause().getClass()));
-        }
-
         @Override
         public void executeTask(ImmutableMultimap<String, String> params, PrintWriter output) throws Exception {
             try {
                 underlying.executeTask(params, output);
             } catch (Exception e) {
-                if (exceptionMeter != null && isReallyAssignableFrom(e)) {
-                    exceptionMeter.mark();
-                } else {
-                    throw e;
+                if (exceptionMeter != null) {
+                    if (exceptionClass.isAssignableFrom(e.getClass()) ||
+                            (e.getCause() != null && exceptionClass.isAssignableFrom(e.getCause().getClass()))) {
+                        exceptionMeter.mark();
+                    }
                 }
+
+                throw e;
             }
         }
     }
