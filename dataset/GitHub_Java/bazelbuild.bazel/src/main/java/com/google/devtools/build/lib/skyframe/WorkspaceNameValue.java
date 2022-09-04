@@ -13,48 +13,41 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.skyframe.LegacySkyKey;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import java.util.Objects;
-import javax.annotation.Nullable;
 
 /**
  * A value that solely represents the 'name' of a Bazel workspace, as defined in the WORKSPACE file.
  *
  * <p>This is a separate value with trivial change pruning so as to not necessitate a dependency
  * from every {@link PackageValue} to the //external {@link PackageValue}, since such a
- * hypothetical design would necessiate reloading all packages whenever there's a benign change to
+ * hypothetical design would necessitate reloading all packages whenever there's a benign change to
  * the WORKSPACE file.
  */
 public class WorkspaceNameValue implements SkyValue {
   private static final SkyKey KEY =
-      SkyKey.create(SkyFunctions.WORKSPACE_NAME, DummyArgument.INSTANCE);
-  private static final WorkspaceNameValue ERROR = new WorkspaceNameValue(null);
+      LegacySkyKey.create(SkyFunctions.WORKSPACE_NAME, DummyArgument.INSTANCE);
 
-  @Nullable
   private final String workspaceName;
 
-  private WorkspaceNameValue(@Nullable String workspaceName) {
+  private WorkspaceNameValue(String workspaceName) {
     this.workspaceName = workspaceName;
   }
 
   /**
-   * Returns the name of the workspace, or {@code null} if there was an error in the WORKSPACE file.
+   * Returns the name of the workspace.
    */
-  @Nullable
-  public String maybeGetName() {
+  public String getName() {
     return workspaceName;
   }
 
   /** Returns the (singleton) {@link SkyKey} for {@link WorkspaceNameValue}s. */
   public static SkyKey key() {
     return KEY;
-  }
-
-  /** Returns a {@link WorkspaceNameValue} for a workspace whose WORKSPACE file is in error. */
-  public static WorkspaceNameValue withError() {
-    return WorkspaceNameValue.ERROR;
   }
 
   /** Returns a {@link WorkspaceNameValue} for a workspace with the given name. */
@@ -83,8 +76,8 @@ public class WorkspaceNameValue implements SkyValue {
 
   /** Singleton class used as the {@link SkyKey#argument} for {@link WorkspaceNameValue#key}. */
   public static final class DummyArgument {
-    public static final int HASHCODE = DummyArgument.class.getCanonicalName().hashCode();
-    public static final DummyArgument INSTANCE = new DummyArgument();
+    static final int HASHCODE = DummyArgument.class.getCanonicalName().hashCode();
+    @AutoCodec public static final DummyArgument INSTANCE = new DummyArgument();
 
     private DummyArgument() {
     }
@@ -97,6 +90,11 @@ public class WorkspaceNameValue implements SkyValue {
     @Override
     public int hashCode() {
       return HASHCODE;
+    }
+
+    @Override
+    public String toString() {
+      return "#";
     }
   }
 }
