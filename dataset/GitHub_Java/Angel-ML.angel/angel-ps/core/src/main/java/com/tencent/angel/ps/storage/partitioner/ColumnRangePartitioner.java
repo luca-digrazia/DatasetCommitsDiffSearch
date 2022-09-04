@@ -23,9 +23,7 @@ import com.tencent.angel.ml.matrix.PartitionMeta;
 import java.util.List;
 
 public class ColumnRangePartitioner extends RangePartitioner {
-
-  @Override
-  public List<PartitionMeta> getPartitions() {
+  @Override public List<PartitionMeta> getPartitions() {
     mContext.setMaxRowNumInBlock(mContext.getRowNum());
     return super.getPartitions();
   }

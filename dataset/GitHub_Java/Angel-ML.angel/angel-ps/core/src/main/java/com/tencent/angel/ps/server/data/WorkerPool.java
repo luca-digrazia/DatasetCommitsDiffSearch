@@ -773,12 +773,8 @@ public class WorkerPool {
           result = new UpdaterResponse(ResponseType.SERVER_IS_BUSY, log);
         } else {
           UpdaterRequest request = new UpdaterRequest();
-          try {
-            request.deserialize(in);
-            result = update(request, in);
-          } catch (Throwable x) {
-            result = new UpdaterResponse(ResponseType.SERVER_HANDLE_FATAL, StringUtils.stringifyException(x));
-          }
+          request.deserialize(in);
+          result = update(request, in);
         }
         break;
       }
@@ -788,12 +784,8 @@ public class WorkerPool {
           result = new GetUDFResponse(ResponseType.SERVER_IS_BUSY, log);
         } else {
           GetUDFRequest request = new GetUDFRequest();
-          try {
-            request.deserialize(in);
-            result = getSplit(request);
-          } catch (Throwable x) {
-            result = new GetUDFResponse(ResponseType.SERVER_HANDLE_FATAL, StringUtils.stringifyException(x));
-          }
+          request.deserialize(in);
+          result = getSplit(request);
         }
         break;
       }
