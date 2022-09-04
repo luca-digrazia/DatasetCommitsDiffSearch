@@ -20,10 +20,15 @@ import io.quarkus.arc.Arc;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.qute.Engine;
 import io.quarkus.qute.EngineBuilder;
+import io.quarkus.qute.Escaper;
+import io.quarkus.qute.Expression;
 import io.quarkus.qute.NamespaceResolver;
+import io.quarkus.qute.RawString;
 import io.quarkus.qute.ReflectionValueResolver;
+import io.quarkus.qute.ResultMapper;
 import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.TemplateLocator.TemplateLocation;
+import io.quarkus.qute.TemplateNode.Origin;
 import io.quarkus.qute.UserTagSectionHelper;
 import io.quarkus.qute.ValueResolver;
 import io.quarkus.qute.ValueResolvers;
@@ -42,15 +47,12 @@ public class EngineProducer {
     private static final Logger LOGGER = Logger.getLogger(EngineProducer.class);
 
     private final Engine engine;
-    private final ContentTypes contentTypes;
     private final List<String> tags;
     private final List<String> suffixes;
     private final String basePath;
     private final String tagPath;
 
-    public EngineProducer(QuteContext context, Event<EngineBuilder> builderReady, Event<Engine> engineReady,
-            ContentTypes contentTypes) {
-        this.contentTypes = contentTypes;
+    public EngineProducer(QuteContext context, Event<EngineBuilder> event) {
         this.suffixes = context.getConfig().suffixes;
         this.basePath = "templates/";
         this.tagPath = basePath + TAGS;
@@ -74,16 +76,27 @@ public class EngineProducer {
         builder.addValueResolver(ValueResolvers.rawResolver());
 
         // Escape some characters for HTML templates
-        builder.addResultMapper(new HtmlEscaper());
+        Escaper htmlEscaper = Escaper.builder().add('"', "&quot;").add('\'', "&#39;")
+                .add('&', "&amp;").add('<', "&lt;").add('>', "&gt;").build();
+        builder.addResultMapper(new ResultMapper() {
+
+            @Override
+            public boolean appliesTo(Origin origin, Object result) {
+                return !(result instanceof RawString)
+                        && origin.getVariant().filter(EngineProducer::requiresDefaultEscaping).isPresent();
+            }
+
+            @Override
+            public String map(Object result, Expression expression) {
+                return htmlEscaper.escape(result.toString());
+            }
+        });
 
         // Fallback reflection resolver
         builder.addValueResolver(new ReflectionValueResolver());
 
-        // Remove standalone lines if desired
-        builder.removeStandaloneLines(context.getConfig().removeStandaloneLines);
-
         // Allow anyone to customize the builder
-        builderReady.fire(builder);
+        event.fire(builder);
 
         // Resolve @Named beans
         builder.addNamespaceResolver(NamespaceResolver.builder(INJECT_NAMESPACE).resolve(ctx -> {
@@ -112,7 +125,6 @@ public class EngineProducer {
         for (String path : context.getTemplatePaths()) {
             engine.getTemplate(path);
         }
-        engineReady.fire(engine);
     }
 
     @Produces
@@ -175,9 +187,20 @@ public class EngineProducer {
         return cl.getResource(path);
     }
 
-    Variant guessVariant(String path) {
-        // TODO detect locale and encoding
-        return Variant.forContentType(contentTypes.getContentType(path));
+    static Variant guessVariant(String path) {
+        // TODO we need a proper way to detect the variant
+        int suffixIdx = path.lastIndexOf('.');
+        if (suffixIdx != -1) {
+            String suffix = path.substring(suffixIdx);
+            return new Variant(null, VariantTemplateProducer.parseMediaType(suffix), null);
+        }
+        return null;
+    }
+
+    static boolean requiresDefaultEscaping(Variant variant) {
+        return variant.mediaType != null
+                ? (Variant.TEXT_HTML.equals(variant.mediaType) || Variant.TEXT_XML.equals(variant.mediaType))
+                : false;
     }
 
     static class ResourceTemplateLocation implements TemplateLocation {
