@@ -69,6 +69,7 @@ import java.util.stream.Collectors;
 public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback {
 
   protected final ConfiguredTargetAccessor accessor;
+  protected final SkyframeExecutor skyframeExecutor;
   protected final BuildConfiguration hostConfiguration;
 
   private final HashMap<Label, Target> partialResultMap;
@@ -80,16 +81,18 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
 
   /**
    * @param accessor provider of query result configured targets.
-   * @param hostConfiguration host configuration for this query.
+   * @param out output stream. This is nullable for testing purposes since tests directly access
+   *     result.
    */
   TransitionsOutputFormatterCallback(
+      TargetAccessor<ConfiguredTarget> accessor,
       CqueryOptions options,
       OutputStream out,
       SkyframeExecutor skyframeExecutor,
-      TargetAccessor<ConfiguredTarget> accessor,
       BuildConfiguration hostConfiguration) {
-    super(options, out, skyframeExecutor);
+    super(options, out);
     this.accessor = (ConfiguredTargetAccessor) accessor;
+    this.skyframeExecutor = skyframeExecutor;
     this.hostConfiguration = hostConfiguration;
     this.partialResultMap = Maps.newHashMap();
   }

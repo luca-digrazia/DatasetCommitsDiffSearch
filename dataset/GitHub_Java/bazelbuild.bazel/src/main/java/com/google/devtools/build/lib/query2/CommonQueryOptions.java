@@ -29,6 +29,7 @@ public class CommonQueryOptions extends OptionsBase {
   @Option(
       name = "output",
       defaultValue = "label",
+      category = "query",
       documentationCategory = OptionDocumentationCategory.QUERY,
       effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
       help =
@@ -79,6 +80,7 @@ public class CommonQueryOptions extends OptionsBase {
   @Option(
     name = "implicit_deps",
     defaultValue = "true",
+    category = "query",
     documentationCategory = OptionDocumentationCategory.QUERY,
     effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
     help =

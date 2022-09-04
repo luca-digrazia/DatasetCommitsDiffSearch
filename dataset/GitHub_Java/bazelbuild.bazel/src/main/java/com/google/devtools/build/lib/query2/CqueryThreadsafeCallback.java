@@ -20,7 +20,6 @@ import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
 import com.google.devtools.build.lib.query2.output.CqueryOptions;
-import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.PrintStream;
@@ -36,17 +35,14 @@ public abstract class CqueryThreadsafeCallback
 
   protected final CqueryOptions options;
   protected PrintStream printStream = null;
-  protected final SkyframeExecutor skyframeExecutor;
 
   private final List<String> result = new ArrayList<>();
 
-  CqueryThreadsafeCallback(
-      CqueryOptions options, OutputStream out, SkyframeExecutor skyframeExecutor) {
+  CqueryThreadsafeCallback(CqueryOptions options, OutputStream out) {
     this.options = options;
     if (out != null) {
       this.printStream = new PrintStream(out);
     }
-    this.skyframeExecutor = skyframeExecutor;
   }
 
   public abstract String getName();
