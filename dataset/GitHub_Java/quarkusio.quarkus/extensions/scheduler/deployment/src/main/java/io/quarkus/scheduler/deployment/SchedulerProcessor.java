@@ -1,3 +1,18 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package io.quarkus.scheduler.deployment;
 
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
@@ -61,7 +76,7 @@ import io.quarkus.scheduler.ScheduledExecution;
 import io.quarkus.scheduler.runtime.QuartzScheduler;
 import io.quarkus.scheduler.runtime.ScheduledInvoker;
 import io.quarkus.scheduler.runtime.SchedulerConfiguration;
-import io.quarkus.scheduler.runtime.SchedulerDeploymentRecorder;
+import io.quarkus.scheduler.runtime.SchedulerDeploymentTemplate;
 
 /**
  * @author Martin Kouba
@@ -195,7 +210,7 @@ public class SchedulerProcessor {
 
     @BuildStep
     @Record(STATIC_INIT)
-    public void build(SchedulerDeploymentRecorder recorder, BeanContainerBuildItem beanContainer,
+    public void build(SchedulerDeploymentTemplate template, BeanContainerBuildItem beanContainer,
             List<ScheduledBusinessMethodItem> scheduledBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<FeatureBuildItem> feature, AnnotationProxyBuildItem annotationProxy) {
@@ -213,17 +228,17 @@ public class SchedulerProcessor {
             Map<String, Object> config = new HashMap<>();
             String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), classOutput);
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, invokerClass));
-            config.put(SchedulerDeploymentRecorder.INVOKER_KEY, invokerClass);
+            config.put(SchedulerDeploymentTemplate.INVOKER_KEY, invokerClass);
             List<Scheduled> schedules = new ArrayList<>();
             for (AnnotationInstance scheduled : businessMethod.getSchedules()) {
                 schedules.add(annotationProxy.from(scheduled, Scheduled.class));
             }
-            config.put(SchedulerDeploymentRecorder.SCHEDULES_KEY, schedules);
-            config.put(SchedulerDeploymentRecorder.DESC_KEY,
+            config.put(SchedulerDeploymentTemplate.SCHEDULES_KEY, schedules);
+            config.put(SchedulerDeploymentTemplate.DESC_KEY,
                     businessMethod.getMethod().declaringClass() + "#" + businessMethod.getMethod().name());
             scheduleConfigurations.add(config);
         }
-        recorder.registerSchedules(scheduleConfigurations, beanContainer.getValue());
+        template.registerSchedules(scheduleConfigurations, beanContainer.getValue());
     }
 
     @BuildStep
