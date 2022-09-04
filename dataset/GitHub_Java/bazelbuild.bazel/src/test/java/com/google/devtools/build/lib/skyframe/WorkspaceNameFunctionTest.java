@@ -55,7 +55,7 @@ public class WorkspaceNameFunctionTest extends BuildViewTestCase {
   @Test
   public void testErrorInExternalPkg() throws Exception {
     reporter.removeHandler(failFastHandler);
-    scratch.overwriteFile("WORKSPACE", "bad");
+    scratch.overwriteFile("WORKSPACE", "workspace(bad)");
     assertThatEvaluationResult(eval())
         .hasErrorEntryForKeyThat(key)
         .hasExceptionThat()
@@ -68,10 +68,12 @@ public class WorkspaceNameFunctionTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     scratch.deleteFile("WORKSPACE");
     FileSystemUtils.ensureSymbolicLink(scratch.resolve("WORKSPACE"), "WORKSPACE");
+    // Transitive errors from WorkspaceNameValue should manifest themselves as
+    // NoSuchPackageExceptions.
     assertThatEvaluationResult(eval())
         .hasErrorEntryForKeyThat(key)
         .hasExceptionThat()
-        .isInstanceOf(FileSymlinkCycleException.class);
+        .isInstanceOf(NoSuchPackageException.class);
   }
 
   @Test
