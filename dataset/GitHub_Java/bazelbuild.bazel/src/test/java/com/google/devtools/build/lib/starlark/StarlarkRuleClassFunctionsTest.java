@@ -105,7 +105,6 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
     builder.addStarlarkAccessibleTopLevels(
         "parametrized_native_aspect",
         TestAspects.PARAMETRIZED_STARLARK_NATIVE_ASPECT_WITH_PROVIDER);
-    builder.addNativeAspectClass(TestAspects.PARAMETRIZED_STARLARK_NATIVE_ASPECT_WITH_PROVIDER);
     return builder.build();
   }
 
@@ -2852,6 +2851,8 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testRuleAddExecGroup() throws Exception {
+    setBuildLanguageOptions("--experimental_exec_groups=true");
+
     registerDummyStarlarkFunction();
     scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
     evalAndExport(
@@ -2912,6 +2913,8 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testCreateExecGroup() throws Exception {
+    setBuildLanguageOptions("--experimental_exec_groups=true");
+
     scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
     evalAndExport(
         ev,
