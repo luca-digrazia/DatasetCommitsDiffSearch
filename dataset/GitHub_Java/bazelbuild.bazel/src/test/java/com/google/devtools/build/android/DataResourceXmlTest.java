@@ -57,6 +57,7 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 import javax.xml.stream.XMLStreamException;
 import org.junit.Before;
 import org.junit.Test;
@@ -90,7 +91,7 @@ public class DataResourceXmlTest {
     Files.createDirectories(values.getParent());
     StringBuilder builder = new StringBuilder();
     builder.append(AndroidDataWriter.PRELUDE).append("<resources");
-    for (Map.Entry<String, String> entry : namespaces.entrySet()) {
+    for (Entry<String, String> entry : namespaces.entrySet()) {
       builder
           .append(" xmlns:")
           .append(entry.getKey())
@@ -98,7 +99,7 @@ public class DataResourceXmlTest {
           .append(entry.getValue())
           .append("\"");
     }
-    for (Map.Entry<String, String> entry : attributes.entrySet()) {
+    for (Entry<String, String> entry : attributes.entrySet()) {
       builder
           .append(" ")
           .append(entry.getKey())
@@ -1070,7 +1071,7 @@ public class DataResourceXmlTest {
     serializer.queueForSerialization(dimenKey, dimenValue);
     serializer.flushTo(serialized);
 
-    AndroidDataDeserializer deserializer = AndroidParsedDataDeserializer.create();
+    AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
     final Map<DataKey, DataResource> toOverwrite = new HashMap<>();
     final Map<DataKey, DataResource> toCombine = new HashMap<>();
     deserializer.read(
@@ -1131,7 +1132,7 @@ public class DataResourceXmlTest {
     serializer.queueForSerialization(themeKey, themeValue);
     serializer.flushTo(serialized);
 
-    AndroidDataDeserializer deserializer = AndroidParsedDataDeserializer.create();
+    AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
     final Map<DataKey, DataResource> toOverwrite = new HashMap<>();
     final Map<DataKey, DataResource> toCombine = new HashMap<>();
     deserializer.read(
@@ -1257,7 +1258,7 @@ public class DataResourceXmlTest {
     serializer.queueForSerialization(key, value);
     serializer.flushTo(serialized);
 
-    AndroidDataDeserializer deserializer = AndroidParsedDataDeserializer.create();
+    AndroidDataDeserializer deserializer = AndroidDataDeserializer.create();
     final Map<DataKey, DataResource> toOverwrite = new HashMap<>();
     final Map<DataKey, DataResource> toCombine = new HashMap<>();
     deserializer.read(
@@ -1279,30 +1280,28 @@ public class DataResourceXmlTest {
 
   private String[] resourcesXmlFrom(Map<String, String> namespaces, Map<String, String> attributes,
       Path source, String... lines) {
-    FluentIterable<String> xml =
-        FluentIterable.of(new String(AndroidDataWriter.PRELUDE))
-            .append("<resources")
-            .append(
-                FluentIterable.from(namespaces.entrySet())
-                    .transform(
-                        new Function<Map.Entry<String, String>, String>() {
-                          @Override
-                          public String apply(Map.Entry<String, String> input) {
-                            return String.format(
-                                " xmlns:%s=\"%s\"", input.getKey(), input.getValue());
-                          }
-                        })
-                    .join(Joiner.on("")))
-            .append(
-                FluentIterable.from(attributes.entrySet())
-                    .transform(
-                        new Function<Map.Entry<String, String>, String>() {
-                          @Override
-                          public String apply(Map.Entry<String, String> input) {
-                            return String.format(" %s=\"%s\"", input.getKey(), input.getValue());
-                          }
-                        })
-                    .join(Joiner.on("")));
+    FluentIterable<String> xml = FluentIterable.of(new String(AndroidDataWriter.PRELUDE))
+        .append("<resources")
+        .append(
+            FluentIterable.from(namespaces.entrySet())
+                .transform(
+                    new Function<Entry<String, String>, String>() {
+                      @Override
+                      public String apply(Entry<String, String> input) {
+                        return String.format(" xmlns:%s=\"%s\"", input.getKey(), input.getValue());
+                      }
+                    })
+                .join(Joiner.on("")))
+        .append(
+            FluentIterable.from(attributes.entrySet())
+                .transform(
+                    new Function<Entry<String, String>, String>() {
+                      @Override
+                      public String apply(Entry<String, String> input) {
+                        return String.format(" %s=\"%s\"", input.getKey(), input.getValue());
+                      }
+                    })
+                .join(Joiner.on("")));
     if (source == null && (lines == null || lines.length == 0)) {
       xml = xml.append("/>");
     } else {

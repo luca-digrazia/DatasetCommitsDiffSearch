@@ -29,12 +29,14 @@ public class ErrorInfoSubject extends Subject<ErrorInfoSubject, ErrorInfo> {
   }
 
   public ThrowableSubject hasExceptionThat() {
-    return Truth.assertThat(getSubject().getException()).named("Exception in " + actualAsString());
+    return Truth.assertThat(getSubject().getException())
+        .named("Exception in " + getDisplaySubject());
   }
 
   public IterableSubject hasCycleInfoThat() {
     isNotNull();
-    return Truth.assertThat(getSubject().getCycleInfo()).named("CycleInfo in " + actualAsString());
+    return Truth.assertThat(getSubject().getCycleInfo())
+        .named("CycleInfo in " + getDisplaySubject());
   }
 
   public void rootCauseOfExceptionIs(SkyKey key) {

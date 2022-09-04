@@ -113,9 +113,7 @@ public class ClassPathsSubject extends Subject<ClassPathsSubject, Path> {
       fail("should not be null.");
     }
     exists();
-    return check("class(%s)", className)
-        .about(ClassNameSubject.classNames(getSubject()))
-        .that(className);
+    return check().about(ClassNameSubject.classNames(getSubject())).that(className);
   }
 
   static final class ClassNameSubject extends Subject<ClassNameSubject, String> {

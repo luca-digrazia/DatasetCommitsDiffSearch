@@ -45,23 +45,23 @@ public class EvaluationResultSubject extends Subject<EvaluationResultSubject, Ev
   }
 
   public DefaultSubject hasEntryThat(SkyKey key) {
-    return assertThat(getSubject().get(key)).named("Entry for " + actualAsString());
+    return assertThat(getSubject().get(key)).named("Entry for " + getDisplaySubject());
   }
 
   public ErrorInfoSubject hasErrorEntryForKeyThat(SkyKey key) {
     return assertThatErrorInfo(getSubject().getError(key))
-        .named("Error entry for " + actualAsString());
+        .named("Error entry for " + getDisplaySubject());
   }
 
   public IterableSubject hasDirectDepsInGraphThat(SkyKey parent) throws InterruptedException {
     return assertThat(
             getSubject().getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent))
-        .named("Direct deps for " + parent + " in " + actualAsString());
+        .named("Direct deps for " + parent + " in " + getDisplaySubject());
   }
 
   public IterableSubject hasReverseDepsInGraphThat(SkyKey child) throws InterruptedException {
     return assertThat(
             getSubject().getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child))
-        .named("Reverse deps for " + child + " in " + actualAsString());
+        .named("Reverse deps for " + child + " in " + getDisplaySubject());
   }
 }
