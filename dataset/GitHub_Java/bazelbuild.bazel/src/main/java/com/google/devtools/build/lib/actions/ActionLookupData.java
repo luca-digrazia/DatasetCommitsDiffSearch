@@ -15,15 +15,22 @@ package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skyframe.SkyFunctions;
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.skyframe.ShareabilityOfValue;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
 
 /** Data that uniquely identifies an action. */
+@AutoCodec
 public class ActionLookupData implements SkyKey {
+  private static final Interner<ActionLookupData> INTERNER = BlazeInterners.newWeakInterner();
+  // Test actions are not shareable.
+  // Action execution can be nondeterministic, so is semi-hermetic.
+  public static final SkyFunctionName NAME = SkyFunctionName.createSemiHermetic("ACTION_EXECUTION");
 
   private final ActionLookupKey actionLookupKey;
   private final int actionIndex;
@@ -33,12 +40,9 @@ public class ActionLookupData implements SkyKey {
     this.actionIndex = actionIndex;
   }
 
-  /**
-   * Creates a key for the result of action execution. Does <i>not</i> intern its results, so should
-   * only be called once per {@code (actionLookupKey, actionIndex)} pair.
-   */
+  @AutoCodec.Instantiator
   public static ActionLookupData create(ActionLookupKey actionLookupKey, int actionIndex) {
-    return new ActionLookupData(actionLookupKey, actionIndex);
+    return INTERNER.intern(new ActionLookupData(actionLookupKey, actionIndex));
   }
 
   public ActionLookupKey getActionLookupKey() {
@@ -91,6 +95,6 @@ public class ActionLookupData implements SkyKey {
 
   @Override
   public SkyFunctionName functionName() {
-    return SkyFunctions.ACTION_EXECUTION;
+    return NAME;
   }
 }
