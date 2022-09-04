@@ -168,7 +168,6 @@ public class NativeImageBuildStep {
             command.add(
                     "-H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime"); //the default collection policy results in full GC's 50% of the time
             command.add("-H:+JNI");
-            command.add("-H:+AllowFoldMethods");
             command.add("-jar");
             command.add(runnerJarName);
 
@@ -187,8 +186,10 @@ public class NativeImageBuildStep {
                 command.add("-H:+ReportExceptionStackTraces");
             }
             if (nativeConfig.debug.enabled) {
-                command.add("-g");
-                command.add("-H:DebugInfoSourceSearchPath=" + APP_SOURCES);
+                if (graalVMVersion.isMandrel() || graalVMVersion.isNewerThan(GraalVM.Version.VERSION_20_1)) {
+                    command.add("-g");
+                    command.add("-H:DebugInfoSourceSearchPath=" + APP_SOURCES);
+                }
             }
             if (nativeConfig.debugBuildProcess) {
                 command.add("-J-Xrunjdwp:transport=dt_socket,address=" + DEBUG_BUILD_PROCESS_PORT + ",server=y,suspend=y");
@@ -279,11 +280,13 @@ public class NativeImageBuildStep {
             IoUtils.copy(generatedImage, finalPath);
             Files.delete(generatedImage);
             if (nativeConfig.debug.enabled) {
-                final String sources = "sources";
-                final Path generatedSources = outputDir.resolve(sources);
-                final Path finalSources = outputTargetBuildItem.getOutputDirectory().resolve(sources);
-                IoUtils.copy(generatedSources, finalSources);
-                IoUtils.recursiveDelete(generatedSources);
+                if (graalVMVersion.isMandrel() || graalVMVersion.isNewerThan(GraalVM.Version.VERSION_20_1)) {
+                    final String sources = "sources";
+                    final Path generatedSources = outputDir.resolve(sources);
+                    final Path finalSources = outputTargetBuildItem.getOutputDirectory().resolve(sources);
+                    IoUtils.copy(generatedSources, finalSources);
+                    IoUtils.recursiveDelete(generatedSources);
+                }
             }
             System.setProperty("native.image.path", finalPath.toAbsolutePath().toString());
 
@@ -762,12 +765,11 @@ public class NativeImageBuildStep {
             static final Version SNAPSHOT_MANDREL = new Version("Snapshot", Integer.MAX_VALUE, Integer.MAX_VALUE,
                     Distribution.MANDREL);
 
+            static final Version VERSION_20_1 = new Version("GraalVM 20.1", 20, 1, Distribution.ORACLE);
             static final Version VERSION_20_2 = new Version("GraalVM 20.2", 20, 2, Distribution.ORACLE);
-            static final Version VERSION_20_3 = new Version("GraalVM 20.3", 20, 3, Distribution.ORACLE);
-            static final Version VERSION_21_0 = new Version("GraalVM 21.0", 21, 0, Distribution.ORACLE);
 
-            static final Version MINIMUM = VERSION_20_2;
-            static final Version CURRENT = VERSION_21_0;
+            static final Version MINIMUM = VERSION_20_1;
+            static final Version CURRENT = VERSION_20_2;
 
             final String fullVersion;
             final int major;

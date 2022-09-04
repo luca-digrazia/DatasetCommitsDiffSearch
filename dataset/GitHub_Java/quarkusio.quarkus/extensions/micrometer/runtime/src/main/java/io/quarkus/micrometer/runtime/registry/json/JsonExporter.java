@@ -86,25 +86,15 @@ public class JsonExporter {
     }
 
     private Map<String, JsonValue> exportGauges(Collection<Gauge> gauges) {
-        Map<String, JsonValue> result = new HashMap<String, JsonValue>(gauges.size());
-        for (Gauge g : gauges) {
-            double value = g.value();
-            if (Double.isFinite(value)) {
-                result.put(createExportKey(g.getId()), JSON_PROVIDER.createValue(value));
-            }
-        }
-        return result;
+        return gauges.stream()
+                .collect(Collectors.toMap(gauge -> createExportKey(gauge.getId()),
+                        gauge -> JSON_PROVIDER.createValue(gauge.value())));
     }
 
     private Map<String, JsonValue> exportTimeGauges(Collection<TimeGauge> timeGauges) {
-        Map<String, JsonValue> result = new HashMap<String, JsonValue>(timeGauges.size());
-        for (TimeGauge g : timeGauges) {
-            double value = g.value();
-            if (Double.isFinite(value)) {
-                result.put(createExportKey(g.getId()), JSON_PROVIDER.createValue(value));
-            }
-        }
-        return result;
+        return timeGauges.stream()
+                .collect(Collectors.toMap(gauge -> createExportKey(gauge.getId()),
+                        gauge -> JSON_PROVIDER.createValue(gauge.value())));
     }
 
     private Map<String, JsonValue> exportCounters(Collection<Counter> counters) {
