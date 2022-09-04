@@ -57,9 +57,9 @@ public class WindowsFileSystem extends JavaIoFileSystem {
     try {
       return WindowsFileOperations.deletePath(path.getPathString());
     } catch (java.nio.file.DirectoryNotEmptyException e) {
-      throw new IOException(path.getPathString() + ERR_DIRECTORY_NOT_EMPTY, e);
+      throw new IOException(path.getPathString() + ERR_DIRECTORY_NOT_EMPTY);
     } catch (java.nio.file.AccessDeniedException e) {
-      throw new IOException(path.getPathString() + ERR_PERMISSION_DENIED, e);
+      throw new IOException(path.getPathString() + ERR_PERMISSION_DENIED);
     } finally {
       profiler.logSimpleTask(startTime, ProfilerTask.VFS_DELETE, path.getPathString());
     }
@@ -81,26 +81,12 @@ public class WindowsFileSystem extends JavaIoFileSystem {
         Files.copy(target, link);
       }
     } catch (java.nio.file.FileAlreadyExistsException e) {
-      throw new IOException(linkPath + ERR_FILE_EXISTS, e);
+      throw new IOException(linkPath + ERR_FILE_EXISTS);
     } catch (java.nio.file.AccessDeniedException e) {
-      throw new IOException(linkPath + ERR_PERMISSION_DENIED, e);
+      throw new IOException(linkPath + ERR_PERMISSION_DENIED);
     } catch (java.nio.file.NoSuchFileException e) {
       throw new FileNotFoundException(linkPath + ERR_NO_SUCH_FILE_OR_DIR);
     }
-  }
-
-  @Override
-  protected PathFragment readSymbolicLink(Path path) throws IOException {
-    java.nio.file.Path nioPath = getNioPath(path);
-    WindowsFileOperations.ReadSymlinkOrJunctionResult result =
-        WindowsFileOperations.readSymlinkOrJunction(nioPath.toString());
-    if (result.getStatus() == WindowsFileOperations.ReadSymlinkOrJunctionResult.Status.OK) {
-      return PathFragment.create(result.getResult());
-    }
-    if (result.getStatus() == WindowsFileOperations.ReadSymlinkOrJunctionResult.Status.NOT_A_LINK) {
-      throw new NotASymlinkException(path);
-    }
-    throw new IOException(result.getResult());
   }
 
   @Override
@@ -116,7 +102,7 @@ public class WindowsFileSystem extends JavaIoFileSystem {
   @Override
   protected boolean fileIsSymbolicLink(File file) {
     try {
-      if (isSymlinkOrJunction(file)) {
+      if (isJunction(file)) {
         return true;
       }
     } catch (IOException e) {
@@ -144,20 +130,17 @@ public class WindowsFileSystem extends JavaIoFileSystem {
         new FileStatus() {
           @Override
           public boolean isFile() {
-            return !isSymbolicLink && (attributes.isRegularFile() || isSpecialFile());
+            return attributes.isRegularFile() || (isSpecialFile() && !isDirectory());
           }
 
           @Override
           public boolean isSpecialFile() {
-            // attributes.isOther() returns false for symlinks but returns true for junctions.
-            // Bazel treats junctions like symlinks. So let's return false here for junctions.
-            // This fixes https://github.com/bazelbuild/bazel/issues/9176
-            return !isSymbolicLink && attributes.isOther();
+            return attributes.isOther();
           }
 
           @Override
           public boolean isDirectory() {
-            return !isSymbolicLink && attributes.isDirectory();
+            return attributes.isDirectory();
           }
 
           @Override
@@ -195,7 +178,7 @@ public class WindowsFileSystem extends JavaIoFileSystem {
   protected boolean isDirectory(Path path, boolean followSymlinks) {
     if (!followSymlinks) {
       try {
-        if (isSymlinkOrJunction(getIoFile(path))) {
+        if (isJunction(getIoFile(path))) {
           return false;
         }
       } catch (IOException e) {
@@ -225,18 +208,13 @@ public class WindowsFileSystem extends JavaIoFileSystem {
    * they are dangling), though only directory junctions and directory symlinks are useful.
    */
   @VisibleForTesting
-  static boolean isSymlinkOrJunction(File file) throws IOException {
-    return WindowsFileOperations.isSymlinkOrJunction(file.getPath());
+  static boolean isJunction(File file) throws IOException {
+    return WindowsFileOperations.isJunction(file.getPath());
   }
 
   private static DosFileAttributes getAttribs(File file, boolean followSymlinks)
       throws IOException {
     return Files.readAttributes(
         file.toPath(), DosFileAttributes.class, symlinkOpts(followSymlinks));
-  }
-
-  @VisibleForTesting
-  Path getCorrectCasingForTesting(Path p) throws IOException {
-    return getPath(WindowsFileOperations.getCorrectCasing(p.getPathString()));
   }
 }
