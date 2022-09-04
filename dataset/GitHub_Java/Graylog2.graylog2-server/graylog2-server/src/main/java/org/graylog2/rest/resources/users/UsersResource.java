@@ -160,7 +160,7 @@ public class UsersResource extends RestResource {
         // Create user.
         org.graylog2.plugin.database.users.User user = userService.create();
         user.setName(cr.username());
-        user.setPassword(cr.password());
+        user.setPassword(cr.password(), configuration.getPasswordSecret());
         user.setFullName(cr.fullName());
         user.setEmail(cr.email());
         user.setPermissions(cr.permissions());
@@ -375,8 +375,9 @@ public class UsersResource extends RestResource {
         }
 
         boolean changeAllowed = false;
+        final String secret = configuration.getPasswordSecret();
         if (checkOldPassword) {
-            if (user.isUserPassword(cr.oldPassword())) {
+            if (user.isUserPassword(cr.oldPassword(), secret)) {
                 changeAllowed = true;
             }
         } else {
@@ -384,7 +385,7 @@ public class UsersResource extends RestResource {
         }
 
         if (changeAllowed) {
-            user.setPassword(cr.password());
+            user.setPassword(cr.password(), secret);
             userService.save(user);
         } else {
             throw new ForbiddenException();
