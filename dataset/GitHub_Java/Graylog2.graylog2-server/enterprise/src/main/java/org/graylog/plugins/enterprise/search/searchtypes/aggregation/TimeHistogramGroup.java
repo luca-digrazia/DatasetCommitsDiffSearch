@@ -28,11 +28,9 @@ public abstract class TimeHistogramGroup implements GroupSpec {
     @Override
     public abstract String type();
 
-    @Override
     @JsonProperty
     public abstract List<MetricSpec> metrics();
 
-    @Override
     @JsonProperty
     public abstract List<GroupSpec> groups();
 

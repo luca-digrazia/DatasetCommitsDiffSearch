@@ -4,7 +4,6 @@ import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.primitives.Ints;
 import io.searchbox.core.SearchResult;
-import io.searchbox.core.search.aggregation.MetricAggregation;
 import io.searchbox.core.search.aggregation.TermsAggregation;
 import org.elasticsearch.index.query.BoolQueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
@@ -81,8 +80,8 @@ public class ESGroupBy implements ESSearchTypeHandler<GroupBy> {
     }
 
     @Override
-    public SearchType.Result doExtractResult(SearchJob job, Query query, GroupBy groupBy, SearchResult queryResult, MetricAggregation aggregations, ESGeneratedQueryContext queryContext) {
-        final TermsAggregation termsAggregation = aggregations
+    public SearchType.Result doExtractResult(SearchJob job, Query query, GroupBy groupBy, SearchResult queryResult, ESGeneratedQueryContext queryContext) {
+        final TermsAggregation termsAggregation = queryResult.getAggregations()
                 .getFilterAggregation(filterAggName(groupBy))
                 .getTermsAggregation(termsAggName(groupBy));
 

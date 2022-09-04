@@ -1,16 +1,11 @@
 package org.graylog.plugins.enterprise.search.engine;
 
-import com.google.common.base.Stopwatch;
-import com.google.common.collect.ImmutableSet;
-import org.graylog.plugins.enterprise.search.Parameter;
 import org.graylog.plugins.enterprise.search.Query;
-import org.graylog.plugins.enterprise.search.QueryMetadata;
+import org.graylog.plugins.enterprise.search.QueryInfo;
 import org.graylog.plugins.enterprise.search.QueryResult;
 import org.graylog.plugins.enterprise.search.SearchJob;
-import org.graylog.plugins.enterprise.search.errors.QueryError;
 
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 /**
  * A search backend that is capable of generating and executing search jobs
@@ -31,26 +26,9 @@ public interface QueryBackend<T extends GeneratedQueryContext> {
 
     // TODO we can probably push job, query and predecessorResults into the GeneratedQueryContext to simplify the signature
     default QueryResult run(SearchJob job, Query query, GeneratedQueryContext generatedQueryContext, Set<QueryResult> predecessorResults) {
-        try {
-            final Stopwatch stopwatch = Stopwatch.createStarted();
-            final QueryExecutionStats.Builder statsBuilder = QueryExecutionStats.builderWithCurrentTime();
-            // https://www.ibm.com/developerworks/java/library/j-jtp04298/index.html#3.0
-            //noinspection unchecked
-            final QueryResult result = doRun(job, query, (T) generatedQueryContext, predecessorResults);
-            stopwatch.stop();
-            return result.toBuilder()
-                    .executionStats(
-                            statsBuilder.duration(stopwatch.elapsed(TimeUnit.MILLISECONDS))
-                                    .effectiveTimeRange(EffectiveTimeRange.create(query.timerange().getFrom(), query.timerange().getTo()))
-                                    .build())
-                    .build();
-        } catch (Exception e) {
-            // the backend has very likely created a more specific error and added it to the context, but we fall
-            // back to a generic error so we never throw exceptions into the engine.
-            final QueryError queryError = new QueryError(query, e);
-            generatedQueryContext.addError(queryError);
-            return QueryResult.failedQueryWithError(query, queryError);
-        }
+        // https://www.ibm.com/developerworks/java/library/j-jtp04298/index.html#3.0
+        //noinspection unchecked
+        return doRun(job, query, (T) generatedQueryContext, predecessorResults);
     }
 
     /**
@@ -73,5 +51,5 @@ public interface QueryBackend<T extends GeneratedQueryContext> {
      * This method decomposes the backend-specific query and returns information about used parameters, optionally the
      * AST for syntax highlight and other information the UI can use to offer help.
      */
-    QueryMetadata parse(ImmutableSet<Parameter> parameters, Query query);
+    QueryInfo parse(Query query);
 }

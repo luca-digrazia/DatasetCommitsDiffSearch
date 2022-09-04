@@ -42,7 +42,8 @@ public class ESFieldMetric implements ESSearchTypeHandler<FieldMetric> {
     }
 
     @Override
-    public SearchType.Result doExtractResult(SearchJob job, Query query, FieldMetric fieldMetric, SearchResult queryResult, MetricAggregation aggregations, ESGeneratedQueryContext queryContext) {
+    public SearchType.Result doExtractResult(SearchJob job, Query query, FieldMetric fieldMetric, SearchResult queryResult, ESGeneratedQueryContext queryContext) {
+        final MetricAggregation aggregations = queryResult.getAggregations();
         final String id = fieldMetric.id();
         final SearchType.Result result;
 

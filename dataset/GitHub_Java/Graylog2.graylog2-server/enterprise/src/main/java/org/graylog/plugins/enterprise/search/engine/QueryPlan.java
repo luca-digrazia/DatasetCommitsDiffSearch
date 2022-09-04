@@ -1,6 +1,7 @@
 package org.graylog.plugins.enterprise.search.engine;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.graph.GraphBuilder;
 import com.google.common.graph.ImmutableGraph;
 import com.google.common.graph.MutableGraph;
@@ -8,14 +9,16 @@ import com.google.common.graph.Traverser;
 import one.util.streamex.StreamEx;
 import org.graylog.plugins.enterprise.search.Parameter;
 import org.graylog.plugins.enterprise.search.Query;
-import org.graylog.plugins.enterprise.search.QueryMetadata;
 import org.graylog.plugins.enterprise.search.Search;
 import org.graylog.plugins.enterprise.search.SearchJob;
 import org.graylog.plugins.enterprise.search.params.QueryReferenceBinding;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import java.util.Optional;
+import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
@@ -25,13 +28,13 @@ import static com.google.common.collect.ImmutableList.toImmutableList;
 import static org.graylog.plugins.enterprise.search.util.GraphToDot.toDot;
 
 public class QueryPlan {
-    private final QueryEngine queryEngine;
+    private static final Logger LOG = LoggerFactory.getLogger(QueryPlan.class);
+
     private final SearchJob searchJob;
     private ImmutableGraph<Query> plan;
     private final Query rootNode = Query.emptyRoot();
 
-    public QueryPlan(QueryEngine queryEngine, SearchJob searchJob) {
-        this.queryEngine = queryEngine;
+    public QueryPlan(SearchJob searchJob) {
         this.searchJob = searchJob;
         plan();
     }
@@ -45,12 +48,8 @@ public class QueryPlan {
         final Search search = searchJob.getSearch();
         for (Query currentQuery : search.queries()) {
             // if this query does not reference any others explicitly, we will use the rootNode as its source
-            final QueryMetadata queryMetadata = queryEngine.parse(search, currentQuery);
-            final Stream<Parameter> parameterStream = queryMetadata.usedParameterNames().stream()
-                    .map(search::getParameter)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get);
-            final Set<String> referencedQueryIds = StreamEx.of(parameterStream)
+            final ImmutableSet<Parameter> parameters = currentQuery.parameters();
+            final Set<String> referencedQueryIds = StreamEx.of(parameters.stream())
                     .map(Parameter::binding)
                     .filter(QueryReferenceBinding.class::isInstance)
                     .map(binding -> (QueryReferenceBinding) binding)
@@ -64,7 +63,7 @@ public class QueryPlan {
 
             // add edges from each source node to this one, typically this will be only a single source
             for (String sourceQueryId : referencedQueryIds) {
-                final Query sourceQuery = search.getQuery(sourceQueryId).orElse(rootNode);
+                final Query sourceQuery = sourceQueryId.isEmpty() ? rootNode : search.getQuery(sourceQueryId);
                 planGraph.addNode(sourceQuery);
                 planGraph.addNode(currentQuery);
                 planGraph.putEdge(sourceQuery, currentQuery);
