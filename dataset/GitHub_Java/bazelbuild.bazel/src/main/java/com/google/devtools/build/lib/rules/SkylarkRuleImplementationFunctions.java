@@ -16,13 +16,17 @@ package com.google.devtools.build.lib.rules;
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
+import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.AbstractConfiguredTarget;
 import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.LocationExpander;
+import com.google.devtools.build.lib.analysis.PseudoAction;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -31,6 +35,8 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.ParamType;
@@ -56,6 +62,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 // TODO(bazel-team): function argument names are often duplicated,
 // figure out a nicely readable way to get rid of the duplications.
@@ -437,9 +444,7 @@ public class SkylarkRuleImplementationFunctions {
   @SkylarkSignature(
     name = "empty_action",
     doc =
-        "DEPRECATED. Use <a href=\"actions.html#do_nothing\">ctx.actions.do_nothing</a> instead."
-            + " <br>"
-            + "Creates an empty action that neither executes a command nor produces any "
+        "Creates an empty action that neither executes a command nor produces any "
             + "output, but that is useful for inserting 'extra actions'.",
     objectType = SkylarkRuleContext.class,
     returnType = Runtime.NoneType.class,
@@ -470,10 +475,44 @@ public class SkylarkRuleImplementationFunctions {
       new BuiltinFunction("empty_action") {
         @SuppressWarnings("unused")
         public Runtime.NoneType invoke(SkylarkRuleContext ctx, String mnemonic, Object inputs)
-            throws EvalException {
+            throws EvalException, ConversionException {
           ctx.checkMutable("empty_action");
-          ctx.actions().doNothing(mnemonic, inputs);
+          RuleContext ruleContext = ctx.getRuleContext();
+          NestedSet<Artifact> inputSet = inputs instanceof SkylarkNestedSet
+              ? ((SkylarkNestedSet) inputs).getSet(Artifact.class)
+              : convertInputs((SkylarkList) inputs);
+          Action action =
+              new PseudoAction<>(
+                  generateUuid(ruleContext),
+                  ruleContext.getActionOwner(),
+                  inputSet,
+                  generateDummyOutputs(ruleContext),
+                  mnemonic,
+                  SpawnInfo.spawnInfo,
+                  createEmptySpawnInfo());
+          ruleContext.registerAction(action);
+
           return Runtime.NONE;
+        }
+
+        private NestedSet<Artifact> convertInputs(SkylarkList inputs) throws EvalException {
+          return NestedSetBuilder.<Artifact>compileOrder()
+              .addAll(inputs.getContents(Artifact.class, "inputs"))
+              .build();
+        }
+
+        protected UUID generateUuid(RuleContext ruleContext) {
+          return UUID.nameUUIDFromBytes(
+              String.format("empty action %s", ruleContext.getLabel())
+                  .getBytes(StandardCharsets.UTF_8));
+        }
+
+        protected ImmutableList<Artifact> generateDummyOutputs(RuleContext ruleContext) {
+          return ImmutableList.of(PseudoAction.getDummyOutput(ruleContext));
+        }
+
+        protected SpawnInfo createEmptySpawnInfo() {
+          return SpawnInfo.newBuilder().build();
         }
       };
 
@@ -630,6 +669,7 @@ public class SkylarkRuleImplementationFunctions {
     }
   };
 
+
   /**
    * Ensures the given {@link Map} has keys that have {@link Label} type and values that have either
    * {@link Iterable} or {@link SkylarkNestedSet} type, and raises {@link EvalException} otherwise.
@@ -638,7 +678,8 @@ public class SkylarkRuleImplementationFunctions {
   // TODO(bazel-team): find a better way to typecheck this argument.
   @SuppressWarnings("unchecked")
   private static Map<Label, Iterable<Artifact>> checkLabelDict(
-      Map<?, ?> labelDict, Location loc, Environment env) throws EvalException {
+      Map<?, ?> labelDict, Location loc)
+      throws EvalException {
     Map<Label, Iterable<Artifact>> convertedMap = new HashMap<>();
     for (Map.Entry<?, ?> entry : labelDict.entrySet()) {
       Object key = entry.getKey();
@@ -650,7 +691,7 @@ public class SkylarkRuleImplementationFunctions {
       Object val = entry.getValue();
       Iterable<?> valIter;
       try {
-        valIter = EvalUtils.toIterableStrict(val, loc, env);
+        valIter = EvalUtils.toIterableStrict(val, loc);
       } catch (EvalException ex) {
         // EvalException is thrown only if the type is wrong.
         throw new EvalException(
@@ -772,7 +813,7 @@ public class SkylarkRuleImplementationFunctions {
             throws ConversionException, EvalException {
           ctx.checkMutable("resolve_command");
           Label ruleLabel = ctx.getLabel();
-          Map<Label, Iterable<Artifact>> labelDict = checkLabelDict(labelDictUnchecked, loc, env);
+          Map<Label, Iterable<Artifact>> labelDict = checkLabelDict(labelDictUnchecked, loc);
           // The best way to fix this probably is to convert CommandHelper to Skylark.
           CommandHelper helper =
               new CommandHelper(
