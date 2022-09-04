@@ -73,7 +73,6 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParamsInfo;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -250,7 +249,7 @@ public final class ObjcCommon {
       return this;
     }
 
-    Builder addDeps(List<ConfiguredTargetAndTarget> deps) {
+    Builder addDeps(List<? extends TransitiveInfoCollection> deps) {
       ImmutableList.Builder<ObjcProvider> propagatedObjcDeps =
           ImmutableList.<ObjcProvider>builder();
       ImmutableList.Builder<CppCompilationContext> cppDeps =
@@ -258,13 +257,12 @@ public final class ObjcCommon {
       ImmutableList.Builder<CcLinkParamsInfo> cppDepLinkParams =
           ImmutableList.<CcLinkParamsInfo>builder();
 
-      for (ConfiguredTargetAndTarget dep : deps) {
-        ConfiguredTarget depCT = dep.getConfiguredTarget();
-        addAnyProviders(propagatedObjcDeps, depCT, ObjcProvider.SKYLARK_CONSTRUCTOR);
-        addAnyProviders(cppDeps, depCT, CppCompilationContext.class);
+      for (TransitiveInfoCollection dep : deps) {
+        addAnyProviders(propagatedObjcDeps, dep, ObjcProvider.SKYLARK_CONSTRUCTOR);
+        addAnyProviders(cppDeps, dep, CppCompilationContext.class);
         if (isCcLibrary(dep)) {
-          cppDepLinkParams.add(depCT.get(CcLinkParamsInfo.PROVIDER));
-          addDefines(depCT.getProvider(CppCompilationContext.class).getDefines());
+          cppDepLinkParams.add(dep.get(CcLinkParamsInfo.PROVIDER));
+          addDefines(dep.getProvider(CppCompilationContext.class).getDefines());
         }
       }
       addDepObjcProviders(propagatedObjcDeps.build());
@@ -574,10 +572,10 @@ public final class ObjcCommon {
       return new ObjcCommon(objcProvider.build(), compilationArtifacts);
     }
 
-    private static boolean isCcLibrary(ConfiguredTargetAndTarget info) {
+    private static boolean isCcLibrary(TransitiveInfoCollection info) {
       try {
-        String targetName = info.getTarget().getTargetKind();
-
+        ConfiguredTarget target = (ConfiguredTarget) info;
+        String targetName = target.getTarget().getTargetKind();
         for (String ruleClassName : ObjcRuleClasses.CompilingRule.ALLOWED_CC_DEPS_RULE_CLASSES) {
           if (targetName.equals(ruleClassName + " rule")) {
             return true;
@@ -721,6 +719,10 @@ public final class ObjcCommon {
     return notInContainerErrors(artifacts, ImmutableList.of(containerType));
   }
 
+  @VisibleForTesting
+  static final String NOT_IN_CONTAINER_ERROR_FORMAT =
+      "File '%s' is not in a directory of one of these type(s): %s";
+
   static Iterable<String> notInContainerErrors(
       Iterable<Artifact> artifacts, Iterable<FileType> containerTypes) {
     Set<String> errors = new HashSet<>();
@@ -736,8 +738,4 @@ public final class ObjcCommon {
     }
     return errors;
   }
-
-  @VisibleForTesting
-  static final String NOT_IN_CONTAINER_ERROR_FORMAT =
-      "File '%s' is not in a directory of one of these type(s): %s";
 }
