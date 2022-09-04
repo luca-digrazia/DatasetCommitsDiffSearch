@@ -94,7 +94,7 @@ public class NettyHttpClientConfig {
      * <p>
      * 0 means unlimited.
      */
-    @ConfigItem
+    @ConfigItem(defaultValue = "0")
     public int maxHttp2Streams;
 
     /**
@@ -168,13 +168,13 @@ public class NettyHttpClientConfig {
          * raised.
          */
         @ConfigItem
-        public Optional<URI> endpoint;
+        public URI endpoint;
 
         /**
          * The hosts that the client is allowed to access without going through the proxy.
          */
         @ConfigItem
-        public Optional<List<String>> nonProxyHosts;
+        public List<String> nonProxyHosts;
     }
 
     //TODO: additionalChannelOptions

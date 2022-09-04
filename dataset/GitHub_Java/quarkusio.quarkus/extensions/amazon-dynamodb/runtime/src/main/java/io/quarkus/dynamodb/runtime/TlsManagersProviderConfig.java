@@ -14,11 +14,11 @@ public class TlsManagersProviderConfig {
      *
      * Available providers:
      *
-     * * `none` - Use this provider if you don't want the client to present any certificates to the remote TLS host.
-     * * `system-property` - Provider checks the standard `javax.net.ssl.keyStore`, `javax.net.ssl.keyStorePassword`, and
+     * * `NONE` - Use this provider if you don't want the client to present any certificates to the remote TLS host.
+     * * `SYSTEM_PROPERTY` - Provider checks the standard `javax.net.ssl.keyStore`, `javax.net.ssl.keyStorePassword`, and
      *                       `javax.net.ssl.keyStoreType` properties defined by the
      *                        https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html[JSSE].
-     * * `file-store` - Provider that loads a the key store from a file.
+     * * `FILE_STORE` - Provider that loads a the key store from a file.
      *
      * @asciidoclet
      */

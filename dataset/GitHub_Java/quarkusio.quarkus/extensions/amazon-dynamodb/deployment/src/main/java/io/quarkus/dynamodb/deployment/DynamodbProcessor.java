@@ -5,8 +5,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import javax.enterprise.inject.spi.DeploymentException;
-
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
 
@@ -19,39 +17,35 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageProxyDefinitionBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
+import io.quarkus.dynamodb.runtime.ApacheHttpClientConfig;
 import io.quarkus.dynamodb.runtime.AwsCredentialsProviderType;
 import io.quarkus.dynamodb.runtime.DynamodbClientProducer;
 import io.quarkus.dynamodb.runtime.DynamodbConfig;
 import io.quarkus.dynamodb.runtime.DynamodbRecorder;
 import io.quarkus.dynamodb.runtime.NettyHttpClientConfig;
-import io.quarkus.dynamodb.runtime.SyncHttpClientConfig;
-import io.quarkus.dynamodb.runtime.SyncHttpClientConfig.SyncClientType;
 import io.quarkus.dynamodb.runtime.TlsManagersProviderConfig;
 import io.quarkus.dynamodb.runtime.TlsManagersProviderType;
 import software.amazon.awssdk.core.interceptor.ExecutionInterceptor;
 import software.amazon.awssdk.http.SdkHttpService;
+import software.amazon.awssdk.http.apache.ApacheSdkHttpService;
 import software.amazon.awssdk.http.async.SdkAsyncHttpService;
+import software.amazon.awssdk.http.nio.netty.NettySdkAsyncHttpService;
 import software.amazon.awssdk.services.dynamodb.DynamoDbAsyncClient;
 import software.amazon.awssdk.services.dynamodb.DynamoDbClient;
 import software.amazon.awssdk.utils.StringUtils;
 
 public class DynamodbProcessor {
     public static final String AWS_SDK_APPLICATION_ARCHIVE_MARKERS = "software/amazon/awssdk";
-
-    private static final String APACHE_HTTP_SERVICE = "software.amazon.awssdk.http.apache.ApacheSdkHttpService";
-    private static final String NETTY_HTTP_SERVICE = "software.amazon.awssdk.http.nio.netty.NettySdkAsyncHttpService";
-    private static final String URL_HTTP_SERVICE = "software.amazon.awssdk.http.urlconnection.UrlConnectionSdkHttpService";
 
     private static final List<String> INTERCEPTOR_PATHS = Arrays.asList(
             "software/amazon/awssdk/global/handlers/execution.interceptors",
@@ -68,25 +62,20 @@ public class DynamodbProcessor {
         return new JniBuildItem();
     }
 
-    @BuildStep
-    AdditionalApplicationArchiveMarkerBuildItem marker() {
-        return new AdditionalApplicationArchiveMarkerBuildItem(AWS_SDK_APPLICATION_ARCHIVE_MARKERS);
-    }
-
-    @BuildStep
+    @BuildStep(applicationArchiveMarkers = { AWS_SDK_APPLICATION_ARCHIVE_MARKERS })
     void setup(CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport,
             BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            BuildProducer<NativeImageResourceBuildItem> resource) {
+            BuildProducer<SubstrateResourceBuildItem> resource) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.DYNAMODB));
 
         // Indicates that this extension would like the SSL support to be enabled
         extensionSslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(FeatureBuildItem.DYNAMODB));
 
-        INTERCEPTOR_PATHS.stream().forEach(path -> resource.produce(new NativeImageResourceBuildItem(path)));
+        INTERCEPTOR_PATHS.stream().forEach(path -> resource.produce(new SubstrateResourceBuildItem(path)));
 
         List<String> knownInterceptorImpls = combinedIndexBuildItem.getIndex()
                 .getAllKnownImplementors(EXECUTION_INTERCEPTOR_NAME)
@@ -104,7 +93,7 @@ public class DynamodbProcessor {
     @BuildStep
     DynamodbClientBuildItem analyzeDynamodbClientInjectionPoints(BeanRegistrationPhaseBuildItem beanRegistrationPhase,
             BuildProducer<ServiceProviderBuildItem> serviceProvider,
-            BuildProducer<NativeImageProxyDefinitionBuildItem> proxyDefinition) {
+            BuildProducer<SubstrateProxyDefinitionBuildItem> proxyDefinition) {
 
         boolean createSyncClient = false;
         boolean createAsyncClient = false;
@@ -123,38 +112,24 @@ public class DynamodbProcessor {
         }
 
         if (createSyncClient) {
-            if (config.syncClient.type == SyncClientType.APACHE) {
-                checkClasspath(APACHE_HTTP_SERVICE, "apache-client");
+            //Register Apache client as sync client
+            proxyDefinition
+                    .produce(new SubstrateProxyDefinitionBuildItem("org.apache.http.conn.HttpClientConnectionManager",
+                            "org.apache.http.pool.ConnPoolControl",
+                            "software.amazon.awssdk.http.apache.internal.conn.Wrapped"));
 
-                //Register Apache client as sync client
-                proxyDefinition.produce(
-                        new NativeImageProxyDefinitionBuildItem("org.apache.http.conn.HttpClientConnectionManager",
-                                "org.apache.http.pool.ConnPoolControl",
-                                "software.amazon.awssdk.http.apache.internal.conn.Wrapped"));
-
-                serviceProvider.produce(new ServiceProviderBuildItem(SdkHttpService.class.getName(), APACHE_HTTP_SERVICE));
-            } else {
-                checkClasspath(URL_HTTP_SERVICE, "url-connection-client");
-                serviceProvider.produce(new ServiceProviderBuildItem(SdkHttpService.class.getName(), URL_HTTP_SERVICE));
-            }
+            serviceProvider.produce(
+                    new ServiceProviderBuildItem(SdkHttpService.class.getName(), ApacheSdkHttpService.class.getName()));
         }
 
         if (createAsyncClient) {
-            checkClasspath(NETTY_HTTP_SERVICE, "netty-nio-client");
             //Register netty as async client
-            serviceProvider.produce(new ServiceProviderBuildItem(SdkAsyncHttpService.class.getName(), NETTY_HTTP_SERVICE));
+            serviceProvider.produce(
+                    new ServiceProviderBuildItem(SdkAsyncHttpService.class.getName(),
+                            NettySdkAsyncHttpService.class.getName()));
         }
 
         return new DynamodbClientBuildItem(createSyncClient, createAsyncClient);
-    }
-
-    private void checkClasspath(String className, String dependencyName) {
-        try {
-            Class.forName(className, true, Thread.currentThread().getContextClassLoader());
-        } catch (ClassNotFoundException e) {
-            throw new DeploymentException(
-                    "Missing 'software.amazon.awssdk:" + dependencyName + "' dependency on the classpath");
-        }
     }
 
     @BuildStep
@@ -218,19 +193,17 @@ public class DynamodbProcessor {
         }
     }
 
-    private static void checkSyncClientConfig(SyncHttpClientConfig syncClient) {
-        if (syncClient.type == SyncClientType.APACHE) {
-            if (syncClient.apache.maxConnections <= 0) {
-                throw new ConfigurationError("quarkus.dynamodb.sync-client.max-connections may not be negative or zero.");
-            }
-            if (syncClient.apache.proxy != null && syncClient.apache.proxy.enabled) {
-                URI proxyEndpoint = syncClient.apache.proxy.endpoint;
-                if (proxyEndpoint != null) {
-                    validateProxyEndpoint(proxyEndpoint, "sync");
-                }
-            }
-            validateTlsManagersProvider(syncClient.apache.tlsManagersProvider, "sync");
+    private static void checkSyncClientConfig(ApacheHttpClientConfig syncClient) {
+        if (syncClient.maxConnections <= 0) {
+            throw new ConfigurationError("quarkus.dynamodb.sync-client.max-connections may not be negative or zero.");
         }
+        if (syncClient.proxy != null && syncClient.proxy.enabled) {
+            URI proxyEndpoint = syncClient.proxy.endpoint;
+            if (proxyEndpoint != null) {
+                validateProxyEndpoint(proxyEndpoint, "sync");
+            }
+        }
+        validateTlsManagersProvider(syncClient.tlsManagersProvider, "sync");
     }
 
     private static void checkAsyncClientConfig(NettyHttpClientConfig asyncClient) {
