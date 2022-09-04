@@ -109,11 +109,6 @@ public abstract class AbstractDataSourceProducer {
                 transactionSynchronizationRegistry);
         poolConfiguration.transactionIntegration(txIntegration);
 
-        // New connection SQL
-        if (dataSourceRuntimeConfig.newConnectionSql.isPresent()) {
-            agroalConnectionFactoryConfigurationSupplier.initialSql(dataSourceRuntimeConfig.newConnectionSql.get());
-        }
-
         // metrics
         dataSourceConfiguration.metricsEnabled(dataSourceRuntimeConfig.enableMetrics);
 
@@ -169,9 +164,7 @@ public abstract class AbstractDataSourceProducer {
         // Explicit reference to bypass reflection need of the ServiceLoader used by AgroalDataSource#from
         AgroalDataSource dataSource = new io.agroal.pool.DataSource(dataSourceConfiguration.get());
 
-        if (log.isDebugEnabled()) {
-            log.debug("Started data source " + dataSourceName + " connected to " + url);
-        }
+        log.debug("Started data source " + dataSourceName + " connected to " + url);
 
         this.dataSources.add(dataSource);
 
