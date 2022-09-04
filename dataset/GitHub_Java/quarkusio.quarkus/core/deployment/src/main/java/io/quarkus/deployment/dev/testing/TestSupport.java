@@ -13,7 +13,6 @@ import org.jboss.logging.Logger;
 
 import io.quarkus.bootstrap.app.CuratedApplication;
 import io.quarkus.bootstrap.app.QuarkusBootstrap;
-import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
 import io.quarkus.bootstrap.model.PathsCollection;
 import io.quarkus.deployment.dev.CompilationProvider;
 import io.quarkus.deployment.dev.DevModeContext;
@@ -133,13 +132,6 @@ public class TestSupport implements TestController {
                         .bootstrap();
                 compiler = new QuarkusCompiler(testCuratedApplication, compilationProviders, context);
                 testRunner = new TestRunner(this, context, testCuratedApplication);
-                QuarkusClassLoader cl = (QuarkusClassLoader) getClass().getClassLoader();
-                cl.addCloseTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        testCuratedApplication.close();
-                    }
-                });
 
             } catch (Exception e) {
                 throw new RuntimeException(e);
@@ -256,85 +248,7 @@ public class TestSupport implements TestController {
 
     @Override
     public boolean toggleBrokenOnlyMode() {
-
-        failingTestsOnly = !failingTestsOnly;
-
-        if (failingTestsOnly) {
-            log.info("Broken only mode enabled");
-        } else {
-            log.info("Broken only mode disabled");
-        }
-
-        for (TestListener i : testListeners) {
-            i.setBrokenOnly(failingTestsOnly);
-        }
-
-        return failingTestsOnly;
-    }
-
-    @Override
-    public boolean toggleTestOutput() {
-
-        setDisplayTestOutput(!displayTestOutput);
-        if (displayTestOutput) {
-            log.info("Test output enabled");
-        } else {
-            log.info("Test output disabled");
-        }
-
-        for (TestListener i : testListeners) {
-            i.setTestOutput(displayTestOutput);
-        }
-
-        return displayTestOutput;
-    }
-
-    @Override
-    public boolean toggleInstrumentation() {
-
-        boolean ibr = RuntimeUpdatesProcessor.INSTANCE.toggleInstrumentation();
-
-        for (TestListener i : testListeners) {
-            i.setInstrumentationBasedReload(ibr);
-        }
-
-        return ibr;
-    }
-
-    @Override
-    public void printFullResults() {
-        if (currentState().getFailingClasses().isEmpty()) {
-            log.info("All tests passed, no output to display");
-        }
-        for (TestClassResult i : currentState().getFailingClasses()) {
-            for (TestResult failed : i.getFailing()) {
-                log.error(
-                        "Test " + failed.getDisplayName() + " failed "
-                                + failed.getTestExecutionResult().getStatus()
-                                + "\n",
-                        failed.getTestExecutionResult().getThrowable().get());
-            }
-        }
-    }
-
-    @Override
-    public boolean isBrokenOnlyMode() {
-        return failingTestsOnly;
-    }
-
-    @Override
-    public boolean isDisplayTestOutput() {
-        return displayTestOutput;
-    }
-
-    @Override
-    public boolean isInstrumentationEnabled() {
-        return RuntimeUpdatesProcessor.INSTANCE.instrumentationEnabled();
-    }
-
-    @Override
-    public boolean isLiveReloadEnabled() {
-        return RuntimeUpdatesProcessor.INSTANCE.isLiveReloadEnabled();
+        return failingTestsOnly = !failingTestsOnly;
     }
 
     public static class RunStatus {
