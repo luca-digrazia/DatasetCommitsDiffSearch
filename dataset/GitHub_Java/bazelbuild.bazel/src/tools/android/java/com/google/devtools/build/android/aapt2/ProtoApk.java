@@ -320,10 +320,6 @@ public class ProtoApk implements Closeable {
         }
         ANGLE_OPEN.writeTo(out);
         FORWARD_SLASH.writeTo(out);
-        if (!element.getNamespaceUriBytes().isEmpty()) {
-          findNamespacePrefix(element.getNamespaceUriBytes()).writeTo(out);
-          COLON.writeTo(out);
-        }
         name.writeTo(out);
         ANGLE_CLOSE.writeTo(out);
       }
