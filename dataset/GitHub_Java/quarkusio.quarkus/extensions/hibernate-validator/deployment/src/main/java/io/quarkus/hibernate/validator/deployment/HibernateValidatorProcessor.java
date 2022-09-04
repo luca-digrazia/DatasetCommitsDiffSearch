@@ -5,10 +5,7 @@ import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Modifier;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
 
@@ -32,7 +29,6 @@ import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
-import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
@@ -47,15 +43,14 @@ import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageConfigBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveFieldBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveFieldBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
 import io.quarkus.hibernate.validator.runtime.HibernateValidatorRecorder;
 import io.quarkus.hibernate.validator.runtime.ValidatorProvider;
 import io.quarkus.hibernate.validator.runtime.interceptor.MethodValidationInterceptor;
-import io.quarkus.resteasy.server.common.spi.AdditionalJaxRsResourceMethodAnnotationsBuildItem;
 
 class HibernateValidatorProcessor {
 
@@ -123,8 +118,7 @@ class HibernateValidatorProcessor {
             CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<FeatureBuildItem> feature,
             BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
-            ShutdownContextBuildItem shutdownContext,
-            List<AdditionalJaxRsResourceMethodAnnotationsBuildItem> additionalJaxRsResourceMethodAnnotations) throws Exception {
+            ShutdownContextBuildItem shutdownContext) throws Exception {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_VALIDATOR));
 
@@ -147,7 +141,6 @@ class HibernateValidatorProcessor {
         consideredAnnotations.add(VALIDATE_ON_EXECUTION);
 
         Set<DotName> classNamesToBeValidated = new HashSet<>();
-        Map<DotName, Set<String>> inheritedAnnotationsToBeValidated = new HashMap<>();
 
         for (DotName consideredAnnotation : consideredAnnotations) {
             Collection<AnnotationInstance> annotationInstances = indexView.getAnnotations(consideredAnnotation);
@@ -164,8 +157,6 @@ class HibernateValidatorProcessor {
                     reflectiveMethods.produce(new ReflectiveMethodBuildItem(annotation.target().asMethod()));
                     contributeClassMarkedForCascadingValidation(classNamesToBeValidated, indexView, consideredAnnotation,
                             annotation.target().asMethod().returnType());
-                    contributeMethodsWithInheritedValidation(inheritedAnnotationsToBeValidated, indexView,
-                            annotation.target().asMethod());
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
                     contributeClass(classNamesToBeValidated, indexView,
                             annotation.target().asMethodParameter().method().declaringClass().name());
@@ -174,8 +165,6 @@ class HibernateValidatorProcessor {
                             // FIXME this won't work in the case of synthetic parameters
                             annotation.target().asMethodParameter().method().parameters()
                                     .get(annotation.target().asMethodParameter().position()));
-                    contributeMethodsWithInheritedValidation(inheritedAnnotationsToBeValidated, indexView,
-                            annotation.target().asMethodParameter().method());
                 } else if (annotation.target().kind() == AnnotationTarget.Kind.CLASS) {
                     contributeClass(classNamesToBeValidated, indexView, annotation.target().asClass().name());
                     // no need for reflection in the case of a class level constraint
@@ -184,15 +173,8 @@ class HibernateValidatorProcessor {
         }
 
         // Add the annotations transformer to add @MethodValidated annotations on the methods requiring validation
-        Set<DotName> additionalJaxRsMethodAnnotationsDotNames = new HashSet<>(additionalJaxRsResourceMethodAnnotations.size());
-        for (AdditionalJaxRsResourceMethodAnnotationsBuildItem additionalJaxRsResourceMethodAnnotation : additionalJaxRsResourceMethodAnnotations) {
-            additionalJaxRsMethodAnnotationsDotNames.addAll(additionalJaxRsResourceMethodAnnotation.getAnnotationClasses());
-        }
         annotationsTransformers
-                .produce(new AnnotationsTransformerBuildItem(
-                        new MethodValidatedAnnotationsTransformer(consideredAnnotations,
-                                additionalJaxRsMethodAnnotationsDotNames,
-                                inheritedAnnotationsToBeValidated)));
+                .produce(new AnnotationsTransformerBuildItem(new MethodValidatedAnnotationsTransformer(consideredAnnotations)));
 
         Set<Class<?>> classesToBeValidated = new HashSet<>();
         for (DotName className : classNamesToBeValidated) {
@@ -205,8 +187,8 @@ class HibernateValidatorProcessor {
     }
 
     @BuildStep
-    NativeImageConfigBuildItem nativeImageConfig() {
-        return NativeImageConfigBuildItem.builder()
+    SubstrateConfigBuildItem substrateConfig() {
+        return SubstrateConfigBuildItem.builder()
                 .addResourceBundle(AbstractMessageInterpolator.DEFAULT_VALIDATION_MESSAGES)
                 .addResourceBundle(AbstractMessageInterpolator.USER_VALIDATION_MESSAGES)
                 .addResourceBundle(AbstractMessageInterpolator.CONTRIBUTOR_VALIDATION_MESSAGES)
@@ -251,16 +233,6 @@ class HibernateValidatorProcessor {
         DotName className = getClassName(type);
         if (className != null) {
             contributeClass(classNamesCollector, indexView, className);
-        }
-    }
-
-    private static void contributeMethodsWithInheritedValidation(Map<DotName, Set<String>> inheritedAnnotationsToBeValidated,
-            IndexView indexView, MethodInfo method) {
-        ClassInfo clazz = method.declaringClass();
-        if (Modifier.isInterface(clazz.flags())) {
-            // Remember annotated interface methods that must be validated
-            inheritedAnnotationsToBeValidated.computeIfAbsent(clazz.name(), k -> new HashSet<String>())
-                    .add(method.name().toString());
         }
     }
 
