@@ -243,7 +243,6 @@ public final class FilesetEntryFunction implements SkyFunction {
             traversal.getRoot(),
             traversal.isGenerated(),
             traversal.getPackageBoundaryMode(),
-            traversal.isStrictFilesetOutput(),
             traversal.isPackage(),
             errorInfo);
     RecursiveFilesystemTraversalValue v = (RecursiveFilesystemTraversalValue) env.getValue(depKey);
