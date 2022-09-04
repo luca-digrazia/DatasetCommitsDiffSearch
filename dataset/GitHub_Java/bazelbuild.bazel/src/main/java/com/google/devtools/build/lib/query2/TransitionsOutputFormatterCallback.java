@@ -41,6 +41,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
+import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
@@ -53,6 +54,7 @@ import com.google.devtools.build.lib.query2.output.CqueryOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
+import java.io.IOException;
 import java.io.OutputStream;
 import java.util.HashMap;
 import java.util.List;
@@ -83,24 +85,25 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
    * @param hostConfiguration host configuration for this query.
    */
   TransitionsOutputFormatterCallback(
-      ExtendedEventHandler eventHandler,
+      Reporter reporter,
       CqueryOptions options,
       OutputStream out,
       SkyframeExecutor skyframeExecutor,
       TargetAccessor<ConfiguredTarget> accessor,
       BuildConfiguration hostConfiguration,
       @Nullable RuleTransitionFactory trimmingTransitionFactory) {
-    super(eventHandler, options, out, skyframeExecutor, accessor);
+    super(reporter, options, out, skyframeExecutor, accessor);
     this.hostConfiguration = hostConfiguration;
     this.trimmingTransitionFactory = trimmingTransitionFactory;
     this.partialResultMap = Maps.newHashMap();
   }
 
   @Override
-  public void processOutput(Iterable<ConfiguredTarget> partialResult) throws InterruptedException {
+  public void processOutput(Iterable<ConfiguredTarget> partialResult)
+      throws IOException, InterruptedException {
     CqueryOptions.Transitions verbosity = options.transitions;
     if (verbosity.equals(CqueryOptions.Transitions.NONE)) {
-      eventHandler.handle(
+      reporter.handle(
           Event.error(
               "Instead of using --output=transitions, set the --transitions"
                   + " flag explicitly to 'lite' or 'full'"));
@@ -112,7 +115,7 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
       Target target = partialResultMap.get(configuredTarget.getLabel());
       BuildConfiguration config =
           skyframeExecutor.getConfiguration(
-              eventHandler, configuredTarget.getConfigurationKey());
+              reporter, configuredTarget.getConfigurationKey());
       addResult(
           getRuleClassTransition(configuredTarget, target)
               + configuredTarget.getLabel()
@@ -133,7 +136,7 @@ public class TransitionsOutputFormatterCallback extends CqueryThreadsafeCallback
         // DependencyResolver but passing to avoid passing a null and since we have the information
         // anyway.
         deps =
-            new FormatterDependencyResolver(configuredTarget, eventHandler)
+            new FormatterDependencyResolver(configuredTarget, reporter)
                 .dependentNodeMap(
                     new TargetAndConfiguration(target, config),
                     hostConfiguration,
