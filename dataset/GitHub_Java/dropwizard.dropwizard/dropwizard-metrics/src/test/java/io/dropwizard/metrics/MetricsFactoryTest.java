@@ -27,7 +27,7 @@ public class MetricsFactoryTest {
     private MetricsFactory config;
 
     @BeforeEach
-    void setUp() throws Exception {
+    public void setUp() throws Exception {
         objectMapper.getSubtypeResolver().registerSubtypes(ConsoleReporterFactory.class, CsvReporterFactory.class,
             Slf4jReporterFactory.class);
 
@@ -35,19 +35,19 @@ public class MetricsFactoryTest {
     }
 
     @Test
-    void hasADefaultFrequency() throws Exception {
+    public void hasADefaultFrequency() throws Exception {
         assertThat(config.getFrequency()).isEqualTo(Duration.seconds(10));
     }
 
     @Test
-    void hasReporters() throws Exception {
+    public void hasReporters() throws Exception {
         CsvReporterFactory csvReporter = new CsvReporterFactory();
         csvReporter.setFile(new File("metrics"));
         assertThat(config.getReporters()).hasSize(3);
     }
 
     @Test
-    void canReadExcludedAndIncludedAttributes() {
+    public void canReadExcludedAndIncludedAttributes() {
         assertThat(config.getReporters()).hasSize(3);
         final ReporterFactory reporterFactory = config.getReporters().get(0);
         assertThat(reporterFactory).isInstanceOf(ConsoleReporterFactory.class);
@@ -58,7 +58,7 @@ public class MetricsFactoryTest {
     }
 
     @Test
-    void canReadDefaultExcludedAndIncludedAttributes() {
+    public void canReadDefaultExcludedAndIncludedAttributes() {
         assertThat(config.getReporters()).hasSize(3);
         final ReporterFactory reporterFactory = config.getReporters().get(1);
         assertThat(reporterFactory).isInstanceOf(CsvReporterFactory.class);
@@ -68,12 +68,12 @@ public class MetricsFactoryTest {
     }
 
     @Test
-    void reportOnStopFalseByDefault() {
+    public void reportOnStopFalseByDefault() {
         assertThat(config.isReportOnStop()).isFalse();
     }
 
     @Test
-    void reportOnStopCanBeTrue() throws Exception {
+    public void reportOnStopCanBeTrue() throws Exception {
         config = factory.build(new File(Resources.getResource("yaml/metrics-report-on-stop.yml").toURI()));
         assertThat(config.isReportOnStop()).isTrue();
     }
