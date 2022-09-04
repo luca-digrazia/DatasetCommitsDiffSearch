@@ -329,11 +329,6 @@ class DataFrameImpl implements DataFrame {
         }
 
         @Override
-        public StructType schema() {
-            return schema;
-        }
-
-        @Override
         public int size() {
             return columns.size();
         }

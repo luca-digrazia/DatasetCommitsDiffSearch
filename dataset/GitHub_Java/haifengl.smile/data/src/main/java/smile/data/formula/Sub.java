@@ -1,73 +1,91 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.data.formula;
 
-import smile.data.Tuple;
+import smile.data.type.DataType;
+import smile.data.type.DataTypes;
 import smile.data.type.StructType;
 
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 /**
- * The term of <code>a - b</code> expression.
+ * The term of a - b subtraction expression.
  *
  * @author Haifeng Li
  */
-class Sub extends Operator {
+public class Sub<T> implements Factor<T, Double> {
+    /** The left factor. */
+    private Factor<T, Double> a;
+    /** The right factor. */
+    private Factor<T, Double> b;
+
     /**
      * Constructor.
      *
      * @param a the first factor.
      * @param b the second factor.
      */
-    public Sub(Term a, Term b) {
-        super("-", a, b);
+    public Sub(Factor<T, Double> a, Factor<T, Double> b) {
+        this.a = a;
+        this.b = b;
     }
 
     @Override
-    public int applyAsInt(Tuple o) {
-        return a.applyAsInt(o) - b.applyAsInt(o);
+    public String name() {
+        return String.format("%s - %s", a.name(), b.name());
     }
 
     @Override
-    public long applyAsLong(Tuple o) {
-        return a.applyAsLong(o) - b.applyAsLong(o);
+    public String toString() {
+        return name();
     }
 
     @Override
-    public float applyAsFloat(Tuple o) {
-        return a.applyAsFloat(o) - b.applyAsFloat(o);
+    public boolean equals(Object o) {
+        return name().equals(o);
     }
 
     @Override
-    public double applyAsDouble(Tuple o) {
-        return a.applyAsDouble(o) - b.applyAsDouble(o);
+    public List<? extends Factor> factors() {
+        return Collections.singletonList(this);
+    }
+
+    @Override
+    public Set<String> variables() {
+        Set<String> t = new HashSet<>(a.variables());
+        t.addAll(b.variables());
+        return t;
+    }
+
+    @Override
+    public Double apply(T o) {
+        return a.apply(o) - b.apply(o);
+    }
+
+    @Override
+    public DataType type() {
+        return DataTypes.DoubleType;
     }
 
     @Override
     public void bind(StructType schema) {
-        super.bind(schema);
-
-        if (type.isInt()) {
-            lambda = (Tuple o) -> a.applyAsInt(o) - b.applyAsInt(o);
-        } else if (type.isLong()) {
-            lambda = (Tuple o) -> a.applyAsLong(o) - b.applyAsLong(o);
-        } else if (type.isFloat()) {
-            lambda = (Tuple o) -> a.applyAsFloat(o) - b.applyAsFloat(o);
-        } else if (type.isDouble()) {
-            lambda = (Tuple o) -> a.applyAsDouble(o) - b.applyAsDouble(o);
-        }
+        a.bind(schema);
+        b.bind(schema);
     }
 }

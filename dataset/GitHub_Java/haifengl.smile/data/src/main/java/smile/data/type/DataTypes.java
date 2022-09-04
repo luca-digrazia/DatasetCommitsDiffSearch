@@ -15,8 +15,6 @@
  *******************************************************************************/
 package smile.data.type;
 
-import java.util.List;
-
 /**
  * To get a specific data type, users should use singleton objects
  * and factory methods in this class.
@@ -33,7 +31,7 @@ public class DataTypes {
     /** Short data type. */
     public static smile.data.type.ShortType ShortType = smile.data.type.ShortType.instance;
     /** Integer data type. */
-    public static IntegerType IntegerType = smile.data.type.IntegerType.instance;
+    public static smile.data.type.IntegerType IntegerType = smile.data.type.IntegerType.instance;
     /** Long data type. */
     public static smile.data.type.LongType LongType = smile.data.type.LongType.instance;
     /** Float data type. */
@@ -43,43 +41,11 @@ public class DataTypes {
     /** String data type. */
     public static smile.data.type.StringType StringType = smile.data.type.StringType.instance;
     /** Date data type with ISO format. */
-    public static smile.data.type.DateType DateType = smile.data.type.DateType.instance;
+    public static smile.data.type.DateType DateType = new smile.data.type.DateType();
     /** DateTime data type with ISO format. */
-    public static smile.data.type.DateTimeType DateTimeType = smile.data.type.DateTimeType.instance;
+    public static smile.data.type.DateTimeType DateTimeType = new smile.data.type.DateTimeType();
     /** Plain Object data type. */
     public static smile.data.type.ObjectType ObjectType = smile.data.type.ObjectType.instance;
-    /** Boolean Object data type. */
-    public static smile.data.type.ObjectType BooleanObjectType = smile.data.type.ObjectType.BooleanObjectType;
-    /** Char Object data type. */
-    public static smile.data.type.ObjectType CharObjectType = smile.data.type.ObjectType.CharObjectType;
-    /** Byte Object data type. */
-    public static smile.data.type.ObjectType ByteObjectType = smile.data.type.ObjectType.ByteObjectType;
-    /** Short Object data type. */
-    public static smile.data.type.ObjectType ShortObjectType = smile.data.type.ObjectType.ShortObjectType;
-    /** Integer Object data type. */
-    public static smile.data.type.ObjectType IntegerObjectType = smile.data.type.ObjectType.IntegerObjectType;
-    /** Long Object data type. */
-    public static smile.data.type.ObjectType LongObjectType = smile.data.type.ObjectType.LongObjectType;
-    /** Float Object data type. */
-    public static smile.data.type.ObjectType FloatObjectType = smile.data.type.ObjectType.FloatObjectType;
-    /** Double Object data type. */
-    public static smile.data.type.ObjectType DoubleObjectType = smile.data.type.ObjectType.DoubleObjectType;
-    /** Boolean Array data type. */
-    public static smile.data.type.ArrayType BooleanArrayType = smile.data.type.ArrayType.BooleanArrayType;
-    /** Char Array data type. */
-    public static smile.data.type.ArrayType CharArrayType = smile.data.type.ArrayType.CharArrayType;
-    /** Byte Array data type. */
-    public static smile.data.type.ArrayType ByteArrayType = smile.data.type.ArrayType.ByteArrayType;
-    /** Short Array data type. */
-    public static smile.data.type.ArrayType ShortArrayType = smile.data.type.ArrayType.ShortArrayType;
-    /** Integer Array data type. */
-    public static smile.data.type.ArrayType IntegerArrayType = smile.data.type.ArrayType.IntegerArrayType;
-    /** Long Array data type. */
-    public static smile.data.type.ArrayType LongArrayType = smile.data.type.ArrayType.LongArrayType;
-    /** Float Array data type. */
-    public static smile.data.type.ArrayType FloatArrayType = smile.data.type.ArrayType.FloatArrayType;
-    /** Double Array data type. */
-    public static smile.data.type.ArrayType DoubleArrayType = smile.data.type.ArrayType.DoubleArrayType;
 
     /** Date data type with customized format. */
     public static smile.data.type.DateType date(String pattern) {
@@ -91,39 +57,28 @@ public class DataTypes {
         return new smile.data.type.DateTimeType(pattern);
     }
 
+    /** Creates a nominal data type. */
+    public static NominalType nominal(String... values) {
+        return new NominalType(values);
+    }
+
+    /** Creates an ordinal data type. */
+    public static OrdinalType ordinal(String... values) {
+        return new OrdinalType(values);
+    }
+
     /** Creates an object data type of a given class. */
     public static ObjectType object(Class clazz) {
-        if (clazz == Integer.class) return IntegerObjectType;
-        if (clazz == Long.class) return LongObjectType;
-        if (clazz == Float.class) return FloatObjectType;
-        if (clazz == Double.class) return DoubleObjectType;
-        if (clazz == Boolean.class) return BooleanObjectType;
-        if (clazz == Character.class) return CharObjectType;
-        if (clazz == Byte.class) return ByteObjectType;
-        if (clazz == Short.class) return ShortObjectType;
         return new ObjectType(clazz);
     }
 
     /** Creates an array data type. */
     public static ArrayType array(DataType type) {
-        if (type == IntegerType) return IntegerArrayType;
-        if (type == LongType) return LongArrayType;
-        if (type == FloatType) return FloatArrayType;
-        if (type == DoubleType) return DoubleArrayType;
-        if (type == BooleanType) return BooleanArrayType;
-        if (type == CharType) return CharArrayType;
-        if (type == ByteType) return ByteArrayType;
-        if (type == ShortType) return ShortArrayType;
         return new ArrayType(type);
     }
 
     /** Creates a struct data type. */
     public static StructType struct(StructField... fields) {
-        return new StructType(fields);
-    }
-
-    /** Creates a struct data type. */
-    public static StructType struct(List<StructField> fields) {
         return new StructType(fields);
     }
 }

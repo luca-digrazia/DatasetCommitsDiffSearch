@@ -22,37 +22,18 @@ import java.util.stream.Collectors;
 import smile.data.type.StructType;
 
 /**
- * All columns in the input DataFrame.
+ * All columns not otherwise in the formula.
  *
  * @author Haifeng Li
  */
-class All implements HyperTerm {
-    /** If true, only columns not in the formula. Otherwise, keep all the original columns. */
-    private boolean rest;
+public class All implements Term {
     /** All columns in the schema. */
-    private List<Variable> columns;
-
-    /**
-     * Constructor. All columns not otherwise in the formula.
-     */
-    public All() {
-        this(true);
-    }
-
+    private List<Column> columns;
     /**
      * Constructor.
-     * @param rest If true, only columns not in the formula.
-     *             Otherwise, keep all the original columns.
      */
-    public All(boolean rest) {
-        this.rest = rest;
-    }
+    public All() {
 
-    /**
-     * Return true if only columns not in the formula.
-     */
-    public boolean rest() {
-        return rest;
     }
 
     @Override
@@ -61,19 +42,19 @@ class All implements HyperTerm {
     }
 
     @Override
-    public List<Variable> terms() {
+    public List<Column> factors() {
         return columns;
     }
 
     @Override
     public Set<String> variables() {
-        return columns.stream().map(Variable::name).collect(Collectors.toSet());
+        return columns.stream().map(Column::name).collect(Collectors.toSet());
     }
 
     @Override
     public void bind(StructType schema) {
         columns = Arrays.stream(schema.fields())
-                .map(field -> new Variable(field.name))
+                .map(field -> new Column(field.name))
                 .collect(Collectors.toList());
 
         columns.forEach(column -> column.bind(schema));

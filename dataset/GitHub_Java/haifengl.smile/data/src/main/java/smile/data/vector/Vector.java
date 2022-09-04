@@ -17,7 +17,6 @@
 package smile.data.vector;
 
 import java.util.Objects;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import smile.data.type.DataType;
 import smile.data.type.DataTypes;
@@ -38,36 +37,6 @@ public interface Vector<T> extends BaseVector<T, T, Stream<T>> {
                 .orElse(DataTypes.ObjectType);
     }
 
-    @Override
-    default byte getByte(int i) {
-        return ((Number) get(i)).byteValue();
-    }
-
-    @Override
-    default short getShort(int i) {
-        return ((Number) get(i)).shortValue();
-    }
-
-    @Override
-    default int getInt(int i) {
-        return ((Number) get(i)).intValue();
-    }
-
-    @Override
-    default long getLong(int i) {
-        return ((Number) get(i)).longValue();
-    }
-
-    @Override
-    default float getFloat(int i) {
-        return ((Number) get(i)).floatValue();
-    }
-
-    @Override
-    default double getDouble(int i) {
-        return ((Number) get(i)).doubleValue();
-    }
-
     /** Checks whether the value at position i is null. */
     default boolean isNullAt(int i) {
         return get(i) == null;
@@ -79,15 +48,6 @@ public interface Vector<T> extends BaseVector<T, T, Stream<T>> {
             if (isNullAt(i)) return true;
         }
         return false;
-    }
-
-    /**
-     * Returns the string representation of vector.
-     * @param n Number of elements to show
-     */
-    default String toString(int n) {
-        String suffix = n >= size() ? "]" : String.format(", ... %d more]", size() - n);
-        return stream().limit(n).map(Object::toString).collect(Collectors.joining(", ", "[", suffix));
     }
 
     /** Creates a named vector.
