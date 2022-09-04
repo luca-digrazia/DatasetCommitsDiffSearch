@@ -395,7 +395,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
   }
 
   /** Returns the results of include scanning. */
-  @Nullable
   private NestedSet<Artifact> findUsedHeaders(
       ActionExecutionContext actionExecutionContext, IncludeScanningHeaderData headerData)
       throws ActionExecutionException, InterruptedException {
@@ -407,9 +406,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
             actionExecutionContext
                 .getContext(CppIncludeScanningContext.class)
                 .findAdditionalInputs(this, actionExecutionContext, headerData);
-        if (includes == null) {
-          return null;
-        }
 
         return NestedSetBuilder.wrap(Order.STABLE_ORDER, includes);
       } catch (IORuntimeException e) {
@@ -485,9 +481,6 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
               .setIsValidUndeclaredHeader(getValidUndeclaredHeaderPredicate(actionExecutionContext))
               .build();
       additionalInputs = findUsedHeaders(actionExecutionContext, includeScanningHeaderData);
-      if (additionalInputs == null) {
-        return null;
-      }
 
       if (useHeaderModules) {
         usedModules = ccCompilationContext.computeUsedModules(usePic, additionalInputs.toSet());

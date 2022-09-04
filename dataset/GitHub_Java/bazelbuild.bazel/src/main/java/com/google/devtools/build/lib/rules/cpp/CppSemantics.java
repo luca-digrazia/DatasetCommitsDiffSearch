@@ -23,10 +23,9 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
-import net.starlark.java.eval.StarlarkValue;
 
 /** Pluggable C++ compilation semantics. */
-public interface CppSemantics extends StarlarkValue {
+public interface CppSemantics {
   /**
    * Called before a C++ compile action is built.
    *
