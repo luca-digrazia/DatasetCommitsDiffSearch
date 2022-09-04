@@ -28,6 +28,7 @@ import com.google.common.collect.Maps;
 import com.google.common.hash.HashCode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetCodec;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Context;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.Marshaller;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.SerializationCodeGenerator.PrimitiveValueSerializationCodeGenerator;
@@ -44,7 +45,9 @@ import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
 import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
@@ -61,14 +64,12 @@ class Marshallers {
   }
 
   void writeSerializationCode(Context context) {
-    SerializationCodeGenerator generator = getMatchingCodeGenerator(context.type);
-    boolean needsNullHandling = context.canBeNull() && generator != contextMarshaller;
-    if (needsNullHandling) {
+    if (context.canBeNull()) {
       context.builder.beginControlFlow("if ($L != null)", context.name);
       context.builder.addStatement("codedOut.writeBoolNoTag(true)");
     }
-    generator.addSerializationCode(context);
-    if (needsNullHandling) {
+    getMatchingCodeGenerator(context.type).addSerializationCode(context);
+    if (context.canBeNull()) {
       context.builder.nextControlFlow("else");
       context.builder.addStatement("codedOut.writeBoolNoTag(false)");
       context.builder.endControlFlow();
@@ -76,16 +77,14 @@ class Marshallers {
   }
 
   void writeDeserializationCode(Context context) {
-    SerializationCodeGenerator generator = getMatchingCodeGenerator(context.type);
-    boolean needsNullHandling = context.canBeNull() && generator != contextMarshaller;
-    if (needsNullHandling) {
+    if (context.canBeNull()) {
       context.builder.addStatement("$T $L = null", context.getTypeName(), context.name);
       context.builder.beginControlFlow("if (codedIn.readBool())");
     } else {
       context.builder.addStatement("$T $L", context.getTypeName(), context.name);
     }
-    generator.addDeserializationCode(context);
-    if (needsNullHandling) {
+    getMatchingCodeGenerator(context.type).addDeserializationCode(context);
+    if (requiresNullityCheck(context)) {
       context.builder.endControlFlow();
     }
   }
@@ -107,6 +106,10 @@ class Marshallers {
     context.builder.addStatement("$L.add($L)", builderName, repeated.name);
     context.builder.endControlFlow();
     context.builder.addStatement("$L = $L.build()", context.name, builderName);
+  }
+
+  private static boolean requiresNullityCheck(Context context) {
+    return !(context.type instanceof PrimitiveType);
   }
 
   private SerializationCodeGenerator getMatchingCodeGenerator(TypeMirror type) {
@@ -185,7 +188,7 @@ class Marshallers {
         }
       };
 
-  private static final PrimitiveValueSerializationCodeGenerator INT_CODE_GENERATOR =
+  private final PrimitiveValueSerializationCodeGenerator intCodeGenerator =
       new PrimitiveValueSerializationCodeGenerator() {
         @Override
         public boolean matches(PrimitiveType type) {
@@ -200,78 +203,6 @@ class Marshallers {
         @Override
         public void addDeserializationCode(Context context) {
           context.builder.addStatement("$L = codedIn.readInt32()", context.name);
-        }
-      };
-
-  private static final PrimitiveValueSerializationCodeGenerator LONG_CODE_GENERATOR =
-      new PrimitiveValueSerializationCodeGenerator() {
-        @Override
-        public boolean matches(PrimitiveType type) {
-          return type.getKind() == TypeKind.LONG;
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          context.builder.addStatement("codedOut.writeInt64NoTag($L)", context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          context.builder.addStatement("$L = codedIn.readInt64()", context.name);
-        }
-      };
-
-  private static final PrimitiveValueSerializationCodeGenerator BYTE_CODE_GENERATOR =
-      new PrimitiveValueSerializationCodeGenerator() {
-        @Override
-        public boolean matches(PrimitiveType type) {
-          return type.getKind() == TypeKind.BYTE;
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          context.builder.addStatement("codedOut.write($L)", context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          context.builder.addStatement("$L = codedIn.readRawByte()", context.name);
-        }
-      };
-
-  private static final PrimitiveValueSerializationCodeGenerator BOOLEAN_CODE_GENERATOR =
-      new PrimitiveValueSerializationCodeGenerator() {
-        @Override
-        public boolean matches(PrimitiveType type) {
-          return type.getKind() == TypeKind.BOOLEAN;
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          context.builder.addStatement("codedOut.writeBoolNoTag($L)", context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          context.builder.addStatement("$L = codedIn.readBool()", context.name);
-        }
-      };
-
-  private static final PrimitiveValueSerializationCodeGenerator DOUBLE_CODE_GENERATOR =
-      new PrimitiveValueSerializationCodeGenerator() {
-        @Override
-        public boolean matches(PrimitiveType type) {
-          return type.getKind() == TypeKind.DOUBLE;
-        }
-
-        @Override
-        public void addSerializationCode(Context context) {
-          context.builder.addStatement("codedOut.writeDoubleNoTag($L)", context.name);
-        }
-
-        @Override
-        public void addDeserializationCode(Context context) {
-          context.builder.addStatement("$L = codedIn.readDouble()", context.name);
         }
       };
 
@@ -883,13 +814,27 @@ class Marshallers {
 
   private void addSerializationCodeForNestedSet(Context context) {
     TypeMirror typeParameter = context.getDeclaredType().getTypeArguments().get(0);
-    String nestedSetCodec = context.makeName("nestedSetCodec");
+          String nestedSetCodec = context.makeName("nestedSetCodec");
+    Optional<? extends Element> typeParameterCodec =
+        Optional.fromJavaUtil(getCodec((DeclaredType) typeParameter));
+    if (!typeParameterCodec.isPresent()) {
+      // AutoCodec can only serialize NestedSets of declared types.  However, this code must
+      // be generated for Iterables of non-declared types (e.g. String), since Iterable
+      // serialization involves a runtime check for NestedSet.  In this case, throw on the unused
+      // NestedSet branch.
+      context.builder.addStatement(
+          "throw new $T(\"NestedSet<$T> is not supported in AutoCodec\")",
+          AssertionError.class,
+          typeParameter);
+      return;
+    }
     context.builder.addStatement(
-        "$T<$T> $L = new $T<>()",
+        "$T<$T> $L = new $T<>($T.CODEC)",
         NestedSetCodec.class,
         typeParameter,
         nestedSetCodec,
-        NestedSetCodec.class);
+        NestedSetCodec.class,
+        typeParameter);
     context.builder.addStatement(
         "$L.serialize(context, ($T<$T>) $L, codedOut)",
         nestedSetCodec,
@@ -901,12 +846,26 @@ class Marshallers {
   private void addDeserializationCodeForNestedSet(Context context) {
     TypeMirror typeParameter = context.getDeclaredType().getTypeArguments().get(0);
           String nestedSetCodec = context.makeName("nestedSetCodec");
+    Optional<? extends Element> typeParameterCodec =
+        Optional.fromJavaUtil(getCodec((DeclaredType) typeParameter));
+    if (!typeParameterCodec.isPresent()) {
+      // AutoCodec can only serialize NestedSets of declared types.  However, this code must
+      // be generated for Iterables of non-declared types (e.g. String), since Iterable
+      // serialization involves a runtime check for NestedSet.  In this case, we throw on the unused
+      // NestedSet branch.
+      context.builder.addStatement(
+          "throw new $T(\"NestedSet<$T> is not supported in AutoCodec\")",
+          AssertionError.class,
+          typeParameter);
+      return;
+    }
     context.builder.addStatement(
-        "$T<$T> $L = new $T<>()",
+        "$T<$T> $L = new $T<>($T.CODEC)",
         NestedSetCodec.class,
         typeParameter,
         nestedSetCodec,
-        NestedSetCodec.class);
+        NestedSetCodec.class,
+        typeParameter);
     context.builder.addStatement(
         "$L = $L.deserialize(context, codedIn)", context.name, nestedSetCodec);
   }
@@ -934,32 +893,44 @@ class Marshallers {
         }
       };
 
-  /** Delegates marshalling back to the context. */
-  private final Marshaller contextMarshaller =
+  private final Marshaller codecMarshaller =
       new Marshaller() {
         @Override
-        public boolean matches(DeclaredType unusedType) {
-          return true;
+        public boolean matches(DeclaredType type) {
+          return getCodec(type).isPresent();
         }
 
         @Override
         public void addSerializationCode(Context context) {
-          context.builder.addStatement("context.serialize($L, codedOut)", context.name);
+          TypeMirror codecType = getCodec(context.getDeclaredType()).get().asType();
+          if (isSubtypeErased(codecType, ObjectCodec.class)) {
+            context.builder.addStatement(
+                "$T.CODEC.serialize(context, $L, codedOut)", context.getTypeName(), context.name);
+          } else {
+            throw new IllegalArgumentException(
+                "CODEC field of "
+                    + ((TypeElement) context.getDeclaredType().asElement()).getQualifiedName()
+                    + " is not ObjectCodec");
+          }
         }
 
         @Override
         public void addDeserializationCode(Context context) {
-          context.builder.addStatement("$L = context.deserialize(codedIn)", context.name);
+          TypeMirror codecType = getCodec(context.getDeclaredType()).get().asType();
+          if (isSubtypeErased(codecType, ObjectCodec.class)) {
+            context.builder.addStatement(
+                "$L = $T.CODEC.deserialize(context, codedIn)", context.name, context.getTypeName());
+          } else {
+            throw new IllegalArgumentException(
+                "CODEC field of "
+                    + ((TypeElement) context.getDeclaredType().asElement()).getQualifiedName()
+                    + " is neither ObjectCodec");
+          }
         }
       };
 
   private final ImmutableList<PrimitiveValueSerializationCodeGenerator> primitiveGenerators =
-      ImmutableList.of(
-          INT_CODE_GENERATOR,
-          LONG_CODE_GENERATOR,
-          BYTE_CODE_GENERATOR,
-          BOOLEAN_CODE_GENERATOR,
-          DOUBLE_CODE_GENERATOR);
+      ImmutableList.of(intCodeGenerator);
 
   private final ImmutableList<Marshaller> marshallers =
       ImmutableList.of(
@@ -981,8 +952,8 @@ class Marshallers {
           patternMarshaller,
           hashCodeMarshaller,
           protoMarshaller,
-          iterableMarshaller,
-          contextMarshaller);
+          codecMarshaller,
+          iterableMarshaller);
 
   /** True when {@code type} has the same type as {@code clazz}. */
   private boolean matchesType(TypeMirror type, Class<?> clazz) {
@@ -1000,8 +971,24 @@ class Marshallers {
         .isSameType(env.getTypeUtils().erasure(type), env.getTypeUtils().erasure(getType(clazz)));
   }
 
+  /** True when erasure of {@code type} is a subtype of the erasure of {@code clazz}. */
+  private boolean isSubtypeErased(TypeMirror type, Class<?> clazz) {
+    return env.getTypeUtils()
+        .isSubtype(env.getTypeUtils().erasure(type), env.getTypeUtils().erasure(getType(clazz)));
+  }
+
   /** Returns the TypeMirror corresponding to {@code clazz}. */
   private TypeMirror getType(Class<?> clazz) {
     return env.getElementUtils().getTypeElement((clazz.getCanonicalName())).asType();
+  }
+
+  private static java.util.Optional<? extends Element> getCodec(DeclaredType type) {
+    return type.asElement()
+        .getEnclosedElements()
+        .stream()
+        .filter(t -> t.getModifiers().contains(Modifier.STATIC))
+        .filter(t -> t.getSimpleName().contentEquals("CODEC"))
+        .filter(t -> t.getKind() == ElementKind.FIELD)
+        .findAny();
   }
 }
