@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -158,7 +157,9 @@ public final class LtoBackendArtifacts {
 
     // The command-line doesn't specify the full path to clang++, so we set it in the
     // environment.
-    PathFragment compiler = ccToolchain.getToolPathFragment(Tool.GCC);
+    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
+
+    PathFragment compiler = cppConfiguration.getCppExecutable();
 
     builder.setExecutable(compiler);
     Variables.Builder buildVariablesBuilder =
