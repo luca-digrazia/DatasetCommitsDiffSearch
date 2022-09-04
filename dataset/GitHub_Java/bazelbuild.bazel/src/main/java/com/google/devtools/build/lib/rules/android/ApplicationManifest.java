@@ -241,7 +241,7 @@ public final class ApplicationManifest {
 
   public ApplicationManifest mergeWith(
       RuleContext ruleContext, ResourceDependencies resourceDeps, boolean legacy) {
-    Map<Artifact, Label> mergeeManifests = getMergeeManifests(resourceDeps.getResourceContainers());
+    Map<Artifact, Label> mergeeManifests = getMergeeManifests(resourceDeps.getResources());
 
     if (legacy) {
       if (!mergeeManifests.isEmpty()) {
@@ -369,8 +369,7 @@ public final class ApplicationManifest {
                 .setManifest(getManifest())
                 .setApk(resourceApk)
                 .build(),
-            resourceDeps
-                .getResourceContainers(), // TODO(bazel-team): Figure out if we really need to check
+            resourceDeps.getResources(), // TODO(bazel-team): Figure out if we really need to check
             // the ENTIRE transitive closure, or just the direct dependencies. Given that each rule
             // with resources would check for inline resources, we can rely on the previous rule to
             // have checked its dependencies.
@@ -446,8 +445,7 @@ public final class ApplicationManifest {
                 .setManifest(getManifest())
                 .setAssetsAndResourcesFrom(data)
                 .build(),
-            resourceDeps
-                .getResourceContainers(), // TODO(bazel-team): Figure out if we really need to check
+            resourceDeps.getResources(), // TODO(bazel-team): Figure out if we really need to check
             // the ENTIRE transitive closure, or just the direct dependencies. Given that each rule
             // with resources would check for inline resources, we can rely on the previous rule to
             // have checked its dependencies.
@@ -547,8 +545,7 @@ public final class ApplicationManifest {
                 .setManifest(getManifest())
                 .setAssetsAndResourcesFrom(data)
                 .build(),
-            resourceDeps
-                .getResourceContainers(), // TODO(bazel-team): Figure out if we really need to check
+            resourceDeps.getResources(), // TODO(bazel-team): Figure out if we really need to check
             // the ENTIRE transitive closure, or just the direct dependencies. Given that each rule
             // with resources would check for inline resources, we can rely on the previous rule to
             // have checked its dependencies.
@@ -616,8 +613,7 @@ public final class ApplicationManifest {
                     ResourceType.ASSETS.getAttribute(), Mode.TARGET, FileProvider.class))
             .withResources(
                 ruleContext.getPrerequisites("resource_files", Mode.TARGET, FileProvider.class))
-            .build()
-            .filter(ruleContext, resourceFilter);
+            .build();
 
     resourceDeps = resourceDeps.filter(ruleContext, resourceFilter);
 
@@ -630,9 +626,10 @@ public final class ApplicationManifest {
                 .setManifest(getManifest())
                 .setRTxt(rTxt)
                 .setApk(resourceApk)
+                .setManifest(getManifest())
+                .setAssetsAndResourcesFrom(data.filter(ruleContext, resourceFilter))
                 .build(),
-            resourceDeps
-                .getResourceContainers(), // TODO(bazel-team): Figure out if we really need to check
+            resourceDeps.getResources(), // TODO(bazel-team): Figure out if we really need to check
             // the ENTIRE transitive closure, or just the direct dependencies. Given that each rule
             // with resources would check for inline resources, we can rely on the previous rule to
             // have checked its dependencies.
@@ -737,8 +734,7 @@ public final class ApplicationManifest {
     ResourceContainer resourceContainer =
         checkForInlinedResources(
             builder.setManifest(getManifest()).setAssetsAndResourcesFrom(data).build(),
-            resourceDeps
-                .getResourceContainers(), // TODO(bazel-team): Figure out if we really need to check
+            resourceDeps.getResources(), // TODO(bazel-team): Figure out if we really need to check
             // the ENTIRE transitive closure, or just the direct dependencies. Given that each rule
             // with resources would check for inline resources, we can rely on the previous rule to
             // have checked its dependencies.
@@ -885,11 +881,11 @@ public final class ApplicationManifest {
     List<ResourceContainer> resourceContainers =
         ImmutableList.<ResourceContainer>builder()
             // .add(resourceContainer)
-            .addAll(resourceDeps.getResourceContainers())
+            .addAll(resourceDeps.getResources())
             .build();
 
     // Dealing with Android library projects
-    if (Iterables.size(resourceDeps.getResourceContainers()) > 1) {
+    if (Iterables.size(resourceDeps.getResources()) > 1) {
       if (resourceContainer.getConstantsInlined()
           && !resourceContainer.getArtifacts(ResourceType.RESOURCES).isEmpty()) {
         ruleContext.ruleError(
