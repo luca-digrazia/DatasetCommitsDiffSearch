@@ -48,12 +48,7 @@ public class StampedAndroidManifest extends AndroidManifest {
 
   /** Creates an empty manifest stamped with the default Java package for this target. */
   public static StampedAndroidManifest createEmpty(RuleContext ruleContext, boolean exported) {
-    return createEmpty(ruleContext, AndroidCommon.getJavaPackage(ruleContext), exported);
-  }
-
-  /** Creates an empty manifest stamped with a specified package. */
-  public static StampedAndroidManifest createEmpty(
-      RuleContext ruleContext, String pkg, boolean exported) {
+    String pkg = AndroidCommon.getJavaPackage(ruleContext);
     return new StampedAndroidManifest(
         ApplicationManifest.generateManifest(ruleContext, pkg), pkg, exported);
   }
@@ -72,9 +67,5 @@ public class StampedAndroidManifest extends AndroidManifest {
         ApplicationManifest.createSplitManifest(ruleContext, getManifest(), splitName, hasCode),
         getPackage(),
         isExported());
-  }
-
-  public AndroidManifestInfo toProvider() {
-    return AndroidManifestInfo.of(getManifest(), getPackage(), isExported());
   }
 }

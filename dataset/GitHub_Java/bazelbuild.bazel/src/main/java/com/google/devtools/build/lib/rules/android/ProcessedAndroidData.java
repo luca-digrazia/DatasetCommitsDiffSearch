@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.java.ProguardHelper;
@@ -47,8 +46,6 @@ public class ProcessedAndroidData {
   private final Artifact apk;
   @Nullable private final Artifact dataBindingInfoZip;
   private final ResourceDependencies resourceDeps;
-  @Nullable private final Artifact resourceProguardConfig;
-  @Nullable private final Artifact mainDexProguardConfig;
 
   /** Processes Android data (assets, resources, and manifest) for android_binary targets. */
   public static ProcessedAndroidData processBinaryDataFrom(
@@ -75,18 +72,6 @@ public class ProcessedAndroidData {
             .setDataBindingInfoZip(
                 DataBinding.isEnabled(ruleContext)
                     ? DataBinding.getLayoutInfoFile(ruleContext)
-                    : null)
-            .setFeatureOf(
-                ruleContext.attributes().isAttributeValueExplicitlySpecified("feature_of")
-                    ? ruleContext
-                        .getPrerequisite("feature_of", Mode.TARGET, ApkInfo.PROVIDER)
-                        .getApk()
-                    : null)
-            .setFeatureAfter(
-                ruleContext.attributes().isAttributeValueExplicitlySpecified("feature_after")
-                    ? ruleContext
-                        .getPrerequisite("feature_after", Mode.TARGET, ApkInfo.PROVIDER)
-                        .getApk()
                     : null);
     return buildActionForBinary(ruleContext, builder, manifest);
   }
@@ -200,8 +185,7 @@ public class ProcessedAndroidData {
         .setApkOut(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_RESOURCES_APK))
         .setRTxtOut(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT))
         .setSourceJarOut(
-            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR))
-        .setSymbols(ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS));
+            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_JAVA_SOURCE_JAR));
   }
 
   /**
@@ -235,12 +219,9 @@ public class ProcessedAndroidData {
       Artifact sourceJar,
       Artifact apk,
       @Nullable Artifact dataBindingInfoZip,
-      ResourceDependencies resourceDeps,
-      @Nullable Artifact resourceProguardConfig,
-      @Nullable Artifact mainDexProguardConfig) {
+      ResourceDependencies resourceDeps) {
     return new ProcessedAndroidData(
-        resources, assets, manifest, rTxt, sourceJar, apk, dataBindingInfoZip, resourceDeps,
-        resourceProguardConfig, mainDexProguardConfig);
+        resources, assets, manifest, rTxt, sourceJar, apk, dataBindingInfoZip, resourceDeps);
   }
 
   private ProcessedAndroidData(
@@ -251,9 +232,7 @@ public class ProcessedAndroidData {
       Artifact sourceJar,
       Artifact apk,
       @Nullable Artifact dataBindingInfoZip,
-      ResourceDependencies resourceDeps,
-      @Nullable Artifact resourceProguardConfig,
-      @Nullable Artifact mainDexProguardConfig) {
+      ResourceDependencies resourceDeps) {
     this.resources = resources;
     this.assets = assets;
     this.manifest = manifest;
@@ -262,8 +241,6 @@ public class ProcessedAndroidData {
     this.apk = apk;
     this.dataBindingInfoZip = dataBindingInfoZip;
     this.resourceDeps = resourceDeps;
-    this.resourceProguardConfig = resourceProguardConfig;
-    this.mainDexProguardConfig = mainDexProguardConfig;
   }
 
   /**
@@ -301,7 +278,7 @@ public class ProcessedAndroidData {
     // Combined resource processing does not produce aapt2 artifacts; they're nulled out
     ValidatedAndroidResources validated =
         ValidatedAndroidResources.of(merged, rTxt, sourceJar, apk, null, null, null);
-    return ResourceApk.of(validated, assets, resourceProguardConfig, mainDexProguardConfig);
+    return ResourceApk.of(validated, assets);
   }
 
   public MergedAndroidAssets getAssets() {
