@@ -14,11 +14,7 @@
 
 package com.google.devtools.build.lib.analysis.config.transitions;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.events.EventHandler;
 import java.util.Map;
 
 /**
@@ -32,39 +28,13 @@ public interface ConfigurationTransition {
   String PATCH_TRANSITION_KEY = "";
 
   /**
-   * Declares the {@link FragmentOptions} this transition may read.
-   *
-   * <p>Blaze throws an {@link IllegalArgumentException} if {@link #apply} is called on an options
-   * fragment that isn't declared here.
-   */
-  default ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
-    return ImmutableSet.of();
-  }
-
-  /**
-   * {@link #requiresOptionFragments()} variation for Starlark transitions, which need a {@link
-   * BuildOptions} instance to map required options to their {@link FragmentOptions}.
-   *
-   * <p>Non-Starlark transitions should override {@link #requiresOptionFragments()} and ignore this.
-   *
-   * <p>Callers may also ignore this if they know they're not calling into a Starlark transition.
-   */
-  default ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments(
-      BuildOptions options) {
-    return requiresOptionFragments();
-  }
-
-  /**
    * Returns the map of {@code BuildOptions} after applying this transition. The returned map keys
    * are only used for dealing with split transitions. Patch transitions, including internal, native
    * Patch transitions, should return a single entry map with key {@code PATCH_TRANSITION_KEY}.
    *
-   * <p>Blaze throws an {@link IllegalArgumentException} if this method reads any options fragment
-   * not declared in {@link #requiresOptionFragments}.
-   *
    * <p>Returning an empty or null map triggers a {@link RuntimeException}.
    */
-  Map<String, BuildOptions> apply(BuildOptionsView buildOptions, EventHandler eventHandler);
+  Map<String, BuildOptions> apply(BuildOptions buildOptions);
 
   /**
    * We want to keep the number of transition interfaces no larger than what's necessary to maintain

@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
@@ -81,10 +80,10 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
     BuildOptions targetOptions = defaultBuildOptions.applyDiff(options.getOptionsDiff());
     BuildOptions hostOptions =
         targetOptions.get(CoreOptions.class).useDistinctHostConfiguration
-            ? HostTransition.INSTANCE.patch(targetOptions, env.getListener())
+            ? HostTransition.INSTANCE.patch(targetOptions)
             : targetOptions;
 
-    ImmutableSortedSet<Class<? extends Fragment>> allFragments =
+    ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> allFragments =
         options.getFragments().fragmentClasses();
 
     PathFragment platformMappingPath = targetOptions.get(PlatformOptions.class).platformMappings;
@@ -271,14 +270,15 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
         ArrayListMultimap.<Dependency, BuildConfiguration>create();
     Set<Dependency> depsToEvaluate = new HashSet<>();
 
-    ImmutableSortedSet<Class<? extends Fragment>> allFragments = null;
+    ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> allFragments = null;
     if (useUntrimmedConfigs(fromOptions)) {
       allFragments = ruleClassProvider.getAllFragments();
     }
 
     // Get the fragments needed for dynamic configuration nodes.
     final List<SkyKey> transitiveFragmentSkyKeys = new ArrayList<>();
-    Map<Label, ImmutableSortedSet<Class<? extends Fragment>>> fragmentsMap = new HashMap<>();
+    Map<Label, ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>>> fragmentsMap =
+        new HashMap<>();
     Set<Label> labelsWithErrors = new HashSet<>();
     for (Dependency key : keys) {
       if (key.hasExplicitConfiguration()) {
@@ -332,7 +332,8 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
         continue;
       }
       ConfigurationTransition transition = key.getTransition();
-      ImmutableSortedSet<Class<? extends Fragment>> depFragments = fragmentsMap.get(key.getLabel());
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
+          fragmentsMap.get(key.getLabel());
 
       if (depFragments != null) {
         HashMap<PackageValue.Key, PackageValue> buildSettingPackages =
@@ -344,6 +345,7 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
             ConfigurationResolver.applyTransition(
                     fromOptions, transition, buildSettingPackages, env.getListener())
                 .values();
+        StarlarkTransition.replayEvents(env.getListener(), transition);
         for (BuildOptions toOption : toOptions) {
           configSkyKeys.add(
               BuildConfigurationValue.keyWithPlatformMapping(
@@ -366,7 +368,8 @@ final class PrepareAnalysisPhaseFunction implements SkyFunction {
         continue;
       }
       ConfigurationTransition transition = key.getTransition();
-      ImmutableSortedSet<Class<? extends Fragment>> depFragments = fragmentsMap.get(key.getLabel());
+      ImmutableSortedSet<Class<? extends BuildConfiguration.Fragment>> depFragments =
+          fragmentsMap.get(key.getLabel());
       if (depFragments != null) {
         HashMap<PackageValue.Key, PackageValue> buildSettingPackages =
             StarlarkTransition.getBuildSettingPackages(env, transition);

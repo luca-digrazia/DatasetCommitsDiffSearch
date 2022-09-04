@@ -97,11 +97,6 @@ public abstract class ComposingTransitionFactory<T> implements TransitionFactory
   }
 
   @Override
-  public boolean isTool() {
-    return transitionFactory1().isTool() || transitionFactory2().isTool();
-  }
-
-  @Override
   public boolean isSplit() {
     return transitionFactory1().isSplit() || transitionFactory2().isSplit();
   }

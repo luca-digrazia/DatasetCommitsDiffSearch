@@ -15,24 +15,15 @@ package com.google.devtools.build.lib.analysis.config.transitions;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.StoredEventHandler;
-import com.google.devtools.build.lib.rules.cpp.CppOptions;
-import com.google.devtools.build.lib.rules.java.JavaOptions;
 import java.util.Map;
 import java.util.stream.IntStream;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -43,23 +34,15 @@ public class ComposingTransitionTest {
   // Use starlark flags for the test since they are easy to set and check.
   private static final Label FLAG_1 = Label.parseAbsoluteUnchecked("//flag1");
   private static final Label FLAG_2 = Label.parseAbsoluteUnchecked("//flag2");
-  private EventHandler eventHandler;
-
-  @Before
-  public void init() {
-    eventHandler = new StoredEventHandler();
-  }
 
   @Test
-  public void compose_patch_patch() throws Exception {
+  public void compose_patch_patch() {
     // Same flag, will overwrite.
     ConfigurationTransition composed =
         ComposingTransition.of(new StubPatch(FLAG_1, "value1"), new StubPatch(FLAG_1, "value2"));
 
     assertThat(composed).isNotNull();
-    Map<String, BuildOptions> results =
-        composed.apply(
-            TransitionUtil.restrict(composed, BuildOptions.builder().build()), eventHandler);
+    Map<String, BuildOptions> results = composed.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(1);
     BuildOptions result = Iterables.getOnlyElement(results.values());
@@ -68,16 +51,14 @@ public class ComposingTransitionTest {
   }
 
   @Test
-  public void compose_patch_split() throws Exception {
+  public void compose_patch_split() {
     // Different flags, will combine.
     ConfigurationTransition composed =
         ComposingTransition.of(
             new StubPatch(FLAG_1, "value1"), new StubSplit(FLAG_2, "value2a", "value2b"));
 
     assertThat(composed).isNotNull();
-    Map<String, BuildOptions> results =
-        composed.apply(
-            TransitionUtil.restrict(composed, BuildOptions.builder().build()), eventHandler);
+    Map<String, BuildOptions> results = composed.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
@@ -93,16 +74,14 @@ public class ComposingTransitionTest {
   }
 
   @Test
-  public void compose_split_patch() throws Exception {
+  public void compose_split_patch() {
     // Different flags, will combine.
     ConfigurationTransition composed =
         ComposingTransition.of(
             new StubSplit(FLAG_1, "value1a", "value1b"), new StubPatch(FLAG_2, "value2"));
 
     assertThat(composed).isNotNull();
-    Map<String, BuildOptions> results =
-        composed.apply(
-            TransitionUtil.restrict(composed, BuildOptions.builder().build()), eventHandler);
+    Map<String, BuildOptions> results = composed.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
@@ -126,11 +105,7 @@ public class ComposingTransitionTest {
             new StubSplit(FLAG_2, "value2a", "value2b"));
 
     assertThat(composed).isNotNull();
-    assertThrows(
-        IllegalStateException.class,
-        () ->
-            composed.apply(
-                TransitionUtil.restrict(composed, BuildOptions.builder().build()), eventHandler));
+    assertThrows(IllegalStateException.class, () -> composed.apply(BuildOptions.builder().build()));
   }
 
   @Test
@@ -184,8 +159,8 @@ public class ComposingTransitionTest {
     }
 
     @Override
-    public BuildOptions patch(BuildOptionsView options, EventHandler eventHandler) {
-      return updateOptions(options.underlying(), flagLabel, flagValue);
+    public BuildOptions patch(BuildOptions options) {
+      return updateOptions(options, flagLabel, flagValue);
     }
   }
 
@@ -199,42 +174,13 @@ public class ComposingTransitionTest {
     }
 
     @Override
-    public ImmutableMap<String, BuildOptions> split(
-        BuildOptionsView options, EventHandler eventHandler) {
+    public Map<String, BuildOptions> split(BuildOptions options) {
       return IntStream.range(0, flagValues.size())
           .boxed()
           .collect(
               toImmutableMap(
                   i -> "stub_split" + i,
-                  i -> updateOptions(options.underlying(), flagLabel, flagValues.get(i))));
+                  i -> updateOptions(options, flagLabel, flagValues.get(i))));
     }
-  }
-
-  private static final class TransitionWithCustomFragments implements PatchTransition {
-    private final ImmutableSet<Class<? extends FragmentOptions>> fragments;
-
-    TransitionWithCustomFragments(ImmutableSet<Class<? extends FragmentOptions>> fragments) {
-      this.fragments = fragments;
-    }
-
-    @Override
-    public ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
-      return fragments;
-    }
-
-    @Override
-    public BuildOptions patch(BuildOptionsView options, EventHandler eventHandler) {
-      return options.underlying();
-    }
-  }
-
-  @Test
-  public void composed_required_fragments() throws Exception {
-    ConfigurationTransition composed =
-        ComposingTransition.of(
-            new TransitionWithCustomFragments(ImmutableSet.of(CppOptions.class)),
-            new TransitionWithCustomFragments(ImmutableSet.of(JavaOptions.class)));
-    assertThat(composed.requiresOptionFragments(BuildOptions.builder().build()))
-        .containsExactly("CppOptions", "JavaOptions");
   }
 }

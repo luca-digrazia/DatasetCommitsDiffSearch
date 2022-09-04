@@ -15,22 +15,17 @@ package com.google.devtools.build.lib.analysis.config.transitions;
 
 import static com.google.common.collect.ImmutableMap.toImmutableMap;
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.TransitionFactories;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import java.util.Collection;
 import java.util.Map;
 import java.util.stream.IntStream;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -41,15 +36,9 @@ public class ComposingTransitionFactoryTest {
   // Use starlark flags for the test since they are easy to set and check.
   private static final Label FLAG_1 = Label.parseAbsoluteUnchecked("//flag1");
   private static final Label FLAG_2 = Label.parseAbsoluteUnchecked("//flag2");
-  private EventHandler eventHandler;
-
-  @Before
-  public void init() {
-    eventHandler = new StoredEventHandler();
-  }
 
   @Test
-  public void compose_patch_patch() throws Exception {
+  public void compose_patch_patch() {
     // Same flag, will overwrite.
     TransitionFactory<StubData> composed =
         ComposingTransitionFactory.of(
@@ -59,11 +48,7 @@ public class ComposingTransitionFactoryTest {
     assertThat(composed).isNotNull();
     assertThat(composed.isSplit()).isFalse();
     ConfigurationTransition transition = composed.create(new StubData());
-    Collection<BuildOptions> results =
-        transition
-            .apply(
-                TransitionUtil.restrict(transition, BuildOptions.builder().build()), eventHandler)
-            .values();
+    Collection<BuildOptions> results = transition.apply(BuildOptions.builder().build()).values();
     assertThat(results).isNotNull();
     assertThat(results).hasSize(1);
     BuildOptions result = Iterables.getOnlyElement(results);
@@ -72,7 +57,7 @@ public class ComposingTransitionFactoryTest {
   }
 
   @Test
-  public void compose_patch_split() throws Exception {
+  public void compose_patch_split() {
     // Different flags, will combine.
     TransitionFactory<StubData> composed =
         ComposingTransitionFactory.of(
@@ -82,9 +67,7 @@ public class ComposingTransitionFactoryTest {
     assertThat(composed).isNotNull();
     assertThat(composed.isSplit()).isTrue();
     ConfigurationTransition transition = composed.create(new StubData());
-    Map<String, BuildOptions> results =
-        transition.apply(
-            TransitionUtil.restrict(transition, BuildOptions.builder().build()), eventHandler);
+    Map<String, BuildOptions> results = transition.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
@@ -100,7 +83,7 @@ public class ComposingTransitionFactoryTest {
   }
 
   @Test
-  public void compose_split_patch() throws Exception {
+  public void compose_split_patch() {
     // Different flags, will combine.
     TransitionFactory<StubData> composed =
         ComposingTransitionFactory.of(
@@ -110,9 +93,7 @@ public class ComposingTransitionFactoryTest {
     assertThat(composed).isNotNull();
     assertThat(composed.isSplit()).isTrue();
     ConfigurationTransition transition = composed.create(new StubData());
-    Map<String, BuildOptions> results =
-        transition.apply(
-            TransitionUtil.restrict(transition, BuildOptions.builder().build()), eventHandler);
+    Map<String, BuildOptions> results = transition.apply(BuildOptions.builder().build());
     assertThat(results).isNotNull();
     assertThat(results).hasSize(2);
 
@@ -219,8 +200,8 @@ public class ComposingTransitionFactoryTest {
     }
 
     @Override
-    public BuildOptions patch(BuildOptionsView options, EventHandler eventHandler) {
-      return updateOptions(options.underlying(), flagLabel, flagValue);
+    public BuildOptions patch(BuildOptions options) {
+      return updateOptions(options, flagLabel, flagValue);
     }
   }
 
@@ -234,14 +215,13 @@ public class ComposingTransitionFactoryTest {
     }
 
     @Override
-    public ImmutableMap<String, BuildOptions> split(
-        BuildOptionsView options, EventHandler eventHandler) {
+    public Map<String, BuildOptions> split(BuildOptions options) {
       return IntStream.range(0, flagValues.size())
           .boxed()
           .collect(
               toImmutableMap(
                   i -> "stub_split" + i,
-                  i -> updateOptions(options.underlying(), flagLabel, flagValues.get(i))));
+                  i -> updateOptions(options, flagLabel, flagValues.get(i))));
     }
   }
 }
