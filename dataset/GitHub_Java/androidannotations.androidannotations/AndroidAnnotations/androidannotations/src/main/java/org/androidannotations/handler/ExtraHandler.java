@@ -1,38 +1,6 @@
-/**
- * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not
- * use this file except in compliance with the License. You may obtain a copy of
- * the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed To in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
- * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
- * License for the specific language governing permissions and limitations under
- * the License.
- */
 package org.androidannotations.handler;
 
-import static com.sun.codemodel.JExpr._this;
-import static com.sun.codemodel.JExpr.cast;
-import static com.sun.codemodel.JExpr.invoke;
-import static com.sun.codemodel.JExpr.lit;
-import static com.sun.codemodel.JMod.FINAL;
-import static com.sun.codemodel.JMod.PUBLIC;
-import static com.sun.codemodel.JMod.STATIC;
-import static org.androidannotations.helper.CanonicalNameConstants.PARCELABLE;
-import static org.androidannotations.helper.CanonicalNameConstants.SERIALIZABLE;
-import static org.androidannotations.helper.CanonicalNameConstants.STRING;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeKind;
-import javax.lang.model.type.TypeMirror;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
-
+import com.sun.codemodel.*;
 import org.androidannotations.annotations.Extra;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.AnnotationHelper;
@@ -43,16 +11,16 @@ import org.androidannotations.holder.HasIntentBuilder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JVar;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
+import javax.lang.model.util.Elements;
+import javax.lang.model.util.Types;
+
+import static com.sun.codemodel.JExpr.*;
+import static com.sun.codemodel.JMod.*;
+import static org.androidannotations.helper.CanonicalNameConstants.*;
 
 public class ExtraHandler extends BaseAnnotationHandler<HasExtras> {
 
@@ -131,8 +99,8 @@ public class ExtraHandler extends BaseAnnotationHandler<HasExtras> {
 		}
 
 		/*
-		 * Handle the android bug : getIntent().getExtras().getByteArray()
-		 * always returns null;
+		 * Handle the android bug :
+		 * getIntent().getExtras().getByteArray() always returns null;
 		 */
 		restoreMethodCall = handleByteArrayExtraBug(element, extraKeyStaticField, restoreMethodCall);
 
