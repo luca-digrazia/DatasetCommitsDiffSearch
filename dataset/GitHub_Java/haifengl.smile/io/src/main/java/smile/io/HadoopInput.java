@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.io;
 
@@ -30,7 +30,7 @@ import org.apache.parquet.io.InputFile;
 
 /**
  * Static methods that return the InputStream/Reader of a HDFS/S3.
- * Local files, HTTP and FTP URLs are supported too.
+ * Local files, HTTP & FTP URLs are supported too.
  *
  * @author Haifeng Li
  */

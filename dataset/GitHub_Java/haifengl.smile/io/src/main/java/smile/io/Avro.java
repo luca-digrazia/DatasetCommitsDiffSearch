@@ -42,10 +42,10 @@ import smile.data.type.StructType;
 
 /**
  * Apache Avro is a data serialization system.
- * <p>
+ *
  * Avro provides rich data structures, a compact, fast, binary data format,
  * a container file, to store persistent data, and remote procedure call (RPC).
- * <p>
+ *
  * Avro relies on schemas. When Avro data is stored in a file, its schema
  * is stored with it. Avro schemas are defined with JSON.
  *
@@ -70,19 +70,13 @@ public class Avro {
     /**
      * Constructor.
      *
-     * @param schema the input stream of schema.
+     * @param schemaFile Avro schema file path.
      */
-    public Avro(InputStream schema) throws IOException {
-        this(new Schema.Parser().parse(schema));
-    }
-
-    /**
-     * Constructor.
-     *
-     * @param schema Avro schema file path.
-     */
-    public Avro(Path schema) throws IOException {
-        this(Files.newInputStream(schema));
+    public Avro(Path schemaFile) throws IOException {
+        schema = new Schema.Parser().parse(Files.newInputStream(schemaFile));
+        if (schema.getType() != Schema.Type.RECORD) {
+            throw new IllegalArgumentException("The type of schema is not Record");
+        }
     }
 
     /**

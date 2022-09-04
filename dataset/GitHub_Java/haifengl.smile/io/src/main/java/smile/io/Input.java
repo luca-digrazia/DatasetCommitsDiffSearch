@@ -43,13 +43,11 @@ public interface Input {
     /** Returns the reader of a file path or URI. */
     static InputStream stream(String path) throws IOException, URISyntaxException {
         URI uri = new URI(path);
-        String scheme = uri.getScheme();
-        // If scheme is single character, assume it is the drive letter in Windows.
-        if (scheme == null || scheme.length() < 2) return Files.newInputStream(Paths.get(path));
+        if (uri.getScheme() == null) return Files.newInputStream(Paths.get(path));
 
         switch (uri.getScheme().toLowerCase()) {
             case "file":
-                return Files.newInputStream(Paths.get(uri.getPath()));
+                return Files.newInputStream(Paths.get(path));
 
             default: // http, ftp, ...
                 return uri.toURL().openStream();
