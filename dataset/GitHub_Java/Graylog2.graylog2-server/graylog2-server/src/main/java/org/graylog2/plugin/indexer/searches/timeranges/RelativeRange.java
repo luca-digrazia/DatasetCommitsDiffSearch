@@ -76,7 +76,7 @@ public abstract class RelativeRange extends TimeRange {
             return Tools.nowUTC();
         }
 
-        return Tools.nowUTC().minusSeconds(to().orElse(0));
+        return Tools.nowUTC().minusSeconds(to().orElseThrow(() -> new IllegalStateException("Neither `range` nor `to` specified!")));
     }
 
     @JsonIgnore
@@ -111,7 +111,7 @@ public abstract class RelativeRange extends TimeRange {
 
         public RelativeRange build() throws InvalidRangeParametersException {
             if (range().isPresent() && (from().isPresent() || to().isPresent())) {
-                throw new InvalidRangeParametersException("Either `range` OR `from`/`to` must be specified, not both!");
+                throw new InvalidRangeParametersException("Either `range` OR `from`/`to` must be specifed, not both!");
             }
 
             if (range().isPresent()) {
@@ -120,8 +120,8 @@ public abstract class RelativeRange extends TimeRange {
                 }
             }
 
-            if (to().isPresent() && !from().isPresent()) {
-                throw new InvalidRangeParametersException("If `to` is specified, `from` must be specified to!");
+            if ((from().isPresent() && !to().isPresent()) || (to().isPresent() && !from().isPresent())) {
+                throw new InvalidRangeParametersException("Both `from` and `to` must be specified!");
             }
 
             if ((from().isPresent() && to().isPresent()) && (to().getAsInt() > from().getAsInt())) {
