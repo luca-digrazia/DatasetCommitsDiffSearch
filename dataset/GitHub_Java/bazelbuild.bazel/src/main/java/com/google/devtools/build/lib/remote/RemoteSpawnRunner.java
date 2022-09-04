@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.remote;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputFileCache;
@@ -137,6 +136,7 @@ class RemoteSpawnRunner implements SpawnRunner {
     Command command = buildCommand(spawn.getArguments(), spawn.getEnvironment());
     Action action =
         buildAction(
+            execRoot,
             spawn.getOutputFiles(),
             digestUtil.compute(command),
             repository.getMerkleDigest(inputRoot),
@@ -168,7 +168,6 @@ class RemoteSpawnRunner implements SpawnRunner {
           try {
             return downloadRemoteResults(cachedResult, policy.getFileOutErr())
                 .setCacheHit(true)
-                .setRunnerName("remote cache hit")
                 .build();
           } catch (CacheNotFoundException e) {
             // No cache hit, so we fall through to local or remote execution.
@@ -210,7 +209,7 @@ class RemoteSpawnRunner implements SpawnRunner {
 
       try {
         return downloadRemoteResults(result, policy.getFileOutErr())
-            .setRunnerName(remoteCacheHit ? "remote cache hit" : getName())
+            .setRunnerName(remoteCacheHit ? "" : getName())
             .setCacheHit(remoteCacheHit)
             .build();
       } catch (IOException e) {
@@ -319,6 +318,7 @@ class RemoteSpawnRunner implements SpawnRunner {
   }
 
   static Action buildAction(
+      Path execRoot,
       Collection<? extends ActionInput> outputs,
       Digest command,
       Digest inputRoot,
@@ -442,12 +442,12 @@ class RemoteSpawnRunner implements SpawnRunner {
         return result;
       }
     }
-    boolean uploadAction =
-        Spawns.mayBeCached(spawn)
-            && Status.SUCCESS.equals(result.status())
-            && result.exitCode() == 0;
-    Collection<Path> outputFiles = resolveActionInputs(execRoot, spawn.getOutputFiles());
+    List<Path> outputFiles = listExistingOutputFiles(execRoot, spawn);
     try {
+      boolean uploadAction =
+          Spawns.mayBeCached(spawn)
+              && Status.SUCCESS.equals(result.status())
+              && result.exitCode() == 0;
       remoteCache.upload(actionKey, execRoot, outputFiles, policy.getFileOutErr(), uploadAction);
     } catch (IOException e) {
       if (verboseFailures) {
@@ -471,12 +471,16 @@ class RemoteSpawnRunner implements SpawnRunner {
     }
   }
 
-  /** Resolve a collection of {@link com.google.build.lib.actions.ActionInput}s to {@link Path}s. */
-  static Collection<Path> resolveActionInputs(
-      Path execRoot, Collection<? extends ActionInput> actionInputs) {
-    return actionInputs
-        .stream()
-        .map((inp) -> execRoot.getRelative(inp.getExecPath()))
-        .collect(ImmutableList.toImmutableList());
+  static List<Path> listExistingOutputFiles(Path execRoot, Spawn spawn) {
+    ArrayList<Path> outputFiles = new ArrayList<>();
+    for (ActionInput output : spawn.getOutputFiles()) {
+      Path outputPath = execRoot.getRelative(output.getExecPathString());
+      // TODO(ulfjack): Store the actual list of output files in SpawnResult and use that instead
+      // of statting the files here again.
+      if (outputPath.exists()) {
+        outputFiles.add(outputPath);
+      }
+    }
+    return outputFiles;
   }
 }

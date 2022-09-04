@@ -38,9 +38,8 @@ import javax.annotation.Nullable;
  */
 final class RemoteActionContextProvider extends ActionContextProvider {
   private final CommandEnvironment env;
-  @Nullable private final AbstractRemoteActionCache cache;
-  @Nullable private final GrpcRemoteExecutor executor;
-  private final RemoteRetrier retrier;
+  private final AbstractRemoteActionCache cache;
+  private final GrpcRemoteExecutor executor;
   private final DigestUtil digestUtil;
   private final Path logDir;
 
@@ -48,13 +47,11 @@ final class RemoteActionContextProvider extends ActionContextProvider {
       CommandEnvironment env,
       @Nullable AbstractRemoteActionCache cache,
       @Nullable GrpcRemoteExecutor executor,
-      RemoteRetrier retrier,
       DigestUtil digestUtil,
       Path logDir) {
     this.env = env;
     this.executor = executor;
     this.cache = cache;
-    this.retrier = retrier;
     this.digestUtil = digestUtil;
     this.logDir = logDir;
   }
@@ -67,7 +64,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
     String buildRequestId = env.getBuildRequestId().toString();
     String commandId = env.getCommandId().toString();
 
-    if (executor == null && cache != null) {
+    if (remoteOptions.experimentalRemoteSpawnCache || remoteOptions.experimentalLocalDiskCache) {
       RemoteSpawnCache spawnCache =
           new RemoteSpawnCache(
               env.getExecRoot(),
@@ -75,6 +72,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
               cache,
               buildRequestId,
               commandId,
+              executionOptions.verboseFailures,
               env.getReporter(),
               digestUtil);
       return ImmutableList.of(spawnCache);
@@ -83,7 +81,6 @@ final class RemoteActionContextProvider extends ActionContextProvider {
           new RemoteSpawnRunner(
               env.getExecRoot(),
               remoteOptions,
-              env.getOptions().getOptions(ExecutionOptions.class),
               createFallbackRunner(env),
               executionOptions.verboseFailures,
               env.getReporter(),
@@ -91,7 +88,6 @@ final class RemoteActionContextProvider extends ActionContextProvider {
               commandId,
               cache,
               executor,
-              retrier,
               digestUtil,
               logDir);
       return ImmutableList.of(new RemoteSpawnStrategy(env.getExecRoot(), spawnRunner));
@@ -103,7 +99,7 @@ final class RemoteActionContextProvider extends ActionContextProvider {
         env.getOptions().getOptions(LocalExecutionOptions.class);
     LocalEnvProvider localEnvProvider =
         OS.getCurrent() == OS.DARWIN
-            ? new XcodeLocalEnvProvider(env.getClientEnv())
+            ? new XcodeLocalEnvProvider(env.getRuntime().getProductName(), env.getClientEnv())
             : (OS.getCurrent() == OS.WINDOWS
                 ? new WindowsLocalEnvProvider(env.getClientEnv())
                 : new PosixLocalEnvProvider(env.getClientEnv()));
