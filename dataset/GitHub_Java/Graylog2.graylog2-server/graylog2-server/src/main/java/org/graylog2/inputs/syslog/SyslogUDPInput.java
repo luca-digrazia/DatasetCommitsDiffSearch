@@ -20,6 +20,7 @@
 
 package org.graylog2.inputs.syslog;
 
+import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.Core;
 import org.graylog2.plugin.inputs.*;
@@ -31,6 +32,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.graylog2.plugin.GraylogServer;
@@ -38,7 +40,7 @@ import org.graylog2.plugin.GraylogServer;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class SyslogUDPInput extends SyslogInputBase implements MessageInput {
+public class SyslogUDPInput implements MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogUDPInput.class);
 
@@ -46,52 +48,39 @@ public class SyslogUDPInput extends SyslogInputBase implements MessageInput {
 
     private Core core;
     private String inputId;
-    private MessageInputConfiguration config;
     private InetSocketAddress socketAddress;
-    private ConnectionlessBootstrap bootstrap;
 
     @Override
     public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException {
         this.core = (Core) graylogServer;
-        this.config = config;
 
-        if (!checkConfig(config)) {
-            throw new MessageInputConfigurationException();
-        }
-
-        this.socketAddress = new InetSocketAddress(
-                config.getString(CK_BIND_ADDRESS),
-                (int) config.getInt(CK_PORT)
-        );
-    }
+        // TODO load from actual config.
+        this.socketAddress = new InetSocketAddress("127.0.0.1", 5514);    }
 
     @Override
     public void launch() throws MisfireException {
         final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
-                        .setNameFormat("input-" + inputId + "-syslogudp-worker-%d")
+                        .setNameFormat("input-syslogudp-worker-%d")
                         .build());
 
-        bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
+        final ConnectionlessBootstrap bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
 
         bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(
                 core.getConfiguration().getUdpRecvBufferSizes())
         );
-        bootstrap.setPipelineFactory(new SyslogPipelineFactory(core, config));
+        bootstrap.setPipelineFactory(new SyslogPipelineFactory(core));
 
         try {
             bootstrap.bind(socketAddress);
             LOG.info("Started UDP Syslog server on {}", socketAddress);
         } catch (ChannelException e) {
             LOG.error("Could not bind Syslog UDP server to address " + socketAddress, e);
-        }
-    }
+        }    }
 
     @Override
     public void stop() {
-        if (bootstrap != null) {
-            bootstrap.shutdown();
-        }
+        // TODO implement me.
     }
 
     @Override
