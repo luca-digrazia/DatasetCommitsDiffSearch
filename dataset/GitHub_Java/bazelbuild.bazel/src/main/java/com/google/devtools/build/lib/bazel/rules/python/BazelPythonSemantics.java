@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.ShToolchain;
-import com.google.devtools.build.lib.analysis.TransitionMode;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.LauncherFileWriteAction;
@@ -40,6 +39,7 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.Substitution;
 import com.google.devtools.build.lib.analysis.actions.Template;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector.InstrumentationSpec;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -151,7 +151,7 @@ public class BazelPythonSemantics implements PythonSemantics {
     String pythonBinary = getPythonBinary(ruleContext, common, bazelConfig);
 
     // Version information for host config diagnostic warning.
-    PythonVersion attrVersion = PyCommon.readPythonVersionFromAttribute(ruleContext.attributes());
+    PythonVersion attrVersion = PyCommon.readPythonVersionFromAttributes(ruleContext.attributes());
     boolean attrVersionSpecifiedExplicitly = attrVersion != null;
     if (!attrVersionSpecifiedExplicitly) {
       attrVersion = config.getDefaultPythonVersion();
@@ -299,8 +299,7 @@ public class BazelPythonSemantics implements PythonSemantics {
       RunfilesSupport runfilesSupport,
       PyCommon common,
       RuleConfiguredTargetBuilder builder) {
-    FilesToRunProvider zipper =
-        ruleContext.getExecutablePrerequisite("$zipper", TransitionMode.HOST);
+    FilesToRunProvider zipper = ruleContext.getExecutablePrerequisite("$zipper", Mode.HOST);
     Artifact executable = common.getExecutable();
     Artifact zipFile = common.getPythonZipArtifact(executable);
 
@@ -352,11 +351,9 @@ public class BazelPythonSemantics implements PythonSemantics {
     inputsBuilder.add(stubFile);
     argv.addPrefixedExecPath("__main__.py=", stubFile);
 
-    PathFragment initPy =
-        ZIP_RUNFILES_DIRECTORY_NAME.getRelative(workspaceName).getRelative("__init__.py");
     // Creating __init__.py files under each directory
     argv.add("__init__.py=");
-    argv.addDynamicString(initPy.getPathString() + "=");
+    argv.addDynamicString(getZipRunfilesPath("__init__.py", workspaceName) + "=");
     for (String path : runfilesSupport.getRunfiles().getEmptyFilenames().toList()) {
       argv.addDynamicString(getZipRunfilesPath(path, workspaceName) + "=");
     }
@@ -366,7 +363,7 @@ public class BazelPythonSemantics implements PythonSemantics {
     for (Artifact artifact : runfilesSupport.getRunfilesArtifacts().toList()) {
       if (!artifact.equals(executable) && !artifact.equals(zipFile)) {
         argv.addDynamicString(
-            getZipRunfilesPath(artifact.getRootRelativePath(), workspaceName)
+            getZipRunfilesPath(artifact.getRunfilesPath(), workspaceName)
                 + "="
                 + artifact.getExecPathString());
         inputsBuilder.add(artifact);
@@ -404,8 +401,7 @@ public class BazelPythonSemantics implements PythonSemantics {
   private static PyRuntimeInfo getRuntime(RuleContext ruleContext, PyCommon common) {
     return common.shouldGetRuntimeFromToolchain()
         ? common.getRuntimeFromToolchain()
-        : ruleContext.getPrerequisite(
-            ":py_interpreter", TransitionMode.TARGET, PyRuntimeInfo.PROVIDER);
+        : ruleContext.getPrerequisite(":py_interpreter", Mode.TARGET, PyRuntimeInfo.PROVIDER);
   }
 
   private static void addRuntime(
@@ -437,7 +433,7 @@ public class BazelPythonSemantics implements PythonSemantics {
         PathFragment workspaceName =
             PathFragment.create(ruleContext.getRule().getPackage().getWorkspaceName());
         pythonBinary =
-            workspaceName.getRelative(provider.getInterpreter().getShortPath()).getPathString();
+            workspaceName.getRelative(provider.getInterpreter().getRunfilesPath()).getPathString();
       }
     } else  {
       // make use of the Python interpreter in an absolute path
