@@ -40,12 +40,12 @@ import smile.stat.distribution.GaussianDistribution;
  * similarly to t-SNE, but also for general non-linear dimension reduction.
  * The algorithm is founded on three assumptions about the data:
  *
- * <ul>
+ * <ol>
  * <li>The data is uniformly distributed on a Riemannian manifold;</li>
  * <li>The Riemannian metric is locally constant (or can be approximated as
  * such);</li>
  * <li>The manifold is locally connected.</li>
- * </ul>
+ * </ol>
  *
  * From these assumptions it is possible to model the manifold with a fuzzy
  * topological structure. The embedding is found by searching for a low
@@ -308,7 +308,7 @@ public class UMAP implements Serializable {
         }
         double[] p = {0.5, 0.0};
         LevenbergMarquardt curveFit = LevenbergMarquardt.fit(func, x, y, p);
-        return curveFit.parameters;
+        return curveFit.p;
     }
 
     /**
