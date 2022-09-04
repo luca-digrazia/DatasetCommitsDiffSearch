@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.annotation.PreDestroy;
-import javax.enterprise.inject.Any;
 import javax.inject.Singleton;
 
 import org.bson.codecs.configuration.CodecProvider;
@@ -37,8 +36,6 @@ import com.mongodb.ConnectionString;
 import com.mongodb.MongoClientSettings;
 import com.mongodb.MongoCredential;
 import com.mongodb.MongoException;
-import com.mongodb.ReadConcern;
-import com.mongodb.ReadConcernLevel;
 import com.mongodb.ReadPreference;
 import com.mongodb.ServerAddress;
 import com.mongodb.WriteConcern;
@@ -52,9 +49,6 @@ import com.mongodb.connection.SslSettings;
 import com.mongodb.event.CommandListener;
 import com.mongodb.event.ConnectionPoolListener;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.InstanceHandle;
-import io.quarkus.mongodb.health.MongoHealthCheck;
 import io.quarkus.mongodb.impl.ReactiveMongoClientImpl;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
 
@@ -82,25 +76,6 @@ public class MongoClients {
     public MongoClients(MongodbConfig mongodbConfig, MongoClientSupport mongoClientSupport) {
         this.mongodbConfig = mongodbConfig;
         this.mongoClientSupport = mongoClientSupport;
-
-        try {
-            //JDK bug workaround
-            //https://github.com/quarkusio/quarkus/issues/14424
-            //force class init to prevent possible deadlock when done by mongo threads
-            Class.forName("sun.net.ext.ExtendedSocketOptions", true, ClassLoader.getSystemClassLoader());
-        } catch (ClassNotFoundException e) {
-        }
-
-        try {
-            Class.forName("org.eclipse.microprofile.health.HealthCheck");
-            InstanceHandle<MongoHealthCheck> instance = Arc.container()
-                    .instance(MongoHealthCheck.class, Any.Literal.INSTANCE);
-            if (instance.isAvailable()) {
-                instance.get().configure(mongodbConfig);
-            }
-        } catch (ClassNotFoundException e) {
-            // Ignored - no health check
-        }
     }
 
     public MongoClient createMongoClient(String clientName) throws MongoException {
@@ -276,13 +251,7 @@ public class MongoClients {
 
             Optional<String> maybeW = wc.w;
             if (maybeW.isPresent()) {
-                String w = maybeW.get();
-                if ("majority".equalsIgnoreCase(w)) {
-                    concern = concern.withW(w);
-                } else {
-                    int wInt = Integer.parseInt(w);
-                    concern = concern.withW(wInt);
-                }
+                concern = concern.withW(maybeW.get());
             }
             settings.writeConcern(concern);
             settings.retryWrites(wc.retryWrites);
@@ -298,9 +267,6 @@ public class MongoClients {
 
         if (config.readPreference.isPresent()) {
             settings.readPreference(ReadPreference.valueOf(config.readPreference.get()));
-        }
-        if (config.readConcern.isPresent()) {
-            settings.readConcern(new ReadConcern(ReadConcernLevel.fromString(config.readConcern.get())));
         }
 
         return settings.build();
