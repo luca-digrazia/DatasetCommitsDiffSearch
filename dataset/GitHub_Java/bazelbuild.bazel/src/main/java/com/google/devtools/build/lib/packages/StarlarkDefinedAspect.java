@@ -268,9 +268,9 @@ public class StarlarkDefinedAspect implements StarlarkExportable, StarlarkAspect
   }
 
   @Override
-  public void attachToAspectsList(
+  public void attachToAttribute(
       String baseAspectName,
-      AspectsListBuilder aspectsList,
+      Attribute.Builder<?> builder,
       ImmutableList<ImmutableSet<StarlarkProviderIdentifier>> inheritedRequiredProviders,
       ImmutableList<String> inheritedAttributeAspects)
       throws EvalException {
@@ -302,16 +302,15 @@ public class StarlarkDefinedAspect implements StarlarkExportable, StarlarkAspect
       }
 
       for (StarlarkAspect requiredAspect : requiredAspects) {
-        requiredAspect.attachToAspectsList(
+        requiredAspect.attachToAttribute(
             this.getName(),
-            aspectsList,
+            builder,
             requiredAspectInheritedRequiredProviders.build(),
             requiredAspectInheritedAttributeAspects.build());
       }
     }
 
-    aspectsList.addAspect(
-        this, baseAspectName, inheritedRequiredProviders, inheritedAttributeAspects);
+    builder.aspect(this, baseAspectName, inheritedRequiredProviders, inheritedAttributeAspects);
   }
 
   public ImmutableSet<StarlarkAspect> getRequiredAspects() {

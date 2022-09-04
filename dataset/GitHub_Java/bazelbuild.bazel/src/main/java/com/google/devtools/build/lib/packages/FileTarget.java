@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,29 +16,30 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.License.DistributionType;
-import com.google.devtools.build.lib.util.FileType.HasFilename;
-
+import com.google.devtools.build.lib.util.FileType;
 import java.util.Set;
 
 /**
- * Common superclass for InputFile and OutputFile which provides implementation
- * for the file operations in common.
+ * Common superclass for InputFile and OutputFile which provides implementation for the file
+ * operations in common.
  */
-public abstract class FileTarget implements Target, HasFilename {
-  protected final Package pkg;
-  protected final Label label;
+@Immutable
+public abstract class FileTarget implements Target, FileType.HasFileType {
+  final Label label;
 
-  /**
-   * Constructs a file with the given label, which must be in the given package.
-   */
-  protected FileTarget(Package pkg, Label label) {
+  /** Constructs a file with the given label, which must be in the given package. */
+  FileTarget(Package pkg, Label label) {
     Preconditions.checkArgument(label.getPackageFragment().equals(pkg.getNameFragment()));
-    this.pkg = pkg;
     this.label = label;
   }
 
   @Override
+  public boolean isImmutable() {
+    return true; // immutable and Starlark-hashable
+  }
+
   public String getFilename() {
     return label.getName();
   }
@@ -54,18 +55,13 @@ public abstract class FileTarget implements Target, HasFilename {
   }
 
   @Override
-  public Package getPackage() {
-    return pkg;
+  public String filePathForFileTypeMatcher() {
+    return getFilename();
   }
 
   @Override
   public String toString() {
-    return getTargetKind() + "(" + getLabel() + ")"; // Just for debugging
-  }
-
-  @Override
-  public int hashCode() {
-    return label.hashCode();
+    return getTargetKind() + "(" + label + ")"; // Just for debugging
   }
 
   @Override

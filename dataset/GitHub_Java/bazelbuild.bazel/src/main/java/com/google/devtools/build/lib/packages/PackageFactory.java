@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.flogger.GoogleLogger;
-import com.google.devtools.build.lib.actions.ThreadStateReceiver;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -441,7 +440,7 @@ public final class PackageFactory {
     }
   }
 
-  @VisibleForTesting // exposed to WorkspaceFileFunction and BzlmodRepoRuleFunction
+  @VisibleForTesting // exposed to WorkspaceFileFunction
   public Package.Builder newExternalPackageBuilder(
       RootedPath workspacePath, String workspaceName, StarlarkSemantics starlarkSemantics) {
     return Package.newExternalPackageBuilder(
@@ -471,8 +470,7 @@ public final class PackageFactory {
       Path packageDirectory,
       PackageIdentifier packageId,
       ImmutableSet<PathFragment> ignoredGlobPrefixes,
-      CachingPackageLocator locator,
-      ThreadStateReceiver threadStateReceiverForMetrics) {
+      CachingPackageLocator locator) {
     return new NonSkyframeGlobber(
         new GlobCache(
             packageDirectory,
@@ -481,8 +479,7 @@ public final class PackageFactory {
             locator,
             syscalls,
             executor,
-            maxDirectoriesToEagerlyVisitInGlobbing,
-            threadStateReceiverForMetrics));
+            maxDirectoriesToEagerlyVisitInGlobbing));
   }
 
   /**
@@ -526,7 +523,7 @@ public final class PackageFactory {
 
   /**
    * Runs final validation and administrative tasks on newly loaded package. Called by a caller of
-   * {@link #executeBuildFile} after this caller has fully loaded the package.
+   * {@link #createPackageFromAst} after this caller has fully loaded the package.
    *
    * @throws InvalidPackageException if the package is determined to be invalid
    */

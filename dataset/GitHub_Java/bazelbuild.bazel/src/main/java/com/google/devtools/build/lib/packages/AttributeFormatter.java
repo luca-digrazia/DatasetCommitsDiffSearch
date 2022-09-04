@@ -17,6 +17,7 @@ import static com.google.devtools.build.lib.packages.BuildType.DISTRIBUTIONS;
 import static com.google.devtools.build.lib.packages.BuildType.FILESET_ENTRY_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_DICT_UNARY;
+import static com.google.devtools.build.lib.packages.BuildType.LABEL_KEYED_STRING_DICT;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.LICENSE;
 import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL;
@@ -24,16 +25,14 @@ import static com.google.devtools.build.lib.packages.BuildType.NODEP_LABEL_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.OUTPUT;
 import static com.google.devtools.build.lib.packages.BuildType.OUTPUT_LIST;
 import static com.google.devtools.build.lib.packages.BuildType.TRISTATE;
-import static com.google.devtools.build.lib.syntax.Type.BOOLEAN;
-import static com.google.devtools.build.lib.syntax.Type.INTEGER;
-import static com.google.devtools.build.lib.syntax.Type.INTEGER_LIST;
-import static com.google.devtools.build.lib.syntax.Type.STRING;
-import static com.google.devtools.build.lib.syntax.Type.STRING_DICT;
-import static com.google.devtools.build.lib.syntax.Type.STRING_DICT_UNARY;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
-import static com.google.devtools.build.lib.syntax.Type.STRING_LIST_DICT;
+import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
+import static com.google.devtools.build.lib.packages.Type.INTEGER;
+import static com.google.devtools.build.lib.packages.Type.INTEGER_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING;
+import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
+import static com.google.devtools.build.lib.packages.Type.STRING_LIST_DICT;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -42,33 +41,35 @@ import com.google.devtools.build.lib.packages.BuildType.SelectorList;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.Attribute.Discriminator;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.Attribute.SelectorEntry;
-import com.google.devtools.build.lib.query2.proto.proto2api.Build.Attribute.SelectorEntry.Builder;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.Attribute.Tristate;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.LabelDictUnaryEntry;
+import com.google.devtools.build.lib.query2.proto.proto2api.Build.LabelKeyedStringDictEntry;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.LabelListDictEntry;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.StringDictEntry;
-import com.google.devtools.build.lib.query2.proto.proto2api.Build.StringDictUnaryEntry;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build.StringListDictEntry;
-import com.google.devtools.build.lib.syntax.GlobCriteria;
-import com.google.devtools.build.lib.syntax.GlobList;
-import com.google.devtools.build.lib.syntax.Type;
-
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
-
 import javax.annotation.Nullable;
+import net.starlark.java.eval.StarlarkInt;
 
 /** Common utilities for serializing {@link Attribute}s as protocol buffers. */
 public class AttributeFormatter {
 
   private static final ImmutableSet<Type<?>> depTypes =
-      ImmutableSet.<Type<?>>of(
-          STRING, LABEL, OUTPUT, STRING_LIST, LABEL_LIST, OUTPUT_LIST, DISTRIBUTIONS);
+      ImmutableSet.of(
+          STRING,
+          LABEL,
+          OUTPUT,
+          STRING_LIST,
+          LABEL_LIST,
+          LABEL_DICT_UNARY,
+          LABEL_KEYED_STRING_DICT,
+          OUTPUT_LIST,
+          DISTRIBUTIONS);
 
   private static final ImmutableSet<Type<?>> noDepTypes =
-      ImmutableSet.<Type<?>>of(NODEP_LABEL_LIST, NODEP_LABEL);
+      ImmutableSet.of(NODEP_LABEL_LIST, NODEP_LABEL);
 
   private AttributeFormatter() {}
 
@@ -78,9 +79,6 @@ public class AttributeFormatter {
    * <p>If {@param value} is null, only the {@code name}, {@code explicitlySpecified}, {@code
    * nodep} (if applicable), and {@code type} fields will be included in the proto message.
    *
-   * <p>If {@param includeGlobs} is true then {@link GlobCriteria} will be included in the proto
-   * message if present.
-   *
    * <p>If {@param encodeBooleanAndTriStateAsIntegerAndString} is true then boolean and tristate
    * values are also encoded as integers and strings.
    */
@@ -88,24 +86,20 @@ public class AttributeFormatter {
       Attribute attr,
       @Nullable Object value,
       boolean explicitlySpecified,
-      boolean includeGlobs,
       boolean encodeBooleanAndTriStateAsIntegerAndString) {
     return getAttributeProto(
         attr.getName(),
         attr.getType(),
         value,
         explicitlySpecified,
-        includeGlobs,
         encodeBooleanAndTriStateAsIntegerAndString);
   }
 
-  @VisibleForTesting
-  static Build.Attribute getAttributeProto(
+  private static Build.Attribute getAttributeProto(
       String name,
       Type<?> type,
       @Nullable Object value,
       boolean explicitlySpecified,
-      boolean includeGlobs,
       boolean encodeBooleanAndTriStateAsIntegerAndString) {
     Build.Attribute.Builder attrPb = Build.Attribute.newBuilder();
     attrPb.setName(name);
@@ -114,13 +108,13 @@ public class AttributeFormatter {
 
     if (value instanceof SelectorList<?>) {
       attrPb.setType(Discriminator.SELECTOR_LIST);
-      writeSelectorListToBuilder(attrPb, type, (SelectorList<?>) value, includeGlobs);
+      writeSelectorListToBuilder(attrPb, type, (SelectorList<?>) value);
     } else {
       attrPb.setType(ProtoUtils.getDiscriminatorFromType(type));
       if (value != null) {
         AttributeBuilderAdapter adapter =
             new AttributeBuilderAdapter(attrPb, encodeBooleanAndTriStateAsIntegerAndString);
-        writeAttributeValueToBuilder(adapter, type, value, includeGlobs);
+        writeAttributeValueToBuilder(adapter, type, value);
       }
     }
 
@@ -138,8 +132,7 @@ public class AttributeFormatter {
   private static void writeSelectorListToBuilder(
       Build.Attribute.Builder attrPb,
       Type<?> type,
-      SelectorList<?> selectorList,
-      boolean includeGlobs) {
+      SelectorList<?> selectorList) {
     Build.Attribute.SelectorList.Builder selectorListBuilder =
         Build.Attribute.SelectorList.newBuilder();
     selectorListBuilder.setType(ProtoUtils.getDiscriminatorFromType(type));
@@ -149,20 +142,21 @@ public class AttributeFormatter {
           .setHasDefaultValue(selector.hasDefault());
 
       // Note that the order of entries returned by selector.getEntries is stable. The map's
-      // entries' order is preserved from the sorting performed by the SelectorValue constructor.
-      for (Entry<Label, ?> entry : selector.getEntries().entrySet()) {
+      // entries' order is preserved from the fact that Starlark dictionary entry order is stable
+      // (it's determined by insertion order).
+      for (Map.Entry<Label, ?> entry : selector.getEntries().entrySet()) {
         Label condition = entry.getKey();
-        Builder selectorEntryBuilder = SelectorEntry.newBuilder()
-            .setLabel(condition.toString())
-            .setIsDefaultValue(!selector.isValueSet(condition));
+        SelectorEntry.Builder selectorEntryBuilder =
+            SelectorEntry.newBuilder()
+                .setLabel(condition.toString())
+                .setIsDefaultValue(!selector.isValueSet(condition));
 
         Object conditionValue = entry.getValue();
         if (conditionValue != null) {
           writeAttributeValueToBuilder(
               new SelectorEntryBuilderAdapter(selectorEntryBuilder),
               type,
-              conditionValue,
-              includeGlobs);
+              conditionValue);
         }
         selectorBuilder.addEntries(selectorEntryBuilder);
       }
@@ -175,11 +169,10 @@ public class AttributeFormatter {
    * Set the appropriate type and value. Since string and string list store values for multiple
    * types, use the toString() method on the objects instead of casting them.
    */
-  @SuppressWarnings("unchecked")
   private static void writeAttributeValueToBuilder(
-      AttributeValueBuilderAdapter builder, Type<?> type, Object value, boolean includeGlobs) {
+      AttributeValueBuilderAdapter builder, Type<?> type, Object value) {
     if (type == INTEGER) {
-      builder.setIntValue((Integer) value);
+      builder.setIntValue(((StarlarkInt) value).toIntUnchecked());
     } else if (type == STRING || type == LABEL || type == NODEP_LABEL || type == OUTPUT) {
       builder.setStringValue(value.toString());
     } else if (type == STRING_LIST || type == LABEL_LIST || type == NODEP_LABEL_LIST
@@ -188,8 +181,8 @@ public class AttributeFormatter {
         builder.addStringListValue(entry.toString());
       }
     } else if (type == INTEGER_LIST) {
-      for (Integer entry : (Collection<Integer>) value) {
-        builder.addIntListValue(entry);
+      for (Object elem : (Collection<?>) value) {
+        builder.addIntListValue(((StarlarkInt) elem).toIntUnchecked());
       }
     } else if (type == BOOLEAN) {
       builder.setBooleanValue((Boolean) value);
@@ -206,6 +199,7 @@ public class AttributeFormatter {
       }
       builder.setLicense(licensePb);
     } else if (type == STRING_DICT) {
+      @SuppressWarnings("unchecked")
       Map<String, String> dict = (Map<String, String>) value;
       for (Map.Entry<String, String> keyValueList : dict.entrySet()) {
         StringDictEntry.Builder entry =
@@ -214,16 +208,8 @@ public class AttributeFormatter {
                 .setValue(keyValueList.getValue());
         builder.addStringDictValue(entry);
       }
-    } else if (type == STRING_DICT_UNARY) {
-      Map<String, String> dict = (Map<String, String>) value;
-      for (Map.Entry<String, String> dictEntry : dict.entrySet()) {
-        StringDictUnaryEntry.Builder entry =
-            StringDictUnaryEntry.newBuilder()
-                .setKey(dictEntry.getKey())
-                .setValue(dictEntry.getValue());
-        builder.addStringDictUnaryValue(entry);
-      }
     } else if (type == STRING_LIST_DICT) {
+      @SuppressWarnings("unchecked")
       Map<String, List<String>> dict = (Map<String, List<String>>) value;
       for (Map.Entry<String, List<String>> dictEntry : dict.entrySet()) {
         StringListDictEntry.Builder entry =
@@ -234,6 +220,7 @@ public class AttributeFormatter {
         builder.addStringListDictValue(entry);
       }
     } else if (type == LABEL_DICT_UNARY) {
+      @SuppressWarnings("unchecked")
       Map<String, Label> dict = (Map<String, Label>) value;
       for (Map.Entry<String, Label> dictEntry : dict.entrySet()) {
         LabelDictUnaryEntry.Builder entry =
@@ -242,7 +229,18 @@ public class AttributeFormatter {
                 .setValue(dictEntry.getValue().toString());
         builder.addLabelDictUnaryValue(entry);
       }
+    } else if (type == LABEL_KEYED_STRING_DICT) {
+      @SuppressWarnings("unchecked")
+      Map<Label, String> dict = (Map<Label, String>) value;
+      for (Map.Entry<Label, String> dictEntry : dict.entrySet()) {
+        LabelKeyedStringDictEntry.Builder entry =
+            LabelKeyedStringDictEntry.newBuilder()
+                .setKey(dictEntry.getKey().toString())
+                .setValue(dictEntry.getValue());
+        builder.addLabelKeyedStringDictValue(entry);
+      }
     } else if (type == FILESET_ENTRY_LIST) {
+      @SuppressWarnings("unchecked")
       List<FilesetEntry> filesetEntries = (List<FilesetEntry>) value;
       for (FilesetEntry filesetEntry : filesetEntries) {
         Build.FilesetEntry.Builder filesetEntryPb =
@@ -269,23 +267,6 @@ public class AttributeFormatter {
       }
     } else {
       throw new AssertionError("Unknown type: " + type);
-    }
-
-    if (includeGlobs && value instanceof GlobList<?>) {
-      GlobList<?> globList = (GlobList<?>) value;
-
-      for (GlobCriteria criteria : globList.getCriteria()) {
-        Build.GlobCriteria.Builder criteriaPb =
-            Build.GlobCriteria.newBuilder().setGlob(criteria.isGlob());
-        for (String include : criteria.getIncludePatterns()) {
-          criteriaPb.addInclude(include);
-        }
-        for (String exclude : criteria.getExcludePatterns()) {
-          criteriaPb.addExclude(exclude);
-        }
-
-        builder.addGlobCriteria(criteriaPb);
-      }
     }
   }
 
@@ -327,15 +308,13 @@ public class AttributeFormatter {
 
     void addFilesetListValue(Build.FilesetEntry.Builder builder);
 
-    void addGlobCriteria(Build.GlobCriteria.Builder builder);
-
     void addLabelDictUnaryValue(LabelDictUnaryEntry.Builder builder);
+
+    void addLabelKeyedStringDictValue(LabelKeyedStringDictEntry.Builder builder);
 
     void addLabelListDictValue(LabelListDictEntry.Builder builder);
 
     void addIntListValue(int i);
-
-    void addStringDictUnaryValue(StringDictUnaryEntry.Builder builder);
 
     void addStringDictValue(StringDictEntry.Builder builder);
 
@@ -370,6 +349,7 @@ public class AttributeFormatter {
       this.encodeBooleanAndTriStateAsIntegerAndString = encodeBooleanAndTriStateAsIntegerAndString;
     }
 
+    @Override
     public void addStringListValue(String s) {
       attributeBuilder.addStringListValue(s);
     }
@@ -380,13 +360,13 @@ public class AttributeFormatter {
     }
 
     @Override
-    public void addGlobCriteria(Build.GlobCriteria.Builder builder) {
-      attributeBuilder.addGlobCriteria(builder);
+    public void addLabelDictUnaryValue(LabelDictUnaryEntry.Builder builder) {
+      attributeBuilder.addLabelDictUnaryValue(builder);
     }
 
     @Override
-    public void addLabelDictUnaryValue(LabelDictUnaryEntry.Builder builder) {
-      attributeBuilder.addLabelDictUnaryValue(builder);
+    public void addLabelKeyedStringDictValue(LabelKeyedStringDictEntry.Builder builder) {
+      attributeBuilder.addLabelKeyedStringDictValue(builder);
     }
 
     @Override
@@ -397,11 +377,6 @@ public class AttributeFormatter {
     @Override
     public void addIntListValue(int i) {
       attributeBuilder.addIntListValue(i);
-    }
-
-    @Override
-    public void addStringDictUnaryValue(StringDictUnaryEntry.Builder builder) {
-      attributeBuilder.addStringDictUnaryValue(builder);
     }
 
     @Override
@@ -480,21 +455,20 @@ public class AttributeFormatter {
    * An {@link AttributeValueBuilderAdapter} which writes to a {@link SelectorEntry.Builder}.
    *
    * <p>Note that there is no {@code encodeBooleanAndTriStateAsIntegerAndString} parameter needed
-   * here. This is because the clients that expect those alternate encodings of boolean and
-   * tristate attribute values do not support {@link SelectorList} values. When providing output to
-   * those clients, we compute the set of possible attribute values (expanding {@link SelectorList}
+   * here. This is because the clients that expect those alternate encodings of boolean and tristate
+   * attribute values do not support {@link SelectorList} values. When providing output to those
+   * clients, we compute the set of possible attribute values (expanding {@link SelectorList}
    * values, evaluating computed defaults, and flattening collections of collections; see {@link
-   * com.google.devtools.build.lib.packages.AggregatingAttributeMapper#getPossibleAttributeValues}
-   * and {@link
-   * com.google.devtools.build.lib.packages.AggregatingAttributeMapper#flattenAttributeValues}).
+   * com.google.devtools.build.lib.packages.AggregatingAttributeMapper#visitAttribute}).
    */
   private static class SelectorEntryBuilderAdapter implements AttributeValueBuilderAdapter {
     private final SelectorEntry.Builder selectorEntryBuilder;
 
-    private SelectorEntryBuilderAdapter(Builder selectorEntryBuilder) {
+    private SelectorEntryBuilderAdapter(SelectorEntry.Builder selectorEntryBuilder) {
       this.selectorEntryBuilder = Preconditions.checkNotNull(selectorEntryBuilder);
     }
 
+    @Override
     public void addStringListValue(String s) {
       selectorEntryBuilder.addStringListValue(s);
     }
@@ -505,13 +479,13 @@ public class AttributeFormatter {
     }
 
     @Override
-    public void addGlobCriteria(Build.GlobCriteria.Builder builder) {
-      selectorEntryBuilder.addGlobCriteria(builder);
+    public void addLabelDictUnaryValue(LabelDictUnaryEntry.Builder builder) {
+      selectorEntryBuilder.addLabelDictUnaryValue(builder);
     }
 
     @Override
-    public void addLabelDictUnaryValue(LabelDictUnaryEntry.Builder builder) {
-      selectorEntryBuilder.addLabelDictUnaryValue(builder);
+    public void addLabelKeyedStringDictValue(LabelKeyedStringDictEntry.Builder builder) {
+      selectorEntryBuilder.addLabelKeyedStringDictValue(builder);
     }
 
     @Override
@@ -522,11 +496,6 @@ public class AttributeFormatter {
     @Override
     public void addIntListValue(int i) {
       selectorEntryBuilder.addIntListValue(i);
-    }
-
-    @Override
-    public void addStringDictUnaryValue(StringDictUnaryEntry.Builder builder) {
-      selectorEntryBuilder.addStringDictUnaryValue(builder);
     }
 
     @Override
@@ -565,4 +534,3 @@ public class AttributeFormatter {
     }
   }
 }
-

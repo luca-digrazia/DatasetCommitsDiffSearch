@@ -162,24 +162,24 @@ public abstract class Type<T> {
   public abstract T getDefaultValue();
 
   /**
-   * Function accepting a (potentially null) {@link Label} and a (potentially null) {@link
-   * Attribute} provided as context. Used by {@link #visitLabels}.
+   * Function accepting a (potentially null) {@link Label} and an arbitrary context object. Used by
+   * {@link #visitLabels}.
    */
-  public interface LabelVisitor {
-    void visit(@Nullable Label label, @Nullable Attribute context);
+  public interface LabelVisitor<C> {
+    void visit(@Nullable Label label, @Nullable C context);
   }
 
   /**
    * Invokes {@code visitor.visit(label, context)} for each {@link Label} {@code label} associated
-   * with {@code value}, an instance of this {@link Type}.
+   * with {@code value}, which is assumed an instance of this {@link Type}.
    *
    * <p>This is used to support reliable label visitation in {@link
-   * com.google.devtools.build.lib.packages.AttributeMap#visitLabels}. To preserve that reliability,
-   * every type should faithfully define its own instance of this method. In other words, be careful
-   * about defining default instances in base types that get auto-inherited by their children. Keep
-   * all definitions as explicit as possible.
+   * com.google.devtools.build.lib.packages.AbstractAttributeMapper#visitLabels}. To preserve that
+   * reliability, every type should faithfully define its own instance of this method. In other
+   * words, be careful about defining default instances in base types that get auto-inherited by
+   * their children. Keep all definitions as explicit as possible.
    */
-  public abstract void visitLabels(LabelVisitor visitor, T value, @Nullable Attribute context);
+  public abstract <C> void visitLabels(LabelVisitor<C> visitor, Object value, @Nullable C context);
 
   /** Classifications of labels by their usage. */
   public enum LabelClass {
@@ -300,7 +300,7 @@ public abstract class Type<T> {
    *                                                                  *
    ********************************************************************/
 
-  private static final class ObjectType extends Type<Object> {
+  private static class ObjectType extends Type<Object> {
     @Override
     public Object cast(Object value) {
       return value;
@@ -313,7 +313,8 @@ public abstract class Type<T> {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, Object value, @Nullable Attribute context) {}
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    }
 
     @Override
     public String toString() {
@@ -327,7 +328,7 @@ public abstract class Type<T> {
   }
 
   // A Starlark integer in the signed 32-bit range (like Java int).
-  private static final class IntegerType extends Type<StarlarkInt> {
+  private static class IntegerType extends Type<StarlarkInt> {
     @Override
     public StarlarkInt cast(Object value) {
       // This cast will fail if passed a java.lang.Integer,
@@ -341,7 +342,8 @@ public abstract class Type<T> {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, StarlarkInt value, @Nullable Attribute context) {}
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    }
 
     @Override
     public String toString() {
@@ -382,7 +384,7 @@ public abstract class Type<T> {
     }
   }
 
-  private static final class BooleanType extends Type<Boolean> {
+  private static class BooleanType extends Type<Boolean> {
     @Override
     public Boolean cast(Object value) {
       return (Boolean) value;
@@ -394,7 +396,8 @@ public abstract class Type<T> {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, Boolean value, @Nullable Attribute context) {}
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    }
 
     @Override
     public String toString() {
@@ -431,7 +434,7 @@ public abstract class Type<T> {
     }
   }
 
-  private static final class StringType extends Type<String> {
+  private static class StringType extends Type<String> {
     @Override
     public String cast(Object value) {
       return (String) value;
@@ -443,7 +446,8 @@ public abstract class Type<T> {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, String value, @Nullable Attribute context) {}
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    }
 
     @Override
     public String toString() {
@@ -490,10 +494,9 @@ public abstract class Type<T> {
     private final LabelClass labelClass;
 
     @Override
-    public final void visitLabels(
-        LabelVisitor visitor, Map<KeyT, ValueT> value, @Nullable Attribute context) {
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
       if (labelClass != LabelClass.NONE) {
-        for (Map.Entry<KeyT, ValueT> entry : value.entrySet()) {
+        for (Map.Entry<KeyT, ValueT> entry : cast(value).entrySet()) {
           keyType.visitLabels(visitor, entry.getKey(), context);
           valueType.visitLabels(visitor, entry.getValue(), context);
         }
@@ -591,7 +594,7 @@ public abstract class Type<T> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public final List<ElemT> cast(Object value) {
+    public List<ElemT> cast(Object value) {
       return (List<ElemT>) value;
     }
 
@@ -611,19 +614,19 @@ public abstract class Type<T> {
     }
 
     @Override
-    public final void visitLabels(
-        LabelVisitor visitor, List<ElemT> value, @Nullable Attribute context) {
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
       if (elemType.getLabelClass() == LabelClass.NONE) {
         return;
       }
 
+      List<ElemT> elems = cast(value);
       // Hot code path. Optimize for lists with O(1) access to avoid iterator garbage.
-      if (value instanceof RandomAccess) {
-        for (int i = 0; i < value.size(); i++) {
-          elemType.visitLabels(visitor, value.get(i), context);
+      if (elems instanceof RandomAccess) {
+        for (int i = 0; i < elems.size(); i++) {
+          elemType.visitLabels(visitor, elems.get(i), context);
         }
       } else {
-        for (ElemT elem : value) {
+        for (ElemT elem : elems) {
           elemType.visitLabels(visitor, elem, context);
         }
       }

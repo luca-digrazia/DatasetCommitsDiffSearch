@@ -174,7 +174,7 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
 
   private Collection<DepEdge> visitLabels(Iterable<Attribute> attributes) {
     List<DepEdge> edges = new ArrayList<>();
-    Type.LabelVisitor visitor =
+    Type.LabelVisitor<Attribute> visitor =
         (label, attribute) -> {
           if (label != null) {
             Label absoluteLabel = ruleLabel.resolveRepositoryRelative(label);
@@ -187,15 +187,16 @@ public abstract class AbstractAttributeMapper implements AttributeMap {
       // special-case these types.
       if (type != BuildType.OUTPUT && type != BuildType.OUTPUT_LIST
           && type != BuildType.NODEP_LABEL && type != BuildType.NODEP_LABEL_LIST) {
-        visitLabels(attribute, type, visitor);
+        visitLabels(attribute, visitor);
       }
     }
     return edges;
   }
 
   /** Visits all labels reachable from the given attribute. */
-  <T> void visitLabels(Attribute attribute, Type<T> type, Type.LabelVisitor visitor) {
-    T value = get(attribute.getName(), type);
+  void visitLabels(Attribute attribute, Type.LabelVisitor<Attribute> visitor) {
+    Type<?> type = attribute.getType();
+    Object value = get(attribute.getName(), type);
     if (value != null) { // null values are particularly possible for computed defaults.
       type.visitLabels(visitor, value, attribute);
     }

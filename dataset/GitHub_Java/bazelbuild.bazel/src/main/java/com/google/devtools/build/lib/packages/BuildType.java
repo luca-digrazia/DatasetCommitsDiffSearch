@@ -100,8 +100,7 @@ public final class BuildType {
         }
 
         @Override
-        public void visitLabels(
-            LabelVisitor visitor, DistributionType value, @Nullable Attribute context) {}
+        public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {}
 
         @Override
         public String toString() {
@@ -158,7 +157,8 @@ public final class BuildType {
     }
   }
 
-  private static final class FilesetEntryType extends Type<FilesetEntry> {
+  private static class FilesetEntryType extends
+      Type<FilesetEntry> {
     @Override
     public FilesetEntry cast(Object value) {
       return (FilesetEntry) value;
@@ -189,8 +189,8 @@ public final class BuildType {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, FilesetEntry value, @Nullable Attribute context) {
-      for (Label label : value.getLabels()) {
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+      for (Label label : cast(value).getLabels()) {
         visitor.visit(label, context);
       }
     }
@@ -261,8 +261,8 @@ public final class BuildType {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, Label value, @Nullable Attribute context) {
-      visitor.visit(value, context);
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+      visitor.visit(cast(value), context);
     }
 
     @Override
@@ -374,7 +374,7 @@ public final class BuildType {
    * Like Label, LicenseType is a derived type, which is declared specially in order to allow syntax
    * validation. It represents the licenses, as described in {@link License}.
    */
-  public static final class LicenseType extends Type<License> {
+  public static class LicenseType extends Type<License> {
     @Override
     public License cast(Object value) {
       return (License) value;
@@ -396,7 +396,8 @@ public final class BuildType {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, License value, @Nullable Attribute context) {}
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    }
 
     @Override
     public String toString() {
@@ -409,7 +410,7 @@ public final class BuildType {
    * syntax validation. It represents the declared distributions of a target, as described in {@link
    * License}.
    */
-  private static final class Distributions extends Type<Set<DistributionType>> {
+  private static class Distributions extends Type<Set<DistributionType>> {
     @SuppressWarnings("unchecked")
     @Override
     public Set<DistributionType> cast(Object value) {
@@ -433,8 +434,8 @@ public final class BuildType {
     }
 
     @Override
-    public void visitLabels(
-        LabelVisitor visitor, Set<DistributionType> value, @Nullable Attribute context) {}
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    }
 
     @Override
     public String toString() {
@@ -447,7 +448,7 @@ public final class BuildType {
     }
   }
 
-  private static final class OutputType extends Type<Label> {
+  private static class OutputType extends Type<Label> {
     @Override
     public Label cast(Object value) {
       return (Label) value;
@@ -459,8 +460,8 @@ public final class BuildType {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, Label value, @Nullable Attribute context) {
-      visitor.visit(value, context);
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+      visitor.visit(cast(value), context);
     }
 
     @Override
@@ -762,7 +763,7 @@ public final class BuildType {
    * values 0 (NO), 1 (YES), or None (AUTO). TriState is deprecated; use attr.int(values=[-1, 0, 1])
    * instead.
    */
-  private static final class TriStateType extends Type<TriState> {
+  private static class TriStateType extends Type<TriState> {
     @Override
     public TriState cast(Object value) {
       return (TriState) value;
@@ -774,7 +775,8 @@ public final class BuildType {
     }
 
     @Override
-    public void visitLabels(LabelVisitor visitor, TriState value, @Nullable Attribute context) {}
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    }
 
     @Override
     public String toString() {
