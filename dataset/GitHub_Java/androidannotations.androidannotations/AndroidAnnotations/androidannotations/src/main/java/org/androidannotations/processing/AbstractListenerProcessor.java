@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -80,12 +80,13 @@ public abstract class AbstractListenerProcessor implements DecoratingElementProc
 		processParameters(listenerMethod, call, parameters);
 
 		for (JFieldRef idRef : idsRefs) {
-			ViewChangedHolder onViewChanged = holder.onViewChanged();
+			if (idRef != null) {
+				ViewChangedHolder onViewChanged = holder.onViewChanged();
 
-			JBlock block = onViewChanged.body().block();
-			JInvocation view = onViewChanged.findViewById(idRef);
-
-			block._if(view.ne(_null()))._then().invoke(castWidget(view), getSetterName()).arg(_new(listenerAnonymousClass));
+				JBlock block = onViewChanged.body().block();
+				JInvocation view = onViewChanged.findViewById(idRef);
+				block._if(view.ne(_null()))._then().invoke(castWidget(view), getSetterName()).arg(_new(listenerAnonymousClass));
+			}
 		}
 	}
 
