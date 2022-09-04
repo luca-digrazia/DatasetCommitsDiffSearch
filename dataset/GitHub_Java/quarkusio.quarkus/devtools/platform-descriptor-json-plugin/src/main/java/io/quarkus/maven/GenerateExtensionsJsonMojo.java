@@ -234,9 +234,8 @@ public class GenerateExtensionsJsonMojo extends AbstractMojo {
         if (onode != null) {
             // TODO: this is a dirty hack to avoid redoing existing javax.json code
             String json = getMapper(false).writeValueAsString(onode);
-            try (JsonReader jsonReader = Json.createReader(new StringReader(json))) {
-                return jsonReader.readObject();
-            }
+            JsonReader jsonReader = Json.createReader(new StringReader(json));
+            return jsonReader.readObject();
         } else {
             return null;
         }
