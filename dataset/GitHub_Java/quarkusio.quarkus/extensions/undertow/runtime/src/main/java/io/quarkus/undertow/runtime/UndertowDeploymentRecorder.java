@@ -139,8 +139,7 @@ public class UndertowDeploymentRecorder {
     }
 
     public RuntimeValue<DeploymentInfo> createDeployment(String name, Set<String> knownFile, Set<String> knownDirectories,
-            LaunchMode launchMode, ShutdownContext context, String contextPath, String httpRootPath, String defaultCharset,
-            String requestCharacterEncoding, String responseCharacterEncoding) {
+            LaunchMode launchMode, ShutdownContext context, String contextPath, String httpRootPath) {
         String realMountPoint;
         if (contextPath.equals("/")) {
             realMountPoint = httpRootPath;
@@ -151,9 +150,6 @@ public class UndertowDeploymentRecorder {
         }
 
         DeploymentInfo d = new DeploymentInfo();
-        d.setDefaultRequestEncoding(requestCharacterEncoding);
-        d.setDefaultResponseEncoding(responseCharacterEncoding);
-        d.setDefaultEncoding(defaultCharset);
         d.setSessionIdGenerator(new QuarkusSessionIdGenerator());
         d.setClassLoader(getClass().getClassLoader());
         d.setDeploymentName(name);
