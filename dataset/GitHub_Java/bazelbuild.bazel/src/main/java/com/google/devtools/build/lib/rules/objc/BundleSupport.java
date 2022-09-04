@@ -267,16 +267,17 @@ final class BundleSupport {
       Artifact storyboardInput) {
     CustomCommandLine.Builder commandLine =
         CustomCommandLine.builder()
-            .addPath(zipOutput.getExecPath())
+            .add(zipOutput.getExecPath())
             .addDynamicString(archiveRoot)
-            .add("--minimum-deployment-target", bundling.getMinimumOsVersion().toString())
+            .add("--minimum-deployment-target")
+            .add(bundling.getMinimumOsVersion())
             .add("--module", ruleContext.getLabel().getName());
 
     for (TargetDeviceFamily targetDeviceFamily : targetDeviceFamiliesForResources()) {
       commandLine.add("--target-device", targetDeviceFamily.name().toLowerCase(Locale.US));
     }
 
-    return commandLine.addPath(storyboardInput.getExecPath()).build();
+    return commandLine.add(storyboardInput.getExecPath()).build();
   }
 
   private void registerMomczipActions(ObjcProvider objcProvider) {
@@ -292,7 +293,7 @@ final class BundleSupport {
               .addInputs(datamodel.getInputs())
               .setCommandLine(
                   CustomCommandLine.builder()
-                      .addExecPath(outputZip)
+                      .add(outputZip)
                       .addDynamicString(datamodel.archiveRootForMomczip())
                       .addDynamicString("-XD_MOMC_SDKROOT=" + AppleToolchain.sdkDir())
                       .addDynamicString(
@@ -303,7 +304,7 @@ final class BundleSupport {
                               .getMultiArchPlatform(PlatformType.IOS)
                               .getLowerCaseNameInPlist())
                       .add("-XD_MOMC_TARGET_VERSION=10.6")
-                      .addPath(datamodel.getContainer())
+                      .add(datamodel.getContainer())
                       .build())
               .build(ruleContext));
     }
@@ -339,9 +340,9 @@ final class BundleSupport {
                   CustomCommandLine.builder()
                       .add("-convert")
                       .add("binary1")
-                      .addExecPath("-o", bundled)
+                      .add("-o", bundled)
                       .add("--")
-                      .addPath(strings.getExecPath())
+                      .add(strings.getExecPath())
                       .build())
               .addInput(strings)
               .addInput(CompilationSupport.xcrunwrapper(ruleContext).getExecutable())
@@ -435,12 +436,13 @@ final class BundleSupport {
     }
     CustomCommandLine.Builder commandLine =
         CustomCommandLine.builder()
-            .addPath(zipOutput.getExecPath())
+            .add(zipOutput.getExecPath())
             .add(
                 "--platform",
                 appleConfiguration.getMultiArchPlatform(platformType).getLowerCaseNameInPlist())
-            .addExecPath("--output-partial-info-plist", partialInfoPlist)
-            .add("--minimum-deployment-target", bundling.getMinimumOsVersion().toString());
+            .add("--output-partial-info-plist", partialInfoPlist)
+            .add("--minimum-deployment-target")
+            .add(bundling.getMinimumOsVersion());
 
     for (TargetDeviceFamily targetDeviceFamily : targetDeviceFamiliesForResources()) {
       commandLine.add("--target-device", targetDeviceFamily.name().toLowerCase(Locale.US));

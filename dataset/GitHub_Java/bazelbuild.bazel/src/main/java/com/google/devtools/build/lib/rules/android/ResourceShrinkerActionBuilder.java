@@ -162,12 +162,12 @@ public class ResourceShrinkerActionBuilder {
             .getRunfilesSupport()
             .getRunfilesArtifactsWithoutMiddlemen());
 
-    commandLine.addExecPath("--aapt", sdk.getAapt().getExecutable());
+    commandLine.add("--aapt", sdk.getAapt().getExecutable());
 
-    commandLine.addExecPath("--annotationJar", sdk.getAnnotationsJar());
+    commandLine.add("--annotationJar", sdk.getAnnotationsJar());
     inputs.add(sdk.getAnnotationsJar());
 
-    commandLine.addExecPath("--androidJar", sdk.getAndroidJar());
+    commandLine.add("--androidJar", sdk.getAndroidJar());
     inputs.add(sdk.getAndroidJar());
 
     if (!uncompressedExtensions.isEmpty()) {
@@ -194,24 +194,24 @@ public class ResourceShrinkerActionBuilder {
     checkNotNull(primaryResources.getManifest());
     checkNotNull(resourceApkOut);
 
-    commandLine.addExecPath("--resources", resourceFilesZip);
+    commandLine.add("--resources", resourceFilesZip);
     inputs.add(resourceFilesZip);
 
-    commandLine.addExecPath("--shrunkJar", shrunkJar);
+    commandLine.add("--shrunkJar", shrunkJar);
     inputs.add(shrunkJar);
 
-    commandLine.addExecPath("--proguardMapping", proguardMapping);
+    commandLine.add("--proguardMapping", proguardMapping);
     inputs.add(proguardMapping);
 
-    commandLine.addExecPath("--rTxt", primaryResources.getRTxt());
+    commandLine.add("--rTxt", primaryResources.getRTxt());
     inputs.add(primaryResources.getRTxt());
 
-    commandLine.addExecPath("--primaryManifest", primaryResources.getManifest());
+    commandLine.add("--primaryManifest", primaryResources.getManifest());
     inputs.add(primaryResources.getManifest());
 
     ImmutableList<Artifact> dependencyManifests = getManifests(dependencyResources);
     if (!dependencyManifests.isEmpty()) {
-      commandLine.addExecPaths("--dependencyManifest", dependencyManifests);
+      commandLine.add("--dependencyManifest", dependencyManifests);
       inputs.addAll(dependencyManifests);
     }
 
@@ -219,13 +219,13 @@ public class ResourceShrinkerActionBuilder {
         getResourcePackages(primaryResources, dependencyResources);
     commandLine.add("--resourcePackages", VectorArg.of(resourcePackages).joinWith(","));
 
-    commandLine.addExecPath("--shrunkResourceApk", resourceApkOut);
+    commandLine.add("--shrunkResourceApk", resourceApkOut);
     outputs.add(resourceApkOut);
 
-    commandLine.addExecPath("--shrunkResources", shrunkResourcesOut);
+    commandLine.add("--shrunkResources", shrunkResourcesOut);
     outputs.add(shrunkResourcesOut);
 
-    commandLine.addExecPath("--log", logOut);
+    commandLine.add("--log", logOut);
     outputs.add(logOut);
 
     ruleContext.registerAction(

@@ -100,7 +100,7 @@ public class ManifestMergerActionBuilder {
             .getRunfilesSupport()
             .getRunfilesArtifactsWithoutMiddlemen());
 
-    builder.addExecPath("--manifest", manifest);
+    builder.add("--manifest", manifest);
     inputs.add(manifest);
 
     if (mergeeManifests != null && !mergeeManifests.isEmpty()) {
@@ -123,11 +123,11 @@ public class ManifestMergerActionBuilder {
       builder.add("--customPackage", customPackage);
     }
 
-    builder.addExecPath("--manifestOutput", manifestOutput);
+    builder.add("--manifestOutput", manifestOutput);
     outputs.add(manifestOutput);
 
     if (logOut != null) {
-      builder.addExecPath("--log", logOut);
+      builder.add("--log", logOut);
       outputs.add(logOut);
     }
 

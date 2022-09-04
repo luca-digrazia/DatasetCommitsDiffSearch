@@ -82,7 +82,7 @@ public class RobolectricResourceSymbolsActionBuilder {
 
     List<Artifact> inputs = new ArrayList<>();
 
-    builder.addExecPath("--androidJar", sdk.getAndroidJar());
+    builder.add("--androidJar", sdk.getAndroidJar());
     inputs.add(sdk.getAndroidJar());
 
     if (!Iterables.isEmpty(dependencies.getResources())) {
@@ -97,7 +97,7 @@ public class RobolectricResourceSymbolsActionBuilder {
     Iterables.addAll(inputs, FluentIterable.from(dependencies.getResources())
         .transformAndConcat(RESOURCE_CONTAINER_TO_ARTIFACTS));
 
-    builder.addExecPath("--classJarOutput", classJarOut);
+    builder.add("--classJarOutput", classJarOut);
     SpawnAction.Builder spawnActionBuilder = new SpawnAction.Builder();
 
     if (OS.getCurrent() == OS.WINDOWS) {

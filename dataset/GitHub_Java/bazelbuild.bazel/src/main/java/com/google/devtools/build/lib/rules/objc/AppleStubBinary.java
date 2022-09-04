@@ -156,7 +156,7 @@ public class AppleStubBinary implements RuleConfiguredTargetFactory {
         new Builder()
             .add("/bin/cp")
             .addDynamicString(resolveXcenvBasedPath(ruleContext, platform))
-            .addExecPaths(ImmutableList.of(outputBinary))
+            .add(ImmutableList.of(outputBinary))
             .build();
 
     ruleContext.registerAction(

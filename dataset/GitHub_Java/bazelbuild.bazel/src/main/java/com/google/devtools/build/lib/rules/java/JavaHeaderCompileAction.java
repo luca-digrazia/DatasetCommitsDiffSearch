@@ -503,10 +503,10 @@ public class JavaHeaderCompileAction extends SpawnAction {
 
     private CustomCommandLine.Builder getBaseArgs(JavaToolchainProvider javaToolchain) {
       return CustomCommandLine.builder()
-          .addPath(JavaCommon.getHostJavaExecutable(ruleContext))
+          .add(JavaCommon.getHostJavaExecutable(ruleContext))
           .add("-Xverify:none")
           .add(javaToolchain.getJvmOptions())
-          .addExecPath("-jar", javaToolchain.getHeaderCompiler());
+          .add("-jar", javaToolchain.getHeaderCompiler());
     }
 
     /**
@@ -515,20 +515,20 @@ public class JavaHeaderCompileAction extends SpawnAction {
      */
     private CustomCommandLine.Builder baseCommandLine(
         CustomCommandLine.Builder result, NestedSet<Artifact> classpathEntries) {
-      result.addExecPath("--output", outputJar);
+      result.add("--output", outputJar);
 
       if (outputDepsProto != null) {
-        result.addExecPath("--output_deps", outputDepsProto);
+        result.add("--output_deps", outputDepsProto);
       }
 
-      result.add("--temp_dir").addPath(tempDirectory);
+      result.add("--temp_dir").add(tempDirectory);
 
-      result.addExecPaths("--bootclasspath", bootclasspathEntries);
+      result.add("--bootclasspath", bootclasspathEntries);
 
-      result.addExecPaths("--sources", sourceFiles);
+      result.add("--sources", sourceFiles);
 
       if (!sourceJars.isEmpty()) {
-        result.addExecPaths("--source_jars", ImmutableList.copyOf(sourceJars));
+        result.add("--source_jars", ImmutableList.copyOf(sourceJars));
       }
 
       result.add("--javacopts", javacOpts);
@@ -540,14 +540,14 @@ public class JavaHeaderCompileAction extends SpawnAction {
         result.add("--target_label");
         if (targetLabel.getPackageIdentifier().getRepository().isDefault()
             || targetLabel.getPackageIdentifier().getRepository().isMain()) {
-          result.addLabel(targetLabel);
+          result.add(targetLabel);
         } else {
           // @-prefixed strings will be assumed to be params filenames and expanded,
           // so add an extra @ to escape it.
           result.addWithPrefix("@", targetLabel);
         }
       }
-      result.addExecPaths("--classpath", classpathEntries);
+      result.add("--classpath", classpathEntries);
       return result;
     }
 
@@ -562,13 +562,12 @@ public class JavaHeaderCompileAction extends SpawnAction {
         result.add("--javacopts", ImmutableList.copyOf(processorFlags));
       }
       if (!processorPath.isEmpty()) {
-        result.addExecPaths("--processorpath", processorPath);
+        result.add("--processorpath", processorPath);
       }
       if (strictJavaDeps != BuildConfiguration.StrictDepsMode.OFF) {
-        result.addCustomMultiArgv(
-            new JavaCompileAction.JarsToTargetsArgv(classpathEntries, directJars));
+        result.add(new JavaCompileAction.JarsToTargetsArgv(classpathEntries, directJars));
         if (!compileTimeDependencyArtifacts.isEmpty()) {
-          result.addExecPaths("--deps_artifacts", compileTimeDependencyArtifacts);
+          result.add("--deps_artifacts", compileTimeDependencyArtifacts);
         }
       }
       return result.build();
