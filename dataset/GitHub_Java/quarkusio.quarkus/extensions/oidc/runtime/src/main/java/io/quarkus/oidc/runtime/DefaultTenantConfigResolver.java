@@ -14,8 +14,6 @@ import io.vertx.ext.web.RoutingContext;
 @ApplicationScoped
 public class DefaultTenantConfigResolver {
 
-    private static final String CURRENT_TENANT_CONFIG = "io.quarkus.oidc.current.tenant.config";
-
     @Inject
     Instance<TenantResolver> tenantResolver;
 
@@ -31,10 +29,23 @@ public class DefaultTenantConfigResolver {
             throw new IllegalStateException("Multiple " + TenantConfigResolver.class + " beans registered");
         }
 
-        TenantConfigContext config = getTenantConfigFromConfigResolver(context, true);
+        if (tenantConfigResolver.isResolvable()) {
+            OidcTenantConfig tenantConfig = this.tenantConfigResolver.get().resolve(context);
 
-        if (config != null) {
-            return config;
+            if (tenantConfig != null) {
+                String tenantId = tenantConfig.getClientId()
+                        .orElseThrow(() -> new IllegalStateException("You must provide a client_id"));
+                TenantConfigContext tenantContext = tenantsConfig.get(tenantId);
+
+                if (tenantContext == null) {
+                    synchronized (this) {
+                        return tenantsConfig.computeIfAbsent(tenantId,
+                                clientId -> tenantConfigContextFactory.apply(tenantConfig));
+                    }
+                }
+
+                return tenantContext;
+            }
         }
 
         String tenant = null;
@@ -60,39 +71,5 @@ public class DefaultTenantConfigResolver {
 
     void setTenantConfigContextFactory(Function<OidcTenantConfig, TenantConfigContext> tenantConfigContextFactory) {
         this.tenantConfigContextFactory = tenantConfigContextFactory;
-    }
-
-    boolean isBlocking(RoutingContext context) {
-        return getTenantConfigFromConfigResolver(context, false) == null;
-    }
-
-    private TenantConfigContext getTenantConfigFromConfigResolver(RoutingContext context, boolean create) {
-        if (tenantConfigResolver.isResolvable()) {
-            OidcTenantConfig tenantConfig;
-
-            if (context.get(CURRENT_TENANT_CONFIG) != null) {
-                tenantConfig = context.get(CURRENT_TENANT_CONFIG);
-            } else {
-                tenantConfig = this.tenantConfigResolver.get().resolve(context);
-                context.put(CURRENT_TENANT_CONFIG, tenantConfig);
-            }
-
-            if (tenantConfig != null) {
-                String tenantId = tenantConfig.getClientId()
-                        .orElseThrow(() -> new IllegalStateException("You must provide a client_id"));
-                TenantConfigContext tenantContext = tenantsConfig.get(tenantId);
-
-                if (tenantContext == null && create) {
-                    synchronized (this) {
-                        return tenantsConfig.computeIfAbsent(tenantId,
-                                clientId -> tenantConfigContextFactory.apply(tenantConfig));
-                    }
-                }
-
-                return tenantContext;
-            }
-        }
-
-        return null;
     }
 }
