@@ -121,7 +121,7 @@ public class BeanManagerImpl implements BeanManager {
 
     @Override
     public List<Interceptor<?>> resolveInterceptors(InterceptionType type, Annotation... interceptorBindings) {
-        return ArcContainerImpl.instance().resolveInterceptors(Objects.requireNonNull(type), interceptorBindings);
+        throw new UnsupportedOperationException();
     }
 
     @Override
