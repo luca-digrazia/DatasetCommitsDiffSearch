@@ -185,10 +185,22 @@ public final class BlazeWorkspace {
    * <p>This method should be called from the "main" thread on which the command will execute;
    * that thread will receive interruptions if a module requests an early exit.
    */
-  public CommandEnvironment initCommand(Command command, OptionsProvider options) {
+  public CommandEnvironment initCommand(Command command) {
     CommandEnvironment env = new CommandEnvironment(
-        runtime, this, new EventBus(eventBusExceptionHandler), Thread.currentThread(), command,
-        options);
+        runtime, this, new EventBus(eventBusExceptionHandler), Thread.currentThread(), command);
+    skyframeExecutor.setClientEnv(env.getClientEnv());
+    return env;
+  }
+
+  /**
+   * Same as {@code #initCommand()} but setting the command name and the options manually since
+   * those values are set by {@code CommandEnvironment#beforeCommand()} which is not called for
+   * testing. Use ONLY for testing purposes.
+   */
+  public CommandEnvironment initCommandForTesting(Command command, OptionsProvider options) {
+    CommandEnvironment env = new CommandEnvironment(
+        runtime, this, new EventBus(eventBusExceptionHandler), Thread.currentThread(),
+        command, options);
     skyframeExecutor.setClientEnv(env.getClientEnv());
     return env;
   }
@@ -202,7 +214,7 @@ public final class BlazeWorkspace {
   /**
    * Reinitializes the Skyframe evaluator.
    */
-  public void resetEvaluator() {
+  public void resetEvaluator() throws IOException {
     skyframeExecutor.resetEvaluator();
   }
 
