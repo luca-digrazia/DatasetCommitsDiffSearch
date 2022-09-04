@@ -469,24 +469,4 @@ public class LabelTest {
     label = Label.parseAbsolute("@repo//bar/baz", ImmutableMap.of());
     assertThat(label.getWorkspaceRoot()).isEqualTo("external/repo");
   }
-
-  @Test
-  public void testGetContainingDirectory() {
-    assertThat(Label.getContainingDirectory(Label.parseAbsoluteUnchecked("//a:b")))
-        .isEqualTo(PathFragment.create("a"));
-    assertThat(Label.getContainingDirectory(Label.parseAbsoluteUnchecked("//a/b:c")))
-        .isEqualTo(PathFragment.create("a/b"));
-    assertThat(Label.getContainingDirectory(Label.parseAbsoluteUnchecked("//a:b/c")))
-        .isEqualTo(PathFragment.create("a/b"));
-    assertThat(Label.getContainingDirectory(Label.parseAbsoluteUnchecked("//a/b/c")))
-        .isEqualTo(PathFragment.create("a/b/c"));
-  }
-
-  @Test
-  public void testWorkspaceName() throws Exception {
-    assertThat(Label.parseAbsolute("@foo//bar:baz", ImmutableMap.of()).getWorkspaceName())
-        .isEqualTo("foo");
-    assertThat(Label.parseAbsolute("//bar:baz", ImmutableMap.of()).getWorkspaceName()).isEmpty();
-    assertThat(Label.parseAbsolute("@//bar:baz", ImmutableMap.of()).getWorkspaceName()).isEmpty();
-  }
 }
