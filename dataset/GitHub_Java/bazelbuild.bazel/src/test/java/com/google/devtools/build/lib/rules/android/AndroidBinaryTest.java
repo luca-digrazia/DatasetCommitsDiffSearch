@@ -50,6 +50,7 @@ import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.MultidexMo
 import com.google.devtools.build.lib.rules.android.deployinfo.AndroidDeployInfoOuterClass.AndroidDeployInfo;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
+import com.google.devtools.build.lib.rules.java.JavaCompileAction;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
@@ -240,8 +241,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    plugins = [':plugin'],",
         "    srcs = ['ToBeProcessed.java'])");
     ConfiguredTarget target = getConfiguredTarget("//java/test:to_be_processed");
-    SpawnAction javacAction =
-        (SpawnAction) getGeneratingAction(getBinArtifact("libto_be_processed.jar", target));
+    JavaCompileAction javacAction = (JavaCompileAction) getGeneratingAction(
+        getBinArtifact("libto_be_processed.jar", target));
 
     assertThat(getProcessorNames(javacAction)).contains("com.google.process.stuff");
     assertThat(getProcessorNames(javacAction)).hasSize(1);
@@ -272,8 +273,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     useConfiguration("--plugin=//java/test:plugin");
     ConfiguredTarget target = getConfiguredTarget("//java/test:to_be_processed");
-    SpawnAction javacAction =
-        (SpawnAction) getGeneratingAction(getBinArtifact("libto_be_processed.jar", target));
+    JavaCompileAction javacAction = (JavaCompileAction) getGeneratingAction(
+        getBinArtifact("libto_be_processed.jar", target));
 
     assertThat(getProcessorNames(javacAction)).contains("com.google.process.stuff");
     assertThat(getProcessorNames(javacAction)).hasSize(1);
@@ -2809,11 +2810,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     Artifact deployJar = getFileConfiguredTarget("//java/foo:a_deploy.jar").getArtifact();
     Action deployAction = getGeneratingAction(deployJar);
-    SpawnAction javacAction =
-        (SpawnAction)
-            actionsTestUtil()
-                .getActionForArtifactEndingWith(
-                    actionsTestUtil().artifactClosureOf(deployAction.getInputs()), "liba.jar");
+    JavaCompileAction javacAction = (JavaCompileAction)
+        actionsTestUtil().getActionForArtifactEndingWith(
+              actionsTestUtil().artifactClosureOf(deployAction.getInputs()), "liba.jar");
 
     assertThat(getJavacArguments(javacAction)).contains("-g:lines,source");
   }
@@ -2830,7 +2829,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     Iterable<String> commandLine =
         getJavacArguments(
-            ((SpawnAction)
+            ((JavaCompileAction)
                 actionsTestUtil()
                     .getActionForArtifactEndingWith(
                         actionsTestUtil()
@@ -2854,7 +2853,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     Iterable<String> commandLine =
         getJavacArguments(
-            ((SpawnAction)
+            ((JavaCompileAction)
                 actionsTestUtil()
                     .getActionForArtifactEndingWith(
                         actionsTestUtil()
