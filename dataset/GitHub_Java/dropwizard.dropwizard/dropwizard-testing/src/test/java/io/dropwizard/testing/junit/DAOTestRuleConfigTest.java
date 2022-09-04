@@ -10,7 +10,7 @@ import org.junit.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class DAOTestRuleConfigTest {
-    @SuppressWarnings("deprecation")
+
     @Rule
     public final DAOTestRule database = DAOTestRule.newBuilder()
         .setUrl("jdbc:h2:mem:rule-config-test")
@@ -25,7 +25,7 @@ public class DAOTestRuleConfigTest {
         .build();
 
     @Test
-    void explicitConfigCreatesSessionFactory() {
+    public void explicitConfigCreatesSessionFactory() {
         // it yields a valid SessionFactory instance
         final SessionFactory sessionFactory = database.getSessionFactory();
         assertThat(sessionFactory).isNotNull();
