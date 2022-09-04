@@ -43,11 +43,12 @@ public class DevModeMain {
     private static File wiringDir;
     private static File cacheDir;
 
-    private static Closeable runner;
+    private static Closeable closeable;
     static volatile Throwable deploymentProblem;
     static RuntimeUpdatesProcessor runtimeUpdatesProcessor;
 
     public static void main(String... args) throws Exception {
+
         Timing.staticInitStarted();
 
         //the path that contains the compiled classes
@@ -66,9 +67,9 @@ public class DevModeMain {
             @Override
             public void run() {
                 synchronized (DevModeMain.class) {
-                    if (runner != null) {
+                    if (closeable != null) {
                         try {
-                            runner.close();
+                            closeable.close();
                         } catch (IOException e) {
                             e.printStackTrace();
                         }
@@ -104,7 +105,7 @@ public class DevModeMain {
                 RuntimeRunner runner = builder
                         .build();
                 runner.run();
-                DevModeMain.runner = runner;
+                closeable = runner;
                 deploymentProblem = null;
             } finally {
                 Thread.currentThread().setContextClassLoader(old);
@@ -116,11 +117,11 @@ public class DevModeMain {
     }
 
     public static synchronized void restartApp() {
-        if (runner != null) {
+        if (closeable != null) {
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             Thread.currentThread().setContextClassLoader(runtimeCl);
             try {
-                runner.close();
+                closeable.close();
             } catch (IOException e) {
                 e.printStackTrace();
             } finally {
@@ -128,7 +129,7 @@ public class DevModeMain {
             }
         }
         SmallRyeConfigProviderResolver.instance().releaseConfig(SmallRyeConfigProviderResolver.instance().getConfig());
-        DevModeMain.runner = null;
+        closeable = null;
         Timing.restart();
         doStart();
     }
