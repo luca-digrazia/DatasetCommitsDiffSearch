@@ -74,22 +74,16 @@ final class WatcherServer extends WatcherImplBase {
           Throwables.throwIfUnchecked(e.getCause());
           throw (Exception) e.getCause();
         }
+      } catch (IllegalArgumentException e) {
+        responseObserver.onError(
+            StatusProto.toStatusRuntimeException(
+                Status.newBuilder()
+                    .setCode(Code.INVALID_ARGUMENT.getNumber())
+                    .setMessage(e.toString())
+                    .build()));
       } catch (Exception e) {
         logger.log(Level.SEVERE, "Work failed: " + opName, e);
-        responseObserver.onNext(
-            ChangeBatch.newBuilder()
-                .addChanges(
-                    Change.newBuilder()
-                        .setState(Change.State.EXISTS)
-                        .setData(
-                            Any.pack(
-                                Operation.newBuilder()
-                                    .setName(opName)
-                                    .setError(StatusUtils.internalErrorStatus(e))
-                                    .build()))
-                        .build())
-                .build());
-        responseObserver.onCompleted();
+        responseObserver.onError(StatusUtils.internalError(e));
         if (e instanceof InterruptedException) {
           Thread.currentThread().interrupt();
         }
