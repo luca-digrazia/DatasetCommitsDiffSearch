@@ -20,12 +20,12 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.Starlark;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -123,7 +123,7 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.append("<aspect>");
   }
 
@@ -235,12 +235,13 @@ public class SkylarkDefinedAspect implements SkylarkExportable, SkylarkAspect {
   }
 
   @Override
-  public void attachToAttribute(Attribute.Builder<?> attrBuilder) throws EvalException {
+  public void attachToAttribute(Attribute.Builder<?> attrBuilder, Location loc)
+      throws EvalException {
     if (!isExported()) {
-      throw Starlark.errorf(
-          "Aspects should be top-level values in extension files that define them.");
+      throw new EvalException(
+          loc, "Aspects should be top-level values in extension files that define them.");
     }
-    attrBuilder.aspect(this);
+    attrBuilder.aspect(this, loc);
   }
 
   @Override

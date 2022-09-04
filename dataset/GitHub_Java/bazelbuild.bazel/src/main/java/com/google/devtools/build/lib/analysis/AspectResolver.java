@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
 import com.google.devtools.build.lib.causes.LabelCause;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -120,7 +121,7 @@ public final class AspectResolver {
       OrderedSetMultimap<DependencyKind, Dependency> depValueNames,
       Map<SkyKey, ConfiguredTargetAndData> depConfiguredTargetMap,
       OrderedSetMultimap<Dependency, ConfiguredAspect> depAspectMap)
-      throws DuplicateException {
+      throws MergedConfiguredTarget.DuplicateException {
     OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> result =
         OrderedSetMultimap.create();
 

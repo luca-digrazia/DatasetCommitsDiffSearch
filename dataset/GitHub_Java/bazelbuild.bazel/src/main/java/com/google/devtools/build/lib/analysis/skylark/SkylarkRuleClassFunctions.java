@@ -48,7 +48,6 @@ import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
@@ -502,7 +501,7 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
       SkylarkList<?> toolchains,
       String doc,
       Boolean applyToGeneratingRules,
-      FuncallExpression ast, // just for getLocation(); TODO(adonovan): simplify
+      FuncallExpression ast,
       Environment funcallEnv,
       StarlarkContext context)
       throws EvalException {
@@ -645,12 +644,12 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
     }
 
     @Override
-    public Object call(Object[] args, FuncallExpression astForLocation, Environment env)
+    public Object call(Object[] args, FuncallExpression ast, Environment env)
         throws EvalException, InterruptedException, ConversionException {
-      Location loc = astForLocation.getLocation();
-      SkylarkUtils.checkLoadingPhase(env, getName(), loc);
+      SkylarkUtils.checkLoadingPhase(env, getName(), ast.getLocation());
       if (ruleClass == null) {
-        throw new EvalException(loc, "Invalid rule class hasn't been exported by a bzl file");
+        throw new EvalException(
+            ast.getLocation(), "Invalid rule class hasn't been exported by a bzl file");
       }
 
       for (Attribute attribute : ruleClass.getAttributes()) {
@@ -676,15 +675,20 @@ public class SkylarkRuleClassFunctions implements SkylarkRuleFunctionsApi<Artifa
         PackageContext pkgContext = env.getThreadLocal(PackageContext.class);
         if (pkgContext == null) {
           throw new EvalException(
-              loc,
+              ast.getLocation(),
               "Cannot instantiate a rule when loading a .bzl file. "
                   + "Rules may be instantiated only in a BUILD thread.");
         }
         RuleFactory.createAndAddRule(
-            pkgContext, ruleClass, attributeValues, loc, env, new AttributeContainer(ruleClass));
+            pkgContext,
+            ruleClass,
+            attributeValues,
+            ast,
+            env,
+            pkgContext.getAttributeContainerFactory().apply(ruleClass));
         return Runtime.NONE;
       } catch (InvalidRuleException | NameConflictException e) {
-        throw new EvalException(loc, e.getMessage());
+        throw new EvalException(ast.getLocation(), e.getMessage());
       }
     }
 
