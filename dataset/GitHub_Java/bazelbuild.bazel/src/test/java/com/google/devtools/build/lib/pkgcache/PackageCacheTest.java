@@ -258,8 +258,7 @@ public class PackageCacheTest extends FoundationTestCase {
       fail();
     } catch (NoSuchTargetException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
+          .hasMessage(
               "no such target '//pkg1:not-there': target 'not-there' "
                   + "not declared in package 'pkg1' defined by /workspace/pkg1/BUILD");
     }
@@ -547,8 +546,7 @@ public class PackageCacheTest extends FoundationTestCase {
       fail();
     } catch (NoSuchPackageException e) {
       assertThat(e)
-          .hasMessageThat()
-          .isEqualTo(
+          .hasMessage(
               "no such package 'c/d': Package is considered deleted due to --deleted_packages");
     }
 
