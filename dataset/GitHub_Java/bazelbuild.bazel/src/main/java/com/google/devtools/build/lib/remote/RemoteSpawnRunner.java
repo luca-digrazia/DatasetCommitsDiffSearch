@@ -156,17 +156,23 @@ class RemoteSpawnRunner implements SpawnRunner {
     Platform platform =
         parsePlatform(spawn.getExecutionPlatform(), remoteOptions.remoteDefaultPlatformProperties);
 
-    Command command =
-        buildCommand(
-            spawn.getOutputFiles(), spawn.getArguments(), spawn.getEnvironment(), platform);
-    Digest commandHash = digestUtil.compute(command);
-    Action action =
-        buildAction(
-            commandHash,
-            merkleTree.getRootDigest(),
-            context.getTimeout(),
-            Spawns.mayBeCached(spawn));
-    ActionKey actionKey = digestUtil.computeActionKey(action);
+    final Command command;
+    final Digest commandHash;
+    final Action action;
+    final ActionKey actionKey;
+    try (SilentCloseable c = Profiler.instance().profile("Remote.buildAction")) {
+      command =
+          buildCommand(
+              spawn.getOutputFiles(), spawn.getArguments(), spawn.getEnvironment(), platform);
+      commandHash = digestUtil.compute(command);
+      action =
+          buildAction(
+              commandHash,
+              merkleTree.getRootDigest(),
+              context.getTimeout(),
+              Spawns.mayBeCached(spawn));
+      actionKey = digestUtil.computeActionKey(action);
+    }
 
     // Look up action cache, and reuse the action output if it is found.
     Context withMetadata =
