@@ -83,11 +83,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
   }
 
   @Override
-  public boolean mayBeSlow() {
-    return true;
-  }
-
-  @Override
   public void sendBuildEvent(BuildEvent event) {
     besUploader.enqueueEvent(event);
   }
