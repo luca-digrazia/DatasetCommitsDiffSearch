@@ -697,4 +697,9 @@ public abstract class Type<T> {
       }
     }
   }
+
+  /**
+   * The type of a general list.
+   */
+  public static final ListType<Object> LIST = new ListType<>(new ObjectType());
 }

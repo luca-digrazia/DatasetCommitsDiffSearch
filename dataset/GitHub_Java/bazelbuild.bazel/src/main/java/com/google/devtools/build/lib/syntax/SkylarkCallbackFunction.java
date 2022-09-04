@@ -54,8 +54,7 @@ public class SkylarkCallbackFunction {
    * Creates a list of actual arguments that contains the given arguments and all attribute values
    * required from the specified context.
    */
-  private ImmutableList<Object> buildArgumentList(ClassObject ctx, Object... arguments)
-      throws EvalException {
+  private ImmutableList<Object> buildArgumentList(ClassObject ctx, Object... arguments) {
     Builder<Object> builder = ImmutableList.builder();
     ImmutableList<String> names = getParameterNames();
     int requiredParameters = names.size() - arguments.length;

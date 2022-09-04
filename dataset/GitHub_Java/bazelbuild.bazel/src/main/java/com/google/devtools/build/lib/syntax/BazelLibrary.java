@@ -84,17 +84,14 @@ public class BazelLibrary {
                 + "the possible values."
       )
     },
-      useLocation = true,
-      useEnvironment = true
+    useLocation = true
   )
   private static final BuiltinFunction depset =
       new BuiltinFunction("depset") {
-        public SkylarkNestedSet invoke(Object items, String order, Location loc, Environment env)
+        public SkylarkNestedSet invoke(Object items, String order, Location loc)
             throws EvalException {
           try {
-            return new SkylarkNestedSet(
-                Order.parse(order, env.getSemantics().incompatibleDisallowSetConstructor),
-                items, loc);
+            return new SkylarkNestedSet(Order.parse(order), items, loc);
           } catch (IllegalArgumentException ex) {
             throw new EvalException(loc, ex);
           }
@@ -138,9 +135,7 @@ public class BazelLibrary {
                     + "--incompatible_disallow_set_constructor=false");
           }
           try {
-            return new SkylarkNestedSet(
-                Order.parse(order, /*forbidDeprecatedOrderNames=*/false),
-                items, loc);
+            return new SkylarkNestedSet(Order.parse(order), items, loc);
           } catch (IllegalArgumentException ex) {
             throw new EvalException(loc, ex);
           }

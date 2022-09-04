@@ -159,8 +159,7 @@ public final class SkylarkNestedSet implements SkylarkValue, SkylarkQueryable {
       for (NestedSet<?> nestedSet : transitiveItems) {
         builder.addTransitive(nestedSet);
       }
-    } catch (IllegalArgumentException e) {
-      // Order mismatch between item and builder.
+    } catch (IllegalStateException e) {
       throw new EvalException(loc, e.getMessage());
     }
     this.set = builder.build();

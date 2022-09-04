@@ -17,10 +17,11 @@ package com.google.devtools.build.lib.syntax;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.common.base.Functions;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableList.Builder;
 import com.google.common.collect.Iterables;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.List;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -201,7 +202,7 @@ public class GlobCriteria {
       return ImmutableList.of();
     }
     Iterable<String> split = Splitter.on(", ").split(text);
-    ImmutableList.Builder<String> listBuilder = ImmutableList.builder();
+    Builder<String> listBuilder = ImmutableList.builder();
     for (String element : split) {
       if (!element.isEmpty()) {
         if ((element.length() < 2) || !element.startsWith("'") || !element.endsWith("'")) {
