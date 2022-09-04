@@ -85,6 +85,7 @@ public class StreamsController extends AuthenticatedController {
 
         try {
             CreateStreamRequest csr = form.get();
+            csr.creatorUserId = currentUser().getName();
             newStreamId = streamService.create(csr);
         } catch (APIException e) {
             String message = "Could not create stream. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
@@ -112,6 +113,7 @@ public class StreamsController extends AuthenticatedController {
 
         try {
             CreateStreamRequest csr = form.get();
+            csr.creatorUserId = currentUser().getName();
             newStreamId = streamService.cloneStream(stream_id, csr);
         } catch (APIException e) {
             String message = "Could not create stream. We expected HTTP 201, but got a HTTP " + e.getHttpCode() + ".";
