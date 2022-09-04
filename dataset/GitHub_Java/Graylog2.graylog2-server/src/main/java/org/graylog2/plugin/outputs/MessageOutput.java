@@ -34,6 +34,4 @@ public interface MessageOutput {
 
     void write(List<LogMessage> msg, GraylogServer server) throws Exception;
 
-    String getName();
-    
 }
