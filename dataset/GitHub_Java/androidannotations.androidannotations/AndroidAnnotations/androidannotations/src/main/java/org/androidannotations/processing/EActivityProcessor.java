@@ -36,7 +36,6 @@ import javax.lang.model.util.ElementFilter;
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.api.SdkVersionHelper;
 import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.ModelConstants;
@@ -58,7 +57,6 @@ import com.sun.codemodel.JVar;
 
 public class EActivityProcessor implements GeneratingElementProcessor {
 
-	private static final int MIN_SDK_WITH_FRAGMENT_SUPPORT = 11;
 	private final IRClass rClass;
 	private List<TypeElement> greendroidActivityElements;
 
@@ -66,14 +64,12 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 	private final ProcessingEnvironment processingEnv;
 	private final APTCodeModelHelper aptCodeModelHelper;
-	private AndroidManifest androidManifest;
 
-	public EActivityProcessor(ProcessingEnvironment processingEnv, IRClass rClass, AndroidManifest androidManifest) {
+	public EActivityProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
 		this.processingEnv = processingEnv;
-		this.rClass = rClass;
-		this.androidManifest = androidManifest;
 		annotationHelper = new AnnotationHelper(processingEnv);
 		aptCodeModelHelper = new APTCodeModelHelper();
+		this.rClass = rClass;
 
 		greendroidActivityElements = new ArrayList<TypeElement>();
 		for (String greendroidActivityName : GREENDROID_ACTIVITIES_LIST_CLASS) {
@@ -205,8 +201,8 @@ public class EActivityProcessor implements GeneratingElementProcessor {
 
 		}
 
-		boolean addFragmentIntent = androidManifest.getMinSdkVersion() >= MIN_SDK_WITH_FRAGMENT_SUPPORT;
-		aptCodeModelHelper.addActivityIntentBuilder(codeModel, holder, annotationHelper, addFragmentIntent);
+		aptCodeModelHelper.addActivityIntentBuilder(codeModel, holder, annotationHelper);
+
 	}
 
 	private void setContentViewMethod(String setContentViewMethodName, JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {

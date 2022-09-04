@@ -21,13 +21,12 @@ import static org.androidannotations.helper.CanonicalNameConstants.SUBSCRIBE;
 import static org.androidannotations.helper.ModelConstants.TRACE_OPTION;
 import static org.androidannotations.rclass.ProjectRClassFinder.RESOURCE_PACKAGE_NAME_OPTION;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.URL;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 
 import javax.annotation.processing.AbstractProcessor;
@@ -55,7 +54,6 @@ import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.EApplication;
 import org.androidannotations.annotations.EBean;
 import org.androidannotations.annotations.EFragment;
-import org.androidannotations.annotations.EIntentService;
 import org.androidannotations.annotations.EProvider;
 import org.androidannotations.annotations.EReceiver;
 import org.androidannotations.annotations.EService;
@@ -87,7 +85,6 @@ import org.androidannotations.annotations.RootContext;
 import org.androidannotations.annotations.SeekBarProgressChange;
 import org.androidannotations.annotations.SeekBarTouchStart;
 import org.androidannotations.annotations.SeekBarTouchStop;
-import org.androidannotations.annotations.ServiceAction;
 import org.androidannotations.annotations.SystemService;
 import org.androidannotations.annotations.TextChange;
 import org.androidannotations.annotations.Touch;
@@ -124,12 +121,9 @@ import org.androidannotations.annotations.rest.Rest;
 import org.androidannotations.annotations.rest.RestService;
 import org.androidannotations.annotations.sharedpreferences.Pref;
 import org.androidannotations.annotations.sharedpreferences.SharedPref;
-import org.androidannotations.exception.ProcessingException;
-import org.androidannotations.exception.VersionMismatchException;
 import org.androidannotations.generation.CodeModelGenerator;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.AndroidManifestFinder;
-import org.androidannotations.helper.ErrorHelper;
 import org.androidannotations.helper.Option;
 import org.androidannotations.helper.TimeStats;
 import org.androidannotations.model.AndroidRes;
@@ -151,7 +145,6 @@ import org.androidannotations.processing.EActivityProcessor;
 import org.androidannotations.processing.EApplicationProcessor;
 import org.androidannotations.processing.EBeanProcessor;
 import org.androidannotations.processing.EFragmentProcessor;
-import org.androidannotations.processing.EIntentServiceProcessor;
 import org.androidannotations.processing.EProviderProcessor;
 import org.androidannotations.processing.EReceiverProcessor;
 import org.androidannotations.processing.EServiceProcessor;
@@ -189,7 +182,6 @@ import org.androidannotations.processing.RootContextProcessor;
 import org.androidannotations.processing.SeekBarProgressChangeProcessor;
 import org.androidannotations.processing.SeekBarTouchStartProcessor;
 import org.androidannotations.processing.SeekBarTouchStopProcessor;
-import org.androidannotations.processing.ServiceActionProcessor;
 import org.androidannotations.processing.SharedPrefProcessor;
 import org.androidannotations.processing.SubscribeProcessor;
 import org.androidannotations.processing.SystemServiceProcessor;
@@ -225,7 +217,6 @@ import org.androidannotations.validation.EActivityValidator;
 import org.androidannotations.validation.EApplicationValidator;
 import org.androidannotations.validation.EBeanValidator;
 import org.androidannotations.validation.EFragmentValidator;
-import org.androidannotations.validation.EIntentServiceValidator;
 import org.androidannotations.validation.EProviderValidator;
 import org.androidannotations.validation.EReceiverValidator;
 import org.androidannotations.validation.EServiceValidator;
@@ -263,7 +254,6 @@ import org.androidannotations.validation.RunnableValidator;
 import org.androidannotations.validation.SeekBarProgressChangeValidator;
 import org.androidannotations.validation.SeekBarTouchStartValidator;
 import org.androidannotations.validation.SeekBarTouchStopValidator;
-import org.androidannotations.validation.ServiceActionValidator;
 import org.androidannotations.validation.SharedPrefValidator;
 import org.androidannotations.validation.SubscribeValidator;
 import org.androidannotations.validation.SystemServiceValidator;
@@ -286,11 +276,7 @@ import org.androidannotations.validation.rest.RestValidator;
 @SupportedOptions({ TRACE_OPTION, ANDROID_MANIFEST_FILE_OPTION, RESOURCE_PACKAGE_NAME_OPTION })
 public class AndroidAnnotationProcessor extends AbstractProcessor {
 
-	private final Properties properties = new Properties();
-	private final Properties propertiesApi = new Properties();
 	private final TimeStats timeStats = new TimeStats();
-	private final ErrorHelper errorHelper = new ErrorHelper();
-
 	private Set<String> supportedAnnotationNames;
 
 	@Override
@@ -299,76 +285,27 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 		Messager messager = processingEnv.getMessager();
 
-		try {
-			loadPropertyFile();
-			loadApiPropertyFile();
-		} catch (Exception e) {
-			messager.printMessage(Diagnostic.Kind.ERROR, "AndroidAnnotations processing failed: " + e.getMessage());
-			throw new RuntimeException("AndroidAnnotations processing failed", e);
-		}
-
 		timeStats.setMessager(messager);
 
 		messager.printMessage(Diagnostic.Kind.NOTE, "Starting AndroidAnnotations annotation processing");
-
-	}
-
-	private void checkApiAndCoreVersions() throws VersionMismatchException {
-		String apiVersion = getAAApiVersion();
-		String coreVersion = getAAProcessorVersion();
-
-		if (!apiVersion.equals(coreVersion)) {
-			throw new VersionMismatchException("AndroidAnnotation version for API (" + apiVersion + ") and core (" + coreVersion + " doesn't match. Please check your classpath)");
-		}
 	}
 
 	@Override
 	public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
 		timeStats.clear();
 		timeStats.start("Whole Processing");
-
 		try {
-			checkApiAndCoreVersions();
 			processThrowing(annotations, roundEnv);
-		} catch (ProcessingException e) {
-			handleException(annotations, roundEnv, e);
 		} catch (Exception e) {
-			handleException(annotations, roundEnv, new ProcessingException(e, null));
+			handleException(annotations, roundEnv, e);
 		}
 		timeStats.stop("Whole Processing");
 		timeStats.logStats();
 		return true;
 	}
 
-	private void loadPropertyFile() throws FileNotFoundException {
-		String filename = "androidannotations.properties";
-		try {
-			URL url = getClass().getClassLoader().getResource(filename);
-			properties.load(url.openStream());
-		} catch (Exception e) {
-			throw new FileNotFoundException(filename + " couldn't be parsed.");
-		}
-	}
+	private void processThrowing(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) throws Exception {
 
-	private void loadApiPropertyFile() throws FileNotFoundException {
-		String filename = "androidannotations-api.properties";
-		try {
-			URL url = getClass().getClassLoader().getResource(filename);
-			propertiesApi.load(url.openStream());
-		} catch (Exception e) {
-			throw new FileNotFoundException(filename + " couldn't be parsed. Please check your classpath and verify that AA-API's version is at least 3.0");
-		}
-	}
-
-	private String getAAProcessorVersion() {
-		return properties.getProperty("version", "3.0+");
-	}
-
-	private String getAAApiVersion() {
-		return propertiesApi.getProperty("version", null);
-	}
-
-	private void processThrowing(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) throws ProcessingException, Exception {
 		if (nothingToDo(annotations, roundEnv)) {
 			return;
 		}
@@ -441,7 +378,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		return Option.of(coumpoundRClass);
 	}
 
-	private AnnotationElements validateAnnotations(AnnotationElementsHolder extractedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) throws ProcessingException, Exception {
+	private AnnotationElements validateAnnotations(AnnotationElementsHolder extractedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) {
 		timeStats.start("Validate Annotations");
 		ModelValidator modelValidator = buildModelValidator(rClass, androidSystemServices, androidManifest);
 		AnnotationElements validatedAnnotations = modelValidator.validate(extractedModel);
@@ -454,7 +391,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		modelValidator.register(new EApplicationValidator(processingEnv, androidManifest));
 		modelValidator.register(new EActivityValidator(processingEnv, rClass, androidManifest));
 		modelValidator.register(new EServiceValidator(processingEnv, androidManifest));
-		modelValidator.register(new EIntentServiceValidator(processingEnv, androidManifest));
 		modelValidator.register(new EReceiverValidator(processingEnv, androidManifest));
 		modelValidator.register(new EProviderValidator(processingEnv, androidManifest));
 		modelValidator.register(new EFragmentValidator(processingEnv, rClass));
@@ -510,7 +446,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		modelValidator.register(new SeekBarProgressChangeValidator(processingEnv, rClass));
 		modelValidator.register(new SeekBarTouchStartValidator(processingEnv, rClass));
 		modelValidator.register(new SeekBarTouchStopValidator(processingEnv, rClass));
-		modelValidator.register(new ServiceActionValidator(processingEnv));
 		/*
 		 * Any view injection or listener binding should occur before
 		 * AfterViewsValidator
@@ -540,7 +475,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		}
 	}
 
-	private ProcessResult processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) throws ProcessingException, Exception {
+	private ProcessResult processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices, AndroidManifest androidManifest) throws Exception {
 		timeStats.start("Process Annotations");
 		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices, androidManifest, validatedModel);
 		ProcessResult processResult = modelProcessor.process(validatedModel);
@@ -553,7 +488,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		modelProcessor.register(new EApplicationProcessor());
 		modelProcessor.register(new EActivityProcessor(processingEnv, rClass));
 		modelProcessor.register(new EServiceProcessor(processingEnv));
-		modelProcessor.register(new EIntentServiceProcessor(processingEnv));
 		modelProcessor.register(new EReceiverProcessor());
 		modelProcessor.register(new EProviderProcessor());
 		modelProcessor.register(new EFragmentProcessor(processingEnv, rClass));
@@ -609,7 +543,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		modelProcessor.register(new SeekBarProgressChangeProcessor(processingEnv, rClass));
 		modelProcessor.register(new SeekBarTouchStartProcessor(processingEnv, rClass));
 		modelProcessor.register(new SeekBarTouchStopProcessor(processingEnv, rClass));
-		modelProcessor.register(new ServiceActionProcessor(processingEnv));
 		/*
 		 * Any view injection or listener binding should occur before
 		 * AfterViewsProcessor
@@ -634,13 +567,13 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		timeStats.start("Generate Sources");
 		Messager messager = processingEnv.getMessager();
 		messager.printMessage(Diagnostic.Kind.NOTE, "Number of files generated by AndroidAnnotations: " + processResult.codeModel.countArtifacts());
-		CodeModelGenerator modelGenerator = new CodeModelGenerator(processingEnv.getFiler(), messager, getAAProcessorVersion());
+		CodeModelGenerator modelGenerator = new CodeModelGenerator(processingEnv.getFiler(), messager);
 		modelGenerator.generate(processResult);
 		timeStats.stop("Generate Sources");
 	}
 
-	private void handleException(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv, ProcessingException e) {
-		String errorMessage = errorHelper.getErrorMessage(processingEnv, e, getAAProcessorVersion());
+	private void handleException(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv, Exception e) {
+		String errorMessage = "Unexpected error. Please report an issue on AndroidAnnotations, with the following content: " + stackTraceToString(e);
 
 		Messager messager = processingEnv.getMessager();
 		messager.printMessage(Diagnostic.Kind.ERROR, errorMessage);
@@ -653,6 +586,13 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 
 		Element element = roundEnv.getElementsAnnotatedWith(annotations.iterator().next()).iterator().next();
 		messager.printMessage(Diagnostic.Kind.ERROR, errorMessage, element);
+	}
+
+	private String stackTraceToString(Throwable e) {
+		StringWriter writer = new StringWriter();
+		PrintWriter pw = new PrintWriter(writer);
+		e.printStackTrace(pw);
+		return writer.toString();
 	}
 
 	@Override
@@ -719,8 +659,6 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 					Bean.class, //
 					AfterInject.class, //
 					EService.class, //
-					EIntentService.class, //
-					ServiceAction.class, //
 					EReceiver.class, //
 					EProvider.class, //
 					Trace.class, //

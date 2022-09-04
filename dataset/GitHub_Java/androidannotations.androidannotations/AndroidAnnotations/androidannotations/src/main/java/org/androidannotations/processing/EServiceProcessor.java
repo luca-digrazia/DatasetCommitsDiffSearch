@@ -20,13 +20,13 @@ import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PRIVATE;
 import static com.sun.codemodel.JMod.PUBLIC;
 
-import java.lang.annotation.Annotation;
-
+import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.annotations.EService;
 import org.androidannotations.helper.APTCodeModelHelper;
+import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.ModelConstants;
 
 import com.sun.codemodel.ClassType;
@@ -41,13 +41,16 @@ public class EServiceProcessor implements GeneratingElementProcessor {
 
 	private final APTCodeModelHelper aptCodeModelHelper;
 
-	public EServiceProcessor() {
+	private final AnnotationHelper annotationHelper;
+
+	public EServiceProcessor(ProcessingEnvironment processingEnv) {
 		aptCodeModelHelper = new APTCodeModelHelper();
+		annotationHelper = new AnnotationHelper(processingEnv);
 	}
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return EService.class;
+	public String getTarget() {
+		return EService.class.getName();
 	}
 
 	@Override
@@ -61,7 +64,7 @@ public class EServiceProcessor implements GeneratingElementProcessor {
 
 		JDefinedClass generatedClass = codeModel._class(PUBLIC | FINAL, generatedComponentQualifiedName, ClassType.CLASS);
 
-		EBeanHolder holder = eBeansHolder.create(element, getTarget(), generatedClass);
+		EBeanHolder holder = eBeansHolder.create(element, EService.class, generatedClass);
 
 		JClass annotatedComponent = codeModel.directClass(annotatedComponentQualifiedName);
 
@@ -90,7 +93,7 @@ public class EServiceProcessor implements GeneratingElementProcessor {
 			holder.initActivityRef = null;
 		}
 
-		aptCodeModelHelper.addServiceIntentBuilder(codeModel, holder);
+		aptCodeModelHelper.addServiceIntentBuilder(codeModel, holder, annotationHelper);
 
 	}
 
