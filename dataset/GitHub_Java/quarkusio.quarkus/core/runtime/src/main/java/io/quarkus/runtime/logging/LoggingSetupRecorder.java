@@ -69,7 +69,7 @@ public class LoggingSetupRecorder {
     public LoggingSetupRecorder() {
     }
 
-    @SuppressWarnings("unused") //called via reflection, as it is in an isolated CL
+    @SuppressWarnings("unsed") //called via reflection, as it is in an isolated CL
     public static void handleFailedStart() {
         LogConfig config = new LogConfig();
         ConfigInstantiator.handleObject(config);
@@ -85,7 +85,7 @@ public class LoggingSetupRecorder {
         final LogContext logContext = LogContext.getLogContext();
         final Logger rootLogger = logContext.getLogger("");
 
-        rootLogger.setLevel(config.level);
+        rootLogger.setLevel(config.level.orElse(Level.INFO));
 
         ErrorManager errorManager = new OnlyOnceErrorManager();
         final Map<String, CleanupFilterConfig> filters = config.filters;
@@ -120,8 +120,9 @@ public class LoggingSetupRecorder {
             final String name = entry.getKey();
             final Logger categoryLogger = logContext.getLogger(name);
             final CategoryConfig categoryConfig = entry.getValue();
-            if (!categoryConfig.level.isInherited()) {
-                categoryLogger.setLevel(categoryConfig.level.getLevel());
+            final String levelName = categoryConfig.level.toUpperCase(Locale.ROOT);
+            if (!"INHERIT".equals(categoryConfig.level)) {
+                categoryLogger.setLevelName(levelName);
             }
             categoryLogger.setUseParentHandlers(categoryConfig.useParentHandlers);
             if (categoryConfig.handlers.isPresent()) {
