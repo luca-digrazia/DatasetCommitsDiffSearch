@@ -47,6 +47,7 @@ public class RRD {
     public static final int GRAPH_TYPE_TOTAL = 1;
 
     int type = 0;
+    File folder = null;
     File rrdFile = null;
     String rrdFilePath = null;
 
@@ -93,7 +94,6 @@ public class RRD {
 
     /**
      * Get the RRD file
-     * @param type Type of the graph. Use constant like RRD.GRAPH_TYPE_TOTAL
      * @return RRD file
      * @throws RRDInvalidFileException
      */
@@ -118,6 +118,12 @@ public class RRD {
      */
     public RRD(int type) throws Exception {
         this.type = type;
+
+        try {
+            this.folder = RRD.getStorageFolder();
+        } catch (RRDInvalidStorageException e) {
+            throw new Exception("Error: " + e.toString());
+        }
 
         // Find the RRD.
         try {
