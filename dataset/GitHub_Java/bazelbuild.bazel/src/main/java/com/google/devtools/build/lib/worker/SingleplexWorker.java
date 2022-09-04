@@ -163,9 +163,4 @@ class SingleplexWorker extends Worker {
     recordingInputStream.readRemaining();
     return recordingInputStream.getRecordedDataAsString();
   }
-
-  @Override
-  public String toString() {
-    return workerKey.getMnemonic() + " worker #" + workerId;
-  }
 }

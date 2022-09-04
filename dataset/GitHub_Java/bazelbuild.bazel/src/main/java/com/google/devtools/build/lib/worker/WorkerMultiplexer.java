@@ -234,13 +234,7 @@ public class WorkerMultiplexer extends Thread {
    * {@code workerProcessResponse} and release the semaphore for the {@code WorkerProxy}.
    */
   private void waitResponse() throws InterruptedException, IOException {
-    Subprocess p = this.process;
-    if (p == null || !p.isAlive()) {
-      // Avoid busy-wait for a new process.
-      Thread.sleep(1);
-      return;
-    }
-    recordingStream = new RecordingInputStream(p.getInputStream());
+    recordingStream = new RecordingInputStream(process.getInputStream());
     recordingStream.startRecording(4096);
     WorkResponse parsedResponse = WorkResponse.parseDelimitedFrom(recordingStream);
 
@@ -309,14 +303,14 @@ public class WorkerMultiplexer extends Thread {
 
   /** Returns true if this process has died for other reasons than a call to {@code #destroy()}. */
   boolean diedUnexpectedly() {
-    Subprocess p = this.process; // Protects against this.process getting null.
-    return p != null && !p.isAlive() && !isInterrupted;
+    return process != null && !process.isAlive() && !isInterrupted;
   }
 
   /** Returns the exit value of multiplexer's process, if it has exited. */
   Optional<Integer> getExitValue() {
-    Subprocess p = this.process; // Protects against this.process getting null.
-    return p != null && !p.isAlive() ? Optional.of(p.exitValue()) : Optional.empty();
+    return process != null && !process.isAlive()
+        ? Optional.of(process.exitValue())
+        : Optional.empty();
   }
 
   /** For testing only, to verify that maps are cleared after responses are reaped. */
