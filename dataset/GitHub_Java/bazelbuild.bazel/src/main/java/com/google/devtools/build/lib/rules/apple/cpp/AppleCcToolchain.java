@@ -61,9 +61,7 @@ public class AppleCcToolchain extends CcToolchain {
     AppleConfiguration appleConfiguration = ruleContext.getFragment(AppleConfiguration.class);
 
     if (XcodeConfig.getXcodeVersion(ruleContext) == null) {
-      ruleContext.throwWithRuleError(
-          "Xcode version must be specified to use an Apple CROSSTOOL. If your Xcode version has "
-              + "changed recently, try: \"bazel clean --expunge\" to re-run Xcode configuration");
+      ruleContext.throwWithRuleError("Xcode version must be specified to use an Apple CROSSTOOL");
     }
 
     ApplePlatform platform = appleConfiguration.getSingleArchPlatform();

@@ -28,8 +28,6 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.objc.J2ObjcConfiguration;
-import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodecAdapter;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.ObjectCodecTester;
 import com.google.devtools.common.options.Options;
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -410,46 +408,5 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
         .isEqualTo(target.getBinDirectory(RepositoryName.MAIN));
     assertThat(host.getGenfilesDirectory(RepositoryName.MAIN))
         .isEqualTo(host.getBinDirectory(RepositoryName.MAIN));
-  }
-
-  @Test
-  public void testCodec() throws Exception {
-    ObjectCodecTester.newBuilder(
-            new InjectingObjectCodecAdapter<>(
-                BuildConfiguration.CODEC, () -> getScratch().getFileSystem()))
-        .addSubjects(
-            create(),
-            create("--cpu=piii"),
-            create("--javacopt=foo"),
-            create("--platform_suffix=-test"),
-            create("--target_environment=//foo", "--target_environment=//bar"),
-            create("--noexperimental_separate_genfiles_directory"),
-            create(
-                "--define",
-                "foo=#foo",
-                "--define",
-                "comma=a,b",
-                "--define",
-                "space=foo bar",
-                "--define",
-                "thing=a \"quoted\" thing",
-                "--define",
-                "qspace=a\\ quoted\\ space",
-                "--define",
-                "#a=pounda"))
-        .verificationFunction(BuildConfigurationTest::verifyDeserialized)
-        .buildAndRunTests();
-  }
-
-  /**
-   * Partial verification of deserialized BuildConfiguration.
-   *
-   * <p>Direct comparison of deserialized to subject doesn't work because Fragment classes do not
-   * implement equals. This runs the part of BuildConfiguration.equals that has equals definitions.
-   */
-  private static void verifyDeserialized(
-      BuildConfiguration subject, BuildConfiguration deserialized) {
-    assertThat(deserialized.isActionsEnabled()).isEqualTo(subject.isActionsEnabled());
-    assertThat(deserialized.getOptions()).isEqualTo(subject.getOptions());
   }
 }

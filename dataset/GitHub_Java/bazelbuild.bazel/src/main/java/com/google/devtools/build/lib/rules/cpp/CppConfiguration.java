@@ -50,6 +50,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
+import java.io.Serializable;
+import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -150,6 +152,64 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
    * For possible values see {@code CppModel.getFdoBuildStamp()}.
    */
   public static final String FDO_STAMP_MACRO = "BUILD_FDO_TYPE";
+
+  /**
+   * Represents an optional flag that can be toggled using the package features mechanism.
+   */
+  @Immutable
+  @VisibleForTesting
+  static class OptionalFlag implements Serializable {
+    private final String name;
+    private final ImmutableList<String> flags;
+
+    @VisibleForTesting
+    OptionalFlag(String name, ImmutableList<String> flags) {
+      this.name = name;
+      this.flags = flags;
+    }
+
+    private ImmutableList<String> getFlags() {
+      return flags;
+    }
+
+    private String getName() {
+      return name;
+    }
+  }
+
+  @Immutable
+  @VisibleForTesting
+  static class FlagList implements Serializable {
+    private final ImmutableList<String> prefixFlags;
+    private final ImmutableList<OptionalFlag> optionalFlags;
+    private final ImmutableList<String> suffixFlags;
+
+    @VisibleForTesting
+    FlagList(ImmutableList<String> prefixFlags,
+        ImmutableList<OptionalFlag> optionalFlags,
+        ImmutableList<String> suffixFlags) {
+      this.prefixFlags = prefixFlags;
+      this.optionalFlags = optionalFlags;
+      this.suffixFlags = suffixFlags;
+    }
+
+    @VisibleForTesting
+    ImmutableList<String> evaluate(Iterable<String> features) {
+      ImmutableSet<String> featureSet = ImmutableSet.copyOf(features);
+      ImmutableList.Builder<String> result = ImmutableList.builder();
+      result.addAll(prefixFlags);
+      for (OptionalFlag optionalFlag : optionalFlags) {
+        // The flag is added if the default is true and the flag is not specified,
+        // or if the default is false and the flag is specified.
+        if (featureSet.contains(optionalFlag.getName())) {
+          result.addAll(optionalFlag.getFlags());
+        }
+      }
+
+      result.addAll(suffixFlags);
+      return result.build();
+    }
+  }
 
   private final Label crosstoolTop;
   private final CrosstoolFile crosstoolFile;
@@ -259,11 +319,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     ImmutableList.Builder<String> unfilteredCoptsBuilder = ImmutableList.builder();
 
     unfilteredCoptsBuilder.addAll(toolchain.getUnfilteredCxxFlagList());
-    unfilteredCompilerFlags =
-        new FlagList(
-            unfilteredCoptsBuilder.build(),
-            FlagList.convertOptionalOptions(toolchain.getOptionalUnfilteredCxxFlagList()),
-            ImmutableList.<String>of());
+    unfilteredCompilerFlags = new FlagList(
+        unfilteredCoptsBuilder.build(),
+        convertOptionalOptions(toolchain.getOptionalUnfilteredCxxFlagList()),
+        ImmutableList.<String>of());
 
     ImmutableList.Builder<String> linkoptsBuilder = ImmutableList.builder();
     linkoptsBuilder.addAll(cppOptions.linkoptList);
@@ -285,11 +344,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
       coptsBuilder.add("-fasynchronous-unwind-tables");
       coptsBuilder.add("-DNO_FRAME_POINTER");
     }
-    this.compilerFlags =
-        new FlagList(
-            coptsBuilder.build(),
-            FlagList.convertOptionalOptions(toolchain.getOptionalCompilerFlagList()),
-            ImmutableList.copyOf(cppOptions.coptList));
+    this.compilerFlags = new FlagList(
+        coptsBuilder.build(),
+        convertOptionalOptions(toolchain.getOptionalCompilerFlagList()),
+        ImmutableList.copyOf(cppOptions.coptList));
 
     this.cOptions = ImmutableList.copyOf(cppOptions.conlyoptList);
 
@@ -298,11 +356,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
         .addAll(cxxFlags.get(compilationMode))
         .addAll(lipoCxxFlags.get(cppOptions.getLipoMode()));
 
-    this.cxxFlags =
-        new FlagList(
-            cxxOptsBuilder.build(),
-            FlagList.convertOptionalOptions(toolchain.getOptionalCxxFlagList()),
-            ImmutableList.copyOf(cppOptions.cxxoptList));
+    this.cxxFlags = new FlagList(
+        cxxOptsBuilder.build(),
+        convertOptionalOptions(toolchain.getOptionalCxxFlagList()),
+        ImmutableList.copyOf(cppOptions.cxxoptList));
 
     fullyStaticLinkFlags =
         new FlagList(
@@ -311,7 +368,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 lipoMode,
                 LinkingMode.FULLY_STATIC,
                 cppToolchainInfo.getLdExecutable()),
-            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of());
     mostlyStaticLinkFlags =
         new FlagList(
@@ -320,7 +377,7 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 lipoMode,
                 LinkingMode.MOSTLY_STATIC,
                 cppToolchainInfo.getLdExecutable()),
-            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of());
     mostlyStaticSharedLinkFlags =
         new FlagList(
@@ -329,13 +386,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
                 lipoMode,
                 LinkingMode.MOSTLY_STATIC_LIBRARIES,
                 cppToolchainInfo.getLdExecutable()),
-            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of());
     dynamicLinkFlags =
         new FlagList(
             configureLinkerOptions(
                 compilationMode, lipoMode, LinkingMode.DYNAMIC, cppToolchainInfo.getLdExecutable()),
-            FlagList.convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
+            convertOptionalOptions(toolchain.getOptionalLinkerFlagList()),
             ImmutableList.<String>of());
   }
 
@@ -349,17 +406,21 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
     return LinkingMode.valueOf(mode.name());
   }
 
-  /**
-   * Deprecated: Use {@link CcToolchainProvider#configureLinkerOptions(CompilationMode, LipoMode,
-   * LinkingMode, PathFragment)}
-   */
+  static ImmutableList<OptionalFlag> convertOptionalOptions(
+      List<CrosstoolConfig.CToolchain.OptionalFlag> optionalFlagList) {
+    ImmutableList.Builder<OptionalFlag> result = ImmutableList.builder();
+
+    for (CrosstoolConfig.CToolchain.OptionalFlag crosstoolOptionalFlag : optionalFlagList) {
+      String name = crosstoolOptionalFlag.getDefaultSettingName();
+      result.add(new OptionalFlag(name, ImmutableList.copyOf(crosstoolOptionalFlag.getFlagList())));
+    }
+
+    return result.build();
+  }
+
   @VisibleForTesting
-  @Deprecated
-  // TODO(b/64384912): Remove skylark dependants and delete.
-  private ImmutableList<String> configureLinkerOptions(
-      CompilationMode compilationMode,
-      LipoMode lipoMode,
-      LinkingMode linkingMode,
+  ImmutableList<String> configureLinkerOptions(
+      CompilationMode compilationMode, LipoMode lipoMode, LinkingMode linkingMode,
       PathFragment ldExecutable) {
     return cppToolchainInfo.configureLinkerOptions(
         compilationMode, lipoMode, linkingMode, ldExecutable);
@@ -688,15 +749,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns the immutable list of linker options for fully statically linked outputs. Does not
-   * include command-line options passed via --linkopt or --linkopts.
+   * Returns the immutable list of linker options for fully statically linked
+   * outputs. Does not include command-line options passed via --linkopt or
+   * --linkopts.
    *
    * @param features default settings affecting this link
    * @param sharedLib true if the output is a shared lib, false if it's an executable
-   *     <p>Deprecated: Use {@link CppHelper#getFullyStaticLinkOptions(CppConfiguration,
-   *     CcToolchainProvider, Iterable, Boolean)}
    */
-  // TODO(b/64384912): Migrate skylark users to cc_common and remove.
   @SkylarkCallable(
     name = "fully_static_link_options",
     doc =
@@ -704,9 +763,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             + "outputs. Does not include command-line options passed via --linkopt or "
             + "--linkopts."
   )
-  @Deprecated
-  public ImmutableList<String> getFullyStaticLinkOptions(
-      Iterable<String> features, Boolean sharedLib) {
+  public ImmutableList<String> getFullyStaticLinkOptions(Iterable<String> features,
+      Boolean sharedLib) {
     if (sharedLib) {
       return getSharedLibraryLinkOptions(mostlyStaticLinkFlags, features);
     } else {
@@ -715,15 +773,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns the immutable list of linker options for mostly statically linked outputs. Does not
-   * include command-line options passed via --linkopt or --linkopts.
+   * Returns the immutable list of linker options for mostly statically linked
+   * outputs. Does not include command-line options passed via --linkopt or
+   * --linkopts.
    *
    * @param features default settings affecting this link
    * @param sharedLib true if the output is a shared lib, false if it's an executable
-   *     <p>Deprecated: Use {@link CppHelper#getMostlyStaticLinkOptions(CppConfiguration,
-   *     CcToolchainProvider, Iterable, Boolean)}
    */
-  // TODO(b/64384912): Migrate skylark users to cc_common and remove.
   @SkylarkCallable(
     name = "mostly_static_link_options",
     doc =
@@ -731,9 +787,8 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             + "outputs. Does not include command-line options passed via --linkopt or "
             + "--linkopts."
   )
-  @Deprecated
-  public ImmutableList<String> getMostlyStaticLinkOptions(
-      Iterable<String> features, Boolean sharedLib) {
+  public ImmutableList<String> getMostlyStaticLinkOptions(Iterable<String> features,
+      Boolean sharedLib) {
     if (sharedLib) {
       return getSharedLibraryLinkOptions(
           cppToolchainInfo.supportsEmbeddedRuntimes()
@@ -746,15 +801,13 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns the immutable list of linker options for artifacts that are not fully or mostly
-   * statically linked. Does not include command-line options passed via --linkopt or --linkopts.
+   * Returns the immutable list of linker options for artifacts that are not
+   * fully or mostly statically linked. Does not include command-line options
+   * passed via --linkopt or --linkopts.
    *
    * @param features default settings affecting this link
    * @param sharedLib true if the output is a shared lib, false if it's an executable
-   *     <p>Deprecated: Use {@link CppHelper#getDynamicLinkOptions(CppConfiguration,
-   *     CcToolchainProvider, Iterable, Boolean)}
    */
-  // TODO(b/64384912): Migrate skylark users to cc_common and remove.
   @SkylarkCallable(
     name = "dynamic_link_options",
     doc =
@@ -762,7 +815,6 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
             + "fully or mostly statically linked. Does not include command-line options "
             + "passed via --linkopt or --linkopts."
   )
-  @Deprecated
   public ImmutableList<String> getDynamicLinkOptions(Iterable<String> features, Boolean sharedLib) {
     if (sharedLib) {
       return getSharedLibraryLinkOptions(dynamicLinkFlags, features);
@@ -772,14 +824,11 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   }
 
   /**
-   * Returns link options for the specified flag list, combined with universal options for all
-   * shared libraries (regardless of link staticness).
-   *
-   * <p>Deprecated: Use {@link CcToolchainProvider#getSharedLibraryLinkOptions}
+   * Returns link options for the specified flag list, combined with universal options
+   * for all shared libraries (regardless of link staticness).
    */
-  // TODO(b/64384912): Migrate skylark dependants and delete.
-  private ImmutableList<String> getSharedLibraryLinkOptions(
-      FlagList flags, Iterable<String> features) {
+  private ImmutableList<String> getSharedLibraryLinkOptions(FlagList flags,
+      Iterable<String> features) {
     return cppToolchainInfo.getSharedLibraryLinkOptions(flags, features);
   }
 
@@ -1275,6 +1324,10 @@ public class CppConfiguration extends BuildConfiguration.Fragment {
   @Override
   public String getPlatformName() {
     return getToolchainIdentifier();
+  }
+
+  public boolean alwaysAttachExtraActions() {
+    return true;
   }
 
   /**

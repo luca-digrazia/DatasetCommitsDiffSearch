@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
@@ -29,12 +28,12 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
+import com.google.devtools.build.lib.rules.cpp.CppConfiguration.FlagList;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.ArtifactNamePattern;
-import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.CToolchain.OptionalFlag;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LinkingModeFlags;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.ToolPath;
@@ -58,7 +57,6 @@ import java.util.Set;
 @Immutable
 public final class CppToolchainInfo {
 
-  private CToolchain toolchain;
   private final PathFragment crosstoolTopPathFragment;
   private final String toolchainIdentifier;
   private final CcToolchainFeatures toolchainFeatures;
@@ -94,16 +92,6 @@ public final class CppToolchainInfo {
 
   private final ImmutableMap<String, String> additionalMakeVariables;
 
-  private final ImmutableList<String> crosstoolCompilerFlags;
-  private final ImmutableList<String> crosstoolCxxFlags;
-  private final ImmutableList<OptionalFlag> crosstoolOptionalCompilerFlags;
-  private final ImmutableList<OptionalFlag> crosstoolOptionalCxxFlags;
-
-  private final ImmutableListMultimap<CompilationMode, String> cFlags;
-  private final ImmutableListMultimap<CompilationMode, String> cxxFlags;
-  private final ImmutableListMultimap<LipoMode, String> lipoCFlags;
-  private final ImmutableListMultimap<LipoMode, String> lipoCxxFlags;
-
   private final boolean supportsFission;
   private final boolean supportsStartEndLib;
   private final boolean supportsEmbeddedRuntimes;
@@ -116,7 +104,7 @@ public final class CppToolchainInfo {
   public CppToolchainInfo(
       CToolchain cToolchain, PathFragment crosstoolTopPathFragment, Label toolchainLabel)
       throws InvalidConfigurationException {
-    this.toolchain = cToolchain;
+    CToolchain toolchain = cToolchain;
     this.crosstoolTopPathFragment = crosstoolTopPathFragment;
     this.hostSystemName = toolchain.getHostSystemName();
     this.compiler = toolchain.getCompiler();
@@ -154,7 +142,7 @@ public final class CppToolchainInfo {
     this.solibDirectory = "_solib_" + targetCpu;
 
     this.supportsEmbeddedRuntimes = toolchain.getSupportsEmbeddedRuntimes();
-    this.toolchain = addLegacyFeatures(toolchain);
+    toolchain = addLegacyFeatures(toolchain);
     this.toolchainFeatures = new CcToolchainFeatures(toolchain);
     this.supportsGoldLinker = toolchain.getSupportsGoldLinker();
     this.supportsStartEndLib = toolchain.getSupportsStartEndLib();
@@ -205,44 +193,6 @@ public final class CppToolchainInfo {
     }
     this.toolPaths = ImmutableMap.copyOf(toolPathsCollector);
 
-    this.crosstoolCompilerFlags = ImmutableList.copyOf(toolchain.getCompilerFlagList());
-    this.crosstoolCxxFlags = ImmutableList.copyOf(toolchain.getCxxFlagList());
-    this.crosstoolOptionalCompilerFlags =
-        ImmutableList.copyOf(toolchain.getOptionalCompilerFlagList());
-    this.crosstoolOptionalCxxFlags = ImmutableList.copyOf(toolchain.getOptionalCxxFlagList());
-
-    ImmutableListMultimap.Builder<CompilationMode, String> cFlagsBuilder =
-        ImmutableListMultimap.builder();
-    ImmutableListMultimap.Builder<CompilationMode, String> cxxFlagsBuilder =
-        ImmutableListMultimap.builder();
-    for (CrosstoolConfig.CompilationModeFlags flags : toolchain.getCompilationModeFlagsList()) {
-      // Remove this when CROSSTOOL files no longer contain 'coverage'.
-      if (flags.getMode() == CrosstoolConfig.CompilationMode.COVERAGE) {
-        continue;
-      }
-      CompilationMode realmode = importCompilationMode(flags.getMode());
-      cFlagsBuilder.putAll(realmode, flags.getCompilerFlagList());
-      cxxFlagsBuilder.putAll(realmode, flags.getCxxFlagList());
-    }
-    cFlags = cFlagsBuilder.build();
-    cxxFlags = cxxFlagsBuilder.build();
-
-    ImmutableListMultimap.Builder<LipoMode, String> lipoCFlagsBuilder =
-        ImmutableListMultimap.builder();
-    ImmutableListMultimap.Builder<LipoMode, String> lipoCxxFlagsBuilder =
-        ImmutableListMultimap.builder();
-    for (CrosstoolConfig.LipoModeFlags flags : toolchain.getLipoModeFlagsList()) {
-      LipoMode realmode = flags.getMode();
-      lipoCFlagsBuilder.putAll(realmode, flags.getCompilerFlagList());
-      lipoCxxFlagsBuilder.putAll(realmode, flags.getCxxFlagList());
-    }
-    lipoCFlags = lipoCFlagsBuilder.build();
-    lipoCxxFlags = lipoCxxFlagsBuilder.build();
-
-    ImmutableList.Builder<String> unfilteredCoptsBuilder = ImmutableList.builder();
-
-    unfilteredCoptsBuilder.addAll(toolchain.getUnfilteredCxxFlagList());
-
     ImmutableListMultimap.Builder<CompilationMode, String> linkOptionsFromCompilationModeBuilder =
         ImmutableListMultimap.builder();
     for (CrosstoolConfig.CompilationModeFlags flags : toolchain.getCompilationModeFlagsList()) {
@@ -250,7 +200,7 @@ public final class CppToolchainInfo {
       if (flags.getMode() == CrosstoolConfig.CompilationMode.COVERAGE) {
         continue;
       }
-      CompilationMode realmode = importCompilationMode(flags.getMode());
+      CompilationMode realmode = CppConfiguration.importCompilationMode(flags.getMode());
       linkOptionsFromCompilationModeBuilder.putAll(realmode, flags.getLinkerFlagList());
     }
     linkOptionsFromCompilationMode = linkOptionsFromCompilationModeBuilder.build();
@@ -293,7 +243,7 @@ public final class CppToolchainInfo {
     dynamicLibraryLinkFlags =
         new FlagList(
             ImmutableList.copyOf(linkerFlagList),
-            FlagList.convertOptionalOptions(optionalLinkerFlagList),
+            CppConfiguration.convertOptionalOptions(optionalLinkerFlagList),
             ImmutableList.<String>of());
 
     this.objcopyOptions = ImmutableList.copyOf(toolchain.getObjcopyEmbedFlagList());
@@ -329,11 +279,6 @@ public final class CppToolchainInfo {
     this.additionalMakeVariables = ImmutableMap.copyOf(makeVariablesBuilder);
 
     this.ldExecutable = getToolPathFragment(CppConfiguration.Tool.LD);
-  }
-
-  @VisibleForTesting
-  static CompilationMode importCompilationMode(CrosstoolConfig.CompilationMode mode) {
-    return CompilationMode.valueOf(mode.name());
   }
 
   // TODO(bazel-team): Remove this once bazel supports all crosstool flags through
@@ -465,13 +410,6 @@ public final class CppToolchainInfo {
     result.addAll(linkOptionsFromLipoMode.get(lipoMode));
     result.addAll(linkOptionsFromLinkingMode.get(linkingMode));
     return ImmutableList.copyOf(result);
-  }
-
-  /**
-   * Returns the computed {@link CToolchain} proto for this toolchain.
-   */
-  public CToolchain getToolchain() {
-    return toolchain;
   }
 
   /**
@@ -626,13 +564,6 @@ public final class CppToolchainInfo {
   }
 
   /**
-   * Returns optional flags for linking.
-   */
-  public List<OptionalFlag> getOptionalLinkerFlags() {
-    return toolchain.getOptionalLinkerFlagList();
-  }
-
-  /**
    * Returns the run time sysroot, which is where the dynamic linker and system libraries are found
    * at runtime. This is usually an absolute path. If the toolchain compiler does not support
    * sysroots, then this method returns <code>null</code>.
@@ -727,45 +658,5 @@ public final class CppToolchainInfo {
   /** Returns built-in include directories. */
   public ImmutableList<String> getRawBuiltInIncludeDirectories() {
     return rawBuiltInIncludeDirectories;
-  }
-
-  /** Returns compiler flags for C/C++/Asm compilation. */
-  public ImmutableList<String> getCompilerFlags() {
-    return crosstoolCompilerFlags;
-  }
-
-  /** Returns additional compiler flags for C++ compilation. */
-  public ImmutableList<String> getCxxFlags() {
-    return crosstoolCxxFlags;
-  }
-
-  /** Returns compiler flags for C compilation by compilation mode. */
-  public ImmutableListMultimap<CompilationMode, String> getCFlagsByCompilationMode() {
-    return cFlags;
-  }
-
-  /** Returns compiler flags for C++ compilation, by compilation mode. */
-  public ImmutableListMultimap<CompilationMode, String> getCxxFlagsByCompilationMode() {
-    return cxxFlags;
-  }
-
-  /** Returns compiler flags for C compilation by lipo mode. */
-  public ImmutableListMultimap<LipoMode, String> getLipoCFlags() {
-    return lipoCFlags;
-  }
-
-  /** Returns compiler flags for C compilation by lipo mode. */
-  public ImmutableListMultimap<LipoMode, String> getLipoCxxFlags() {
-    return lipoCxxFlags;
-  }
-
-  /** Returns optional compiler flags from this toolchain. */
-  public ImmutableList<OptionalFlag> getOptionalCompilerFlags() {
-    return crosstoolOptionalCompilerFlags;
-  }
-
-  /** Returns optional compiler flags for C++ from this toolchain. */
-  public ImmutableList<OptionalFlag> getOptionalCxxFlags() {
-    return crosstoolOptionalCxxFlags;
   }
 }
