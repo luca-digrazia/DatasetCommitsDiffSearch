@@ -1,21 +1,18 @@
 package io.dropwizard.testing.junit;
 
-import io.dropwizard.testing.app.TestApplication;
-import io.dropwizard.testing.app.TestConfiguration;
+import com.google.common.base.Optional;
 import org.junit.Test;
 
-import java.util.Optional;
-
-import static io.dropwizard.testing.ConfigOverride.config;
 import static io.dropwizard.testing.ResourceHelpers.resourceFilePath;
+import static io.dropwizard.testing.ConfigOverride.config;
 import static org.assertj.core.api.Assertions.assertThat;
 
 public class DropwizardAppRuleResetConfigOverrideTest {
     private final DropwizardAppRule<TestConfiguration> dropwizardAppRule = new DropwizardAppRule<>(
-        TestApplication.class,
-        resourceFilePath("test-config.yaml"),
-        Optional.of("app-rule-reset"),
-        config("app-rule-reset", "message", "A new way to say Hooray!"));
+            TestApplication.class,
+            resourceFilePath("test-config.yaml"),
+            Optional.of("app-rule-reset"),
+            config("app-rule-reset", "message", "A new way to say Hooray!"));
 
     @Test
     public void test2() throws Exception {
