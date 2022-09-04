@@ -24,7 +24,6 @@ import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.graylog.plugins.map.search.MapDataSearch;
 import org.graylog.plugins.map.search.MapDataSearchRequest;
 import org.graylog.plugins.map.search.MapDataSearchResult;
-import org.graylog2.audit.jersey.NoAuditEvent;
 import org.graylog2.decorators.DecoratorProcessor;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.cluster.ClusterConfigService;
@@ -64,7 +63,6 @@ public class MapDataResource extends SearchResource implements PluginRestResourc
     @ApiOperation(value = "Get map data")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    @NoAuditEvent("only used to fetch map data, no changes made in the system")
     public MapDataSearchResult mapData(@ApiParam(name = "JSON body", required = true) MapDataSearchRequest request) {
         final String filter = "streams:" + request.streamId();
 
