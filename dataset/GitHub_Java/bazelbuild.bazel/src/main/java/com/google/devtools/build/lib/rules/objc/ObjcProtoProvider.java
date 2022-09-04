@@ -44,30 +44,30 @@ public class ObjcProtoProvider extends NativeInfo {
   /** Skylark name for the ObjcProtoProvider. */
   public static final String SKYLARK_NAME = "ObjcProto";
 
-  /** Skylark constructor and identifier for AppleExecutableBinaryInfo. */
+  /** Skylark constructor and identifier for AppleExecutableBinaryProvider. */
   public static final NativeProvider<ObjcProtoProvider> SKYLARK_CONSTRUCTOR =
       new NativeProvider<ObjcProtoProvider>(ObjcProtoProvider.class, SKYLARK_NAME) {};
 
-  private final NestedSet<Artifact> protoFiles;
+  private final NestedSet<NestedSet<Artifact>> protoGroups;
   private final NestedSet<Artifact> protobufHeaders;
   private final NestedSet<PathFragment> protobufHeaderSearchPaths;
   private final NestedSet<Artifact> portableProtoFilters;
 
   private ObjcProtoProvider(
-      NestedSet<Artifact> protoFiles,
+      NestedSet<NestedSet<Artifact>> protoGroups,
       NestedSet<Artifact> portableProtoFilters,
       NestedSet<Artifact> protobufHeaders,
       NestedSet<PathFragment> protobufHeaderSearchPaths) {
     super(SKYLARK_CONSTRUCTOR);
-    this.protoFiles = Preconditions.checkNotNull(protoFiles);
+    this.protoGroups = Preconditions.checkNotNull(protoGroups);
     this.portableProtoFilters = Preconditions.checkNotNull(portableProtoFilters);
     this.protobufHeaders = Preconditions.checkNotNull(protobufHeaders);
     this.protobufHeaderSearchPaths = Preconditions.checkNotNull(protobufHeaderSearchPaths);
   }
 
-  /** Returns the set of all proto files that the dependencies of this provider has seen. */
-  public NestedSet<Artifact> getProtoFiles() {
-    return protoFiles;
+  /** Returns the set of all proto groups that the dependencies of this provider has seen. */
+  public NestedSet<NestedSet<Artifact>> getProtoGroups() {
+    return protoGroups;
   }
 
   /** Returns the header artifacts provided by the Protobuf library. */
@@ -80,7 +80,9 @@ public class ObjcProtoProvider extends NativeInfo {
     return protobufHeaderSearchPaths;
   }
 
-  /** Returns the set of all the associated filters to the collected protos. */
+  /**
+   * Returns the set of all the associated filters to the collected protos.
+   */
   public NestedSet<Artifact> getPortableProtoFilters() {
     return portableProtoFilters;
   }
@@ -90,15 +92,21 @@ public class ObjcProtoProvider extends NativeInfo {
    * several transitive dependencies.
    */
   public static final class Builder {
-    private final NestedSetBuilder<Artifact> protoFiles = NestedSetBuilder.stableOrder();
+    private final NestedSetBuilder<NestedSet<Artifact>> protoGroups =
+        NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> portableProtoFilters = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<Artifact> protobufHeaders = NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<PathFragment> protobufHeaderSearchPaths =
         NestedSetBuilder.linkOrder();
 
-    /** Adds proto files to be propagated. */
-    public Builder addProtoFiles(NestedSet<Artifact> protoFiles) {
-      this.protoFiles.addTransitive(protoFiles);
+    /**
+     * Adds a proto group to be propagated. Each group represents a proto_library target and
+     * contains protos to be built along with their transitive dependencies. We propagate protos as
+     * groups because the grouping provides relationship information between the protos, which can
+     * be used to limit the number of inputs to each proto generation action.
+     */
+    public Builder addProtoGroup(NestedSet<Artifact> protoGroup) {
+      this.protoGroups.add(protoGroup);
       return this;
     }
 
@@ -114,7 +122,9 @@ public class ObjcProtoProvider extends NativeInfo {
       return this;
     }
 
-    /** Adds all the proto filters to the set of dependencies. */
+    /**
+     * Adds all the proto filters to the set of dependencies.
+     */
     public Builder addPortableProtoFilters(NestedSet<Artifact> protoFilters) {
       this.portableProtoFilters.addTransitive(protoFilters);
       return this;
@@ -126,7 +136,7 @@ public class ObjcProtoProvider extends NativeInfo {
      */
     public Builder addTransitive(Iterable<ObjcProtoProvider> providers) {
       for (ObjcProtoProvider provider : providers) {
-        this.protoFiles.addTransitive(provider.getProtoFiles());
+        this.protoGroups.addTransitive(provider.getProtoGroups());
         this.portableProtoFilters.addTransitive(provider.getPortableProtoFilters());
         this.protobufHeaders.addTransitive(provider.getProtobufHeaders());
         this.protobufHeaderSearchPaths.addTransitive(provider.getProtobufHeaderSearchPaths());
@@ -134,14 +144,16 @@ public class ObjcProtoProvider extends NativeInfo {
       return this;
     }
 
-    /** Whether this provider has any protos or filters. */
+    /**
+     * Whether this provider has any protos or filters.
+     */
     public boolean isEmpty() {
-      return protoFiles.isEmpty() && portableProtoFilters.isEmpty();
+      return protoGroups.isEmpty() && portableProtoFilters.isEmpty();
     }
 
     public ObjcProtoProvider build() {
       return new ObjcProtoProvider(
-          protoFiles.build(),
+          protoGroups.build(),
           portableProtoFilters.build(),
           protobufHeaders.build(),
           protobufHeaderSearchPaths.build());

@@ -26,6 +26,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -37,7 +38,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -75,9 +75,8 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
     MultiArchSplitTransitionProvider.validateMinimumOs(ruleContext);
     PlatformType platformType = MultiArchSplitTransitionProvider.getPlatformType(ruleContext);
 
-    ImmutableListMultimap<BuildConfiguration, ConfiguredTargetAndTarget>
-        configToCTATDepsCollectionMap =
-            ruleContext.getPrerequisiteCofiguredTargetAndTargetsByConfiguration("deps", Mode.SPLIT);
+    ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection> configToDepsCollectionMap =
+        ruleContext.getPrerequisitesByConfiguration("deps", Mode.SPLIT);
     ImmutableListMultimap<BuildConfiguration, ObjcProvider> configToObjcAvoidDepsMap =
         ruleContext.getPrerequisitesByConfiguration(AppleStaticLibraryRule.AVOID_DEPS_ATTR_NAME,
             Mode.SPLIT, ObjcProvider.SKYLARK_CONSTRUCTOR);
@@ -135,7 +134,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
               ruleContext,
               childConfig,
               intermediateArtifacts,
-              nullToEmptyList(configToCTATDepsCollectionMap.get(childConfig)),
+              nullToEmptyList(configToDepsCollectionMap.get(childConfig)),
               protosObjcProvider);
       ObjcProvider objcProvider =
           common.getObjcProvider().subtractSubtrees(configToObjcAvoidDepsMap.get(childConfig),
@@ -189,7 +188,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
 
     targetBuilder
         .addNativeDeclaredProvider(
-            new AppleStaticLibraryInfo(
+            new AppleStaticLibraryProvider(
                 ruleIntermediateArtifacts.combinedArchitectureArchive(),
                 objcProvider))
         .addOutputGroups(outputGroupCollector);
@@ -207,7 +206,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       BuildConfiguration buildConfiguration,
       IntermediateArtifacts intermediateArtifacts,
-      List<ConfiguredTargetAndTarget> propagatedConfigredTargetAndTargetDeps,
+      List<TransitiveInfoCollection> propagatedDeps,
       Optional<ObjcProvider> protosObjcProvider) {
 
     CompilationArtifacts compilationArtifacts = new CompilationArtifacts.Builder().build();
@@ -216,7 +215,7 @@ public class AppleStaticLibrary implements RuleConfiguredTargetFactory {
         .setCompilationAttributes(
             CompilationAttributes.Builder.fromRuleContext(ruleContext).build())
         .setCompilationArtifacts(compilationArtifacts)
-        .addDeps(propagatedConfigredTargetAndTargetDeps)
+        .addDeps(propagatedDeps)
         .addDepObjcProviders(protosObjcProvider.asSet())
         .setIntermediateArtifacts(intermediateArtifacts)
         .setAlwayslink(false)
