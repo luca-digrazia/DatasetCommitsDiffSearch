@@ -36,8 +36,6 @@ import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
 import com.google.devtools.build.lib.clock.JavaClock;
-import com.google.devtools.build.lib.events.Reporter;
-import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
@@ -295,8 +293,8 @@ public class BlazeRuntimeWrapper {
     }
     commandCreated = false;
     BuildTool buildTool = new BuildTool(env);
-    Reporter reporter = env.getReporter();
-    try (OutErr.SystemPatcher systemOutErrPatcher = reporter.getOutErr().getSystemPatcher()) {
+    try (OutErr.SystemPatcher systemOutErrPatcher =
+        env.getReporter().getOutErr().getSystemPatcher()) {
       Profiler.instance()
           .start(
               /*profiledTasks=*/ ImmutableSet.of(),
@@ -313,24 +311,16 @@ public class BlazeRuntimeWrapper {
               /*includeTargetLabel=*/ false,
               /*collectTaskHistograms=*/ true);
 
-      StoredEventHandler storedEventHandler = new StoredEventHandler();
-      reporter.addHandler(storedEventHandler);
-
       // This cannot go into newCommand, because we hook up the EventCollectionApparatus as a
       // module, and after that ran, further changes to the apparatus aren't reflected on the
       // reporter.
       for (BlazeModule module : runtime.getBlazeModules()) {
         module.beforeCommand(env);
       }
-      reporter.removeHandler(storedEventHandler);
-
       EventBus eventBus = env.getEventBus();
       for (Object subscriber : eventBusSubscribers) {
         eventBus.register(subscriber);
       }
-
-      // Replay events from beforeCommand, just as BlazeCommandDispatcher does.
-      storedEventHandler.replayOn(reporter);
 
       env.beforeCommand(InvocationPolicy.getDefaultInstance());
 
@@ -362,11 +352,11 @@ public class BlazeRuntimeWrapper {
             crash != null ? crash.getThrowable() : null,
             detailedExitCode,
             /*startSuspendCount=*/ 0);
-        getSkyframeExecutor().notifyCommandComplete(reporter);
+        getSkyframeExecutor().notifyCommandComplete(env.getReporter());
         if (crash != null) {
           runtime
               .getBugReporter()
-              .handleCrash(crash, CrashContext.keepAlive().reportingTo(reporter));
+              .handleCrash(crash, CrashContext.keepAlive().reportingTo(env.getReporter()));
         }
       }
     } finally {
