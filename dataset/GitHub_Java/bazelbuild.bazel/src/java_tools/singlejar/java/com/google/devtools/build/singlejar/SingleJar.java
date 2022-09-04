@@ -23,7 +23,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Date;
@@ -179,8 +178,9 @@ public class SingleJar {
     InputStream buildInfo = createBuildData();
 
     ZipCombiner combiner = null;
-    try (OutputStream out = fileSystem.getOutputStream(outputJar)) {
-      combiner = new ZipCombiner(outputMode, createEntryFilter(normalize, allowedPaths), out);
+    try {
+      combiner = new ZipCombiner(outputMode, createEntryFilter(normalize, allowedPaths),
+          fileSystem.getOutputStream(outputJar));
       if (launcherBin != null) {
         combiner.prependExecutable(fileSystem.getInputStream(launcherBin));
       }
