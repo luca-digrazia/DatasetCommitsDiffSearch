@@ -55,7 +55,6 @@ import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.AppCDSRequestedBuildItem;
 import io.quarkus.deployment.recording.BytecodeRecorderImpl;
 import io.quarkus.dev.appstate.ApplicationStateNotification;
-import io.quarkus.dev.console.QuarkusConsole;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.CatchBlockCreator;
 import io.quarkus.gizmo.ClassCreator;
@@ -136,11 +135,6 @@ public class MainClassBuildStep {
         FieldCreator scField = file.getFieldCreator(STARTUP_CONTEXT_FIELD);
         scField.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 
-        MethodCreator ctor = file.getMethodCreator("<init>", void.class);
-        ctor.invokeSpecialMethod(MethodDescriptor.ofMethod(Application.class, "<init>", void.class, boolean.class),
-                ctor.getThis(), ctor.load(launchMode.isAuxiliaryApplication()));
-        ctor.returnValue(null);
-
         MethodCreator mv = file.getMethodCreator("<clinit>", void.class);
         mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 
@@ -157,8 +151,7 @@ public class MainClassBuildStep {
 
         mv.invokeStaticMethod(CONFIGURE_STEP_TIME_ENABLED);
 
-        mv.invokeStaticMethod(MethodDescriptor.ofMethod(Timing.class, "staticInitStarted", void.class, boolean.class),
-                mv.load(launchMode.isAuxiliaryApplication()));
+        mv.invokeStaticMethod(MethodDescriptor.ofMethod(Timing.class, "staticInitStarted", void.class));
 
         // ensure that the config class is initialized
         mv.invokeStaticMethod(RunTimeConfigurationGenerator.C_ENSURE_INITIALIZED);
@@ -284,17 +277,13 @@ public class MainClassBuildStep {
         ResultHandle featuresHandle = tryBlock.load(featureNames.stream().sorted().collect(Collectors.joining(", ")));
         tryBlock.invokeStaticMethod(
                 ofMethod(Timing.class, "printStartupTime", void.class, String.class, String.class, String.class, String.class,
-                        String.class, boolean.class, boolean.class),
+                        String.class, boolean.class),
                 tryBlock.load(applicationInfo.getName()),
                 tryBlock.load(applicationInfo.getVersion()),
                 tryBlock.load(Version.getVersion()),
                 featuresHandle,
                 activeProfile,
-                tryBlock.load(LaunchMode.DEVELOPMENT.equals(launchMode.getLaunchMode())),
-                tryBlock.load(launchMode.isAuxiliaryApplication()));
-
-        tryBlock.invokeStaticMethod(
-                ofMethod(QuarkusConsole.class, "start", void.class));
+                tryBlock.load(LaunchMode.DEVELOPMENT.equals(launchMode.getLaunchMode())));
         cb = tryBlock.addCatch(Throwable.class);
 
         // an exception was thrown before logging was actually setup, we simply dump everything to the console

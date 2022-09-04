@@ -18,7 +18,6 @@ package io.quarkus.bootstrap.logging;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
-import java.util.logging.ErrorManager;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
 import java.util.logging.Logger;
@@ -37,18 +36,9 @@ public class QuarkusDelayedHandler extends ExtHandler {
 
     private final Deque<ExtLogRecord> logRecords = new ArrayDeque<>();
 
-    private final int queueLimit;
     private volatile boolean buildTimeLoggingActivated = false;
     private volatile boolean activated = false;
     private volatile boolean callerCalculationRequired = false;
-
-    public QuarkusDelayedHandler() {
-        this(4000);
-    }
-
-    public QuarkusDelayedHandler(final int queueLimit) {
-        this.queueLimit = queueLimit;
-    }
 
     @Override
     protected void doPublish(final ExtLogRecord record) {
@@ -63,13 +53,6 @@ public class QuarkusDelayedHandler extends ExtHandler {
                     publishToNestedHandlers(record);
                     super.doPublish(record);
                 } else {
-                    // Determine whether the queue was overrun
-                    if (logRecords.size() >= queueLimit) {
-                        reportError(
-                                "The delayed handler's queue was overrun and log record(s) were lost. Did you forget to configure logging?",
-                                null, ErrorManager.WRITE_FAILURE);
-                        return;
-                    }
                     // Determine if we need to calculate the caller information before we queue the record
                     if (isCallerCalculationRequired()) {
                         // prepare record to move to another thread
