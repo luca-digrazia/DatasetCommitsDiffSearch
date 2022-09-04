@@ -201,8 +201,7 @@ public class InputsResource extends RestResource {
                 input.getType(),
                 input.getCreatorUserId(),
                 input.getConfiguration(),
-                input.getStaticFields(),
-                input.getNodeId()
+                input.getStaticFields()
         );
     }
 }
