@@ -1,5 +1,7 @@
 /*
- * Copyright 2018 Red Hat, Inc.
+ * JBoss, Home of Professional Open Source.
+ * Copyright 2018 Red Hat, Inc., and individual contributors
+ * as indicated by the @author tags.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +18,6 @@
 
 package org.jboss.builder;
 
-import java.io.BufferedWriter;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.OutputStreamWriter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,13 +27,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.jboss.builder.item.BuildItem;
-import org.jboss.builder.item.NamedBuildItem;
 import org.jboss.builder.item.SymbolicBuildItem;
-import org.wildfly.common.Assert;
 
 /**
  * A build chain builder.
@@ -43,8 +37,6 @@ import org.wildfly.common.Assert;
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
  */
 public final class BuildChainBuilder {
-
-    private static final String GRAPH_OUTPUT = System.getProperty("jboss.builder.graph-output");
 
     private final BuildStepBuilder finalStep;
     private final List<BuildProvider> providers = new ArrayList<>();
@@ -108,24 +100,12 @@ public final class BuildChainBuilder {
      * @throws IllegalArgumentException if the item type is {@code null}
      */
     public BuildChainBuilder addInitial(Class<? extends BuildItem> type) {
-        Assert.checkNotNullParam("type", type);
-        if (NamedBuildItem.class.isAssignableFrom(type)) {
-            throw new IllegalArgumentException("Cannot produce a named build item without a name");
-        }
         initialIds.add(new ItemId(type, null));
         return this;
     }
 
     public BuildChainBuilder addInitial(Enum<?> symbolic) {
-        Assert.checkNotNullParam("symbolic", symbolic);
         initialIds.add(new ItemId(SymbolicBuildItem.class, symbolic));
-        return this;
-    }
-
-    public <N> BuildChainBuilder addInitial(Class<? extends NamedBuildItem<N>> type, N name) {
-        Assert.checkNotNullParam("type", type);
-        Assert.checkNotNullParam("name", name);
-        initialIds.add(new ItemId(type, name));
         return this;
     }
 
@@ -137,7 +117,6 @@ public final class BuildChainBuilder {
         }
         return this;
     }
-
     /**
      * Declare a final item that will be consumable after the build step chain completes.  This may be any item
      * that is produced in the chain.
@@ -147,24 +126,12 @@ public final class BuildChainBuilder {
      * @throws IllegalArgumentException if the item type is {@code null}
      */
     public BuildChainBuilder addFinal(Class<? extends BuildItem> type) {
-        Assert.checkNotNullParam("type", type);
-        if (NamedBuildItem.class.isAssignableFrom(type)) {
-            throw new IllegalArgumentException("Cannot consume a named build item without a name");
-        }
         finalIds.add(new ItemId(type, null));
         return this;
     }
 
     public BuildChainBuilder addFinal(Enum<?> symbolic) {
-        Assert.checkNotNullParam("symbolic", symbolic);
         finalIds.add(new ItemId(SymbolicBuildItem.class, symbolic));
-        return this;
-    }
-
-    public <N> BuildChainBuilder addFinal(Class<? extends NamedBuildItem<N>> type, N name) {
-        Assert.checkNotNullParam("type", type);
-        Assert.checkNotNullParam("name", name);
-        finalIds.add(new ItemId(type, name));
         return this;
     }
 
@@ -176,6 +143,7 @@ public final class BuildChainBuilder {
      */
     public BuildChain build() throws ChainBuildException {
         final Set<ItemId> consumed = new HashSet<>();
+        final List<StepInfo> startSteps = new ArrayList<>();
         final Map<BuildStepBuilder, StepInfo> mappedSteps = new HashMap<>();
         int initialSingleCount = 0;
         int initialMultiCount = 0;
@@ -220,13 +188,13 @@ public final class BuildChainBuilder {
         // now begin to wire dependencies
         final Set<ItemId> finalIds = this.finalIds;
         final ArrayDeque<BuildStepBuilder> toAdd = new ArrayDeque<>();
-        final Set<Produce> lastDependencies = new HashSet<>();
+        final Set<BuildStepBuilder> lastDependencies = new HashSet<>();
         for (ItemId finalId : finalIds) {
             addOne(allProduces, included, toAdd, finalId, lastDependencies);
         }
         // now recursively add producers of consumed items
         BuildStepBuilder stepBuilder;
-        Map<BuildStepBuilder, Set<Produce>> dependencies = new HashMap<>();
+        Map<BuildStepBuilder, Set<BuildStepBuilder>> dependencies = new HashMap<>();
         while ((stepBuilder = toAdd.pollFirst()) != null) {
             for (Map.Entry<ItemId, Consume> entry : stepBuilder.getConsumes().entrySet()) {
                 final Consume consume = entry.getValue();
@@ -242,118 +210,35 @@ public final class BuildChainBuilder {
         }
         // calculate dependents
         Map<BuildStepBuilder, Set<BuildStepBuilder>> dependents = new HashMap<>();
-        for (Map.Entry<BuildStepBuilder, Set<Produce>> entry : dependencies.entrySet()) {
+        for (Map.Entry<BuildStepBuilder, Set<BuildStepBuilder>> entry : dependencies.entrySet()) {
             final BuildStepBuilder dependent = entry.getKey();
-            for (Produce produce : entry.getValue()) {
-                dependents.computeIfAbsent(produce.getStepBuilder(), x -> new HashSet<>()).add(dependent);
+            for (BuildStepBuilder dependency : entry.getValue()) {
+                dependents.computeIfAbsent(dependency, x -> new HashSet<>()).add(dependent);
             }
         }
         // detect cycles
         cycleCheck(included, new HashSet<>(), new HashSet<>(), dependencies);
         // recursively build all
-        final Set<StepInfo> startSteps = new HashSet<>();
-        final Set<StepInfo> endSteps = new HashSet<>();
+        List<StepInfo> endSteps = new ArrayList<>();
         for (BuildStepBuilder builder : included) {
-            buildOne(builder, included, mappedSteps, dependents, dependencies, startSteps, endSteps);
-        }
-        if (GRAPH_OUTPUT != null && ! GRAPH_OUTPUT.isEmpty()) {
-            try (FileOutputStream fos = new FileOutputStream(GRAPH_OUTPUT)) {
-                try (OutputStreamWriter osw = new OutputStreamWriter(fos)) {
-                    try (BufferedWriter writer = new BufferedWriter(osw)) {
-                        writer.write("digraph {");
-                        writer.newLine();
-                        writer.write("    node [shape=rectangle];");
-                        writer.newLine();
-                        writer.write("    rankdir=LR;");
-                        writer.newLine();
-                        writer.newLine();
-                        writer.write("    { rank = same; ");
-                        for (StepInfo startStep : startSteps) {
-                            writer.write(quoteString(startStep.getBuildStep().toString()));
-                            writer.write("; ");
-                        }
-                        writer.write("};");
-                        writer.newLine();
-                        writer.write("    { rank = same; ");
-                        for (StepInfo endStep : endSteps) {
-                            if (! startSteps.contains(endStep)) {
-                                writer.write(quoteString(endStep.getBuildStep().toString()));
-                                writer.write("; ");
-                            }
-                        }
-                        writer.write("};");
-                        writer.newLine();
-                        writer.newLine();
-                        final HashSet<StepInfo> printed = new HashSet<>();
-                        for (StepInfo step : startSteps) {
-                            writeStep(writer, printed, step);
-                        }
-                        writer.write("}");
-                        writer.newLine();
-                    }
-                }
-            } catch (IOException ioe) {
-                throw new RuntimeException("Failed to write debug graph output", ioe);
-            }
+            buildOne(builder, mappedSteps, dependents, dependencies, startSteps, endSteps);
         }
         return new BuildChain(initialSingleCount, initialMultiCount, startSteps, consumed, this, endSteps.size());
     }
 
-    private static void writeStep(final BufferedWriter writer, final HashSet<StepInfo> printed, final StepInfo step) throws IOException {
-        if (printed.add(step)) {
-            final String currentStepName = quoteString(step.getBuildStep().toString());
-            final Set<StepInfo> dependents = step.getDependents();
-            if (! dependents.isEmpty()) {
-                for (StepInfo dependent : dependents) {
-                    final String dependentName = quoteString(dependent.getBuildStep().toString());
-                    writer.write("    ");
-                    writer.write(dependentName);
-                    writer.write(" -> ");
-                    writer.write(currentStepName);
-                    writer.newLine();
-                }
-                writer.newLine();
-                for (StepInfo dependent : dependents) {
-                    writeStep(writer, printed, dependent);
-                }
-            }
-        }
-    }
-
-    private static final Pattern QUOTE_PATTERN = Pattern.compile("[\"]");
-
-    private static String quoteString(String input) {
-        final Matcher matcher = QUOTE_PATTERN.matcher(input);
-        final StringBuffer buf = new StringBuffer();
-        buf.append('"');
-        while (matcher.find()) {
-            matcher.appendReplacement(buf, "\\" + matcher.group(0));
-        }
-        matcher.appendTail(buf);
-        buf.append('"');
-        return buf.toString();
-    }
-
-    private void cycleCheck(Set<BuildStepBuilder> builders, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked, final Map<BuildStepBuilder, Set<Produce>> dependencies) throws ChainBuildException {
+    private void cycleCheck(Set<BuildStepBuilder> builders, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked, final Map<BuildStepBuilder, Set<BuildStepBuilder>> dependencies) throws ChainBuildException {
         for (BuildStepBuilder builder : builders) {
             cycleCheck(builder, visited, checked, dependencies);
         }
     }
 
-    private void cycleCheckProduce(Set<Produce> produceSet, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked, final Map<BuildStepBuilder, Set<Produce>> dependencies) throws ChainBuildException {
-        for (Produce produce : produceSet) {
-            cycleCheck(produce.getStepBuilder(), visited, checked, dependencies);
-        }
-    }
-
-    private void cycleCheck(BuildStepBuilder builder, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked, final Map<BuildStepBuilder, Set<Produce>> dependencies) throws ChainBuildException {
+    private void cycleCheck(BuildStepBuilder builder, Set<BuildStepBuilder> visited, Set<BuildStepBuilder> checked, final Map<BuildStepBuilder, Set<BuildStepBuilder>> dependencies) throws ChainBuildException {
         if (! checked.contains(builder)) {
             if (! visited.add(builder)) {
                 throw new ChainBuildException("Cycle detected: " + visited);
             }
             try {
-                final Set<Produce> dependencySet = dependencies.getOrDefault(builder, Collections.emptySet());
-                cycleCheckProduce(dependencySet, visited, checked, dependencies);
+                cycleCheck(dependencies.getOrDefault(builder, Collections.emptySet()), visited, checked, dependencies);
             } finally {
                 visited.remove(builder);
             }
@@ -361,52 +246,34 @@ public final class BuildChainBuilder {
         checked.add(builder);
     }
 
-    private void addOne(final Map<ItemId, List<Produce>> allProduces, final Set<BuildStepBuilder> included, final ArrayDeque<BuildStepBuilder> toAdd, final ItemId idToAdd, Set<Produce> dependencies) throws ChainBuildException {
+    private void addOne(final Map<ItemId, List<Produce>> allProduces, final Set<BuildStepBuilder> included, final ArrayDeque<BuildStepBuilder> toAdd, final ItemId idToAdd, Set<BuildStepBuilder> dependencies) throws ChainBuildException {
         for (Produce produce : allProduces.getOrDefault(idToAdd, Collections.emptyList())) {
             final BuildStepBuilder stepBuilder = produce.getStepBuilder();
-            if (! produce.getFlags().contains(ProduceFlag.WEAK)) {
-                if (included.add(stepBuilder)) {
-                    // recursively add
-                    toAdd.addLast(stepBuilder);
-                }
+            if (included.add(stepBuilder)) {
+                // recursively add
+                toAdd.addLast(stepBuilder);
             }
-            dependencies.add(produce);
+            dependencies.add(stepBuilder);
         }
     }
 
-    private StepInfo buildOne(BuildStepBuilder toBuild, Set<BuildStepBuilder> included, Map<BuildStepBuilder, StepInfo> mapped, Map<BuildStepBuilder, Set<BuildStepBuilder>> dependents, Map<BuildStepBuilder, Set<Produce>> dependencies, final Set<StepInfo> startSteps, final Set<StepInfo> endSteps) {
+    private StepInfo buildOne(BuildStepBuilder toBuild, Map<BuildStepBuilder, StepInfo> mapped, Map<BuildStepBuilder, Set<BuildStepBuilder>> dependents, Map<BuildStepBuilder, Set<BuildStepBuilder>> dependencies, final List<StepInfo> startSteps, final List<StepInfo> endSteps) {
         if (mapped.containsKey(toBuild)) {
             return mapped.get(toBuild);
         }
         Set<StepInfo> dependentStepInfos = new HashSet<>();
         final Set<BuildStepBuilder> dependentsOfThis = dependents.getOrDefault(toBuild, Collections.emptySet());
         for (BuildStepBuilder dependentBuilder : dependentsOfThis) {
-            if (included.contains(dependentBuilder)) {
-                dependentStepInfos.add(buildOne(dependentBuilder, included, mapped, dependents, dependencies, startSteps, endSteps));
-            }
+            dependentStepInfos.add(buildOne(dependentBuilder, mapped, dependents, dependencies, startSteps, endSteps));
         }
-        final Set<Produce> dependenciesOfThis = dependencies.getOrDefault(toBuild, Collections.emptySet());
-        int includedDependencies = 0;
-        final Set<BuildStepBuilder> visited = new HashSet<>();
-        for (Produce produce : dependenciesOfThis) {
-            final BuildStepBuilder stepBuilder = produce.getStepBuilder();
-            if (included.contains(stepBuilder) && visited.add(stepBuilder)) {
-                includedDependencies ++;
-            }
-        }
-        int includedDependents = 0;
-        for (BuildStepBuilder dependent : dependentsOfThis) {
-            if (included.contains(dependent)) {
-                includedDependents ++;
-            }
-        }
-        final StepInfo stepInfo = new StepInfo(toBuild, includedDependencies, dependentStepInfos);
+        final Set<BuildStepBuilder> dependenciesOfThis = dependencies.getOrDefault(toBuild, Collections.emptySet());
+        final StepInfo stepInfo = new StepInfo(toBuild, dependenciesOfThis.size(), dependentStepInfos);
         mapped.put(toBuild, stepInfo);
-        if (includedDependencies == 0) {
+        if (dependenciesOfThis.isEmpty()) {
             // it's a start step!
             startSteps.add(stepInfo);
         }
-        if (includedDependents == 0) {
+        if (dependentsOfThis.isEmpty()) {
             // it's an end step!
             endSteps.add(stepInfo);
         }

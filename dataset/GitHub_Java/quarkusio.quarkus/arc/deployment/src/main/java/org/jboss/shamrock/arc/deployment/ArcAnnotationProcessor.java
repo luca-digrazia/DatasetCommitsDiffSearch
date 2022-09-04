@@ -47,7 +47,6 @@ import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedResourceBuildItem;
 import org.jboss.shamrock.deployment.builditem.InjectionProviderBuildItem;
 import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
-import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveMethodBuildItem;
@@ -100,8 +99,7 @@ public class ArcAnnotationProcessor {
     public BeanContainerBuildItem build(ArcDeploymentTemplate arcTemplate, BuildProducer<ServletExtensionBuildItem> extensions, BuildProducer<InjectionProviderBuildItem> injectionProvider,
                                         List<BeanContainerListenerBuildItem> beanContainerListenerBuildItems,
                                         List<GeneratedBeanBuildItem> generatedBeans,
-                                        List<AnnotationTransformerBuildItem> annotationTransformers,
-                                        ShutdownContextBuildItem shutdown) throws Exception {
+                                        List<AnnotationTransformerBuildItem> annotationTransformers) throws Exception {
 
         List<String> additionalBeans = new ArrayList<>();
         for (AdditionalBeanBuildItem i : this.additionalBeans) {
@@ -207,7 +205,7 @@ public class ArcAnnotationProcessor {
         BeanProcessor beanProcessor = builder.build();
         beanProcessor.process();
 
-        ArcContainer container = arcTemplate.getContainer(shutdown);
+        ArcContainer container = arcTemplate.getContainer(null);
         BeanContainer bc = arcTemplate.initBeanContainer(container, beanContainerListenerBuildItems.stream().map(BeanContainerListenerBuildItem::getBeanContainerListener).collect(Collectors.toList()));
         injectionProvider.produce(new InjectionProviderBuildItem(arcTemplate.setupInjection(container)));
         extensions.produce(new ServletExtensionBuildItem(arcTemplate.setupRequestScope(container)));

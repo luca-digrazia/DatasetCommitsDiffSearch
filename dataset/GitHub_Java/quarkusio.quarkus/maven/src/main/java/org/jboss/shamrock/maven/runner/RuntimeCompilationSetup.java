@@ -2,11 +2,10 @@ package org.jboss.shamrock.maven.runner;
 
 import java.io.File;
 import java.nio.file.Paths;
-import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.jboss.shamrock.undertow.runtime.HttpConfig;
+import org.jboss.shamrock.runtime.ConfiguredValue;
 import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
 import io.undertow.server.HandlerWrapper;
@@ -26,14 +25,7 @@ public class RuntimeCompilationSetup {
         String classesDir = System.getProperty("shamrock.runner.classes");
         if (classesDir != null) {
             HandlerWrapper wrapper = createHandlerWrapper();
-            //TODO: we need to get these values from the config in runtime mode
-            HttpConfig config = new HttpConfig();
-            config.port = 8080;
-            config.host = "localhost";
-            config.ioThreads = Optional.empty();
-            config.workerThreads = Optional.empty();
-
-            UndertowDeploymentTemplate.startUndertowEagerly(config, wrapper);
+            UndertowDeploymentTemplate.startUndertowEagerly(new ConfiguredValue("http.port", "8080"), new ConfiguredValue("http.host", "localhost"), new ConfiguredValue("http.io-threads", ""), new ConfiguredValue("http.worker-threads", ""), wrapper);
         }
     }
 

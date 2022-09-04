@@ -5,6 +5,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.net.JarURLConnection;
 import java.net.URL;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.jar.Attributes;
@@ -13,6 +14,7 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.maven.artifact.Artifact;
+import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoFailureException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -30,6 +32,7 @@ import org.jboss.shamrock.maven.ProcessReader;
 @Mojo(name = "run", defaultPhase = LifecyclePhase.PREPARE_PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class RunMojo extends AbstractMojo {
 
+    private static final String RESOURCES_PROP = "shamrock.undertow.resources";
     /**
      * The directory for compiled classes.
      */
@@ -40,26 +43,52 @@ public class RunMojo extends AbstractMojo {
     protected MavenProject project;
 
     @Parameter(defaultValue = "${fakereplace}")
-    private boolean fakereplace = true;
+    private boolean fakereplace = false;
 
     @Parameter(defaultValue = "${debug}")
-    private boolean debug = false;
+    private String debug;
 
     @Parameter(defaultValue = "${project.build.directory}")
     private File buildDir;
 
+    @Parameter(defaultValue = "${project.build.sourceDirectory}")
+    private File sourceDir;
+
+
+    @Parameter(defaultValue = "${jvm.args}")
+    private String jvmArgs;
+
+
     @Override
     public void execute() throws MojoFailureException {
         try {
-
             List<String> args = new ArrayList<>();
             args.add("java");
-            if (debug) {
+            if (debug != null) {
                 args.add("-Xdebug");
                 args.add("-Xnoagent");
                 args.add("-Djava.compiler=NONE");
-                args.add("-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=y");
+                if (debug.equals("client")) {
+                    args.add("-Xrunjdwp:transport=dt_socket,address=localhost:5005,server=n,suspend=n");
+                } else {
+                    args.add("-Xrunjdwp:transport=dt_socket,address=5005,server=y,suspend=y");
+                }
             }
+            if(jvmArgs != null) {
+                args.add(jvmArgs);
+            }
+
+            for (Resource r : project.getBuild().getResources()) {
+                File f = new File(r.getDirectory());
+                File servletRes = new File(f, "META-INF/resources");
+                if (servletRes.exists()) {
+                    args.add("-D" + RESOURCES_PROP + "=" + servletRes.getAbsolutePath());
+                    System.out.println("Using servlet resources " + servletRes.getAbsolutePath());
+                    break;
+                }
+            }
+
+            args.add("-XX:TieredStopAtLevel=1");
             //build a class-path string for the base platform
             //this stuff does not change
             StringBuilder classPath = new StringBuilder();
@@ -67,6 +96,11 @@ public class RunMojo extends AbstractMojo {
                 classPath.append(artifact.getFile().getAbsolutePath());
                 classPath.append(" ");
             }
+            File wiringClassesDirectory = Files.createTempDirectory("wiring-classes").toFile();
+            wiringClassesDirectory.deleteOnExit();
+
+            classPath.append(wiringClassesDirectory.getAbsolutePath() + "/");
+            classPath.append(' ');
 
             if (fakereplace) {
                 File target = new File(buildDir, "fakereplace.jar");
@@ -90,12 +124,13 @@ public class RunMojo extends AbstractMojo {
                     }
                 }
                 args.add("-javaagent:" + target.getAbsolutePath());
+                args.add("-Dshamrock.fakereplace=true");
             }
 
             //we also want to add the maven plugin jar to the class path
             //this allows us to just directly use classes, without messing around copying them
             //to the runner jar
-            URL classFile = getClass().getClassLoader().getResource(getClass().getName().replace(".", "/") + ".class");
+            URL classFile = getClass().getClassLoader().getResource(getClass().getName().replace('.', '/') + ".class");
             classPath.append(((JarURLConnection) classFile.openConnection()).getJarFileURL().getFile());
 
             //now we need to build a temporary jar to actually run
@@ -113,9 +148,12 @@ public class RunMojo extends AbstractMojo {
             }
 
             args.add("-Dshamrock.runner.classes=" + outputDirectory.getAbsolutePath());
+            args.add("-Dshamrock.runner.sources=" + sourceDir.getAbsolutePath());
             args.add("-jar");
             args.add(tempFile.getAbsolutePath());
             args.add(outputDirectory.getAbsolutePath());
+            args.add(wiringClassesDirectory.getAbsolutePath());
+            args.add(new File(buildDir, "transformer-cache").getAbsolutePath());
             Process p = Runtime.getRuntime().exec(args.toArray(new String[0]), null, outputDirectory);
             new Thread(new ProcessReader(p.getErrorStream(), true)).start();
             new Thread(new ProcessReader(p.getInputStream(), false)).start();

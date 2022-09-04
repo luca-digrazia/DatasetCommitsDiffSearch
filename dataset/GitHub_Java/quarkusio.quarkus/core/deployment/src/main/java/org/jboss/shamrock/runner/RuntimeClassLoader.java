@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.runner;
 
 import java.io.ByteArrayInputStream;
@@ -23,17 +7,17 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
 import java.net.URLStreamHandler;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -41,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
 
 import org.jboss.logging.Logger;
 import org.jboss.shamrock.deployment.ClassOutput;
@@ -85,7 +70,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
             name = nm;
         }
 
-        // TODO: some superugly hack for bean provider
+        // TODO some superugly hack for bean provider
         byte[] data = resources.get(name);
         if (data != null) {
             URL url = new URL(null, "shamrock:" + name + "/", new URLStreamHandler() {
@@ -105,16 +90,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
             });
             return Collections.enumeration(Collections.singleton(url));
         }
-
-        URL appResource = findApplicationResource(name);
-        if (appResource != null) {
-            List<URL> resources = new ArrayList<>();
-            resources.add(appResource);
-            for (Enumeration<URL> e = super.getResources(name); e.hasMoreElements();) {
-                resources.add(e.nextElement());
-            }
-            return Collections.enumeration(resources);
-        }
         return super.getResources(name);
     }
 
@@ -125,10 +100,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
             name = nm.substring(1);
         } else {
             name = nm;
-        }
-        URL appResource = findApplicationResource(name);
-        if (appResource != null) {
-            return appResource;
         }
         return super.getResource(name);
     }
@@ -143,7 +114,7 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
         }
         return super.getResourceAsStream(name);
     }
-    
+
     @Override
     protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
         Class<?> ex = findLoadedClass(name);
@@ -294,7 +265,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
         this.bytecodeTransformers = functions;
     }
 
-    @Override
     public void writeResource(String name, byte[] data) throws IOException {
         resources.put(name, data);
     }
@@ -316,16 +286,6 @@ public class RuntimeClassLoader extends ClassLoader implements ClassOutput {
                 out.write(buf, 0, r);
             }
             return out.toByteArray();
-        }
-    }
-
-    private URL findApplicationResource(String name) {
-        Path resourcePath = applicationClasses.resolve(name);
-        try {
-            return Files.exists(resourcePath) ? resourcePath.toUri()
-                    .toURL() : null;
-        } catch (MalformedURLException e) {
-            throw new RuntimeException(e);
         }
     }
 

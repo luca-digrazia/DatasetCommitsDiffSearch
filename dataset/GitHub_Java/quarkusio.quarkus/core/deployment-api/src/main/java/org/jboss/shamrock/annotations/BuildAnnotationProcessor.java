@@ -55,8 +55,6 @@ import org.jboss.protean.gizmo.TryBlock;
 public class BuildAnnotationProcessor extends AbstractProcessor {
 
     private static final String BUILD_PRODUCER = "org.jboss.shamrock.deployment.BuildProducerImpl";
-    private static final String STATIC_RECORDER = "org.jboss.shamrock.deployment.builditem.StaticBytecodeRecorderBuildItem";
-    private static final String MAIN_RECORDER = "org.jboss.shamrock.deployment.builditem.MainBytecodeRecorderBuildItem";
 
     @Override
     public Set<String> getSupportedOptions() {
@@ -141,7 +139,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
             //now lets generate some stuff
             //first we create a build provider, this registers the producers and consumers
             //we only create a single one for the the class, even if there are multiple steps
-            String processorClassName = processingEnv.getElementUtils().getBinaryName(processor).toString();
+            String processorClassName = processor.getQualifiedName().toString();
             final String buildProviderName = processorClassName + "BuildProvider";
             serviceNames.add(buildProviderName);
             processorElements.add(processor);
@@ -179,7 +177,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                         methodInjection.add(injection);
 
                         DeclaredType type = (DeclaredType) i.asType();
-                        String simpleType = processingEnv.getElementUtils().getBinaryName(((TypeElement) type.asElement())).toString();
+                        String simpleType = ((TypeElement) type.asElement()).getQualifiedName().toString();
                         methodParamTypes.add(simpleType);
                     }
 
@@ -198,7 +196,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                             throw new RuntimeException("@BuildStep method return type cannot be primitive: " + method);
                         }
                         DeclaredType returnTypeElement = (DeclaredType) method.getReturnType();
-                        String returnType = processingEnv.getElementUtils().getBinaryName(((TypeElement) returnTypeElement.asElement())).toString();
+                        String returnType = ((TypeElement) returnTypeElement.asElement()).getQualifiedName().toString();
 
                         if (returnType.equals(List.class.getName())) {
                             listReturn = true;
@@ -209,7 +207,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                             TypeMirror typeMirror = returnTypeElement.getTypeArguments().get(0);
 
                             verifyType(typeMirror, MultiBuildItem.class);
-                            producedType = processingEnv.getElementUtils().getBinaryName(((TypeElement) ((DeclaredType) typeMirror).asElement())).toString();
+                            producedType = ((TypeElement) ((DeclaredType) typeMirror).asElement()).getQualifiedName().toString();
                             rawReturnType = returnType;
                         } else {
                             verifyType(returnTypeElement, BuildItem.class);
@@ -232,9 +230,9 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                     //if it is using bytecode recording register the production of a new recorder
                     if (templatePresent) {
                         if (recordAnnotation.value() == ExecutionTime.STATIC_INIT) {
-                            mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "produces", BuildStepBuilder.class, Class.class), builder, mc.loadClass(STATIC_RECORDER));
+                            mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "produces", BuildStepBuilder.class, Class.class), builder, mc.loadClass("org.jboss.shamrock.deployment.recording.StaticBytecodeRecorderBuildItem"));
                         } else {
-                            mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "produces", BuildStepBuilder.class, Class.class), builder, mc.loadClass(MAIN_RECORDER));
+                            mc.invokeVirtualMethod(ofMethod(BuildStepBuilder.class, "produces", BuildStepBuilder.class, Class.class), builder, mc.loadClass("org.jboss.shamrock.deployment.recording.MainBytecodeRecorderBuildItem"));
                         }
                     }
                     //register parameter injection
@@ -320,10 +318,10 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
                         if (bytecodeRecorder != null) {
                             ResultHandle buildItem;
                             if (recordAnnotation.value() == ExecutionTime.STATIC_INIT) {
-                                buildItem = buildStepMc.newInstance(ofConstructor(STATIC_RECORDER,
+                                buildItem = buildStepMc.newInstance(ofConstructor("org.jboss.shamrock.deployment.recording.StaticBytecodeRecorderBuildItem",
                                         "org.jboss.shamrock.deployment.recording.BytecodeRecorderImpl"), bytecodeRecorder);
                             } else {
-                                buildItem = buildStepMc.newInstance(ofConstructor(MAIN_RECORDER,
+                                buildItem = buildStepMc.newInstance(ofConstructor("org.jboss.shamrock.deployment.recording.MainBytecodeRecorderBuildItem",
                                         "org.jboss.shamrock.deployment.recording.BytecodeRecorderImpl"), bytecodeRecorder);
                             }
                             buildStepMc.invokeVirtualMethod(ofMethod(BuildContext.class, "produce", void.class, BuildItem.class), buildStepMc.getMethodParam(0), buildItem);
@@ -356,19 +354,14 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
         if (!serviceNames.isEmpty()) {
             //we read them first, as if an IDE has processed this we may not have seen the full set of names
             try {
-                String relativeName = "META-INF/services/" + BuildProvider.class.getName();
-                try {
-                    FileObject res = processingEnv.getFiler().getResource(StandardLocation.CLASS_OUTPUT, "", relativeName);
-                    try (BufferedReader reader = new BufferedReader(res.openReader(true))) {
-                        String r;
-                        while ((r = reader.readLine()) != null) {
-                            serviceNames.add(r.trim());
-                        }
-                    }
-                } catch (IOException ignore) {
-                }
 
-                FileObject res = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", relativeName, processorElements.toArray(new Element[0]));
+                FileObject res = processingEnv.getFiler().createResource(StandardLocation.CLASS_OUTPUT, "", "META-INF/services/" + BuildProvider.class.getName(), processorElements.toArray(new Element[0]));
+
+                try (BufferedReader reader = new BufferedReader(res.openReader(true))) {
+                    serviceNames.add(reader.readLine().trim());
+                } catch (Exception ignored) {
+
+                }
 
                 try (Writer out = res.openWriter()) {
                     for (String service : serviceNames) {
@@ -396,7 +389,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
 
     private InjectedBuildResource createInjectionResource(Element element, DeclaredType elementType) {
         DeclaredType type = elementType;
-        String simpleType = processingEnv.getElementUtils().getBinaryName(((TypeElement) type.asElement())).toString();
+        String simpleType = ((TypeElement) type.asElement()).getQualifiedName().toString();
         InjectionType ft;
         String producedTypeName = null;
         String consumedTypeName = null;
@@ -409,7 +402,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
             TypeMirror typeMirror = type.getTypeArguments().get(0);
 
             verifyType(typeMirror, MultiBuildItem.class);
-            consumedTypeName = processingEnv.getElementUtils().getBinaryName(((TypeElement) ((DeclaredType) typeMirror).asElement())).toString();
+            consumedTypeName = ((TypeElement) ((DeclaredType) typeMirror).asElement()).getQualifiedName().toString();
 
         } else if (simpleType.equals(BuildProducer.class.getName())) {
             ft = InjectionType.PRODUCER;
@@ -418,7 +411,7 @@ public class BuildAnnotationProcessor extends AbstractProcessor {
             }
             TypeMirror typeMirror = type.getTypeArguments().get(0);
             verifyType(typeMirror, BuildItem.class);
-            producedTypeName = processingEnv.getElementUtils().getBinaryName(((TypeElement) ((DeclaredType) typeMirror).asElement())).toString();
+            producedTypeName = ((TypeElement) ((DeclaredType) typeMirror).asElement()).getQualifiedName().toString();
         } else {
             consumedTypeName = simpleType;
             if (isTemplate(processingEnv.getTypeUtils().asElement(type))) {

@@ -12,7 +12,6 @@ import org.jboss.protean.arc.Arc;
 import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.InstanceHandle;
 import org.jboss.protean.arc.ManagedContext;
-import org.jboss.shamrock.runtime.ShutdownContext;
 import org.jboss.shamrock.runtime.Template;
 import org.jboss.shamrock.runtime.cdi.BeanContainer;
 import org.jboss.shamrock.runtime.InjectionFactory;
@@ -31,11 +30,11 @@ import io.undertow.servlet.api.ThreadSetupHandler;
 @Template
 public class ArcDeploymentTemplate {
 
-    public ArcContainer getContainer(ShutdownContext shutdown) throws Exception {
+    public ArcContainer getContainer(StartupContext startupContext) throws Exception {
         ArcContainer container = Arc.initialize();
-        shutdown.addShutdownTask(new Runnable() {
+        startupContext.addCloseable(new Closeable() {
             @Override
-            public void run() {
+            public void close() throws IOException {
                 Arc.shutdown();
             }
         });

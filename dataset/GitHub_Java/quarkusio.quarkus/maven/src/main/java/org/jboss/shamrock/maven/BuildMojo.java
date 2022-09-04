@@ -1,19 +1,3 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 package org.jboss.shamrock.maven;
 
 import java.io.BufferedOutputStream;
@@ -61,7 +45,6 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
-import org.eclipse.microprofile.config.Config;
 import org.jboss.builder.BuildResult;
 import org.jboss.shamrock.deployment.ClassOutput;
 import org.jboss.shamrock.deployment.ShamrockAugumentor;
@@ -72,11 +55,6 @@ import org.jboss.shamrock.deployment.index.ResolvedArtifact;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-
-import io.smallrye.config.PropertiesConfigSource;
-import io.smallrye.config.SmallRyeConfig;
-import io.smallrye.config.SmallRyeConfigBuilder;
-import io.smallrye.config.SmallRyeConfigProviderResolver;
 
 @Mojo(name = "build", defaultPhase = LifecyclePhase.PREPARE_PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class BuildMojo extends AbstractMojo {
@@ -118,29 +96,9 @@ public class BuildMojo extends AbstractMojo {
     @Parameter(defaultValue = "false")
     private boolean uberJar;
 
-    public BuildMojo() {
-        MojoLogger.logSupplier = this::getLog;
-    }
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
-        //first lets look for some config, as it is not on the current class path
-        //and we need to load it to run the build process
-        File config = new File(outputDirectory, "META-INF/microprofile-config.properties");
-        if(config.exists()) {
-            try {
-                Config built = SmallRyeConfigProviderResolver.instance().getBuilder()
-                        .addDefaultSources()
-                        .addDiscoveredConverters()
-                        .addDiscoveredSources()
-                        .withSources(new PropertiesConfigSource(config.toURL())).build();
-                SmallRyeConfigProviderResolver.instance().registerConfig(built, Thread.currentThread().getContextClassLoader());
-            } catch (Exception e) {
-                throw new RuntimeException(e);
-            }
-        }
-
-
         libDir.mkdirs();
         wiringClassesDirectory.mkdirs();
         try {
@@ -193,9 +151,6 @@ public class BuildMojo extends AbstractMojo {
 
                 for (Artifact a : project.getArtifacts()) {
                     if (a.getScope().equals(PROVIDED) && !whitelist.contains(a.getDependencyConflictId())) {
-                        continue;
-                    }
-                    if (a.getArtifactId().equals("svm") && a.getGroupId().equals("com.oracle.substratevm")) {
                         continue;
                     }
                     final File artifactFile = a.getFile();

@@ -2,6 +2,8 @@ package org.jboss.shamrock.runner;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -15,11 +17,10 @@ import org.jboss.builder.BuildResult;
 import org.jboss.shamrock.deployment.ShamrockAugumentor;
 import org.jboss.shamrock.deployment.builditem.BytecodeTransformerBuildItem;
 import org.jboss.shamrock.deployment.builditem.MainClassBuildItem;
-import org.jboss.shamrock.runtime.Application;
 import org.objectweb.asm.ClassVisitor;
 
 /**
- * Class that can be used to run shamrock directly, executing the build and runtime
+ * Class that can be used to run shamrock directly, ececuting the build and runtime
  * steps in the same JVM
  */
 public class RuntimeRunner implements Runnable, Closeable {
@@ -89,22 +90,26 @@ public class RuntimeRunner implements Runnable, Closeable {
             }
 
 
-            final Application application;
-            // todo - I guess this class name should come from a build item?
-            Class<? extends Application> appClass = loader.findClass("org.jboss.shamrock.runner.ApplicationImpl").asSubclass(Application.class);
+            Class<?> mainClass = loader.findClass(result.consume(MainClassBuildItem.class).getClassName());
             ClassLoader old = Thread.currentThread().getContextClassLoader();
             try {
                 Thread.currentThread().setContextClassLoader(loader);
-                application = appClass.newInstance();
-                application.start(null);
+                Method run = mainClass.getDeclaredMethod("main", String[].class);
+                run.invoke(null, (Object) null);
             } finally {
                 Thread.currentThread().setContextClassLoader(old);
             }
 
+            Method close = mainClass.getDeclaredMethod("close");
+
             closeTask = new Closeable() {
                 @Override
-                public void close() {
-                    application.stop();
+                public void close() throws IOException {
+                    try {
+                        close.invoke(null);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        throw new RuntimeException(e);
+                    }
                 }
             };
 
