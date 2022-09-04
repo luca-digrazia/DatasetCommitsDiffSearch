@@ -805,7 +805,7 @@ public class SkylarkActionFactory implements SkylarkValue {
     }
     if (executionRequirementsUnchecked != Runtime.NONE) {
       builder.setExecutionInfo(
-          TargetUtils.filter(
+          ImmutableMap.copyOf(
               SkylarkDict.castSkylarkDictOrNoneToDict(
                   executionRequirementsUnchecked,
                   String.class,

@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.EnumConverter;
@@ -274,6 +275,11 @@ public final class TestActionBuilder {
     List<Artifact> results = Lists.newArrayListWithCapacity(runsPerTest * shardRuns);
     ImmutableList.Builder<Artifact> coverageArtifacts = ImmutableList.builder();
 
+    boolean useTestRunner = false;
+    if (ruleContext.attributes().has("use_testrunner", Type.BOOLEAN)) {
+      useTestRunner = ruleContext.attributes().get("use_testrunner", Type.BOOLEAN);
+    }
+
     for (int run = 0; run < runsPerTest; run++) {
       // Use a 1-based index for user friendliness.
       String testRunDir =
@@ -318,7 +324,8 @@ public final class TestActionBuilder {
                 run,
                 config,
                 ruleContext.getWorkspaceName(),
-                shExecutable));
+                shExecutable,
+                useTestRunner));
         results.add(cacheStatus);
       }
     }
