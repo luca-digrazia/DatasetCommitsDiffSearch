@@ -14,8 +14,6 @@
 
 package com.google.devtools.common.options;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
-
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -36,6 +34,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 
 /**
@@ -147,31 +146,33 @@ public class OptionsParser implements OptionsParsingResult {
    */
   public static OptionsParser newOptionsParser(Class<? extends OptionsBase> class1)
       throws ConstructionException {
-    return builder().optionsClasses(class1).build();
+    return newOptionsParser(ImmutableList.<Class<? extends OptionsBase>>of(class1));
   }
 
   /** @see #newOptionsParser(Iterable) */
   public static OptionsParser newOptionsParser(Class<? extends OptionsBase>... optionsClasses)
       throws ConstructionException {
-    return builder().optionsClasses(optionsClasses).build();
+    return newOptionsParser(getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
   }
 
   public static OptionsParser newOptionsParser(
       boolean allowResidue, Class<? extends OptionsBase>... optionsClasses)
       throws ConstructionException {
-    return builder().optionsClasses(optionsClasses).allowResidue(allowResidue).build();
+    OptionsParser optionsParser =
+        newOptionsParser(getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
+    optionsParser.setAllowResidue(allowResidue);
+    return optionsParser;
   }
 
   public static OptionsParser newOptionsParser(
       @Nullable ParamsFilePreProcessor preProcessor, Class<? extends OptionsBase>... optionsClasses)
       throws ConstructionException {
-    OptionsParser.Builder builder = builder().optionsClasses(optionsClasses);
-
+    OptionsParser optionsParser =
+        newOptionsParser(getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
     if (preProcessor != null) {
-      builder.argsPreProcessor(preProcessor);
+      optionsParser.enableParamsFileSupport(preProcessor);
     }
-
-    return builder.build();
+    return optionsParser;
   }
 
   public static OptionsParser newOptionsParser(
@@ -179,35 +180,38 @@ public class OptionsParser implements OptionsParsingResult {
       @Nullable ParamsFilePreProcessor preProcessor,
       Class<? extends OptionsBase>... optionsClasses)
       throws ConstructionException {
-    OptionsParser.Builder builder =
-        builder().optionsClasses(optionsClasses).allowResidue(allowResidue);
-
+    OptionsParser optionsParser =
+        newOptionsParser(getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
+    optionsParser.setAllowResidue(allowResidue);
     if (preProcessor != null) {
-      builder.argsPreProcessor(preProcessor);
+      optionsParser.enableParamsFileSupport(preProcessor);
     }
-
-    return builder.build();
+    return optionsParser;
   }
 
+  /** Create a new {@link OptionsParser}. */
   public static OptionsParser newOptionsParser(
       boolean allowResidue, Iterable<? extends Class<? extends OptionsBase>> optionsClasses)
       throws ConstructionException {
-    return builder().optionsClasses(optionsClasses).allowResidue(allowResidue).build();
+    OptionsParser optionsParser =
+        newOptionsParser(getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
+    optionsParser.setAllowResidue(allowResidue);
+    return optionsParser;
   }
 
   /** Create a new {@link OptionsParser}. */
   public static OptionsParser newOptionsParser(
       Iterable<? extends Class<? extends OptionsBase>> optionsClasses)
       throws ConstructionException {
-    return builder().optionsClasses(optionsClasses).build();
+    return newOptionsParser(getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
   }
-  
+
   /**
    * Create a new {@link OptionsParser}, using {@link OpaqueOptionsData} previously returned from
    * {@link #getOptionsData}.
    */
   public static OptionsParser newOptionsParser(OpaqueOptionsData optionsData) {
-    return builder().optionsData(optionsData).build();
+    return new OptionsParser((OptionsData) optionsData);
   }
 
   /**
@@ -217,109 +221,57 @@ public class OptionsParser implements OptionsParsingResult {
    */
   public static OptionsParser newOptionsParser(
       OpaqueOptionsData optionsData, String skippedPrefix) {
-    return builder().optionsData(optionsData).skippedPrefix(skippedPrefix).build();
+    return new OptionsParser((OptionsData) optionsData, skippedPrefix);
+  }
+
+  public static OptionsParser newOptionsParser(
+      OpaqueOptionsData optionsData, String skippedPrefix, boolean allowResidue) {
+    OptionsParser optionsParser = new OptionsParser((OptionsData) optionsData, skippedPrefix);
+    optionsParser.setAllowResidue(allowResidue);
+    return optionsParser;
+  }
+
+  // TODO(katre): Make this final again when enableParamsFileSupport is gone.
+  private OptionsParserImpl impl;
+  private List<String> residue = new ArrayList<>();
+  private final List<String> postDoubleDashResidue = new ArrayList<>();
+  private boolean allowResidue = true;
+  private Map<String, Object> starlarkOptions = new HashMap<>();
+
+  OptionsParser(OptionsData optionsData) {
+    impl = OptionsParserImpl.builder().optionsData(optionsData).build();
+  }
+
+  OptionsParser(OptionsData optionsData, String skippedPrefix) {
+    impl =
+        OptionsParserImpl.builder().optionsData(optionsData).skippedPrefix(skippedPrefix).build();
   }
 
   /**
-   * Create a new {@link OptionsParser}, using {@link OpaqueOptionsData} previously returned from
-   * {@link #getOptionsData} and a prefix that signifies the parser should skip parsing args that
-   * begin with that prefix, and a boolean that declares whether extra data should be kept.
+   * Indicates whether or not the parser will allow a non-empty residue; that is, iff this value is
+   * true then a call to one of the {@code parse} methods will throw {@link OptionsParsingException}
+   * unless {@link #getResidue()} is empty after parsing.
    */
-  public static OptionsParser newOptionsParser(
-      OpaqueOptionsData optionsData, String skippedPrefix, boolean allowResidue) {
-    return builder()
-        .optionsData(optionsData)
-        .allowResidue(allowResidue)
-        .skippedPrefix(skippedPrefix)
-        .build();
-  }
-
-  /** A helper class to create new instances of {@link OptionsParser}. */
-  public static final class Builder {
-    private final OptionsParserImpl.Builder implBuilder = OptionsParserImpl.builder();
-    private boolean allowResidue = true;
-
-    /** Directly sets the {@link OptionsData} used by this parser. */
-    public Builder optionsData(OptionsData optionsData) {
-      this.implBuilder.optionsData(optionsData);
-      return this;
-    }
-
-    /** Directly sets the {@link OpaqueOptionsData} used by this parser. */
-    public Builder optionsData(OpaqueOptionsData optionsData) {
-      return this.optionsData((OptionsData) optionsData);
-    }
-
-    /**
-     * Sets the {@link OptionsData} used by this parser, based on the given {@code optionsClasses}.
-     */
-    public Builder optionsClasses(Class<? extends OptionsBase>... optionsClasses) {
-      return this.optionsData(
-          (OpaqueOptionsData) getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
-    }
-
-    /**
-     * Sets the {@link OptionsData} used by this parser, based on the given {@code optionsClasses}.
-     */
-    public Builder optionsClasses(Iterable<? extends Class<? extends OptionsBase>> optionsClasses) {
-      return this.optionsData(
-          (OpaqueOptionsData) getOptionsDataInternal(ImmutableList.copyOf(optionsClasses)));
-    }
-
-    /**
-     * Enables the Parser to handle params files using the provided {@link ParamsFilePreProcessor}.
-     */
-    public Builder argsPreProcessor(ArgsPreProcessor preProcessor) {
-      this.implBuilder.argsPreProcessor(preProcessor);
-      return this;
-    }
-
-    /** Any flags with this prefix will be skipped during processing. */
-    public Builder skippedPrefix(@Nullable String skippedPrefix) {
-      this.implBuilder.skippedPrefix(skippedPrefix);
-      return this;
-    }
-
-    /**
-     * Indicates whether or not the parser will allow a non-empty residue; that is, iff this value
-     * is true then a call to one of the {@code parse} methods will throw {@link
-     * OptionsParsingException} unless {@link #getResidue()} is empty after parsing.
-     */
-    public Builder allowResidue(boolean allowResidue) {
-      this.allowResidue = allowResidue;
-      return this;
-    }
-
-    /** Returns a new {@link OptionsParser}. */
-    public OptionsParser build() {
-      return new OptionsParser(implBuilder.build(), allowResidue);
-    }
-  }
-
-  /** Returns a new {@link Builder} to create {@link OptionsParser} instances. */
-  public static Builder builder() {
-    return new Builder();
-  }
-
-  private final OptionsParserImpl impl;
-  private final List<String> residue = new ArrayList<>();
-  private final List<String> postDoubleDashResidue = new ArrayList<>();
-  private final boolean allowResidue;
-  private final Map<String, Object> starlarkOptions = new HashMap<>();
-
-  private OptionsParser(OptionsParserImpl impl, boolean allowResidue) {
-    this.impl = impl;
+  // TODO(katre): Remove this when all accessors are gone.
+  private void setAllowResidue(boolean allowResidue) {
     this.allowResidue = allowResidue;
   }
 
   @Override
   public Map<String, Object> getStarlarkOptions() {
-    return ImmutableMap.copyOf(starlarkOptions);
+    return starlarkOptions;
   }
 
   public void setStarlarkOptions(Map<String, Object> starlarkOptions) {
-    this.starlarkOptions.clear();
-    this.starlarkOptions.putAll(starlarkOptions);
+    this.starlarkOptions = starlarkOptions;
+  }
+
+  /**
+   * Enables the Parser to handle params files using the provided {@link ParamsFilePreProcessor}.
+   */
+  // TODO(katre): Remove this when all accessors are gone.
+  private void enableParamsFileSupport(ParamsFilePreProcessor preProcessor) {
+    this.impl = this.impl.toBuilder().argsPreProcessor(preProcessor).build();
   }
 
   public void parseAndExitUponError(String[] args) {
@@ -803,21 +755,20 @@ public class OptionsParser implements OptionsParsingResult {
         ? ImmutableList.copyOf(residue)
         : residue.stream()
             .filter(residue -> !postDoubleDashResidue.contains(residue))
-            .collect(toImmutableList());
+            .collect(Collectors.toList());
   }
 
   public List<String> getPostDoubleDashResidue() {
-    return ImmutableList.copyOf(postDoubleDashResidue);
+    return postDoubleDashResidue;
   }
 
   public void setResidue(List<String> residue) {
-    this.residue.clear();
-    this.residue.addAll(residue);
+    this.residue = residue;
   }
 
   /** Returns a list of warnings about problems encountered by previous parse calls. */
   public List<String> getWarnings() {
-    return ImmutableList.copyOf(impl.getWarnings());
+    return impl.getWarnings();
   }
 
   @Override
