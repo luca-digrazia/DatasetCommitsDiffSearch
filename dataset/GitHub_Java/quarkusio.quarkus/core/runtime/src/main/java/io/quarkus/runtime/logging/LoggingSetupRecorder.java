@@ -18,7 +18,6 @@ import java.util.logging.ErrorManager;
 import java.util.logging.Formatter;
 import java.util.logging.Handler;
 import java.util.logging.Level;
-import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ImageInfo;
 import org.jboss.logmanager.EmbeddedConfigurator;
@@ -74,12 +73,11 @@ public class LoggingSetupRecorder {
     public static void handleFailedStart() {
         LogConfig config = new LogConfig();
         ConfigInstantiator.handleObject(config);
-        new LoggingSetupRecorder().initializeLogging(config, Collections.emptyList(), Collections.emptyList(),
+        new LoggingSetupRecorder().initializeLogging(config, Collections.emptyList(),
                 Collections.emptyList(), null);
     }
 
     public void initializeLogging(LogConfig config, final List<RuntimeValue<Optional<Handler>>> additionalHandlers,
-            final List<RuntimeValue<Map<String, Handler>>> additionalNamedHandlers,
             final List<RuntimeValue<Optional<Formatter>>> possibleFormatters,
             final RuntimeValue<Optional<Supplier<String>>> possibleBannerSupplier) {
 
@@ -117,16 +115,6 @@ public class LoggingSetupRecorder {
         }
 
         Map<String, Handler> namedHandlers = createNamedHandlers(config, possibleFormatters, errorManager, filterElements);
-
-        Map<String, Handler> additionalNamedHandlersMap = additionalNamedHandlers.stream().map(RuntimeValue::getValue)
-                .flatMap(map -> map.entrySet().stream())
-                .collect(Collectors.toMap(Entry::getKey, Entry::getValue));
-
-        for (Handler additionalNamedHandler : additionalNamedHandlersMap.values()) {
-            additionalNamedHandler.setErrorManager(errorManager);
-            additionalNamedHandler.setFilter(new LogCleanupFilter(filterElements));
-        }
-        namedHandlers.putAll(additionalNamedHandlersMap);
 
         for (Map.Entry<String, CategoryConfig> entry : categories.entrySet()) {
             final String name = entry.getKey();
