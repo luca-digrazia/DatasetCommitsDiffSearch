@@ -20,11 +20,11 @@ import com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule;
 import com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthResponse;
+import org.elasticsearch.action.admin.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.action.admin.indices.create.CreateIndexResponse;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexResponse;
 import org.elasticsearch.action.index.IndexResponse;
 import org.elasticsearch.client.Client;
-import org.elasticsearch.cluster.health.ClusterHealthStatus;
 import org.elasticsearch.common.unit.TimeValue;
 import org.graylog2.indexer.Deflector;
 import org.junit.After;
@@ -81,7 +81,7 @@ public class CountsTest {
                 .get();
         assumeTrue(clusterHealthResponse.getStatus() == ClusterHealthStatus.GREEN);
 
-        when(deflector.getAllGraylogIndexNames()).thenReturn(new String[]{INDEX_NAME});
+        when(deflector.getAllDeflectorIndexNames()).thenReturn(new String[]{INDEX_NAME});
 
         counts = new Counts(client, deflector);
     }
