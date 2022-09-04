@@ -60,7 +60,7 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RunfilesSupport;
 import com.google.devtools.build.lib.analysis.actions.BinaryFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
@@ -342,7 +342,21 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   @Override
   protected void useConfiguration(String... args) throws Exception {
-    ImmutableList<String> extraArgs = MockObjcSupport.requiredObjcCrosstoolFlags();
+    ImmutableList.Builder<String> extraArgsBuilder = ImmutableList.builder();
+    extraArgsBuilder.addAll(TestConstants.OSX_CROSSTOOL_FLAGS);
+
+    // TODO(b/68751876): Set --apple_crosstool_top and --crosstool_top using the
+    // AppleCrosstoolTransition
+    extraArgsBuilder
+        .add("--xcode_version_config=" + MockObjcSupport.XCODE_VERSION_CONFIG)
+        .add("--apple_crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL)
+        .add("--crosstool_top=" + MockObjcSupport.DEFAULT_OSX_CROSSTOOL);
+
+    // TODO(b/32411441): This flag will be flipped off by default imminently, at which point
+    // this can be removed. The flag itself is for safe rollout of a backwards incompatible change.
+    extraArgsBuilder.add("--noexperimental_objc_provider_from_linked");
+
+    ImmutableList<String> extraArgs = extraArgsBuilder.build();
     args = Arrays.copyOf(args, args.length + extraArgs.size());
     for (int i = 0; i < extraArgs.size(); i++) {
       args[(args.length - extraArgs.size()) + i] = extraArgs.get(i);
@@ -4705,7 +4719,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//x:x");
     assertThat(
             ActionsTestUtil.baseNamesOf(
-                getOutputGroup(target, OutputGroupInfo.FILES_TO_COMPILE)))
+                getOutputGroup(target, OutputGroupProvider.FILES_TO_COMPILE)))
         .isEqualTo("a.o");
   }
 
