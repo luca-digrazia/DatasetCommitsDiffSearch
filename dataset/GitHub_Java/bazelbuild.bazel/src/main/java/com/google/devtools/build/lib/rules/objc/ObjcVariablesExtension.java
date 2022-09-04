@@ -25,8 +25,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
-import com.google.devtools.build.lib.rules.apple.ApplePlatform;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.StringSequenceBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
@@ -155,11 +153,9 @@ class ObjcVariablesExtension implements VariablesExtension {
   }
 
   private void addFrameworkVariables(CcToolchainFeatures.Variables.Builder builder) {
-    ApplePlatform applePlatform =
-        buildConfiguration.getFragment(AppleConfiguration.class).getSingleArchPlatform();
     StringSequenceBuilder frameworkSequence = new StringSequenceBuilder();
     for (String framework :
-        CompilationSupport.commonFrameworkNames(objcProvider, ruleContext, applePlatform)) {
+        CompilationSupport.commonFrameworkNames(objcProvider, ruleContext)) {
       frameworkSequence.addValue(framework);
     }
     builder.addCustomBuiltVariable(FRAMEWORKS_VARIABLE_NAME, frameworkSequence);

@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,66 +16,138 @@ package com.google.devtools.build.lib.rules.objc;
 
 import static com.google.devtools.build.lib.rules.objc.ObjcProvider.MERGE_ZIP;
 
-import com.google.common.base.Optional;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Ordering;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
-import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.LinkedBinary;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
+import com.google.devtools.build.lib.rules.apple.AppleCommandLineOptions;
+import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
+import com.google.devtools.build.lib.rules.apple.DottedVersion;
+import com.google.devtools.build.lib.rules.apple.XcodeConfig;
+import com.google.devtools.build.lib.rules.objc.ReleaseBundlingSupport.SplitArchTransition;
+import java.io.Serializable;
+import javax.annotation.Nullable;
 
 /**
  * Implementation for {@code ios_extension}.
+ *
+ * @deprecated The native bundling rules have been deprecated. This class will be removed in the
+ *     future.
  */
-public class IosExtension implements RuleConfiguredTargetFactory {
+@Deprecated
+public class IosExtension extends ReleaseBundlingTargetFactory {
+
+  // Apple only accepts extensions starting at 8.0.
+  @VisibleForTesting
+  static final DottedVersion EXTENSION_MINIMUM_OS_VERSION = DottedVersion.fromString("8.0");
+
+  /**
+   * Transition that when applied to a target generates a configured target for each value in
+   * {@code --ios_multi_cpus}, such that {@code --ios_cpu} is set to a different one of those values
+   * in the configured targets.
+   *
+   * <p>Also ensures that, no matter whether {@code --ios_multi_cpus} is set, {@code
+   * --ios_minimum_os} is at least {@code 8.0} as Apple requires this for extensions.
+   */
+  static final SplitTransition<BuildOptions> MINIMUM_OS_AND_SPLIT_ARCH_TRANSITION =
+      new ExtensionSplitArchTransition(EXTENSION_MINIMUM_OS_VERSION,
+          ConfigurationDistinguisher.IOS_EXTENSION);
+
+  public IosExtension() {
+    super(
+        ReleaseBundlingSupport.EXTENSION_BUNDLE_DIR_FORMAT,
+        ImmutableSet.of(new Attribute("binary", Mode.SPLIT)));
+  }
 
   @Override
-  public ConfiguredTarget create(RuleContext ruleContext) throws InterruptedException {
-    ObjcCommon common = common(ruleContext);
-
-    XcodeProvider.Builder xcodeProviderBuilder = new XcodeProvider.Builder();
-    NestedSetBuilder<Artifact> filesToBuild = NestedSetBuilder.stableOrder();
-
-    ReleaseBundlingSupport releaseBundlingSupport = new ReleaseBundlingSupport(
-        ruleContext, common.getObjcProvider(), optionsProvider(ruleContext),
-        LinkedBinary.DEPENDENCIES_ONLY, "PlugIns/%s.appex");
-    releaseBundlingSupport
-        .registerActions()
-        .addXcodeSettings(xcodeProviderBuilder)
-        .addFilesToBuild(filesToBuild)
-        .validateAttributes();
-
-    new XcodeSupport(ruleContext)
-        .addFilesToBuild(filesToBuild)
-        .addXcodeSettings(
-            xcodeProviderBuilder, common.getObjcProvider(), XcodeProductType.EXTENSION)
-        .addDependencies(xcodeProviderBuilder, "binary")
-        .registerActions(xcodeProviderBuilder.build());
-
-    ObjcProvider nestedBundleProvider = new ObjcProvider.Builder()
-        .add(MERGE_ZIP, ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA))
-        .build();
-
-    return common.configuredTarget(
-        filesToBuild.build(),
-        Optional.of(xcodeProviderBuilder.build()),
-        Optional.of(nestedBundleProvider),
-        Optional.<XcTestAppProvider>absent(),
-        Optional.<J2ObjcSrcsProvider>absent());
+  protected DottedVersion bundleMinimumOsVersion(RuleContext ruleContext) {
+    return determineMinimumOsVersion(
+        XcodeConfig.getMinimumOsForPlatformType(ruleContext, PlatformType.IOS),
+        EXTENSION_MINIMUM_OS_VERSION);
   }
 
-  private OptionsProvider optionsProvider(RuleContext ruleContext) {
-    return new OptionsProvider.Builder()
-        .addInfoplists(ruleContext.getPrerequisiteArtifacts("infoplist", Mode.TARGET).list())
-        .build();
+  @Override
+  protected ObjcProvider exposedObjcProvider(
+      RuleContext ruleContext, ReleaseBundlingSupport releaseBundlingSupport)
+      throws InterruptedException {
+    ObjcProvider.Builder builder =
+        new ObjcProvider.Builder()
+            // Nest this target's bundle under final IPA
+            .add(MERGE_ZIP, ruleContext.getImplicitOutputArtifact(ReleaseBundlingSupport.IPA));
+
+    releaseBundlingSupport.addExportedDebugArtifacts(builder, DsymOutputType.APP);
+    return builder.build();
   }
 
-  private ObjcCommon common(RuleContext ruleContext) {
-    return new ObjcCommon.Builder(ruleContext)
-        .setIntermediateArtifacts(ObjcRuleClasses.intermediateArtifacts(ruleContext))
-        .addDepObjcProviders(
-            ruleContext.getPrerequisites("binary", Mode.TARGET, ObjcProvider.class))
-        .build();
+  /**
+   * Overrides (if necessary) any flag-set minimum iOS version for extensions only with given
+   * minimum OS version.
+   *
+   * Extensions are not accepted by Apple below given mininumOSVersion. While applications built
+   * with a minimum iOS version of less than give version may contain extensions in their bundle,
+   * the extension itself needs to be built with given version or higher.
+   *
+   * @param fromFlag the minimum OS version from command line flag
+   * @param minimumOSVersion the minumum OS version the extension should be built with
+   */
+  private static DottedVersion determineMinimumOsVersion(@Nullable DottedVersion fromFlag,
+      DottedVersion minimumOSVersion) {
+    if (fromFlag == null) {
+      return minimumOSVersion;
+    }
+    return Ordering.natural().max(fromFlag, minimumOSVersion);
+  }
+
+  /**
+   * Split transition that configures the minimum iOS version in addition to architecture splitting.
+   */
+  static class ExtensionSplitArchTransition extends SplitArchTransition
+      implements Serializable {
+
+    private final DottedVersion minimumOSVersion;
+    private final ConfigurationDistinguisher configurationDistinguisher;
+
+    ExtensionSplitArchTransition(DottedVersion minimumOSVersion,
+        ConfigurationDistinguisher configurationDistinguisher) {
+      this.minimumOSVersion = minimumOSVersion;
+      this.configurationDistinguisher = configurationDistinguisher;
+    }
+
+    @Override
+    protected ImmutableList<BuildOptions> defaultOptions(BuildOptions originalOptions) {
+      AppleCommandLineOptions appleOptions = originalOptions.get(AppleCommandLineOptions.class);
+      DottedVersion newMinimumVersion = determineMinimumOsVersion(appleOptions.iosMinimumOs,
+          minimumOSVersion);
+
+      if (newMinimumVersion.equals(appleOptions.iosMinimumOs)) {
+        return ImmutableList.of();
+      }
+
+      BuildOptions splitOptions = originalOptions.clone();
+      setMinimumOsVersion(splitOptions, newMinimumVersion);
+      splitOptions.get(AppleCommandLineOptions.class).configurationDistinguisher =
+          getConfigurationDistinguisher();
+      return ImmutableList.of(splitOptions);
+    }
+
+    @Override
+    protected void setAdditionalOptions(BuildOptions splitOptions, BuildOptions originalOptions) {
+      DottedVersion fromFlag = originalOptions.get(AppleCommandLineOptions.class).iosMinimumOs;
+      setMinimumOsVersion(splitOptions, determineMinimumOsVersion(fromFlag, minimumOSVersion));
+    }
+
+    @Override
+    protected ConfigurationDistinguisher getConfigurationDistinguisher() {
+      return configurationDistinguisher;
+    }
+
+    private void setMinimumOsVersion(BuildOptions splitOptions, DottedVersion newMinimumVersion) {
+      splitOptions.get(AppleCommandLineOptions.class).iosMinimumOs = newMinimumVersion;
+    }
   }
 }

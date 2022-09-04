@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RedirectChaser;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
@@ -35,6 +34,7 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.syntax.Type;
 import java.util.List;
 import java.util.Map;
@@ -152,7 +152,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY)
-        .addNativeDeclaredProvider(xcodeVersions)
+        .addProvider(xcodeVersions)
         .addNativeDeclaredProvider(xcodeVersionProperties)
         .build();
   }
@@ -337,7 +337,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     XcodeConfigProvider versions = ruleContext.getPrerequisite(
         XcodeConfigRule.XCODE_CONFIG_ATTR_NAME,
         RuleConfiguredTarget.Mode.TARGET,
-        XcodeConfigProvider.PROVIDER);
+        XcodeConfigProvider.class);
     DottedVersion fromProvider = versions.getMinimumOsForPlatformType(platformType);
     DottedVersion fromConfig = config.getMinimumOsForPlatformType(platformType);
     // This sanity check is there to keep this provider in sync with AppleConfiguration until the
@@ -355,7 +355,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
     XcodeConfigProvider versions = ruleContext.getPrerequisite(
         XcodeConfigRule.XCODE_CONFIG_ATTR_NAME,
         RuleConfiguredTarget.Mode.TARGET,
-        XcodeConfigProvider.PROVIDER);
+        XcodeConfigProvider.class);
     DottedVersion fromProvider = versions.getSdkVersionForPlatform(platform);
     DottedVersion fromConfig = ruleContext.getFragment(AppleConfiguration.class)
         .getSdkVersionForPlatform(platform);
@@ -373,8 +373,7 @@ public class XcodeConfig implements RuleConfiguredTargetFactory {
   public static DottedVersion getXcodeVersion(RuleContext ruleContext) {
     XcodeConfigProvider versions = ruleContext.getPrerequisite(
         XcodeConfigRule.XCODE_CONFIG_ATTR_NAME,
-        RuleConfiguredTarget.Mode.TARGET,
-        XcodeConfigProvider.PROVIDER);
+        RuleConfiguredTarget.Mode.TARGET, XcodeConfigProvider.class);
     DottedVersion fromProvider = versions.getXcodeVersion();
     DottedVersion fromConfig = ruleContext.getFragment(AppleConfiguration.class).getXcodeVersion();
     // This sanity check is there to keep this provider in sync with AppleConfiguration until the

@@ -106,14 +106,6 @@ public class AppleToolchain {
   }
 
   /**
-   * Returns the platform frameworks directory inside of Xcode for a given {@link ApplePlatform}.
-   */
-  public static String platformDeveloperFrameworkDir(ApplePlatform platform) {
-    String platformDir = platformDir(platform.getNameInPlist());
-    return platformDir + "/Developer/Library/Frameworks";
-  }
-
-  /**
    * Returns the platform frameworks directory inside of Xcode for a given configuration.
    */
   @SkylarkCallable(
@@ -121,7 +113,8 @@ public class AppleToolchain {
     doc = "Returns the platform frameworks directory inside of Xcode for a given configuration."
   )
   public static String platformDeveloperFrameworkDir(AppleConfiguration configuration) {
-    return platformDeveloperFrameworkDir(configuration.getSingleArchPlatform());
+    String platformDir = platformDir(configuration.getSingleArchPlatform().getNameInPlist());
+    return platformDir + "/Developer/Library/Frameworks";
   }
 
   /** Returns the SDK frameworks directory inside of Xcode for a given configuration. */
@@ -139,6 +132,8 @@ public class AppleToolchain {
         }
         break;
       case MACOS:
+        relativePath = DEVELOPER_FRAMEWORK_PATH;
+        break;
       case WATCHOS_DEVICE:
       case WATCHOS_SIMULATOR:
       case TVOS_DEVICE:
