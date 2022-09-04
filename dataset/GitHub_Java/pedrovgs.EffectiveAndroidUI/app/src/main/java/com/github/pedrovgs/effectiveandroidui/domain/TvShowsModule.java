@@ -1,6 +1,7 @@
 package com.github.pedrovgs.effectiveandroidui.domain;
 
 import com.github.pedrovgs.effectiveandroidui.domain.tvshow.Catalog;
+import com.github.pedrovgs.effectiveandroidui.executor.ExecutorModule;
 import dagger.Module;
 import dagger.Provides;
 import javax.inject.Singleton;
@@ -8,8 +9,8 @@ import javax.inject.Singleton;
 /**
  * @author Pedro Vicente Gómez Sánchez
  */
-@Module(library = true, complete = false)
-public final class TvShowsModule {
+@Module(library = true, includes = ExecutorModule.class)
+public class TvShowsModule {
 
   @Provides @Singleton Catalog provideCatalog() {
     return new Catalog();
