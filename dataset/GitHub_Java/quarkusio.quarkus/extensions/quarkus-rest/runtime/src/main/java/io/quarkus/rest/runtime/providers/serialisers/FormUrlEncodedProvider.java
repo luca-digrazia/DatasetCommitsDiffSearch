@@ -17,14 +17,14 @@ import javax.ws.rs.RuntimeType;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.Provider;
 
 import io.quarkus.rest.runtime.core.LazyMethod;
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
+import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyReader;
 import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyWriter;
 import io.quarkus.rest.runtime.util.Encode;
-import io.quarkus.rest.runtime.util.MultivaluedMapImpl;
+import io.quarkus.rest.runtime.util.QuarkusMultivaluedHashMap;
 
 /**
  * @author <a href="mailto:bill@burkecentral.com">Bill Burke</a>
@@ -35,7 +35,8 @@ import io.quarkus.rest.runtime.util.MultivaluedMapImpl;
 @Produces("application/x-www-form-urlencoded")
 @Consumes("application/x-www-form-urlencoded")
 @ConstrainedTo(RuntimeType.CLIENT)
-public class FormUrlEncodedProvider implements MessageBodyReader<MultivaluedMap>, QuarkusRestMessageBodyWriter<MultivaluedMap> {
+public class FormUrlEncodedProvider
+        implements QuarkusRestMessageBodyReader<MultivaluedMap>, QuarkusRestMessageBodyWriter<MultivaluedMap> {
 
     public boolean isReadable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
         return MultivaluedMap.class.equals(type);
@@ -43,6 +44,21 @@ public class FormUrlEncodedProvider implements MessageBodyReader<MultivaluedMap>
 
     public MultivaluedMap readFrom(Class<MultivaluedMap> type, Type genericType, Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException {
+        return doReadFrom(mediaType, entityStream);
+    }
+
+    @Override
+    public boolean isReadable(Class<?> type, Type genericType, LazyMethod lazyMethod, MediaType mediaType) {
+        return MultivaluedMap.class.equals(type);
+    }
+
+    @Override
+    public MultivaluedMap readFrom(Class<MultivaluedMap> type, Type genericType, MediaType mediaType,
+            QuarkusRestRequestContext context) throws WebApplicationException, IOException {
+        return doReadFrom(mediaType, context.getInputStream());
+    }
+
+    private MultivaluedMap<String, String> doReadFrom(MediaType mediaType, InputStream entityStream) throws IOException {
         String charset = MessageReaderUtil.charsetFromMediaType(mediaType);
         return Encode.decode(parseForm(entityStream, mediaType), charset);
     }
@@ -50,7 +66,7 @@ public class FormUrlEncodedProvider implements MessageBodyReader<MultivaluedMap>
     public static MultivaluedMap<String, String> parseForm(InputStream entityStream, MediaType charset) throws IOException {
         String form = MessageReaderUtil.readString(entityStream, charset);
 
-        MultivaluedMap<String, String> formData = new MultivaluedMapImpl<String, String>();
+        MultivaluedMap<String, String> formData = new QuarkusMultivaluedHashMap<String, String>();
         if ("".equals(form)) {
             return formData;
         }
@@ -77,7 +93,7 @@ public class FormUrlEncodedProvider implements MessageBodyReader<MultivaluedMap>
     public void writeResponse(MultivaluedMap o, QuarkusRestRequestContext context) throws WebApplicationException {
         try {
             // FIXME: use response encoding
-            context.getContext().response().end(multiValuedMapToString(o, MessageReaderUtil.UTF8_CHARSET));
+            context.getHttpServerResponse().end(multiValuedMapToString(o, MessageReaderUtil.UTF8_CHARSET));
         } catch (UnsupportedEncodingException e) {
             throw new WebApplicationException(e);
         }

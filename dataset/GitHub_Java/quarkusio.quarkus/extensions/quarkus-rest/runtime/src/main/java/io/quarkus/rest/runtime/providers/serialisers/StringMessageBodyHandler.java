@@ -10,17 +10,16 @@ import java.nio.charset.StandardCharsets;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.ext.MessageBodyReader;
 import javax.ws.rs.ext.Provider;
 
 import io.quarkus.rest.runtime.core.LazyMethod;
 import io.quarkus.rest.runtime.core.QuarkusRestRequestContext;
+import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyReader;
 import io.quarkus.rest.runtime.spi.QuarkusRestMessageBodyWriter;
-import io.vertx.core.http.HttpServerResponse;
 
 @Provider
 public class StringMessageBodyHandler extends PrimitiveBodyHandler
-        implements QuarkusRestMessageBodyWriter<Object>, MessageBodyReader<String> {
+        implements QuarkusRestMessageBodyWriter<Object>, QuarkusRestMessageBodyReader<String> {
 
     @Override
     public boolean isWriteable(Class<?> type, Type genericType, Annotation[] annotations, MediaType mediaType) {
@@ -42,8 +41,7 @@ public class StringMessageBodyHandler extends PrimitiveBodyHandler
     @Override
     public void writeResponse(Object o, QuarkusRestRequestContext context) throws WebApplicationException {
         // FIXME: use response encoding
-        HttpServerResponse vertxResponse = context.getContext().response();
-        vertxResponse.end(o.toString());
+        context.getHttpServerResponse().end(o.toString());
     }
 
     @Override
@@ -54,6 +52,17 @@ public class StringMessageBodyHandler extends PrimitiveBodyHandler
     @Override
     public String readFrom(Class<String> type, Type genericType, Annotation[] annotations, MediaType mediaType,
             MultivaluedMap<String, String> httpHeaders, InputStream entityStream) throws IOException, WebApplicationException {
-        return super.readFrom(entityStream);
+        return readFrom(entityStream, true);
+    }
+
+    @Override
+    public boolean isReadable(Class<?> type, Type genericType, LazyMethod lazyMethod, MediaType mediaType) {
+        return type.equals(String.class);
+    }
+
+    @Override
+    public String readFrom(Class<String> type, Type genericType, MediaType mediaType, QuarkusRestRequestContext context)
+            throws WebApplicationException, IOException {
+        return readFrom(context.getInputStream(), true);
     }
 }
