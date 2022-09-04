@@ -44,7 +44,6 @@ public abstract class StarlarkSemantics {
     EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS(
         StarlarkSemantics::experimentalEnableAndroidMigrationApis),
     EXPERIMENTAL_BUILD_SETTING_API(StarlarkSemantics::experimentalBuildSettingApi),
-    EXPERIMENTAL_GOOGLE_LEGACY_API(StarlarkSemantics::experimentalGoogleLegacyApi),
     EXPERIMENTAL_PLATFORM_API(StarlarkSemantics::experimentalPlatformsApi),
     EXPERIMENTAL_STARLARK_CONFIG_TRANSITION(
         StarlarkSemantics::experimentalStarlarkConfigTransitions),
@@ -229,7 +228,7 @@ public abstract class StarlarkSemantics {
           .experimentalStarlarkConfigTransitions(true)
           .experimentalStarlarkUnusedInputsList(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
-          .incompatibleDepsetIsNotIterable(true)
+          .incompatibleDepsetIsNotIterable(false)
           .incompatibleDepsetUnion(true)
           .incompatibleDisableThirdPartyLicenseChecking(true)
           .incompatibleDisableDeprecatedAttrParams(true)
@@ -249,7 +248,7 @@ public abstract class StarlarkSemantics {
           .incompatibleNoAttrLicense(true)
           .incompatibleNoKwargsInBuildFiles(true)
           .incompatibleNoOutputAttrDefault(true)
-          .incompatibleNoSupportToolsInActionInputs(true)
+          .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
           .incompatibleNoTransitiveLoads(true)
           .incompatibleObjcFrameworkCleanup(true)
