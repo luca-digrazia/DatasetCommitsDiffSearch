@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkTreeActionContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionPhaseCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionStartingEvent;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -212,6 +213,7 @@ public class ExecutionTool {
       UUID buildId,
       AnalysisResult analysisResult,
       BuildResult buildResult,
+      BuildConfigurationCollection configurations,
       PackageRoots packageRoots,
       TopLevelArtifactContext topLevelArtifactContext)
       throws BuildFailedException, InterruptedException, TestExecException, AbruptExitException {
@@ -251,8 +253,7 @@ public class ExecutionTool {
                 .distinct()
                 .map((key) -> env.getSkyframeExecutor().getConfiguration(env.getReporter(), key))
                 .collect(toImmutableSet())
-            : ImmutableSet.copyOf(
-                analysisResult.getConfigurationCollection().getTargetConfigurations());
+            : ImmutableSet.copyOf(configurations.getTargetConfigurations());
     String productName = runtime.getProductName();
     String workspaceName = env.getWorkspaceName();
     OutputDirectoryLinksUtils.createOutputDirectoryLinks(
