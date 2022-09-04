@@ -24,7 +24,6 @@ import com.github.rholder.retry.Retryer;
 import com.github.rholder.retry.RetryerBuilder;
 import com.github.rholder.retry.WaitStrategies;
 import com.google.common.base.Throwables;
-import com.google.common.collect.ImmutableMap;
 import org.elasticsearch.ElasticsearchTimeoutException;
 import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.indices.analyze.AnalyzeResponse;
@@ -39,8 +38,6 @@ import org.elasticsearch.action.index.IndexRequest;
 import org.elasticsearch.client.Client;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.Deflector;
-import org.graylog2.indexer.IndexFailure;
-import org.graylog2.indexer.IndexFailureImpl;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
@@ -50,13 +47,10 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -74,19 +68,13 @@ public class Messages {
     private final String deflectorName;
     private final String analyzer;
     private final Meter invalidTimestampMeter;
-    private final LinkedBlockingQueue<List<IndexFailure>> indexFailureQueue;
 
     @Inject
-    public Messages(Client client,
-                    ElasticsearchConfiguration configuration,
-                    MetricRegistry metricRegistry) {
+    public Messages(Client client, ElasticsearchConfiguration configuration, MetricRegistry metricRegistry) {
         this.c = client;
         this.deflectorName = Deflector.buildName(configuration.getIndexPrefix());
         this.analyzer = configuration.getAnalyzer();
         invalidTimestampMeter = metricRegistry.meter(name(Messages.class, "invalid-timestamps"));
-
-        // TODO: Magic number
-        this.indexFailureQueue =  new LinkedBlockingQueue<>(1000);
     }
 
     public ResultMessage get(String messageId, String index) throws DocumentNotFoundException {
@@ -133,7 +121,7 @@ public class Messages {
         LOG.debug("Index {}: Bulk indexed {} messages, took {} ms, failures: {}", indexName,
                 response.getItems().length, response.getTookInMillis(), response.hasFailures());
         if (response.hasFailures()) {
-            propagateFailure(response.getItems(), messages, response.buildFailureMessage());
+            propagateFailure(response.getItems(), response.buildFailureMessage());
         }
 
         return !response.hasFailures();
@@ -153,36 +141,18 @@ public class Messages {
         }
     }
 
-    private void propagateFailure(BulkItemResponse[] items, List<Message> messages, String errorMessage) {
-        final List<IndexFailure> indexFailures = new LinkedList<>();
+    private void propagateFailure(BulkItemResponse[] items, String errorMessage) {
+        // Get all failed messages.
+        long failedMessages = 0L;
         for (BulkItemResponse item : items) {
             if (item.isFailed()) {
                 LOG.trace("Failed to index message: {}", item.getFailureMessage());
-
-                // Write failure to index_failures.
-                final BulkItemResponse.Failure f = item.getFailure();
-                final Message message = messages.get(item.getItemId());
-                final Map<String, Object> doc = ImmutableMap.<String, Object>builder()
-                        .put("letter_id", item.getId())
-                        .put("index", f.getIndex())
-                        .put("type", f.getType())
-                        .put("message", f.getMessage())
-                        .put("timestamp", message.getTimestamp())
-                        .build();
-
-                indexFailures.add(new IndexFailureImpl(doc));
+                failedMessages++;
             }
         }
 
         LOG.error("Failed to index [{}] messages. Please check the index error log in your web interface for the reason. Error: {}",
-                indexFailures.size(), errorMessage);
-
-        try {
-            // TODO: Magic number
-            indexFailureQueue.offer(indexFailures, 25, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException e) {
-            LOG.warn("Couldn't save index failures.", e);
-        }
+                failedMessages, errorMessage);
     }
 
     public IndexRequest buildIndexRequest(String index, Map<String, Object> source, String id) {
@@ -192,10 +162,6 @@ public class Messages {
                 .setSource(source)
                 .setConsistencyLevel(WriteConsistencyLevel.ONE)
                 .request();
-    }
-
-    public LinkedBlockingQueue<List<IndexFailure>> getIndexFailureQueue() {
-        return indexFailureQueue;
     }
 
     private static class BulkRequestCallable implements Callable<BulkResponse> {
