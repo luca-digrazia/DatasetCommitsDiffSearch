@@ -23,9 +23,7 @@
 package org.graylog2.plugin;
 
 import com.github.joschi.jadconfig.Parameter;
-import com.github.joschi.jadconfig.util.Duration;
 import com.github.joschi.jadconfig.validators.InetPortValidator;
-import com.github.joschi.jadconfig.validators.PositiveDurationValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.lmax.disruptor.BlockingWaitStrategy;
 import com.lmax.disruptor.BusySpinWaitStrategy;
@@ -98,6 +96,12 @@ public abstract class BaseConfiguration {
     @Parameter(value = "rest_worker_threads_max_pool_size", required = true, validator = PositiveIntegerValidator.class)
     private int restWorkerThreadsMaxPoolSize = 16;
 
+    @Parameter(value = "groovy_shell_enable")
+    private boolean groovyShellEnable = false;
+
+    @Parameter(value = "groovy_shell_port", validator = InetPortValidator.class)
+    private int groovyShellPort = 6789;
+
     @Parameter(value = "plugin_dir")
     private String pluginDir = "plugin";
 
@@ -121,15 +125,6 @@ public abstract class BaseConfiguration {
 
     @Parameter(value = "http_proxy_uri")
     private URI httpProxyUri;
-
-    @Parameter(value = "http_connect_timeout", validator = PositiveDurationValidator.class)
-    private Duration httpConnectTimeout = Duration.seconds(5L);
-
-    @Parameter(value = "http_write_timeout", validator = PositiveDurationValidator.class)
-    private Duration httpWriteTimeout = Duration.seconds(10L);
-
-    @Parameter(value = "http_read_timeout", validator = PositiveDurationValidator.class)
-    private Duration httpReadTimeout = Duration.seconds(10L);
 
     public String getRestUriScheme() {
         return isRestEnableTls() ? "https" : "http";
@@ -250,6 +245,14 @@ public abstract class BaseConfiguration {
         return restWorkerThreadsMaxPoolSize;
     }
 
+    public boolean isGroovyShellEnable() {
+        return groovyShellEnable;
+    }
+
+    public int getGroovyShellPort() {
+        return groovyShellPort;
+    }
+
     public String getPluginDir() {
         return pluginDir;
     }
@@ -292,17 +295,5 @@ public abstract class BaseConfiguration {
 
     public URI getHttpProxyUri() {
         return httpProxyUri;
-    }
-
-    public Duration getHttpConnectTimeout() {
-        return httpConnectTimeout;
-    }
-
-    public Duration getHttpWriteTimeout() {
-        return httpWriteTimeout;
-    }
-
-    public Duration getHttpReadTimeout() {
-        return httpReadTimeout;
     }
 }
