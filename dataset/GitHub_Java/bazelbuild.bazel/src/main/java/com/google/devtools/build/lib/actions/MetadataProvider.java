@@ -29,10 +29,6 @@ public interface MetadataProvider {
    * then t >= p. Aside from these properties, t can be any value and may vary arbitrarily across
    * calls.
    *
-   * <p>Returned {@link Metadata} instance correspond to the final target of a symlink, and
-   * therefore must not have a type of
-   * {@link com.google.devtools.build.lib.actions.FileStateType#SYMLINK} themselves.
-   *
    * The return value is owned by the cache and must not be modified.
    *
    * @param input the input to retrieve the digest for

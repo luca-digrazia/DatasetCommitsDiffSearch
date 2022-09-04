@@ -21,7 +21,6 @@ import com.google.bytestream.ByteStreamProto.ReadResponse;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.devtools.build.lib.actions.ActionInput;
@@ -57,7 +56,6 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -91,21 +89,18 @@ public class GrpcRemoteCache implements RemoteActionCache {
 
   private ContentAddressableStorageBlockingStub casBlockingStub() {
     return ContentAddressableStorageGrpc.newBlockingStub(channel)
-        .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
         .withCallCredentials(credentials)
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
 
   private ByteStreamBlockingStub bsBlockingStub() {
     return ByteStreamGrpc.newBlockingStub(channel)
-        .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
         .withCallCredentials(credentials)
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
 
   private ActionCacheBlockingStub acBlockingStub() {
     return ActionCacheGrpc.newBlockingStub(channel)
-        .withInterceptors(TracingMetadataUtils.attachMetadataFromContextInterceptor())
         .withCallCredentials(credentials)
         .withDeadlineAfter(options.remoteTimeout, TimeUnit.SECONDS);
   }
@@ -143,35 +138,30 @@ public class GrpcRemoteCache implements RemoteActionCache {
       TreeNodeRepository repository, Path execRoot, TreeNode root, Command command)
       throws IOException, InterruptedException {
     repository.computeMerkleDigests(root);
-    Digest commandDigest = Digests.computeDigest(command);
     // TODO(olaola): avoid querying all the digests, only ask for novel subtrees.
-    ImmutableSet<Digest> missingDigests =
-        getMissingDigests(
-            Iterables.concat(repository.getAllDigests(root), ImmutableList.of(commandDigest)));
+    ImmutableSet<Digest> missingDigests = getMissingDigests(repository.getAllDigests(root));
 
-    List<Chunker> toUpload = new ArrayList<>();
     // Only upload data that was missing from the cache.
     ArrayList<ActionInput> missingActionInputs = new ArrayList<>();
     ArrayList<Directory> missingTreeNodes = new ArrayList<>();
-    HashSet<Digest> missingTreeDigests = new HashSet<>(missingDigests);
-    missingTreeDigests.remove(commandDigest);
-    repository.getDataFromDigests(missingTreeDigests, missingActionInputs, missingTreeNodes);
+    repository.getDataFromDigests(missingDigests, missingActionInputs, missingTreeNodes);
 
-    if (missingDigests.contains(commandDigest)) {
-      toUpload.add(new Chunker(command.toByteArray()));
-    }
     if (!missingTreeNodes.isEmpty()) {
+      List<Chunker> toUpload = new ArrayList<>(missingTreeNodes.size());
       for (Directory d : missingTreeNodes) {
         toUpload.add(new Chunker(d.toByteArray()));
       }
+      uploader.uploadBlobs(toUpload);
     }
+    uploadBlob(command.toByteArray());
     if (!missingActionInputs.isEmpty()) {
+      List<Chunker> inputsToUpload = new ArrayList<>();
       MetadataProvider inputFileCache = repository.getInputFileCache();
       for (ActionInput actionInput : missingActionInputs) {
-        toUpload.add(new Chunker(actionInput, inputFileCache, execRoot));
+        inputsToUpload.add(new Chunker(actionInput, inputFileCache, execRoot));
       }
+      uploader.uploadBlobs(inputsToUpload);
     }
-    uploader.uploadBlobs(toUpload);
   }
 
   /**
@@ -291,18 +281,10 @@ public class GrpcRemoteCache implements RemoteActionCache {
   }
 
   @Override
-  public void upload(
-      ActionKey actionKey,
-      Path execRoot,
-      Collection<Path> files,
-      FileOutErr outErr,
-      boolean uploadAction)
+  public void upload(ActionKey actionKey, Path execRoot, Collection<Path> files, FileOutErr outErr)
       throws IOException, InterruptedException {
     ActionResult.Builder result = ActionResult.newBuilder();
     upload(execRoot, files, outErr, result);
-    if (!uploadAction) {
-      return;
-    }
     try {
       retrier.execute(
           () ->
