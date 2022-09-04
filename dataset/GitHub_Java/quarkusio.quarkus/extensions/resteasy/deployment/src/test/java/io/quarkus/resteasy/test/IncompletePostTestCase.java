@@ -30,6 +30,7 @@ public class IncompletePostTestCase {
 
     @Test
     public void testIncompleteWrite() throws Exception {
+        PostEndpoint.invoked = false;
 
         //make sure incomplete writes do not block threads
         //and that incoplete data is not delivered to the endpoint
@@ -45,8 +46,8 @@ public class IncompletePostTestCase {
         Assertions.assertFalse(PostEndpoint.invoked);
         RestAssuredConfig config = RestAssured.config()
                 .httpClient(HttpClientConfig.httpClientConfig()
-                        .setParam(CoreConnectionPNames.CONNECTION_TIMEOUT, 1000)
-                        .setParam(CoreConnectionPNames.SO_TIMEOUT, 1000));
+                        .setParam(CoreConnectionPNames.CONNECTION_TIMEOUT, 60000)
+                        .setParam(CoreConnectionPNames.SO_TIMEOUT, 60000));
 
         RestAssured.given().config(config).get("/post").then().body(Matchers.is("ok"));
     }
