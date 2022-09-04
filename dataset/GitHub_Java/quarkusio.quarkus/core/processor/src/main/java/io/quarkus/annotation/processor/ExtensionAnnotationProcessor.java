@@ -290,6 +290,10 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
                 continue;
             }
 
+            for (VariableElement variableElement : i.getParameters()) {
+                configDocItemScanner.addProcessorClassMember(variableElement.asType().toString());
+            }
+
             final PackageElement pkg = processingEnv.getElementUtils().getPackageOf(clazz);
             if (pkg == null) {
                 processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
@@ -299,6 +303,12 @@ public class ExtensionAnnotationProcessor extends AbstractProcessor {
 
             final String binaryName = processingEnv.getElementUtils().getBinaryName(clazz).toString();
             if (processorClassNames.add(binaryName)) {
+                // new class
+                for (Element element : clazz.getEnclosedElements()) {
+                    if (element.getKind().isField()) {
+                        configDocItemScanner.addProcessorClassMember(element.asType().toString());
+                    }
+                }
                 recordConfigJavadoc(clazz);
                 generateAccessor(clazz);
                 final StringBuilder rbn = getRelativeBinaryName(clazz, new StringBuilder());
