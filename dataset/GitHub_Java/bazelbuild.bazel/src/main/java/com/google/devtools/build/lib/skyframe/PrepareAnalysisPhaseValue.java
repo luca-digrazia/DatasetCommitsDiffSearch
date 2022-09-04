@@ -85,9 +85,8 @@ public final class PrepareAnalysisPhaseValue implements SkyValue {
           throws InvalidConfigurationException {
     BuildConfiguration hostConfiguration =
         skyframeExecutor.getConfiguration(eventHandler, hostConfigurationKey);
-    ImmutableList<BuildConfiguration> targetConfigurations =
-        ImmutableList.copyOf(
-            skyframeExecutor.getConfigurations(eventHandler, targetConfigurationKeys).values());
+    Collection<BuildConfiguration> targetConfigurations =
+        skyframeExecutor.getConfigurations(eventHandler, targetConfigurationKeys).values();
     return new BuildConfigurationCollection(targetConfigurations, hostConfiguration);
   }
 

@@ -510,7 +510,6 @@ public class BuildViewForTesting {
     String targetDescription = target.toString();
     ResolvedToolchainContext toolchainContext =
         ResolvedToolchainContext.load(
-            target.getPackage().getRepositoryMapping(),
             unloadedToolchainContext,
             targetDescription,
             prerequisiteMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
