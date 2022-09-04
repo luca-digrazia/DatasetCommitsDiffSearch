@@ -1,6 +1,5 @@
 package io.quarkus.maven;
 
-import static org.fusesource.jansi.internal.Kernel32.GetStdHandle;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.artifactId;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.configuration;
 import static org.twdata.maven.mojoexecutor.MojoExecutor.executeMojo;
@@ -74,8 +73,6 @@ import org.eclipse.aether.resolution.DependencyRequest;
 import org.eclipse.aether.resolution.DependencyResolutionException;
 import org.eclipse.aether.resolution.DependencyResult;
 import org.eclipse.aether.util.artifact.JavaScopes;
-import org.fusesource.jansi.internal.Kernel32;
-import org.fusesource.jansi.internal.WindowsSupport;
 
 import io.quarkus.bootstrap.devmode.DependenciesFilter;
 import io.quarkus.bootstrap.model.AppArtifactKey;
@@ -89,6 +86,7 @@ import io.quarkus.deployment.dev.QuarkusDevModeLauncher;
 import io.quarkus.maven.MavenDevModeLauncher.Builder;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.utilities.MojoUtils;
+import io.quarkus.utilities.OS;
 
 /**
  * The dev mojo, that runs a quarkus app in a forked process. A background compilation process is launched and any changes are
@@ -107,7 +105,7 @@ public class DevMojo extends AbstractMojo {
      * running any one of these phases means the compile phase will have been run, if these have
      * not been run we manually run compile
      */
-    private static final Set<String> POST_COMPILE_PHASES = Set.of(
+    private static final Set<String> POST_COMPILE_PHASES = new HashSet<>(Arrays.asList(
             "compile",
             "process-classes",
             "generate-test-sources",
@@ -124,13 +122,13 @@ public class DevMojo extends AbstractMojo {
             "post-integration-test",
             "verify",
             "install",
-            "deploy");
+            "deploy"));
 
     /**
      * running any one of these phases means the test-compile phase will have been run, if these have
      * not been run we manually run test-compile
      */
-    private static final Set<String> POST_TEST_COMPILE_PHASES = Set.of(
+    private static final Set<String> POST_TEST_COMPILE_PHASES = new HashSet<>(Arrays.asList(
             "test-compile",
             "process-test-classes",
             "test",
@@ -141,7 +139,7 @@ public class DevMojo extends AbstractMojo {
             "post-integration-test",
             "verify",
             "install",
-            "deploy");
+            "deploy"));
     private static final String QUARKUS_PLUGIN_GROUPID = "io.quarkus";
     private static final String QUARKUS_PLUGIN_ARTIFACTID = "quarkus-maven-plugin";
     private static final String QUARKUS_GENERATE_CODE_GOAL = "generate-code";
@@ -317,10 +315,7 @@ public class DevMojo extends AbstractMojo {
      * console attributes, used to restore the console state
      */
     private Attributes attributes;
-    private int windowsAttributes;
-    private boolean windowsAttributesSet;
     private Connection connection;
-    private boolean windowsColorSupport;
 
     @Override
     public void setLog(Log log) {
@@ -407,53 +402,38 @@ public class DevMojo extends AbstractMojo {
      * messes everything up. This attempts to fix that by saving the state so it can be restored
      */
     private void saveTerminalState() {
+        if (OS.determineOS() == OS.WINDOWS) {
+            //this does not work on windows
+            //jansi creates an input pump thread, that will steal
+            //input from the dev mode process
+            return;
+        }
         try {
-            windowsAttributes = WindowsSupport.getConsoleMode();
-            windowsAttributesSet = true;
-            if (windowsAttributes > 0) {
-                long hConsole = Kernel32.GetStdHandle(Kernel32.STD_INPUT_HANDLE);
-                if (hConsole != (long) Kernel32.INVALID_HANDLE_VALUE) {
-                    final int VIRTUAL_TERMINAL_PROCESSING = 0x0004; //enable color on the windows console
-                    if (Kernel32.SetConsoleMode(hConsole, windowsAttributes | VIRTUAL_TERMINAL_PROCESSING) != 0) {
-                        windowsColorSupport = true;
-                    }
+            new TerminalConnection(new Consumer<Connection>() {
+                @Override
+                public void accept(Connection connection) {
+                    attributes = connection.getAttributes();
+                    DevMojo.this.connection = connection;
                 }
-            }
-        } catch (Throwable t) {
-            try {
-                //this does not work on windows
-                //jansi creates an input pump thread, that will steal
-                //input from the dev mode process
-                new TerminalConnection(new Consumer<Connection>() {
-                    @Override
-                    public void accept(Connection connection) {
-                        attributes = connection.getAttributes();
-                        DevMojo.this.connection = connection;
-                    }
-                });
-            } catch (IOException e) {
-                getLog().error(
-                        "Failed to setup console restore, console may be left in an inconsistent state if the process is killed",
-                        e);
-            }
+            });
+        } catch (IOException e) {
+            getLog().error(
+                    "Failed to setup console restore, console may be left in an inconsistent state if the process is killed",
+                    e);
         }
     }
 
     private void restoreTerminalState() {
-        if (windowsAttributesSet) {
-            WindowsSupport.setConsoleMode(windowsAttributes);
-        } else {
-            if (attributes == null || connection == null) {
-                return;
-            }
-            connection.setAttributes(attributes);
-            int height = connection.size().getHeight();
-            connection.write(ANSI.MAIN_BUFFER);
-            connection.write(ANSI.CURSOR_SHOW);
-            connection.write("\u001B[0m");
-            connection.write("\033[" + height + ";0H");
-            connection.close();
+        if (attributes == null || connection == null) {
+            return;
         }
+        connection.setAttributes(attributes);
+        int height = connection.size().getHeight();
+        connection.write(ANSI.MAIN_BUFFER);
+        connection.write(ANSI.CURSOR_SHOW);
+        connection.write("\u001B[0m");
+        connection.write("\033[" + height + ";0H");
+        connection.close();
     }
 
     private void handleAutoCompile() throws MojoExecutionException {
@@ -724,7 +704,7 @@ public class DevMojo extends AbstractMojo {
         }
 
         boolean alive() {
-            return process != null && process.isAlive();
+            return process == null ? false : process.isAlive();
         }
 
         int exitValue() {
@@ -757,8 +737,8 @@ public class DevMojo extends AbstractMojo {
                     process.destroy();
                     try {
                         process.waitFor();
-                    } catch (InterruptedException e) {
-                        getLog().warn("Unable to properly wait for dev-mode end", e);
+                    } catch (InterruptedException ignored) {
+                        getLog().warn("Unable to properly wait for dev-mode end", ignored);
                     }
                 }
             }, "Development Mode Shutdown Hook"));
@@ -792,9 +772,6 @@ public class DevMojo extends AbstractMojo {
                 .deleteDevJar(deleteDevJar);
 
         setJvmArgs(builder);
-        if (windowsColorSupport) {
-            builder.jvmArgs("-Dio.quarkus.force-color-support=true");
-        }
 
         builder.projectDir(project.getFile().getParentFile());
         builder.buildSystemProperties((Map) project.getProperties());
