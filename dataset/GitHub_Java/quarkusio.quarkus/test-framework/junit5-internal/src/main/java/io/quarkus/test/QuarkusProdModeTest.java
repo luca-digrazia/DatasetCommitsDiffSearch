@@ -29,13 +29,12 @@ import java.util.TimerTask;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.logging.Handler;
 import java.util.logging.LogManager;
 import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.jboss.logmanager.Logger;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
 import org.jboss.shrinkwrap.api.exporter.ZipExporter;
@@ -73,11 +72,10 @@ public class QuarkusProdModeTest
     private static final String QUARKUS_HTTP_PORT_PROPERTY = "quarkus.http.port";
 
     private static final Logger rootLogger;
-    private Handler[] originalHandlers;
 
     static {
         System.setProperty("java.util.logging.manager", "org.jboss.logmanager.LogManager");
-        rootLogger = (Logger) LogManager.getLogManager().getLogger("");
+        rootLogger = LogManager.getLogManager().getLogger("");
     }
 
     private Path outputDir;
@@ -97,8 +95,6 @@ public class QuarkusProdModeTest
 
     private String logFileName;
     private Map<String, String> runtimeProperties;
-    // by default, we use these lower heap settings
-    private List<String> jvmArgs = Collections.singletonList("-Xmx128m");
     private Map<String, String> testResourceProperties = new HashMap<>();
 
     private Process process;
@@ -180,14 +176,6 @@ public class QuarkusProdModeTest
      */
     public QuarkusProdModeTest setLogFileName(String logFileName) {
         this.logFileName = logFileName;
-        return this;
-    }
-
-    /**
-     * The complete set of JVM args to be used if the built artifact is configured to be run
-     */
-    public QuarkusProdModeTest setJVMArgs(final List<String> jvmArgs) {
-        this.jvmArgs = jvmArgs;
         return this;
     }
 
@@ -302,7 +290,6 @@ public class QuarkusProdModeTest
 
     @Override
     public void beforeAll(ExtensionContext extensionContext) throws Exception {
-        originalHandlers = rootLogger.getHandlers();
         rootLogger.addHandler(inMemoryLogHandler);
 
         timeoutTask = new TimerTask() {
@@ -468,21 +455,16 @@ public class QuarkusProdModeTest
         List<String> command = new ArrayList<>(systemProperties.size() + 3);
         if (builtResultArtifact.getFileName().toString().endsWith(".jar")) {
             command.add(JavaBinFinder.findBin());
-            if (this.jvmArgs != null) {
-                command.addAll(this.jvmArgs);
-            }
             command.addAll(systemProperties);
             command.add("-jar");
             command.add(builtResultArtifact.toAbsolutePath().toString());
         } else {
             command.add(builtResultArtifact.toAbsolutePath().toString());
-            if (this.jvmArgs != null) {
-                command.addAll(this.jvmArgs);
-            }
             command.addAll(systemProperties);
         }
 
         command.addAll(Arrays.asList(commandLineParameters));
+
         process = new ProcessBuilder(command)
                 .redirectErrorStream(true)
                 .directory(builtResultArtifactParentDir.toFile())
@@ -557,8 +539,6 @@ public class QuarkusProdModeTest
 
     @Override
     public void afterAll(ExtensionContext extensionContext) throws Exception {
-        rootLogger.setHandlers(originalHandlers);
-
         if (run) {
             RestAssuredURLManager.clearURL();
         }
