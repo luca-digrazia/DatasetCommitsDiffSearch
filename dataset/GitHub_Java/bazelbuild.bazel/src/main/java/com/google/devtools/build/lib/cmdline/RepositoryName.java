@@ -18,7 +18,6 @@ import com.google.common.base.Throwables;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import com.google.devtools.build.lib.util.StringUtilities;
@@ -31,12 +30,13 @@ import java.io.Serializable;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
 
-/** A human-readable name for the repository. */
-@AutoCodec
+/**
+ * A human-readable name for the repository.
+ */
 public final class RepositoryName implements Serializable {
   public static final String DEFAULT_REPOSITORY = "";
-  @AutoCodec public static final RepositoryName DEFAULT;
-  @AutoCodec public static final RepositoryName MAIN;
+  public static final RepositoryName DEFAULT;
+  public static final RepositoryName MAIN;
   private static final Pattern VALID_REPO_NAME = Pattern.compile("@[\\w\\-.]*");
 
   /** Helper for serializing {@link RepositoryName}. */
@@ -108,7 +108,6 @@ public final class RepositoryName implements Serializable {
    *
    * @throws LabelSyntaxException if the name is invalid
    */
-  @AutoCodec.Instantiator
   public static RepositoryName create(String name) throws LabelSyntaxException {
     try {
       return repositoryNameCache.get(name);

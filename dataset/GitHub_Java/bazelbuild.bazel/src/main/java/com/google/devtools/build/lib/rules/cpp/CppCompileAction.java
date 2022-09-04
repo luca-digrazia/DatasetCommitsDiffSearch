@@ -1081,11 +1081,11 @@ public class CppCompileAction extends AbstractAction
      */
     f.addPaths(context.getDeclaredIncludeDirs());
     f.addPaths(context.getDeclaredIncludeWarnDirs());
-    actionKeyContext.addNestedSetToFingerprint(f, context.getDeclaredIncludeSrcs());
+    actionKeyContext.addArtifactsToFingerprint(f, context.getDeclaredIncludeSrcs());
     f.addInt(0);  // mark the boundary between input types
-    actionKeyContext.addNestedSetToFingerprint(f, getMandatoryInputs());
+    actionKeyContext.addArtifactsToFingerprint(f, getMandatoryInputs());
     f.addInt(0);
-    actionKeyContext.addNestedSetToFingerprint(f, prunableInputs);
+    actionKeyContext.addArtifactsToFingerprint(f, prunableInputs);
     return f.hexDigestAndReset();
   }
 
@@ -1216,13 +1216,7 @@ public class CppCompileAction extends AbstractAction
       // case where we expected an in-memory .d file, but we did not get an appropriate response.
       // Perhaps we produced the file locally.
       if (dotdFile.artifact() != null || reply == null) {
-        Path dotdPath;
-        if (dotdFile.artifact() != null) {
-          dotdPath = dotdFile.getPath();
-        } else {
-          dotdPath = execRoot.getRelative(dotdFile.getSafeExecPath());
-        }
-        return depSet.read(dotdPath);
+        return depSet.read(dotdFile.getPath());
       } else {
         // This is an in-memory .d file.
         return depSet.process(reply.getContents());

@@ -940,9 +940,9 @@ public class AndroidCommon {
   static NestedSet<Artifact> getSupportApks(RuleContext ruleContext) {
     NestedSetBuilder<Artifact> supportApks = NestedSetBuilder.stableOrder();
     for (TransitiveInfoCollection dep : ruleContext.getPrerequisites("support_apks", Mode.TARGET)) {
-      ApkInfo apkProvider = dep.get(ApkInfo.PROVIDER);
+      ApkProvider apkProvider = dep.getProvider(ApkProvider.class);
       FileProvider fileProvider = dep.getProvider(FileProvider.class);
-      // If ApkInfo is present, do not check FileProvider for .apk files. For example,
+      // If ApkProvider is present, do not check FileProvider for .apk files. For example,
       // android_binary creates a FileProvider containing both the signed and unsigned APKs.
       if (apkProvider != null) {
         supportApks.add(apkProvider.getApk());

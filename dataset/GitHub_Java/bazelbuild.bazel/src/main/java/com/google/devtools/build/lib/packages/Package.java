@@ -203,7 +203,6 @@ public class Package {
   private ImmutableList<Event> events;
   private ImmutableList<Postable> posts;
 
-  private ImmutableList<Label> registeredExecutionPlatformLabels;
   private ImmutableList<Label> registeredToolchainLabels;
 
   /**
@@ -340,8 +339,6 @@ public class Package {
     this.features = ImmutableSortedSet.copyOf(builder.features);
     this.events = ImmutableList.copyOf(builder.events);
     this.posts = ImmutableList.copyOf(builder.posts);
-    this.registeredExecutionPlatformLabels =
-        ImmutableList.copyOf(builder.registeredExecutionPlatformLabels);
     this.registeredToolchainLabels = ImmutableList.copyOf(builder.registeredToolchainLabels);
   }
 
@@ -659,10 +656,6 @@ public class Package {
     return defaultRestrictedTo;
   }
 
-  public ImmutableList<Label> getRegisteredExecutionPlatformLabels() {
-    return registeredExecutionPlatformLabels;
-  }
-
   public ImmutableList<Label> getRegisteredToolchainLabels() {
     return registeredToolchainLabels;
   }
@@ -782,7 +775,6 @@ public class Package {
     protected Map<Label, Path> subincludes = null;
     protected ImmutableList<Label> skylarkFileDependencies = ImmutableList.of();
 
-    protected List<Label> registeredExecutionPlatformLabels = new ArrayList<>();
     protected List<Label> registeredToolchainLabels = new ArrayList<>();
 
     /**
@@ -1304,10 +1296,6 @@ public class Package {
     void addRule(Rule rule) throws NameConflictException, InterruptedException {
       checkForConflicts(rule);
       addRuleUnchecked(rule);
-    }
-
-    public void addRegisteredExecutionPlatformLabels(List<Label> platforms) {
-      this.registeredExecutionPlatformLabels.addAll(platforms);
     }
 
     void addRegisteredToolchainLabels(List<Label> toolchains) {
