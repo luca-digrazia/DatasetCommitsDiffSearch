@@ -1,9 +1,15 @@
 package io.quarkus.it.spring.data.jpa;
 
 import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
 
 @Entity
-public class Cat extends Mammal {
+public class Cat {
+
+    @Id
+    @GeneratedValue
+    public long id;
 
     private String breed;
 
@@ -17,6 +23,10 @@ public class Cat extends Mammal {
     public Cat(String breed, String color) {
         this.breed = breed;
         this.color = color;
+    }
+
+    public long getId() {
+        return id;
     }
 
     public String getBreed() {
