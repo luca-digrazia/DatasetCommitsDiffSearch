@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.analysis.Expander;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.StaticallyLinkedMarkerProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -52,24 +51,24 @@ import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.ExpansionException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.server.FailureDetails.FailAction.Code;
 import com.google.devtools.build.lib.shell.ShellUtils;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.FileTypeSet;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -77,8 +76,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.StarlarkSemantics;
 
 /**
  * Helper class for functionality shared by cpp related rules.
@@ -107,9 +104,9 @@ public class CppHelper {
   public static TransitiveInfoCollection mallocForTarget(
       RuleContext ruleContext, String mallocAttrName) {
     if (ruleContext.getFragment(CppConfiguration.class).customMalloc() != null) {
-      return ruleContext.getPrerequisite(":default_malloc");
+      return ruleContext.getPrerequisite(":default_malloc", Mode.TARGET);
     } else {
-      return ruleContext.getPrerequisite(mallocAttrName);
+      return ruleContext.getPrerequisite(mallocAttrName, Mode.TARGET);
     }
   }
 
@@ -175,7 +172,7 @@ public class CppHelper {
 
     if (ruleContext.attributes().has("additional_linker_inputs", LABEL_LIST)) {
       for (TransitiveInfoCollection current :
-          ruleContext.getPrerequisites("additional_linker_inputs")) {
+          ruleContext.getPrerequisites("additional_linker_inputs", Mode.TARGET)) {
         builder.put(
             AliasProvider.getDependencyLabel(current),
             current.getProvider(FileProvider.class).getFilesToBuild().toList());
@@ -305,7 +302,7 @@ public class CppHelper {
       // TODO(bazel-team): Report an error or throw an exception in this case.
       return null;
     }
-    TransitiveInfoCollection dep = ruleContext.getPrerequisite(toolchainAttribute);
+    TransitiveInfoCollection dep = ruleContext.getPrerequisite(toolchainAttribute, Mode.TARGET);
     return getToolchain(ruleContext, dep);
   }
 
@@ -491,8 +488,7 @@ public class CppHelper {
               ImmutableList.of(linuxDefault),
               String.format(
                   "the given toolchain supports creation of %s instead of %s",
-                  result.getExecPathString(), linuxDefault.getExecPathString()),
-              Code.INCORRECT_TOOLCHAIN));
+                  result.getExecPathString(), linuxDefault.getExecPathString())));
     }
 
     return result;
@@ -594,7 +590,8 @@ public class CppHelper {
         true,
         true,
         solibDir,
-        solibDirOverride);
+        solibDirOverride,
+        configuration);
   }
 
   @VisibleForTesting
@@ -607,7 +604,15 @@ public class CppHelper {
       String solibDir,
       BuildConfiguration configuration) {
     return getMiddlemanInternal(
-        ruleContext, owner, purpose, artifacts, useSolibSymlinks, false, solibDir, null);
+        ruleContext,
+        owner,
+        purpose,
+        artifacts,
+        useSolibSymlinks,
+        false,
+        solibDir,
+        null,
+        configuration);
   }
 
   /** Internal implementation for getAggregatingMiddlemanForCppRuntimes. */
@@ -619,7 +624,8 @@ public class CppHelper {
       boolean useSolibSymlinks,
       boolean isCppRuntime,
       String solibDir,
-      String solibDirOverride) {
+      String solibDirOverride,
+      BuildConfiguration configuration) {
     MiddlemanFactory factory = ruleContext.getAnalysisEnvironment().getMiddlemanFactory();
     if (useSolibSymlinks) {
       NestedSetBuilder<Artifact> symlinkedArtifacts = NestedSetBuilder.stableOrder();
@@ -647,7 +653,7 @@ public class CppHelper {
             ruleContext.getPackageDirectory(),
             purpose,
             artifacts,
-            ruleContext.getMiddlemanDirectory()));
+            configuration.getMiddlemanDirectory(ruleContext.getRule().getRepository())));
   }
 
   /** Returns the FDO build subtype. */
@@ -837,7 +843,7 @@ public class CppHelper {
       RuleContext ruleContext, FeatureConfiguration featureConfiguration) {
     return featureConfiguration.isEnabled(CppRuleClasses.WINDOWS_EXPORT_ALL_SYMBOLS)
         && !featureConfiguration.isEnabled(CppRuleClasses.NO_WINDOWS_EXPORT_ALL_SYMBOLS)
-        && ruleContext.getPrerequisiteArtifact("win_def_file") == null;
+        && ruleContext.getPrerequisiteArtifact("win_def_file", Mode.TARGET) == null;
   }
 
   /**
@@ -921,23 +927,6 @@ public class CppHelper {
     } else {
       return createEmptyDefFileAction(ruleContext);
     }
-  }
-
-  /** Returns the suffix (_{hash}) for artifacts generated by cc_library on Windows. */
-  public static String getDLLHashSuffix(
-      RuleContext ruleContext, FeatureConfiguration featureConfiguration) {
-    CppOptions cppOptions =
-        Preconditions.checkNotNull(
-            ruleContext.getConfiguration().getOptions().get(CppOptions.class));
-    if (cppOptions.renameDLL
-        && cppOptions.dynamicMode != DynamicMode.OFF
-        && featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-      Fingerprint digest = new Fingerprint();
-      digest.addString(ruleContext.getRepository().getName());
-      digest.addPath(ruleContext.getPackageDirectory());
-      return "_" + digest.hexDigestAndReset().substring(0, 10);
-    }
-    return "";
   }
 
   /**
@@ -1027,13 +1016,13 @@ public class CppHelper {
 
   public static Artifact getGrepIncludes(RuleContext ruleContext) {
     return ruleContext.attributes().has("$grep_includes")
-        ? ruleContext.getPrerequisiteArtifact("$grep_includes")
+        ? ruleContext.getPrerequisiteArtifact("$grep_includes", Mode.HOST)
         : null;
   }
 
   public static boolean doNotSplitLinkingCmdLine(
       StarlarkSemantics starlarkSemantics, CcToolchainProvider ccToolchain) {
-    return starlarkSemantics.getBool(BuildLanguageOptions.INCOMPATIBLE_DO_NOT_SPLIT_LINKING_CMDLINE)
+    return starlarkSemantics.incompatibleDoNotSplitLinkingCmdline()
         || ccToolchain.doNotSplitLinkingCmdline();
   }
 }
