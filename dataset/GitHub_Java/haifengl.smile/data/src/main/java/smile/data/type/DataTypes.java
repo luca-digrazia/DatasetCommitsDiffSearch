@@ -1,30 +1,20 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
-
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 package smile.data.type;
 
-import java.math.BigDecimal;
-import java.sql.JDBCType;
-import java.sql.ResultSet;
-import java.sql.ResultSetMetaData;
-import java.sql.SQLException;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.List;
 
 /**
@@ -111,7 +101,7 @@ public class DataTypes {
     }
 
     /** Creates an object data type of a given class. */
-    public static DataType object(Class clazz) {
+    public static ObjectType object(Class clazz) {
         if (clazz == Integer.class) return IntegerObjectType;
         if (clazz == Long.class) return LongObjectType;
         if (clazz == Float.class) return FloatObjectType;
@@ -120,11 +110,6 @@ public class DataTypes {
         if (clazz == Character.class) return CharObjectType;
         if (clazz == Byte.class) return ByteObjectType;
         if (clazz == Short.class) return ShortObjectType;
-        if (clazz == BigDecimal.class) return DecimalType;
-        if (clazz == String.class) return StringType;
-        if (clazz == LocalDate.class) return DateType;
-        if (clazz == LocalTime.class) return TimeType;
-        if (clazz == LocalDateTime.class) return DateTimeType;
         return new ObjectType(clazz);
     }
 
@@ -149,28 +134,5 @@ public class DataTypes {
     /** Creates a struct data type. */
     public static StructType struct(List<StructField> fields) {
         return new StructType(fields);
-    }
-
-    /** Creates a struct data type from JDBC result set meta data. */
-    public static StructType struct(ResultSet rs) throws SQLException {
-        ResultSetMetaData meta = rs.getMetaData();
-        String dbms = rs.getStatement().getConnection().getMetaData().getDatabaseProductName();
-        return struct(meta, dbms);
-    }
-
-    /** Creates a struct data type from JDBC result set meta data. */
-    public static StructType struct(ResultSetMetaData meta, String dbms) throws SQLException {
-        int ncols = meta.getColumnCount();
-        StructField[] fields = new StructField[ncols];
-        for (int i = 1; i <= ncols; i++) {
-            String name = meta.getColumnName(i);
-            DataType type = DataType.of(
-                    JDBCType.valueOf(meta.getColumnType(i)),
-                    meta.isNullable(i) != ResultSetMetaData.columnNoNulls,
-                    dbms);
-            fields[i-1] = new StructField(name, type);
-        }
-
-        return struct(fields);
     }
 }

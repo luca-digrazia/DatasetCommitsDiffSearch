@@ -102,7 +102,7 @@ public class Formula implements Serializable {
 
             @Override
             public String toString() {
-                return schema.toString(this);
+                return toString(",");
             }
         };
     }
