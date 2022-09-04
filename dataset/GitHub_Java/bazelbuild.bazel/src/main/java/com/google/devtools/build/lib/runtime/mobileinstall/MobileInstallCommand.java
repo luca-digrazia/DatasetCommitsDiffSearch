@@ -28,7 +28,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.rules.android.WriteAdbArgsAction;
 import com.google.devtools.build.lib.rules.android.WriteAdbArgsAction.StartType;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
-import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.Command;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.CommonCommandOptions;
@@ -73,7 +72,6 @@ public class MobileInstallCommand implements BlazeCommand {
    */
   public enum Mode {
     CLASSIC("classic", null),
-    CLASSIC_INTERNAL_TEST("classic_internal_test_DO_NOT_USE", null),
     SKYLARK("skylark", "MIASPECT"),
     SKYLARK_INCREMENTAL_RES("skylark_incremental_res", "MIRESASPECT");
 
@@ -169,18 +167,16 @@ public class MobileInstallCommand implements BlazeCommand {
   private static final String NO_TARGET_MESSAGE = "No targets found to run";
 
   @Override
-  public BlazeCommandResult exec(CommandEnvironment env, OptionsProvider options) {
+  public ExitCode exec(CommandEnvironment env, OptionsProvider options) {
     Options mobileInstallOptions = options.getOptions(Options.class);
     WriteAdbArgsAction.Options adbOptions = options.getOptions(WriteAdbArgsAction.Options.class);
 
-    if (mobileInstallOptions.mode == Mode.CLASSIC
-        || mobileInstallOptions.mode == Mode.CLASSIC_INTERNAL_TEST) {
-      // Notify internal users that classic mode is no longer supported.
-      if (mobileInstallOptions.mode == Mode.CLASSIC
-          && !mobileInstallOptions.mobileInstallAspect.startsWith("@")) {
-        env.getReporter().handle(Event.error(
-            "mobile-install --mode=classic is no longer supported"));
-        return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+    if (mobileInstallOptions.mode == Mode.CLASSIC) {
+      // Notify internal users that classic mode is deprecated. Use mobile_install_aspect as a proxy
+      // for internal vs external users.
+      if (!mobileInstallOptions.mobileInstallAspect.startsWith("@")) {
+        env.getReporter().handle(Event.warn(
+            "mobile-install --mode=classic is deprecated. This option will go away soon."));
       }
       if (adbOptions.start == StartType.WARM && !mobileInstallOptions.incremental) {
         env.getReporter().handle(Event.warn(
@@ -197,8 +193,7 @@ public class MobileInstallCommand implements BlazeCommand {
               env.getReporter().getOutErr(),
               env.getCommandId(),
               env.getCommandStartTime());
-      ExitCode exitCode = new BuildTool(env).processRequest(request, null).getExitCondition();
-      return BlazeCommandResult.exitCode(exitCode);
+      return new BuildTool(env).processRequest(request, null).getExitCondition();
     }
 
     // This list should look like: ["//executable:target", "arg1", "arg2"]
@@ -207,7 +202,7 @@ public class MobileInstallCommand implements BlazeCommand {
     // The user must at least specify an executable target.
     if (targetAndArgs.isEmpty()) {
       env.getReporter().handle(Event.error("Must specify a target to run"));
-      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+      return ExitCode.COMMAND_LINE_ERROR;
     }
 
     List<String> targets = ImmutableList.of(targetAndArgs.get(0));
@@ -227,17 +222,17 @@ public class MobileInstallCommand implements BlazeCommand {
 
     if (!result.getSuccess()) {
       env.getReporter().handle(Event.error("Build failed. Not running target"));
-      return BlazeCommandResult.exitCode(result.getExitCondition());
+      return result.getExitCondition();
     }
 
     Collection<ConfiguredTarget> targetsBuilt = result.getSuccessfulTargets();
     if (targetsBuilt == null) {
       env.getReporter().handle(Event.error(NO_TARGET_MESSAGE));
-      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+      return ExitCode.COMMAND_LINE_ERROR;
     }
     if (targetsBuilt.size() != 1) {
       env.getReporter().handle(Event.error(SINGLE_TARGET_MESSAGE));
-      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
+      return ExitCode.COMMAND_LINE_ERROR;
     }
     ConfiguredTarget targetToRun = Iterables.getOnlyElement(targetsBuilt);
 
@@ -304,7 +299,7 @@ public class MobileInstallCommand implements BlazeCommand {
           .execute(outErr.getOutputStream(), outErr.getErrorStream())
           .getTerminationStatus()
           .getExitCode();
-      return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
+      return ExitCode.SUCCESS;
     } catch (BadExitStatusException e) {
       String message =
           "Non-zero return code '"
@@ -312,13 +307,13 @@ public class MobileInstallCommand implements BlazeCommand {
               + "' from command: "
               + e.getMessage();
       env.getReporter().handle(Event.error(message));
-      return BlazeCommandResult.exitCode(ExitCode.RUN_FAILURE);
+      return ExitCode.RUN_FAILURE;
     } catch (AbnormalTerminationException e) {
       // The process was likely terminated by a signal in this case.
-      return BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
+      return ExitCode.INTERRUPTED;
     } catch (CommandException e) {
       env.getReporter().handle(Event.error("Error running program: " + e.getMessage()));
-      return BlazeCommandResult.exitCode(ExitCode.RUN_FAILURE);
+      return ExitCode.RUN_FAILURE;
     }
   }
 
@@ -326,7 +321,7 @@ public class MobileInstallCommand implements BlazeCommand {
   public void editOptions(OptionsParser optionsParser) {
     Options options = optionsParser.getOptions(Options.class);
     try {
-      if (options.mode == Mode.CLASSIC || options.mode == Mode.CLASSIC_INTERNAL_TEST) {
+      if (options.mode == Mode.CLASSIC) {
         String outputGroup =
             options.splitApks
                 ? "mobile_install_split" + INTERNAL_SUFFIX
