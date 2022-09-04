@@ -305,6 +305,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 			loadApiPropertyFile();
 		} catch (Exception e) {
 			messager.printMessage(Diagnostic.Kind.ERROR, "AndroidAnnotations processing failed: " + e.getMessage());
+			throw new RuntimeException("AndroidAnnotations processing failed", e);
 		}
 
 		timeStats.setMessager(messager);
@@ -353,7 +354,7 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 	private void loadApiPropertyFile() throws FileNotFoundException {
 		String filename = "androidannotations-api.properties";
 		try {
-			URL url = EActivity.class.getClassLoader().getResource(filename);
+			URL url = getClass().getClassLoader().getResource(filename);
 			propertiesApi.load(url.openStream());
 		} catch (Exception e) {
 			throw new FileNotFoundException(filename + " couldn't be parsed. Please check your classpath and verify that AA-API's version is at least 3.0");
@@ -655,6 +656,11 @@ public class AndroidAnnotationProcessor extends AbstractProcessor {
 		if (iterator.hasNext()) {
 			Element element = roundEnv.getElementsAnnotatedWith(iterator.next()).iterator().next();
 			messager.printMessage(Diagnostic.Kind.ERROR, errorMessage, element);
+		} else {
+			// Sometime this is a total mess and javac could not even find one
+			// element on which we could print the error. So we should just
+			// throw an exception and let it go.
+			throw new RuntimeException("An error occured and couldn't be printed on an element: " + errorMessage);
 		}
 	}
 
