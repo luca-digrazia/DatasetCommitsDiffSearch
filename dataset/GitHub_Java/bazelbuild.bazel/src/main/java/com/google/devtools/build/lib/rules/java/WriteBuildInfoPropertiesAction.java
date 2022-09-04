@@ -26,19 +26,20 @@ import com.google.devtools.build.lib.analysis.BuildInfo;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Key;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 
-/** An action that creates a Java properties file containing the build informations. */
-@AutoCodec
+/**
+ * An action that creates a Java properties file containing the build informations.
+ */
 public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
   private static final String GUID = "19e543c2-3ce4-4aef-80f5-4f8abf4b064f";
 
@@ -122,7 +123,7 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
    * @param timestampFormatter formats dates printed in the properties file
    */
   public WriteBuildInfoPropertiesAction(
-      Iterable<Artifact> inputs,
+      Collection<Artifact> inputs,
       Artifact primaryOutput,
       BuildInfoPropertiesTranslator keyTranslations,
       boolean includeVolatile,
@@ -134,13 +135,13 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
     this.includeNonVolatile = includeNonVolatile;
     this.timestampFormatter = timestampFormatter;
 
-    if (!Iterables.isEmpty(inputs)) {
+    if (!inputs.isEmpty()) {
       // With non-empty inputs we should not generate both volatile and non-volatile data
       // in the same properties file.
       Preconditions.checkState(includeVolatile ^ includeNonVolatile);
     }
     Preconditions.checkState(
-        primaryOutput.isConstantMetadata() == (includeVolatile && !Iterables.isEmpty(inputs)));
+        primaryOutput.isConstantMetadata() == (includeVolatile && !inputs.isEmpty()));
   }
 
   @Override
@@ -152,7 +153,7 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
         WorkspaceStatusAction.Context context = ctx.getContext(WorkspaceStatusAction.Context.class);
         Map<String, String> values = new LinkedHashMap<>();
         for (Artifact valueFile : getInputs()) {
-          values.putAll(WorkspaceStatusAction.parseValues(ctx.getInputPath(valueFile)));
+          values.putAll(WorkspaceStatusAction.parseValues(valueFile.getPath()));
         }
 
         Map<String, String> keys = new HashMap<>();
