@@ -45,7 +45,6 @@ import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.SpellChecker;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -760,9 +759,12 @@ public class Package {
       RootedPath workspacePath,
       String runfilesPrefix,
       StarlarkSemantics starlarkSemantics) {
-    return new Builder(
-            helper, LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, runfilesPrefix, starlarkSemantics)
-        .setFilename(workspacePath);
+    Builder b =
+        new Builder(
+            helper.createFreshPackage(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER, runfilesPrefix),
+            starlarkSemantics);
+    b.setFilename(workspacePath);
+    return b;
   }
 
   /**
@@ -819,7 +821,6 @@ public class Package {
     private final Package pkg;
 
     private final StarlarkSemantics starlarkSemantics;
-    private final CallStack.Builder callStackBuilder = new CallStack.Builder();
 
     // The map from each repository to that repository's remappings map.
     // This is only used in the //external package, it is an empty map for all other packages.
@@ -908,7 +909,6 @@ public class Package {
       }
     };
 
-    // low-level constructor
     Builder(Package pkg, StarlarkSemantics starlarkSemantics) {
       this.starlarkSemantics = starlarkSemantics;
       this.pkg = pkg;
@@ -917,7 +917,6 @@ public class Package {
       }
     }
 
-    // high-level constructor
     Builder(
         Helper helper,
         PackageIdentifier id,
@@ -1246,22 +1245,24 @@ public class Package {
         Label label,
         RuleClass ruleClass,
         Location location,
-        List<StarlarkThread.CallStackEntry> callstack,
         AttributeContainer attributeContainer) {
       return new Rule(
-          pkg, label, ruleClass, location, callStackBuilder.of(callstack), attributeContainer);
+          pkg,
+          label,
+          ruleClass,
+          location,
+          attributeContainer);
     }
 
     /**
-     * Same as {@link #createRule(Label, RuleClass, Location, List<StarlarkThread.CallStackEntry>,
-     * AttributeContainer)}, except allows specifying an {@link ImplicitOutputsFunction} override.
-     * Only use if you know what you're doing.
+     * Same as {@link #createRule(Label, RuleClass, Location, AttributeContainer)}, except
+     * allows specifying an {@link ImplicitOutputsFunction} override. Only use if you know what
+     * you're doing.
      */
     Rule createRule(
         Label label,
         RuleClass ruleClass,
         Location location,
-        List<StarlarkThread.CallStackEntry> callstack,
         AttributeContainer attributeContainer,
         ImplicitOutputsFunction implicitOutputsFunction) {
       return new Rule(
@@ -1269,7 +1270,6 @@ public class Package {
           label,
           ruleClass,
           location,
-          callStackBuilder.of(callstack),
           attributeContainer,
           implicitOutputsFunction);
     }

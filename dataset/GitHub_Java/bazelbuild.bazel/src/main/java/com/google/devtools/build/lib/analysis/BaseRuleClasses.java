@@ -33,7 +33,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
-import com.google.devtools.build.lib.analysis.constraints.ConstraintConstants;
+import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -315,7 +315,7 @@ public class BaseRuleClasses {
                 .value(ACTION_LISTENER))
         .add(
             attr(RuleClass.COMPATIBLE_ENVIRONMENT_ATTR, LABEL_LIST)
-                .allowedRuleClasses(ConstraintConstants.ENVIRONMENT_RULE)
+                .allowedRuleClasses(EnvironmentRule.RULE_NAME)
                 .cfg(HostTransition.createFactory())
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .dontCheckConstraints()
@@ -323,7 +323,7 @@ public class BaseRuleClasses {
                     "special logic for constraints and select: see ConstraintSemantics"))
         .add(
             attr(RuleClass.RESTRICTED_ENVIRONMENT_ATTR, LABEL_LIST)
-                .allowedRuleClasses(ConstraintConstants.ENVIRONMENT_RULE)
+                .allowedRuleClasses(EnvironmentRule.RULE_NAME)
                 .cfg(HostTransition.createFactory())
                 .allowedFileTypes(FileTypeSet.NO_FILE)
                 .dontCheckConstraints()
@@ -405,13 +405,15 @@ public class BaseRuleClasses {
     @Override
     public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
       return builder
-          // Documented in
-          // com/google/devtools/build/docgen/templates/attributes/common/toolchains.html.
-          .add(
-              attr("toolchains", LABEL_LIST)
-                  .allowedFileTypes(FileTypeSet.NO_FILE)
-                  .mandatoryProviders(ImmutableList.of(TemplateVariableInfo.PROVIDER.id()))
-                  .dontCheckConstraints())
+          /* <!-- #BLAZE_RULE($make_variable_expanding_rule).ATTRIBUTE(toolchains) -->
+          The set of toolchains that supply <a href="${link make-variables}">"Make variables"</a>
+          that this target can use in some of its attributes. Some rules have toolchains whose Make
+          variables they can use by default.
+          <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
+          .add(attr("toolchains", LABEL_LIST)
+              .allowedFileTypes(FileTypeSet.NO_FILE)
+              .mandatoryProviders(ImmutableList.of(TemplateVariableInfo.PROVIDER.id()))
+              .dontCheckConstraints())
           .build();
     }
 
