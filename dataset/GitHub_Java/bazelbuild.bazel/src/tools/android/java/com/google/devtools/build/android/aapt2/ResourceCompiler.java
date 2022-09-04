@@ -16,7 +16,6 @@ package com.google.devtools.build.android.aapt2;
 
 import com.android.builder.core.VariantType;
 import com.android.repository.Revision;
-import com.google.common.base.Preconditions;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
@@ -56,38 +55,22 @@ public class ResourceCompiler {
 
     @Override
     public Path call() throws Exception {
-        logger.fine(
-            new AaptCommandBuilder(aapt2)
-                .forBuildToolsVersion(buildToolsVersion)
-                .forVariantType(VariantType.LIBRARY)
-                .add("compile")
-                .add("-v")
-                .add("--legacy")
-                .add("-o", compiledResourcesOut.toString())
-                .add(file.toString())
-                .execute("Compiling " + file));
-
-
+      logger.fine(
+          new AaptCommandBuilder(aapt2)
+              .forBuildToolsVersion(buildToolsVersion)
+              .forVariantType(VariantType.LIBRARY)
+              .add("compile")
+              .add("-v")
+              .add("--legacy")
+              .add("-o", compiledResourcesOut.toString())
+              .add(file.toString())
+              .execute("Compiling " + file));
       String type = file.getParent().getFileName().toString();
       String filename = file.getFileName().toString();
       if (type.startsWith("values")) {
-        filename =
-            (filename.indexOf('.') != -1 ? filename.substring(0, filename.indexOf('.')) : filename)
-                + ".arsc";
+        filename = filename.substring(0, filename.indexOf('.')) + ".arsc";
       }
-
-      final Path compiledResourcePath =
-          compiledResourcesOut.resolve(type + "_" + filename + ".flat");
-      Preconditions.checkArgument(
-          Files.exists(compiledResourcePath),
-          "%s does not exists after aapt2 ran.",
-          compiledResourcePath);
-      return compiledResourcePath;
-    }
-
-    @Override
-    public String toString() {
-      return "ResourceCompiler.CompileTask(" + file + ")";
+      return compiledResourcesOut.resolve(type + "_" + filename + ".flat");
     }
   }
 
@@ -112,8 +95,7 @@ public class ResourceCompiler {
 
     @Override
     public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-      // Ignore directories and "hidden" files that start with .
-      if (!Files.isDirectory(file) && !file.getFileName().toString().startsWith(".")) {
+      if (!Files.isDirectory(file)) {
         tasks.add(
             executorService.submit(
                 new CompileTask(

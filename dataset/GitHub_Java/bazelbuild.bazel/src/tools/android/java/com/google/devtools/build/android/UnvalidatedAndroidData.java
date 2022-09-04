@@ -13,9 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.android.builder.core.VariantType;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.android.aapt2.CompiledResources;
 import com.google.devtools.build.android.aapt2.ResourceCompiler;
@@ -23,12 +21,10 @@ import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.regex.Pattern;
-import javax.annotation.Nullable;
 
 /**
  * Android data that has yet to be merged and validated, the primary data for the Processor.
@@ -49,7 +45,8 @@ class UnvalidatedAndroidData extends UnvalidatedAndroidDirectories {
   @VisibleForTesting
   static UnvalidatedAndroidData valueOf(String text, FileSystem fileSystem) {
     if (!VALID_REGEX.matcher(text).find()) {
-      throw new IllegalArgumentException(text + " is not in the format '" + EXPECTED_FORMAT + "'");
+      throw new IllegalArgumentException(
+          text + " is not in the format '" + EXPECTED_FORMAT + "'");
     }
     String[] parts = text.split(":");
     return new UnvalidatedAndroidData(
@@ -114,44 +111,16 @@ class UnvalidatedAndroidData extends UnvalidatedAndroidDirectories {
         assetDirs);
   }
 
-  /* Processes the resources for databinding annotations if dataBindingOut is defined. */
   public UnvalidatedAndroidData processDataBindings(
-      @Nullable Path dataBindingOut, String packagePath, Path dataBindingWorkingDirectory)
-      throws IOException {
+      Path dataBindingInfoOut, Path dataBindingWorkingDirectory) {
 
-    if (dataBindingOut == null) {
-      return this;
-    }
-
-    Preconditions.checkNotNull(manifest);
-    Preconditions.checkNotNull(packagePath);
-
-    final List<Path> processed = new ArrayList<>();
-    final Path metadataWorkingDirectory = dataBindingWorkingDirectory.resolve("metadata");
-    final Path databindingResourceRoot = dataBindingWorkingDirectory.resolve("resources");
-    for (Path resource : resourceDirs) {
-      processed.add(
-          AndroidResourceProcessor.processDataBindings(
-              databindingResourceRoot,
-              resource,
-              metadataWorkingDirectory,
-              VariantType.LIBRARY,
-              packagePath,
-              manifest,
-              false));
-    }
-
-    AndroidResourceOutputs.archiveDirectory(
-        metadataWorkingDirectory, dataBindingOut);
-
-    return new UnvalidatedAndroidData(ImmutableList.copyOf(processed), assetDirs, manifest) {
+    return new UnvalidatedAndroidData(resourceDirs, assetDirs, manifest) {
       @Override
       protected CompiledResources archiveCompiledResources(
           List<Path> resources, Path workingDirectory, Path output) throws IOException {
-        // Update the archiving to ensure that the resources are correctly placed.
         return CompiledResources.from(
             AndroidResourceOutputs.archiveCompiledResources(
-                output, databindingResourceRoot, workingDirectory, resources),
+                output, dataBindingWorkingDirectory, workingDirectory, resources),
             manifest,
             assetDirs);
       }

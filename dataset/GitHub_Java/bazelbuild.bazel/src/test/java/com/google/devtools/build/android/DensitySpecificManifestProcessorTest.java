@@ -203,9 +203,9 @@ public class DensitySpecificManifestProcessorTest {
     final Path path = tmp.resolve("AndroidManifest.xml");
     Files.createDirectories(path.getParent());
     Files.deleteIfExists(path);
-    try (BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8)) {
-      writer.write(Joiner.on("\n").join(lines));
-    }
+    BufferedWriter writer = Files.newBufferedWriter(path, StandardCharsets.UTF_8);
+    writer.write(Joiner.on("\n").join(lines));
+    writer.close();
     return path;
   }
 

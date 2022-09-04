@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.io.ByteStreams;
 import com.google.devtools.build.android.AaptCommandBuilder;
-import com.google.devtools.build.android.AndroidResourceOutputs;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -41,7 +40,7 @@ public class ResourceLinker {
     }
   }
 
-  private static Logger logger = Logger.getLogger(ResourceLinker.class.getName());
+  private static final Logger logger = Logger.getLogger(ResourceLinker.class.getName());
 
   private final Path aapt2;
   private final Path workingDirectory;
@@ -63,10 +62,9 @@ public class ResourceLinker {
     return new ResourceLinker(aapt2, workingDirectory);
   }
 
-
-  /** Dependent static libraries to be linked to. */
-  public ResourceLinker dependencies(List<StaticLibrary> libraries) {
-    this.linkAgainst = libraries;
+  /** Dependent static to be linked against. */
+  public ResourceLinker dependencies(List<StaticLibrary> linkAgainst) {
+    this.linkAgainst = linkAgainst;
     return this;
   }
 
@@ -88,8 +86,9 @@ public class ResourceLinker {
 
   public ResourceLinker filterToDensity(List<String> densitiesToFilter) {
     if (densitiesToFilter.size() > 1) {
-      logger.warning("Multiple densities not yet supported with aapt2");
-    } else if (densitiesToFilter.size() > 0) {
+      throw new UnsupportedOperationException("Multiple densities not yet supported with aapt2");
+    }
+    if (densitiesToFilter.size() > 0) {
       density = Iterables.getOnlyElement(densitiesToFilter);
     }
     return this;
@@ -103,9 +102,7 @@ public class ResourceLinker {
    */
   public StaticLibrary linkStatically(CompiledResources resources) {
     final Path outPath = workingDirectory.resolve("lib.ap_");
-    final Path rTxt = workingDirectory.resolve("R.txt");
-    final Path sourceJar = workingDirectory.resolve("r.srcjar");
-    Path javaSourceDirectory = workingDirectory.resolve("java");
+    Path rTxt = workingDirectory.resolve("R.txt");
 
     try {
       logger.fine(
@@ -120,16 +117,12 @@ public class ResourceLinker {
               .thenAdd("--no-version-vectors")
               .addRepeated("-R", unzipCompiledResources(resources.getZip()))
               .addRepeated("-I", StaticLibrary.toPathStrings(linkAgainst))
-              .add("--java", javaSourceDirectory)
               .add("--auto-add-overlay")
               .add("-o", outPath)
-              .add("--java", javaSourceDirectory)
+              .add("--java", workingDirectory.resolve("java")) // java needed to create R.txt
               .add("--output-text-symbols", rTxt)
               .execute(String.format("Statically linking %s", resources)));
-
-      AndroidResourceOutputs.createSrcJar(javaSourceDirectory, sourceJar, true /* staticIds */);
-
-      return StaticLibrary.from(outPath, rTxt, ImmutableList.of(), sourceJar);
+      return StaticLibrary.from(outPath, rTxt);
     } catch (IOException e) {
       throw new LinkError(e);
     }
@@ -151,7 +144,7 @@ public class ResourceLinker {
               .whenVersionIsAtLeast(new Revision(23))
               .thenAdd("--no-version-vectors")
               .add("--no-static-lib-packages")
-              .when(logger.getLevel() == Level.FINE)
+              .when(Level.FINE.equals(logger.getLevel()))
               .thenAdd("-v")
               .add("--manifest", compiled.getManifest())
               .add("--auto-add-overlay")
