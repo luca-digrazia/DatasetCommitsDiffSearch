@@ -64,16 +64,13 @@ public final class RestBlobStore implements SimpleBlobStore {
    * @param baseUrl base URL for the remote cache
    * @param poolSize maximum number of simultaneous connections
    */
-  public RestBlobStore(String baseUrl, int timeoutMillis, @Nullable Credentials creds)
+  public RestBlobStore(String baseUrl, int poolSize, int timeoutMillis, @Nullable Credentials creds)
       throws IOException {
     validateUrl(baseUrl);
     this.baseUrl = baseUrl;
     PoolingHttpClientConnectionManager connMan = new PoolingHttpClientConnectionManager();
-    // We'll use as many connections as necessary. The connection pool tries to re-use open
-    // connections before creating new ones, so in practice we should have as many connections
-    // as concurrent actions.
-    connMan.setDefaultMaxPerRoute(Integer.MAX_VALUE);
-    connMan.setMaxTotal(Integer.MAX_VALUE);
+    connMan.setDefaultMaxPerRoute(poolSize);
+    connMan.setMaxTotal(poolSize);
     clientFactory = HttpClientBuilder.create();
     clientFactory.setConnectionManager(connMan);
     clientFactory.setConnectionManagerShared(true);
