@@ -63,12 +63,6 @@ public class VertxHttpRecorder {
     private static volatile Router router;
 
     private static volatile Runnable closeTask;
-    private static final Runnable cleanupRouterTask = new Runnable() {
-        @Override
-        public void run() {
-            router = null;
-        }
-    };
 
     public static void setHotReplacement(Handler<RoutingContext> handler) {
         hotReplacementHandler = handler;
@@ -77,7 +71,7 @@ public class VertxHttpRecorder {
     public static void shutDownDevMode() {
         closeTask.run();
         closeTask = null;
-        cleanupRouterTask.run();
+        router = null;
         hotReplacementHandler = null;
     }
 
@@ -108,15 +102,12 @@ public class VertxHttpRecorder {
         }
     }
 
-    public RuntimeValue<Router> initializeRouter(final RuntimeValue<Vertx> vertxRuntimeValue,
-            final LaunchMode launchMode, final ShutdownContext shutdownContext) {
+    public RuntimeValue<Router> initializeRouter(RuntimeValue<Vertx> vertxRuntimeValue) {
 
         Vertx vertx = vertxRuntimeValue.getValue();
+
         if (router == null) {
             router = Router.router(vertx);
-            if (launchMode != LaunchMode.DEVELOPMENT) {
-                shutdownContext.addShutdownTask(cleanupRouterTask);
-            }
             if (hotReplacementHandler != null) {
                 router.route().handler(hotReplacementHandler);
             }
@@ -249,6 +240,7 @@ public class VertxHttpRecorder {
                                 throw new RuntimeException(e);
                             }
                         }
+                        router = null;
                         closeTask = null;
                     }
                 }
