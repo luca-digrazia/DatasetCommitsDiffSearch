@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.remote;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -29,6 +28,7 @@ import com.google.devtools.build.lib.remote.Retrier.Backoff;
 import com.google.devtools.build.lib.remote.Retrier.CircuitBreaker;
 import com.google.devtools.build.lib.remote.Retrier.CircuitBreaker.State;
 import com.google.devtools.build.lib.remote.Retrier.CircuitBreakerException;
+import com.google.devtools.build.lib.remote.Retrier.RetryException;
 import com.google.devtools.build.lib.remote.Retrier.ZeroBackoff;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
@@ -82,19 +82,15 @@ public class RetrierTest {
 
     Supplier<Backoff> s  = () -> new ZeroBackoff(/*maxRetries=*/2);
     Retrier r = new Retrier(s, RETRY_ALL, retryService, alwaysOpen);
-    AtomicInteger numCalls = new AtomicInteger();
     try {
-      r.execute(
-          () -> {
-            numCalls.incrementAndGet();
-            throw new Exception("call failed");
-          });
+      r.execute(() -> {
+        throw new Exception("call failed");
+      });
       fail("exception expected.");
-    } catch (Exception e) {
-      assertThat(e).hasMessageThat().isEqualTo("call failed");
+    } catch (RetryException e) {
+      assertThat(e.getAttempts()).isEqualTo(3);
     }
 
-    assertThat(numCalls.get()).isEqualTo(3);
     verify(alwaysOpen, times(3)).recordFailure();
     verify(alwaysOpen, never()).recordSuccess();
   }
@@ -106,19 +102,15 @@ public class RetrierTest {
 
     Supplier<Backoff> s  = () -> new ZeroBackoff(/*maxRetries=*/2);
     Retrier r = new Retrier(s, RETRY_NONE, retryService, alwaysOpen);
-    AtomicInteger numCalls = new AtomicInteger();
     try {
-      r.execute(
-          () -> {
-            numCalls.incrementAndGet();
-            throw new Exception("call failed");
-          });
+      r.execute(() -> {
+        throw new Exception("call failed");
+      });
       fail("exception expected.");
-    } catch (Exception e) {
-      assertThat(e).hasMessageThat().isEqualTo("call failed");
+    } catch (RetryException e) {
+      assertThat(e.getAttempts()).isEqualTo(1);
     }
 
-    assertThat(numCalls.get()).isEqualTo(1);
     verify(alwaysOpen, times(1)).recordFailure();
     verify(alwaysOpen, never()).recordSuccess();
   }
@@ -168,8 +160,17 @@ public class RetrierTest {
                       });
                 });
           });
-    } catch (Exception e) {
-      assertThat(e).hasMessageThat().isEqualTo("failure message");
+    } catch (RetryException outer) {
+      assertThat(outer.getAttempts()).isEqualTo(2);
+      // Propagate original cause.
+      assertThat(outer).hasCauseThat().hasMessageThat().isEqualTo("failure message");
+      // Compose the overall error message.
+      assertThat(outer)
+          .hasMessageThat()
+          .isEqualTo(
+              "Call failed after 1 retry attempts: "
+                  + "Call failed after 1 retry attempts: "
+                  + "Call failed after 1 retry attempts: failure message");
       assertThat(attemptsLvl0.get()).isEqualTo(2);
       assertThat(attemptsLvl1.get()).isEqualTo(4);
       assertThat(attemptsLvl2.get()).isEqualTo(8);
@@ -227,11 +228,10 @@ public class RetrierTest {
     cb.trialCall();
 
     try {
-      r.execute(
-          () -> {
-            throw new Exception("call failed");
-          });
-    } catch (Exception expected) {
+      r.execute(() -> {
+        throw new Exception("call failed");
+      });
+    } catch (RetryException expected) {
       // Intentionally left empty.
     }
 
@@ -243,41 +243,34 @@ public class RetrierTest {
     // Test that a call is not executed / retried if the current thread
     // is interrupted.
 
-    Supplier<Backoff> s = () -> new ZeroBackoff(/*maxRetries=*/ 3);
-    TripAfterNCircuitBreaker cb = new TripAfterNCircuitBreaker(/*maxConsecutiveFailures=*/ 2);
+    Supplier<Backoff> s  = () -> new ZeroBackoff(/*maxRetries=*/3);
+    TripAfterNCircuitBreaker cb = new TripAfterNCircuitBreaker(/*maxConsecutiveFailures=*/2);
     Retrier r = new Retrier(s, RETRY_ALL, retryService, cb);
 
-    AtomicInteger numCalls = new AtomicInteger();
-    Thread.currentThread().interrupt();
-    assertThrows(
-        InterruptedException.class,
-        () ->
-            r.execute(
-                () -> {
-                  numCalls.incrementAndGet();
-                  return 10;
-                }));
-    assertThat(numCalls.get()).isEqualTo(0);
+    try {
+      Thread.currentThread().interrupt();
+      r.execute(() -> 10);
+    } catch (InterruptedException expected) {
+      // Intentionally left empty.
+    }
   }
 
   @Test
   public void interruptsShouldNotBeRetried_exception() throws Exception {
     // Test that a call is not retried if an InterruptedException is thrown.
 
-    Supplier<Backoff> s = () -> new ZeroBackoff(/*maxRetries=*/ 3);
-    TripAfterNCircuitBreaker cb = new TripAfterNCircuitBreaker(/*maxConsecutiveFailures=*/ 2);
+    Supplier<Backoff> s  = () -> new ZeroBackoff(/*maxRetries=*/3);
+    TripAfterNCircuitBreaker cb = new TripAfterNCircuitBreaker(/*maxConsecutiveFailures=*/2);
     Retrier r = new Retrier(s, RETRY_ALL, retryService, cb);
 
-    AtomicInteger numCalls = new AtomicInteger();
-    assertThrows(
-        InterruptedException.class,
-        () ->
-            r.execute(
-                () -> {
-                  numCalls.incrementAndGet();
-                  throw new InterruptedException();
-                }));
-    assertThat(numCalls.get()).isEqualTo(1);
+    try {
+      Thread.currentThread().interrupt();
+      r.execute(() -> {
+        throw new InterruptedException();
+      });
+    } catch (InterruptedException expected) {
+      // Intentionally left empty.
+    }
   }
 
   @Test
@@ -287,19 +280,19 @@ public class RetrierTest {
 
     Supplier<Backoff> s = () -> new ZeroBackoff(/*maxRetries=*/ 2);
     Retrier r = new Retrier(s, RETRY_ALL, retryService, alwaysOpen);
-    AtomicInteger numCalls = new AtomicInteger();
     ListenableFuture<Void> res =
         r.executeAsync(
             () -> {
-              numCalls.incrementAndGet();
               throw new Exception("call failed");
             });
     try {
       res.get();
       fail("exception expected.");
     } catch (ExecutionException e) {
-      assertThat(numCalls.get()).isEqualTo(3);
-      assertThat(e).hasCauseThat().hasMessageThat().isEqualTo("call failed");
+      assertThat(e).hasCauseThat().isInstanceOf(RetryException.class);
+      assertThat(((RetryException) e.getCause()).getAttempts()).isEqualTo(3);
+      assertThat(e).hasCauseThat().hasMessageThat().contains("Exhausted retry attempts");
+      assertThat(e).hasCauseThat().hasMessageThat().contains("call failed");
     }
   }
 
@@ -310,19 +303,18 @@ public class RetrierTest {
 
     Supplier<Backoff> s = () -> new ZeroBackoff(/*maxRetries=*/ 2);
     Retrier r = new Retrier(s, RETRY_NONE, retryService, alwaysOpen);
-    AtomicInteger numCalls = new AtomicInteger();
     ListenableFuture<Void> res =
         r.executeAsync(
             () -> {
-              numCalls.incrementAndGet();
               throw new Exception("call failed");
             });
     try {
       res.get();
       fail("exception expected.");
     } catch (ExecutionException e) {
-      assertThat(e).hasCauseThat().hasMessageThat().isEqualTo("call failed");
-      assertThat(numCalls.get()).isEqualTo(1);
+      assertThat(e).hasCauseThat().isInstanceOf(RetryException.class);
+      assertThat(e).hasCauseThat().hasMessageThat().contains("not retriable");
+      assertThat(e).hasCauseThat().hasMessageThat().contains("call failed");
     }
   }
 
@@ -342,11 +334,14 @@ public class RetrierTest {
       res.get();
       fail("exception expected.");
     } catch (ExecutionException e) {
-      assertThat(e).hasCauseThat().hasMessageThat().isEqualTo("");
+      assertThat(e).hasCauseThat().isInstanceOf(RetryException.class);
+      assertThat(e).hasCauseThat().hasMessageThat().isEqualTo("Status not retriable.");
     }
   }
 
-  /** Simple circuit breaker that trips after N consecutive failures. */
+  /**
+   * Simple circuit breaker that trips after N consecutive failures.
+   */
   @ThreadSafe
   private static class TripAfterNCircuitBreaker implements CircuitBreaker {
 
