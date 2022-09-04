@@ -115,7 +115,7 @@ public class SmallRyeMetricsProcessor {
          * The use case is to facilitate migration from Micrometer-based metrics, because original dashboards for JVM metrics
          * will continue working without having to rewrite them.
          */
-        @ConfigItem(name = "micrometer.compatibility")
+        @ConfigItem(name = "micrometer.compatibility", defaultValue = "false")
         public boolean micrometerCompatibility;
 
     }
@@ -415,11 +415,7 @@ public class SmallRyeMetricsProcessor {
             BeanArchiveIndexBuildItem beanArchiveIndex) {
         IndexView index = beanArchiveIndex.getIndex();
         for (io.quarkus.arc.processor.BeanInfo bean : validationPhase.getContext().beans().producers()) {
-            ClassInfo implClazz = bean.getImplClazz();
-            if (implClazz == null) {
-                continue;
-            }
-            MetricType metricType = getMetricType(implClazz);
+            MetricType metricType = getMetricType(bean.getImplClazz());
             if (metricType != null) {
                 AnnotationTarget target = bean.getTarget().get();
                 AnnotationInstance metricAnnotation = null;

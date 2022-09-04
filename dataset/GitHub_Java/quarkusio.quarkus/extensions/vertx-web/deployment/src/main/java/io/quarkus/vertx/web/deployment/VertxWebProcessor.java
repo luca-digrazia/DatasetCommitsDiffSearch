@@ -1,8 +1,5 @@
 package io.quarkus.vertx.web.deployment;
 
-import static org.objectweb.asm.Opcodes.ACC_FINAL;
-import static org.objectweb.asm.Opcodes.ACC_PRIVATE;
-
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collections;
@@ -18,10 +15,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.Function;
 
-import javax.enterprise.context.ContextNotActiveException;
-import javax.enterprise.context.spi.Context;
-import javax.enterprise.context.spi.Contextual;
-import javax.enterprise.context.spi.CreationalContext;
 import javax.inject.Singleton;
 
 import org.jboss.jandex.AnnotationInstance;
@@ -36,17 +29,14 @@ import org.jboss.logging.Logger;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.ArcContainer;
 import io.quarkus.arc.InjectableBean;
-import io.quarkus.arc.InjectableContext;
-import io.quarkus.arc.InjectableReferenceProvider;
+import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
-import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.CustomScopeAnnotationsBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
-import io.quarkus.arc.impl.CreationalContextImpl;
 import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BeanInfo;
@@ -62,11 +52,8 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.HashUtil;
-import io.quarkus.gizmo.AssignableResultHandle;
-import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
-import io.quarkus.gizmo.FieldCreator;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
@@ -110,26 +97,6 @@ class VertxWebProcessor {
     private static final String VALUE_METHODS = "methods";
     private static final String VALUE_ORDER = "order";
     private static final String SLASH = "/";
-
-    private static final MethodDescriptor ARC_CONTAINER = MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class);
-    private static final MethodDescriptor ARC_CONTAINER_GET_ACTIVE_CONTEXT = MethodDescriptor.ofMethod(ArcContainer.class,
-            "getActiveContext", InjectableContext.class, Class.class);
-    private static final MethodDescriptor ARC_CONTAINER_BEAN = MethodDescriptor.ofMethod(ArcContainer.class, "bean",
-            InjectableBean.class, String.class);
-    private static final MethodDescriptor BEAN_GET_SCOPE = MethodDescriptor.ofMethod(InjectableBean.class, "getScope",
-            Class.class);
-    private static final MethodDescriptor CONTEXT_GET = MethodDescriptor.ofMethod(Context.class, "get", Object.class,
-            Contextual.class,
-            CreationalContext.class);
-    private static final MethodDescriptor CONTEXT_GET_IF_PRESENT = MethodDescriptor.ofMethod(Context.class, "get", Object.class,
-            Contextual.class);
-    private static final MethodDescriptor INJECTABLE_REF_PROVIDER_GET = MethodDescriptor.ofMethod(
-            InjectableReferenceProvider.class,
-            "get", Object.class,
-            CreationalContext.class);
-    private static final MethodDescriptor INJECTABLE_BEAN_DESTROY = MethodDescriptor.ofMethod(InjectableBean.class, "destroy",
-            void.class, Object.class,
-            CreationalContext.class);
 
     @BuildStep
     FeatureBuildItem feature() {
@@ -329,12 +296,6 @@ class VertxWebProcessor {
     }
 
     @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    void initRouteHandlers(VertxWebRecorder recorder, BeanContainerBuildItem container) {
-        recorder.initHandlers();
-    }
-
-    @BuildStep
     AnnotationsTransformerBuildItem annotationTransformer(CustomScopeAnnotationsBuildItem scopes) {
         return new AnnotationsTransformerBuildItem(new AnnotationsTransformer() {
 
@@ -404,93 +365,22 @@ class VertxWebProcessor {
         ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName)
                 .interfaces(RouteHandler.class).build();
 
-        // Initialized state
-        FieldCreator beanField = invokerCreator.getFieldCreator("bean", InjectableBean.class)
-                .setModifiers(ACC_PRIVATE | ACC_FINAL);
-        FieldCreator contextField = null;
-        FieldCreator containerField = null;
-        if (BuiltinScope.APPLICATION.is(bean.getScope()) || BuiltinScope.SINGLETON.is(bean.getScope())) {
-            // Singleton and application contexts are always active and unambiguous
-            contextField = invokerCreator.getFieldCreator("context", InjectableContext.class)
-                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
-        } else {
-            containerField = invokerCreator.getFieldCreator("container", ArcContainer.class)
-                    .setModifiers(ACC_PRIVATE | ACC_FINAL);
-        }
-
-        implementInitialize(bean, invokerCreator, beanField, contextField, containerField);
-        implementInvoke(bean, method, invokerCreator, beanField, contextField, containerField);
-
-        invokerCreator.close();
-        return generatedName.replace('/', '.');
-    }
-
-    void implementInitialize(BeanInfo bean, ClassCreator invokerCreator, FieldCreator beanField, FieldCreator contextField,
-            FieldCreator containerField) {
-        MethodCreator initialize = invokerCreator.getMethodCreator("initialize", void.class);
-        ResultHandle containerHandle = initialize
-                .invokeStaticMethod(ARC_CONTAINER);
-        ResultHandle beanHandle = initialize.invokeInterfaceMethod(
-                ARC_CONTAINER_BEAN,
-                containerHandle, initialize.load(bean.getIdentifier()));
-        initialize.writeInstanceField(beanField.getFieldDescriptor(), initialize.getThis(), beanHandle);
-        if (contextField != null) {
-            initialize.writeInstanceField(contextField.getFieldDescriptor(), initialize.getThis(),
-                    initialize.invokeInterfaceMethod(
-                            ARC_CONTAINER_GET_ACTIVE_CONTEXT,
-                            containerHandle, initialize
-                                    .invokeInterfaceMethod(
-                                            BEAN_GET_SCOPE,
-                                            beanHandle)));
-        } else {
-            initialize.writeInstanceField(containerField.getFieldDescriptor(), initialize.getThis(), containerHandle);
-        }
-        initialize.returnValue(null);
-    }
-
-    void implementInvoke(BeanInfo bean, MethodInfo method, ClassCreator invokerCreator, FieldCreator beanField,
-            FieldCreator contextField, FieldCreator containerField) {
-        // The descriptor is: void invoke(RoutingContext context)
-        MethodCreator invoke = invokerCreator.getMethodCreator("invoke", void.class, RoutingContext.class);
-        ResultHandle beanHandle = invoke.readInstanceField(beanField.getFieldDescriptor(), invoke.getThis());
-        AssignableResultHandle beanInstanceHandle = invoke.createVariable(Object.class);
-        AssignableResultHandle creationlContextHandle = invoke.createVariable(CreationalContextImpl.class);
-
-        if (BuiltinScope.DEPENDENT.is(bean.getScope())) {
-            // Always create a new dependent instance
-            invoke.assign(creationlContextHandle,
-                    invoke.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class),
-                            beanHandle));
-            invoke.assign(beanInstanceHandle, invoke.invokeInterfaceMethod(
-                    INJECTABLE_REF_PROVIDER_GET, beanHandle,
-                    creationlContextHandle));
-        } else {
-            ResultHandle contextInvokeHandle;
-            if (contextField != null) {
-                contextInvokeHandle = invoke.readInstanceField(contextField.getFieldDescriptor(), invoke.getThis());
-            } else {
-                ResultHandle containerInvokeHandle = invoke.readInstanceField(containerField.getFieldDescriptor(),
-                        invoke.getThis());
-                contextInvokeHandle = invoke.invokeInterfaceMethod(
-                        ARC_CONTAINER_GET_ACTIVE_CONTEXT,
-                        containerInvokeHandle, invoke
-                                .invokeInterfaceMethod(
-                                        BEAN_GET_SCOPE,
-                                        beanHandle));
-                invoke.ifNull(contextInvokeHandle).trueBranch().throwException(ContextNotActiveException.class,
-                        "Context not active: " + bean.getScope().getDotName());
-            }
-            // First try to obtain the bean via Context.get(bean)
-            invoke.assign(beanInstanceHandle, invoke.invokeInterfaceMethod(CONTEXT_GET_IF_PRESENT, contextInvokeHandle,
-                    beanHandle));
-            // If not present, try Context.get(bean,creationalContext)
-            BytecodeCreator doesNotExist = invoke.ifNull(beanInstanceHandle).trueBranch();
-            doesNotExist.assign(beanInstanceHandle,
-                    doesNotExist.invokeInterfaceMethod(CONTEXT_GET, contextInvokeHandle, beanHandle,
-                            doesNotExist.newInstance(
-                                    MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class),
-                                    beanHandle)));
-        }
+        // The descriptor is: void invokeBean(Object context)
+        MethodCreator invoke = invokerCreator.getMethodCreator("invokeBean", void.class, Object.class);
+        // ArcContainer container = Arc.container();
+        // InjectableBean<Foo: bean = container.bean("1");
+        // InstanceHandle<Foo> handle = container().instance(bean);
+        // handle.get().foo(ctx);
+        ResultHandle containerHandle = invoke
+                .invokeStaticMethod(MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));
+        ResultHandle beanHandle = invoke.invokeInterfaceMethod(
+                MethodDescriptor.ofMethod(ArcContainer.class, "bean", InjectableBean.class, String.class),
+                containerHandle, invoke.load(bean.getIdentifier()));
+        ResultHandle instanceHandle = invoke.invokeInterfaceMethod(
+                MethodDescriptor.ofMethod(ArcContainer.class, "instance", InstanceHandle.class, InjectableBean.class),
+                containerHandle, beanHandle);
+        ResultHandle beanInstanceHandle = invoke
+                .invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "get", Object.class), instanceHandle);
 
         ResultHandle paramHandle;
         MethodDescriptor methodDescriptor;
@@ -514,12 +404,15 @@ class VertxWebProcessor {
         // Invoke the business method handler
         invoke.invokeVirtualMethod(methodDescriptor, beanInstanceHandle, paramHandle);
 
-        // Destroy dependent instance afterwards
+        // handle.destroy() - destroy dependent instance afterwards
         if (BuiltinScope.DEPENDENT.is(bean.getScope())) {
-            invoke.invokeInterfaceMethod(INJECTABLE_BEAN_DESTROY, beanHandle,
-                    beanInstanceHandle, creationlContextHandle);
+            invoke.invokeInterfaceMethod(MethodDescriptor.ofMethod(InstanceHandle.class, "destroy", void.class),
+                    instanceHandle);
         }
         invoke.returnValue(null);
+
+        invokerCreator.close();
+        return generatedName.replace('/', '.');
     }
 
     private static String dashify(String value) {

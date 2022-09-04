@@ -30,18 +30,16 @@ import io.quarkus.arc.InstanceHandle;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
 import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
-import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
-import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem.BeanConfiguratorBuildItem;
+import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.CustomScopeAnnotationsBuildItem;
-import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem;
 import io.quarkus.arc.deployment.UnremovableBeanBuildItem.BeanClassAnnotationExclusion;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem;
 import io.quarkus.arc.deployment.ValidationPhaseBuildItem.ValidationErrorBuildItem;
 import io.quarkus.arc.processor.AnnotationStore;
 import io.quarkus.arc.processor.AnnotationsTransformer;
+import io.quarkus.arc.processor.BeanDeploymentValidator;
 import io.quarkus.arc.processor.BeanInfo;
-import io.quarkus.arc.processor.BeanRegistrar;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
@@ -54,6 +52,7 @@ import io.quarkus.deployment.builditem.AnnotationProxyBuildItem;
 import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
+import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.util.HashUtil;
 import io.quarkus.gizmo.ClassCreator;
@@ -66,8 +65,8 @@ import io.quarkus.scheduler.ScheduledExecution;
 import io.quarkus.scheduler.runtime.ScheduledInvoker;
 import io.quarkus.scheduler.runtime.ScheduledMethodMetadata;
 import io.quarkus.scheduler.runtime.SchedulerConfig;
-import io.quarkus.scheduler.runtime.SchedulerContext;
 import io.quarkus.scheduler.runtime.SchedulerRecorder;
+import io.quarkus.scheduler.runtime.SchedulerSupport;
 import io.quarkus.scheduler.runtime.SimpleScheduler;
 
 /**
@@ -86,10 +85,12 @@ public class SchedulerProcessor {
     static final String INVOKER_SUFFIX = "_ScheduledInvoker";
 
     @BuildStep
-    void beans(Capabilities capabilities, BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
+    AdditionalBeanBuildItem beans(Capabilities capabilities) {
+        AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder().addBeanClass(SchedulerSupport.class);
         if (!capabilities.isCapabilityPresent(Capabilities.QUARTZ)) {
-            additionalBeans.produce(new AdditionalBeanBuildItem(SimpleScheduler.class));
+            builder.addBeanClass(SimpleScheduler.class);
         }
+        return builder.build();
     }
 
     @BuildStep
@@ -120,27 +121,29 @@ public class SchedulerProcessor {
     void collectScheduledMethods(
             SchedulerConfig config,
             BeanArchiveIndexBuildItem beanArchives,
-            BeanRegistrationPhaseBuildItem beanRegistrationPhase,
+            ValidationPhaseBuildItem validationPhase,
             BuildProducer<ScheduledBusinessMethodItem> scheduledBusinessMethods,
-            BuildProducer<BeanConfiguratorBuildItem> beans) {
+            BuildProducer<ValidationErrorBuildItem> errors) {
 
-        AnnotationStore annotationStore = beanRegistrationPhase.getContext().get(BuildExtension.Key.ANNOTATION_STORE);
+        AnnotationStore annotationStore = validationPhase.getContext().get(BuildExtension.Key.ANNOTATION_STORE);
 
         // We need to collect all business methods annotated with @Scheduled first
-        for (BeanInfo bean : beanRegistrationPhase.getContext().beans().classBeans()) {
+        for (BeanInfo bean : validationPhase.getContext().beans().classBeans()) {
             collectScheduledMethods(config, beanArchives.getIndex(), annotationStore, bean,
                     bean.getTarget().get().asClass(),
-                    scheduledBusinessMethods, beanRegistrationPhase.getContext());
+                    scheduledBusinessMethods, validationPhase.getContext());
         }
     }
 
     private void collectScheduledMethods(SchedulerConfig config, IndexView index, AnnotationStore annotationStore,
             BeanInfo bean, ClassInfo beanClass,
             BuildProducer<ScheduledBusinessMethodItem> scheduledBusinessMethods,
-            BeanRegistrar.RegistrationContext context) {
+            BeanDeploymentValidator.ValidationContext validationContext) {
 
         for (MethodInfo method : beanClass.methods()) {
+
             List<AnnotationInstance> schedules = null;
+
             AnnotationInstance scheduledAnnotation = annotationStore.getAnnotation(method, SCHEDULED_NAME);
             if (scheduledAnnotation != null) {
                 schedules = Collections.singletonList(scheduledAnnotation);
@@ -153,7 +156,31 @@ public class SchedulerProcessor {
                     }
                 }
             }
+
             if (schedules != null) {
+                // Validate method params and return type
+                List<Type> params = method.parameters();
+                if (params.size() > 1
+                        || (params.size() == 1 && !params.get(0).equals(SCHEDULED_EXECUTION_TYPE))) {
+                    validationContext.addDeploymentProblem(new IllegalStateException(String.format(
+                            "Invalid scheduled business method parameters %s [method: %s, bean: %s]", params,
+                            method, bean)));
+                    return;
+                }
+                if (!method.returnType().kind().equals(Type.Kind.VOID)) {
+                    validationContext.addDeploymentProblem(new IllegalStateException(
+                            String.format("Scheduled business method must return void [method: %s, bean: %s]",
+                                    method, bean)));
+                    return;
+                }
+                // Validate cron() and every() expressions
+                CronParser parser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(config.cronType));
+                for (AnnotationInstance scheduled : schedules) {
+                    Throwable error = validateScheduled(parser, scheduled);
+                    if (error != null) {
+                        validationContext.addDeploymentProblem(error);
+                    }
+                }
                 scheduledBusinessMethods.produce(new ScheduledBusinessMethodItem(bean, method, schedules));
                 LOGGER.debugf("Found scheduled business method %s declared on %s", method, bean);
             }
@@ -164,44 +191,8 @@ public class SchedulerProcessor {
             ClassInfo superClass = index.getClassByName(superClassName);
             if (superClass != null) {
                 collectScheduledMethods(config, index, annotationStore, bean, superClass, scheduledBusinessMethods,
-                        context);
+                        validationContext);
             }
-        }
-    }
-
-    @BuildStep
-    void validateScheduledBusinessMethods(SchedulerConfig config, List<ScheduledBusinessMethodItem> scheduledMethods,
-            ValidationPhaseBuildItem validationPhase, BuildProducer<ValidationErrorBuildItem> validationErrors) {
-        List<Throwable> errors = new ArrayList<>();
-
-        for (ScheduledBusinessMethodItem scheduledMethod : scheduledMethods) {
-            MethodInfo method = scheduledMethod.getMethod();
-
-            // Validate method params and return type
-            List<Type> params = method.parameters();
-            if (params.size() > 1
-                    || (params.size() == 1 && !params.get(0).equals(SCHEDULED_EXECUTION_TYPE))) {
-                errors.add(new IllegalStateException(String.format(
-                        "Invalid scheduled business method parameters %s [method: %s, bean: %s]", params,
-                        method, scheduledMethod.getBean())));
-            }
-            if (!method.returnType().kind().equals(Type.Kind.VOID)) {
-                errors.add(new IllegalStateException(
-                        String.format("Scheduled business method must return void [method: %s, bean: %s]",
-                                method, scheduledMethod.getBean())));
-            }
-            // Validate cron() and every() expressions
-            CronParser parser = new CronParser(CronDefinitionBuilder.instanceDefinitionFor(config.cronType));
-            for (AnnotationInstance scheduled : scheduledMethod.getSchedules()) {
-                Throwable error = validateScheduled(parser, scheduled);
-                if (error != null) {
-                    errors.add(error);
-                }
-            }
-        }
-
-        if (!errors.isEmpty()) {
-            validationErrors.produce(new ValidationErrorBuildItem(errors));
         }
     }
 
@@ -214,17 +205,18 @@ public class SchedulerProcessor {
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    public void build(SchedulerConfig config, BuildProducer<SyntheticBeanBuildItem> syntheticBeans, SchedulerRecorder recorder,
-            List<ScheduledBusinessMethodItem> scheduledMethods,
+    public void build(SchedulerConfig config, SchedulerRecorder recorder, BeanContainerBuildItem beanContainer,
+            List<ScheduledBusinessMethodItem> scheduledBusinessMethods,
             BuildProducer<GeneratedClassBuildItem> generatedClass, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<FeatureBuildItem> feature,
+            BuildProducer<ServiceStartBuildItem> serviceStart,
             AnnotationProxyBuildItem annotationProxy, ExecutorBuildItem executor) {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SCHEDULER));
-        List<ScheduledMethodMetadata> scheduledMetadata = new ArrayList<>();
+        List<ScheduledMethodMetadata> scheduledMethods = new ArrayList<>();
         ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
 
-        for (ScheduledBusinessMethodItem businessMethod : scheduledMethods) {
+        for (ScheduledBusinessMethodItem businessMethod : scheduledBusinessMethods) {
             ScheduledMethodMetadata scheduledMethod = new ScheduledMethodMetadata();
             String invokerClass = generateInvoker(businessMethod.getBean(), businessMethod.getMethod(), classOutput);
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, invokerClass));
@@ -236,12 +228,11 @@ public class SchedulerProcessor {
             scheduledMethod.setSchedules(schedules);
             scheduledMethod.setMethodDescription(
                     businessMethod.getMethod().declaringClass() + "#" + businessMethod.getMethod().name());
-            scheduledMetadata.add(scheduledMethod);
+            scheduledMethods.add(scheduledMethod);
         }
-
-        syntheticBeans.produce(SyntheticBeanBuildItem.configure(SchedulerContext.class).setRuntimeInit()
-                .supplier(recorder.createContext(config, executor.getExecutorProxy(), scheduledMetadata))
-                .done());
+        recorder.initialize(config, scheduledMethods, executor.getExecutorProxy(), beanContainer.getValue());
+        // Make sure that StartupEvent is fired after the init
+        serviceStart.produce(new ServiceStartBuildItem(FeatureBuildItem.SCHEDULER));
     }
 
     private String generateInvoker(BeanInfo bean, MethodInfo method, ClassOutput classOutput) {
@@ -306,7 +297,7 @@ public class SchedulerProcessor {
         AnnotationValue cronValue = schedule.value("cron");
         if (cronValue != null && !cronValue.asString().trim().isEmpty()) {
             String cron = cronValue.asString().trim();
-            if (SchedulerContext.isConfigValue(cron)) {
+            if (SchedulerSupport.isConfigValue(cron)) {
                 // Don't validate config property
                 return null;
             }
@@ -319,7 +310,7 @@ public class SchedulerProcessor {
             AnnotationValue everyValue = schedule.value("every");
             if (everyValue != null && !everyValue.asString().trim().isEmpty()) {
                 String every = everyValue.asString().trim();
-                if (SchedulerContext.isConfigValue(every)) {
+                if (SchedulerSupport.isConfigValue(every)) {
                     return null;
                 }
                 if (Character.isDigit(every.charAt(0))) {
@@ -332,23 +323,6 @@ public class SchedulerProcessor {
                 }
             } else {
                 return new IllegalStateException("@Scheduled must declare either cron() or every(): " + schedule);
-            }
-        }
-        if (schedule.value("delay") == null) {
-            AnnotationValue delayedValue = schedule.value("delayed");
-            if (delayedValue != null && !delayedValue.asString().trim().isEmpty()) {
-                String delayed = delayedValue.asString().trim();
-                if (SchedulerContext.isConfigValue(delayed)) {
-                    return null;
-                }
-                if (Character.isDigit(delayed.charAt(0))) {
-                    delayed = "PT" + delayed;
-                }
-                try {
-                    Duration.parse(delayed);
-                } catch (Exception e) {
-                    return new IllegalStateException("Invalid delayed() expression on: " + schedule, e);
-                }
             }
         }
         return null;
