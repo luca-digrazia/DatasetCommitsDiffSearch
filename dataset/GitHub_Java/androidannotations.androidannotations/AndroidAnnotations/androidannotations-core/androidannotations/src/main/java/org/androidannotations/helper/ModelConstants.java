@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,7 +23,6 @@ import java.util.List;
 import javax.lang.model.SourceVersion;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.Option;
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.annotations.EApplication;
 import org.androidannotations.annotations.EBean;
@@ -34,6 +33,7 @@ import org.androidannotations.annotations.EReceiver;
 import org.androidannotations.annotations.EService;
 import org.androidannotations.annotations.EView;
 import org.androidannotations.annotations.EViewGroup;
+import org.androidannotations.process.Option;
 
 public abstract class ModelConstants {
 
@@ -57,7 +57,7 @@ public abstract class ModelConstants {
 			throw new IllegalArgumentException("'" + classSuffix + "' may not be an empty string.");
 		}
 
-		if (!SourceVersion.isName("ValidName" + classSuffix) || classSuffix.contains(".")) {
+		if (!SourceVersion.isName(classSuffix) || classSuffix.contains(".")) {
 			throw new IllegalArgumentException("'" + classSuffix + "' may not be a valid Java identifier.");
 		}
 	}
