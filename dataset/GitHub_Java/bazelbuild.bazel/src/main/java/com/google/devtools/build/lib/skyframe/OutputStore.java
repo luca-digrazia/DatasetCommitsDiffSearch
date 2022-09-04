@@ -166,7 +166,7 @@ class OutputStore {
     injectedFiles.add(output);
 
     // While `artifactValue` carries the important information, consumers also require an entry in
-    // `artifactData` so a `PLACEHOLDER` is added to `artifactData`.
+    // `outputArtifactData` so a `PLACEHOLDER` is added to `outputArtifactData`.
     artifactData.put(output, ArtifactFileMetadata.PLACEHOLDER);
     additionalOutputData.put(output, artifactValue);
   }

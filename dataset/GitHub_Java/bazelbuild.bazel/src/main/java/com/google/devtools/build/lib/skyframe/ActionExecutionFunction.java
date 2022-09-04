@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ArtifactSkyKey;
 import com.google.devtools.build.lib.actions.FileArtifactValue;
 import com.google.devtools.build.lib.actions.FilesetOutputSymlink;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MissingDepException;
 import com.google.devtools.build.lib.actions.MissingInputFileException;
 import com.google.devtools.build.lib.actions.NotifyOnActionCacheHit;
@@ -68,6 +67,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import javax.annotation.Nullable;
 
 /**
@@ -383,14 +383,15 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     // The metadataHandler may be recreated (via the supplier) if we discover inputs.
     ArtifactPathResolver pathResolver = ArtifactPathResolver.createPathResolver(
         state.actionFileSystem, skyframeActionExecutor.getExecRoot());
-    ActionMetadataHandler metadataHandler =
-        new ActionMetadataHandler(
-            state.inputArtifactData,
-            /* missingArtifactsAllowed= */ action.discoversInputs(),
-            action.getOutputs(),
-            tsgm.get(),
-            pathResolver,
-            state.actionFileSystem == null ? new OutputStore() : new MinimalOutputStore());
+    Supplier<ActionMetadataHandler> metadataHandlerSupplier =
+        () ->
+            new ActionMetadataHandler(
+                state.inputArtifactData,
+                action.getOutputs(),
+                tsgm.get(),
+                pathResolver,
+                state.actionFileSystem == null ? new OutputStore() : new MinimalOutputStore());
+    ActionMetadataHandler metadataHandler = metadataHandlerSupplier.get();
     long actionStartTime = BlazeClock.nanoTime();
     // We only need to check the action cache if we haven't done it on a previous run.
     if (!state.hasCheckedActionCache()) {
@@ -426,10 +427,9 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
     // This may be recreated if we discover inputs.
     // TODO(shahan): this isn't used when using ActionFileSystem so we can avoid creating some
     // unused objects.
-    MetadataProvider perActionFileCache = skyframeActionExecutor.usePerFileActionCache()
-        ? new PerActionFileCache(
-            state.inputArtifactData, /*missingArtifactsAllowed=*/ action.discoversInputs())
-        : metadataHandler;
+    PerActionFileCache perActionFileCache =
+        new PerActionFileCache(
+            state.inputArtifactData, /*missingArtifactsAllowed=*/ action.discoversInputs());
     if (action.discoversInputs()) {
       if (state.discoveredInputs == null) {
         try {
@@ -459,20 +459,12 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       if (env.valuesMissing()) {
         return null;
       }
-      metadataHandler =
-          new ActionMetadataHandler(
-              state.inputArtifactData,
-              /* missingArtifactsAllowed= */ false,
-              action.getOutputs(),
-              tsgm.get(),
-              pathResolver,
-              state.actionFileSystem == null ? new OutputStore() : new MinimalOutputStore());
+      perActionFileCache =
+          new PerActionFileCache(state.inputArtifactData, /*missingArtifactsAllowed=*/ false);
+
+      metadataHandler = metadataHandlerSupplier.get();
       // Set the MetadataHandler to accept output information.
       metadataHandler.discardOutputMetadata();
-
-      perActionFileCache = skyframeActionExecutor.usePerFileActionCache()
-          ? new PerActionFileCache(state.inputArtifactData, /*missingArtifactsAllowed=*/ false)
-          : metadataHandler;
     }
 
     // Make sure this is a regular HashMap rather than ImmutableMapBuilder so that we are safe
@@ -550,14 +542,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
         // the documentation on MetadataHandler.artifactOmitted. This works by accident because
         // markOmitted is only called for remote execution, and this code only gets executed for
         // local execution.
-        metadataHandler =
-            new ActionMetadataHandler(
-                state.inputArtifactData,
-                /*missingArtifactsAllowed=*/ false,
-                action.getOutputs(),
-                tsgm.get(),
-                pathResolver,
-                state.actionFileSystem == null ? new OutputStore() : new MinimalOutputStore());
+        metadataHandler = metadataHandlerSupplier.get();
       }
     }
     Preconditions.checkState(!env.valuesMissing(), action);

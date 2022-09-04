@@ -80,7 +80,6 @@ public final class ActionMetadataHandler implements MetadataHandler {
    * <p>This should never be read directly. Use {@link #getInputFileArtifactValue} instead.
    */
   private final ActionInputMap inputArtifactData;
-  private final boolean missingArtifactsAllowed;
 
   /** Outputs that are to be omitted. */
   private final Set<Artifact> omittedOutputs = Sets.newConcurrentHashSet();
@@ -91,7 +90,6 @@ public final class ActionMetadataHandler implements MetadataHandler {
    * The timestamp granularity monitor for this build.
    * Use {@link #getTimestampGranularityMonitor(Artifact)} to fetch this member.
    */
-  @Nullable
   private final TimestampGranularityMonitor tsgm;
   private final ArtifactPathResolver artifactPathResolver;
 
@@ -106,13 +104,11 @@ public final class ActionMetadataHandler implements MetadataHandler {
   @VisibleForTesting
   public ActionMetadataHandler(
       ActionInputMap inputArtifactData,
-      boolean missingArtifactsAllowed,
       Iterable<Artifact> outputs,
-      @Nullable TimestampGranularityMonitor tsgm,
+      TimestampGranularityMonitor tsgm,
       ArtifactPathResolver artifactPathResolver,
       OutputStore store)  {
     this.inputArtifactData = Preconditions.checkNotNull(inputArtifactData);
-    this.missingArtifactsAllowed = missingArtifactsAllowed;
     this.outputs = ImmutableSet.copyOf(outputs);
     this.tsgm = tsgm;
     this.artifactPathResolver = artifactPathResolver;
@@ -128,7 +124,6 @@ public final class ActionMetadataHandler implements MetadataHandler {
    * @param artifact the artifact for which to fetch the timestamp granularity monitor
    * @return the timestamp granularity monitor to use, which may be null
    */
-  @Nullable
   private TimestampGranularityMonitor getTimestampGranularityMonitor(Artifact artifact) {
     return artifact.isConstantMetadata() ? null : tsgm;
   }
@@ -156,25 +151,15 @@ public final class ActionMetadataHandler implements MetadataHandler {
   }
 
   @Override
-  public FileArtifactValue getMetadata(ActionInput actionInput) throws IOException {
-    // TODO(shahan): is this bypass needed?
-    if (!(actionInput instanceof Artifact)) {
-      return null;
-    }
-
-    Artifact artifact = (Artifact) actionInput;
+  public FileArtifactValue getMetadata(Artifact artifact) throws IOException {
     FileArtifactValue value = getInputFileArtifactValue(artifact);
     if (value != null) {
       return metadataFromValue(value);
     }
-
     if (artifact.isSourceArtifact()) {
       // A discovered input we didn't have data for.
       // TODO(bazel-team): Change this to an assertion once Skyframe has native input discovery, so
       // all inputs will already have metadata known.
-      if (!missingArtifactsAllowed) {
-        throw new IllegalStateException(String.format("null for %s", artifact));
-      }
       return null;
     } else if (artifact.isMiddlemanArtifact()) {
       // A middleman artifact's data was either already injected from the action cache checker using
@@ -195,11 +180,7 @@ public final class ActionMetadataHandler implements MetadataHandler {
       // Calling code depends on this particular exception.
       throw new FileNotFoundException(artifact + " not found");
     }
-    // Fallthrough: the artifact must be a non-tree, non-middleman output artifact.
-
-    // Check for existing metadata. It may have been injected. In either case, this method is called
-    // from SkyframeActionExecutor to make sure that we have metadata for all action outputs, as the
-    // results are then stored in Skyframe (and the action cache).
+    // It's an ordinary artifact.
     ArtifactFileMetadata fileMetadata = store.getArtifactData(artifact);
     if (fileMetadata != null) {
       // Non-middleman artifacts should only have additionalOutputData if they have
@@ -216,30 +197,14 @@ public final class ActionMetadataHandler implements MetadataHandler {
       }
       return FileArtifactValue.createNormalFile(fileMetadata);
     }
-
-    // No existing metadata; this can happen if the output metadata is not injected after a spawn
-    // is executed. SkyframeActionExecutor.checkOutputs calls this method for every output file of
-    // the action, which hits this code path. Another possibility is that an action runs multiple
-    // spawns, and a subsequent spawn requests the metadata of an output of a previous spawn.
-    //
-    // Stat the file. All output artifacts of an action are deleted before execution, so if a file
-    // exists, it was most likely created by the current action. There is a race condition here if
-    // an external process creates (or modifies) the file between the deletion and this stat, which
-    // we cannot solve.
-    //
-    // We only cache nonexistence here, not file system errors. It is unlikely that the file will be
-    // requested from this cache too many times.
+    // We do not cache exceptions besides nonexistence here, because it is unlikely that the file
+    // will be requested from this cache too many times.
     fileMetadata = constructArtifactFileMetadata(artifact, /*statNoFollow=*/ null);
     return maybeStoreAdditionalData(artifact, fileMetadata, null);
   }
 
-  @Override
-  public ActionInput getInput(String execPath) {
-    return inputArtifactData.getInput(execPath);
-  }
-
   /**
-   * See {@link OutputStore#getAllAdditionalOutputData} for why we sometimes need to store
+   * See {@link Outputstore#getAllAdditionalOutputData} for why we sometimes need to store
    * additional data, even for normal (non-middleman) artifacts.
    */
   @Nullable
