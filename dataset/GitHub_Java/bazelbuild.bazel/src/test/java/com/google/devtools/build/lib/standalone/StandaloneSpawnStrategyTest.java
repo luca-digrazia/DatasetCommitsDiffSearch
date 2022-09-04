@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil.NullAction;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -60,7 +59,6 @@ import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.UnixGlob;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsParser;
@@ -215,8 +213,7 @@ public class StandaloneSpawnStrategyTest {
         SIMPLE_ARTIFACT_EXPANDER,
         /*actionFileSystem=*/ null,
         /*skyframeDepsResult=*/ null,
-        NestedSetExpander.DEFAULT,
-        UnixGlob.DEFAULT_SYSCALLS);
+        NestedSetExpander.DEFAULT);
   }
 
   @Test
@@ -319,7 +316,7 @@ public class StandaloneSpawnStrategyTest {
   public void testVerboseFailures() {
     ExecException e = assertThrows(ExecException.class, () -> run(createSpawn(getFalseCommand())));
     ActionExecutionException actionExecutionException =
-        e.toActionExecutionException(new NullAction());
+        e.toActionExecutionException("messagePrefix", null);
     assertWithMessage("got: " + actionExecutionException.getMessage())
         .that(actionExecutionException.getMessage().contains("failed: error executing command"))
         .isTrue();

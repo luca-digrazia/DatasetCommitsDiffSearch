@@ -14,16 +14,16 @@
 
 package com.google.devtools.build.lib.actions;
 
+import com.google.common.base.Strings;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.errorprone.annotations.ForOverride;
-import javax.annotation.Nullable;
 
 /**
  * An exception indication that the execution of an action has failed OR could not be attempted OR
  * could not be finished OR had something else wrong.
  *
- * <p>The six main kinds of failure are broadly defined as follows:
+ * <p>The five main kinds of failure are broadly defined as follows:
  *
  * <p>USER_INPUT which means it had something to do with what the user told us to do. This failure
  * should satisfy the invariant that it would happen identically again if all other things are
@@ -41,8 +41,6 @@ import javax.annotation.Nullable;
  * <p>LOST_INPUT which means the failure occurred because the action expected to consume some input
  * that went missing. Although this seems similar to ENVIRONMENT, Blaze may know how to fix this
  * problem.
- *
- * <p>MISSING_DEP which means that a skyframe restart is necessary because a dependency was missing.
  *
  * <p>The class is a catch-all for both failures of actions and failures to evaluate actions
  * properly.
@@ -89,32 +87,27 @@ public abstract class ExecException extends Exception {
    * @return ActionExecutionException object describing the action failure
    */
   public final ActionExecutionException toActionExecutionException(Action action) {
-    return toActionExecutionException(null, action);
+    return toActionExecutionException("", action);
   }
 
   /**
-   * Returns a new ActionExecutionException given an optional action subtask describing which part
-   * of the action failed (should be null for standard action failures). When appropriate (we use
-   * some heuristics to decide), produces an abbreviated message incorporating just the termination
-   * status if available.
+   * Returns a new ActionExecutionException given a message prefix describing the action type as a
+   * noun. When appropriate (we use some heuristics to decide), produces an abbreviated message
+   * incorporating just the termination status if available.
    *
-   * @param actionSubtask additional information about the action
+   * @param messagePrefix describes the action type as noun
    * @param action failed action
    * @return ActionExecutionException object describing the action failure
    */
   public final ActionExecutionException toActionExecutionException(
-      @Nullable String actionSubtask, Action action) {
-    // Message from ActionExecutionException will be prepended with action.describe() where
-    // necessary: because not all ActionExecutionExceptions come from this codepath, it is safer
-    // for consumers to manually prepend. We still put action.describe() in the failure detail
-    // message argument.
+      String messagePrefix, Action action) {
     String message =
-        (actionSubtask == null ? "" : actionSubtask + ": ")
-            + getMessageForActionExecutionException();
+        String.format(
+            "%s failed: %s",
+            Strings.isNullOrEmpty(messagePrefix) ? action.describe() : messagePrefix,
+            getMessageForActionExecutionException());
     return toActionExecutionException(
-        message,
-        action,
-        DetailedExitCode.of(getFailureDetail(action.describe() + " failed: " + message)));
+        message, action, DetailedExitCode.of(getFailureDetail(message)));
   }
 
   @ForOverride
