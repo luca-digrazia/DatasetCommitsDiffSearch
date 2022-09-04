@@ -67,7 +67,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
   private final HeaderDiscovery.DotdPruningMode dotdPruningPlan;
   private final boolean shouldScanIncludes;
   private final Label appleSdk;
-  private final boolean compileInfoMigration;
 
   ObjcConfiguration(ObjcCommandLineOptions objcOptions, CoreOptions options) {
     this.iosSimulatorDevice = objcOptions.iosSimulatorDevice;
@@ -96,7 +95,6 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
             : HeaderDiscovery.DotdPruningMode.DO_NOT_USE;
     this.shouldScanIncludes = objcOptions.scanIncludes;
     this.appleSdk = objcOptions.appleSdk;
-    this.compileInfoMigration = objcOptions.incompatibleObjcCompileInfoMigration;
   }
 
   /**
@@ -259,10 +257,5 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
   /** Returns the label for the Apple SDK for current build configuration. */
   public Label getAppleSdk() {
     return appleSdk;
-  }
-
-  /** Whether native rules can assume compile info has been migrated to CcInfo. */
-  public boolean compileInfoMigration() {
-    return compileInfoMigration;
   }
 }

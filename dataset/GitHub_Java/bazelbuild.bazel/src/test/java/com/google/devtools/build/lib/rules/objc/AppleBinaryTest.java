@@ -34,7 +34,7 @@ import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.StarlarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.packages.util.MockProtoSupport;
@@ -104,7 +104,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
   private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.parseAbsolute("//myinfo:myinfo.bzl", ImmutableMap.of()), "MyInfo");
     return (StructImpl) configuredTarget.get(key);
   }
@@ -368,7 +368,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     SymlinkAction action = (SymlinkAction) lipoBinAction("//x:x");
     CommandAction linkAction = linkAction("//x:x");
 
-    assertThat(action.getInputs().toList())
+    assertThat(action.getInputs())
         .containsExactly(Iterables.getOnlyElement(linkAction.getOutputs()));
   }
 
@@ -1274,7 +1274,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     Action lipoAction = actionProducingArtifact("//examples:bin", "_lipobin");
     ArrayList<String> genfileRoots = new ArrayList<>();
 
-    for (Artifact archBinary : lipoAction.getInputs().toList()) {
+    for (Artifact archBinary : lipoAction.getInputs()) {
       if (archBinary.getExecPathString().endsWith("bin_bin")) {
         Artifact protoLib =
             getFirstArtifactEndingWith(
@@ -1548,7 +1548,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
 
     ConfiguredTarget bundleTarget = getConfiguredTarget("//examples:bundle");
     InstrumentedFilesInfo instrumentedFilesProvider =
-        bundleTarget.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
+        bundleTarget.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
     assertThat(instrumentedFilesProvider).isNotNull();
 
     assertThat(Artifact.toRootRelativePaths(instrumentedFilesProvider.getInstrumentedFiles()))
@@ -1658,7 +1658,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
     assertThat(executableBinaryProvider).isNotNull();
 
     CommandAction testLinkAction = linkAction("//test:test");
-    assertThat(testLinkAction.getInputs().toList())
+    assertThat(testLinkAction.getInputs())
         .contains(executableBinaryProvider.getAppleExecutableBinary());
   }
 
@@ -1841,7 +1841,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         "deps", "['//testlib:lib']");
 
     ObjcProvider objcProvider = providerForTarget("//x:x");
-    assertThat(objcProvider.sdkFramework().toList()).contains("TestFramework");
+    assertThat(objcProvider.sdkFramework().toCollection()).contains("TestFramework");
   }
 
   protected RuleType getRuleType() {
