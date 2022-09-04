@@ -471,7 +471,11 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         + configsMode.toString().toLowerCase();
     masterConfig = createConfigurations(actualArgs);
     targetConfig = getTargetConfiguration();
-    targetConfigKey = BuildConfigurationValue.key(targetConfig);
+    targetConfigKey =
+        BuildConfigurationValue.key(
+            targetConfig.fragmentClasses(),
+            BuildOptions.diffForReconstruction(
+                skyframeExecutor.getDefaultBuildOptions(), targetConfig.getOptions()));
     configurationArgs = Arrays.asList(actualArgs);
     createBuildView();
   }

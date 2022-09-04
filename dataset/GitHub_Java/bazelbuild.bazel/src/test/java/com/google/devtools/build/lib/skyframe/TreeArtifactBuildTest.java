@@ -27,10 +27,10 @@ import com.google.common.collect.Lists;
 import com.google.common.hash.Hashing;
 import com.google.common.util.concurrent.Runnables;
 import com.google.devtools.build.lib.actions.Action;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ActionInputFileCache;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionResult;
@@ -41,8 +41,8 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BuildFailedException;
-import com.google.devtools.build.lib.actions.MetadataProvider;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
+import com.google.devtools.build.lib.actions.OutputBaseSupplier;
 import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.actions.util.TestAction;
@@ -118,6 +118,8 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   public void testCodec() throws Exception {
     new SerializationTester(outOne, outOneFileOne)
         .addDependency(FileSystem.class, scratch.getFileSystem())
+        .addDependency(
+            OutputBaseSupplier.class, () -> scratch.getFileSystem().getPath(TestUtils.tmpDir()))
         .runTests();
   }
 
@@ -164,7 +166,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
           public ActionResult execute(ActionExecutionContext actionExecutionContext) {
             try {
               // Check the file cache for input TreeFileArtifacts.
-              MetadataProvider fileCache = actionExecutionContext.getMetadataProvider();
+              ActionInputFileCache fileCache = actionExecutionContext.getActionInputFileCache();
               assertThat(fileCache.getMetadata(outOneFileOne).getType().isFile()).isTrue();
               assertThat(fileCache.getMetadata(outOneFileTwo).getType().isFile()).isTrue();
 
@@ -682,50 +684,6 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     }
   }
 
-  @Test
-  public void testRelativeSymlinkTraversingToDirOutsideOfTreeArtifactRejected() throws Exception {
-    // Failure expected
-    StoredEventHandler storingEventHandler = new StoredEventHandler();
-    reporter.removeHandler(failFastHandler);
-    reporter.addHandler(storingEventHandler);
-
-    final SpecialArtifact out = createTreeArtifact("output");
-
-    // Create a valid directory that can be referenced
-    scratch.dir(out.getRoot().getRoot().getRelative("some/dir").getPathString());
-
-    TreeArtifactTestAction action =
-        new TreeArtifactTestAction(out) {
-          @Override
-          public ActionResult execute(ActionExecutionContext actionExecutionContext) {
-            try {
-              writeFile(out.getPath().getChild("one"), "one");
-              writeFile(out.getPath().getChild("two"), "two");
-              FileSystemUtils.ensureSymbolicLink(
-                  out.getPath().getChild("links").getChild("link"), "../../some/dir");
-            } catch (Exception e) {
-              throw new RuntimeException(e);
-            }
-            return ActionResult.EMPTY;
-          }
-        };
-
-    registerAction(action);
-
-    try {
-      buildArtifact(action.getSoleOutput());
-      fail(); // Should have thrown
-    } catch (BuildFailedException e) {
-      List<Event> errors = ImmutableList.copyOf(
-          Iterables.filter(storingEventHandler.getEvents(), IS_ERROR_EVENT));
-      assertThat(errors).hasSize(2);
-      assertThat(errors.get(0).getMessage()).contains(
-          "A TreeArtifact may not contain relative symlinks whose target paths traverse "
-              + "outside of the TreeArtifact");
-      assertThat(errors.get(1).getMessage()).contains("not all outputs were created or valid");
-    }
-  }
-
   // This is more a smoke test than anything, because it turns out that:
   // 1) there is no easy way to turn fast digests on/off for these test cases, and
   // 2) injectDigest() doesn't really complain if you inject bad digests or digests
@@ -1219,8 +1177,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
 
   private SpecialArtifact createTreeArtifact(String name) {
     FileSystem fs = scratch.getFileSystem();
-    Path execRoot =
-        fs.getPath(TestUtils.tmpDir()).getRelative("execroot").getRelative("default-exec-root");
+    Path execRoot = fs.getPath(TestUtils.tmpDir());
     PathFragment execPath = PathFragment.create("out").getRelative(name);
     return new SpecialArtifact(
         ArtifactRoot.asDerivedRoot(execRoot, execRoot.getRelative("out")),
@@ -1270,10 +1227,9 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
   /** A dummy action template expansion function that just returns the injected actions */
   private static class DummyActionTemplateExpansionFunction implements SkyFunction {
     private final ActionKeyContext actionKeyContext;
-    private final ImmutableList<ActionAnalysisMetadata> actions;
+    private final List<Action> actions;
 
-    DummyActionTemplateExpansionFunction(
-        ActionKeyContext actionKeyContext, ImmutableList<ActionAnalysisMetadata> actions) {
+    DummyActionTemplateExpansionFunction(ActionKeyContext actionKeyContext, List<Action> actions) {
       this.actionKeyContext = actionKeyContext;
       this.actions = actions;
     }
@@ -1282,7 +1238,7 @@ public class TreeArtifactBuildTest extends TimestampBuilderTestCase {
     public SkyValue compute(SkyKey skyKey, Environment env) {
       try {
         return new ActionTemplateExpansionValue(
-            Actions.filterSharedActionsAndThrowActionConflict(actionKeyContext, actions));
+            Actions.filterSharedActionsAndThrowActionConflict(actionKeyContext, actions), false);
       } catch (ActionConflictException e) {
         throw new IllegalStateException(e);
       }

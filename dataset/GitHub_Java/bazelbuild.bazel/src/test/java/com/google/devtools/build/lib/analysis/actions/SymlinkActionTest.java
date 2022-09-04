@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.OutputBaseSupplier;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.exec.util.TestExecutorBuilder;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationDepsUtils;
 import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.FileSystem;
@@ -88,7 +87,6 @@ public class SymlinkActionTest extends BuildViewTestCase {
                 null,
                 null,
                 ImmutableMap.<String, String>of(),
-                ImmutableMap.of(),
                 null));
     assertThat(actionResult.spawnResults()).isEmpty();
     assertThat(output.isSymbolicLink()).isTrue();
@@ -102,7 +100,6 @@ public class SymlinkActionTest extends BuildViewTestCase {
     new SerializationTester(action)
         .addDependency(FileSystem.class, scratch.getFileSystem())
         .addDependency(OutputBaseSupplier.class, () -> outputBase)
-        .addDependencies(SerializationDepsUtils.SERIALIZATION_DEPS_FOR_TEST)
         .setVerificationFunction(
             (in, out) -> {
               SymlinkAction inAction = (SymlinkAction) in;

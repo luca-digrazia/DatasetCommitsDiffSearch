@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Preconditions;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
@@ -59,12 +60,22 @@ import java.util.Objects;
 )
 @Immutable
 public final class ArtifactRoot implements Comparable<ArtifactRoot>, Serializable, SkylarkValue {
-  /**
-   * Do not use except in tests and in {@link
-   * com.google.devtools.build.lib.skyframe.SkyframeExecutor}.
-   *
-   * <p>Returns the given path as a source root. The path may not be {@code null}.
-   */
+  // This must always be consistent with Package.getSourceRoot; otherwise computing source roots
+  // from exec paths does not work, which can break the action cache for input-discovering actions.
+  public static ArtifactRoot computeSourceRoot(Root packageRoot, RepositoryName repository) {
+    if (repository.isMain()) {
+      return asSourceRoot(packageRoot);
+    } else {
+      Path actualRootPath = packageRoot.asPath();
+      int segmentCount = repository.getSourceRoot().segmentCount();
+      for (int i = 0; i < segmentCount; i++) {
+        actualRootPath = actualRootPath.getParentDirectory();
+      }
+      return asSourceRoot(Root.fromPath(actualRootPath));
+    }
+  }
+
+  /** Returns the given path as a source root. The path may not be {@code null}. */
   public static ArtifactRoot asSourceRoot(Root root) {
     return new ArtifactRoot(root, PathFragment.EMPTY_FRAGMENT, RootType.Source);
   }
