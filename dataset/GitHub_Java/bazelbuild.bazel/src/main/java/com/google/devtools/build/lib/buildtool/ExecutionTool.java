@@ -151,7 +151,8 @@ public class ExecutionTool {
 
     // Unfortunately, the exec root cache is not shared with caches in the remote execution client.
     this.fileCache =
-        new SingleBuildFileCache(env.getExecRoot().getPathString(), runtime.getFileSystem());
+        new SingleBuildFileCache(
+            env.getExecRoot().getPathString(), env.getRuntime().getFileSystem());
     this.prefetcher = builder.getActionInputPrefetcher();
 
     this.actionContextProviders = builder.getActionContextProviders();
@@ -286,7 +287,8 @@ public class ExecutionTool {
       // The syntax of this message is tightly constrained by lisp/progmodes/compile.el in emacs
       request
           .getOutErr()
-          .printErrLn(runtime.getProductName() + ": Entering directory `" + getExecRoot() + "/'");
+          .printErrLn(
+              env.getRuntime().getProductName() + ": Entering directory `" + getExecRoot() + "/'");
     }
 
     Throwable catastrophe = null;
@@ -363,7 +365,8 @@ public class ExecutionTool {
       if (request.isRunningInEmacs()) {
         request
             .getOutErr()
-            .printErrLn(runtime.getProductName() + ": Leaving directory `" + getExecRoot() + "/'");
+            .printErrLn(
+                env.getRuntime().getProductName() + ": Leaving directory `" + getExecRoot() + "/'");
       }
       if (buildCompleted) {
         getReporter().handle(Event.progress("Building complete."));
@@ -498,7 +501,6 @@ public class ExecutionTool {
     try (SilentCloseable c =
         Profiler.instance().profile("OutputDirectoryLinksUtils.createOutputDirectoryLinks")) {
       OutputDirectoryLinksUtils.createOutputDirectoryLinks(
-          buildRequestOptions,
           workspaceName,
           env.getWorkspace(),
           env.getDirectories().getExecRoot(workspaceName),
@@ -506,7 +508,10 @@ public class ExecutionTool {
           getReporter(),
           targetConfigurations,
           options -> getConfiguration(executor, reporter, options),
-          productName);
+          buildRequestOptions.getSymlinkPrefix(productName),
+          productName,
+          !buildRequestOptions.incompatibleSkipGenfilesSymlink,
+          buildRequestOptions.experimentalCreatePy2BinSymlink);
     }
   }
 
