@@ -602,7 +602,7 @@ public abstract class GSYVideoView extends GSYTextureRenderView implements GSYMe
     public void onVideoSizeChanged() {
         int mVideoWidth = GSYVideoManager.instance().getCurrentVideoWidth();
         int mVideoHeight = GSYVideoManager.instance().getCurrentVideoHeight();
-        if (mVideoWidth != 0 && mVideoHeight != 0 && mTextureView != null) {
+        if (mVideoWidth != 0 && mVideoHeight != 0) {
             mTextureView.requestLayout();
         }
     }
