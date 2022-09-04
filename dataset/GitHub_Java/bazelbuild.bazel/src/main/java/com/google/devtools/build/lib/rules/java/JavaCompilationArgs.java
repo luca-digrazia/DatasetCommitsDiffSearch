@@ -14,20 +14,17 @@
 
 package com.google.devtools.build.lib.rules.java;
 
+import com.google.auto.value.AutoValue;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
-import com.google.devtools.build.lib.util.FileType;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
-import java.util.Collection;
-
-/**
- * A container of Java compilation artifacts.
- */
-public final class JavaCompilationArgs {
+/** A container of Java compilation artifacts. */
+@AutoValue
+@AutoCodec
+public abstract class JavaCompilationArgs {
   // TODO(bazel-team): It would be desirable to use LinkOrderNestedSet here so that
   // parents-before-deps is preserved for graphs that are not trees. However, the legacy
   // JavaLibraryCollector implemented naive link ordering and many targets in the
@@ -39,43 +36,40 @@ public final class JavaCompilationArgs {
   // decided by the rightmost branch in such cases. For example, if A depends on {junit4,
   // B}, B depends on {C, D}, C depends on {junit3}, and D depends on {junit4},
   // the classpath of A will have junit3 before junit4.
-  private final NestedSet<Artifact> runtimeJars;
-  private final NestedSet<Artifact> compileTimeJars;
-  private final NestedSet<Artifact> instrumentationMetadata;
 
-  public static final JavaCompilationArgs EMPTY_ARGS = new JavaCompilationArgs(
-    NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
-    NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
-    NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER));
+  @AutoCodec
+  public static final JavaCompilationArgs EMPTY_ARGS =
+      JavaCompilationArgs.create(
+          NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
+          NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
+          NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER),
+          NestedSetBuilder.<Artifact>create(Order.NAIVE_LINK_ORDER));
 
-  private JavaCompilationArgs(NestedSet<Artifact> runtimeJars,
+  @AutoCodec.VisibleForSerialization
+  @AutoCodec.Instantiator
+  static JavaCompilationArgs create(
+      NestedSet<Artifact> runtimeJars,
       NestedSet<Artifact> compileTimeJars,
+      NestedSet<Artifact> fullCompileTimeJars,
       NestedSet<Artifact> instrumentationMetadata) {
-    this.runtimeJars = runtimeJars;
-    this.compileTimeJars = compileTimeJars;
-    this.instrumentationMetadata = instrumentationMetadata;
+    return new AutoValue_JavaCompilationArgs(
+        runtimeJars, compileTimeJars, fullCompileTimeJars, instrumentationMetadata);
   }
 
-  /**
-   * Returns transitive runtime jars.
-   */
-  public NestedSet<Artifact> getRuntimeJars() {
-    return runtimeJars;
-  }
+  /** Returns transitive runtime jars. */
+  public abstract NestedSet<Artifact> getRuntimeJars();
+
+  /** Returns transitive compile-time jars. */
+  public abstract NestedSet<Artifact> getCompileTimeJars();
 
   /**
-   * Returns transitive compile-time jars.
+   * Returns transitive full jars for compilation time: the full jars for every interface jar and
+   * all the full jars on the compiletime classpath.
    */
-  public NestedSet<Artifact> getCompileTimeJars() {
-    return compileTimeJars;
-  }
+  public abstract NestedSet<Artifact> getFullCompileTimeJars();
 
-  /**
-   * Returns transitive instrumentation metadata jars.
-   */
-  public NestedSet<Artifact> getInstrumentationMetadata() {
-    return instrumentationMetadata;
-  }
+  /** Returns transitive instrumentation metadata jars. */
+  public abstract NestedSet<Artifact> getInstrumentationMetadata();
 
   /**
    * Returns a new builder instance.
@@ -86,13 +80,13 @@ public final class JavaCompilationArgs {
 
   /**
    * Builder for {@link JavaCompilationArgs}.
-   *
- *
    */
   public static final class Builder {
     private final NestedSetBuilder<Artifact> runtimeJarsBuilder =
         NestedSetBuilder.naiveLinkOrder();
     private final NestedSetBuilder<Artifact> compileTimeJarsBuilder =
+        NestedSetBuilder.naiveLinkOrder();
+    private final NestedSetBuilder<Artifact> fullCompileTimeJarsBuilder =
         NestedSetBuilder.naiveLinkOrder();
     private final NestedSetBuilder<Artifact> instrumentationMetadataBuilder =
         NestedSetBuilder.naiveLinkOrder();
@@ -101,6 +95,15 @@ public final class JavaCompilationArgs {
      * Use {@code TransitiveJavaCompilationArgs#builder()} to instantiate the builder.
      */
     private Builder() {
+    }
+
+    public static Builder copyOf(Builder builder){
+      Builder result = new Builder();
+      result.addTransitiveRuntimeJars(builder.runtimeJarsBuilder.build());
+      result.addTransitiveCompileTimeJars(builder.compileTimeJarsBuilder.build());
+      result.addTransitiveFullCompileTimeJars(builder.fullCompileTimeJarsBuilder.build());
+      result.addInstrumentationMetadata(builder.instrumentationMetadataBuilder.build());
+      return result;
     }
 
     /**
@@ -113,6 +116,7 @@ public final class JavaCompilationArgs {
         addRuntimeJars(other.getRuntimeJars());
       }
       addCompileTimeJars(other.getCompileTimeJars());
+      addFullCompileTimeJars(other.getFullCompileTimeJars());
       addInstrumentationMetadata(other.getInstrumentationMetadata());
       return this;
     }
@@ -135,8 +139,14 @@ public final class JavaCompilationArgs {
       return this;
     }
 
-    public Builder addCompileTimeJar(Artifact compileTimeJar) {
+    public Builder addTransitiveRuntimeJars(NestedSet<Artifact> runtimeJars) {
+      this.runtimeJarsBuilder.addTransitive(runtimeJars);
+      return this;
+    }
+
+    public Builder addCompileTimeJarAsFullJar(Artifact compileTimeJar) {
       this.compileTimeJarsBuilder.add(compileTimeJar);
+      this.fullCompileTimeJarsBuilder.add(compileTimeJar);
       return this;
     }
 
@@ -145,126 +155,67 @@ public final class JavaCompilationArgs {
       return this;
     }
 
+    public Builder addCompileTimeJar(Artifact compileTimeJar) {
+      this.compileTimeJarsBuilder.add(compileTimeJar);
+      return this;
+    }
+
+    public Builder addFullCompileTimeJars(Iterable<Artifact> fullCompileTimeJars) {
+      this.fullCompileTimeJarsBuilder.addAll(fullCompileTimeJars);
+      return this;
+    }
+
+    public Builder addFullCompileTimeJar(Artifact fullCompileTimeJar) {
+      this.fullCompileTimeJarsBuilder.add(fullCompileTimeJar);
+      return this;
+    }
+
+    public Builder addTransitiveCompileTimeJars(NestedSet<Artifact> compileTimeJars) {
+      this.compileTimeJarsBuilder.addTransitive(compileTimeJars);
+      return this;
+    }
+
+    public Builder addTransitiveFullCompileTimeJars(NestedSet<Artifact> fullCompileTimeJars) {
+      this.fullCompileTimeJarsBuilder.addTransitive(fullCompileTimeJars);
+      return this;
+    }
+
     public Builder addInstrumentationMetadata(Artifact instrumentationMetadata) {
       this.instrumentationMetadataBuilder.add(instrumentationMetadata);
       return this;
     }
 
-    public Builder addInstrumentationMetadata(Collection<Artifact> instrumentationMetadata) {
+    public Builder addInstrumentationMetadata(Iterable<Artifact> instrumentationMetadata) {
       this.instrumentationMetadataBuilder.addAll(instrumentationMetadata);
       return this;
     }
 
     public Builder addTransitiveCompilationArgs(
         JavaCompilationArgsProvider dep, boolean recursive, ClasspathType type) {
-      JavaCompilationArgs args = recursive
-          ? dep.getRecursiveJavaCompilationArgs()
-          : dep.getJavaCompilationArgs();
+      JavaCompilationArgs args =
+          recursive ? dep.getRecursiveJavaCompilationArgs() : dep.getJavaCompilationArgs();
       addTransitiveArgs(args, type);
       return this;
     }
 
     public Builder addTransitiveCompilationArgs(
-        SourcesJavaCompilationArgsProvider dep, boolean recursive, ClasspathType type) {
-      JavaCompilationArgs args;
-      if (recursive) {
-        args = dep.getRecursiveJavaCompilationArgs();
-      } else {
-        args = dep.getJavaCompilationArgs();
-      }
-      addTransitiveArgs(args, type);
-      return this;
-    }
-
-    public Builder addSourcesTransitiveCompilationArgs(
-        Iterable<? extends SourcesJavaCompilationArgsProvider> deps,
-        boolean recursive,
-        ClasspathType type) {
-      for (SourcesJavaCompilationArgsProvider dep : deps) {
-        addTransitiveCompilationArgs(dep, recursive, type);
-      }
-
-      return this;
-    }
-
-    /**
-     * Merges the artifacts of another target.
-     */
-    public Builder addTransitiveTarget(TransitiveInfoCollection dep, boolean recursive,
-        ClasspathType type) {
-      JavaCompilationArgsProvider provider = dep.getProvider(JavaCompilationArgsProvider.class);
-      if (provider != null) {
+        Iterable<JavaCompilationArgsProvider> args, boolean recursive, ClasspathType type) {
+      for (JavaCompilationArgsProvider provider : args) {
         addTransitiveCompilationArgs(provider, recursive, type);
-        return this;
-      } else {
-        NestedSet<Artifact> filesToBuild =
-            dep.getProvider(FileProvider.class).getFilesToBuild();
-        for (Artifact jar : FileType.filter(filesToBuild, JavaSemantics.JAR)) {
-          addCompileTimeJar(jar);
-          addRuntimeJar(jar);
-        }
       }
       return this;
     }
 
     /**
-     * Merges the artifacts of a collection of targets.
-     */
-    public Builder addTransitiveTargets(Iterable<? extends TransitiveInfoCollection> deps,
-        boolean recursive, ClasspathType type) {
-      for (TransitiveInfoCollection dep : deps) {
-        addTransitiveTarget(dep, recursive, type);
-      }
-      return this;
-    }
-
-    /**
-     * Merges the artifacts of a collection of targets.
-     */
-    public Builder addTransitiveTargets(Iterable<? extends TransitiveInfoCollection> deps,
-        boolean recursive) {
-      return addTransitiveTargets(deps, recursive, ClasspathType.BOTH);
-    }
-
-    /**
-     * Merges the artifacts of a collection of targets.
-     */
-    public Builder addTransitiveDependencies(Iterable<JavaCompilationArgsProvider> deps,
-        boolean recursive) {
-      for (JavaCompilationArgsProvider dep : deps) {
-        addTransitiveDependency(dep, recursive, ClasspathType.BOTH);
-      }
-      return this;
-    }
-
-    /**
-     * Merges the artifacts of another target.
-     */
-    private Builder addTransitiveDependency(JavaCompilationArgsProvider dep, boolean recursive,
-        ClasspathType type) {
-      JavaCompilationArgs args = recursive
-          ? dep.getRecursiveJavaCompilationArgs()
-          : dep.getJavaCompilationArgs();
-      addTransitiveArgs(args, type);
-      return this;
-    }
-
-    /**
-     * Merges the artifacts of a collection of targets.
-     */
-    public Builder addTransitiveTargets(Iterable<? extends TransitiveInfoCollection> deps) {
-      return addTransitiveTargets(deps, /*recursive=*/true, ClasspathType.BOTH);
-    }
-
-    /**
-     * Includes the contents of another instance of JavaCompilationArgs.
+     * Includes the contents of another instance of {@link JavaCompilationArgs}.
      *
-     * @param args the JavaCompilationArgs instance
+     * @param args the {@link JavaCompilationArgs} instance
      * @param type the classpath(s) to consider
      */
     public Builder addTransitiveArgs(JavaCompilationArgs args, ClasspathType type) {
       if (!ClasspathType.RUNTIME_ONLY.equals(type)) {
         compileTimeJarsBuilder.addTransitive(args.getCompileTimeJars());
+        fullCompileTimeJarsBuilder.addTransitive(args.getFullCompileTimeJars());
       }
       if (!ClasspathType.COMPILE_ONLY.equals(type)) {
         runtimeJarsBuilder.addTransitive(args.getRuntimeJars());
@@ -278,9 +229,16 @@ public final class JavaCompilationArgs {
      * Builds a {@link JavaCompilationArgs} object.
      */
     public JavaCompilationArgs build() {
-      return new JavaCompilationArgs(
+      if (runtimeJarsBuilder.isEmpty()
+          && compileTimeJarsBuilder.isEmpty()
+          && fullCompileTimeJarsBuilder.isEmpty()
+          && instrumentationMetadataBuilder.isEmpty()) {
+        return EMPTY_ARGS;
+      }
+      return JavaCompilationArgs.create(
           runtimeJarsBuilder.build(),
           compileTimeJarsBuilder.build(),
+          fullCompileTimeJarsBuilder.build(),
           instrumentationMetadataBuilder.build());
     }
   }
@@ -298,4 +256,6 @@ public final class JavaCompilationArgs {
       /* Only include on runtime classpath */
       RUNTIME_ONLY;
   }
+
+  JavaCompilationArgs() {}
 }
