@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -16,52 +16,57 @@ package com.google.devtools.build.lib.runtime;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
-import com.google.devtools.build.lib.Constants;
+import com.google.common.eventbus.Subscribe;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.AliasProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
+import com.google.devtools.build.lib.analysis.test.TestProvider;
+import com.google.devtools.build.lib.analysis.test.TestResult;
+import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.packages.TestTimeout;
-import com.google.devtools.build.lib.rules.test.TestProvider;
-import com.google.devtools.build.lib.rules.test.TestResult;
 import com.google.devtools.build.lib.runtime.TerminalTestResultNotifier.TestSummaryOptions;
-import com.google.devtools.build.lib.syntax.Label;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
-
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/**
- * Prints results to the terminal, showing the results of each test target.
- */
+/** Prints results to the terminal, showing the results of each test target. */
 @ThreadCompatible
-public class TestResultAnalyzer {
-  private final Path execRoot;
+public final class TestResultAnalyzer {
   private final TestSummaryOptions summaryOptions;
   private final ExecutionOptions executionOptions;
   private final EventBus eventBus;
+
+  // Store information about potential failures in the presence of --nokeep_going or
+  // --notest_keep_going.
+  private boolean skipTargetsOnFailure;
 
   /**
    * @param summaryOptions Parsed test summarization options.
    * @param executionOptions Parsed build/test execution options.
    * @param eventBus For reporting failed to build and cached tests.
    */
-  public TestResultAnalyzer(Path execRoot,
-                            TestSummaryOptions summaryOptions,
-                            ExecutionOptions executionOptions,
-                            EventBus eventBus) {
-    this.execRoot = execRoot;
+  TestResultAnalyzer(
+      TestSummaryOptions summaryOptions, ExecutionOptions executionOptions, EventBus eventBus) {
     this.summaryOptions = summaryOptions;
     this.executionOptions = executionOptions;
     this.eventBus = eventBus;
+    eventBus.register(this);
+  }
+
+  @Subscribe
+  public void doneBuild(BuildCompleteEvent event) {
+    skipTargetsOnFailure = event.getResult().getStopOnFirstFailure();
   }
 
   /**
@@ -77,6 +82,7 @@ public class TestResultAnalyzer {
    */
   public boolean differentialAnalyzeAndReport(
       Collection<ConfiguredTarget> testTargets,
+      Collection<ConfiguredTarget> skippedTargets,
       AggregatingTestListener listener,
       TestResultNotifier notifier) {
 
@@ -91,7 +97,7 @@ public class TestResultAnalyzer {
     int passCount = 0;
 
     for (ConfiguredTarget testTarget : testTargets) {
-      TestSummary summary = aggregateAndReportSummary(testTarget, listener).build();
+      TestSummary summary = aggregateAndReportSummary(testTarget, listener);
       summaries.add(summary);
 
       // Finished aggregating; build the final console output.
@@ -104,31 +110,41 @@ public class TestResultAnalyzer {
       }
     }
 
-    Preconditions.checkState(summaries.size() == testTargets.size());
+    int summarySize = summaries.size();
+    int testTargetsSize = testTargets.size();
+    Preconditions.checkState(
+        summarySize == testTargetsSize,
+        "Unequal sizes: %s vs %s (%s and %s)",
+        summarySize,
+        testTargetsSize,
+        summaries,
+        testTargets);
 
     notifier.notify(summaries, totalRun);
-    return passCount == testTargets.size();
+    // skipped targets are not in passCount since they have NO_STATUS
+    Set<ConfiguredTarget> testTargetsSet = new HashSet<>(testTargets);
+    Set<ConfiguredTarget> skippedTargetsSet = new HashSet<>(skippedTargets);
+    return passCount == Sets.difference(testTargetsSet, skippedTargetsSet).size();
   }
 
   private static BlazeTestStatus aggregateStatus(BlazeTestStatus status, BlazeTestStatus other) {
-    return status.ordinal() > other.ordinal() ? status : other;
+    return status.getNumber() > other.getNumber() ? status : other;
   }
 
   /**
-   * Helper for differential analysis which aggregates the TestSummary
-   * for an individual target, reporting runs on the EventBus if necessary.
+   * Helper for differential analysis which aggregates the TestSummary for an individual target,
+   * reporting runs on the EventBus if necessary.
    */
-  private TestSummary.Builder aggregateAndReportSummary(
-      ConfiguredTarget testTarget,
-      AggregatingTestListener listener) {
+  private TestSummary aggregateAndReportSummary(
+      ConfiguredTarget testTarget, AggregatingTestListener listener) {
 
     // If already reported by the listener, no work remains for this target.
     TestSummary.Builder summary = listener.getCurrentSummary(testTarget);
-    Label testLabel = testTarget.getLabel();
+    Label testLabel = AliasProvider.getDependencyLabel(testTarget);
     Preconditions.checkNotNull(summary,
         "%s did not complete test filtering, but has a test result", testLabel);
     if (listener.targetReported(testTarget)) {
-      return summary;
+      return summary.build();
     }
 
     Collection<Artifact> incompleteRuns = listener.getIncompleteRuns(testTarget);
@@ -162,8 +178,9 @@ public class TestResultAnalyzer {
     }
 
     // The target was not posted by the listener and must be posted now.
-    eventBus.post(summary.build());
-    return summary;
+    TestSummary result = summary.build();
+    eventBus.post(result);
+    return result;
   }
 
   /**
@@ -181,10 +198,6 @@ public class TestResultAnalyzer {
     Preconditions.checkNotNull(summaryBuilder);
     TestSummary existingSummary = Preconditions.checkNotNull(summaryBuilder.peek());
 
-    TransitiveInfoCollection target = existingSummary.getTarget();
-    Preconditions.checkNotNull(
-        target, "The existing TestSummary must be associated with a target");
-
     BlazeTestStatus status = existingSummary.getStatus();
     int numCached = existingSummary.numCached();
     int numLocalActionCached = existingSummary.numLocalActionCached();
@@ -200,11 +213,13 @@ public class TestResultAnalyzer {
       numLocalActionCached++;
     }
     
-    PathFragment coverageData = result.getCoverageData();
+    Path coverageData = result.getCoverageData();
     if (coverageData != null) {
-      summaryBuilder.addCoverageFiles(
-          Collections.singletonList(execRoot.getRelative(coverageData)));
+      summaryBuilder.addCoverageFiles(Collections.singletonList(coverageData));
     }
+
+    TransitiveInfoCollection target = existingSummary.getTarget();
+    Preconditions.checkNotNull(target, "The existing TestSummary must be associated with a target");
 
     if (!executionOptions.runsPerTestDetectsFlakes) {
       status = aggregateStatus(status, result.getData().getStatus());
@@ -218,7 +233,7 @@ public class TestResultAnalyzer {
         int passes = 0;
         for (BlazeTestStatus runStatusForShard : singleShardStatuses) {
           shardStatus = aggregateStatus(shardStatus, runStatusForShard);
-          if (TestResult.isBlazeTestStatusPassed(shardStatus)) {
+          if (TestResult.isBlazeTestStatusPassed(runStatusForShard)) {
             passes++;
           }
         }
@@ -232,43 +247,31 @@ public class TestResultAnalyzer {
       }
     }
 
-    List<String> filtered = new ArrayList<>();
-    warningLoop: for (String warning : result.getData().getWarningList()) {
-      for (String ignoredPrefix : Constants.IGNORED_TEST_WARNING_PREFIXES) {
-        if (warning.startsWith(ignoredPrefix)) {
-          continue warningLoop;
-        }
-      }
-
-      filtered.add(warning);
-    }
-
-    List<Path> passed = new ArrayList<>();
     if (result.getData().hasPassedLog()) {
-      passed.add(result.getTestAction().getTestLog().getPath().getRelative(
-          result.getData().getPassedLog()));
+      summaryBuilder.addPassedLog(
+          result.getTestLogPath().getRelative(result.getData().getPassedLog()));
     }
-
-    List<Path> failed = new ArrayList<>();
     for (String path : result.getData().getFailedLogsList()) {
-      failed.add(result.getTestAction().getTestLog().getPath().getRelative(path));
+      summaryBuilder.addFailedLog(result.getTestLogPath().getRelative(path));
     }
 
     summaryBuilder
         .addTestTimes(result.getData().getTestTimesList())
-        .addPassedLogs(passed)
-        .addFailedLogs(failed)
-        .addWarnings(filtered)
+        .mergeTiming(
+            result.getData().getStartTimeMillisEpoch(), result.getData().getRunDurationMillis())
+        .addWarnings(result.getData().getWarningList())
         .collectFailedTests(result.getData().getTestCase())
+        .countTotalTestCases(result.getData().getTestCase())
         .setRanRemotely(result.getData().getIsRemoteStrategy());
 
     List<String> warnings = new ArrayList<>();
-    if (status == BlazeTestStatus.PASSED) {
-      if (shouldEmitTestSizeWarningInSummary(
-          summaryOptions.testVerboseTimeoutWarnings,
-          warnings, result.getData().getTestProcessTimesList(), target)) {
-        summaryBuilder.setWasUnreportedWrongSize(true);
-      }
+    if (status == BlazeTestStatus.PASSED
+        && shouldEmitTestSizeWarningInSummary(
+            summaryOptions.testVerboseTimeoutWarnings,
+            warnings,
+            result.getData().getTestProcessTimesList(),
+            target)) {
+      summaryBuilder.setWasUnreportedWrongSize(true);
     }
 
     return summaryBuilder
@@ -283,7 +286,9 @@ public class TestResultAnalyzer {
     // tests with no status and post it here.
     TestSummary summary = summaryBuilder.peek();
     BlazeTestStatus status = summary.getStatus();
-    if (status != BlazeTestStatus.NO_STATUS) {
+    if (skipTargetsOnFailure) {
+      status = BlazeTestStatus.NO_STATUS;
+    } else if (status != BlazeTestStatus.NO_STATUS) {
       status = aggregateStatus(status, BlazeTestStatus.INCOMPLETE);
     }
 
@@ -291,23 +296,27 @@ public class TestResultAnalyzer {
   }
 
   TestSummary.Builder markUnbuilt(TestSummary.Builder summary, boolean blazeHalted) {
-    BlazeTestStatus runStatus = blazeHalted ? BlazeTestStatus.BLAZE_HALTED_BEFORE_TESTING
-        : (executionOptions.testCheckUpToDate
-            ? BlazeTestStatus.NO_STATUS
-            : BlazeTestStatus.FAILED_TO_BUILD);
+    BlazeTestStatus runStatus =
+        blazeHalted
+            ? BlazeTestStatus.BLAZE_HALTED_BEFORE_TESTING
+            : (executionOptions.testCheckUpToDate || skipTargetsOnFailure
+                ? BlazeTestStatus.NO_STATUS
+                : BlazeTestStatus.FAILED_TO_BUILD);
 
     return summary.setStatus(runStatus);
   }
 
   /**
-   * Checks whether the specified test timeout could have been smaller and adds
-   * a warning message if verbose is true.
+   * Checks whether the specified test timeout could have been smaller or is too small and adds a
+   * warning message if verbose is true.
    *
-   * <p>Returns true if there was a test with the wrong timeout, but if was not
-   * reported.
+   * <p>Returns true if there was a test with the wrong timeout, but if was not reported.
    */
-  private static boolean shouldEmitTestSizeWarningInSummary(boolean verbose,
-      List<String> warnings, List<Long> testTimes, TransitiveInfoCollection target) {
+  private static boolean shouldEmitTestSizeWarningInSummary(
+      boolean verbose,
+      List<String> warnings,
+      List<Long> testTimes,
+      TransitiveInfoCollection target) {
 
     TestTimeout specifiedTimeout =
         target.getProvider(TestProvider.class).getTestParams().getTimeout();
@@ -326,15 +335,16 @@ public class TestResultAnalyzer {
       TestSize expectedSize = TestSize.getTestSize(expectedTimeout);
       if (verbose) {
         StringBuilder builder = new StringBuilder(String.format(
-            "Test execution time (%.1fs excluding execution overhead) outside of "
+            "%s: Test execution time (%.1fs excluding execution overhead) outside of "
             + "range for %s tests. Consider setting timeout=\"%s\"",
+            AliasProvider.getDependencyLabel(target),
             maxTimeOfShard / 1000.0,
             specifiedTimeout.prettyPrint(),
             expectedTimeout));
         if (expectedSize != null) {
           builder.append(" or size=\"").append(expectedSize).append("\"");
         }
-        builder.append(". You need not modify the size if you think it is correct.");
+        builder.append(".");
         warnings.add(builder.toString());
         return false;
       }
