@@ -21,6 +21,7 @@ import com.google.devtools.build.android.Converters.PathConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
+import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
@@ -239,6 +240,18 @@ public class DesugarOptions extends OptionsBase {
       help = "Assume the given java.* interfaces are emulated.")
   public List<String> emulateCoreLibraryInterfaces;
 
+  /** Members that we will retarget to the given new owner. */
+  @Option(
+      name = "retarget_core_library_member",
+      defaultValue = "null",
+      allowMultiple = true,
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Method invocations to retarget, given as \"class/Name#member->new/class/Name\".  "
+              + "The new owner is blindly assumed to exist.")
+  public List<String> retargetCoreLibraryMembers;
+
   /** Members not to rewrite. */
   @Option(
       name = "dont_rewrite_core_library_invocation",
@@ -294,6 +307,15 @@ public class DesugarOptions extends OptionsBase {
           "Desugar JVM 9 string concatenation operations to string builder based"
               + " implementations.")
   public boolean desugarIndifyStringConcat;
+
+  @Option(
+      name = "persistent_worker",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      metadataTags = {OptionMetadataTag.HIDDEN},
+      help = "Run as a Bazel persistent worker.")
+  public boolean persistentWorker;
 
   public static DesugarOptions parseCommandLineOptions(String[] args) {
     OptionsParser parser =
