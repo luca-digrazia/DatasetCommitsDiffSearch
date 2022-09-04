@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Set;
 import org.apache.log4j.Logger;
 import org.graylog2.Core;
-import org.graylog2.activities.Activity;
 import org.graylog2.inputs.amqp.AMQPConsumer;
 import org.graylog2.inputs.amqp.AMQPInput;
 import org.graylog2.inputs.amqp.AMQPQueueConfiguration;
@@ -56,10 +55,7 @@ public class AMQPSyncThread implements Runnable {
         for (AMQPQueueConfiguration config : configs) {
             if (!AMQPInput.getConsumers().containsKey(config.getId())) {
                 // This queue config has no consumers yet. Start one.
-                String msg = "Spawning AMQP consumer for new AMQP queue config <" + config + ">";
-                LOG.info(msg);
-                graylogServer.getActivityWriter().write(new Activity(msg, AMQPSyncThread.class));
-
+                LOG.info("Spawning AMQP consumer for new AMQP queue config <" + config + ">");
                 AMQPConsumer consumer = new AMQPConsumer(graylogServer, config);
                 AMQPInput.getThreadPool().submit(consumer);
                 AMQPInput.getConsumers().put(config.getId(), consumer);
@@ -72,10 +68,7 @@ public class AMQPSyncThread implements Runnable {
             
             for (Map.Entry<String, AMQPConsumer> consumer : AMQPInput.getConsumers().entrySet()) {
                 if (!AMQPQueueConfiguration.fetchAllIds(graylogServer).contains(consumer.getKey())) {
-                    String msg = "Consumer <" + consumer.getKey() + "> is not in the configuration anymore. Stopping it.";
-                    LOG.info(msg);
-                    graylogServer.getActivityWriter().write(new Activity(msg, AMQPSyncThread.class));
-
+                    LOG.info("Consumer <" + consumer.getKey() + "> is not in the configuration anymore. Stopping it.");
                     consumer.getValue().disconnect();
                 }
             } 
