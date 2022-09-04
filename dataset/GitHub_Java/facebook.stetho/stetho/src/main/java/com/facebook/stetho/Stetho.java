@@ -93,12 +93,8 @@ public class Stetho {
   public static void initialize(final Initializer initializer) {
     // Hook activity tracking so that after Stetho is attached we can figure out what
     // activities are present.
-    boolean isTrackingActivities = ActivityTracker.get().beginTrackingIfPossible(
+    ActivityTracker.get().beginTrackingIfPossible(
         (Application)initializer.mContext.getApplicationContext());
-    if (!isTrackingActivities) {
-      LogUtil.w("Automatic activity tracking not available on this API level, caller must invoke " +
-          "ActivityTracker methods manually!");
-    }
 
     Thread listener = new Thread(LISTENER_THREAD_NAME) {
       @Override

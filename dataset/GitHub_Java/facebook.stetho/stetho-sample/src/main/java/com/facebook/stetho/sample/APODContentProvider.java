@@ -1,3 +1,12 @@
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
 package com.facebook.stetho.sample;
 
 import java.util.ArrayList;
@@ -52,6 +61,7 @@ public class APODContentProvider extends ContentProvider {
   public Uri insert(Uri uri, ContentValues values) {
     SQLiteDatabase db = mOpenHelper.getWritableDatabase();
     long id = db.insert(APODContract.TABLE_NAME, null /* nullColumnHack */, values);
+    notifyChange();
     return uri.buildUpon().appendEncodedPath(String.valueOf(id)).build();
   }
 
@@ -59,6 +69,7 @@ public class APODContentProvider extends ContentProvider {
   public int delete(Uri uri, String selection, String[] selectionArgs) {
     SQLiteDatabase db = mOpenHelper.getWritableDatabase();
     int count = db.delete(APODContract.TABLE_NAME, selection, selectionArgs);
+    notifyChange();
     return count;
   }
 
@@ -66,6 +77,7 @@ public class APODContentProvider extends ContentProvider {
   public int update(Uri uri, ContentValues values, String selection, String[] selectionArgs) {
     SQLiteDatabase db = mOpenHelper.getWritableDatabase();
     int count = db.update(APODContract.TABLE_NAME, values, selection, selectionArgs);
+    notifyChange();
     return count;
   }
 
