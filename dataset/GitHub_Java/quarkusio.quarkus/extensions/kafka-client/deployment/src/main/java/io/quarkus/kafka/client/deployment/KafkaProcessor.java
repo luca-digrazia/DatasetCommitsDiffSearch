@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.zip.Checksum;
 
+import io.quarkus.deployment.Capabilities;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.clients.consumer.StickyAssignor;
@@ -33,22 +34,18 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 
-import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.GizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.JniBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
 import io.quarkus.gizmo.MethodCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.kafka.client.serialization.JsonbDeserializer;
 import io.quarkus.kafka.client.serialization.JsonbSerializer;
-import io.quarkus.kafka.client.serialization.ObjectMapperDeserializer;
-import io.quarkus.kafka.client.serialization.ObjectMapperSerializer;
 
 public class KafkaProcessor {
 
@@ -95,10 +92,6 @@ public class KafkaProcessor {
         if (capabilities.isCapabilityPresent(Capabilities.JSONB)) {
             reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, JsonbSerializer.class, JsonbDeserializer.class));
         }
-        if (capabilities.isCapabilityPresent(Capabilities.JACKSON)) {
-            reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(false, false, ObjectMapperSerializer.class, ObjectMapperDeserializer.class));
-        }
 
         for (Collection<ClassInfo> list : Arrays.asList(serializers, deserializers, partitioners, partitionAssignors)) {
             for (ClassInfo s : list) {
@@ -124,9 +117,14 @@ public class KafkaProcessor {
      * @return the generated class
      */
     @BuildStep
-    public void replaceJava9Code(BuildProducer<GeneratedClassBuildItem> producer) {
+    public GeneratedClassBuildItem replaceJava9Code() {
         // make our own class output to ensure that our step is run.
-        ClassOutput classOutput = new GizmoAdaptor(producer, false);
+        byte[][] holder = new byte[1][];
+        ClassOutput classOutput = new ClassOutput() {
+            public void write(final String name, final byte[] data) {
+                holder[0] = data;
+            }
+        };
         try (ClassCreator cc = ClassCreator.builder().className(TARGET_JAVA_9_CHECKSUM_FACTORY)
                 .classOutput(classOutput).setFinal(true).superClass(Object.class).build()) {
 
@@ -139,5 +137,6 @@ public class KafkaProcessor {
                 mc.returnValue(mc.newInstance(MethodDescriptor.ofConstructor("java.util.zip.CRC32C")));
             }
         }
+        return new GeneratedClassBuildItem(false, TARGET_JAVA_9_CHECKSUM_FACTORY, holder[0]);
     }
 }
