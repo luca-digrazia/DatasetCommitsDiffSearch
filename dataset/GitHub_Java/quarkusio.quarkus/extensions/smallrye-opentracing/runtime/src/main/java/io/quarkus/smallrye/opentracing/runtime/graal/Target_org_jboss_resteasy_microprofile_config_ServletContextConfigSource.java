@@ -25,11 +25,13 @@ import com.oracle.svm.core.annotate.TargetClass;
  *
  * See https://github.com/quarkusio/quarkus/issues/14876
  */
-@TargetClass(className = "org.jboss.resteasy.microprofile.config.ServletContextConfigSource", onlyWith = {
+@TargetClass(className = Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSource.SERVLET_CONTEXT_CONFIG_SOURCE_NAME, onlyWith = {
         UndertowMissing.class,
         Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSource.ServletContextConfigSourceIsLoaded.class
 })
 final class Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSource {
+
+    static final String SERVLET_CONTEXT_CONFIG_SOURCE_NAME = "org.jboss.resteasy.microprofile.config.ServletContextConfigSource";
 
     @Alias
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FromAlias)
@@ -43,7 +45,7 @@ final class Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSo
         @Override
         public boolean getAsBoolean() {
             try {
-                Class.forName("org.jboss.resteasy.microprofile.config.ServletContextConfigSource");
+                Class.forName(SERVLET_CONTEXT_CONFIG_SOURCE_NAME);
                 return true;
             } catch (ClassNotFoundException e) {
                 return false;
