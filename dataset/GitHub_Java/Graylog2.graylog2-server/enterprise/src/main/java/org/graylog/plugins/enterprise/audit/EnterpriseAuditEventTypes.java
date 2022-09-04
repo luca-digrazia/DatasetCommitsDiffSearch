@@ -40,9 +40,6 @@ public class EnterpriseAuditEventTypes implements PluginAuditEventTypes {
 
             .add(SEARCH_JOB_CREATE)
 
-            .add(VIEW_SHARING_CREATE)
-            .add(VIEW_SHARING_DELETE)
-
             .build();
 
     @Override
