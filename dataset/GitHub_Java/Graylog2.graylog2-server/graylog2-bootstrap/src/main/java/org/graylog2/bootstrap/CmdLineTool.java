@@ -55,8 +55,6 @@ import org.graylog2.shared.bindings.GuiceInstantiationService;
 import org.graylog2.shared.bindings.InstantiationService;
 import org.graylog2.shared.bindings.PluginBindings;
 import org.graylog2.shared.plugins.PluginLoader;
-import org.jboss.netty.logging.InternalLoggerFactory;
-import org.jboss.netty.logging.Slf4JLoggerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
@@ -193,9 +191,6 @@ public abstract class CmdLineTool implements Runnable {
         if (isDebug()) {
             LOG.info("Running in Debug mode");
             logLevel = Level.DEBUG;
-
-            // Enable logging for Netty when running in debug mode.
-            InternalLoggerFactory.setDefaultFactory(new Slf4JLoggerFactory());
         } else if (onlyLogErrors()) {
             logLevel = Level.ERROR;
         }
@@ -231,7 +226,9 @@ public abstract class CmdLineTool implements Runnable {
 
     private String getPluginPath(String configFile) {
         PluginLoaderConfig pluginLoaderConfig = new PluginLoaderConfig();
-        JadConfig jadConfig = new JadConfig(getConfigRepositories(configFile), pluginLoaderConfig);
+        JadConfig jadConfig = new JadConfig();
+        jadConfig.addConfigurationBean(pluginLoaderConfig);
+        jadConfig.setRepositories(getConfigRepositories(configFile));
 
         try {
             jadConfig.process();
@@ -284,9 +281,8 @@ public abstract class CmdLineTool implements Runnable {
 
     protected NamedConfigParametersModule readConfiguration(final String configFile) {
         final List<Object> beans = getCommandConfigurationBeans();
-        for (Object bean : beans) {
+        for (Object bean : beans)
             jadConfig.addConfigurationBean(bean);
-        }
         jadConfig.setRepositories(getConfigRepositories(configFile));
 
         LOG.debug("Loading configuration from config file: {}", configFile);
@@ -305,7 +301,7 @@ public abstract class CmdLineTool implements Runnable {
             LOG.debug("No rest_transport_uri set. Using default [{}].", configuration.getRestTransportUri());
         }
 
-        return new NamedConfigParametersModule(jadConfig.getConfigurationBeans());
+        return new NamedConfigParametersModule(beans);
     }
 
     protected List<Module> getSharedBindingsModules(InstantiationService instantiationService) {
