@@ -51,6 +51,7 @@ import io.quarkus.creator.config.reader.PropertiesHandler;
 import io.quarkus.creator.outcome.OutcomeProviderRegistration;
 import io.quarkus.creator.phase.curate.CurateOutcome;
 import io.quarkus.deployment.ApplicationArchive;
+import io.quarkus.deployment.ApplicationInfoUtil;
 import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.QuarkusAugmentor;
 import io.quarkus.deployment.QuarkusClassWriter;
@@ -71,6 +72,7 @@ import io.smallrye.config.SmallRyeConfigProviderResolver;
 public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutcome {
 
     private static final Logger log = Logger.getLogger(AugmentPhase.class);
+    private static final String APPLICATION_INFO_PROPERTIES = "application-info.properties";
     private static final String META_INF = "META-INF";
 
     private Path outputDir;
@@ -217,7 +219,10 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
             IoUtils.recursiveDelete(metaInf.resolve("maven"));
             IoUtils.recursiveDelete(metaInf.resolve("INDEX.LIST"));
             IoUtils.recursiveDelete(metaInf.resolve("MANIFEST.MF"));
+            IoUtils.recursiveDelete(metaInf.resolve(APPLICATION_INFO_PROPERTIES));
         }
+
+        ApplicationInfoUtil.writeApplicationInfoProperties(appState.getAppArtifact(), appClassesDir);
 
         //lets default to appClassesDir for now
         if (configDir == null)
