@@ -43,13 +43,13 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     private static final Logger log = LoggerFactory.getLogger(DecodingProcessor.class);
 
     private final LoadingCache<String, MessageInput> inputCache;
-    private final Timer decodeTime;
 
     public interface Factory {
-        public DecodingProcessor create(@Assisted("decodeTime") Timer decodeTime, @Assisted("parseTime") Timer parseTime);
+        public DecodingProcessor create(@Assisted("parseTime") Timer parseTime);
     }
 
     private final Map<String, Codec.Factory<? extends Codec>> codecFactory;
+    private final InputRegistry inputRegistry;
     private final ServerStatus serverStatus;
     private final Timer parseTime;
 
@@ -57,9 +57,9 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     public DecodingProcessor(Map<String, Codec.Factory<? extends Codec>> codecFactory,
                              final InputRegistry inputRegistry,
                              final ServerStatus serverStatus,
-                             @Assisted("decodeTime") Timer decodeTime,
                              @Assisted("parseTime") Timer parseTime) {
         this.codecFactory = codecFactory;
+        this.inputRegistry = inputRegistry;
         this.serverStatus = serverStatus;
 
         /*
@@ -68,7 +68,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         rawSize = localRegistry.meter("rawSize");
         */
         this.parseTime = parseTime;
-        this.decodeTime = decodeTime;
 
         // Use cache here to avoid looking up the inputs in the InputRegistry for every message.
         // TODO Check if there is a better way to do this!
@@ -84,22 +83,11 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
 
     @Override
     public void onEvent(MessageEvent event, long sequence, boolean endOfBatch) throws Exception {
-        final Timer.Context context = decodeTime.time();
-        try {
-            event.setMessage(processMessage(event.getRaw()));
-        } finally {
-            if (event.getMessage() != null) {
-                event.getMessage().recordTiming(serverStatus, "decode", context.stop());
-            }
-        }
-    }
-
-    private Message processMessage(RawMessage raw) throws java.util.concurrent.ExecutionException {
+        final RawMessage raw = event.getRaw();
         if (raw == null) {
             log.warn("Ignoring null message");
-            return null;
+            return;
         }
-
         final Codec codec = codecFactory.get(raw.getCodecName()).create(raw.getCodecConfig());
 
         /*
@@ -124,24 +112,17 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         final Message message;
 
         // TODO Create parse times per codec as well. (add some more metrics too)
-        final Timer.Context decodeTimeCtx = parseTime.time();
-        final long decodeTime;
-        try {
+        try (Timer.Context ignored = parseTime.time()) {
             message = codec.decode(raw);
-            if (message != null) {
-                message.setJournalOffset(raw.getJournalOffset());
-            }
+            message.setJournalOffset(raw.getJournalOffset());
         } catch (RuntimeException e) {
-            //failures.mark();
             throw e;
-        } finally {
-            decodeTime = decodeTimeCtx.stop();
+            //failures.mark();
         }
 
         if (message == null) {
-            return null;
+            return;
         }
-        message.recordTiming(serverStatus, "parse", decodeTime);
 
         for (final RawMessage.SourceNode node : raw.getSourceNodes()) {
             switch (node.type) {
@@ -185,6 +166,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
                 message.addField("gl2_remote_hostname", remoteAddress.getHostName());
             }
         }
-        return message;
+        event.setMessage(message);
     }
 }
