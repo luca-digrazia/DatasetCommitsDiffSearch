@@ -21,6 +21,7 @@ import io.quarkus.oidc.AuthorizationCodeTokens;
 import io.quarkus.oidc.OIDCException;
 import io.quarkus.oidc.OidcConfigurationMetadata;
 import io.quarkus.oidc.OidcTenantConfig;
+import io.quarkus.oidc.TokenIntrospection;
 import io.quarkus.oidc.common.runtime.OidcConstants;
 import io.quarkus.security.AuthenticationFailedException;
 import io.quarkus.security.identity.request.TokenAuthenticationRequest;
@@ -33,21 +34,53 @@ import io.vertx.ext.web.RoutingContext;
 public class OidcProvider {
 
     private static final Logger LOG = Logger.getLogger(OidcProvider.class);
+    private static final String ANY_ISSUER = "any";
+    private static final String[] SUPPORTED_ALGORITHMS = new String[] { SignatureAlgorithm.RS256.getAlgorithm(),
+            SignatureAlgorithm.RS384.getAlgorithm(),
+            SignatureAlgorithm.RS512.getAlgorithm(),
+            SignatureAlgorithm.ES256.getAlgorithm(),
+            SignatureAlgorithm.ES384.getAlgorithm(),
+            SignatureAlgorithm.ES512.getAlgorithm() };
+    private static final AlgorithmConstraints ALGORITHM_CONSTRAINTS = new AlgorithmConstraints(
+            AlgorithmConstraints.ConstraintType.PERMIT, SUPPORTED_ALGORITHMS);
 
     final OidcProviderClient client;
     final RefreshableVerificationKeyResolver keyResolver;
     final OidcTenantConfig oidcConfig;
+    final String issuer;
+    final String[] audience;
 
-    public OidcProvider(OidcProviderClient client, OidcTenantConfig oidcConfig, JsonWebKeyCache jwks) {
+    public OidcProvider(OidcProviderClient client, OidcTenantConfig oidcConfig, JsonWebKeySet jwks) {
         this.client = client;
         this.oidcConfig = oidcConfig;
         this.keyResolver = jwks == null ? null : new JsonWebKeyResolver(jwks, oidcConfig.token.forcedJwkRefreshInterval);
+
+        this.issuer = checkIssuerProp();
+        this.audience = checkAudienceProp();
     }
 
     public OidcProvider(String publicKeyEnc, OidcTenantConfig oidcConfig) {
         this.client = null;
         this.oidcConfig = oidcConfig;
         this.keyResolver = new LocalPublicKeyResolver(publicKeyEnc);
+        this.issuer = checkIssuerProp();
+        this.audience = checkAudienceProp();
+    }
+
+    private String checkIssuerProp() {
+        String issuerProp = null;
+        if (oidcConfig != null) {
+            issuerProp = oidcConfig.token.issuer.orElse(null);
+            if (issuerProp == null && client != null) {
+                issuerProp = client.getMetadata().getIssuer();
+            }
+        }
+        return ANY_ISSUER.equals(issuerProp) ? null : issuerProp;
+    }
+
+    private String[] checkAudienceProp() {
+        List<String> audienceProp = oidcConfig != null ? oidcConfig.token.audience.orElse(null) : null;
+        return audienceProp != null ? audienceProp.toArray(new String[] {}) : null;
     }
 
     public TokenVerificationResult verifyJwtToken(String token) throws InvalidJwtException {
@@ -55,21 +88,16 @@ public class OidcProvider {
 
         builder.setVerificationKeyResolver(keyResolver);
 
-        builder.setJwsAlgorithmConstraints(
-                new AlgorithmConstraints(AlgorithmConstraints.ConstraintType.PERMIT, SignatureAlgorithm.RS256.getAlgorithm()));
+        builder.setJwsAlgorithmConstraints(ALGORITHM_CONSTRAINTS);
 
         builder.setRequireExpirationTime();
         builder.setRequireIssuedAt();
 
-        String issuer = oidcConfig.token.issuer.orElse(null);
-        if (issuer == null && client != null) {
-            issuer = client.getMetadata().getIssuer();
-        }
         if (issuer != null) {
             builder.setExpectedIssuer(issuer);
         }
-        if (oidcConfig.token.audience.isPresent()) {
-            builder.setExpectedAudience(oidcConfig.token.audience.get().toArray(new String[] {}));
+        if (audience != null) {
+            builder.setExpectedAudience(audience);
         } else {
             builder.setSkipDefaultAudienceValidation();
         }
@@ -90,7 +118,11 @@ public class OidcProvider {
             if (!details.isEmpty()) {
                 detail = details.get(0).getErrorMessage();
             }
-            LOG.debugf("Token verification has failed: %s", detail);
+            if (oidcConfig.clientId.isPresent()) {
+                LOG.debugf("Verification of the token issued to client %s has failed: %s", oidcConfig.clientId.get(), detail);
+            } else {
+                LOG.debugf("Token verification has failed: %s", detail);
+            }
             throw ex;
         }
         return new TokenVerificationResult(OidcUtils.decodeJwtContent(token), null);
@@ -112,28 +144,37 @@ public class OidcProvider {
     }
 
     public Uni<TokenVerificationResult> introspectToken(String token) {
+        if (client.getMetadata().getIntrospectionUri() == null) {
+            LOG.debugf(
+                    "Token issued to client %s can not be introspected because the introspection endpoint address is unknown - "
+                            + "please check if your OpenId Connect Provider supports the token introspection",
+                    oidcConfig.clientId.get());
+            throw new AuthenticationFailedException();
+        }
         return client.introspectToken(token).onItemOrFailure()
-                .transform(new BiFunction<JsonObject, Throwable, TokenVerificationResult>() {
+                .transform(new BiFunction<TokenIntrospection, Throwable, TokenVerificationResult>() {
 
                     @Override
-                    public TokenVerificationResult apply(JsonObject jsonObject, Throwable t) {
+                    public TokenVerificationResult apply(TokenIntrospection introspectionResult, Throwable t) {
                         if (t != null) {
                             throw new AuthenticationFailedException(t);
                         }
-                        if (!Boolean.TRUE.equals(jsonObject.getBoolean(OidcConstants.INTROSPECTION_TOKEN_ACTIVE))) {
+                        if (!Boolean.TRUE.equals(introspectionResult.getBoolean(OidcConstants.INTROSPECTION_TOKEN_ACTIVE))) {
+                            LOG.debugf("Token issued to client %s is not active", oidcConfig.clientId.get());
                             throw new AuthenticationFailedException();
                         }
-                        Long exp = jsonObject.getLong(OidcConstants.INTROSPECTION_TOKEN_EXP);
+                        Long exp = introspectionResult.getLong(OidcConstants.INTROSPECTION_TOKEN_EXP);
                         if (exp != null) {
                             final int lifespanGrace = client.getOidcConfig().token.lifespanGrace.isPresent()
                                     ? client.getOidcConfig().token.lifespanGrace.getAsInt()
                                     : 0;
                             if (System.currentTimeMillis() / 1000 > exp + lifespanGrace) {
+                                LOG.debugf("Token issued to client %s has expired", oidcConfig.clientId.get());
                                 throw new AuthenticationFailedException();
                             }
                         }
 
-                        return new TokenVerificationResult(null, jsonObject);
+                        return new TokenVerificationResult(null, introspectionResult);
                     }
 
                 });
@@ -156,11 +197,11 @@ public class OidcProvider {
     }
 
     private class JsonWebKeyResolver implements RefreshableVerificationKeyResolver {
-        volatile JsonWebKeyCache jwks;
+        volatile JsonWebKeySet jwks;
         volatile long lastForcedRefreshTime;
         volatile long forcedJwksRefreshIntervalMilliSecs;
 
-        JsonWebKeyResolver(JsonWebKeyCache jwks, Duration forcedJwksRefreshInterval) {
+        JsonWebKeyResolver(JsonWebKeySet jwks, Duration forcedJwksRefreshInterval) {
             this.jwks = jwks;
             this.forcedJwksRefreshIntervalMilliSecs = forcedJwksRefreshInterval.toMillis();
         }
@@ -183,10 +224,10 @@ public class OidcProvider {
             final long now = System.currentTimeMillis();
             if (now > lastForcedRefreshTime + forcedJwksRefreshIntervalMilliSecs) {
                 lastForcedRefreshTime = now;
-                return client.getJsonWebKeySet().onItem().transformToUni(new Function<JsonWebKeyCache, Uni<? extends Void>>() {
+                return client.getJsonWebKeySet().onItem().transformToUni(new Function<JsonWebKeySet, Uni<? extends Void>>() {
 
                     @Override
-                    public Uni<? extends Void> apply(JsonWebKeyCache t) {
+                    public Uni<? extends Void> apply(JsonWebKeySet t) {
                         jwks = t;
                         return Uni.createFrom().voidItem();
                     }
