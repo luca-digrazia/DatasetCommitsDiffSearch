@@ -12,12 +12,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.TypeMirror;
 
 import io.quarkus.annotation.processor.Constants;
 
 public class DocGeneratorUtil {
-    private static String CONFIG_GROUP_PREFIX = "config-group-";
     static final String VERTX_JAVA_DOC_SITE = "https://vertx.io/docs/apidocs/";
     static final String OFFICIAL_JAVA_DOC_BASE_LINK = "https://docs.oracle.com/javase/8/docs/api/";
     static final String AGROAL_API_JAVA_DOC_SITE = "https://jar-download.com/javaDoc/io.agroal/agroal-api/1.5/index.html?";
@@ -258,65 +256,44 @@ public class DocGeneratorUtil {
     }
 
     /**
-     * Guess extension name from given configuration root class name
+     * Guess extension name from given configuration root file
      */
     public static String computeExtensionDocFileName(String configRoot) {
-        StringBuilder extensionNameBuilder = new StringBuilder();
         final Matcher matcher = Constants.PKG_PATTERN.matcher(configRoot);
         if (!matcher.find()) {
-            extensionNameBuilder.append(configRoot);
-        } else {
-            String extensionName = matcher.group(1);
-            final String subgroup = matcher.group(2);
-            extensionNameBuilder.append(Constants.QUARKUS);
-            extensionNameBuilder.append(Constants.DASH);
+            return configRoot + Constants.ADOC_EXTENSION;
+        }
 
-            if (Constants.DEPLOYMENT.equals(extensionName) || Constants.RUNTIME.equals(extensionName)) {
-                final String configClass = configRoot.substring(configRoot.lastIndexOf(Constants.DOT) + 1);
-                extensionName = hyphenate(configClass);
-                extensionNameBuilder.append(Constants.CORE);
-                extensionNameBuilder.append(extensionName);
-            } else if (subgroup != null && !Constants.DEPLOYMENT.equals(subgroup)
-                    && !Constants.RUNTIME.equals(subgroup) && !Constants.COMMON.equals(subgroup)
-                    && subgroup.matches(Constants.DIGIT_OR_LOWERCASE)) {
-                extensionNameBuilder.append(extensionName);
-                extensionNameBuilder.append(Constants.DASH);
-                extensionNameBuilder.append(subgroup);
+        String extensionName = matcher.group(1);
+        final String subgroup = matcher.group(2);
+        final StringBuilder key = new StringBuilder(Constants.QUARKUS);
+        key.append(Constants.DASH);
 
-                final String qualifier = matcher.group(3);
-                if (qualifier != null && !Constants.DEPLOYMENT.equals(qualifier)
-                        && !Constants.RUNTIME.equals(qualifier) && !Constants.COMMON.equals(qualifier)
-                        && qualifier.matches(Constants.DIGIT_OR_LOWERCASE)) {
-                    extensionNameBuilder.append(Constants.DASH);
-                    extensionNameBuilder.append(qualifier);
-                }
-            } else {
-                extensionNameBuilder.append(extensionName);
+        if (Constants.DEPLOYMENT.equals(extensionName) || Constants.RUNTIME.equals(extensionName)) {
+            final String configClass = configRoot.substring(configRoot.lastIndexOf(Constants.DOT) + 1);
+            extensionName = hyphenate(configClass);
+            key.append(Constants.CORE);
+            key.append(extensionName);
+        } else if (subgroup != null && !Constants.DEPLOYMENT.equals(subgroup)
+                && !Constants.RUNTIME.equals(subgroup) && !Constants.COMMON.equals(subgroup)
+                && subgroup.matches(Constants.DIGIT_OR_LOWERCASE)) {
+            key.append(extensionName);
+            key.append(Constants.DASH);
+            key.append(subgroup);
+
+            final String qualifier = matcher.group(3);
+            if (qualifier != null && !Constants.DEPLOYMENT.equals(qualifier)
+                    && !Constants.RUNTIME.equals(qualifier) && !Constants.COMMON.equals(qualifier)
+                    && qualifier.matches(Constants.DIGIT_OR_LOWERCASE)) {
+                key.append(Constants.DASH);
+                key.append(qualifier);
             }
+        } else {
+            key.append(extensionName);
         }
 
-        extensionNameBuilder.append(Constants.ADOC_EXTENSION);
-        return extensionNameBuilder.toString();
-    }
-
-    /**
-     * Guess config group file name from given configuration group class name
-     */
-    public static String computeConfigGroupDocFileName(String configGroup) {
-        final Matcher matcher = Constants.PKG_PATTERN.matcher(configGroup);
-        if (!matcher.find()) {
-            return CONFIG_GROUP_PREFIX + hyphenate(configGroup) + Constants.ADOC_EXTENSION;
-        }
-
-        String replacement = Constants.DASH + CONFIG_GROUP_PREFIX;
-        String sanitizedClassName = configGroup
-                .replaceFirst("io.", "")
-                .replaceFirst("\\.runtime\\.", replacement)
-                .replaceFirst("\\.deployment\\.", replacement);
-
-        return hyphenate(sanitizedClassName)
-                .replaceAll("[\\.-]+", Constants.DASH)
-                + Constants.ADOC_EXTENSION;
+        key.append(Constants.ADOC_EXTENSION);
+        return key.toString();
     }
 
     public static void appendConfigItemsIntoExistingOnes(List<ConfigDocItem> existingConfigItems,
@@ -359,25 +336,5 @@ public class DocGeneratorUtil {
         }
 
         return false;
-    }
-
-    static String stringifyType(TypeMirror typeMirror) {
-        List<? extends TypeMirror> typeArguments = ((DeclaredType) typeMirror).getTypeArguments();
-        String simpleName = typeSimpleName(typeMirror);
-        if (typeArguments.isEmpty()) {
-            return simpleName;
-        } else if (typeArguments.size() == 1) {
-            return String.format("%s<%s>", simpleName, stringifyType(typeArguments.get(0)));
-        } else if (typeArguments.size() == 2) {
-            return String.format("%s<%s,%s>", simpleName, stringifyType(typeArguments.get(0)),
-                    stringifyType(typeArguments.get(1)));
-        }
-
-        return "unknown"; // we should not reach here
-    }
-
-    private static String typeSimpleName(TypeMirror typeMirror) {
-        String type = ((DeclaredType) typeMirror).asElement().toString();
-        return type.substring(1 + type.lastIndexOf(Constants.DOT));
     }
 }

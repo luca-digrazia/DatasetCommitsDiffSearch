@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -88,8 +87,7 @@ public class AllConfigGenerator {
                 // see if it has a deployment artifact we need to load
                 ZipEntry entry = zf.getEntry("META-INF/quarkus-extension.properties");
                 if (entry != null) {
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(zf.getInputStream(entry), StandardCharsets.UTF_8))) {
+                    try (BufferedReader reader = new BufferedReader(new InputStreamReader(zf.getInputStream(entry)))) {
                         Properties properties = new Properties();
                         properties.load(reader);
                         String deploymentGav = (String) properties.get("deployment-artifact");
@@ -210,8 +208,7 @@ public class AllConfigGenerator {
             throws IOException {
         ZipEntry entry = zf.getEntry("META-INF/quarkus-config-roots.list");
         if (entry != null) {
-            try (BufferedReader reader = new BufferedReader(
-                    new InputStreamReader(zf.getInputStream(entry), StandardCharsets.UTF_8))) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(zf.getInputStream(entry)))) {
                 reader.lines().map(String::trim).filter(str -> !str.isEmpty())
                         .forEach(klass -> extensionsByConfigRoots.put(klass, extension));
             }

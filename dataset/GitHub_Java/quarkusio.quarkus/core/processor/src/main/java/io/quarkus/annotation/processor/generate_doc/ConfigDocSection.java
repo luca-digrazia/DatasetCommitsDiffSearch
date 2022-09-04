@@ -8,7 +8,6 @@ import java.util.Objects;
 
 final public class ConfigDocSection implements ConfigDocElement, Comparable<ConfigDocElement> {
     private String name;
-    private boolean optional;
     private boolean withinAMap;
     private String sectionDetails;
     private String sectionDetailsTitle;
@@ -101,13 +100,12 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
     public String toString() {
         return "ConfigDocSection{" +
                 "name='" + name + '\'' +
-                ", optional='" + optional + '\'' +
                 ", withinAMap=" + withinAMap +
                 ", sectionDetails='" + sectionDetails + '\'' +
                 ", sectionDetailsTitle='" + sectionDetailsTitle + '\'' +
                 ", configPhase=" + configPhase +
                 ", configDocItems=" + configDocItems +
-                ", anchorPrefix='" + anchorPrefix + '\'' +
+                ", anchorPrefix=" + anchorPrefix +
                 '}';
     }
 
@@ -133,13 +131,5 @@ final public class ConfigDocSection implements ConfigDocElement, Comparable<Conf
 
     public String getAnchorPrefix() {
         return anchorPrefix;
-    }
-
-    public boolean isOptional() {
-        return optional;
-    }
-
-    public void setOptional(boolean optional) {
-        this.optional = optional;
     }
 }
