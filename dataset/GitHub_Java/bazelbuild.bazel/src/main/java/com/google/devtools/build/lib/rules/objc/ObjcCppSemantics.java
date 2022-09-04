@@ -111,12 +111,7 @@ public class ObjcCppSemantics implements CppSemantics {
 
   @Override
   public void setupCompilationContext(RuleContext ruleContext, Builder contextBuilder) {
-    // The genfiles root of each child configuration must be added to the compile action so that
-    // generated headers can be resolved.
-    for (PathFragment iquotePath :
-        ObjcCommon.userHeaderSearchPaths(objcProvider, ruleContext.getConfiguration())) {
-      contextBuilder.addQuoteIncludeDir(iquotePath);
-    }
+    // For objc builds, no extra setup is required.
   }
 
   @Override

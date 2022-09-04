@@ -1171,8 +1171,6 @@ public abstract class CompilationSupport {
     }
 
     FilesToRunProvider headerScannerTool = getHeaderThinningToolExecutable();
-    PrerequisiteArtifacts appleSdks =
-        ruleContext.getPrerequisiteArtifacts(ObjcRuleClasses.APPLE_SDK_ATTRIBUTE, Mode.TARGET);
     ListMultimap<ImmutableList<String>, ObjcHeaderThinningInfo>
         objcHeaderThinningInfoByCommandLine = groupActionsByCommandLine(headerThinningInfo);
     // Register a header scanning spawn action for each unique set of command line arguments
@@ -1180,22 +1178,8 @@ public abstract class CompilationSupport {
       SpawnAction.Builder builder =
           new SpawnAction.Builder()
               .setMnemonic("ObjcHeaderScanning")
-              .setExecutable(headerScannerTool)
-              .addInputs(appleSdks.list());
-      CustomCommandLine.Builder cmdLine =
-          CustomCommandLine.builder()
-              .add("--arch")
-              .add(appleConfiguration.getSingleArchitecture().toLowerCase())
-              .add("--platform")
-              .add(appleConfiguration.getSingleArchPlatform().getLowerCaseNameInPlist())
-              .add("--sdk_version")
-              .add(
-                  appleConfiguration
-                      .getSdkVersionForPlatform(appleConfiguration.getSingleArchPlatform())
-                      .toStringWithMinimumComponents(2))
-              .add("--xcode_version")
-              .add(appleConfiguration.getXcodeVersion().toStringWithMinimumComponents(2))
-              .add("--");
+              .setExecutable(headerScannerTool);
+      CustomCommandLine.Builder cmdLine = CustomCommandLine.builder();
       for (ObjcHeaderThinningInfo info : objcHeaderThinningInfoByCommandLine.get(args)) {
         cmdLine.addJoinPaths(
             ":",
