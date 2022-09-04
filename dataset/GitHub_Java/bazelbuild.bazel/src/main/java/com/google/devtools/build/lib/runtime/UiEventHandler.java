@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.actions.StoppedScanningActionEvent;
 import com.google.devtools.build.lib.analysis.AnalysisPhaseCompleteEvent;
 import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.analysis.NoBuildRequestFinishedEvent;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
@@ -303,12 +302,11 @@ public final class UiEventHandler implements EventHandler {
             stream.write(event.getMessageBytes());
             stream.flush();
           } else {
-            boolean clearedProgress =
-                writeToStream(stream, event.getKind(), event.getMessageBytes());
-            if (clearedProgress && showProgress && cursorControl) {
-              addProgressBar();
-            }
-            terminal.flush();
+            writeToStream(
+                stream,
+                event.getKind(),
+                event.getMessageBytes(),
+                /*addBackProgressBar=*/ showProgress && cursorControl);
           }
           break;
         case FATAL:
@@ -348,14 +346,6 @@ public final class UiEventHandler implements EventHandler {
           if (incompleteLine) {
             crlf();
           }
-          if (stderr != null) {
-            writeToStream(outErr.getErrorStream(), EventKind.STDERR, stderr);
-            outErr.getErrorStream().flush();
-          }
-          if (stdout != null) {
-            writeToStream(outErr.getOutputStream(), EventKind.STDOUT, stdout);
-            outErr.getOutputStream().flush();
-          }
           if (showProgress && buildRunning && cursorControl) {
             addProgressBar();
           }
@@ -365,18 +355,31 @@ public final class UiEventHandler implements EventHandler {
           if (stateTracker.progressBarTimeDependent()) {
             refresh();
           }
-          // Fall through.
+          break;
         case START:
         case FINISH:
         case PASS:
         case TIMEOUT:
         case DEPCHECKER:
-          if (stdout != null || stderr != null) {
-            BugReport.sendBugReport(
-                new IllegalStateException(
-                    "stdout/stderr should not be present for this event " + event));
-          }
           break;
+      }
+      if (stdout != null || stderr != null) {
+        clearProgressBar();
+        terminal.flush();
+        if (stderr != null) {
+          writeToStream(
+              outErr.getErrorStream(), EventKind.STDERR, stderr, /*addBackProgressBar=*/ false);
+          outErr.getErrorStream().flush();
+        }
+        if (stdout != null) {
+          writeToStream(
+              outErr.getOutputStream(), EventKind.STDOUT, stdout, /*addBackProgressBar=*/ false);
+          outErr.getOutputStream().flush();
+        }
+        if (showProgress && cursorControl) {
+          addProgressBar();
+        }
+        terminal.flush();
       }
     }
   }
@@ -453,14 +456,15 @@ public final class UiEventHandler implements EventHandler {
     handleInternal(event);
   }
 
-  private boolean writeToStream(OutputStream stream, EventKind eventKind, byte[] message)
+  private void writeToStream(
+      OutputStream stream, EventKind eventKind, byte[] message, boolean addBackProgressBar)
       throws IOException {
     int eolIndex = Bytes.lastIndexOf(message, (byte) '\n');
     ByteArrayOutputStream outLineBuffer =
         eventKind == EventKind.STDOUT ? stdoutLineBuffer : stderrLineBuffer;
     if (eolIndex < 0) {
       outLineBuffer.write(message);
-      return false;
+      return;
     }
 
     clearProgressBar();
@@ -474,7 +478,10 @@ public final class UiEventHandler implements EventHandler {
     stream.flush();
 
     outLineBuffer.write(message, eolIndex + 1, message.length - eolIndex - 1);
-    return true;
+    if (addBackProgressBar) {
+      addProgressBar();
+      terminal.flush();
+    }
   }
 
   private void setEventKindColor(EventKind kind) throws IOException {
