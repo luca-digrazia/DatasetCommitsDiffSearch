@@ -1,7 +1,5 @@
 package org.jboss.resteasy.reactive.client.impl;
 
-import static org.jboss.resteasy.reactive.client.api.QuarkusRestClientProperties.CONNECT_TIMEOUT;
-
 import io.netty.channel.EventLoopGroup;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Context;
@@ -13,7 +11,6 @@ import io.vertx.core.Promise;
 import io.vertx.core.TimeoutStream;
 import io.vertx.core.Verticle;
 import io.vertx.core.Vertx;
-import io.vertx.core.VertxOptions;
 import io.vertx.core.WorkerExecutor;
 import io.vertx.core.datagram.DatagramSocket;
 import io.vertx.core.datagram.DatagramSocketOptions;
@@ -37,8 +34,10 @@ import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetClientOptions;
 import io.vertx.core.net.NetServer;
 import io.vertx.core.net.NetServerOptions;
+import io.vertx.core.net.SocketAddress;
 import io.vertx.core.shareddata.SharedData;
 import io.vertx.core.spi.VerticleFactory;
+import io.vertx.core.streams.ReadStream;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -66,8 +65,6 @@ import org.jboss.resteasy.reactive.common.jaxrs.ConfigurationImpl;
 
 public class ClientImpl implements Client {
 
-    private static final int DEFAULT_CONNECT_TIMEOUT = 15000;
-
     final ClientContext clientContext;
     final boolean closeVertx;
     final HttpClient httpClient;
@@ -79,11 +76,9 @@ public class ClientImpl implements Client {
     final ClientRestHandler[] abortHandlerChain;
     final Vertx vertx;
 
-    public ClientImpl(HttpClientOptions options, ConfigurationImpl configuration, ClientContext clientContext,
+    public ClientImpl(HttpClientOptions httpClientOptions, ConfigurationImpl configuration, ClientContext clientContext,
             HostnameVerifier hostnameVerifier,
             SSLContext sslContext) {
-        // TODO: ssl context
-        // TODO: hostnameVerifier
         this.configuration = configuration != null ? configuration : new ConfigurationImpl(RuntimeType.CLIENT);
         this.clientContext = clientContext;
         this.hostnameVerifier = hostnameVerifier;
@@ -101,13 +96,7 @@ public class ClientImpl implements Client {
             });
             closeVertx = true;
         }
-        Object connectTimeoutMs = configuration == null ? null : configuration.getProperty(CONNECT_TIMEOUT);
-        if (connectTimeoutMs == null) {
-            options.setConnectTimeout(DEFAULT_CONNECT_TIMEOUT);
-        } else {
-            options.setConnectTimeout((int) connectTimeoutMs);
-        }
-        this.httpClient = this.vertx.createHttpClient(options);
+        this.httpClient = this.vertx.createHttpClient(httpClientOptions);
         abortHandlerChain = new ClientRestHandler[] { new ClientErrorHandler() };
         handlerChain = new ClientRestHandler[] { new ClientRequestFiltersRestHandler(), new ClientSendRequestHandler(),
                 new ClientResponseRestHandler() };
@@ -266,7 +255,7 @@ public class ClientImpl implements Client {
         private final Supplier<Vertx> supplier;
         private volatile Vertx supplied = null;
 
-        LazyVertx(Supplier<Vertx> supplier) {
+        public LazyVertx(Supplier<Vertx> supplier) {
             this.supplier = supplier;
         }
 
@@ -403,11 +392,10 @@ public class ClientImpl implements Client {
         }
 
         @Override
-        public Future<Void> close() {
+        public void close() {
             if (supplied != null) { // no need to close if we never obtained a reference
-                return getDelegate().close();
+                getDelegate().close();
             }
-            return Future.succeededFuture();
         }
 
         @Override
@@ -418,8 +406,8 @@ public class ClientImpl implements Client {
         }
 
         @Override
-        public Future<String> deployVerticle(Verticle verticle) {
-            return getDelegate().deployVerticle(verticle);
+        public void deployVerticle(Verticle verticle) {
+            getDelegate().deployVerticle(verticle);
         }
 
         @Override
@@ -427,91 +415,67 @@ public class ClientImpl implements Client {
             getDelegate().deployVerticle(verticle, handler);
         }
 
-        public static Vertx vertx() {
-            return Vertx.vertx();
-        }
-
-        public static Vertx vertx(VertxOptions options) {
-            return Vertx.vertx(options);
-        }
-
-        public static void clusteredVertx(VertxOptions options,
-                Handler<AsyncResult<Vertx>> resultHandler) {
-            Vertx.clusteredVertx(options, resultHandler);
-        }
-
-        public static Future<Vertx> clusteredVertx(VertxOptions options) {
-            return Vertx.clusteredVertx(options);
-        }
-
-        public static Context currentContext() {
-            return Vertx.currentContext();
+        @Override
+        public void deployVerticle(Verticle verticle, DeploymentOptions deploymentOptions) {
+            getDelegate().deployVerticle(verticle, deploymentOptions);
         }
 
         @Override
-        public Future<String> deployVerticle(Verticle verticle, DeploymentOptions options) {
-            return getDelegate().deployVerticle(verticle, options);
+        public void deployVerticle(Class<? extends Verticle> aClass, DeploymentOptions deploymentOptions) {
+            getDelegate().deployVerticle(aClass, deploymentOptions);
         }
 
         @Override
-        public Future<String> deployVerticle(Class<? extends Verticle> verticleClass, DeploymentOptions options) {
-            return getDelegate().deployVerticle(verticleClass, options);
+        public void deployVerticle(Supplier<Verticle> supplier, DeploymentOptions deploymentOptions) {
+            getDelegate().deployVerticle(supplier, deploymentOptions);
         }
 
         @Override
-        public Future<String> deployVerticle(Supplier<Verticle> verticleSupplier, DeploymentOptions options) {
-            return getDelegate().deployVerticle(verticleSupplier, options);
+        public void deployVerticle(Verticle verticle, DeploymentOptions deploymentOptions,
+                Handler<AsyncResult<String>> handler) {
+            getDelegate().deployVerticle(verticle, deploymentOptions, handler);
         }
 
         @Override
-        public void deployVerticle(Verticle verticle, DeploymentOptions options,
-                Handler<AsyncResult<String>> completionHandler) {
-            getDelegate().deployVerticle(verticle, options, completionHandler);
+        public void deployVerticle(Class<? extends Verticle> aClass, DeploymentOptions deploymentOptions,
+                Handler<AsyncResult<String>> handler) {
+            getDelegate().deployVerticle(aClass, deploymentOptions, handler);
         }
 
         @Override
-        public void deployVerticle(Class<? extends Verticle> verticleClass, DeploymentOptions options,
-                Handler<AsyncResult<String>> completionHandler) {
-            getDelegate().deployVerticle(verticleClass, options, completionHandler);
+        public void deployVerticle(Supplier<Verticle> supplier, DeploymentOptions deploymentOptions,
+                Handler<AsyncResult<String>> handler) {
+            getDelegate().deployVerticle(supplier, deploymentOptions, handler);
         }
 
         @Override
-        public void deployVerticle(Supplier<Verticle> verticleSupplier, DeploymentOptions options,
-                Handler<AsyncResult<String>> completionHandler) {
-            getDelegate().deployVerticle(verticleSupplier, options, completionHandler);
+        public void deployVerticle(String s) {
+            getDelegate().deployVerticle(s);
         }
 
         @Override
-        public Future<String> deployVerticle(String name) {
-            return getDelegate().deployVerticle(name);
+        public void deployVerticle(String s, Handler<AsyncResult<String>> handler) {
+            getDelegate().deployVerticle(s, handler);
         }
 
         @Override
-        public void deployVerticle(String name,
-                Handler<AsyncResult<String>> completionHandler) {
-            getDelegate().deployVerticle(name, completionHandler);
+        public void deployVerticle(String s, DeploymentOptions deploymentOptions) {
+            getDelegate().deployVerticle(s, deploymentOptions);
         }
 
         @Override
-        public Future<String> deployVerticle(String name, DeploymentOptions options) {
-            return getDelegate().deployVerticle(name, options);
+        public void deployVerticle(String s, DeploymentOptions deploymentOptions, Handler<AsyncResult<String>> handler) {
+            getDelegate().deployVerticle(s, deploymentOptions, handler);
         }
 
         @Override
-        public void deployVerticle(String name, DeploymentOptions options,
-                Handler<AsyncResult<String>> completionHandler) {
-            getDelegate().deployVerticle(name, options, completionHandler);
+        public void undeploy(String s) {
+            getDelegate().undeploy(s);
         }
 
         @Override
-        public Future<Void> undeploy(String deploymentID) {
-            return getDelegate().undeploy(deploymentID);
-        }
-
-        @Override
-        public void undeploy(String deploymentID,
-                Handler<AsyncResult<Void>> completionHandler) {
-            getDelegate().undeploy(deploymentID, completionHandler);
+        public void undeploy(String s, Handler<AsyncResult<Void>> handler) {
+            getDelegate().undeploy(s, handler);
         }
 
         @Override
@@ -520,13 +484,13 @@ public class ClientImpl implements Client {
         }
 
         @Override
-        public void registerVerticleFactory(VerticleFactory factory) {
-            getDelegate().registerVerticleFactory(factory);
+        public void registerVerticleFactory(VerticleFactory verticleFactory) {
+            getDelegate().registerVerticleFactory(verticleFactory);
         }
 
         @Override
-        public void unregisterVerticleFactory(VerticleFactory factory) {
-            getDelegate().unregisterVerticleFactory(factory);
+        public void unregisterVerticleFactory(VerticleFactory verticleFactory) {
+            getDelegate().unregisterVerticleFactory(verticleFactory);
         }
 
         @Override
@@ -540,25 +504,13 @@ public class ClientImpl implements Client {
         }
 
         @Override
-        public <T> void executeBlocking(Handler<Promise<T>> blockingCodeHandler, boolean ordered,
-                Handler<AsyncResult<T>> asyncResultHandler) {
-            getDelegate().executeBlocking(blockingCodeHandler, ordered, asyncResultHandler);
+        public <T> void executeBlocking(Handler<Promise<T>> handler, boolean b, Handler<AsyncResult<T>> handler1) {
+            getDelegate().executeBlocking(handler, b, handler1);
         }
 
         @Override
-        public <T> void executeBlocking(Handler<Promise<T>> blockingCodeHandler,
-                Handler<AsyncResult<T>> asyncResultHandler) {
-            getDelegate().executeBlocking(blockingCodeHandler, asyncResultHandler);
-        }
-
-        @Override
-        public <T> Future<T> executeBlocking(Handler<Promise<T>> blockingCodeHandler, boolean ordered) {
-            return getDelegate().executeBlocking(blockingCodeHandler, ordered);
-        }
-
-        @Override
-        public <T> Future<T> executeBlocking(Handler<Promise<T>> blockingCodeHandler) {
-            return getDelegate().executeBlocking(blockingCodeHandler);
+        public <T> void executeBlocking(Handler<Promise<T>> handler, Handler<AsyncResult<T>> handler1) {
+            getDelegate().executeBlocking(handler, handler1);
         }
 
         @Override
@@ -567,24 +519,23 @@ public class ClientImpl implements Client {
         }
 
         @Override
-        public WorkerExecutor createSharedWorkerExecutor(String name) {
-            return getDelegate().createSharedWorkerExecutor(name);
+        public WorkerExecutor createSharedWorkerExecutor(String s) {
+            return getDelegate().createSharedWorkerExecutor(s);
         }
 
         @Override
-        public WorkerExecutor createSharedWorkerExecutor(String name, int poolSize) {
-            return getDelegate().createSharedWorkerExecutor(name, poolSize);
+        public WorkerExecutor createSharedWorkerExecutor(String s, int i) {
+            return getDelegate().createSharedWorkerExecutor(s, i);
         }
 
         @Override
-        public WorkerExecutor createSharedWorkerExecutor(String name, int poolSize, long maxExecuteTime) {
-            return getDelegate().createSharedWorkerExecutor(name, poolSize, maxExecuteTime);
+        public WorkerExecutor createSharedWorkerExecutor(String s, int i, long l) {
+            return getDelegate().createSharedWorkerExecutor(s, i, l);
         }
 
         @Override
-        public WorkerExecutor createSharedWorkerExecutor(String name, int poolSize, long maxExecuteTime,
-                TimeUnit maxExecuteTimeUnit) {
-            return getDelegate().createSharedWorkerExecutor(name, poolSize, maxExecuteTime, maxExecuteTimeUnit);
+        public WorkerExecutor createSharedWorkerExecutor(String s, int i, long l, TimeUnit timeUnit) {
+            return getDelegate().createSharedWorkerExecutor(s, i, l, timeUnit);
         }
 
         @Override
@@ -611,7 +562,7 @@ public class ClientImpl implements Client {
             private final Supplier<HttpClient> supplier;
             private volatile HttpClient supplied = null;
 
-            LazyHttpClient(Supplier<HttpClient> supplier) {
+            public LazyHttpClient(Supplier<HttpClient> supplier) {
                 this.supplier = supplier;
             }
 
@@ -623,104 +574,851 @@ public class ClientImpl implements Client {
             }
 
             @Override
-            public void request(RequestOptions options,
-                    Handler<AsyncResult<HttpClientRequest>> handler) {
-                getDelegate().request(options, handler);
+            public HttpClientRequest request(HttpMethod httpMethod, SocketAddress socketAddress,
+                    RequestOptions requestOptions) {
+                return getDelegate().request(httpMethod, socketAddress, requestOptions);
             }
 
             @Override
-            public Future<HttpClientRequest> request(RequestOptions options) {
-                return getDelegate().request(options);
+            public HttpClientRequest request(HttpMethod httpMethod, RequestOptions requestOptions) {
+                return getDelegate().request(httpMethod, requestOptions);
             }
 
             @Override
-            public void request(HttpMethod method, int port, String host, String requestURI,
-                    Handler<AsyncResult<HttpClientRequest>> handler) {
-                getDelegate().request(method, port, host, requestURI, handler);
+            public HttpClientRequest request(HttpMethod httpMethod, int i, String s, String s1) {
+                return getDelegate().request(httpMethod, i, s, s1);
             }
 
             @Override
-            public Future<HttpClientRequest> request(HttpMethod method, int port, String host, String requestURI) {
-                return getDelegate().request(method, port, host, requestURI);
+            public HttpClientRequest request(HttpMethod httpMethod, SocketAddress socketAddress, int i, String s, String s1) {
+                return getDelegate().request(httpMethod, socketAddress, i, s, s1);
             }
 
             @Override
-            public void request(HttpMethod method, String host, String requestURI,
-                    Handler<AsyncResult<HttpClientRequest>> handler) {
-                getDelegate().request(method, host, requestURI, handler);
+            public HttpClientRequest request(HttpMethod httpMethod, String s, String s1) {
+                return getDelegate().request(httpMethod, s, s1);
             }
 
             @Override
-            public Future<HttpClientRequest> request(HttpMethod method, String host, String requestURI) {
-                return getDelegate().request(method, host, requestURI);
+            @Deprecated
+            public HttpClientRequest request(HttpMethod httpMethod, RequestOptions requestOptions,
+                    Handler<HttpClientResponse> handler) {
+                return getDelegate().request(httpMethod, requestOptions, handler);
             }
 
             @Override
-            public void request(HttpMethod method, String requestURI,
-                    Handler<AsyncResult<HttpClientRequest>> handler) {
-                getDelegate().request(method, requestURI, handler);
+            public HttpClientRequest request(HttpMethod httpMethod, SocketAddress socketAddress, RequestOptions requestOptions,
+                    Handler<HttpClientResponse> handler) {
+                return getDelegate().request(httpMethod, socketAddress, requestOptions, handler);
             }
 
             @Override
-            public Future<HttpClientRequest> request(HttpMethod method, String requestURI) {
-                return getDelegate().request(method, requestURI);
+            @Deprecated
+            public HttpClientRequest request(HttpMethod httpMethod, int i, String s, String s1,
+                    Handler<HttpClientResponse> handler) {
+                return getDelegate().request(httpMethod, i, s, s1, handler);
             }
 
             @Override
-            public void webSocket(int port, String host, String requestURI,
+            public HttpClientRequest request(HttpMethod httpMethod, SocketAddress socketAddress, int i, String s, String s1,
+                    Handler<HttpClientResponse> handler) {
+                return getDelegate().request(httpMethod, socketAddress, i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest request(HttpMethod httpMethod, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().request(httpMethod, s, s1, handler);
+            }
+
+            @Override
+            public HttpClientRequest request(HttpMethod httpMethod, String s) {
+                return getDelegate().request(httpMethod, s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest request(HttpMethod httpMethod, String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().request(httpMethod, s, handler);
+            }
+
+            @Override
+            public HttpClientRequest requestAbs(HttpMethod httpMethod, String s) {
+                return getDelegate().requestAbs(httpMethod, s);
+            }
+
+            @Override
+            public HttpClientRequest requestAbs(HttpMethod httpMethod, SocketAddress socketAddress, String s) {
+                return getDelegate().requestAbs(httpMethod, socketAddress, s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest requestAbs(HttpMethod httpMethod, String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().requestAbs(httpMethod, s, handler);
+            }
+
+            @Override
+            public HttpClientRequest requestAbs(HttpMethod httpMethod, SocketAddress socketAddress, String s,
+                    Handler<HttpClientResponse> handler) {
+                return getDelegate().requestAbs(httpMethod, socketAddress, s, handler);
+            }
+
+            @Override
+            public HttpClientRequest get(RequestOptions requestOptions) {
+                return getDelegate().get(requestOptions);
+            }
+
+            @Override
+            public HttpClientRequest get(int i, String s, String s1) {
+                return getDelegate().get(i, s, s1);
+            }
+
+            @Override
+            public HttpClientRequest get(String s, String s1) {
+                return getDelegate().get(s, s1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest get(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().get(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest get(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().get(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest get(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().get(s, s1, handler);
+            }
+
+            @Override
+            public HttpClientRequest get(String s) {
+                return getDelegate().get(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest get(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().get(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest getAbs(String s) {
+                return getDelegate().getAbs(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest getAbs(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().getAbs(s, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient getNow(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().getNow(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient getNow(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().getNow(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient getNow(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().getNow(s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient getNow(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().getNow(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest post(RequestOptions requestOptions) {
+                return getDelegate().post(requestOptions);
+            }
+
+            @Override
+            public HttpClientRequest post(int i, String s, String s1) {
+                return getDelegate().post(i, s, s1);
+            }
+
+            @Override
+            public HttpClientRequest post(String s, String s1) {
+                return getDelegate().post(s, s1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest post(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().post(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest post(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().post(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest post(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().post(s, s1, handler);
+            }
+
+            @Override
+            public HttpClientRequest post(String s) {
+                return getDelegate().post(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest post(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().post(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest postAbs(String s) {
+                return getDelegate().postAbs(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest postAbs(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().postAbs(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest head(RequestOptions requestOptions) {
+                return getDelegate().head(requestOptions);
+            }
+
+            @Override
+            public HttpClientRequest head(int i, String s, String s1) {
+                return getDelegate().head(i, s, s1);
+            }
+
+            @Override
+            public HttpClientRequest head(String s, String s1) {
+                return getDelegate().head(s, s1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest head(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().head(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest head(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().head(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest head(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().head(s, s1, handler);
+            }
+
+            @Override
+            public HttpClientRequest head(String s) {
+                return getDelegate().head(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest head(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().head(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest headAbs(String s) {
+                return getDelegate().headAbs(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest headAbs(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().headAbs(s, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient headNow(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().headNow(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient headNow(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().headNow(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient headNow(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().headNow(s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient headNow(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().headNow(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest options(RequestOptions requestOptions) {
+                return getDelegate().options(requestOptions);
+            }
+
+            @Override
+            public HttpClientRequest options(int i, String s, String s1) {
+                return getDelegate().options(i, s, s1);
+            }
+
+            @Override
+            public HttpClientRequest options(String s, String s1) {
+                return getDelegate().options(s, s1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest options(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().options(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest options(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().options(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest options(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().options(s, s1, handler);
+            }
+
+            @Override
+            public HttpClientRequest options(String s) {
+                return getDelegate().options(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest options(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().options(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest optionsAbs(String s) {
+                return getDelegate().optionsAbs(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest optionsAbs(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().optionsAbs(s, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient optionsNow(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().optionsNow(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient optionsNow(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().optionsNow(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient optionsNow(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().optionsNow(s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient optionsNow(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().optionsNow(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest put(RequestOptions requestOptions) {
+                return getDelegate().put(requestOptions);
+            }
+
+            @Override
+            public HttpClientRequest put(int i, String s, String s1) {
+                return getDelegate().put(i, s, s1);
+            }
+
+            @Override
+            public HttpClientRequest put(String s, String s1) {
+                return getDelegate().put(s, s1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest put(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().put(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest put(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().put(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest put(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().put(s, s1, handler);
+            }
+
+            @Override
+            public HttpClientRequest put(String s) {
+                return getDelegate().put(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest put(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().put(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest putAbs(String s) {
+                return getDelegate().putAbs(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest putAbs(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().putAbs(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest delete(RequestOptions requestOptions) {
+                return getDelegate().delete(requestOptions);
+            }
+
+            @Override
+            public HttpClientRequest delete(int i, String s, String s1) {
+                return getDelegate().delete(i, s, s1);
+            }
+
+            @Override
+            public HttpClientRequest delete(String s, String s1) {
+                return getDelegate().delete(s, s1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest delete(RequestOptions requestOptions, Handler<HttpClientResponse> handler) {
+                return getDelegate().delete(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest delete(int i, String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().delete(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest delete(String s, String s1, Handler<HttpClientResponse> handler) {
+                return getDelegate().delete(s, s1, handler);
+            }
+
+            @Override
+            public HttpClientRequest delete(String s) {
+                return getDelegate().delete(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest delete(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().delete(s, handler);
+            }
+
+            @Override
+            public HttpClientRequest deleteAbs(String s) {
+                return getDelegate().deleteAbs(s);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClientRequest deleteAbs(String s, Handler<HttpClientResponse> handler) {
+                return getDelegate().deleteAbs(s, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, Handler<WebSocket> handler) {
+                return getDelegate().websocket(requestOptions, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, Handler<WebSocket> handler) {
+                return getDelegate().websocket(i, s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, Handler<WebSocket> handler,
+                    Handler<Throwable> handler1) {
+                return getDelegate().websocket(requestOptions, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(i, s, s1, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, s1, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, MultiMap multiMap, Handler<WebSocket> handler) {
+                return getDelegate().websocket(requestOptions, multiMap, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, MultiMap multiMap, Handler<WebSocket> handler) {
+                return getDelegate().websocket(i, s, s1, multiMap, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, MultiMap multiMap, Handler<WebSocket> handler,
+                    Handler<Throwable> handler1) {
+                return getDelegate().websocket(requestOptions, multiMap, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, MultiMap multiMap, Handler<WebSocket> handler,
+                    Handler<Throwable> handler1) {
+                return getDelegate().websocket(i, s, s1, multiMap, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, MultiMap multiMap, Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, s1, multiMap, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, MultiMap multiMap, Handler<WebSocket> handler,
+                    Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, s1, multiMap, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler) {
+                return getDelegate().websocket(requestOptions, multiMap, websocketVersion, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler) {
+                return getDelegate().websocket(i, s, s1, multiMap, websocketVersion, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(requestOptions, multiMap, websocketVersion, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(i, s, s1, multiMap, websocketVersion, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, s1, multiMap, websocketVersion, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, s1, multiMap, websocketVersion, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    String s, Handler<WebSocket> handler) {
+                return getDelegate().websocket(requestOptions, multiMap, websocketVersion, s, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    String s2, Handler<WebSocket> handler) {
+                return getDelegate().websocket(i, s, s1, multiMap, websocketVersion, s2, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocketAbs(String s, MultiMap multiMap, WebsocketVersion websocketVersion, String s1,
+                    Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocketAbs(s, multiMap, websocketVersion, s1, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(RequestOptions requestOptions, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    String s, Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(requestOptions, multiMap, websocketVersion, s, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(int i, String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    String s2, Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(i, s, s1, multiMap, websocketVersion, s2, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion, String s2,
+                    Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, s1, multiMap, websocketVersion, s2, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, String s1, MultiMap multiMap, WebsocketVersion websocketVersion, String s2,
+                    Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, s1, multiMap, websocketVersion, s2, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, MultiMap multiMap, Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, multiMap, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, MultiMap multiMap, Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, multiMap, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, multiMap, websocketVersion, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, multiMap, websocketVersion, handler, handler1);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, MultiMap multiMap, WebsocketVersion websocketVersion, String s1,
+                    Handler<WebSocket> handler) {
+                return getDelegate().websocket(s, multiMap, websocketVersion, s1, handler);
+            }
+
+            @Override
+            @Deprecated
+            public HttpClient websocket(String s, MultiMap multiMap, WebsocketVersion websocketVersion, String s1,
+                    Handler<WebSocket> handler, Handler<Throwable> handler1) {
+                return getDelegate().websocket(s, multiMap, websocketVersion, s1, handler, handler1);
+            }
+
+            @Override
+            public void webSocket(int i, String s, String s1, Handler<AsyncResult<WebSocket>> handler) {
+                getDelegate().webSocket(i, s, s1, handler);
+            }
+
+            @Override
+            public void webSocket(String s, String s1, Handler<AsyncResult<WebSocket>> handler) {
+                getDelegate().webSocket(s, s1, handler);
+            }
+
+            @Override
+            public void webSocket(String s, Handler<AsyncResult<WebSocket>> handler) {
+                getDelegate().webSocket(s, handler);
+            }
+
+            @Override
+            public void webSocket(WebSocketConnectOptions webSocketConnectOptions, Handler<AsyncResult<WebSocket>> handler) {
+                getDelegate().webSocket(webSocketConnectOptions, handler);
+            }
+
+            @Override
+            public void webSocketAbs(String s, MultiMap multiMap, WebsocketVersion websocketVersion, List<String> list,
                     Handler<AsyncResult<WebSocket>> handler) {
-                getDelegate().webSocket(port, host, requestURI, handler);
+                getDelegate().webSocketAbs(s, multiMap, websocketVersion, list, handler);
             }
 
             @Override
-            public Future<WebSocket> webSocket(int port, String host, String requestURI) {
-                return getDelegate().webSocket(port, host, requestURI);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(RequestOptions requestOptions) {
+                return getDelegate().websocketStream(requestOptions);
             }
 
             @Override
-            public void webSocket(String host, String requestURI,
-                    Handler<AsyncResult<WebSocket>> handler) {
-                getDelegate().webSocket(host, requestURI, handler);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(int i, String s, String s1) {
+                return getDelegate().websocketStream(i, s, s1);
             }
 
             @Override
-            public Future<WebSocket> webSocket(String host, String requestURI) {
-                return getDelegate().webSocket(host, requestURI);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s, String s1) {
+                return getDelegate().websocketStream(s, s1);
             }
 
             @Override
-            public void webSocket(String requestURI,
-                    Handler<AsyncResult<WebSocket>> handler) {
-                getDelegate().webSocket(requestURI, handler);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(RequestOptions requestOptions, MultiMap multiMap) {
+                return getDelegate().websocketStream(requestOptions, multiMap);
             }
 
             @Override
-            public Future<WebSocket> webSocket(String requestURI) {
-                return getDelegate().webSocket(requestURI);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(int i, String s, String s1, MultiMap multiMap) {
+                return getDelegate().websocketStream(i, s, s1, multiMap);
             }
 
             @Override
-            public void webSocket(WebSocketConnectOptions options,
-                    Handler<AsyncResult<WebSocket>> handler) {
-                getDelegate().webSocket(options, handler);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s, String s1, MultiMap multiMap) {
+                return getDelegate().websocketStream(s, s1, multiMap);
             }
 
             @Override
-            public Future<WebSocket> webSocket(WebSocketConnectOptions options) {
-                return getDelegate().webSocket(options);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(RequestOptions requestOptions, MultiMap multiMap,
+                    WebsocketVersion websocketVersion) {
+                return getDelegate().websocketStream(requestOptions, multiMap, websocketVersion);
             }
 
             @Override
-            public void webSocketAbs(String url, MultiMap headers, WebsocketVersion version,
-                    List<String> subProtocols,
-                    Handler<AsyncResult<WebSocket>> handler) {
-                getDelegate().webSocketAbs(url, headers, version, subProtocols, handler);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(int i, String s, String s1, MultiMap multiMap,
+                    WebsocketVersion websocketVersion) {
+                return getDelegate().websocketStream(i, s, s1, multiMap, websocketVersion);
             }
 
             @Override
-            public Future<WebSocket> webSocketAbs(String url, MultiMap headers, WebsocketVersion version,
-                    List<String> subProtocols) {
-                return getDelegate().webSocketAbs(url, headers, version, subProtocols);
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s, String s1, MultiMap multiMap,
+                    WebsocketVersion websocketVersion) {
+                return getDelegate().websocketStream(s, s1, multiMap, websocketVersion);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStreamAbs(String s, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    String s1) {
+                return getDelegate().websocketStreamAbs(s, multiMap, websocketVersion, s1);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(RequestOptions requestOptions, MultiMap multiMap,
+                    WebsocketVersion websocketVersion, String s) {
+                return getDelegate().websocketStream(requestOptions, multiMap, websocketVersion, s);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(int i, String s, String s1, MultiMap multiMap,
+                    WebsocketVersion websocketVersion, String s2) {
+                return getDelegate().websocketStream(i, s, s1, multiMap, websocketVersion, s2);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s, String s1, MultiMap multiMap,
+                    WebsocketVersion websocketVersion, String s2) {
+                return getDelegate().websocketStream(s, s1, multiMap, websocketVersion, s2);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s) {
+                return getDelegate().websocketStream(s);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s, MultiMap multiMap) {
+                return getDelegate().websocketStream(s, multiMap);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s, MultiMap multiMap, WebsocketVersion websocketVersion) {
+                return getDelegate().websocketStream(s, multiMap, websocketVersion);
+            }
+
+            @Override
+            @Deprecated
+            public ReadStream<WebSocket> websocketStream(String s, MultiMap multiMap, WebsocketVersion websocketVersion,
+                    String s1) {
+                return getDelegate().websocketStream(s, multiMap, websocketVersion, s1);
             }
 
             @Override
@@ -729,32 +1427,20 @@ public class ClientImpl implements Client {
             }
 
             @Override
-            public HttpClient redirectHandler(
-                    Function<HttpClientResponse, Future<RequestOptions>> handler) {
-                return getDelegate().redirectHandler(handler);
+            public HttpClient redirectHandler(Function<HttpClientResponse, Future<HttpClientRequest>> function) {
+                return getDelegate().redirectHandler(function);
             }
 
             @Override
-            public Function<HttpClientResponse, Future<RequestOptions>> redirectHandler() {
+            public Function<HttpClientResponse, Future<HttpClientRequest>> redirectHandler() {
                 return getDelegate().redirectHandler();
             }
 
             @Override
-            public void close(Handler<AsyncResult<Void>> handler) {
+            public void close() {
                 if (supplied != null) { // no need to close if we never obtained a reference
-                    getDelegate().close(handler);
+                    getDelegate().close();
                 }
-                if (handler != null) {
-                    handler.handle(Future.succeededFuture());
-                }
-            }
-
-            @Override
-            public Future<Void> close() {
-                if (supplied != null) { // no need to close if we never obtained a reference
-                    return getDelegate().close();
-                }
-                return Future.succeededFuture();
             }
 
             @Override
