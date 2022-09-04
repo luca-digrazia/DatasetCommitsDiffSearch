@@ -274,23 +274,16 @@ public final class BuildResult {
         .toString();
   }
 
-  /**
-   * Collection of data for the build tool logs event. See {@link BuildToolLogs} for details.
-   */
+  /** Collection of data for the build tool logs event. */
   public static final class BuildToolLogCollection {
     private final List<Pair<String, ByteString>> directValues = new ArrayList<>();
     private final List<Pair<String, String>> directUris = new ArrayList<>();
-    private final List<Pair<String, Path>> localFiles = new ArrayList<>();
+    private final List<Pair<String, Path>> logFiles = new ArrayList<>();
     private boolean frozen;
 
     public BuildToolLogCollection freeze() {
       frozen = true;
       return this;
-    }
-
-    @VisibleForTesting
-    public List<Pair<String, Path>> getLocalFiles() {
-      return localFiles;
     }
 
     public BuildToolLogCollection addDirectValue(String name, byte[] data) {
@@ -307,13 +300,13 @@ public final class BuildResult {
 
     public BuildToolLogCollection addLocalFile(String name, Path path) {
       Preconditions.checkState(!frozen);
-      this.localFiles.add(Pair.of(name, path));
+      this.logFiles.add(Pair.of(name, path));
       return this;
     }
 
     public BuildToolLogs toEvent() {
       Preconditions.checkState(frozen);
-      return new BuildToolLogs(directValues, directUris, localFiles);
+      return new BuildToolLogs(directValues, directUris, logFiles);
     }
 
     /** For debugging. */
@@ -322,7 +315,7 @@ public final class BuildResult {
       return MoreObjects.toStringHelper(this)
           .add("directValues", directValues)
           .add("directUris", directUris)
-          .add("localFiles", localFiles)
+          .add("logFiles", logFiles)
           .toString();
     }
   }
