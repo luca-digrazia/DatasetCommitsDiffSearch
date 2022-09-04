@@ -46,8 +46,9 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.util.MockCcSupport;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariableValue;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariableValue;
 import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
+import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
@@ -328,7 +329,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
             } else {
               builder.setLinkType(LinkTargetType.EXECUTABLE);
             }
-            builder.setLinkingMode(Link.LinkingMode.DYNAMIC);
+            builder.setLinkStaticness(LinkStaticness.DYNAMIC);
             builder.setNativeDeps(attributesToFlip.contains(NonStaticAttributes.NATIVE_DEPS));
             builder.setUseTestOnlyFlags(
                 attributesToFlip.contains(NonStaticAttributes.USE_TEST_ONLY_FLAGS));
@@ -506,10 +507,10 @@ public class CppLinkActionTest extends BuildViewTestCase {
             .addLibraries(NestedSetBuilder.wrap(Order.LINK_ORDER, libraryInputs))
             .setLinkType(type)
             .setCrosstoolInputs(NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER))
-            .setLinkingMode(
+            .setLinkStaticness(
                 type.linkerOrArchiver() == LinkerOrArchiver.ARCHIVER
-                    ? Link.LinkingMode.LEGACY_FULLY_STATIC
-                    : Link.LinkingMode.STATIC);
+                    ? LinkStaticness.FULLY_STATIC
+                    : LinkStaticness.MOSTLY_STATIC);
     return builder;
   }
 
@@ -626,7 +627,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testStaticLinkWithDynamicIsError() throws Exception {
     CppLinkActionBuilder builder =
         createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
-            .setLinkingMode(Link.LinkingMode.DYNAMIC)
+            .setLinkStaticness(LinkStaticness.DYNAMIC)
             .setLibraryIdentifier("foo");
 
     assertError("static library link must be static", builder);
@@ -636,7 +637,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testStaticLinkWithSymbolsCountOutputIsError() throws Exception {
     CppLinkActionBuilder builder =
         createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
-            .setLinkingMode(Link.LinkingMode.LEGACY_FULLY_STATIC)
+            .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .setLibraryIdentifier("foo")
             .setSymbolCountsOutput(scratchArtifact("dummySymbolCounts"));
 
@@ -647,7 +648,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testStaticLinkWithNativeDepsIsError() throws Exception {
     CppLinkActionBuilder builder =
         createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
-            .setLinkingMode(Link.LinkingMode.LEGACY_FULLY_STATIC)
+            .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .setLibraryIdentifier("foo")
             .setNativeDeps(true);
 
@@ -658,7 +659,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
   public void testStaticLinkWithWholeArchiveIsError() throws Exception {
     CppLinkActionBuilder builder =
         createLinkBuilder(LinkTargetType.STATIC_LIBRARY)
-            .setLinkingMode(Link.LinkingMode.LEGACY_FULLY_STATIC)
+            .setLinkStaticness(LinkStaticness.FULLY_STATIC)
             .setLibraryIdentifier("foo")
             .setWholeArchive(true);
 
@@ -844,7 +845,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 ImmutableList.of(),
                 ImmutableList.of(),
                 getMockFeatureConfiguration())
-            .setLinkingMode(Link.LinkingMode.STATIC)
+            .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
             .addLinkopts(ImmutableList.of("-pie", "-other", "-pie"))
             .setLibraryIdentifier("foo")
             .build();
@@ -864,7 +865,7 @@ public class CppLinkActionTest extends BuildViewTestCase {
                 ImmutableList.of(),
                 ImmutableList.of(),
                 getMockFeatureConfiguration())
-            .setLinkingMode(Link.LinkingMode.STATIC)
+            .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
             .addLinkopts(ImmutableList.of("-pie", "-other", "-pie"))
             .build();
 

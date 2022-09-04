@@ -205,11 +205,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     }
 
     final Aar aar =
-        Aar.makeAar(
-            ruleContext,
-            resourceApk,
-            proguardLibrary.collectLocalProguardSpecs(),
-            androidCommon.getClassJar());
+        Aar.makeAar(ruleContext, resourceApk, proguardLibrary.collectLocalProguardSpecs());
 
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
     androidCommon.addTransitiveInfoProviders(

@@ -101,6 +101,7 @@ public enum LinkBuildVariables {
       Artifact thinltoMergedObjectFile,
       boolean mustKeepDebug,
       Artifact symbolCounts,
+      CppConfiguration cppConfiguration,
       CcToolchainProvider ccToolchainProvider,
       FeatureConfiguration featureConfiguration,
       boolean useTestOnlyFlags,
@@ -122,16 +123,17 @@ public enum LinkBuildVariables {
     }
 
     // pic
-    if (ccToolchainProvider.getForcePic()) {
+    if (cppConfiguration.forcePic()) {
       buildVariables.addStringVariable(FORCE_PIC.getVariableName(), "");
     }
 
-    if (!mustKeepDebug && ccToolchainProvider.getShouldStripBinaries()) {
+    if (!mustKeepDebug && cppConfiguration.shouldStripBinaries()) {
       buildVariables.addStringVariable(STRIP_DEBUG_SYMBOLS.getVariableName(), "");
     }
 
     if (isUsingLinkerNotArchiver
-        && ccToolchainProvider.shouldCreatePerObjectDebugInfo(featureConfiguration)) {
+        && CppHelper.shouldCreatePerObjectDebugInfo(
+            cppConfiguration, ccToolchainProvider, featureConfiguration)) {
       buildVariables.addStringVariable(IS_USING_FISSION.getVariableName(), "");
     }
 

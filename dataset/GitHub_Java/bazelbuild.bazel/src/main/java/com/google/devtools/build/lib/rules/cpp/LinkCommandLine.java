@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -50,7 +51,7 @@ public final class LinkCommandLine extends CommandLine {
   private final ImmutableList<Artifact> buildInfoHeaderArtifacts;
   private final Iterable<Artifact> linkerInputArtifacts;
   private final LinkTargetType linkTargetType;
-  private final Link.LinkingMode linkingMode;
+  private final LinkStaticness linkStaticness;
   private final ImmutableList<String> linkopts;
   @Nullable private final PathFragment toolchainLibrariesSolibDir;
   private final boolean nativeDeps;
@@ -65,7 +66,7 @@ public final class LinkCommandLine extends CommandLine {
       ImmutableList<Artifact> buildInfoHeaderArtifacts,
       Iterable<Artifact> linkerInputArtifacts,
       LinkTargetType linkTargetType,
-      Link.LinkingMode linkingMode,
+      LinkStaticness linkStaticness,
       ImmutableList<String> linkopts,
       @Nullable PathFragment toolchainLibrariesSolibDir,
       boolean nativeDeps,
@@ -81,7 +82,7 @@ public final class LinkCommandLine extends CommandLine {
     this.buildInfoHeaderArtifacts = Preconditions.checkNotNull(buildInfoHeaderArtifacts);
     this.linkerInputArtifacts = Preconditions.checkNotNull(linkerInputArtifacts);
     this.linkTargetType = Preconditions.checkNotNull(linkTargetType);
-    this.linkingMode = Preconditions.checkNotNull(linkingMode);
+    this.linkStaticness = Preconditions.checkNotNull(linkStaticness);
     this.linkopts = linkopts;
     this.toolchainLibrariesSolibDir = toolchainLibrariesSolibDir;
     this.nativeDeps = nativeDeps;
@@ -111,9 +112,11 @@ public final class LinkCommandLine extends CommandLine {
     return linkTargetType;
   }
 
-  /** Returns the "staticness" of the link. */
-  public Link.LinkingMode getLinkingMode() {
-    return linkingMode;
+  /**
+   * Returns the "staticness" of the link.
+   */
+  public LinkStaticness getLinkStaticness() {
+    return linkStaticness;
   }
 
   /**
@@ -413,7 +416,7 @@ public final class LinkCommandLine extends CommandLine {
     private ImmutableList<Artifact> buildInfoHeaderArtifacts = ImmutableList.of();
     private Iterable<Artifact> linkerInputArtifacts = ImmutableList.of();
     @Nullable private LinkTargetType linkTargetType;
-    private Link.LinkingMode linkingMode = Link.LinkingMode.LEGACY_FULLY_STATIC;
+    private LinkStaticness linkStaticness = LinkStaticness.FULLY_STATIC;
     private ImmutableList<String> linkopts = ImmutableList.of();
     @Nullable private PathFragment toolchainLibrariesSolibDir;
     private boolean nativeDeps;
@@ -451,7 +454,7 @@ public final class LinkCommandLine extends CommandLine {
           buildInfoHeaderArtifacts,
           linkerInputArtifacts,
           linkTargetType,
-          linkingMode,
+          linkStaticness,
           linkopts,
           toolchainLibrariesSolibDir,
           nativeDeps,
@@ -509,11 +512,11 @@ public final class LinkCommandLine extends CommandLine {
     /**
      * Sets how static the link is supposed to be. For static target types (see {@link
      * LinkTargetType#linkerOrArchiver()}}), the {@link #build} method throws an exception if this
-     * is not {@link Link.LinkingMode#LEGACY_FULLY_STATIC}. The default setting is {@link
-     * Link.LinkingMode#LEGACY_FULLY_STATIC}.
+     * is not {@link LinkStaticness#FULLY_STATIC}. The default setting is {@link
+     * LinkStaticness#FULLY_STATIC}.
      */
-    public Builder setLinkingMode(Link.LinkingMode linkingMode) {
-      this.linkingMode = linkingMode;
+    public Builder setLinkStaticness(LinkStaticness linkStaticness) {
+      this.linkStaticness = linkStaticness;
       return this;
     }
 
