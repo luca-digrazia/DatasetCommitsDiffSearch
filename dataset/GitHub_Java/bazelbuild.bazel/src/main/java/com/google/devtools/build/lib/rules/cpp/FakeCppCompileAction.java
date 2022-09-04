@@ -75,7 +75,7 @@ public class FakeCppCompileAction extends CppCompileAction {
       PathFragment tempOutputFile,
       DotdFile dotdFile,
       ImmutableMap<String, String> localShellEnvironment,
-      CcCompilationContextInfo ccCompilationContextInfo,
+      CcCompilationInfo ccCompilationInfo,
       CoptsFilter nocopts,
       Iterable<IncludeScannable> lipoScannables,
       CppSemantics cppSemantics,
@@ -112,7 +112,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         // cc_fake_binary and for the negative compilation tests that depend on
         // the cc_fake_binary, and the runfiles must be determined at analysis
         // time, so they can't depend on the contents of the ".d" file.)
-        CcCompilationContextInfo.disallowUndeclaredHeaders(ccCompilationContextInfo),
+        CcCompilationInfo.disallowUndeclaredHeaders(ccCompilationInfo),
         nocopts,
         lipoScannables,
         ImmutableList.<Artifact>of(),
@@ -160,8 +160,7 @@ public class FakeCppCompileAction extends CppCompileAction {
           new HeaderDiscovery.Builder()
               .setAction(this)
               .setSourceFile(getSourceFile())
-              .setDependencies(
-                  processDepset(actionExecutionContext, execRoot, reply).getDependencies())
+              .setDependencies(processDepset(execRoot, reply).getDependencies())
               .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
               .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
 
@@ -184,16 +183,16 @@ public class FakeCppCompileAction extends CppCompileAction {
     // listed in the "srcs" of the cc_fake_binary or in the "srcs" of a cc_library that it
     // depends on.
     try {
-      validateInclusions(actionExecutionContext, discoveredInputs);
+      validateInclusions(
+          discoveredInputs,
+          actionExecutionContext.getArtifactExpander(),
+          actionExecutionContext.getEventHandler());
     } catch (ActionExecutionException e) {
       // TODO(bazel-team): (2009) make this into an error, once most of the current warnings
       // are fixed.
-      actionExecutionContext
-          .getEventHandler()
-          .handle(
-              Event.warn(
-                  getOwner().getLocation(),
-                  e.getMessage() + ";\n  this warning may eventually become an error"));
+      actionExecutionContext.getEventHandler().handle(Event.warn(
+          getOwner().getLocation(),
+          e.getMessage() + ";\n  this warning may eventually become an error"));
     }
 
     updateActionInputs(discoveredInputs);

@@ -57,7 +57,7 @@ public class CcToolchainProviderTest {
             /* dynamicRuntimeLinkInputs= */ NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             /* dynamicRuntimeLinkMiddleman= */ null,
             /* dynamicRuntimeSolibDir= */ PathFragment.EMPTY_FRAGMENT,
-            CcCompilationContextInfo.EMPTY,
+            CcCompilationInfo.EMPTY,
             /* supportsParamFiles= */ false,
             /* supportsHeaderParsing= */ false,
             Variables.EMPTY,
@@ -66,10 +66,7 @@ public class CcToolchainProviderTest {
             /* linkDynamicLibraryTool= */ null,
             /* builtInIncludeDirectories= */ ImmutableList.<PathFragment>of(),
             /* sysroot= */ null,
-            FdoMode.OFF,
-            /* useLLVMCoverageMapFormat= */ false,
-            /* codeCoverageEnabled= */ false,
-            /* isHostConfiguration= */ false);
+            FdoMode.OFF);
 
     CcToolchainProvider b =
         new CcToolchainProvider(
@@ -94,7 +91,7 @@ public class CcToolchainProviderTest {
             /* dynamicRuntimeLinkInputs= */ NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
             /* dynamicRuntimeLinkMiddleman= */ null,
             /* dynamicRuntimeSolibDir= */ PathFragment.EMPTY_FRAGMENT,
-            CcCompilationContextInfo.EMPTY,
+            CcCompilationInfo.EMPTY,
             /* supportsParamFiles= */ false,
             /* supportsHeaderParsing= */ false,
             Variables.EMPTY,
@@ -103,10 +100,7 @@ public class CcToolchainProviderTest {
             /* linkDynamicLibraryTool= */ null,
             /* builtInIncludeDirectories= */ ImmutableList.<PathFragment>of(),
             /* sysroot= */ null,
-            FdoMode.OFF,
-            /* useLLVMCoverageMapFormat= */ false,
-            /* codeCoverageEnabled= */ false,
-            /* isHostConfiguration= */ false);
+            FdoMode.OFF);
 
     new EqualsTester()
         .addEqualityGroup(a)
