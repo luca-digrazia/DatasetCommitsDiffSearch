@@ -1,107 +1,84 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.bundles;
 
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.mongodb.BasicDBObject;
 import org.graylog2.dashboards.DashboardImpl;
-import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
+import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.indexer.Indexer;
+import org.graylog2.grok.GrokPatternService;
 import org.graylog2.inputs.InputService;
-import org.graylog2.inputs.extractors.ExtractorFactory;
-import org.graylog2.plugin.ServerStatus;
-import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.streams.OutputService;
-import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
 public class BundleExporter {
-
-
     private static final Logger LOG = LoggerFactory.getLogger(BundleExporter.class);
 
     private final InputService inputService;
-    private final InputRegistry inputRegistry;
-    private final ExtractorFactory extractorFactory;
     private final StreamService streamService;
-    private final StreamRuleService streamRuleService;
     private final OutputService outputService;
     private final DashboardService dashboardService;
-    private final DashboardRegistry dashboardRegistry;
-    private final ServerStatus serverStatus;
-    private final MetricRegistry metricRegistry;
-    private final Indexer indexer;
+    private final DashboardWidgetCreator dashboardWidgetCreator;
+    private final GrokPatternService grokPatternService;
 
-    private final Map<String, MessageInput> createdInputs = new HashMap<>();
-    private final Map<String, org.graylog2.plugin.streams.Output> createdOutputs = new HashMap<>();
-    private final Map<String, org.graylog2.plugin.streams.Stream> createdStreams = new HashMap<>();
-    private final Map<String, org.graylog2.dashboards.Dashboard> createdDashboards = new HashMap<>();
-    private final Map<String, org.graylog2.plugin.streams.Output> outputsByReferenceId = new HashMap<>();
-    private final Map<String, org.graylog2.plugin.streams.Stream> streamsByReferenceId = new HashMap<>();
+    private Set<String> streamSet = new HashSet<>();
 
     @Inject
     public BundleExporter(final InputService inputService,
-                          final InputRegistry inputRegistry,
-                          final ExtractorFactory extractorFactory,
                           final StreamService streamService,
-                          final StreamRuleService streamRuleService,
                           final OutputService outputService,
                           final DashboardService dashboardService,
-                          final DashboardRegistry dashboardRegistry,
-                          final ServerStatus serverStatus,
-                          final MetricRegistry metricRegistry,
-                          final Indexer indexer) {
+                          final DashboardWidgetCreator dashboardWidgetCreator,
+                          final GrokPatternService grokPatternService) {
         this.inputService = inputService;
-        this.inputRegistry = inputRegistry;
-        this.extractorFactory = extractorFactory;
         this.streamService = streamService;
-        this.streamRuleService = streamRuleService;
         this.outputService = outputService;
         this.dashboardService = dashboardService;
-        this.dashboardRegistry = dashboardRegistry;
-        this.serverStatus = serverStatus;
-        this.metricRegistry = metricRegistry;
-        this.indexer = indexer;
+        this.dashboardWidgetCreator = dashboardWidgetCreator;
+        this.grokPatternService = grokPatternService;
     }
 
     public ConfigurationBundle export(final ExportBundle exportBundle) {
         final ConfigurationBundle configurationBundle = new ConfigurationBundle();
 
-        List<Input> inputs = exportInputs(exportBundle.getInputs());
-        List<Stream> streams = exportStreams(exportBundle.getStreams());
-        List<Output> outputs = exportOutputs(exportBundle.getOutputs());
-        List<Dashboard> dashboards = exportDashboards(exportBundle.getDashboards());
+        streamSet = new HashSet<>(exportBundle.getStreams());
+
+        final Set<Dashboard> dashboards = exportDashboards(exportBundle.getDashboards());
+        final Set<Output> outputs = exportOutputs(exportBundle.getOutputs());
+        final Set<Stream> streams = exportStreams(streamSet);
+        final Set<GrokPattern> grokPatterns = exportGrokPatterns(exportBundle.getGrokPatterns());
+        final Set<Input> inputs = exportInputs(exportBundle.getInputs());
 
         configurationBundle.setName(exportBundle.getName());
         configurationBundle.setCategory(exportBundle.getCategory());
         configurationBundle.setDescription(exportBundle.getDescription());
+        configurationBundle.setGrokPatterns(grokPatterns);
         configurationBundle.setInputs(inputs);
         configurationBundle.setStreams(streams);
         configurationBundle.setOutputs(outputs);
@@ -110,13 +87,38 @@ public class BundleExporter {
         return configurationBundle;
     }
 
-    private List<Input> exportInputs(final List<String> inputs) {
-        final ImmutableList.Builder<Input> inputBuilder = ImmutableList.builder();
+    private Set<GrokPattern> exportGrokPatterns(final Set<String> grokPatterns) {
+        final ImmutableSet.Builder<GrokPattern> grokPatternBuilder = ImmutableSet.builder();
+
+        for (String name : grokPatterns) {
+            final GrokPattern grokPattern = exportGrokPattern(name);
+            if (grokPattern != null) {
+                grokPatternBuilder.add(grokPattern);
+            }
+        }
+
+        return grokPatternBuilder.build();
+    }
+
+    private GrokPattern exportGrokPattern(final String grokPatternName) {
+        final org.graylog2.grok.GrokPattern grokPattern;
+        try {
+            grokPattern = grokPatternService.load(grokPatternName);
+        } catch (NotFoundException e) {
+            LOG.debug("Requested grok pattern \"{}\" not found.", grokPatternName);
+            return null;
+        }
+
+        return GrokPattern.create(grokPattern.name(), grokPattern.pattern());
+    }
+
+    private Set<Input> exportInputs(final Set<String> inputs) {
+        final ImmutableSet.Builder<Input> inputBuilder = ImmutableSet.builder();
 
         for (String inputId : inputs) {
             final Input input = exportInput(inputId);
             if (input != null) {
-                inputBuilder.add(exportInput(inputId));
+                inputBuilder.add(input);
             }
         }
 
@@ -133,6 +135,7 @@ public class BundleExporter {
         }
 
         final Input inputDescription = new Input();
+        inputDescription.setId(input.getId());
         inputDescription.setTitle(input.getTitle());
         inputDescription.setType(input.getType());
         inputDescription.setGlobal(input.isGlobal());
@@ -178,7 +181,7 @@ public class BundleExporter {
         for (org.graylog2.plugin.inputs.Converter converter : converters) {
             final Converter converterDescription = new Converter();
             final org.graylog2.plugin.inputs.Converter.Type type =
-                    org.graylog2.plugin.inputs.Converter.Type.valueOf(converter.getType().toUpperCase());
+                    org.graylog2.plugin.inputs.Converter.Type.valueOf(converter.getType().toUpperCase(Locale.ENGLISH));
 
             converterDescription.setType(type);
             converterDescription.setConfiguration(converter.getConfig());
@@ -189,8 +192,8 @@ public class BundleExporter {
         return converterBuilder.build();
     }
 
-    private List<Stream> exportStreams(final List<String> streams) {
-        final ImmutableList.Builder<Stream> streamBuilder = ImmutableList.builder();
+    private Set<Stream> exportStreams(final Set<String> streams) {
+        final ImmutableSet.Builder<Stream> streamBuilder = ImmutableSet.builder();
 
         for (String streamId : streams) {
             final Stream stream = exportStream(streamId);
@@ -217,8 +220,10 @@ public class BundleExporter {
         streamDescription.setTitle(stream.getTitle());
         streamDescription.setDescription(stream.getDescription());
         streamDescription.setDisabled(stream.getDisabled());
+        streamDescription.setMatchingType(stream.getMatchingType());
         streamDescription.setOutputs(exportOutputReferences(stream.getOutputs()));
         streamDescription.setStreamRules(exportStreamRules(stream.getStreamRules()));
+        streamDescription.setDefaultStream(stream.isDefaultStream());
 
         return streamDescription;
     }
@@ -232,6 +237,7 @@ public class BundleExporter {
             streamRuleDescription.setField(streamRule.getField());
             streamRuleDescription.setValue(streamRule.getValue());
             streamRuleDescription.setInverted(streamRule.getInverted());
+            streamRuleDescription.setDescription(streamRule.getDescription());
 
             streamRuleBuilder.add(streamRuleDescription);
         }
@@ -249,8 +255,8 @@ public class BundleExporter {
         return outputBuilder.build();
     }
 
-    private List<Output> exportOutputs(final List<String> outputs) {
-        final ImmutableList.Builder<Output> outputBuilder = ImmutableList.builder();
+    private Set<Output> exportOutputs(final Set<String> outputs) {
+        final ImmutableSet.Builder<Output> outputBuilder = ImmutableSet.builder();
 
         for (String outputId : outputs) {
             final Output output = exportOutput(outputId);
@@ -282,8 +288,8 @@ public class BundleExporter {
         return outputDescription;
     }
 
-    private List<Dashboard> exportDashboards(final List<String> dashboards) {
-        final ImmutableList.Builder<Dashboard> dashboardBuilder = ImmutableList.builder();
+    private Set<Dashboard> exportDashboards(final Set<String> dashboards) {
+        final ImmutableSet.Builder<Dashboard> dashboardBuilder = ImmutableSet.builder();
 
         for (String dashboardId : dashboards) {
             final Dashboard dashboard = exportDashboard(dashboardId);
@@ -321,10 +327,12 @@ public class BundleExporter {
         @SuppressWarnings("unchecked")
         final Map<String, Object> positions = (Map<String, Object>) dashboard.asMap().get("positions");
         if (fields.containsKey(DashboardImpl.EMBEDDED_WIDGETS)) {
-            for (BasicDBObject widgetFields : (List<BasicDBObject>) fields.get(DashboardImpl.EMBEDDED_WIDGETS)) {
-                org.graylog2.dashboards.widgets.DashboardWidget widget = null;
+            @SuppressWarnings("unchecked")
+            final List<BasicDBObject> embeddedWidgets = (List<BasicDBObject>) fields.get(DashboardImpl.EMBEDDED_WIDGETS);
+            for (BasicDBObject widgetFields : embeddedWidgets) {
+                org.graylog2.dashboards.widgets.DashboardWidget widget;
                 try {
-                    widget = org.graylog2.dashboards.widgets.DashboardWidget.fromPersisted(null, null, widgetFields);
+                    widget = dashboardWidgetCreator.fromPersisted(widgetFields);
                 } catch (Exception e) {
                     LOG.warn("Error while exporting widgets of dashboard " + dashboard.getId(), e);
                     continue;
@@ -338,12 +346,34 @@ public class BundleExporter {
                 dashboardWidgetDescription.setConfiguration(widgetConfig);
                 dashboardWidgetDescription.setCacheTime(widget.getCacheTime());
 
+                // Mark referenced streams for export
+                final Object streamId = widgetConfig.get("stream_id");
+                if (streamId instanceof String) {
+                    if (streamSet.add((String) streamId)) {
+                        LOG.debug("Adding stream {} to export list", streamId);
+                    }
+                }
+
                 @SuppressWarnings("unchecked")
                 final Map<String, Integer> widgetPosition = (Map<String, Integer>) positions.get(widget.getId());
-                final Integer row = widgetPosition.get("row");
-                final Integer col = widgetPosition.get("col");
-                dashboardWidgetDescription.setRow(row == null ? 0 : row);
-                dashboardWidgetDescription.setCol(col == null ? 0 : col);
+
+                if (widgetPosition != null) {
+                    final int row = widgetPosition.getOrDefault("row", 0);
+                    final int col = widgetPosition.getOrDefault("col", 0);
+                    final int height = widgetPosition.getOrDefault("height", 0);
+                    final int width = widgetPosition.getOrDefault("width", 0);
+                    dashboardWidgetDescription.setRow(row);
+                    dashboardWidgetDescription.setCol(col);
+                    dashboardWidgetDescription.setHeight(height);
+                    dashboardWidgetDescription.setWidth(width);
+                } else {
+                    LOG.debug("Couldn't find position for widget {} on dashboard {}, using defaults (0, 0, 0, 0).",
+                            widget.getId(), dashboard.getTitle());
+                    dashboardWidgetDescription.setRow(0);
+                    dashboardWidgetDescription.setCol(0);
+                    dashboardWidgetDescription.setHeight(0);
+                    dashboardWidgetDescription.setWidth(0);
+                }
 
                 dashboardWidgetBuilder.add(dashboardWidgetDescription);
             }
