@@ -86,7 +86,6 @@ public class DetailExoListPlayer extends GSYBaseActivityDetail<GSYExo2PlayerView
             @Override
             public void onClick(View v) {
                 GSYExoVideoManager.instance().next();
-                ((GSYExo2PlayerView)detailPlayer.getCurrentPlayer()).nextUI();
             }
         });
 

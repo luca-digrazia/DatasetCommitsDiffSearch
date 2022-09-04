@@ -13,7 +13,6 @@ import com.shuyu.gsyvideoplayer.utils.Debuger;
 
 import java.util.List;
 
-import tv.danmaku.ijk.media.exo2.IjkExo2MediaPlayer;
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 
 /**
@@ -92,12 +91,6 @@ public class GSYExoPlayerManager extends BasePlayerManager {
         }
     }
 
-    @Override
-    public void setVolume(float left, float right) {
-        if (mediaPlayer != null) {
-            mediaPlayer.setVolume(left, right);
-        }
-    }
 
     @Override
     public void releaseSurface() {
@@ -107,29 +100,11 @@ public class GSYExoPlayerManager extends BasePlayerManager {
         }
     }
 
-    /**
-     * 测试异步释放
-     * */
     @Override
     public void release() {
         if (mediaPlayer != null) {
-            final IjkExo2MediaPlayer mm = mediaPlayer;
-            /// todo 测试异步，可能会收到警告
-            /// todo Player is accessed on the wrong thread. See https://exoplayer.dev/issues/player-accessed-on-wrong-thread
-            /*new Thread(
-                    new Runnable() {
-                        @Override
-                        public void run() {
-                            mm.setSurface(null);
-                            mm.release();
-
-                        }
-
-                    }
-            ).start();*/
-            mm.setSurface(null);
-            mm.release();
-            mediaPlayer = null;
+            mediaPlayer.setSurface(null);
+            mediaPlayer.release();
         }
         if (dummySurface != null) {
             dummySurface.release();

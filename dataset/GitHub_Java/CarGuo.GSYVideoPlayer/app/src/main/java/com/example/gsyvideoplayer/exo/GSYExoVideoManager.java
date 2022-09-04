@@ -8,7 +8,6 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
 
-import com.danikula.videocache.HttpProxyCacheServer;
 import com.shuyu.gsyvideoplayer.GSYVideoBaseManager;
 import com.shuyu.gsyvideoplayer.player.IPlayerManager;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
@@ -17,8 +16,6 @@ import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
 import java.io.File;
 import java.util.List;
 import java.util.Map;
-
-import tv.danmaku.ijk.media.player.IjkLibLoader;
 
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
 
@@ -36,11 +33,9 @@ public class GSYExoVideoManager extends GSYVideoBaseManager {
     @SuppressLint("StaticFieldLeak")
     private static GSYExoVideoManager videoManager;
 
-    /***
-     * @param libLoader 是否使用外部动态加载so
-     * */
-    private GSYExoVideoManager(IjkLibLoader libLoader) {
-        init(libLoader);
+
+    private GSYExoVideoManager() {
+        init();
     }
 
     /**
@@ -48,37 +43,21 @@ public class GSYExoVideoManager extends GSYVideoBaseManager {
      */
     public static synchronized GSYExoVideoManager instance() {
         if (videoManager == null) {
-            videoManager = new GSYExoVideoManager(ijkLibLoader);
+            videoManager = new GSYExoVideoManager();
         }
         return videoManager;
     }
 
     @Override
-    public HttpProxyCacheServer newProxy(Context context, File file) {
-        throw new UnsupportedOperationException("no support");
-    }
-
-    @Override
-    public void setProxy(HttpProxyCacheServer proxy) {
-        throw new UnsupportedOperationException("no support");
-    }
-
-    @Override
-    public HttpProxyCacheServer newProxy(Context context) {
-        throw new UnsupportedOperationException("no support");
-    }
-
-    @Override
-    protected IPlayerManager getPlayManager(int videoType) {
+    protected IPlayerManager getPlayManager() {
         return new GSYExoPlayerManager();
     }
 
-    public void prepare(List<String> urls, Map<String, String> mapHeadData, boolean loop, float speed, boolean cache) {
+    public void prepare(List<String> urls, Map<String, String> mapHeadData, int index,  boolean loop, float speed, boolean cache, File cachePath, String overrideExtension) {
         if (urls.size() == 0) return;
         Message msg = new Message();
         msg.what = HANDLER_PREPARE;
-        mMapHeadData = mapHeadData;
-        msg.obj = new GSYExoModel(urls, mapHeadData, loop, speed, cache);
+        msg.obj = new GSYExoModel(urls, mapHeadData, index, loop, speed, cache, cachePath, overrideExtension);
         sendMessage(msg);
         if (needTimeOutOther) {
             startTimeOutBuffer();

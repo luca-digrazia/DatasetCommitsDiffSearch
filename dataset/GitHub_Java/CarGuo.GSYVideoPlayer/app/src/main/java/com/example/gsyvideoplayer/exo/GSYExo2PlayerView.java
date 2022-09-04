@@ -262,9 +262,4 @@ public class GSYExo2PlayerView extends StandardGSYVideoPlayer {
             super.onInfo(what, extra);
         }
     }
-
-
-    public void nextUI() {
-        resetProgressAndTime();
-    }
 }
