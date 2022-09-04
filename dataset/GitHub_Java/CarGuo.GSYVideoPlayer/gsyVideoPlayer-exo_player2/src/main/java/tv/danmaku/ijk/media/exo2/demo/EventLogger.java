@@ -16,10 +16,9 @@
 package tv.danmaku.ijk.media.exo2.demo;
 
 import android.os.SystemClock;
+import androidx.annotation.Nullable;
 import android.util.Log;
 import android.view.Surface;
-
-import androidx.annotation.NonNull;
 
 import com.google.android.exoplayer2.C;
 import com.google.android.exoplayer2.ExoPlaybackException;
@@ -40,6 +39,7 @@ import com.google.android.exoplayer2.metadata.id3.Id3Frame;
 import com.google.android.exoplayer2.metadata.id3.PrivFrame;
 import com.google.android.exoplayer2.metadata.id3.TextInformationFrame;
 import com.google.android.exoplayer2.metadata.id3.UrlLinkFrame;
+import com.google.android.exoplayer2.source.MediaSource;
 import com.google.android.exoplayer2.source.MediaSourceEventListener;
 import com.google.android.exoplayer2.source.TrackGroup;
 import com.google.android.exoplayer2.source.TrackGroupArray;
@@ -48,14 +48,14 @@ import com.google.android.exoplayer2.trackselection.MappingTrackSelector.MappedT
 import com.google.android.exoplayer2.trackselection.TrackSelection;
 import com.google.android.exoplayer2.trackselection.TrackSelectionArray;
 import com.google.android.exoplayer2.video.VideoRendererEventListener;
-import com.google.android.exoplayer2.video.VideoSize;
 
+import java.io.IOException;
 import java.text.NumberFormat;
 import java.util.Locale;
 
 
 public final class EventLogger implements Player.EventListener, MetadataOutput,
-        AudioRendererEventListener, VideoRendererEventListener, MediaSourceEventListener {
+        AudioRendererEventListener, VideoRendererEventListener, MediaSourceEventListener{
 
     private static final String TAG = "EventLogger";
     private static final int MAX_TIMELINE_ITEM_LINES = 3;
@@ -103,19 +103,9 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
         Log.d(TAG, "shuffleModeEnabled [" + shuffleModeEnabled + "]");
     }
 
-    private static String getDiscontinuityReasonString(@Player.DiscontinuityReason int reason) {
-        switch (reason) {
-            case Player.DISCONTINUITY_REASON_AUTO_TRANSITION:
-                return "AUTO_TRANSITION";
-            case Player.DISCONTINUITY_REASON_SEEK:
-                return "SEEK";
-            case Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT:
-                return "SEEK_ADJUSTMENT";
-            case Player.DISCONTINUITY_REASON_INTERNAL:
-                return "INTERNAL";
-            default:
-                return "?";
-        }
+    @Override
+    public void onPositionDiscontinuity(@Player.DiscontinuityReason int reason) {
+        Log.d(TAG, "positionDiscontinuity [" + getDiscontinuityReasonString(reason) + "]");
     }
 
     @Override
@@ -138,7 +128,7 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
         }
         Log.d(TAG, "Tracks [");
         // Log tracks associated to renderers.
-        for (int rendererIndex = 0; rendererIndex < mappedTrackInfo.getRendererCount(); rendererIndex++) {
+        for (int rendererIndex = 0; rendererIndex < mappedTrackInfo.length; rendererIndex++) {
             TrackGroupArray rendererTrackGroups = mappedTrackInfo.getTrackGroups(rendererIndex);
             TrackSelection trackSelection = trackSelections.get(rendererIndex);
             if (rendererTrackGroups.length > 0) {
@@ -150,11 +140,11 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
                     Log.d(TAG, "    Group:" + groupIndex + ", adaptive_supported=" + adaptiveSupport + " [");
                     for (int trackIndex = 0; trackIndex < trackGroup.length; trackIndex++) {
                         String status = getTrackStatusString(trackSelection, trackGroup, trackIndex);
-                        /*String formatSupport = getFormatSupportString(
+                        String formatSupport = getFormatSupportString(
                                 mappedTrackInfo.getTrackFormatSupport(rendererIndex, groupIndex, trackIndex));
                         Log.d(TAG, "      " + status + " Track:" + trackIndex + ", "
                                 + Format.toLogString(trackGroup.getFormat(trackIndex))
-                                + ", supported=" + formatSupport);*/
+                                + ", supported=" + formatSupport);
                     }
                     Log.d(TAG, "    ]");
                 }
@@ -174,7 +164,7 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
             }
         }
         // Log tracks not associated with a renderer.
-        TrackGroupArray unassociatedTrackGroups = mappedTrackInfo.getUnmappedTrackGroups();
+        TrackGroupArray unassociatedTrackGroups = mappedTrackInfo.getUnassociatedTrackGroups();
         if (unassociatedTrackGroups.length > 0) {
             Log.d(TAG, "  Renderer:None [");
             for (int groupIndex = 0; groupIndex < unassociatedTrackGroups.length; groupIndex++) {
@@ -214,6 +204,11 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
     @Override
     public void onAudioEnabled(DecoderCounters counters) {
         Log.d(TAG, "audioEnabled [" + getSessionTimeString() + "]");
+    }
+
+    @Override
+    public void onAudioSessionId(int audioSessionId) {
+        Log.d(TAG, "audioSessionId [" + audioSessionId + "]");
     }
 
     @Override
@@ -263,17 +258,14 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
     }
 
     @Override
-    public void onPositionDiscontinuity(
-            @NonNull Player.PositionInfo oldPosition,
-            @NonNull Player.PositionInfo newPosition,
-            @Player.DiscontinuityReason int reason
-    ) {
-        Log.d(TAG, "positionDiscontinuity [" + getDiscontinuityReasonString(reason) + "]");
+    public void onVideoSizeChanged(int width, int height, int unappliedRotationDegrees,
+                                   float pixelWidthHeightRatio) {
+        Log.d(TAG, "videoSizeChanged [" + width + ", " + height + "]");
     }
 
     @Override
-    public void onVideoSizeChanged(VideoSize videoSize) {
-        Log.d(TAG, "videoSizeChanged [" + videoSize.width + ", " + videoSize.height + "]");
+    public void onRenderedFirstFrame(Surface surface) {
+        Log.d(TAG, "renderedFirstFrame [" + surface + "]");
     }
 
     //MediaSourceEventListener
@@ -422,10 +414,18 @@ public final class EventLogger implements Player.EventListener, MetadataOutput,
         }
     }
 
-    @Override
-    public void onRenderedFirstFrame(Object output, long renderTimeMs) {
-        if (output instanceof Surface) {
-            Log.d(TAG, "renderedFirstFrame [" + (Surface) output + "]");
+    private static String getDiscontinuityReasonString(@Player.DiscontinuityReason int reason) {
+        switch (reason) {
+            case Player.DISCONTINUITY_REASON_PERIOD_TRANSITION:
+                return "PERIOD_TRANSITION";
+            case Player.DISCONTINUITY_REASON_SEEK:
+                return "SEEK";
+            case Player.DISCONTINUITY_REASON_SEEK_ADJUSTMENT:
+                return "SEEK_ADJUSTMENT";
+            case Player.DISCONTINUITY_REASON_INTERNAL:
+                return "INTERNAL";
+            default:
+                return "?";
         }
     }
 }

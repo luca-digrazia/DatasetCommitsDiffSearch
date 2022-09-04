@@ -15,13 +15,9 @@
  */
 package com.example.gsyvideoplayer.exosource;
 
-import static java.lang.Math.max;
-import static java.lang.Math.min;
-
 import android.net.Uri;
 import android.text.TextUtils;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.annotation.VisibleForTesting;
 
@@ -66,6 +62,9 @@ import javax.net.ssl.SSLSession;
 import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
+
+import static java.lang.Math.max;
+import static java.lang.Math.min;
 
 /**
  * An {@link HttpDataSource} that uses Android's {@link HttpURLConnection}.
@@ -289,8 +288,8 @@ public class GSYDefaultHttpDataSource extends BaseDataSource implements HttpData
         this.contentTypePredicate = contentTypePredicate;
     }
 
-    @Nullable
     @Override
+    @Nullable
     public Uri getUri() {
         return connection == null ? null : Uri.parse(connection.getURL().toString());
     }
@@ -300,21 +299,20 @@ public class GSYDefaultHttpDataSource extends BaseDataSource implements HttpData
         return connection == null || responseCode <= 0 ? -1 : responseCode;
     }
 
-    @NonNull
     @Override
     public Map<String, List<String>> getResponseHeaders() {
-        return connection == null ? Collections.emptyMap() : connection.getHeaderFields();
+        return connection == null ? Collections.<String, List<String>>emptyMap() : connection.getHeaderFields();
     }
 
     @Override
-    public void setRequestProperty(@NonNull String name, @NonNull String value) {
+    public void setRequestProperty(String name, String value) {
         Assertions.checkNotNull(name);
         Assertions.checkNotNull(value);
         requestProperties.set(name, value);
     }
 
     @Override
-    public void clearRequestProperty(@NonNull String name) {
+    public void clearRequestProperty(String name) {
         Assertions.checkNotNull(name);
         requestProperties.remove(name);
     }
@@ -328,7 +326,7 @@ public class GSYDefaultHttpDataSource extends BaseDataSource implements HttpData
      * Opens the source to read the specified data.
      */
     @Override
-    public long open(@NonNull DataSpec dataSpec) throws HttpDataSourceException {
+    public long open(DataSpec dataSpec) throws HttpDataSourceException {
         this.dataSpec = dataSpec;
         this.bytesRead = 0;
         this.bytesSkipped = 0;
@@ -419,7 +417,7 @@ public class GSYDefaultHttpDataSource extends BaseDataSource implements HttpData
     }
 
     @Override
-    public int read(@NonNull byte[] buffer, int offset, int readLength) throws HttpDataSourceException {
+    public int read(byte[] buffer, int offset, int readLength) throws HttpDataSourceException {
         try {
             skipInternal();
             return readInternal(buffer, offset, readLength);

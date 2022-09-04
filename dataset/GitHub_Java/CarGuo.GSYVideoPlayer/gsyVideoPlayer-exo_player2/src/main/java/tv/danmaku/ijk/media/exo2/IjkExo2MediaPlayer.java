@@ -525,15 +525,11 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
         //缓冲时顺序为：STATE_BUFFERING -》STATE_READY
         //Log.e(TAG, "onPlayerStateChanged: playWhenReady = " + playWhenReady + ", playbackState = " + playbackState);
         if (isLastReportedPlayWhenReady != playWhenReady || lastReportedPlaybackState != playbackState) {
-            int buffer = 0;
-            if(mInternalPlayer != null) {
-                buffer =  mInternalPlayer.getBufferedPercentage()
-            }
             if (isBuffering) {
                 switch (playbackState) {
                     case Player.STATE_ENDED:
                     case Player.STATE_READY:
-                        notifyOnInfo(IMediaPlayer.MEDIA_INFO_BUFFERING_END, buffer);
+                        notifyOnInfo(IMediaPlayer.MEDIA_INFO_BUFFERING_END, mInternalPlayer.getBufferedPercentage());
                         isBuffering = false;
                         break;
                 }
@@ -550,7 +546,7 @@ public class IjkExo2MediaPlayer extends AbstractMediaPlayer implements Player.Ev
 
             switch (playbackState) {
                 case Player.STATE_BUFFERING:
-                    notifyOnInfo(IMediaPlayer.MEDIA_INFO_BUFFERING_START, buffer);
+                    notifyOnInfo(IMediaPlayer.MEDIA_INFO_BUFFERING_START, mInternalPlayer.getBufferedPercentage());
                     isBuffering = true;
                     break;
                 case Player.STATE_READY:
