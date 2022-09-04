@@ -11,23 +11,18 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 package com.google.devtools.build.lib.buildeventstream;
 
 import static com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader.LOCAL_FILES_UPLOADER;
 
-import com.google.devtools.common.options.OptionsProvider;
-
 /** A factory for {@link BuildEventArtifactUploader}. */
 public interface BuildEventArtifactUploaderFactory {
 
-  BuildEventArtifactUploaderFactory LOCAL_FILES_UPLOADER_FACTORY =
-      (OptionsProvider options) -> LOCAL_FILES_UPLOADER;
+  BuildEventArtifactUploaderFactory LOCAL_FILES_UPLOADER_FACTORY = () -> LOCAL_FILES_UPLOADER;
 
   /**
    * Returns a new instance of a {@link BuildEventArtifactUploader}. The call is responsible for
    * calling {@link BuildEventArtifactUploader#shutdown()} on the returned instance.
    */
-  BuildEventArtifactUploader create(OptionsProvider options);
+  BuildEventArtifactUploader create();
 }
-

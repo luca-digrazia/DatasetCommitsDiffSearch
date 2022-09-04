@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.syntax.DictionaryLiteral.DictionaryEntryLiteral;
 import com.google.devtools.build.lib.syntax.IfStatement.ConditionalStatements;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -638,7 +639,7 @@ public class Parser {
           nextToken();
           // check for the empty tuple literal
           if (token.kind == TokenKind.RPAREN) {
-            ListLiteral literal = ListLiteral.makeTuple(ImmutableList.of());
+            ListLiteral literal = ListLiteral.makeTuple(Collections.emptyList());
             setLocation(literal, start, token.right);
             nextToken();
             return literal;
@@ -810,7 +811,7 @@ public class Parser {
     switch (token.kind) {
       case RBRACKET: // singleton List
         {
-          ListLiteral literal = ListLiteral.makeList(ImmutableList.of(expression));
+          ListLiteral literal = ListLiteral.makeList(Collections.singletonList(expression));
           setLocation(literal, start, token.right);
           nextToken();
           return literal;
@@ -997,7 +998,7 @@ public class Parser {
   private Expression parseNotExpression(int prec) {
     int start = token.left;
     expect(TokenKind.NOT);
-    Expression expression = parseNonTupleExpression(prec);
+    Expression expression = parseNonTupleExpression(prec + 1);
     UnaryOperatorExpression notExpression =
         new UnaryOperatorExpression(UnaryOperator.NOT, expression);
     return setLocation(notExpression, start, expression);

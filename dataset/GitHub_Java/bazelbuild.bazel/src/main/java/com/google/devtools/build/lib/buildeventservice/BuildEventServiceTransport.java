@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.buildeventservice;
 
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.util.concurrent.MoreExecutors.listeningDecorator;
+import static com.google.devtools.build.lib.events.EventKind.ERROR;
 import static com.google.devtools.build.lib.events.EventKind.INFO;
 import static com.google.devtools.build.v1.BuildStatus.Result.COMMAND_FAILED;
 import static com.google.devtools.build.v1.BuildStatus.Result.COMMAND_SUCCEEDED;
@@ -102,7 +103,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
   private final BuildEventProtocolOptions protocolOptions;
   private final BuildEventArtifactUploader artifactUploader;
   private final Sleeper sleeper;
-  private final boolean errorsShouldFailTheBuild;
   /** Contains all pendingAck events that might be retried in case of failures. */
   private ConcurrentLinkedDeque<InternalOrderedBuildEvent> pendingAck;
   /** Contains all events should be sent ordered by sequence number. */
@@ -141,8 +141,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       @Nullable String projectId,
       Set<String> keywords,
       @Nullable String besResultsUrl,
-      BuildEventArtifactUploader artifactUploader,
-      boolean errorsShouldFailTheBuild) {
+      BuildEventArtifactUploader artifactUploader) {
     this(
         besClient,
         uploadTimeout,
@@ -158,8 +157,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
         keywords,
         besResultsUrl,
         artifactUploader,
-        new JavaSleeper(),
-        errorsShouldFailTheBuild);
+        new JavaSleeper());
   }
 
   @VisibleForTesting
@@ -178,8 +176,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       Set<String> keywords,
       @Nullable String besResultsUrl,
       BuildEventArtifactUploader artifactUploader,
-      Sleeper sleeper,
-      boolean errorsShouldFailTheBuild) {
+      Sleeper sleeper) {
     this.besClient = besClient;
     this.besProtoUtil =
         new BuildEventServiceProtoUtil(
@@ -201,7 +198,6 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     this.artifactUploader = artifactUploader;
     this.sleeper = sleeper;
     this.besResultsUrl = besResultsUrl;
-    this.errorsShouldFailTheBuild = errorsShouldFailTheBuild;
   }
 
   public boolean isStreaming() {
@@ -358,14 +354,11 @@ public class BuildEventServiceTransport implements BuildEventTransport {
 
   private void reportErrorAndFailBuild(Throwable t) {
     String message = errorMessageFromException(t);
-    if (errorsShouldFailTheBuild) {
-      commandLineReporter.handle(Event.error(message));
-      moduleEnvironment.exit(
-          new AbruptExitException(
-              "BuildEventServiceTransport internal error", ExitCode.PUBLISH_ERROR));
-    } else {
-      commandLineReporter.handle(Event.warn(message));
-    }
+
+    report(ERROR, message);
+    moduleEnvironment.exit(
+        new AbruptExitException(
+            "BuildEventServiceTransport internal error", ExitCode.PUBLISH_ERROR));
   }
 
   private void maybeReportUploadError() {
