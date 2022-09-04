@@ -15,6 +15,7 @@
  */
 package io.quarkus.gradle.tasks;
 
+import java.io.File;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -316,7 +317,7 @@ public class QuarkusNative extends QuarkusTask {
                         .setAddAllCharsets(addAllCharsets)
                         .setAdditionalBuildArgs(getAdditionalBuildArgs())
                         .setAutoServiceLoaderRegistration(isAutoServiceLoaderRegistration())
-                        .setOutputDir(getProject().getBuildDir().toPath())
+                        .setOutputDir(extension().buildDir().toPath())
                         .setCleanupServer(isCleanupServer())
                         .setDebugBuildProcess(isDebugBuildProcess())
                         .setDebugSymbols(isDebugSymbols())
@@ -365,7 +366,7 @@ public class QuarkusNative extends QuarkusTask {
                     throw new UnsupportedOperationException();
                 }
             }).pushOutcome(RunnerJarOutcome.class, new RunnerJarOutcome() {
-                final Path runnerJar = getProject().getBuildDir().toPath().resolve(extension().finalName() + "-runner.jar");
+                final Path runnerJar = extension().buildDir().toPath().resolve(extension().finalName() + "-runner.jar");
 
                 @Override
                 public Path getRunnerJar() {
