@@ -54,7 +54,7 @@ public class BatchedElasticSearchOutput extends ElasticSearchOutput {
     }
 
     public void synchronousFlush(List<Message> mybuffer) {
-        LOG.debug("[{}] Starting flushing {} messages", Thread.currentThread(), mybuffer.size());
+        LOG.info("[{}] Starting flushing {} messages", Thread.currentThread(), mybuffer.size());
 
         try(Timer.Context context = this.processTime.time()) {
             super.write(mybuffer, null);
@@ -63,11 +63,11 @@ public class BatchedElasticSearchOutput extends ElasticSearchOutput {
         } catch (Exception e) {
             LOG.error("Unable to flush message buffer: {} - {}", e, e.getStackTrace());
         }
-        LOG.debug("[{}] Flushing {} messages completed", Thread.currentThread(), mybuffer.size());
+        LOG.info("[{}] Flushing {} messages completed", Thread.currentThread(), mybuffer.size());
     }
 
     public void asynchronousFlush(final List<Message> mybuffer) {
-        LOG.debug("Submitting new flush thread");
+        LOG.info("Submitting new flush thread");
         flushThread.submit(new Runnable() {
             @Override
             public void run() {
