@@ -245,24 +245,21 @@ public class LibrariesToLinkCollector {
     for (LinkerInput input : linkerInputs) {
       if (input.getArtifactCategory() == ArtifactCategory.DYNAMIC_LIBRARY
           || input.getArtifactCategory() == ArtifactCategory.INTERFACE_LIBRARY) {
-        PathFragment originalLibDir =
-            input.getOriginalLibraryArtifact().getExecPath().getParentDirectory();
-        Preconditions.checkNotNull(originalLibDir);
+        PathFragment libDir = input.getArtifact().getExecPath().getParentDirectory();
+        Preconditions.checkNotNull(libDir);
         String libraryIdentifier = input.getLibraryIdentifier();
         PathFragment previousLibDir = linkedLibrariesPaths.get(libraryIdentifier);
 
         if (previousLibDir == null) {
-          linkedLibrariesPaths.put(libraryIdentifier, originalLibDir);
-        } else if (!previousLibDir.equals(originalLibDir)) {
+          linkedLibrariesPaths.put(libraryIdentifier, libDir);
+        } else if (!previousLibDir.equals(libDir)) {
           ruleErrorConsumer.ruleError(
               String.format(
                   "You are trying to link the same dynamic library %s built in a different"
                       + " configuration. Previously registered instance had path %s, current one"
                       + " has path %s",
-                  libraryIdentifier, previousLibDir, originalLibDir));
+                  libraryIdentifier, previousLibDir, libDir));
         }
-
-        PathFragment libDir = input.getArtifact().getExecPath().getParentDirectory();
 
         // When COPY_DYNAMIC_LIBRARIES_TO_BINARY is enabled, dynamic libraries are not symlinked
         // under solibDir, so don't check it and don't include solibDir.

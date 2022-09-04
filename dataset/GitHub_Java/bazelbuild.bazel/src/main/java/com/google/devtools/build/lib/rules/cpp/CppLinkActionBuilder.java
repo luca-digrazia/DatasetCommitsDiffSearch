@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ParameterFile;
-import com.google.devtools.build.lib.analysis.RuleErrorConsumer;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -39,6 +38,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
+import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.rules.cpp.CcLinkingContext.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.rules.cpp.LibrariesToLinkCollector.Collecte
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
+import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -60,7 +61,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.EvalException;
 
 /** Builder class to construct {@link CppLinkAction}s. */
 public class CppLinkActionBuilder {
@@ -331,7 +331,7 @@ public class CppLinkActionBuilder {
       PathFragment ltoOutputRootPrefix,
       boolean createSharedNonLto,
       List<String> argv)
-      throws RuleErrorException, InterruptedException {
+      throws RuleErrorException {
     // Depending on whether LTO indexing is allowed, generate an LTO backend
     // that will be fed the results of the indexing step, or a dummy LTO backend
     // that simply compiles the bitcode into native code without any index-based
@@ -397,7 +397,7 @@ public class CppLinkActionBuilder {
       NestedSet<LinkerInputs.LibraryToLink> uniqueLibraries,
       boolean allowLtoIndexing,
       boolean includeLinkStaticInLtoIndexing)
-      throws RuleErrorException, InterruptedException {
+      throws RuleErrorException {
     Set<Artifact> compiled = new LinkedHashSet<>();
     for (LinkerInputs.LibraryToLink lib : uniqueLibraries.toList()) {
       compiled.addAll(lib.getLtoCompilationContext().getBitcodeFiles());
@@ -480,7 +480,7 @@ public class CppLinkActionBuilder {
   }
 
   private ImmutableMap<Artifact, LtoBackendArtifacts> createSharedNonLtoArtifacts(
-      boolean isLtoIndexing) throws RuleErrorException, InterruptedException {
+      boolean isLtoIndexing) throws RuleErrorException {
     // Only create the shared LTO artifacts for a statically linked library that has bitcode files.
     if (ltoCompilationContext == null
         || isLtoIndexing
@@ -865,7 +865,7 @@ public class CppLinkActionBuilder {
       variables =
           LinkBuildVariables.setupVariables(
               getLinkType().linkerOrArchiver().equals(LinkerOrArchiver.LINKER),
-              configuration.getBinDirectory(repositoryName).getExecPath(),
+              configuration.getBinDirectory().getExecPath(),
               output.getExecPathString(),
               linkType.equals(LinkTargetType.DYNAMIC_LIBRARY),
               paramFile != null ? paramFile.getExecPathString() : null,
