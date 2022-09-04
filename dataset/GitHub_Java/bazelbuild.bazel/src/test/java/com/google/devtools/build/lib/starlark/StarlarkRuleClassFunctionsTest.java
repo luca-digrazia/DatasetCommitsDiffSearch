@@ -983,12 +983,6 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
     checkTextMessage("struct(name=[]).to_proto()"); // empty lines
     checkTextMessage("struct(name=['a', 'b']).to_proto()", "name: \"a\"", "name: \"b\"");
     checkTextMessage("struct(name=123).to_proto()", "name: 123");
-    checkTextMessage(
-        "struct(a=1.2e34, b=float('nan'), c=float('-inf')).to_proto()",
-        "a: 1.2e+34",
-        "b: nan",
-        "c: -inf");
-    checkTextMessage("struct(name=123).to_proto()", "name: 123");
     checkTextMessage("struct(name=[1, 2, 3]).to_proto()", "name: 1", "name: 2", "name: 3");
     checkTextMessage("struct(a=struct(b='b')).to_proto()", "a {", "  b: \"b\"", "}");
     checkTextMessage(
@@ -1205,10 +1199,6 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
     ClassObject x = (ClassObject) ev.lookup("x");
     assertThat(x.getValue("a")).isEqualTo(StarlarkInt.of(1));
     assertThat(x.getValue("b")).isEqualTo(StarlarkInt.of(2));
-
-    // Update is prohibited.
-    ev.checkEvalErrorContains(
-        "struct value does not support field assignment", "x = struct(a = 1); x.a = 2");
   }
 
   @Test
@@ -1234,14 +1224,10 @@ public final class StarlarkRuleClassFunctionsTest extends BuildViewTestCase {
 
   @Test
   public void testStructIncomparability() throws Exception {
-    ev.checkEvalErrorContains(
-        "unsupported comparison: struct <=> struct", "struct(a = 1) < struct(a = 2)");
-    ev.checkEvalErrorContains(
-        "unsupported comparison: struct <=> struct", "struct(a = 1) > struct(a = 2)");
-    ev.checkEvalErrorContains(
-        "unsupported comparison: struct <=> struct", "struct(a = 1) <= struct(a = 2)");
-    ev.checkEvalErrorContains(
-        "unsupported comparison: struct <=> struct", "struct(a = 1) >= struct(a = 2)");
+    ev.checkEvalErrorContains("Cannot compare structs", "struct(a = 1) < struct(a = 2)");
+    ev.checkEvalErrorContains("Cannot compare structs", "struct(a = 1) > struct(a = 2)");
+    ev.checkEvalErrorContains("Cannot compare structs", "struct(a = 1) <= struct(a = 2)");
+    ev.checkEvalErrorContains("Cannot compare structs", "struct(a = 1) >= struct(a = 2)");
   }
 
   @Test
