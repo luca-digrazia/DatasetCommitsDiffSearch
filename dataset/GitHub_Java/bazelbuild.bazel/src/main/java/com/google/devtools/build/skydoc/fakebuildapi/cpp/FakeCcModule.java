@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcLinkingContextApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcLinkingOutputsApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcModuleApi;
-import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcNativeLibraryProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainConfigInfoApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainProviderApi;
 import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcToolchainVariablesApi;
@@ -74,7 +73,7 @@ public class FakeCcModule
 
   @Override
   public ProviderApi getCcToolchainProvider() {
-    return new FakeProviderApi("CcToolchainInfo");
+    return new FakeProviderApi();
   }
 
   @Override
@@ -404,12 +403,6 @@ public class FakeCcModule
       boolean shouldCreatePerObjectDebugInfo,
       Sequence<?> argv,
       StarlarkThread thread)
-      throws EvalException {
-    return null;
-  }
-
-  @Override
-  public CcNativeLibraryProviderApi getCcNativeLibraryProvider(StarlarkThread thread)
       throws EvalException {
     return null;
   }
