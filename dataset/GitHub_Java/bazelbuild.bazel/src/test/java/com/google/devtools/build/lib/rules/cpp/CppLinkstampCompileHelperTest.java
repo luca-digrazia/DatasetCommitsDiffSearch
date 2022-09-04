@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.packages.util.Crosstool.CcToolchainConfig;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import java.util.List;
 import org.junit.Test;
@@ -41,8 +40,7 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
   public void testLinkstampCompileOptionsForExecutable() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig, CcToolchainConfig.builder().withSysroot("/usr/local/custom-sysroot"));
+        .setupCrosstool(mockToolsConfig, "builtin_sysroot: '/usr/local/custom-sysroot'");
     useConfiguration();
     scratch.file(
         "x/BUILD",
@@ -101,8 +99,7 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
   public void testLinkstampCompileOptionsForSharedLibrary() throws Exception {
     AnalysisMock.get()
         .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig, CcToolchainConfig.builder().withSysroot("/usr/local/custom-sysroot"));
+        .setupCrosstool(mockToolsConfig, "builtin_sysroot: '/usr/local/custom-sysroot'");
     useConfiguration();
     scratch.file(
         "x/BUILD",
@@ -142,13 +139,6 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
 
   @Test
   public void testLinkstampRespectsPicnessFromConfiguration() throws Exception {
-    getAnalysisMock()
-        .ccSupport()
-        .setupCcToolchainConfig(
-            mockToolsConfig,
-            CcToolchainConfig.builder()
-                .withFeatures(CppRuleClasses.SUPPORTS_PIC, CppRuleClasses.PIC));
-
     useConfiguration("--force_pic");
     scratch.file(
         "x/BUILD",
@@ -231,8 +221,7 @@ public class CppLinkstampCompileHelperTest extends BuildViewTestCase {
         CcCommon.configureFeaturesOrThrowEvalException(
             /* requestedFeatures= */ ImmutableSet.of(),
             /* unsupportedFeatures= */ ImmutableSet.of(),
-            toolchain,
-            getRuleContext(target).getFragment(CppConfiguration.class));
+            toolchain);
     boolean usePic = CppHelper.usePicForBinaries(toolchain, featureConfiguration);
 
     CppLinkAction generatingAction = (CppLinkAction) getGeneratingAction(executable);
