@@ -4,10 +4,10 @@ import javax.inject.Singleton;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
-import io.quarkus.arc.processor.DotNames;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
 import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesRuntimeConfig;
+import io.quarkus.datasource.runtime.LegacyDataSourcesRuntimeConfig;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -21,6 +21,7 @@ import io.quarkus.reactive.datasource.deployment.VertxPoolBuildItem;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveBuildTimeConfig;
 import io.quarkus.reactive.datasource.runtime.DataSourceReactiveRuntimeConfig;
 import io.quarkus.reactive.mysql.client.runtime.DataSourceReactiveMySQLConfig;
+import io.quarkus.reactive.mysql.client.runtime.LegacyDataSourceReactiveMySQLConfig;
 import io.quarkus.reactive.mysql.client.runtime.MySQLPoolProducer;
 import io.quarkus.reactive.mysql.client.runtime.MySQLPoolRecorder;
 import io.quarkus.runtime.RuntimeValue;
@@ -29,26 +30,12 @@ import io.quarkus.vertx.deployment.VertxBuildItem;
 import io.vertx.mysqlclient.MySQLPool;
 import io.vertx.sqlclient.Pool;
 
+@SuppressWarnings("deprecation")
 class ReactiveMySQLClientProcessor {
 
-    /**
-     * The producer needs to be produced in a separate method to avoid a circular dependency (the Vert.x instance creation
-     * consumes the AdditionalBeanBuildItems).
-     */
     @BuildStep
-    void poolProducer(
-            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
-        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
-            return;
-        }
-
-        additionalBeans.produce(new AdditionalBeanBuildItem.Builder()
-                .addBeanClass(MySQLPoolProducer.class)
-                .setUnremovable()
-                .setDefaultScope(DotNames.APPLICATION_SCOPED)
-                .build());
+    AdditionalBeanBuildItem registerBean() {
+        return AdditionalBeanBuildItem.unremovableOf(MySQLPoolProducer.class);
     }
 
     @BuildStep
@@ -63,18 +50,27 @@ class ReactiveMySQLClientProcessor {
             DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig, DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
             DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
-            DataSourceReactiveMySQLConfig dataSourceReactiveMySQLConfig) {
+            DataSourceReactiveMySQLConfig dataSourceReactiveMySQLConfig,
+            LegacyDataSourcesRuntimeConfig legacyDataSourcesRuntimeConfig,
+            LegacyDataSourceReactiveMySQLConfig legacyDataSourceReactiveMySQLConfig) {
 
         feature.produce(new FeatureBuildItem(Feature.REACTIVE_MYSQL_CLIENT));
         // Make sure the MySQLPoolProducer is initialized before the StartupEvent is fired
         ServiceStartBuildItem serviceStart = new ServiceStartBuildItem("reactive-mysql-client");
 
-        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
+        // Note: we had to tweak that logic to support the legacy configuration
+        if (dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent()
+                && ((!DatabaseKind.isMySQL(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get())
+                        && !DatabaseKind.isMariaDB(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get()))
+                        || !dataSourceReactiveBuildTimeConfig.enabled)) {
             return serviceStart;
         }
 
+        boolean isLegacy = !dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent();
+
         RuntimeValue<MySQLPool> mySqlPool = recorder.configureMySQLPool(vertx.getVertx(),
                 dataSourcesRuntimeConfig, dataSourceReactiveRuntimeConfig, dataSourceReactiveMySQLConfig,
+                legacyDataSourcesRuntimeConfig, legacyDataSourceReactiveMySQLConfig, isLegacy,
                 shutdown);
         mysqlPool.produce(new MySQLPoolBuildItem(mySqlPool));
 
@@ -93,31 +89,8 @@ class ReactiveMySQLClientProcessor {
     }
 
     @BuildStep
-    void addHealthCheck(
-            BuildProducer<HealthBuildItem> healthChecks,
-            DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
-        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
-            return;
-        }
-
-        healthChecks.produce(
-                new HealthBuildItem("io.quarkus.reactive.mysql.client.runtime.health.ReactiveMySQLDataSourceHealthCheck",
-                        dataSourcesBuildTimeConfig.healthEnabled));
-    }
-
-    private static boolean createPool(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
-        if (!dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent()) {
-            return false;
-        }
-
-        if ((!DatabaseKind.isMySQL(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get())
-                && !DatabaseKind.isMariaDB(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get()))
-                || !dataSourceReactiveBuildTimeConfig.enabled) {
-            return false;
-        }
-
-        return true;
+    HealthBuildItem addHealthCheck(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig) {
+        return new HealthBuildItem("io.quarkus.reactive.mysql.client.runtime.health.ReactiveMySQLDataSourceHealthCheck",
+                dataSourcesBuildTimeConfig.healthEnabled);
     }
 }

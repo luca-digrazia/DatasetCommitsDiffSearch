@@ -4,7 +4,6 @@ import javax.inject.Singleton;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
-import io.quarkus.arc.processor.DotNames;
 import io.quarkus.datasource.common.runtime.DatabaseKind;
 import io.quarkus.datasource.runtime.DataSourcesBuildTimeConfig;
 import io.quarkus.datasource.runtime.DataSourcesRuntimeConfig;
@@ -13,7 +12,6 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.ServiceStartBuildItem;
 import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
@@ -31,24 +29,9 @@ import io.vertx.sqlclient.Pool;
 
 class ReactiveDB2ClientProcessor {
 
-    /**
-     * The producer needs to be produced in a separate method to avoid a circular dependency (the Vert.x instance creation
-     * consumes the AdditionalBeanBuildItems).
-     */
     @BuildStep
-    void poolProducer(
-            BuildProducer<AdditionalBeanBuildItem> additionalBeans,
-            DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
-        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
-            return;
-        }
-
-        additionalBeans.produce(new AdditionalBeanBuildItem.Builder()
-                .addBeanClass(DB2PoolProducer.class)
-                .setUnremovable()
-                .setDefaultScope(DotNames.APPLICATION_SCOPED)
-                .build());
+    AdditionalBeanBuildItem registerBean() {
+        return AdditionalBeanBuildItem.unremovableOf(DB2PoolProducer.class);
     }
 
     @BuildStep
@@ -59,7 +42,6 @@ class ReactiveDB2ClientProcessor {
             DB2PoolRecorder recorder,
             VertxBuildItem vertx,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeans, ShutdownContextBuildItem shutdown,
-            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
             DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig, DataSourcesRuntimeConfig dataSourcesRuntimeConfig,
             DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig,
             DataSourceReactiveRuntimeConfig dataSourceReactiveRuntimeConfig,
@@ -69,7 +51,10 @@ class ReactiveDB2ClientProcessor {
         // Make sure the DB2PoolProducer is initialized before the StartupEvent is fired
         ServiceStartBuildItem serviceStart = new ServiceStartBuildItem("reactive-db2-client");
 
-        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
+        // Note: we had to tweak that logic to support the legacy configuration
+        if (dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent()
+                && (!DatabaseKind.isDB2(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get())
+                        || !dataSourceReactiveBuildTimeConfig.enabled)) {
             return serviceStart;
         }
 
@@ -86,37 +71,12 @@ class ReactiveDB2ClientProcessor {
         boolean isDefault = true; // assume always the default pool for now
         vertxPool.produce(new VertxPoolBuildItem(db2PoolValue, DatabaseKind.DB2, isDefault));
 
-        // Enable SSL support by default
-        sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.REACTIVE_DB2_CLIENT));
-
         return serviceStart;
     }
 
     @BuildStep
-    void addHealthCheck(
-            BuildProducer<HealthBuildItem> healthChecks,
-            DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
-        if (!createPool(dataSourcesBuildTimeConfig, dataSourceReactiveBuildTimeConfig)) {
-            return;
-        }
-
-        healthChecks
-                .produce(new HealthBuildItem("io.quarkus.reactive.db2.client.runtime.health.ReactiveDB2DataSourceHealthCheck",
-                        dataSourcesBuildTimeConfig.healthEnabled));
-    }
-
-    private static boolean createPool(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig,
-            DataSourceReactiveBuildTimeConfig dataSourceReactiveBuildTimeConfig) {
-        if (!dataSourcesBuildTimeConfig.defaultDataSource.dbKind.isPresent()) {
-            return false;
-        }
-
-        if (!DatabaseKind.isDB2(dataSourcesBuildTimeConfig.defaultDataSource.dbKind.get())
-                || !dataSourceReactiveBuildTimeConfig.enabled) {
-            return false;
-        }
-
-        return true;
+    HealthBuildItem addHealthCheck(DataSourcesBuildTimeConfig dataSourcesBuildTimeConfig) {
+        return new HealthBuildItem("io.quarkus.reactive.db2.client.runtime.health.ReactiveDB2DataSourceHealthCheck",
+                dataSourcesBuildTimeConfig.healthEnabled);
     }
 }
