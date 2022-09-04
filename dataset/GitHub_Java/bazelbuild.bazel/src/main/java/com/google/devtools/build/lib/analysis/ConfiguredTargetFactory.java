@@ -288,7 +288,7 @@ public final class ConfiguredTargetFactory {
       PackageGroup packageGroup = (PackageGroup) target;
       return new PackageGroupConfiguredTarget(targetContext, packageGroup);
     } else if (target instanceof EnvironmentGroup) {
-      return new EnvironmentGroupConfiguredTarget(targetContext);
+      return new EnvironmentGroupConfiguredTarget(targetContext, (EnvironmentGroup) target);
     } else {
       throw new AssertionError("Unexpected target class: " + target.getClass().getName());
     }
