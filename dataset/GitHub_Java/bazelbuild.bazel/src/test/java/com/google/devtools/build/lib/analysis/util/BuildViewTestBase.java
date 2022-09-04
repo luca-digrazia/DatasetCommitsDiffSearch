@@ -140,7 +140,7 @@ public abstract class BuildViewTestBase extends AnalysisTestCase {
     AnalysisResult result = getAnalysisResult();
     assertThat(result.getTargetsToBuild()).hasSize(1);
     ConfiguredTarget targetA = Iterables.get(result.getTargetsToBuild(), 0);
-    assertThat(getConfiguration(targetA).getCpu()).isEqualTo(goodCpu);
+    assertThat(targetA.getConfiguration().getCpu()).isEqualTo(goodCpu);
     // Unfortunately, we get the same error twice - we can't distinguish the configurations.
     assertContainsEvent("if genrules produce executables, they are allowed only one output");
   }

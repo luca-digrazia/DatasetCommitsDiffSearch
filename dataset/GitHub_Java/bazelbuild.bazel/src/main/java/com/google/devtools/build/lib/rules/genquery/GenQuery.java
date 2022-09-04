@@ -315,7 +315,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
           (BlazeQueryEnvironment)
               QUERY_ENVIRONMENT_FACTORY.create(
                   /*transitivePackageLoader=*/ null,
-                  /* graphFactory= */ null,
+                  /*graph=*/ null,
                   packageProvider,
                   evaluator,
                   /*keepGoing=*/ false,
