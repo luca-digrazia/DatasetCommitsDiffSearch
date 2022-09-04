@@ -28,11 +28,7 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
 /** */
 @SkylarkModule(
     name = "AndroidFeatureFlagSetInfo",
-    doc =
-        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
-            + "you will be broken when it is removed."
-            + "Information about the android_binary feature flags",
-    documented = false,
+    doc = "Information about the android_binary feature flags",
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidFeatureFlagSetProviderApi extends StructApi {
 
@@ -41,23 +37,16 @@ public interface AndroidFeatureFlagSetProviderApi extends StructApi {
   @SkylarkCallable(
       name = "flags",
       doc = "Returns the flags contained by the provider.",
-      documented = false,
       structField = true)
   ImmutableMap<Label, String> getFlagMap();
 
   /** The provider implementing this can construct the AndroidIdeInfo provider. */
-  @SkylarkModule(
-      name = "Provider",
-      doc =
-          "Do not use this module. It is intended for migration purposes only. If you depend on "
-              + "it, you will be broken when it is removed.",
-      documented = false)
+  @SkylarkModule(name = "Provider", doc = "", documented = false)
   public interface Provider extends ProviderApi {
 
     @SkylarkCallable(
         name = NAME,
         doc = "The <code>AndroidFeatureFlagSetProvider</code> constructor.",
-        documented = false,
         parameters = {
           @Param(
               name = "flags",

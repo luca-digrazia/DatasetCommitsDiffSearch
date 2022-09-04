@@ -89,8 +89,6 @@ public class ApiExporter {
       }
       callable.setReturnType(meth.getReturnType());
       field.setCallable(callable);
-    } else {
-      field.setType(meth.getReturnType());
     }
     return field;
   }

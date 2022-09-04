@@ -28,11 +28,7 @@ import com.google.devtools.build.lib.syntax.EvalException;
  */
 @SkylarkModule(
     name = "AndroidInstrumentationInfo",
-    doc =
-        "Do not use this module. It is intended for migration purposes only. If you depend on it, "
-            + "you will be broken when it is removed."
-            + "Android instrumentation and target APKs to run in a test",
-    documented = false,
+    doc = "Android instrumentation and target APKs to run in a test",
     category = SkylarkModuleCategory.PROVIDER)
 public interface AndroidInstrumentationInfoApi<FileT extends FileApi> extends StructApi {
 
@@ -44,31 +40,23 @@ public interface AndroidInstrumentationInfoApi<FileT extends FileApi> extends St
   @SkylarkCallable(
       name = "target_apk",
       doc = "Returns the target APK of the instrumentation test.",
-      documented = false,
       structField = true)
   FileT getTargetApk();
 
   @SkylarkCallable(
       name = "instrumentation_apk",
       doc = "Returns the instrumentation APK that should be executed.",
-      documented = false,
       structField = true)
   FileT getInstrumentationApk();
 
   /** Provider for {@link AndroidInstrumentationInfoApi}. */
-  @SkylarkModule(
-      name = "Provider",
-      doc =
-          "Do not use this module. It is intended for migration purposes only. If you depend on "
-              + "it, you will be broken when it is removed.",
-      documented = false)
+  @SkylarkModule(name = "Provider", doc = "", documented = false)
   public interface AndroidInstrumentationInfoApiProvider<FileT extends FileApi>
       extends ProviderApi {
 
     @SkylarkCallable(
         name = "AndroidInstrumentationInfo",
         doc = "The <code>AndroidInstrumentationInfo</code> constructor.",
-        documented = false,
         parameters = {
           @Param(
               name = "target_apk",
