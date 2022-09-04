@@ -1,68 +1,98 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.bundles;
 
-import com.codahale.metrics.MetricRegistry;
-import com.google.common.base.Throwables;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import org.bson.types.ObjectId;
 import org.graylog2.dashboards.DashboardImpl;
-import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
+import org.graylog2.dashboards.widgets.DashboardWidgetCreator;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.database.ValidationException;
-import org.graylog2.indexer.Indexer;
-import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
-import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
-import org.graylog2.indexer.searches.timeranges.KeywordRange;
-import org.graylog2.indexer.searches.timeranges.RelativeRange;
-import org.graylog2.indexer.searches.timeranges.TimeRange;
-import org.graylog2.inputs.InputImpl;
+import org.graylog2.events.ClusterEventBus;
+import org.graylog2.grok.GrokPatternService;
+import org.graylog2.grok.GrokPatternsChangedEvent;
+import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.converters.ConverterFactory;
 import org.graylog2.inputs.extractors.ExtractorFactory;
+import org.graylog2.lookup.LookupTableService;
+import org.graylog2.lookup.db.DBCacheService;
+import org.graylog2.lookup.db.DBDataAdapterService;
+import org.graylog2.lookup.db.DBLookupTableService;
+import org.graylog2.lookup.dto.CacheDto;
+import org.graylog2.lookup.dto.DataAdapterDto;
+import org.graylog2.lookup.dto.LookupTableDto;
+import org.graylog2.lookup.events.CachesUpdated;
+import org.graylog2.lookup.events.DataAdaptersUpdated;
+import org.graylog2.lookup.events.LookupTablesDeleted;
+import org.graylog2.lookup.events.LookupTablesUpdated;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
+import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.rest.resources.dashboards.requests.WidgetPositionRequest;
+import org.graylog2.plugin.lookup.LookupCache;
+import org.graylog2.plugin.lookup.LookupCacheConfiguration;
+import org.graylog2.plugin.lookup.LookupDataAdapter;
+import org.graylog2.plugin.lookup.LookupDataAdapterConfiguration;
+import org.graylog2.rest.models.dashboards.requests.WidgetPositionsRequest;
+import org.graylog2.shared.inputs.InputLauncher;
 import org.graylog2.shared.inputs.InputRegistry;
+import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.streams.OutputImpl;
 import org.graylog2.streams.OutputService;
+import org.graylog2.streams.StreamImpl;
 import org.graylog2.streams.StreamRuleImpl;
 import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
+import org.graylog2.streams.events.StreamsChangedEvent;
+import org.graylog2.timeranges.TimeRangeFactory;
+import org.graylog2.utilities.LatchUpdaterListener;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import javax.inject.Named;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static org.graylog2.plugin.inputs.Extractor.Type.GROK;
+import static org.graylog2.plugin.inputs.Extractor.Type.JSON;
 
 public class BundleImporter {
     private static final Logger LOG = LoggerFactory.getLogger(BundleImporter.class);
@@ -70,71 +100,179 @@ public class BundleImporter {
     private final InputService inputService;
     private final InputRegistry inputRegistry;
     private final ExtractorFactory extractorFactory;
+    private final ConverterFactory converterFactory;
     private final StreamService streamService;
     private final StreamRuleService streamRuleService;
+    private final IndexSetRegistry indexSetRegistry;
     private final OutputService outputService;
     private final DashboardService dashboardService;
-    private final DashboardRegistry dashboardRegistry;
+    private final DashboardWidgetCreator dashboardWidgetCreator;
     private final ServerStatus serverStatus;
-    private final MetricRegistry metricRegistry;
-    private final Indexer indexer;
+    private final MessageInputFactory messageInputFactory;
+    private final InputLauncher inputLauncher;
+    private final GrokPatternService grokPatternService;
+    private final DBLookupTableService dbLookupTableService;
+    private final DBCacheService dbCacheService;
+    private final DBDataAdapterService dbDataAdapterService;
+    private final LookupTableService lookupTableService;
+    private final TimeRangeFactory timeRangeFactory;
+    private final ClusterEventBus clusterBus;
+    private final ObjectMapper objectMapper;
+    private final ScheduledExecutorService scheduler;
 
+    private final Map<String, org.graylog2.grok.GrokPattern> createdGrokPatterns = new HashMap<>();
     private final Map<String, MessageInput> createdInputs = new HashMap<>();
     private final Map<String, org.graylog2.plugin.streams.Output> createdOutputs = new HashMap<>();
     private final Map<String, org.graylog2.plugin.streams.Stream> createdStreams = new HashMap<>();
     private final Map<String, org.graylog2.dashboards.Dashboard> createdDashboards = new HashMap<>();
+    private final Map<String, LookupTableDto> createdLookupTables= new HashMap<>();
+    private final Map<String, CacheDto> createdLookupCaches = new HashMap<>();
+    private final Map<String, DataAdapterDto> createdLookupDataAdapters = new HashMap<>();
     private final Map<String, org.graylog2.plugin.streams.Output> outputsByReferenceId = new HashMap<>();
     private final Map<String, org.graylog2.plugin.streams.Stream> streamsByReferenceId = new HashMap<>();
 
+    // TODO: This class has become HUGE, it should be split into smaller classes.
     @Inject
     public BundleImporter(final InputService inputService,
                           final InputRegistry inputRegistry,
                           final ExtractorFactory extractorFactory,
+                          final ConverterFactory converterFactory,
                           final StreamService streamService,
                           final StreamRuleService streamRuleService,
+                          final IndexSetRegistry indexSetRegistry,
                           final OutputService outputService,
                           final DashboardService dashboardService,
-                          final DashboardRegistry dashboardRegistry,
+                          final DashboardWidgetCreator dashboardWidgetCreator,
                           final ServerStatus serverStatus,
-                          final MetricRegistry metricRegistry,
-                          final Indexer indexer) {
+                          final MessageInputFactory messageInputFactory,
+                          final InputLauncher inputLauncher,
+                          final GrokPatternService grokPatternService,
+                          final DBLookupTableService dbLookupTableService,
+                          final DBCacheService dbCacheService,
+                          final DBDataAdapterService dbDataAdapterService,
+                          final LookupTableService lookupTableService,
+                          final TimeRangeFactory timeRangeFactory,
+                          final ClusterEventBus clusterBus,
+                          final ObjectMapper objectMapper,
+                          @Named("daemonScheduler") ScheduledExecutorService scheduler) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
+        this.converterFactory = converterFactory;
         this.streamService = streamService;
         this.streamRuleService = streamRuleService;
+        this.indexSetRegistry = indexSetRegistry;
         this.outputService = outputService;
         this.dashboardService = dashboardService;
-        this.dashboardRegistry = dashboardRegistry;
+        this.dashboardWidgetCreator = dashboardWidgetCreator;
         this.serverStatus = serverStatus;
-        this.metricRegistry = metricRegistry;
-        this.indexer = indexer;
+        this.messageInputFactory = messageInputFactory;
+        this.inputLauncher = inputLauncher;
+        this.grokPatternService = grokPatternService;
+        this.dbLookupTableService = dbLookupTableService;
+        this.dbCacheService = dbCacheService;
+        this.dbDataAdapterService = dbDataAdapterService;
+        this.lookupTableService = lookupTableService;
+        this.timeRangeFactory = timeRangeFactory;
+        this.clusterBus = clusterBus;
+        this.objectMapper = objectMapper;
+        this.scheduler = scheduler;
     }
 
     public void runImport(final ConfigurationBundle bundle, final String userName) {
+        final String bundleId = bundle.getId();
+
         try {
-            createInputs(bundle.getInputs(), userName);
-            createOutputs(bundle.getOutputs(), userName);
-            createStreams(bundle.getStreams(), userName);
-            createDashboards(bundle.getDashboards(), userName);
+            createGrokPatterns(bundleId, bundle.getGrokPatterns());
+            createInputs(bundleId, bundle.getInputs(), userName);
+            createOutputs(bundleId, bundle.getOutputs(), userName);
+            createStreams(bundleId, bundle.getStreams(), userName);
+            createDashboards(bundleId, bundle.getDashboards(), userName);
+            createLookupCaches(bundleId, bundle.getLookupCaches());
+            createLookupDataAdapters(bundleId, bundle.getLookupDataAdapters());
+            // Lookup tables should be created last because they need caches and adapters
+            createLookupTables(bundleId, bundle.getLookupTables());
         } catch (Exception e) {
-            rollback();
-            LOG.error("Error while creating dashboards but no error handling or rollback yet. Sorry.", e);
-            Throwables.propagate(e);
+            LOG.error("Error while creating entities in content pack. Starting rollback.", e);
+            if (!rollback()) {
+                LOG.error("Rollback unsuccessful.");
+            }
+            throw new RuntimeException(e);
         }
     }
 
     private boolean rollback() {
+        boolean success = true;
         try {
             deleteCreatedDashboards();
-            deleteCreatedStreams();
-            deleteCreatedOutputs();
-            deleteCreatedInputs();
         } catch (Exception e) {
-            return false;
+            LOG.error("Error while removing dashboards during rollback.", e);
+            success = false;
         }
 
-        return true;
+        try {
+            deleteCreatedStreams();
+        } catch (Exception e) {
+            LOG.error("Error while removing streams during rollback.", e);
+            success = false;
+        }
+
+        try {
+            deleteCreatedOutputs();
+        } catch (Exception e) {
+            LOG.error("Error while removing outputs during rollback.", e);
+            success = false;
+        }
+
+        try {
+            deleteCreatedGrokPatterns();
+        } catch (Exception e) {
+            LOG.error("Error while removing grok patterns during rollback.", e);
+            success = false;
+        }
+
+        try {
+            deleteCreatedInputs();
+        } catch (Exception e) {
+            LOG.error("Error while removing inputs during rollback.", e);
+            success = false;
+        }
+
+        try {
+            deleteCreatedLookupTables();
+        } catch (Exception e) {
+            LOG.error("Error while removing lookup tables during rollback.", e);
+            success = false;
+        }
+
+        try {
+            deleteCreatedLookupCaches();
+        } catch (Exception e) {
+            LOG.error("Error while removing lookup caches during rollback.", e);
+            success = false;
+        }
+
+        try {
+            deleteCreatedLookupDataAdapters();
+        } catch (Exception e) {
+            LOG.error("Error while removing lookup data adapters during rollback.", e);
+            success = false;
+        }
+
+        return success;
+    }
+
+    private void deleteCreatedGrokPatterns() throws NotFoundException {
+        for (String grokPatternName : createdGrokPatterns.keySet()) {
+            final org.graylog2.grok.GrokPattern grokPattern = grokPatternService.load(grokPatternName);
+
+            if (grokPattern.id() != null) {
+                LOG.debug("Deleting grok pattern \"{}\" from database", grokPatternName);
+                grokPatternService.delete(grokPattern.id());
+            } else {
+                LOG.debug("Couldn't find grok pattern \"{}\" in database", grokPatternName);
+            }
+        }
     }
 
     private void deleteCreatedInputs() throws NotFoundException {
@@ -143,8 +281,9 @@ public class BundleImporter {
             final MessageInput messageInput = entry.getValue();
 
             LOG.debug("Terminating message input {}", inputId);
-            inputRegistry.terminate(messageInput);
-            inputRegistry.cleanInput(messageInput);
+            inputRegistry.remove(messageInput);
+            final org.graylog2.inputs.Input input = inputService.find(messageInput.getId());
+            inputService.destroy(input);
         }
     }
 
@@ -157,66 +296,122 @@ public class BundleImporter {
 
     private void deleteCreatedStreams() throws NotFoundException {
         for (Map.Entry<String, org.graylog2.plugin.streams.Stream> entry : createdStreams.entrySet()) {
-            LOG.debug("Deleting stream {} from database", entry.getKey());
+            final String streamId = entry.getKey();
+            LOG.debug("Deleting stream {} from database", streamId);
             streamService.destroy(entry.getValue());
+            clusterBus.post(streamId);
         }
     }
 
     private void deleteCreatedDashboards() {
         for (Map.Entry<String, org.graylog2.dashboards.Dashboard> entry : createdDashboards.entrySet()) {
             final String dashboardId = entry.getKey();
-            LOG.debug("Removing dashboard {} from registry", dashboardId);
-            dashboardRegistry.remove(dashboardId);
 
             LOG.debug("Deleting dashboard {} from database", dashboardId);
             dashboardService.destroy(entry.getValue());
         }
     }
 
-    private void createInputs(final List<Input> inputs, final String userName)
-            throws org.graylog2.plugin.inputs.Extractor.ReservedFieldException, org.graylog2.ConfigurationException, NoSuchInputTypeException, ValidationException, ExtractorFactory.NoSuchExtractorException, NotFoundException, ConfigurationException {
-        for (final Input input : inputs) {
-            final MessageInput messageInput = createMessageInput(input, userName);
-            createdInputs.put(messageInput.getId(), messageInput);
+    private void deleteCreatedLookupTables() {
+        for (String id : createdLookupTables.keySet()) {
+            LOG.debug("Deleting lookup table {} from database", id);
+            dbLookupTableService.delete(id);
+        }
 
-            // Launch input. (this will run async and clean up itself in case of an error.)
-            inputRegistry.launch(messageInput, messageInput.getId());
+        clusterBus.post(LookupTablesDeleted.create(createdLookupTables.values()));
+    }
+
+    private void deleteCreatedLookupCaches() {
+        for (String id : createdLookupCaches.keySet()) {
+            LOG.debug("Deleting lookup cache {} from database", id);
+            dbCacheService.delete(id);
         }
     }
 
-    private MessageInput createMessageInput(final Input inputDescription, final String userName)
+    private void deleteCreatedLookupDataAdapters() {
+        for (String id : createdLookupDataAdapters.keySet()) {
+            LOG.debug("Deleting lookup data adapter {} from database", id);
+            dbDataAdapterService.delete(id);
+        }
+    }
+
+    private void createGrokPatterns(final String bundleId, final Set<GrokPattern> grokPatterns) throws ValidationException {
+        for (final GrokPattern grokPattern : grokPatterns) {
+            final org.graylog2.grok.GrokPattern createdGrokPattern = createGrokPattern(bundleId, grokPattern);
+            createdGrokPatterns.put(grokPattern.name(), createdGrokPattern);
+        }
+
+        clusterBus.post(GrokPatternsChangedEvent.create(Collections.emptySet(), createdGrokPatterns.keySet()));
+    }
+
+    private org.graylog2.grok.GrokPattern createGrokPattern(String bundleId, GrokPattern grokPattern) throws ValidationException {
+        final org.graylog2.grok.GrokPattern pattern = org.graylog2.grok.GrokPattern.create(null, grokPattern.name(), grokPattern.pattern(), bundleId);
+
+        return grokPatternService.save(pattern);
+    }
+
+    private void createInputs(final String bundleId, final Set<Input> inputs, final String userName)
+            throws org.graylog2.plugin.inputs.Extractor.ReservedFieldException, org.graylog2.ConfigurationException, NoSuchInputTypeException, ValidationException, ExtractorFactory.NoSuchExtractorException, NotFoundException, ConfigurationException {
+        for (final Input input : inputs) {
+            final MessageInput messageInput = createMessageInput(bundleId, input, userName);
+            createdInputs.put(messageInput.getId(), messageInput);
+
+            // Launch input. (this will run async and clean up itself in case of an error.)
+            inputLauncher.launch(messageInput);
+        }
+    }
+
+    private MessageInput createMessageInput(final String bundleId, final Input inputDescription, final String userName)
             throws NoSuchInputTypeException, ConfigurationException, ValidationException,
             NotFoundException, org.graylog2.ConfigurationException, ExtractorFactory.NoSuchExtractorException,
             org.graylog2.plugin.inputs.Extractor.ReservedFieldException {
         final Configuration inputConfig = new Configuration(inputDescription.getConfiguration());
-        final DateTime createdAt = DateTime.now(DateTimeZone.UTC);
+        final DateTime createdAt = Tools.nowUTC();
 
-        final MessageInput messageInput = inputRegistry.create(inputDescription.getType());
+        final MessageInput messageInput = messageInputFactory.create(inputDescription.getType(), inputConfig);
         messageInput.setTitle(inputDescription.getTitle());
         messageInput.setGlobal(inputDescription.isGlobal());
         messageInput.setCreatorUserId(userName);
         messageInput.setCreatedAt(createdAt);
+        messageInput.setContentPack(bundleId);
 
-        messageInput.checkConfiguration(inputConfig);
+        messageInput.checkConfiguration();
 
         // Don't run if exclusive and another instance is already running.
         if (messageInput.isExclusive() && inputRegistry.hasTypeRunning(messageInput.getClass())) {
-            final String error = "Type is exclusive and already has input running.";
-            LOG.error(error);
+            LOG.error("Input type <{}> of input <{}> is exclusive and already has input running.",
+                    messageInput.getClass(), messageInput.getTitle());
         }
 
-        org.graylog2.inputs.Input mongoInput = new InputImpl(
-                buildMongoDbInput(UUID.randomUUID(), inputDescription, userName, createdAt));
+        final String id = inputDescription.getId();
+        final org.graylog2.inputs.Input mongoInput;
+        if (id == null) {
+            mongoInput = inputService.create(buildMongoDbInput(inputDescription, userName, createdAt, bundleId));
+        } else {
+            mongoInput = inputService.create(id, buildMongoDbInput(inputDescription, userName, createdAt, bundleId));
+        }
 
         // Persist input.
         final String persistId = inputService.save(mongoInput);
         messageInput.setPersistId(persistId);
-        messageInput.initialize(inputConfig);
+        messageInput.initialize();
 
         addStaticFields(messageInput, inputDescription.getStaticFields());
         addExtractors(messageInput, inputDescription.getExtractors(), userName);
 
         return messageInput;
+    }
+
+    private void validateExtractor(final Extractor extractorDescription) throws ValidationException {
+        if (extractorDescription.getSourceField().isEmpty()) {
+            throw new ValidationException("Missing parameter source_field in extractor " + extractorDescription.getTitle());
+        }
+
+        if (extractorDescription.getType() != GROK &&
+                extractorDescription.getType() != JSON &&
+                extractorDescription.getTargetField().isEmpty()) {
+            throw new ValidationException("Missing parameter target_field in extractor " + extractorDescription.getTitle());
+        }
     }
 
     private void addExtractors(final MessageInput messageInput, final List<Extractor> extractors, final String userName)
@@ -234,9 +429,7 @@ public class BundleImporter {
             final String userName)
             throws NotFoundException, ValidationException, org.graylog2.ConfigurationException,
             ExtractorFactory.NoSuchExtractorException, org.graylog2.plugin.inputs.Extractor.ReservedFieldException {
-        if (extractorDescription.getSourceField().isEmpty() || extractorDescription.getTargetField().isEmpty()) {
-            throw new ValidationException("Missing parameters source_field or target_field.");
-        }
+        this.validateExtractor(extractorDescription);
 
         final String extractorId = UUID.randomUUID().toString();
         final org.graylog2.plugin.inputs.Extractor extractor = extractorFactory.factory(
@@ -254,8 +447,6 @@ public class BundleImporter {
                 extractorDescription.getConditionValue()
         );
 
-        messageInput.addExtractor(extractorId, extractor);
-
         org.graylog2.inputs.Input mongoInput = inputService.find(messageInput.getPersistId());
         inputService.addExtractor(mongoInput, extractor);
     }
@@ -265,7 +456,7 @@ public class BundleImporter {
 
         for (final Converter converter : requestedConverters) {
             try {
-                converters.add(ConverterFactory.factory(converter.getType(), converter.getConfiguration()));
+                converters.add(converterFactory.create(converter.getType(), converter.getConfiguration()));
             } catch (ConverterFactory.NoSuchConverterException e) {
                 LOG.warn("No such converter [" + converter.getType() + "]. Skipping.", e);
             } catch (org.graylog2.ConfigurationException e) {
@@ -311,17 +502,17 @@ public class BundleImporter {
     }
 
     private Map<String, Object> buildMongoDbInput(
-            final UUID inputId,
             final Input input,
             final String userName,
-            final DateTime createdAt) {
+            final DateTime createdAt,
+            final String bundleId) {
         final ImmutableMap.Builder<String, Object> inputData = ImmutableMap.builder();
-        inputData.put(MessageInput.FIELD_INPUT_ID, inputId.toString());
         inputData.put(MessageInput.FIELD_TITLE, input.getTitle());
         inputData.put(MessageInput.FIELD_TYPE, input.getType());
         inputData.put(MessageInput.FIELD_CREATOR_USER_ID, userName);
         inputData.put(MessageInput.FIELD_CONFIGURATION, input.getConfiguration());
         inputData.put(MessageInput.FIELD_CREATED_AT, createdAt);
+        inputData.put(MessageInput.FIELD_CONTENT_PACK, bundleId);
 
         if (input.isGlobal()) {
             inputData.put(MessageInput.FIELD_GLOBAL, true);
@@ -332,23 +523,25 @@ public class BundleImporter {
         return inputData.build();
     }
 
-    private void createOutputs(final List<Output> outputs, final String userName)
+    private void createOutputs(final String bundleId, final Set<Output> outputs, final String userName)
             throws ValidationException {
         for (final Output outputDescription : outputs) {
-            final OutputImpl output = createOutput(outputDescription, userName);
+            final org.graylog2.plugin.streams.Output output = createOutput(bundleId, outputDescription, userName);
             createdOutputs.put(output.getId(), output);
         }
     }
 
-    private OutputImpl createOutput(final Output outputDescription, final String userName)
+    private org.graylog2.plugin.streams.Output createOutput(final String bundleId, final Output outputDescription, final String userName)
             throws ValidationException {
         final String referenceId = outputDescription.getId();
-        final OutputImpl output = (OutputImpl) outputService.create(new OutputImpl(
+        final org.graylog2.plugin.streams.Output output = outputService.create(OutputImpl.create(
+                outputDescription.getId(),
                 outputDescription.getTitle(),
                 outputDescription.getType(),
+                userName,
                 outputDescription.getConfiguration(),
-                DateTime.now(DateTimeZone.UTC).toDate(),
-                userName));
+                Tools.nowUTC().toDate(),
+                bundleId));
 
         if (!isNullOrEmpty(referenceId)) {
             outputsByReferenceId.put(referenceId, output);
@@ -357,40 +550,56 @@ public class BundleImporter {
         return output;
     }
 
-    private void createStreams(final List<Stream> streams, final String userName)
+    private void createStreams(final String bundleId, final Set<Stream> streams, final String userName)
             throws ValidationException {
         for (final Stream streamDescription : streams) {
             final String referenceId = streamDescription.getId();
-            final org.graylog2.plugin.streams.Stream stream = createStream(streamDescription, userName);
+            final org.graylog2.plugin.streams.Stream stream = createStream(bundleId, streamDescription, userName);
             createdStreams.put(stream.getId(), stream);
 
             if (!isNullOrEmpty(referenceId)) {
                 streamsByReferenceId.put(referenceId, stream);
             }
         }
+
+        final ImmutableSet<String> streamIds = ImmutableSet.copyOf(createdStreams.keySet());
+        clusterBus.post(StreamsChangedEvent.create(streamIds));
     }
 
-    private org.graylog2.plugin.streams.Stream createStream(final Stream streamDescription, final String userName)
+    private org.graylog2.plugin.streams.Stream createStream(final String bundleId, final Stream streamDescription, final String userName)
             throws ValidationException {
-        final Map<String, Object> streamData = ImmutableMap.<String, Object>of(
-                "title", streamDescription.getTitle(),
-                "description", streamDescription.getDescription(),
-                "disabled", streamDescription.isDisabled(),
-                "creator_user_id", userName,
-                "created_at", DateTime.now(DateTimeZone.UTC));
 
-        final org.graylog2.plugin.streams.Stream stream = streamService.create(streamData);
+        // We cannot create streams without having a default index set.
+        final IndexSet indexSet = indexSetRegistry.getDefault();
+
+        final Map<String, Object> streamData = ImmutableMap.<String, Object>builder()
+                .put(StreamImpl.FIELD_TITLE, streamDescription.getTitle())
+                .put(StreamImpl.FIELD_DESCRIPTION, streamDescription.getDescription())
+                .put(StreamImpl.FIELD_DISABLED, streamDescription.isDisabled())
+                .put(StreamImpl.FIELD_MATCHING_TYPE, streamDescription.getMatchingType().name())
+                .put(StreamImpl.FIELD_CREATOR_USER_ID, userName)
+                .put(StreamImpl.FIELD_CREATED_AT, Tools.nowUTC())
+                .put(StreamImpl.FIELD_CONTENT_PACK, bundleId)
+                .put(StreamImpl.FIELD_DEFAULT_STREAM, streamDescription.isDefaultStream())
+                .put(StreamImpl.FIELD_INDEX_SET_ID, indexSet.getConfig().id())
+                .build();
+
+        final String defaultStreamId = org.graylog2.plugin.streams.Stream.DEFAULT_STREAM_ID;
+        final ObjectId id = streamDescription.isDefaultStream() ? new ObjectId(defaultStreamId) : new ObjectId(streamDescription.getId());
+        final org.graylog2.plugin.streams.Stream stream = new StreamImpl(id, streamData, Collections.emptyList(), Collections.emptySet(), indexSet);
+
         final String streamId = streamService.save(stream);
-
         if (streamDescription.getStreamRules() != null) {
             for (StreamRule streamRule : streamDescription.getStreamRules()) {
-                final Map<String, Object> streamRuleData = ImmutableMap.<String, Object>of(
-                        "type", streamRule.getType().toInteger(),
-                        "value", streamRule.getValue(),
-                        "field", streamRule.getField(),
-                        "inverted", streamRule.isInverted(),
-                        "stream_id", new ObjectId(streamId));
-
+                final Map<String, Object> streamRuleData = ImmutableMap.<String, Object>builder()
+                        .put(StreamRuleImpl.FIELD_TYPE, streamRule.getType().toInteger())
+                        .put(StreamRuleImpl.FIELD_VALUE, streamRule.getValue())
+                        .put(StreamRuleImpl.FIELD_FIELD, streamRule.getField())
+                        .put(StreamRuleImpl.FIELD_INVERTED, streamRule.isInverted())
+                        .put(StreamRuleImpl.FIELD_STREAM_ID, new ObjectId(streamId))
+                        .put(StreamRuleImpl.FIELD_CONTENT_PACK, bundleId)
+                        .put(StreamRuleImpl.FIELD_DESCRIPTION, streamRule.getDescription())
+                        .build();
                 streamRuleService.save(new StreamRuleImpl(streamRuleData));
             }
         }
@@ -406,33 +615,34 @@ public class BundleImporter {
         return stream;
     }
 
-    private void createDashboards(final List<Dashboard> dashboards, final String userName)
+    private void createDashboards(final String bundleId, final Set<Dashboard> dashboards, final String userName)
             throws org.graylog2.dashboards.widgets.DashboardWidget.NoSuchWidgetTypeException, InvalidWidgetConfigurationException, InvalidRangeParametersException, ValidationException {
         for (final Dashboard dashboard : dashboards) {
-            org.graylog2.dashboards.Dashboard createdDashboard = createDashboard(dashboard, userName);
+            org.graylog2.dashboards.Dashboard createdDashboard = createDashboard(bundleId, dashboard, userName);
             createdDashboards.put(createdDashboard.getId(), createdDashboard);
         }
     }
 
-    private org.graylog2.dashboards.Dashboard createDashboard(final Dashboard dashboardDescription, final String userName)
+    private org.graylog2.dashboards.Dashboard createDashboard(final String bundleId, final Dashboard dashboardDescription, final String userName)
             throws ValidationException, org.graylog2.dashboards.widgets.DashboardWidget.NoSuchWidgetTypeException, InvalidRangeParametersException, InvalidWidgetConfigurationException {
         // Create dashboard.
         final Map<String, Object> dashboardData = new HashMap<>();
-        dashboardData.put("title", dashboardDescription.getTitle());
-        dashboardData.put("description", dashboardDescription.getDescription());
-        dashboardData.put("creator_user_id", userName);
-        dashboardData.put("created_at", DateTime.now(DateTimeZone.UTC));
+        dashboardData.put(DashboardImpl.FIELD_TITLE, dashboardDescription.getTitle());
+        dashboardData.put(DashboardImpl.FIELD_DESCRIPTION, dashboardDescription.getDescription());
+        dashboardData.put(DashboardImpl.FIELD_CONTENT_PACK, bundleId);
+        dashboardData.put(DashboardImpl.FIELD_CREATOR_USER_ID, userName);
+        dashboardData.put(DashboardImpl.FIELD_CREATED_AT, Tools.nowUTC());
 
         final org.graylog2.dashboards.Dashboard dashboard = new DashboardImpl(dashboardData);
         final String dashboardId = dashboardService.save(dashboard);
 
-        final ImmutableList.Builder<WidgetPositionRequest> widgetPositions = ImmutableList.builder();
+        final ImmutableList.Builder<WidgetPositionsRequest.WidgetPosition> widgetPositions = ImmutableList.builder();
         for (DashboardWidget dashboardWidget : dashboardDescription.getDashboardWidgets()) {
             final org.graylog2.dashboards.widgets.DashboardWidget widget = createDashboardWidget(dashboardWidget, userName);
             dashboardService.addWidget(dashboard, widget);
 
-            final WidgetPositionRequest widgetPosition = new WidgetPositionRequest(widget.getId(),
-                    dashboardWidget.getRow(), dashboardWidget.getCol());
+            final WidgetPositionsRequest.WidgetPosition widgetPosition = WidgetPositionsRequest.WidgetPosition.create(widget.getId(),
+                    dashboardWidget.getCol(), dashboardWidget.getRow(), dashboardWidget.getHeight(), dashboardWidget.getWidth());
             widgetPositions.add(widgetPosition);
         }
 
@@ -441,12 +651,10 @@ public class BundleImporter {
         final org.graylog2.dashboards.Dashboard persistedDashboard;
         try {
             persistedDashboard = dashboardService.load(dashboardId);
-            dashboardService.updateWidgetPositions(persistedDashboard, widgetPositions.build());
+            dashboardService.updateWidgetPositions(persistedDashboard, WidgetPositionsRequest.create(widgetPositions.build()));
         } catch (NotFoundException e) {
             LOG.error("Failed to load dashboard with id " + dashboardId, e);
         }
-
-        dashboardRegistry.add(dashboard);
 
         return dashboard;
     }
@@ -455,14 +663,14 @@ public class BundleImporter {
     private org.graylog2.dashboards.widgets.DashboardWidget createDashboardWidget(
             final DashboardWidget dashboardWidget, final String userName)
             throws InvalidRangeParametersException, org.graylog2.dashboards.widgets.DashboardWidget.NoSuchWidgetTypeException, InvalidWidgetConfigurationException {
-        final org.graylog2.dashboards.widgets.DashboardWidget.Type type = dashboardWidget.getType();
+        final String type = dashboardWidget.getType();
         final Map<String, Object> config = dashboardWidget.getConfiguration();
 
         // Replace "stream_id" in config if it's set
         final String streamReference = (String) config.get("stream_id");
-        if(!isNullOrEmpty(streamReference)) {
+        if (!isNullOrEmpty(streamReference)) {
             final org.graylog2.plugin.streams.Stream stream = streamsByReferenceId.get(streamReference);
-            if(null != stream) {
+            if (null != stream) {
                 config.put("stream_id", stream.getId());
             } else {
                 LOG.warn("Couldn't find referenced stream {}", streamReference);
@@ -471,33 +679,99 @@ public class BundleImporter {
 
         // Build timerange.
         final Map<String, Object> timerangeConfig = (Map<String, Object>) config.get("timerange");
-        final TimeRange timeRange;
-
-        if (!timerangeConfig.containsKey("type")) {
-            throw new InvalidRangeParametersException("range type not set");
-        }
-
-        final String rangeType = (String) timerangeConfig.get("type");
-        switch (rangeType) {
-            case "relative":
-                timeRange = new RelativeRange((Integer) timerangeConfig.get("range"));
-                break;
-            case "keyword":
-                timeRange = new KeywordRange((String) timerangeConfig.get("keyword"));
-                break;
-            case "absolute":
-                final String from = new DateTime(timerangeConfig.get("from")).toString(Tools.ES_DATE_FORMAT);
-                final String to = new DateTime(timerangeConfig.get("to")).toString(Tools.ES_DATE_FORMAT);
-
-                timeRange = new AbsoluteRange(from, to);
-                break;
-            default:
-                throw new InvalidRangeParametersException("range_type not recognized");
-        }
+        final TimeRange timeRange = timeRangeFactory.create(timerangeConfig);
 
         final String widgetId = UUID.randomUUID().toString();
-        return org.graylog2.dashboards.widgets.DashboardWidget.buildDashboardWidget(type, metricRegistry, indexer,
+        return dashboardWidgetCreator.buildDashboardWidget(type,
                 widgetId, dashboardWidget.getDescription(), dashboardWidget.getCacheTime(),
-                config, (String) config.get("query"), timeRange, userName);
+                config, timeRange, userName);
+    }
+
+    private void createLookupTables(String bundleId, Set<LookupTableBundle> lookupTables) {
+        for (LookupTableBundle bundle : lookupTables) {
+            final Optional<CacheDto> cacheDto = dbCacheService.get(bundle.getCacheName());
+            final Optional<DataAdapterDto> adapterDto = dbDataAdapterService.get(bundle.getDataAdapterName());
+
+            if (!cacheDto.isPresent() || !adapterDto.isPresent()) {
+                LOG.warn("Skipping content pack import of lookup table <{}> ({}) due to missing cache or data adapter", bundle.getName(), bundle.getTitle());
+                continue;
+            }
+
+            final LookupTableDto dto = dbLookupTableService.save(LookupTableDto.builder()
+                    .title(bundle.getTitle())
+                    .description(bundle.getDescription())
+                    .name(bundle.getName())
+                    .cacheId(cacheDto.get().id())
+                    .dataAdapterId(adapterDto.get().id())
+                    .defaultSingleValue(bundle.getDefaultSingleValue())
+                    .defaultSingleValueType(bundle.getDefaultSingleValueType())
+                    .defaultMultiValue(bundle.getDefaultMultiValue())
+                    .defaultMultiValueType(bundle.getDefaultMultiValueType())
+                    .contentPack(bundleId)
+                    .build());
+            createdLookupTables.put(dto.id(), dto);
+        }
+
+        if (!createdLookupDataAdapters.isEmpty()) {
+            clusterBus.post(LookupTablesUpdated.create(createdLookupTables.values()));
+        }
+    }
+
+    private void createLookupCaches(String bundleId, Set<LookupCacheBundle> lookupCaches) {
+        for (LookupCacheBundle bundle : lookupCaches) {
+            final CacheDto dto = dbCacheService.save(CacheDto.builder()
+                    .title(bundle.getTitle())
+                    .description(bundle.getDescription())
+                    .name(bundle.getName())
+                    .contentPack(bundleId)
+                    .config(objectMapper.convertValue(bundle.getConfig(), LookupCacheConfiguration.class))
+                    .build());
+            createdLookupCaches.put(dto.id(), dto);
+        }
+
+        if (!createdLookupCaches.isEmpty()) {
+            clusterBus.post(CachesUpdated.create(createdLookupCaches.keySet()));
+        }
+
+        final Collection<LookupCache> caches = lookupTableService.getCaches(createdLookupCaches.keySet());
+        final CountDownLatch latch = new CountDownLatch(caches.size());
+        caches.forEach(c -> c.addListener(new LatchUpdaterListener(latch), scheduler));
+
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) {
+                LOG.warn("Starting imported Lookup Table Caches did not finish within 30 seconds. A server restart might be required for imported Lookup Tables to function.");
+            }
+        } catch (InterruptedException e) {
+            LOG.warn("Starting imported Lookup Table Caches did not finish properly. A server restart might be required for imported Lookup Tables to function: ", e);
+        }
+    }
+
+    private void createLookupDataAdapters(String bundleId, Set<LookupDataAdapterBundle> lookupDataAdapters) {
+        for (LookupDataAdapterBundle bundle : lookupDataAdapters) {
+            final DataAdapterDto dto = dbDataAdapterService.save(DataAdapterDto.builder()
+                    .title(bundle.getTitle())
+                    .description(bundle.getDescription())
+                    .name(bundle.getName())
+                    .contentPack(bundleId)
+                    .config(objectMapper.convertValue(bundle.getConfig(), LookupDataAdapterConfiguration.class))
+                    .build());
+            createdLookupDataAdapters.put(dto.id(), dto);
+        }
+
+        if (!createdLookupDataAdapters.isEmpty()) {
+            clusterBus.post(DataAdaptersUpdated.create(createdLookupDataAdapters.keySet()));
+        }
+
+        final Collection<LookupDataAdapter> dataAdapters = lookupTableService.getDataAdapters(createdLookupDataAdapters.keySet());
+        final CountDownLatch latch = new CountDownLatch(dataAdapters.size());
+        dataAdapters.forEach(da -> da.addListener(new LatchUpdaterListener(latch), scheduler));
+
+        try {
+            if (!latch.await(30, TimeUnit.SECONDS)) {
+                LOG.warn("Starting imported Lookup Table Data Adapters did not finish within 30 seconds. A server restart might be required for imported Lookup Tables to function.");
+            }
+        } catch (InterruptedException e) {
+            LOG.warn("Starting imported Lookup Table Data Adapters did not finish properly. A server restart might be required for imported Lookup Tables to function: ", e);
+        }
     }
 }
