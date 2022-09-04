@@ -1,26 +1,44 @@
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
+
 package com.facebook.stetho.inspector.elements;
+
+import com.facebook.stetho.common.Accumulator;
+import com.facebook.stetho.common.ThreadBound;
 
 import javax.annotation.Nullable;
 
-public interface NodeDescriptor {
-  public void hook(Object element);
+public interface NodeDescriptor<E> extends ThreadBound {
+  void hook(E element);
 
-  public void unhook(Object element);
+  void unhook(E element);
 
-  public NodeType getNodeType(Object element);
+  NodeType getNodeType(E element);
 
-  public String getNodeName(Object element);
+  String getNodeName(E element);
 
-  public String getLocalName(Object element);
+  String getLocalName(E element);
 
   @Nullable
-  public String getNodeValue(Object element);
+  String getNodeValue(E element);
 
-  public int getChildCount(Object element);
+  void getChildren(E element, Accumulator<Object> children);
 
-  public Object getChildAt(Object element, int index);
+  void getAttributes(E element, AttributeAccumulator attributes);
 
-  public int getAttributeCount(Object element);
+  void setAttributesAsText(E element, String text);
 
-  public void copyAttributeAt(Object element, int index, NodeAttribute outAttribute);
+  void getStyleRuleNames(E element, StyleRuleNameAccumulator accumulator);
+
+  void getStyles(E element, String ruleName, StyleAccumulator accumulator);
+
+  void setStyle(E element, String ruleName, String name, String value);
+
+  void getComputedStyles(E element, ComputedStyleAccumulator accumulator);
 }

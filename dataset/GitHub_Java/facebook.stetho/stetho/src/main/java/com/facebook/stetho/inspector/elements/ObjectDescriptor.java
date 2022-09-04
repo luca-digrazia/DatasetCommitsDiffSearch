@@ -1,8 +1,17 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 package com.facebook.stetho.inspector.elements;
 
-public final class ObjectDescriptor extends Descriptor {
+import com.facebook.stetho.common.Accumulator;
+
+public final class ObjectDescriptor extends Descriptor<Object> {
   @Override
   public void hook(Object element) {
   }
@@ -32,22 +41,30 @@ public final class ObjectDescriptor extends Descriptor {
   }
 
   @Override
-  public int getChildCount(Object element) {
-    return 0;
+  public void getChildren(Object element, Accumulator<Object> children) {
   }
 
   @Override
-  public Object getChildAt(Object element, int index) {
-    throw new IndexOutOfBoundsException();
+  public void getAttributes(Object element, AttributeAccumulator attributes) {
   }
 
   @Override
-  public int getAttributeCount(Object element) {
-    return 0;
+  public void setAttributesAsText(Object element, String text) {
   }
 
   @Override
-  public void copyAttributeAt(Object element, int index, NodeAttribute outAttribute) {
-    throw new IndexOutOfBoundsException();
+  public void getStyleRuleNames(Object element, StyleRuleNameAccumulator accumulator) {
+  }
+
+  @Override
+  public void getStyles(Object element, String ruleName, StyleAccumulator accumulator) {
+  }
+
+  @Override
+  public void setStyle(Object element, String ruleName, String name, String value) {
+  }
+
+  @Override
+  public void getComputedStyles(Object element, ComputedStyleAccumulator accumulator) {
   }
 }
