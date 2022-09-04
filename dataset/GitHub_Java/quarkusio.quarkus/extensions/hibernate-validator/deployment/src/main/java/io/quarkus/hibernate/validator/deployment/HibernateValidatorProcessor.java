@@ -30,7 +30,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.HotDeploymentWatchedFileBuildItem;
-import io.quarkus.deployment.builditem.ShutdownContextBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveFieldBuildItem;
 import io.quarkus.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
@@ -79,8 +78,7 @@ class HibernateValidatorProcessor {
             BuildProducer<AnnotationsTransformerBuildItem> annotationsTransformers,
             CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<FeatureBuildItem> feature,
-            BuildProducer<BeanContainerListenerBuildItem> beanContainerListener,
-            ShutdownContextBuildItem shutdownContext) throws Exception {
+            BuildProducer<BeanContainerListenerBuildItem> beanContainerListener) throws Exception {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.HIBERNATE_VALIDATOR));
 
@@ -144,7 +142,7 @@ class HibernateValidatorProcessor {
         }
 
         beanContainerListener
-                .produce(new BeanContainerListenerBuildItem(recorder.initializeValidatorFactory(classesToBeValidated, shutdownContext)));
+                .produce(new BeanContainerListenerBuildItem(recorder.initializeValidatorFactory(classesToBeValidated)));
     }
 
     @BuildStep
