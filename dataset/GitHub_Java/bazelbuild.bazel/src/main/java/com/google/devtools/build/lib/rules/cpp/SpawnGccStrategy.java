@@ -76,6 +76,11 @@ public class SpawnGccStrategy implements CppCompileActionContext {
   }
 
   @Override
+  public ResourceSet estimateResourceConsumption(CppCompileAction action) {
+    return action.estimateResourceConsumptionLocal();
+  }
+
+  @Override
   public Reply getReplyFromException(ExecException e, CppCompileAction action) {
     return null;
   }

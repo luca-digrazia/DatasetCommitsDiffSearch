@@ -20,7 +20,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.testutil.TestThread;
@@ -539,12 +538,6 @@ public class ResourceManagerTest {
     public Iterable<Artifact> getMandatoryInputs() {
       throw new IllegalStateException();
     }
-
-    @Override
-    public Iterable<Artifact> getInputFilesForExtraAction(
-      ActionExecutionContext actionExecutionContext) {
-    return ImmutableList.of();
-  }
 
     @Override
     public String getKey() {

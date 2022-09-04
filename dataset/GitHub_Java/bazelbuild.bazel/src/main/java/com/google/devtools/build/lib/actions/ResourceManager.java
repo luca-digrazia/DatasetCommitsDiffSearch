@@ -17,11 +17,11 @@ package com.google.devtools.build.lib.actions;
 import static com.google.devtools.build.lib.profiler.AutoProfiler.profiled;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -203,7 +203,7 @@ public class ResourceManager {
     Preconditions.checkState(
         !threadHasResources(), "acquireResources with existing resource lock during %s", owner);
 
-    AutoProfiler p = profiled(owner.describe(), ProfilerTask.ACTION_LOCK);
+    AutoProfiler p = profiled(owner, ProfilerTask.ACTION_LOCK);
     CountDownLatch latch = null;
     try {
       latch = acquire(resources);
@@ -300,7 +300,7 @@ public class ResourceManager {
         threadHasResources(), "releaseResources without resource lock during %s", owner);
 
     boolean isConflict = false;
-    AutoProfiler p = profiled(owner.describe(), ProfilerTask.ACTION_RELEASE);
+    AutoProfiler p = profiled(owner, ProfilerTask.ACTION_RELEASE);
     try {
       isConflict = release(resources);
     } finally {

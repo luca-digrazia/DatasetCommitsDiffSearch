@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 
@@ -45,5 +46,10 @@ public final class SpawnLinkStrategy implements CppLinkActionContext {
             action,
             action.estimateResourceConsumptionLocal());
     spawnActionContext.exec(spawn, actionExecutionContext);
+  }
+
+  @Override
+  public ResourceSet estimateResourceConsumption(CppLinkAction action) {
+    return action.estimateResourceConsumptionLocal();
   }
 }

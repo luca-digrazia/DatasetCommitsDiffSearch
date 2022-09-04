@@ -82,7 +82,6 @@ import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
@@ -658,8 +657,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * deletes the relevant values. If using Skyframe execution, clears their data without deleting
    * them (they will be deleted on the next build).
    */
-  public abstract void clearAnalysisCache(
-      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects);
+  public abstract void clearAnalysisCache(Collection<ConfiguredTarget> topLevelTargets);
 
   /**
    * Injects the contents of the computed tools/defaults package.
@@ -1444,32 +1442,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   /**
    * Returns a particular configured target.
+   *
+   * <p>Used only for testing.
    */
   @VisibleForTesting
   @Nullable
   public ConfiguredTarget getConfiguredTargetForTesting(
       ExtendedEventHandler eventHandler, Label label, BuildConfiguration configuration) {
-    return getConfiguredTargetForTesting(
-        eventHandler, label, configuration, ConfigurationTransition.NONE);
-  }
-
-  /**
-   * Returns a particular configured target. If dynamic configurations are active, applies the given
-   * configuration transition.
-   */
-  @VisibleForTesting
-  @Nullable
-  public ConfiguredTarget getConfiguredTargetForTesting(
-      ExtendedEventHandler eventHandler,
-      Label label,
-      BuildConfiguration configuration,
-      Attribute.Transition transition) {
-
-    Preconditions.checkArgument(configuration == null
-        || configuration.useDynamicConfigurations()
-        || transition == ConfigurationTransition.NONE,
-        "Dynamic configurations required for test configuration using a transition");
-
     if (memoizingEvaluator.getExistingValueForTesting(
         PrecomputedValue.WORKSPACE_STATUS_KEY.getKeyForTesting()) == null) {
       injectWorkspaceStatusData(label.getWorkspaceRoot());
@@ -1479,7 +1458,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     if (configuration == null) {
       dep = Dependency.withNullConfiguration(label);
     } else if (configuration.useDynamicConfigurations()) {
-      dep = Dependency.withTransitionAndAspects(label, transition, AspectCollection.EMPTY);
+      dep = Dependency.withTransitionAndAspects(label, Attribute.ConfigurationTransition.NONE,
+          AspectCollection.EMPTY);
     } else {
       dep = Dependency.withConfiguration(label, configuration);
     }
@@ -1522,7 +1502,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     EvaluationResult<ActionLookupValue> result =
         buildDriver.evaluate(keys, keepGoing, numThreads, eventHandler);
     // Get rid of any memory retained by the cache -- all loading is done.
-    perBuildSyscallCache.clear();
+    perBuildSyscallCache = null;
     return result;
   }
 

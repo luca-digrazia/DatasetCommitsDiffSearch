@@ -17,11 +17,15 @@ package com.google.devtools.build.lib.sandbox;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
+import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
+import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionStatusMessage;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionStrategy;
 import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.ResourceManager;
+import com.google.devtools.build.lib.actions.ResourceManager.ResourceHandle;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.UserExecException;
@@ -29,12 +33,10 @@ import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
-import java.util.Map;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.UUID;
@@ -86,34 +88,62 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     this.fullySupported = fullySupported;
   }
 
+  /** Executes the given {@code spawn}. */
   @Override
-  protected void actuallyExec(
+  public void exec(Spawn spawn, ActionExecutionContext actionExecutionContext)
+      throws ExecException, InterruptedException {
+    exec(spawn, actionExecutionContext, null);
+  }
+
+  @Override
+  public void exec(
       Spawn spawn,
       ActionExecutionContext actionExecutionContext,
       AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
       throws ExecException, InterruptedException {
     Executor executor = actionExecutionContext.getExecutor();
-    executor
-        .getEventBus()
-        .post(ActionStatusMessage.runningStrategy(spawn.getResourceOwner(), "linux-sandbox"));
+    // Certain actions can't run remotely or in a sandbox - pass them on to the standalone strategy.
+    if (!spawn.isRemotable() || spawn.hasNoSandbox()) {
+      SandboxHelpers.fallbackToNonSandboxedExecution(spawn, actionExecutionContext, executor);
+      return;
+    }
+
+    EventBus eventBus = actionExecutionContext.getExecutor().getEventBus();
+    ActionExecutionMetadata owner = spawn.getResourceOwner();
+    eventBus.post(ActionStatusMessage.schedulingStrategy(owner));
+    try (ResourceHandle handle =
+        ResourceManager.instance().acquireResources(owner, spawn.getLocalResources())) {
+      SandboxHelpers.postActionStatusMessage(eventBus, spawn);
+      actuallyExec(spawn, actionExecutionContext, writeOutputFiles);
+    }
+  }
+
+  public void actuallyExec(
+      Spawn spawn,
+      ActionExecutionContext actionExecutionContext,
+      AtomicReference<Class<? extends SpawnActionContext>> writeOutputFiles)
+      throws ExecException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
     SandboxHelpers.reportSubcommand(executor, spawn);
 
     // Each invocation of "exec" gets its own sandbox.
     Path sandboxPath = SandboxHelpers.getSandboxRoot(blazeDirs, productName, uuid, execCounter);
     Path sandboxExecRoot = sandboxPath.getRelative("execroot").getRelative(execRoot.getBaseName());
+    Path sandboxTempDir = sandboxPath.getRelative("tmp");
 
-    Set<Path> writableDirs;
+    Set<Path> writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
+
     SymlinkedExecRoot symlinkedExecRoot = new SymlinkedExecRoot(sandboxExecRoot);
     ImmutableSet<PathFragment> outputs = SandboxHelpers.getOutputFiles(spawn);
     try {
-      writableDirs = getWritableDirs(sandboxExecRoot, spawn.getEnvironment());
       symlinkedExecRoot.createFileSystem(
           getMounts(spawn, actionExecutionContext), outputs, writableDirs);
+      sandboxTempDir.createDirectory();
     } catch (IOException e) {
       throw new UserExecException("I/O error during sandboxed execution", e);
     }
 
-    SandboxRunner runner = getSandboxRunner(sandboxPath, sandboxExecRoot, writableDirs);
+    SandboxRunner runner = getSandboxRunner(spawn, sandboxPath, sandboxExecRoot, sandboxTempDir);
     try {
       runSpawn(
           spawn,
@@ -141,13 +171,16 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
   }
 
   private SandboxRunner getSandboxRunner(
-      Path sandboxPath, Path sandboxExecRoot, Set<Path> writableDirs) throws UserExecException {
+      Spawn spawn, Path sandboxPath, Path sandboxExecRoot, Path sandboxTempDir)
+      throws UserExecException {
     if (fullySupported) {
       return new LinuxSandboxRunner(
           execRoot,
           sandboxPath,
           sandboxExecRoot,
-          writableDirs,
+          sandboxTempDir,
+          getWritableDirs(sandboxExecRoot, spawn.getEnvironment()),
+          getInaccessiblePaths(),
           getTmpfsPaths(),
           getReadOnlyBindMounts(blazeDirs, sandboxExecRoot),
           verboseFailures,
@@ -155,19 +188,6 @@ public class LinuxSandboxedStrategy extends SandboxStrategy {
     } else {
       return new ProcessWrapperRunner(execRoot, sandboxExecRoot, verboseFailures);
     }
-  }
-
-  @Override
-  protected ImmutableSet<Path> getWritableDirs(Path sandboxExecRoot, Map<String, String> env)
-      throws IOException {
-    ImmutableSet.Builder<Path> writableDirs = ImmutableSet.builder();
-    writableDirs.addAll(super.getWritableDirs(sandboxExecRoot, env));
-
-    FileSystem fs = sandboxExecRoot.getFileSystem();
-    writableDirs.add(fs.getPath("/dev/shm").resolveSymbolicLinks());
-    writableDirs.add(fs.getPath("/tmp"));
-
-    return writableDirs.build();
   }
 
   private ImmutableSet<Path> getTmpfsPaths() {
