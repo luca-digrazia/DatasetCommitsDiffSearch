@@ -15,12 +15,15 @@
 package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static java.util.Arrays.asList;
+import static org.junit.Assert.fail;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.testing.EqualsTester;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.Map;
+import java.util.TreeSet;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -82,6 +85,79 @@ public class OptionsTest {
       expansion = {"--host=special.google.com", "--port=8080"}
     )
     public Void special;
+
+    // Interestingly, the class needs to be public, or else the default constructor ends up not
+    // being public and the expander can't be instantiated.
+    /**
+     * Defines an expansion function that looks at other options defined with it and expands to
+     * options that match a pattern.
+     */
+    public static class ExpansionDependsOnOtherOptionDefinitions implements ExpansionFunction {
+      @Override
+      public ImmutableList<String> getExpansion(ExpansionContext context) {
+        TreeSet<String> flags = new TreeSet<>();
+        for (Map.Entry<String, ?> entry : context.getOptionsData().getAllNamedFields()) {
+          if (entry.getKey().startsWith("specialexp_")) {
+            flags.add("--" + entry.getKey());
+          }
+        }
+        return ImmutableList.copyOf(flags);
+      }
+    }
+
+    /**
+     * Defines an expansion function that adapts its expansion to the value assigned to the original
+     * expansion option.
+     */
+    public static class ExpansionDependsOnFlagValue implements ExpansionFunction {
+      @Override
+      public ImmutableList<String> getExpansion(ExpansionContext context)
+          throws OptionsParsingException {
+        String value = context.getUnparsedValue();
+        if (value == null) {
+          throw new ExpansionNeedsValueException("Expansion value not set.");
+        }
+        if (value.equals("foo_bar")) {
+          return ImmutableList.<String>of("--specialexp_foo", "--specialexp_bar");
+        }
+
+        throw new OptionsParsingException("Unexpected expansion argument: " + value);
+      }
+    }
+
+    @Option(
+      name = "specialexp_foo",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "false"
+    )
+    public boolean specialExpFoo;
+
+    @Option(
+      name = "specialexp_bar",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "false"
+    )
+    public boolean specialExpBar;
+
+    @Option(
+      name = "specialexp",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "null",
+      expansionFunction = ExpansionDependsOnOtherOptionDefinitions.class
+    )
+    public Void specialExp;
+
+    @Option(
+      name = "dynamicexp",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "null",
+      expansionFunction = ExpansionDependsOnFlagValue.class
+    )
+    public Void variableExpansion;
   }
 
   @Test
@@ -258,17 +334,23 @@ public class OptionsTest {
   @Test
   public void wontParseUnknownOptions() {
     String [] args = { "--unknown", "--other=23", "--options" };
-    OptionsParsingException e =
-        assertThrows(OptionsParsingException.class, () -> Options.parse(HttpOptions.class, args));
-    assertThat(e).hasMessageThat().isEqualTo("Unrecognized option: --unknown");
+    try {
+      Options.parse(HttpOptions.class, args);
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e).hasMessageThat().isEqualTo("Unrecognized option: --unknown");
+    }
   }
 
   @Test
   public void requiresOptionValue() {
     String[] args = {"--port"};
-    OptionsParsingException e =
-        assertThrows(OptionsParsingException.class, () -> Options.parse(HttpOptions.class, args));
-    assertThat(e).hasMessageThat().isEqualTo("Expected value after --port");
+    try {
+      Options.parse(HttpOptions.class, args);
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e).hasMessageThat().isEqualTo("Expected value after --port");
+    }
   }
 
   @Test
@@ -296,23 +378,28 @@ public class OptionsTest {
 
   @Test
   public void isPickyAboutBooleanValues() {
-    OptionsParsingException e =
-        assertThrows(
-            OptionsParsingException.class,
-            () -> Options.parse(HttpOptions.class, new String[] {"--debug=not_a_boolean"}));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo(
-            "While parsing option --debug=not_a_boolean: " + "\'not_a_boolean\' is not a boolean");
+    try {
+      Options.parse(HttpOptions.class, new String[]{"--debug=not_a_boolean"});
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              "While parsing option --debug=not_a_boolean: "
+                  + "\'not_a_boolean\' is not a boolean");
+    }
   }
 
   @Test
   public void isPickyAboutBooleanNos() {
-    OptionsParsingException e =
-        assertThrows(
-            OptionsParsingException.class,
-            () -> Options.parse(HttpOptions.class, new String[] {"--nodebug=1"}));
-    assertThat(e).hasMessageThat().isEqualTo("Unexpected value after boolean option: --nodebug=1");
+    try {
+      Options.parse(HttpOptions.class, new String[]{"--nodebug=1"});
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo("Unexpected value after boolean option: --nodebug=1");
+    }
   }
 
   @Test
@@ -336,10 +423,13 @@ public class OptionsTest {
   }
 
   @Test
-  public void usageForStaticExpansion() {
+  public void usageForExpansion() {
     String usage = Options.getUsage(HttpOptions.class);
     assertThat(usage)
-        .contains("  --special\n      Expands to: --host=special.google.com --port=8080");
+        .contains("  --special\n    Expands to: --host=special.google.com --port=8080");
+    // Expect that the usage text contains the expansion appropriate to the options bases that were
+    // loaded into the options parser.
+    assertThat(usage).contains("  --specialexp\n    Expands to: --specialexp_bar --specialexp_foo");
   }
 
   public static class NullTestOptions extends OptionsBase {
@@ -372,7 +462,7 @@ public class OptionsTest {
                 + "    The URL at which the server will be running.");
     assertThat(usage)
         .contains(
-            "  --none\n" + "    An expanded option.\n" + "      Expands to: --host=www.google.com");
+            "  --none\n" + "    An expanded option.\n" + "    Expands to: --host=www.google.com");
   }
 
   public static class MyURLConverter implements Converter<URL> {
@@ -417,15 +507,17 @@ public class OptionsTest {
   @Test
   public void customConverterThrowsException() throws Exception {
     String[] args = {"--url=a_malformed:url"};
-    OptionsParsingException e =
-        assertThrows(
-            OptionsParsingException.class, () -> Options.parse(UsesCustomConverter.class, args));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo(
-            "While parsing option --url=a_malformed:url: "
-                + "Could not convert 'a_malformed:url': "
-                + "no protocol: a_malformed:url");
+    try {
+      Options.parse(UsesCustomConverter.class, args);
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e)
+          .hasMessageThat()
+          .isEqualTo(
+              "While parsing option --url=a_malformed:url: "
+                  + "Could not convert 'a_malformed:url': "
+                  + "no protocol: a_malformed:url");
+    }
   }
 
   @Test
@@ -436,11 +528,12 @@ public class OptionsTest {
 
   @Test
   public void unknownBooleanOption() {
-    OptionsParsingException e =
-        assertThrows(
-            OptionsParsingException.class,
-            () -> Options.parse(HttpOptions.class, new String[] {"--no-debug"}));
-    assertThat(e).hasMessageThat().isEqualTo("Unrecognized option: --no-debug");
+    try {
+      Options.parse(HttpOptions.class, new String[]{"--no-debug"});
+      fail();
+    } catch (OptionsParsingException e) {
+      assertThat(e).hasMessageThat().isEqualTo("Unrecognized option: --no-debug");
+    }
   }
 
   public static class J extends OptionsBase {
@@ -458,8 +551,38 @@ public class OptionsTest {
     assertThat(options.string).isNull();
   }
 
+  public static class K extends OptionsBase {
+    @Option(
+      name = "1",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "null"
+    )
+    public int int1;
+  }
   @Test
-  public void nullIsNotInterpretedSpeciallyExceptAsADefaultValue() throws Exception {
+  public void nullDefaultForPrimitiveTypeOption() throws Exception {
+    // defaultValue() = "null" is not treated specially for primitive types, so
+    // we get an NumberFormatException from the converter (not a
+    // ClassCastException from casting null to int), just as we would for any
+    // other non-integer-literal string default.
+    try {
+      Options.parse(K.class, NO_ARGS).getOptions();
+      fail();
+    } catch (OptionsParser.ConstructionException e) {
+      assertThat(e).hasCauseThat().isInstanceOf(IllegalStateException.class);
+      assertThat(e)
+          .hasCauseThat()
+          .hasMessageThat()
+          .isEqualTo(
+              "OptionsParsingException while retrieving default for "
+                  + "int1: 'null' is not an int");
+    }
+  }
+
+  @Test
+  public void nullIsntInterpretedSpeciallyExceptAsADefaultValue()
+      throws Exception {
     HttpOptions options =
         Options.parse(HttpOptions.class,
                       new String[] { "--host", "null" }).getOptions();
@@ -499,23 +622,29 @@ public class OptionsTest {
   }
 
   @Test
-  public void usageForExpansionFunction() {
-    // Expect that the usage text contains the expansion appropriate to the options bases that were
-    // loaded into the options parser.
-    String usage = Options.getUsage(TestOptions.class);
-    assertThat(usage)
-        .contains(
-            "  --prefix_expansion\n"
-                + "    Expands to all options with a specific prefix.\n"
-                + "      Expands to: --specialexp_bar --specialexp_foo");
+  public void expansionFunction() throws Exception {
+    Options<HttpOptions> options1 = Options.parse(HttpOptions.class, new String[] {"--specialexp"});
+    Options<HttpOptions> options2 =
+        Options.parse(HttpOptions.class, new String[] {"--specialexp_foo", "--specialexp_bar"});
+    assertThat(options1.getOptions()).isEqualTo(options2.getOptions());
   }
 
   @Test
-  public void expansionFunction() throws Exception {
-    Options<TestOptions> options1 =
-        Options.parse(TestOptions.class, new String[] {"--prefix_expansion"});
-    Options<TestOptions> options2 =
-        Options.parse(TestOptions.class, new String[] {"--specialexp_foo", "--specialexp_bar"});
+  public void dynamicExpansionFunctionWorks() throws Exception {
+    Options<HttpOptions> options1 =
+        Options.parse(HttpOptions.class, new String[] {"--dynamicexp=foo_bar"});
+    Options<HttpOptions> options2 =
+        Options.parse(HttpOptions.class, new String[] {"--specialexp_foo", "--specialexp_bar"});
     assertThat(options1.getOptions()).isEqualTo(options2.getOptions());
+  }
+
+  @Test
+  public void dynamicExpansionFunctionUnknowValue() throws Exception {
+    try {
+      Options.parse(HttpOptions.class, new String[] {"--dynamicexp=foo"});
+      fail("Unknown expansion argument should cause a failure.");
+    } catch (OptionsParsingException e) {
+      assertThat(e).hasMessage("Unexpected expansion argument: foo");
+    }
   }
 }

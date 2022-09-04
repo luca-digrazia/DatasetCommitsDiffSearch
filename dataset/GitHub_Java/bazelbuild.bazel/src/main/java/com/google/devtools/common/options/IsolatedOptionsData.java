@@ -16,6 +16,7 @@ package com.google.devtools.common.options;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Ordering;
 import com.google.devtools.common.options.OptionsParser.ConstructionException;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
@@ -23,14 +24,13 @@ import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.ParameterizedType;
 import java.lang.reflect.Type;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import javax.annotation.concurrent.Immutable;
 
 /**
@@ -57,21 +57,20 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
   private final ImmutableMap<Class<? extends OptionsBase>, Constructor<?>> optionsClasses;
 
   /**
-   * Mapping from option name to {@code OptionDefinition}. Entries appear ordered first by their
-   * options class (the order in which they were passed to {@link #from(Collection)}, and then in
-   * alphabetic order within each options class.
+   * Mapping from option name to {@code @Option}-annotated field. Entries appear ordered first by
+   * their options class (the order in which they were passed to {@link #from(Collection)}, and then
+   * in alphabetic order within each options class.
    */
-  private final ImmutableMap<String, OptionDefinition> nameToField;
+  private final ImmutableMap<String, Field> nameToField;
 
-  /** Mapping from option abbreviation to {@code OptionDefinition} (unordered). */
-  private final ImmutableMap<Character, OptionDefinition> abbrevToField;
+  /** Mapping from option abbreviation to {@code Option}-annotated field (unordered). */
+  private final ImmutableMap<Character, Field> abbrevToField;
 
   /**
-   * Mapping from options class to a list of all {@code OptionFields} in that class. The map entries
-   * are unordered, but the fields in the lists are ordered alphabetically.
+   * Mapping from options class to a list of all {@code Option}-annotated fields in that class. The
+   * map entries are unordered, but the fields in the lists are ordered alphabetically.
    */
-  private final ImmutableMap<Class<? extends OptionsBase>, ImmutableList<OptionDefinition>>
-      allOptionsFields;
+  private final ImmutableMap<Class<? extends OptionsBase>, ImmutableList<Field>> allOptionsFields;
 
   /**
    * Mapping from each {@code Option}-annotated field to the default value for that field
@@ -80,20 +79,20 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    * <p>(This is immutable like the others, but uses {@code Collections.unmodifiableMap} to support
    * null values.)
    */
-  private final Map<OptionDefinition, Object> optionDefaults;
+  private final Map<Field, Object> optionDefaults;
 
   /**
    * Mapping from each {@code Option}-annotated field to the proper converter (unordered).
    *
    * @see #findConverter
    */
-  private final ImmutableMap<OptionDefinition, Converter<?>> converters;
+  private final ImmutableMap<Field, Converter<?>> converters;
 
   /**
    * Mapping from each {@code Option}-annotated field to a boolean for whether that field allows
    * multiple values (unordered).
    */
-  private final ImmutableMap<OptionDefinition, Boolean> allowMultiple;
+  private final ImmutableMap<Field, Boolean> allowMultiple;
 
   /**
    * Mapping from each options class to whether or not it has the {@link UsesOnlyCoreTypes}
@@ -106,13 +105,14 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
       "undocumented", "hidden", "internal");
 
   private IsolatedOptionsData(
-      Map<Class<? extends OptionsBase>, Constructor<?>> optionsClasses,
-      Map<String, OptionDefinition> nameToField,
-      Map<Character, OptionDefinition> abbrevToField,
-      Map<Class<? extends OptionsBase>, ImmutableList<OptionDefinition>> allOptionsFields,
-      Map<OptionDefinition, Object> optionDefaults,
-      Map<OptionDefinition, Converter<?>> converters,
-      Map<OptionDefinition, Boolean> allowMultiple,
+      Map<Class<? extends OptionsBase>,
+      Constructor<?>> optionsClasses,
+      Map<String, Field> nameToField,
+      Map<Character, Field> abbrevToField,
+      Map<Class<? extends OptionsBase>, ImmutableList<Field>> allOptionsFields,
+      Map<Field, Object> optionDefaults,
+      Map<Field, Converter<?>> converters,
+      Map<Field, Boolean> allowMultiple,
       Map<Class<? extends OptionsBase>, Boolean> usesOnlyCoreTypes) {
     this.optionsClasses = ImmutableMap.copyOf(optionsClasses);
     this.nameToField = ImmutableMap.copyOf(nameToField);
@@ -150,7 +150,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
     return (Constructor<T>) optionsClasses.get(clazz);
   }
 
-  public OptionDefinition getFieldFromName(String name) {
+  public Field getFieldFromName(String name) {
     return nameToField.get(name);
   }
 
@@ -159,11 +159,11 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    * objects. Entries appear ordered first by their options class (the order in which they were
    * passed to {@link #from(Collection)}, and then in alphabetic order within each options class.
    */
-  public Iterable<Map.Entry<String, OptionDefinition>> getAllNamedFields() {
+  public Iterable<Map.Entry<String, Field>> getAllNamedFields() {
     return nameToField.entrySet();
   }
 
-  public OptionDefinition getFieldForAbbrev(char abbrev) {
+  public Field getFieldForAbbrev(char abbrev) {
     return abbrevToField.get(abbrev);
   }
 
@@ -171,21 +171,20 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    * Returns a list of all {@link Field} objects for options in the given options class, ordered
    * alphabetically by option name.
    */
-  public ImmutableList<OptionDefinition> getOptionDefinitionsFromClass(
-      Class<? extends OptionsBase> optionsClass) {
+  public ImmutableList<Field> getFieldsForClass(Class<? extends OptionsBase> optionsClass) {
     return allOptionsFields.get(optionsClass);
   }
 
-  public Object getDefaultValue(OptionDefinition optionDefinition) {
-    return optionDefaults.get(optionDefinition);
+  public Object getDefaultValue(Field field) {
+    return optionDefaults.get(field);
   }
 
-  public Converter<?> getConverter(OptionDefinition optionDefinition) {
-    return converters.get(optionDefinition);
+  public Converter<?> getConverter(Field field) {
+    return converters.get(field);
   }
 
-  public boolean getAllowMultiple(OptionDefinition optionDefinition) {
-    return allowMultiple.get(optionDefinition);
+  public boolean getAllowMultiple(Field field) {
+    return allowMultiple.get(field);
   }
 
   public boolean getUsesOnlyCoreTypes(Class<? extends OptionsBase> optionsClass) {
@@ -197,9 +196,9 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    * that does use it, asserts that the type is a {@code List<T>} and returns its element type
    * {@code T}.
    */
-  private static Type getFieldSingularType(OptionDefinition optionDefinition) {
-    Type fieldType = optionDefinition.getField().getGenericType();
-    if (optionDefinition.allowsMultiple()) {
+  private static Type getFieldSingularType(Field field, Option annotation) {
+    Type fieldType = field.getGenericType();
+    if (annotation.allowMultiple()) {
       // If the type isn't a List<T>, this is an error in the option's declaration.
       if (!(fieldType instanceof ParameterizedType)) {
         throw new ConstructionException("Type of multiple occurrence option must be a List<...>");
@@ -218,24 +217,43 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
    *
    * <p>Can be used for usage help and controlling whether the "no" prefix is allowed.
    */
-  boolean isBooleanField(OptionDefinition optionDefinition) {
-    return isBooleanField(optionDefinition, getConverter(optionDefinition));
+  boolean isBooleanField(Field field) {
+    return isBooleanField(field, getConverter(field));
   }
 
-  private static boolean isBooleanField(OptionDefinition optionDefinition, Converter<?> converter) {
-    return optionDefinition.getType().equals(boolean.class)
-        || optionDefinition.getType().equals(TriState.class)
+  private static boolean isBooleanField(Field field, Converter<?> converter) {
+    return field.getType().equals(boolean.class)
+        || field.getType().equals(TriState.class)
         || converter instanceof BoolOrEnumConverter;
+  }
+
+  /** Returns whether a field has Void type. */
+  static boolean isVoidField(Field field) {
+    return field.getType().equals(Void.class);
+  }
+
+  /** Returns whether the arg is an expansion option. */
+  public static boolean isExpansionOption(Option annotation) {
+    return (annotation.expansion().length > 0 || OptionsData.usesExpansionFunction(annotation));
+  }
+
+  /**
+   * Returns whether the arg is an expansion option defined by an expansion function (and not a
+   * constant expansion value).
+   */
+  static boolean usesExpansionFunction(Option annotation) {
+    return annotation.expansionFunction() != ExpansionFunction.class;
   }
 
   /**
    * Given an {@code @Option}-annotated field, retrieves the {@link Converter} that will be used,
    * taking into account the default converters if an explicit one is not specified.
    */
-  private static Converter<?> findConverter(OptionDefinition optionDefinition) {
-    if (optionDefinition.getProvidedConverter() == Converter.class) {
+  private static Converter<?> findConverter(Field optionField) {
+    Option annotation = optionField.getAnnotation(Option.class);
+    if (annotation.converter() == Converter.class) {
       // No converter provided, use the default one.
-      Type type = getFieldSingularType(optionDefinition);
+      Type type = getFieldSingularType(optionField, annotation);
       Converter<?> converter = Converters.DEFAULT_CONVERTERS.get(type);
       if (converter == null) {
         throw new ConstructionException(
@@ -243,13 +261,13 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
                 + type
                 + "; possible fix: add "
                 + "converter=... to @Option annotation for "
-                + optionDefinition.getField().getName());
+                + optionField.getName());
       }
       return converter;
     }
     try {
       // Instantiate the given Converter class.
-      Class<?> converter = optionDefinition.getProvidedConverter();
+      Class<?> converter = annotation.converter();
       Constructor<?> constructor = converter.getConstructor();
       return (Converter<?>) constructor.newInstance();
     } catch (Exception e) {
@@ -258,32 +276,40 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
       throw new ConstructionException(e);
     }
   }
-  /** Returns all {@code optionDefinitions}, ordered by their option name (not their field name). */
-  private static ImmutableList<OptionDefinition> getAllOptionDefinitionsSorted(
+
+  private static final Ordering<Field> fieldOrdering =
+      new Ordering<Field>() {
+    @Override
+    public int compare(Field f1, Field f2) {
+      String n1 = f1.getAnnotation(Option.class).name();
+      String n2 = f2.getAnnotation(Option.class).name();
+      return n1.compareTo(n2);
+    }
+  };
+
+  /**
+   * Return all {@code @Option}-annotated fields, alphabetically ordered by their option name (not
+   * their field name).
+   */
+  private static ImmutableList<Field> getAllAnnotatedFieldsSorted(
       Class<? extends OptionsBase> optionsClass) {
-    return Arrays.stream(optionsClass.getFields())
-        .map(field -> {
-          try {
-            return OptionDefinition.extractOptionDefinition(field);
-          } catch (ConstructionException e) {
-            // Ignore non-@Option annotated fields. Requiring all fields in the OptionsBase to be
-            // @Option-annotated requires a depot cleanup.
-            return null;
-          }
-        })
-        .filter(Objects::nonNull)
-        .sorted(OptionDefinition.BY_OPTION_NAME)
-        .collect(ImmutableList.toImmutableList());
+    List<Field> unsortedFields = new ArrayList<>();
+    for (Field field : optionsClass.getFields()) {
+      if (field.isAnnotationPresent(Option.class)) {
+        unsortedFields.add(field);
+      }
+    }
+    return fieldOrdering.immutableSortedCopy(unsortedFields);
   }
 
-  private static Object retrieveDefaultValue(OptionDefinition optionDefinition) {
-    Converter<?> converter = findConverter(optionDefinition);
-    String defaultValueAsString = optionDefinition.getUnparsedDefaultValue();
+  private static Object retrieveDefaultFromAnnotation(Field optionField) {
+    Converter<?> converter = findConverter(optionField);
+    String defaultValueAsString = OptionsParserImpl.getDefaultOptionString(optionField);
     // Special case for "null"
-    if (optionDefinition.isSpecialNullDefault()) {
+    if (OptionsParserImpl.isSpecialNullDefault(defaultValueAsString, optionField)) {
       return null;
     }
-    boolean allowsMultiple = optionDefinition.allowsMultiple();
+    boolean allowsMultiple = optionField.getAnnotation(Option.class).allowMultiple();
     // If the option allows multiple values then we intentionally return the empty list as
     // the default value of this option since it is not always the case that an option
     // that allows multiple values will have a converter that returns a list value.
@@ -295,18 +321,17 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
     try {
       convertedValue = converter.convert(defaultValueAsString);
     } catch (OptionsParsingException e) {
-      throw new IllegalStateException(
-          "OptionsParsingException while "
-              + "retrieving default for "
-              + optionDefinition.getField().getName()
-              + ": "
-              + e.getMessage());
+      throw new IllegalStateException("OptionsParsingException while "
+          + "retrieving default for " + optionField.getName() + ": "
+          + e.getMessage());
     }
     return convertedValue;
   }
 
   private static <A> void checkForCollisions(
-      Map<A, OptionDefinition> aFieldMap, A optionName, String description) {
+      Map<A, Field> aFieldMap,
+      A optionName,
+      String description) {
     if (aFieldMap.containsKey(optionName)) {
       throw new DuplicateOptionDeclarationException(
           "Duplicate option name, due to " + description + ": --" + optionName);
@@ -329,7 +354,7 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
   }
 
   private static void checkAndUpdateBooleanAliases(
-      Map<String, OptionDefinition> nameToFieldMap,
+      Map<String, Field> nameToFieldMap,
       Map<String, String> booleanAliasMap,
       String optionName) {
     // Check that the negating alias does not conflict with existing flags.
@@ -393,13 +418,13 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
   static IsolatedOptionsData from(Collection<Class<? extends OptionsBase>> classes) {
     // Mind which fields have to preserve order.
     Map<Class<? extends OptionsBase>, Constructor<?>> constructorBuilder = new LinkedHashMap<>();
-    Map<Class<? extends OptionsBase>, ImmutableList<OptionDefinition>> allOptionsFieldsBuilder =
+    Map<Class<? extends OptionsBase>, ImmutableList<Field>> allOptionsFieldsBuilder =
         new HashMap<>();
-    Map<String, OptionDefinition> nameToFieldBuilder = new LinkedHashMap<>();
-    Map<Character, OptionDefinition> abbrevToFieldBuilder = new HashMap<>();
-    Map<OptionDefinition, Object> optionDefaultsBuilder = new HashMap<>();
-    Map<OptionDefinition, Converter<?>> convertersBuilder = new HashMap<>();
-    Map<OptionDefinition, Boolean> allowMultipleBuilder = new HashMap<>();
+    Map<String, Field> nameToFieldBuilder = new LinkedHashMap<>();
+    Map<Character, Field> abbrevToFieldBuilder = new HashMap<>();
+    Map<Field, Object> optionDefaultsBuilder = new HashMap<>();
+    Map<Field, Converter<?>> convertersBuilder = new HashMap<>();
+    Map<Field, Boolean> allowMultipleBuilder = new HashMap<>();
 
     // Maps the negated boolean flag aliases to the original option name.
     Map<String, String> booleanAliasMap = new HashMap<>();
@@ -416,54 +441,44 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
         throw new IllegalArgumentException(parsedOptionsClass
             + " lacks an accessible default constructor");
       }
-      ImmutableList<OptionDefinition> optionDefinitions =
-          getAllOptionDefinitionsSorted(parsedOptionsClass);
-      allOptionsFieldsBuilder.put(parsedOptionsClass, optionDefinitions);
+      ImmutableList<Field> fields = getAllAnnotatedFieldsSorted(parsedOptionsClass);
+      allOptionsFieldsBuilder.put(parsedOptionsClass, fields);
 
-      for (OptionDefinition optionDefinition : optionDefinitions) {
-        String optionName = optionDefinition.getOptionName();
-
-        // Check that the option makes sense on its own, as defined.
+      for (Field field : fields) {
+        Option annotation = field.getAnnotation(Option.class);
+        String optionName = annotation.name();
         if (optionName == null) {
           throw new ConstructionException("Option cannot have a null name");
         }
 
-        if (DEPRECATED_CATEGORIES.contains(optionDefinition.getOptionCategory())) {
+        if (DEPRECATED_CATEGORIES.contains(annotation.category())) {
           throw new ConstructionException(
               "Documentation level is no longer read from the option category. Category \""
-                  + optionDefinition.getOptionCategory()
-                  + "\" in option \""
-                  + optionName
-                  + "\" is disallowed.");
+                  + annotation.category() + "\" in option \"" + optionName + "\" is disallowed.");
         }
 
-        checkEffectTagRationality(optionName, optionDefinition.getOptionEffectTags());
+        checkEffectTagRationality(optionName, annotation.effectTags());
         checkMetadataTagAndCategoryRationality(
-            optionName,
-            optionDefinition.getOptionMetadataTags(),
-            optionDefinition.getDocumentationCategory());
-        Type fieldType = getFieldSingularType(optionDefinition);
+            optionName, annotation.metadataTags(), annotation.documentationCategory());
+
+        Type fieldType = getFieldSingularType(field, annotation);
         // For simple, static expansions, don't accept non-Void types.
-        if (optionDefinition.getOptionExpansion().length != 0 && !optionDefinition.isVoidField()) {
+        if (annotation.expansion().length != 0 && !isVoidField(field)) {
           throw new ConstructionException(
               "Option "
-                  + optionDefinition.getOptionName()
+                  + optionName
                   + " is an expansion flag with a static expansion, but does not have Void type.");
         }
 
-        // Get the converter's return type to check that it matches the option type.
+        // Get the converter return type.
         @SuppressWarnings("rawtypes")
-        Class<? extends Converter> converterClass = optionDefinition.getProvidedConverter();
+        Class<? extends Converter> converterClass = annotation.converter();
         if (converterClass == Converter.class) {
           Converter<?> actualConverter = Converters.DEFAULT_CONVERTERS.get(fieldType);
           if (actualConverter == null) {
-            throw new ConstructionException(
-                "Cannot find converter for field of type "
-                    + optionDefinition.getType()
-                    + " named "
-                    + optionDefinition.getField().getName()
-                    + " in class "
-                    + optionDefinition.getField().getDeclaringClass().getName());
+            throw new ConstructionException("Cannot find converter for field of type "
+                + field.getType() + " named " + field.getName()
+                + " in class " + field.getDeclaringClass().getName());
           }
           converterClass = actualConverter.getClass();
         }
@@ -480,10 +495,10 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
           throw new ConstructionException(
               "A known converter object doesn't implement the convert method");
         }
-        Converter<?> converter = findConverter(optionDefinition);
-        convertersBuilder.put(optionDefinition, converter);
+        Converter<?> converter = findConverter(field);
+        convertersBuilder.put(field, converter);
 
-        if (optionDefinition.allowsMultiple()) {
+        if (annotation.allowMultiple()) {
           if (GenericTypeHelper.getRawType(converterResultType) == List.class) {
             Type elementType =
                 ((ParameterizedType) converterResultType).getActualTypeArguments()[0];
@@ -518,51 +533,47 @@ public class IsolatedOptionsData extends OpaqueOptionsData {
           }
         }
 
-        if (isBooleanField(optionDefinition, converter)) {
+        if (isBooleanField(field, converter)) {
           checkAndUpdateBooleanAliases(nameToFieldBuilder, booleanAliasMap, optionName);
         }
 
         checkForCollisions(nameToFieldBuilder, optionName, "option");
         checkForBooleanAliasCollisions(booleanAliasMap, optionName, "option");
-        nameToFieldBuilder.put(optionName, optionDefinition);
+        nameToFieldBuilder.put(optionName, field);
 
-        if (!optionDefinition.getOldOptionName().isEmpty()) {
-          String oldName = optionDefinition.getOldOptionName();
+        if (!annotation.oldName().isEmpty()) {
+          String oldName = annotation.oldName();
           checkForCollisions(nameToFieldBuilder, oldName, "old option name");
           checkForBooleanAliasCollisions(booleanAliasMap, oldName, "old option name");
-          nameToFieldBuilder.put(optionDefinition.getOldOptionName(), optionDefinition);
+          nameToFieldBuilder.put(annotation.oldName(), field);
 
           // If boolean, repeat the alias dance for the old name.
-          if (isBooleanField(optionDefinition, converter)) {
+          if (isBooleanField(field, converter)) {
             checkAndUpdateBooleanAliases(nameToFieldBuilder, booleanAliasMap, oldName);
           }
         }
-        if (optionDefinition.getAbbreviation() != '\0') {
-          checkForCollisions(
-              abbrevToFieldBuilder, optionDefinition.getAbbreviation(), "option abbreviation");
-          abbrevToFieldBuilder.put(optionDefinition.getAbbreviation(), optionDefinition);
+        if (annotation.abbrev() != '\0') {
+          checkForCollisions(abbrevToFieldBuilder, annotation.abbrev(), "option abbreviation");
+          abbrevToFieldBuilder.put(annotation.abbrev(), field);
         }
 
-        optionDefaultsBuilder.put(optionDefinition, retrieveDefaultValue(optionDefinition));
-        allowMultipleBuilder.put(optionDefinition, optionDefinition.allowsMultiple());
-      }
+        optionDefaultsBuilder.put(field, retrieveDefaultFromAnnotation(field));
+
+        allowMultipleBuilder.put(field, annotation.allowMultiple());
+
+        }
 
       boolean usesOnlyCoreTypes = parsedOptionsClass.isAnnotationPresent(UsesOnlyCoreTypes.class);
       if (usesOnlyCoreTypes) {
         // Validate that @UsesOnlyCoreTypes was used correctly.
-        for (OptionDefinition optionDefinition : optionDefinitions) {
+        for (Field field : fields) {
           // The classes in coreTypes are all final. But even if they weren't, we only want to check
           // for exact matches; subclasses would not be considered core types.
-          if (!UsesOnlyCoreTypes.CORE_TYPES.contains(optionDefinition.getType())) {
+          if (!UsesOnlyCoreTypes.CORE_TYPES.contains(field.getType())) {
             throw new ConstructionException(
-                "Options class '"
-                    + parsedOptionsClass.getName()
-                    + "' is marked as "
-                    + "@UsesOnlyCoreTypes, but field '"
-                    + optionDefinition.getField().getName()
-                    + "' has type '"
-                    + optionDefinition.getType().getName()
-                    + "'");
+                "Options class '" + parsedOptionsClass.getName() + "' is marked as "
+                + "@UsesOnlyCoreTypes, but field '" + field.getName()
+                + "' has type '" + field.getType().getName() + "'");
           }
         }
       }
