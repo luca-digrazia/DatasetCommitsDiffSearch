@@ -4,7 +4,6 @@ import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Scanner;
@@ -30,15 +29,15 @@ public class GradleBuildFile extends BuildFile {
         super(writer);
         if (writer.exists(SETTINGS_GRADLE_PATH)) {
             final byte[] settings = writer.getContent(SETTINGS_GRADLE_PATH);
-            settingsContent = new String(settings, StandardCharsets.UTF_8);
+            settingsContent = new String(settings);
         }
         if (writer.exists(BUILD_GRADLE_PATH)) {
             final byte[] build = writer.getContent(BUILD_GRADLE_PATH);
-            buildContent = new String(build, StandardCharsets.UTF_8);
+            buildContent = new String(build);
         }
         if (writer.exists(GRADLE_PROPERTIES_PATH)) {
             final byte[] properties = writer.getContent(GRADLE_PROPERTIES_PATH);
-            propertiesContent = new String(properties, StandardCharsets.UTF_8);
+            propertiesContent = new String(properties);
         }
     }
 
@@ -136,7 +135,7 @@ public class GradleBuildFile extends BuildFile {
     @Override
     protected void addDependencyInBuildFile(Dependency dependency) {
         StringBuilder newBuildContent = new StringBuilder();
-        try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes(StandardCharsets.UTF_8)))) {
+        try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes()))) {
             while (scanner.hasNextLine()) {
                 String currentLine = scanner.nextLine();
                 newBuildContent.append(currentLine).append(System.lineSeparator());
@@ -144,8 +143,12 @@ public class GradleBuildFile extends BuildFile {
                     newBuildContent.append("    implementation '")
                             .append(dependency.getGroupId())
                             .append(":")
-                            .append(dependency.getArtifactId())
-                            .append("'")
+                            .append(dependency.getArtifactId());
+                    if (dependency.getVersion() != null && !dependency.getVersion().isEmpty()) {
+                        newBuildContent.append(":")
+                                .append(dependency.getVersion());
+                    }
+                    newBuildContent.append("'")
                             .append(System.lineSeparator());
                 }
             }
@@ -170,7 +173,7 @@ public class GradleBuildFile extends BuildFile {
         if (dependencies == null) {
             dependencies = new ArrayList<>();
             boolean inDependencies = false;
-            try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes(StandardCharsets.UTF_8)))) {
+            try (Scanner scanner = new Scanner(new ByteArrayInputStream(buildContent.getBytes()))) {
                 while (scanner.hasNextLine()) {
                     String currentLine = scanner.nextLine();
                     if (currentLine.startsWith("dependencies {")) {

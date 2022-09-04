@@ -1,9 +1,7 @@
 package io.quarkus.gradle.tasks;
 
-import static java.util.Arrays.stream;
-import static java.util.stream.Collectors.toSet;
-
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -13,13 +11,13 @@ import org.gradle.api.tasks.TaskAction;
 import org.gradle.api.tasks.options.Option;
 
 import io.quarkus.cli.commands.AddExtensions;
-import io.quarkus.cli.commands.file.GradleBuildFile;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.generators.BuildTool;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
  */
-public class QuarkusAddExtension extends QuarkusPlatformTask {
+public class QuarkusAddExtension extends QuarkusTask {
 
     public QuarkusAddExtension() {
         super("Adds Quarkus extensions specified by the user to the project.");
@@ -39,18 +37,13 @@ public class QuarkusAddExtension extends QuarkusPlatformTask {
 
     @TaskAction
     public void addExtension() {
-        setupPlatformDescriptor();
-
-        Set<String> extensionsSet = getExtensionsToAdd()
-                .stream()
-                .flatMap(ext -> stream(ext.split(",")))
-                .map(String::trim)
-                .collect(toSet());
+        Set<String> extensionsSet = new HashSet<>(getExtensionsToAdd());
         try {
-            new AddExtensions(new GradleBuildFile(new FileProjectWriter(getProject().getProjectDir())))
+            new AddExtensions(new FileProjectWriter(getProject().getProjectDir()), BuildTool.GRADLE)
                     .addExtensions(extensionsSet);
         } catch (IOException e) {
             throw new GradleException("Failed to add extensions " + getExtensionsToAdd(), e);
         }
     }
+
 }

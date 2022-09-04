@@ -1,5 +1,6 @@
 package io.quarkus.maven;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -7,15 +8,16 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.StringUtils;
+import org.apache.maven.model.Model;
+import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.project.MavenProject;
 
 import io.quarkus.cli.commands.AddExtensionResult;
 import io.quarkus.cli.commands.AddExtensions;
-import io.quarkus.cli.commands.file.BuildFile;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.generators.BuildTool;
 
 /**
  * Allow adding an extension to an existing pom.xml file.
@@ -24,7 +26,13 @@ import io.quarkus.generators.BuildTool;
  * parameters.
  */
 @Mojo(name = "add-extension")
-public class AddExtensionMojo extends BuildFileMojoBase {
+public class AddExtensionMojo extends AbstractMojo {
+
+    /**
+     * The Maven project which will define and configure the quarkus-maven-plugin
+     */
+    @Parameter(defaultValue = "${project}")
+    protected MavenProject project;
 
     /**
      * The list of extensions to be added.
@@ -39,23 +47,12 @@ public class AddExtensionMojo extends BuildFileMojoBase {
     String extension;
 
     @Override
-    protected void validateParameters() throws MojoExecutionException {
+    public void execute() throws MojoExecutionException {
         if ((StringUtils.isBlank(extension) && (extensions == null || extensions.isEmpty())) // None are set
                 || (!StringUtils.isBlank(extension) && extensions != null && !extensions.isEmpty())) { // Both are set
             throw new MojoExecutionException("Either the `extension` or `extensions` parameter must be set");
         }
-    }
 
-    @Override
-    public void doExecute(BuildFile buildFile) throws MojoExecutionException {
-
-        if (buildFile == null) {
-            try {
-                buildFile = BuildTool.MAVEN.createBuildFile(new FileProjectWriter(project.getBasedir()));
-            } catch (IOException e) {
-                throw new MojoExecutionException("Failed to initialize the project's build descriptor", e);
-            }
-        }
         Set<String> ext = new HashSet<>();
         if (extensions != null && !extensions.isEmpty()) {
             ext.addAll(extensions);
@@ -66,7 +63,9 @@ public class AddExtensionMojo extends BuildFileMojoBase {
         }
 
         try {
-            final AddExtensionResult result = new AddExtensions(buildFile)
+            Model model = project.getOriginalModel().clone();
+            File pomFile = new File(model.getPomFile().getAbsolutePath());
+            AddExtensionResult result = new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
                     .addExtensions(ext.stream().map(String::trim).collect(Collectors.toSet()));
             if (!result.succeeded()) {
                 throw new MojoExecutionException("Unable to add extensions");

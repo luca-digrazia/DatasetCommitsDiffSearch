@@ -4,7 +4,6 @@ import static io.quarkus.maven.utilities.MojoUtils.getPluginGroupId;
 import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
 import static io.quarkus.maven.utilities.MojoUtils.readPom;
 import static java.util.Arrays.asList;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.ByteArrayOutputStream;
@@ -21,7 +20,6 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.cli.commands.writer.FileProjectWriter;
-import io.quarkus.generators.BuildTool;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.maven.utilities.QuarkusDependencyPredicate;
 
@@ -34,8 +32,7 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        FileProjectWriter writer = new FileProjectWriter(pom.getParentFile());
-        new CreateProject(writer)
+        new CreateProject(new FileProjectWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
@@ -45,7 +42,9 @@ public class ListExtensionsTest {
         new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
-        final ListExtensions listExtensions = new ListExtensions(writer, BuildTool.MAVEN);
+        Model model = readPom(pom);
+
+        final ListExtensions listExtensions = new ListExtensions(model);
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
@@ -65,18 +64,19 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        File pomFile = new File(pom.getAbsolutePath());
-        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
-
-        new CreateProject(writer)
+        new CreateProject(new FileProjectWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
                 .doCreateProject(context);
-        new AddExtensions(writer)
+
+        File pomFile = new File(pom.getAbsolutePath());
+        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
                 .addExtensions(new HashSet<>(asList("resteasy", " hibernate-validator ")));
 
-        final ListExtensions listExtensions = new ListExtensions(writer, BuildTool.MAVEN);
+        Model model = readPom(pom);
+
+        final ListExtensions listExtensions = new ListExtensions(model);
 
         final Map<String, Dependency> installed = listExtensions.findInstalled();
 
@@ -91,10 +91,7 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        File pomFile = new File(pom.getAbsolutePath());
-        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
-
-        new CreateProject(writer)
+        new CreateProject(new FileProjectWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
@@ -109,7 +106,8 @@ public class ListExtensionsTest {
 
         MojoUtils.write(model, pom);
 
-        new AddExtensions(writer)
+        File pomFile = new File(pom.getAbsolutePath());
+        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
 
         model = readPom(pom);
@@ -118,7 +116,7 @@ public class ListExtensionsTest {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
-            new ListExtensions(writer, BuildTool.MAVEN)
+            new ListExtensions(model)
                     .listExtensions(true, "full", null);
         } finally {
             System.setOut(out);
@@ -161,23 +159,23 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        File pomFile = new File(pom.getAbsolutePath());
-        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
-
-        new CreateProject(writer)
+        new CreateProject(new FileProjectWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
                 .doCreateProject(context);
 
-        new AddExtensions(writer)
+        File pomFile = new File(pom.getAbsolutePath());
+        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
+
+        Model model = readPom(pom);
 
         final PrintStream out = System.out;
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
-            new ListExtensions(writer, BuildTool.MAVEN)
+            new ListExtensions(model)
                     .listExtensions(true, "full", "unexpectedSearch");
         } finally {
             System.setOut(out);
@@ -194,23 +192,23 @@ public class ListExtensionsTest {
         CreateProjectTest.delete(pom.getParentFile());
         final HashMap<String, Object> context = new HashMap<>();
 
-        File pomFile = new File(pom.getAbsolutePath());
-        FileProjectWriter writer = new FileProjectWriter(pomFile.getParentFile());
-
-        new CreateProject(writer)
+        new CreateProject(new FileProjectWriter(pom.getParentFile()))
                 .groupId(getPluginGroupId())
                 .artifactId("add-extension-test")
                 .version("0.0.1-SNAPSHOT")
                 .doCreateProject(context);
 
-        new AddExtensions(writer)
+        File pomFile = new File(pom.getAbsolutePath());
+        new AddExtensions(new FileProjectWriter(pomFile.getParentFile()))
                 .addExtensions(new HashSet<>(asList("commons-io:commons-io:2.5", "Agroal")));
+
+        Model model = readPom(pom);
 
         final PrintStream out = System.out;
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try (final PrintStream printStream = new PrintStream(baos, false, "UTF-8")) {
             System.setOut(printStream);
-            new ListExtensions(writer, BuildTool.MAVEN)
+            new ListExtensions(model)
                     .listExtensions(true, "full", "Rest");
         } finally {
             System.setOut(out);
@@ -221,11 +219,5 @@ public class ListExtensionsTest {
             ++nbLine;
         }
         Assertions.assertTrue(nbLine > 7, "search to unexpected extension must return a message");
-    }
-
-    @Test
-    void testListExtensionsWithoutAPomFile() throws IOException {
-        ListExtensions listExtensions = new ListExtensions(null, BuildTool.MAVEN);
-        assertThat(listExtensions.findInstalled()).isEmpty();
     }
 }
