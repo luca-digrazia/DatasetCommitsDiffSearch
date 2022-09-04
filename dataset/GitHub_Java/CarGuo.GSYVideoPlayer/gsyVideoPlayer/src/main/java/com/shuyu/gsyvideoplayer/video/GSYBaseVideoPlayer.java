@@ -23,7 +23,6 @@ import com.shuyu.gsyvideoplayer.R;
 import com.shuyu.gsyvideoplayer.SmallVideoTouch;
 import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
 import com.shuyu.gsyvideoplayer.listener.VideoAllCallBack;
-import com.shuyu.gsyvideoplayer.model.GSYModel;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
 import com.shuyu.gsyvideoplayer.utils.Debuger;
 import com.shuyu.gsyvideoplayer.utils.OrientationUtils;
@@ -33,8 +32,6 @@ import java.io.File;
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
-
-import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getActionBarHeight;
 import static com.shuyu.gsyvideoplayer.utils.CommonUtil.getStatusBarHeight;
@@ -74,10 +71,6 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     protected int mCurrentState = -1; //当前的播放状态
 
     protected int mRotate = 0; //针对某些视频的旋转信息做了旋转处理
-
-    protected int mShrinkImageRes = -1; //退出全屏显示的案件图片
-
-    protected int mEnlargeImageRes = -1; //全屏显示的案件图片
 
     private int mSystemUiVisibility;
 
@@ -259,7 +252,7 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             showNavKey(mContext, mSystemUiVisibility);
         }
         showSupportActionBar(mContext, mActionBar, mStatusBar);
-        getFullscreenButton().setImageResource(getEnlargeImageRes());
+        getFullscreenButton().setImageResource(R.drawable.video_enlarge);
     }
 
     /**
@@ -354,13 +347,11 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
             gsyVideoPlayer.mCacheFile = mCacheFile;
             gsyVideoPlayer.mFullPauseBitmap = mFullPauseBitmap;
             gsyVideoPlayer.mNeedShowWifiTip = mNeedShowWifiTip;
-            gsyVideoPlayer.mShrinkImageRes = mShrinkImageRes;
-            gsyVideoPlayer.mEnlargeImageRes = mEnlargeImageRes;
             gsyVideoPlayer.setUp(mOriginUrl, mCache, mCachePath, mMapHeadData, mObjects);
             gsyVideoPlayer.setStateAndUi(mCurrentState);
             gsyVideoPlayer.addTextureView();
 
-            gsyVideoPlayer.getFullscreenButton().setImageResource(getShrinkImageRes());
+            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
             gsyVideoPlayer.getFullscreenButton().setOnClickListener(new OnClickListener() {
                 @Override
                 public void onClick(View v) {
@@ -702,16 +693,10 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
     }
 
     /**
-     * 播放速度
+     * 播放速度，只支持6.0以上
      */
     public void setSpeed(float speed) {
         this.mSpeed = speed;
-        if (GSYVideoManager.instance().getMediaPlayer() != null
-                && GSYVideoManager.instance().getMediaPlayer() instanceof IjkMediaPlayer) {
-            if (speed != 1 && speed > 0) {
-                ((IjkMediaPlayer) GSYVideoManager.instance().getMediaPlayer()).setSpeed(speed);
-            }
-        }
     }
 
     public boolean isHideKey() {
@@ -734,37 +719,5 @@ public abstract class GSYBaseVideoPlayer extends FrameLayout implements GSYMedia
      */
     public void setNeedShowWifiTip(boolean needShowWifiTip) {
         this.mNeedShowWifiTip = needShowWifiTip;
-    }
-
-    public int getEnlargeImageRes() {
-        if (mShrinkImageRes == -1) {
-            return R.drawable.video_enlarge;
-        }
-        return mEnlargeImageRes;
-    }
-
-    /**
-     * 设置右下角 显示切换到全屏 的按键资源
-     * 必须在setUp之前设置
-     * 不设置使用默认
-     */
-    public void setEnlargeImageRes(int mEnlargeImageRes) {
-        this.mEnlargeImageRes = mEnlargeImageRes;
-    }
-
-    public int getShrinkImageRes() {
-        if (mShrinkImageRes == -1) {
-            return R.drawable.video_shrink;
-        }
-        return mShrinkImageRes;
-    }
-
-    /**
-     * 设置右下角 显示退出全屏 的按键资源
-     * 必须在setUp之前设置
-     * 不设置使用默认
-     */
-    public void setShrinkImageRes(int mShrinkImageRes) {
-        this.mShrinkImageRes = mShrinkImageRes;
     }
 }
