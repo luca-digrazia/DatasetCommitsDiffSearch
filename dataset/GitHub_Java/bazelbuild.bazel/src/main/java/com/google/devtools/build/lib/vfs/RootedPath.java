@@ -14,7 +14,12 @@
 package com.google.devtools.build.lib.vfs;
 
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodecAdapter;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
+import com.google.protobuf.CodedInputStream;
+import com.google.protobuf.CodedOutputStream;
+import java.io.IOException;
 import java.io.Serializable;
 import java.util.Objects;
 
@@ -28,15 +33,13 @@ import java.util.Objects;
  * <p>TODO(bazel-team): use an opaque root representation so as to not expose the absolute path to
  * clients via #asPath or #getRoot.
  */
-@AutoCodec
 public class RootedPath implements Serializable {
+
   private final Root root;
   private final PathFragment rootRelativePath;
 
   /** Constructs a {@link RootedPath} from a {@link Root} and path fragment relative to the root. */
-  @AutoCodec.Instantiator
-  @AutoCodec.VisibleForSerialization
-  RootedPath(Root root, PathFragment rootRelativePath) {
+  private RootedPath(Root root, PathFragment rootRelativePath) {
     Preconditions.checkState(
         rootRelativePath.isAbsolute() == root.isAbsolute(),
         "rootRelativePath: %s root: %s",
@@ -111,16 +114,42 @@ public class RootedPath implements Serializable {
 
   @Override
   public int hashCode() {
-    final int prime = 31;
-    int result = 1;
-    result = prime * result + root.hashCode();
-    result = prime * result + rootRelativePath.hashCode();
-    return result;
+    return Objects.hash(root, rootRelativePath);
   }
-
 
   @Override
   public String toString() {
     return "[" + root + "]/[" + rootRelativePath + "]";
+  }
+
+  /** Custom serialization for {@link RootedPath}s. */
+  public static class RootedPathCodec implements ObjectCodec<RootedPath> {
+
+    private final ObjectCodec<Root> rootCodec;
+
+    /** Create an instance which will deserialize RootedPaths on {@code fileSystem}. */
+    public RootedPathCodec(FileSystem fileSystem) {
+      this.rootCodec = new InjectingObjectCodecAdapter<>(Root.CODEC, () -> fileSystem);
+    }
+
+    @Override
+    public Class<RootedPath> getEncodedClass() {
+      return RootedPath.class;
+    }
+
+    @Override
+    public void serialize(RootedPath rootedPath, CodedOutputStream codedOut)
+        throws IOException, SerializationException {
+      rootCodec.serialize(rootedPath.getRoot(), codedOut);
+      PathFragment.CODEC.serialize(rootedPath.getRootRelativePath(), codedOut);
+    }
+
+    @Override
+    public RootedPath deserialize(CodedInputStream codedIn)
+        throws IOException, SerializationException {
+      Root root = rootCodec.deserialize(codedIn);
+      PathFragment rootRelativePath = PathFragment.CODEC.deserialize(codedIn);
+      return toRootedPath(root, rootRelativePath);
+    }
   }
 }
