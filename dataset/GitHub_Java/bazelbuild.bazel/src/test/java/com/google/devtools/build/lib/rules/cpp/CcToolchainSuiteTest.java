@@ -813,7 +813,7 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
           "--crosstool_top=//cc:suite",
           "--cpu=k8",
           "--compiler=compiler",
-          "--incompatible_disable_cc_toolchain_label_from_crosstool_proto");
+          "--experimental_enable_cc_toolchain_label_from_crosstool_proto=false");
       getConfiguredTarget("//a:b");
       fail("Expected failure because selecting cc_toolchain label from CROSSTOOL is disabled");
     } catch (InvalidConfigurationException e) {
