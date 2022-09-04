@@ -15,9 +15,10 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.common.options.Option;
@@ -27,7 +28,7 @@ import javax.annotation.Nullable;
 
 /** Configuration fragment for android_local_test. */
 @Immutable
-public class AndroidLocalTestConfiguration extends Fragment {
+public class AndroidLocalTestConfiguration extends BuildConfiguration.Fragment {
   /** android_local_test specific options */
   public static final class Options extends FragmentOptions {
     @Option(
