@@ -69,8 +69,6 @@ public interface LdapSettings extends Persisted {
 
     String getDefaultGroup();
 
-    String getDefaultGroupId();
-
     void setDefaultGroup(String defaultGroup);
 
     boolean isTrustAllCertificates();
@@ -93,7 +91,5 @@ public interface LdapSettings extends Persisted {
     void setAdditionalDefaultGroups(Set<String> strings);
 
     Set<String> getAdditionalDefaultGroups();
-
-    Set<String> getAdditionalDefaultGroupIds();
 
 }
