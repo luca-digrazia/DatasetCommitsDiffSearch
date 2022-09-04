@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.rules.android;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
@@ -45,9 +46,8 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.ZipFilterBuilder.CheckHashMismatchMode;
-import com.google.devtools.build.lib.rules.cpp.AbstractCcLinkParamsStore;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
-import com.google.devtools.build.lib.rules.cpp.CcLinkParamsStore;
+import com.google.devtools.build.lib.rules.cpp.CcLinkingInfo;
 import com.google.devtools.build.lib.rules.java.ClasspathConfiguredFragment;
 import com.google.devtools.build.lib.rules.java.JavaCcLinkParamsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
@@ -673,16 +673,13 @@ public class AndroidCommon {
     if (resourceApk.getResourceJavaClassJar() != null && resourceSourceJar != null) {
       resourceJar =
           new OutputJar(
-              resourceApk.getResourceJavaClassJar(),
-              null /* ijar */,
-              manifestProtoOutput,
-              ImmutableList.of(resourceSourceJar));
+              resourceApk.getResourceJavaClassJar(), null, ImmutableList.of(resourceSourceJar));
       javaRuleOutputJarsProviderBuilder.addOutputJar(resourceJar);
     }
 
     JavaRuleOutputJarsProvider ruleOutputJarsProvider =
         javaRuleOutputJarsProviderBuilder
-            .addOutputJar(classJar, iJar, manifestProtoOutput, ImmutableList.of(srcJar))
+            .addOutputJar(classJar, iJar, ImmutableList.of(srcJar))
             .setJdeps(outputDepsProto)
             .setNativeHeaders(nativeHeaderOutput)
             .build();
@@ -694,7 +691,7 @@ public class AndroidCommon {
     javaCommon.addTransitiveInfoProviders(
         builder, javaInfoBuilder, filesToBuild, classJar, ANDROID_COLLECTION_SPEC);
 
-    javaCommon.addGenJarsProvider(javaInfoBuilder, genClassJar, genSourceJar);
+    javaCommon.addGenJarsProvider(builder, javaInfoBuilder, genClassJar, genSourceJar);
 
     DataBinding.maybeAddProvider(builder, ruleContext);
     JavaInfo javaInfo =
@@ -798,28 +795,39 @@ public class AndroidCommon {
     return asNeverLink;
   }
 
-  public AbstractCcLinkParamsStore getCcLinkParamsStore() {
-    return getCcLinkParamsStore(
+  public CcLinkingInfo getCcLinkingInfo() {
+    return getCcLinkingInfo(
         javaCommon.targetsTreatedAsDeps(ClasspathType.BOTH), ImmutableList.<String>of());
   }
 
-  public static AbstractCcLinkParamsStore getCcLinkParamsStore(
+  public static CcLinkingInfo getCcLinkingInfo(
       final Iterable<? extends TransitiveInfoCollection> deps, final Collection<String> linkOpts) {
-    return new AbstractCcLinkParamsStore() {
-      @Override
-      protected void collect(
-          CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
-        builder.addTransitiveTargets(
-            deps,
-            // Link in Java-specific C++ code in the transitive closure
-            JavaCcLinkParamsProvider.TO_LINK_PARAMS,
-            // Link in Android-specific C++ code (e.g., android_libraries) in the transitive closure
-            AndroidCcLinkParamsProvider.TO_LINK_PARAMS,
-            // Link in non-language-specific C++ code in the transitive closure
-            CcLinkParamsStore.TO_LINK_PARAMS);
-        builder.addLinkOpts(linkOpts);
-      }
-    };
+
+    CcLinkParams linkOptsParams = CcLinkParams.builder().addLinkOpts(linkOpts).build();
+    CcLinkingInfo linkOptsProvider =
+        CcLinkingInfo.Builder.create()
+            .setStaticModeParamsForDynamicLibrary(linkOptsParams)
+            .setStaticModeParamsForExecutable(linkOptsParams)
+            .setDynamicModeParamsForDynamicLibrary(linkOptsParams)
+            .setDynamicModeParamsForExecutable(linkOptsParams)
+            .build();
+
+    ImmutableList<CcLinkingInfo> ccLinkingInfos =
+        ImmutableList.<CcLinkingInfo>builder()
+            .add(linkOptsProvider)
+            .addAll(
+                Streams.stream(AnalysisUtils.getProviders(deps, JavaCcLinkParamsProvider.class))
+                    .map(JavaCcLinkParamsProvider::getCcLinkingInfo)
+                    .collect(ImmutableList.toImmutableList()))
+            .addAll(
+                Streams.stream(
+                        AnalysisUtils.getProviders(deps, AndroidCcLinkParamsProvider.PROVIDER))
+                    .map(AndroidCcLinkParamsProvider::getLinkParams)
+                    .collect(ImmutableList.toImmutableList()))
+            .addAll(AnalysisUtils.getProviders(deps, CcLinkingInfo.PROVIDER))
+            .build();
+
+    return CcLinkingInfo.merge(ccLinkingInfos);
   }
 
   /** Returns {@link AndroidConfiguration} in given context. */
