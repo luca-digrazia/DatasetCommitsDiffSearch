@@ -107,7 +107,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
   }
 
   /**
-   * Returns all of the inputs of the action that generated 'getDirectDescriptorSet', and which are
+   * Returns all of the inputs of the action that generated 'descriptorSet', and which are
    * themselves descriptor sets.
    */
   private ImmutableList<String> getDepsDescriptorSets(Artifact descriptorSet) {
@@ -133,9 +133,9 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     {
       ProtoSourcesProvider provider =
           getConfiguredTarget("//x:alias").getProvider(ProtoSourcesProvider.class);
-      assertThat(provider.getDirectDescriptorSet().getRootRelativePathString())
+      assertThat(provider.directDescriptorSet().getRootRelativePathString())
           .isEqualTo("x/alias-descriptor-set.proto.bin");
-      assertThat(prettyArtifactNames(provider.getTransitiveDescriptorSets()))
+      assertThat(prettyArtifactNames(provider.transitiveDescriptorSets()))
           .containsExactly(
               "x/alias-descriptor-set.proto.bin",
               "x/foo-descriptor-set.proto.bin",
@@ -145,27 +145,27 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     {
       ProtoSourcesProvider provider =
           getConfiguredTarget("//x:foo").getProvider(ProtoSourcesProvider.class);
-      assertThat(provider.getDirectDescriptorSet().getRootRelativePathString())
+      assertThat(provider.directDescriptorSet().getRootRelativePathString())
           .isEqualTo("x/foo-descriptor-set.proto.bin");
-      assertThat(prettyArtifactNames(provider.getTransitiveDescriptorSets()))
+      assertThat(prettyArtifactNames(provider.transitiveDescriptorSets()))
           .containsExactly("x/foo-descriptor-set.proto.bin", "x/bar-descriptor-set.proto.bin");
     }
 
     {
       ProtoSourcesProvider provider =
           getConfiguredTarget("//x:bar").getProvider(ProtoSourcesProvider.class);
-      assertThat(provider.getDirectDescriptorSet().getRootRelativePathString())
+      assertThat(provider.directDescriptorSet().getRootRelativePathString())
           .isEqualTo("x/bar-descriptor-set.proto.bin");
-      assertThat(prettyArtifactNames(provider.getTransitiveDescriptorSets()))
+      assertThat(prettyArtifactNames(provider.transitiveDescriptorSets()))
           .containsExactly("x/bar-descriptor-set.proto.bin");
     }
 
     {
       ProtoSourcesProvider provider =
           getConfiguredTarget("//x:alias_to_no_srcs").getProvider(ProtoSourcesProvider.class);
-      assertThat(provider.getDirectDescriptorSet().getRootRelativePathString())
+      assertThat(provider.directDescriptorSet().getRootRelativePathString())
           .isEqualTo("x/alias_to_no_srcs-descriptor-set.proto.bin");
-      assertThat(prettyArtifactNames(provider.getTransitiveDescriptorSets()))
+      assertThat(prettyArtifactNames(provider.transitiveDescriptorSets()))
           .containsExactly(
               "x/alias_to_no_srcs-descriptor-set.proto.bin", "x/no_srcs-descriptor-set.proto.bin");
     }
@@ -173,9 +173,9 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     {
       ProtoSourcesProvider provider =
           getConfiguredTarget("//x:no_srcs").getProvider(ProtoSourcesProvider.class);
-      assertThat(provider.getDirectDescriptorSet().getRootRelativePathString())
+      assertThat(provider.directDescriptorSet().getRootRelativePathString())
           .isEqualTo("x/no_srcs-descriptor-set.proto.bin");
-      assertThat(prettyArtifactNames(provider.getTransitiveDescriptorSets()))
+      assertThat(prettyArtifactNames(provider.transitiveDescriptorSets()))
           .containsExactly("x/no_srcs-descriptor-set.proto.bin");
     }
   }
@@ -330,8 +330,10 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     );
     ConfiguredTarget protoTarget = getConfiguredTarget("//x/foo:withdeps");
     ProtoSourcesProvider sourcesProvider = protoTarget.getProvider(ProtoSourcesProvider.class);
-    assertThat(sourcesProvider.getTransitiveProtoSourceRoots())
-        .containsExactly("x/foo", "x/bar", ".");
+    assertThat(sourcesProvider.getTransitiveProtoSourceRoots()).containsExactly("x/foo", "x/bar");
+    assertThat(getGeneratingSpawnAction(getDescriptorOutput("//x/foo:withdeps"))
+        .getRemainingArguments())
+        .containsAllOf("--proto_path=x/foo", "--proto_path=x/bar");
   }
 
   @Test
@@ -387,7 +389,7 @@ public class BazelProtoLibraryTest extends BuildViewTestCase {
     ConfiguredTarget protoTarget = getConfiguredTarget("//x/foo:banana");
     ProtoSourcesProvider sourcesProvider = protoTarget.getProvider(ProtoSourcesProvider.class);
 
-    assertThat(sourcesProvider.getDirectProtoSourceRoot()).isEqualTo("x/foo");
+    assertThat(sourcesProvider.getProtoSourceRoot()).isEqualTo("x/foo");
   }
 
   private Artifact getDescriptorOutput(String label) throws Exception {
