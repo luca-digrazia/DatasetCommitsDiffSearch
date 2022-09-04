@@ -159,6 +159,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   protected ListeningExecutorService executor;
   private RecursivePackageProviderBackedTargetPatternResolver resolver;
   protected final SkyKey universeKey;
+  private final ImmutableList<TargetPatternKey> universeTargetPatternKeys;
 
   public SkyQueryEnvironment(
       boolean keepGoing,
@@ -220,6 +221,9 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         this.blockUniverseEvaluationErrors
             ? new ErrorBlockingForwardingEventHandler(this.eventHandler)
             : this.eventHandler;
+    this.universeTargetPatternKeys =
+        PrepareDepsOfPatternsFunction.getTargetPatternKeys(
+            PrepareDepsOfPatternsFunction.getSkyKeys(universeKey, eventHandler));
     // In #getAllowedDeps we have special treatment of deps entailed by the `visibility` attribute.
     // Since this attribute is of the NODEP type, that means we need a special implementation of
     // NO_NODEP_DEPS.
@@ -261,10 +265,7 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       blacklistPatternsSupplier = MemoizingInterruptibleSupplier.of(new BlacklistSupplier(graph));
       graphBackedRecursivePackageProvider =
           new GraphBackedRecursivePackageProvider(
-              graph,
-              getTargetPatternsForUniverse(),
-              pkgPath,
-              new TraversalInfoRootPackageExtractor());
+              graph, universeTargetPatternKeys, pkgPath, new TraversalInfoRootPackageExtractor());
     }
 
     if (executor == null) {
@@ -283,15 +284,6 @@ public class SkyQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
             eventHandler,
             FilteringPolicies.NO_FILTER,
             packageSemaphore);
-  }
-
-  /** Returns the TargetPatterns corresponding to {@link #universeKey}. */
-  protected ImmutableList<TargetPattern> getTargetPatternsForUniverse() {
-    return ImmutableList.copyOf(
-        Iterables.transform(
-            PrepareDepsOfPatternsFunction.getTargetPatternKeys(
-                PrepareDepsOfPatternsFunction.getSkyKeys(universeKey, eventHandler)),
-            TargetPatternKey::getParsedPattern));
   }
 
   /**
