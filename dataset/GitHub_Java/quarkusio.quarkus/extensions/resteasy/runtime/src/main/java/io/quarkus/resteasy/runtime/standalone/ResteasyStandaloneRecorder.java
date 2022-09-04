@@ -7,6 +7,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+import org.jboss.logging.Logger;
 import org.jboss.resteasy.spi.ResteasyDeployment;
 
 import io.netty.buffer.ByteBuf;
@@ -28,6 +29,7 @@ import io.vertx.ext.web.handler.StaticHandler;
 @Recorder
 public class ResteasyStandaloneRecorder {
 
+    private static final Logger log = Logger.getLogger("io.quarkus.resteasy");
     public static final String META_INF_RESOURCES = "META-INF/resources";
 
     /**
@@ -88,10 +90,10 @@ public class ResteasyStandaloneRecorder {
         contextPath = path;
     }
 
-    public Consumer<Route> start(RuntimeValue<Vertx> vertx,
+    public Consumer<Route> start(RuntimeValue<Vertx> vertxValue,
             ShutdownContext shutdown,
             BeanContainer beanContainer,
-            boolean isVirtual, boolean isDefaultResourcesPath) {
+            boolean isVirtual) {
 
         shutdown.addShutdownTask(new Runnable() {
             @Override
@@ -101,6 +103,7 @@ public class ResteasyStandaloneRecorder {
                 }
             }
         });
+        Vertx vertx = vertxValue.getValue();
         useDirect = !isVirtual;
         List<Handler<RoutingContext>> handlers = new ArrayList<>();
 
@@ -144,8 +147,10 @@ public class ResteasyStandaloneRecorder {
             });
         }
 
-        if (deployment != null && isDefaultResourcesPath) {
-            handlers.add(vertxRequestHandler(vertx, beanContainer));
+        if (deployment != null) {
+            VertxRequestHandler requestHandler = new VertxRequestHandler(vertx, beanContainer, deployment, contextPath,
+                    ALLOCATOR);
+            handlers.add(requestHandler);
         }
         return new Consumer<Route>() {
 
@@ -156,14 +161,6 @@ public class ResteasyStandaloneRecorder {
                 }
             }
         };
-    }
-
-    public Handler<RoutingContext> vertxRequestHandler(RuntimeValue<Vertx> vertx,
-            BeanContainer beanContainer) {
-        if (deployment != null) {
-            return new VertxRequestHandler(vertx.getValue(), beanContainer, deployment, contextPath, ALLOCATOR);
-        }
-        return null;
     }
 
 }
