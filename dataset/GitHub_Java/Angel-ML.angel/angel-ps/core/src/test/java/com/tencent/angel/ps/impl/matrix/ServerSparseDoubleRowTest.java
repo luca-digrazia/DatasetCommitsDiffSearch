@@ -16,6 +16,7 @@
 
 package com.tencent.angel.ps.impl.matrix;
 
+import com.tencent.angel.ml.matrix.RowType;
 import com.tencent.angel.protobuf.generated.MLProtos;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -29,7 +30,7 @@ import org.junit.Test;
 
 import java.io.*;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
 
 public class ServerSparseDoubleRowTest {
   private final static Log LOG = LogFactory.getLog(ServerSparseDoubleRowTest.class);
@@ -47,7 +48,7 @@ public class ServerSparseDoubleRowTest {
     rowId = 0;
     startCol = 0;
     endCol = 3;
-    serverSparseDoubleRow = new ServerSparseDoubleRow(rowId, startCol, endCol);
+    serverSparseDoubleRow = new ServerSparseDoubleRow(rowId, startCol, endCol, 0);
   }
 
   @After
@@ -59,17 +60,16 @@ public class ServerSparseDoubleRowTest {
 
   @Test
   public void testWriteTo() throws Exception {
-    ByteBuf buf = Unpooled.buffer(16);
+    ByteBuf buf = Unpooled.buffer(4 + 8 * 3);
+    buf.writeInt(3);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(2.00);
-    serverSparseDoubleRow.update(MLProtos.RowType.T_DOUBLE_DENSE, buf, 3);
-    serverSparseDoubleRow.setClock(10);
+    serverSparseDoubleRow.update(RowType.T_DOUBLE_DENSE, buf);
     DataOutputStream out = new DataOutputStream(new FileOutputStream("data"));
     serverSparseDoubleRow.writeTo(out);
     out.close();
     DataInputStream in = new DataInputStream(new FileInputStream("data"));
-    assertEquals(in.readInt(), 10);
     assertEquals(in.readInt(), 3);
     Int2DoubleOpenHashMap hashMap = new Int2DoubleOpenHashMap();
     hashMap.addTo(0, 0.00);
@@ -80,21 +80,21 @@ public class ServerSparseDoubleRowTest {
 
   @Test
   public void testReadFrom() throws Exception {
-    ByteBuf buf = Unpooled.buffer(16);
+    ByteBuf buf = Unpooled.buffer(4 + 8 * 3);
+    buf.writeInt(3);
     buf.writeDouble(10.00);
     buf.writeDouble(11.00);
     buf.writeDouble(12.00);
-    serverSparseDoubleRow.update(MLProtos.RowType.T_DOUBLE_DENSE, buf, 3);
-    serverSparseDoubleRow.setClock(9);
+    serverSparseDoubleRow.update(RowType.T_DOUBLE_DENSE, buf);
     DataOutputStream out = new DataOutputStream(new FileOutputStream("data"));
     serverSparseDoubleRow.writeTo(out);
     out.close();
     DataInputStream in = new DataInputStream(new FileInputStream("data"));
     ServerSparseDoubleRow newServerSparseDoubleRow =
-        new ServerSparseDoubleRow(rowId, startCol, endCol);
+        new ServerSparseDoubleRow(rowId, startCol, endCol, 0);
     newServerSparseDoubleRow.readFrom(in);
     in.close();
-    assertEquals(newServerSparseDoubleRow.getClock(), 9);
+
     assertEquals(newServerSparseDoubleRow.getData().get(0), serverSparseDoubleRow.getData().get(0),
         0.00);
     assertEquals(newServerSparseDoubleRow.getData().get(1), serverSparseDoubleRow.getData().get(1),
@@ -106,31 +106,33 @@ public class ServerSparseDoubleRowTest {
 
   @Test
   public void testGetRowType() throws Exception {
-    assertEquals(serverSparseDoubleRow.getRowType(), MLProtos.RowType.T_DOUBLE_SPARSE);
+    assertEquals(serverSparseDoubleRow.getRowType(), RowType.T_DOUBLE_SPARSE);
   }
 
   @Test
   public void testUpdate() throws Exception {
-    serverSparseDoubleRow = new ServerSparseDoubleRow(rowId, startCol, endCol);
-    ByteBuf buf = Unpooled.buffer(16);
+    serverSparseDoubleRow = new ServerSparseDoubleRow(rowId, startCol, endCol, 0);
+    ByteBuf buf = Unpooled.buffer(4 + 8 * 3);
+    buf.writeInt(3);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(-1.00);
-    double newValue0 = buf.getDouble(0) + serverSparseDoubleRow.getData().get(0);
-    double newValue1 = buf.getDouble(8) + serverSparseDoubleRow.getData().get(1);
-    serverSparseDoubleRow.update(MLProtos.RowType.T_DOUBLE_DENSE, buf, 3);
+    double newValue0 = buf.getDouble(4) + serverSparseDoubleRow.getData().get(0);
+    double newValue1 = buf.getDouble(12) + serverSparseDoubleRow.getData().get(1);
+    serverSparseDoubleRow.update(RowType.T_DOUBLE_DENSE, buf);
     assertEquals(serverSparseDoubleRow.getData().get(0), newValue0, 0.000);
     assertEquals(serverSparseDoubleRow.getData().get(1), newValue1, 0.000);
     assertEquals(serverSparseDoubleRow.getData().get(2), -1, 0.000);
 
-    serverSparseDoubleRow = new ServerSparseDoubleRow(rowId, startCol, endCol);
-    buf = Unpooled.buffer(0);
+    serverSparseDoubleRow = new ServerSparseDoubleRow(rowId, startCol, endCol, 0);
+    buf = Unpooled.buffer(4 + 2 * 12);
+    buf.writeInt(2);
     LOG.info(buf);
     buf.writeInt(0);
-    buf.writeInt(2);
     buf.writeDouble(1.00);
+    buf.writeInt(2);
     buf.writeDouble(-2.00);
-    serverSparseDoubleRow.update(MLProtos.RowType.T_DOUBLE_SPARSE, buf, 2);
+    serverSparseDoubleRow.update(RowType.T_DOUBLE_SPARSE, buf);
     assertEquals(serverSparseDoubleRow.getData().get(0), 1, 0.000);
     assertEquals(serverSparseDoubleRow.getData().get(1), 0, 0.000);
     assertEquals(serverSparseDoubleRow.getData().get(2), -2, 0.000);
@@ -138,17 +140,18 @@ public class ServerSparseDoubleRowTest {
 
   @Test
   public void testSerialize() throws Exception {
-    ByteBuf buf = Unpooled.buffer(16);
+    ByteBuf buf = Unpooled.buffer(4 + 8 * 3);
+    buf.writeInt(3);
     serverSparseDoubleRow.setClock(8);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(-1.00);
-    serverSparseDoubleRow.update(MLProtos.RowType.T_DOUBLE_DENSE, buf, 3);
+    serverSparseDoubleRow.update(RowType.T_DOUBLE_DENSE, buf);
     serverSparseDoubleRow.serialize(buf);
     assertEquals(serverSparseDoubleRow.getRowId(), buf.readInt());
     assertEquals(serverSparseDoubleRow.getClock(), buf.readInt());
-    assertEquals(serverSparseDoubleRow.getStartCol(), buf.readInt());
-    assertEquals(serverSparseDoubleRow.getEndCol(), buf.readInt());
+    assertEquals(serverSparseDoubleRow.getStartCol(), buf.readLong());
+    assertEquals(serverSparseDoubleRow.getEndCol(), buf.readLong());
     assertEquals(serverSparseDoubleRow.getRowVersion(), buf.readInt());
     assertEquals(3, buf.readInt());
   }
@@ -158,8 +161,8 @@ public class ServerSparseDoubleRowTest {
     ByteBuf buf = Unpooled.buffer(16);
     buf.writeInt(0);
     buf.writeInt(1);
-    buf.writeInt(2);
-    buf.writeInt(3);
+    buf.writeLong(2);
+    buf.writeLong(3);
     buf.writeInt(4);
     buf.writeInt(3);
     buf.writeInt(0);
@@ -182,13 +185,14 @@ public class ServerSparseDoubleRowTest {
 
   @Test
   public void testBufferLen() throws Exception {
-    ByteBuf buf = Unpooled.buffer(16);
+    ByteBuf buf = Unpooled.buffer(4 + 8 * 3);
+    buf.writeInt(3);
     serverSparseDoubleRow.setClock(8);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(-1.00);
-    serverSparseDoubleRow.update(MLProtos.RowType.T_DOUBLE_DENSE, buf, 3);
-    assertEquals(serverSparseDoubleRow.bufferLen(), 20 + 4 + 3 * 12);
+    serverSparseDoubleRow.update(RowType.T_DOUBLE_DENSE, buf);
+    assertEquals(serverSparseDoubleRow.bufferLen(), 28 + 4 + 3 * 12);
   }
 
   @Test
@@ -203,12 +207,13 @@ public class ServerSparseDoubleRowTest {
 
   @Test
   public void testMergeTo() throws Exception {
-    ByteBuf buf = Unpooled.buffer(16);
+    ByteBuf buf = Unpooled.buffer(4 + 8 * 3);
+    buf.writeInt(3);
     serverSparseDoubleRow.setClock(8);
     buf.writeDouble(0.00);
     buf.writeDouble(1.00);
     buf.writeDouble(-1.00);
-    serverSparseDoubleRow.update(MLProtos.RowType.T_DOUBLE_DENSE, buf, 3);
+    serverSparseDoubleRow.update(RowType.T_DOUBLE_DENSE, buf);
     int[] index = new int[3];
     double[] value = new double[3];
     serverSparseDoubleRow.mergeTo(index, value, 0, 3);
