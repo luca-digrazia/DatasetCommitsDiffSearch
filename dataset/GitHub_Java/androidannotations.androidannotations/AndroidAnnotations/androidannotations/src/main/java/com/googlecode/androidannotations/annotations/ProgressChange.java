@@ -23,7 +23,7 @@ import java.lang.annotation.Target;
 /**
  * This annotation is intended to be used on methods to receive events defined
  * by
- * {@link android.widget.SeekBar.OnSeekBarChangeListener#onProgressChanged(android.widget.SeekBar, int, boolean)}
+ * {@link android.text.TextWatcher#onTextChanged(CharSequence s, int start, int before, int count)}
  * when the progress level of a SeekBar has changed.
  * 
  * The annotation value should be one or several R.id.* fields that refers to an
@@ -32,14 +32,13 @@ import java.lang.annotation.Target;
  * 
  * The method may have multiple parameter :
  * <ul>
- * <li>A {@link android.widget.SeekBar} parameter to determine which view has
- * targeted this event
+ * <li>A android.widget.SeekBar parameter to determine which view has targeted
+ * this event (this parameter is mandatory)
  * <li>An int parameter named progress to get the progress level of the SeekBar
+ * (this parameter is optional)
  * <li>A boolean parameter named fromUser to determine if this event is
- * triggered by the user
+ * triggered by the user (this parameter is optional)
  * </ul>
- * 
- * All of those parameters are optional.
  * 
  * Some usage examples of &#064;ProgressChange annotation: <blockquote>
  * 
@@ -69,16 +68,6 @@ import java.lang.annotation.Target;
  * </pre>
  * 
  * </blockquote> <blockquote>
- * 
- * <pre>
- * &#064;ProgressChange(<b>{R.id.seekBar1, R.id.seekBar2}</b>)
- * void onProgressChangeOnSeekBar() {
- * 	// Something Here
- * }
- * </pre>
- * 
- * </blockquote> <blockquote>
- * 
  */
 @Retention(RetentionPolicy.CLASS)
 @Target(ElementType.METHOD)
