@@ -674,7 +674,7 @@ class OptionsParserImpl {
     Option option = field == null ? null : field.getAnnotation(Option.class);
 
     if (option == null
-        || option.optionUsageRestrictions() == OptionUsageRestrictions.INTERNAL) {
+        || OptionsParser.documentationLevel(option) == OptionUsageRestrictions.INTERNAL) {
       // This also covers internal options, which are treated as if they did not exist.
       throw new OptionsParsingException("Unrecognized option: " + arg, arg);
     }
