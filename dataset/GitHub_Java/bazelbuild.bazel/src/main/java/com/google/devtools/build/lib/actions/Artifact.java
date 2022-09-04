@@ -27,27 +27,22 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanType;
-import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.EvalUtils.ComparisonException;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.CodedOutputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -101,11 +96,22 @@ import javax.annotation.Nullable;
  * </ul>
  */
 @Immutable
+@SkylarkModule(
+  name = "File",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "This object is created during the analysis phase to represent a file or directory that "
+          + "will be read or written during the execution phase. It is not an open file handle, "
+          + "and cannot be used to directly read or write file contents. Rather, you use it to "
+          + "construct the action graph in a rule implementation function by passing it to "
+          + "action-creating functions. See the "
+          + "<a href='../rules.$DOC_EXT#files'>Rules page</a> for more information."
+)
 @AutoCodec
 public class Artifact
     implements FileType.HasFileType,
         ActionInput,
-        FileApi,
+        SkylarkValue,
         Comparable<Object>,
         CommandLineItem {
 
@@ -228,7 +234,7 @@ public class Artifact
       throw new IllegalArgumentException(
           "it is illegal to create an artifact with an empty execPath");
     }
-    this.hashCode = execPath.hashCode() + this.getClass().hashCode() * 13;
+    this.hashCode = execPath.hashCode();
     this.root = root;
     this.execPath = execPath;
     this.rootRelativePath = rootRelativePath;
@@ -298,7 +304,9 @@ public class Artifact
    *
    * <p> The directory name is always a relative path to the execution directory.
    */
-  @Override
+  @SkylarkCallable(name = "dirname", structField = true,
+      doc = "The name of the directory containing this file. It's taken from "
+          + "<a href=\"#path\">path</a> and is always relative to the execution directory.")
   public final String getDirname() {
     PathFragment parent = getExecPath().getParentDirectory();
     return (parent == null) ? "/" : parent.getSafePathString();
@@ -307,12 +315,13 @@ public class Artifact
   /**
    * Returns the base file name of this artifact, similar to basename(1).
    */
-  @Override
+  @SkylarkCallable(name = "basename", structField = true,
+      doc = "The base name of this file. This is the name of the file inside the directory.")
   public final String getFilename() {
     return getExecPath().getBaseName();
   }
 
-  @Override
+  @SkylarkCallable(name = "extension", structField = true, doc = "The file extension of this file.")
   public final String getExtension() {
     return getExecPath().getFileExtension();
   }
@@ -362,7 +371,9 @@ public class Artifact
     return owner;
   }
 
-  @Override
+  @SkylarkCallable(name = "owner", structField = true, allowReturnNones = true,
+    doc = "A label of a target that produces this File."
+  )
   public Label getOwnerLabel() {
     return owner.getLabel();
   }
@@ -372,7 +383,11 @@ public class Artifact
    * package-path entries (for source Artifacts), or one of the bin, genfiles or includes dirs (for
    * derived Artifacts). It will always be an ancestor of getPath().
    */
-  @Override
+  @SkylarkCallable(
+    name = "root",
+    structField = true,
+    doc = "The root beneath which this file resides."
+  )
   public final ArtifactRoot getRoot() {
     return root;
   }
@@ -397,7 +412,11 @@ public class Artifact
    * Note that this will report all Artifacts in the output tree, including in the include symlink
    * tree, as non-source.
    */
-  @Override
+  @SkylarkCallable(
+    name = "is_source",
+    structField = true,
+    doc = "Returns true if this is a source file, i.e. it is not generated."
+  )
   public final boolean isSourceArtifact() {
     return root.isSourceRoot();
   }
@@ -413,7 +432,7 @@ public class Artifact
    * Returns true iff this is a TreeArtifact representing a directory tree containing Artifacts.
    */
   // TODO(rduan): Document this Skylark method once TreeArtifact is no longer experimental.
-  @Override
+  @SkylarkCallable(name = "is_directory", structField = true, documented = false)
   public boolean isTreeArtifact() {
     return false;
   }
@@ -445,9 +464,10 @@ public class Artifact
    *
    * TODO(shahan): move {@link Artifact#getPath} to this subclass.
    * */
+  @AutoCodec
   public static final class SourceArtifact extends Artifact {
-    @VisibleForTesting
-    public SourceArtifact(ArtifactRoot root, PathFragment execPath, ArtifactOwner owner) {
+    @AutoCodec.VisibleForSerialization
+    SourceArtifact(ArtifactRoot root, PathFragment execPath, ArtifactOwner owner) {
       super(root, execPath, owner);
     }
 
@@ -606,7 +626,14 @@ public class Artifact
     return relativePath;
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "short_path",
+      structField = true,
+      doc =
+          "The path of this file relative to its root. This excludes the aforementioned "
+              + "<i>root</i>, i.e. configuration-specific fragments of the path. This is also the "
+              + "path under which the file is mapped if it's in the runfiles of a binary."
+  )
   public final String getRunfilesPathString() {
     return getRunfilesPath().getPathString();
   }
@@ -615,6 +642,20 @@ public class Artifact
    * Returns this.getExecPath().getPathString().
    */
   @Override
+  @SkylarkCallable(
+    name = "path",
+    structField = true,
+    doc =
+        "The execution path of this file, relative to the workspace's execution directory. It "
+            + "consists of two parts, an optional first part called the <i>root</i> (see also the "
+            + "<a href=\"root.html\">root</a> module), and the second part which is the "
+            + "<code>short_path</code>. The root may be empty, which it usually is for "
+            + "non-generated files. For generated files it usually contains a "
+            + "configuration-specific path fragment that encodes things like the target CPU "
+            + "architecture that was used while building said file. Use the "
+            + "<code>short_path</code> for the path under which the file is mapped if it's in the "
+            + "runfiles of a binary."
+  )
   public final String getExecPathString() {
     return getExecPath().getPathString();
   }
@@ -639,9 +680,6 @@ public class Artifact
   @Override
   public final boolean equals(Object other) {
     if (!(other instanceof Artifact)) {
-      return false;
-    }
-    if (!getClass().equals(other.getClass())) {
       return false;
     }
     // We don't bother to check root in the equivalence relation, because we
@@ -697,37 +735,6 @@ public class Artifact
       // TODO(blaze-team): this is misleading beacuse execution_root isn't unique. Dig the
       // workspace name out and print that also.
       return "[[<execution_root>]" + root.getExecPath() + "]" + rootRelativePath;
-    }
-  }
-
-  /** {@link ObjectCodec} for {@link SourceArtifact} */
-  private static class SourceArtifactCodec implements ObjectCodec<SourceArtifact> {
-
-    @Override
-    public Class<? extends SourceArtifact> getEncodedClass() {
-      return SourceArtifact.class;
-    }
-
-    @Override
-    public void serialize(
-        SerializationContext context, SourceArtifact obj, CodedOutputStream codedOut)
-        throws SerializationException, IOException {
-      context.serialize(obj.getExecPath(), codedOut);
-      context.serialize(obj.getRoot(), codedOut);
-      context.serialize(obj.getArtifactOwner(), codedOut);
-    }
-
-    @Override
-    public SourceArtifact deserialize(DeserializationContext context, CodedInputStream codedIn)
-        throws SerializationException, IOException {
-      PathFragment execPath = context.deserialize(codedIn);
-      ArtifactRoot artifactRoot = context.deserialize(codedIn);
-      ArtifactOwner owner = context.deserialize(codedIn);
-      return (SourceArtifact)
-          context
-              .getDependency(ArtifactResolverSupplier.class)
-              .get()
-              .getSourceArtifact(execPath, artifactRoot.getRoot(), owner);
     }
   }
 
