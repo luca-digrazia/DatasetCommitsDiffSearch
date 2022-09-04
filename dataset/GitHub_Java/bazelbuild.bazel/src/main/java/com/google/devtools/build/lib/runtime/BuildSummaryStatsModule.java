@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.actions.ActionResultReceivedEvent;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.ExecutionStartingEvent;
-import com.google.devtools.build.lib.buildtool.buildevent.ProfilerStartedEvent;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
@@ -32,8 +31,6 @@ import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.ExecutionFinishedEvent;
-import com.google.devtools.build.lib.vfs.Path;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -57,7 +54,6 @@ public class BuildSummaryStatsModule extends BlazeModule {
   private long executionStartMillis;
   private long executionEndMillis;
   private SpawnStats spawnStats;
-  private Path profilePath;
 
   @Override
   public void beforeCommand(CommandEnvironment env) {
@@ -90,11 +86,6 @@ public class BuildSummaryStatsModule extends BlazeModule {
       criticalPathComputer = new CriticalPathComputer(actionKeyContext, BlazeClock.instance());
       eventBus.register(criticalPathComputer);
     }
-  }
-
-  @Subscribe
-  public void profileStarting(ProfilerStartedEvent event) {
-    this.profilePath = event.getProfilePath();
   }
 
   @Subscribe
@@ -146,20 +137,6 @@ public class BuildSummaryStatsModule extends BlazeModule {
           }
         }
       }
-      if (profilePath != null) {
-        // This leads to missing the afterCommand profiles of the other modules in the profile.
-        // Since the BEP currently shuts down at the BuildCompleteEvent, we cannot just move posting
-        // the BuildToolLogs to afterCommand of this module.
-        try {
-          Profiler.instance().stop();
-          event
-              .getResult()
-              .getBuildToolLogCollection()
-              .addLocalFile(profilePath.getBaseName(), profilePath);
-        } catch (IOException e) {
-          reporter.handle(Event.error("Error while writing profile file: " + e.getMessage()));
-        }
-      }
 
       String spawnSummary = spawnStats.getSummary();
       if (statsSummary) {
@@ -190,7 +167,6 @@ public class BuildSummaryStatsModule extends BlazeModule {
           .addDirectValue("process stats", spawnSummary.getBytes(StandardCharsets.UTF_8));
     } finally {
       criticalPathComputer = null;
-      profilePath = null;
     }
   }
 }
