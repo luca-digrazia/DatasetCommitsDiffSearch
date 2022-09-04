@@ -27,11 +27,8 @@ import com.mongodb.event.ConnectionPoolListener;
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.BeanContainerBuildItem;
 import io.quarkus.arc.deployment.BeanDefiningAnnotationBuildItem;
-import io.quarkus.arc.deployment.BeanRegistrationPhaseBuildItem;
 import io.quarkus.arc.deployment.SyntheticBeanBuildItem;
-import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.DotNames;
-import io.quarkus.arc.processor.InjectionPointInfo;
 import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
@@ -55,13 +52,11 @@ import io.quarkus.mongodb.runtime.MongodbConfig;
 import io.quarkus.smallrye.health.deployment.spi.HealthBuildItem;
 
 public class MongoClientProcessor {
-    private static final DotName MONGO_CLIENT_ANNOTATION = DotName.createSimple(MongoClientName.class.getName());
-    private static final DotName MONGO_CLIENT = DotName.createSimple(MongoClient.class.getName());
-    private static final DotName REACTIVE_MONGO_CLIENT = DotName.createSimple(ReactiveMongoClient.class.getName());
+    private static final DotName MONGOCLIENT_ANNOTATION = DotName.createSimple(MongoClientName.class.getName());
 
     @BuildStep
     BeanDefiningAnnotationBuildItem registerConnectionBean() {
-        return new BeanDefiningAnnotationBuildItem(MONGO_CLIENT_ANNOTATION);
+        return new BeanDefiningAnnotationBuildItem(MONGOCLIENT_ANNOTATION);
     }
 
     @BuildStep
@@ -99,7 +94,7 @@ public class MongoClientProcessor {
             BuildProducer<MongoClientNameBuildItem> mongoClientName) {
         Set<String> values = new HashSet<>();
         IndexView indexView = applicationArchivesBuildItem.getRootArchive().getIndex();
-        Collection<AnnotationInstance> mongoClientAnnotations = indexView.getAnnotations(MONGO_CLIENT_ANNOTATION);
+        Collection<AnnotationInstance> mongoClientAnnotations = indexView.getAnnotations(MONGOCLIENT_ANNOTATION);
         for (AnnotationInstance annotation : mongoClientAnnotations) {
             values.add(annotation.value().asString());
         }
@@ -168,62 +163,32 @@ public class MongoClientProcessor {
     @Record(ExecutionTime.RUNTIME_INIT)
     @BuildStep
     void generateClientBeans(MongoClientRecorder recorder,
-            BeanRegistrationPhaseBuildItem registrationPhase,
             List<MongoClientNameBuildItem> mongoClientNames,
-            MongoClientBuildTimeConfig mongoClientBuildTimeConfig,
             MongodbConfig mongodbConfig,
-            List<MongoUnremovableClientsBuildItem> mongoUnremovableClientsBuildItem,
+            Optional<MongoUnremovableClientsBuildItem> mongoUnremovableClientsBuildItem,
             BuildProducer<SyntheticBeanBuildItem> syntheticBeanBuildItemBuildProducer) {
 
-        boolean makeUnremovable = !mongoUnremovableClientsBuildItem.isEmpty();
+        boolean makeUnremovable = mongoUnremovableClientsBuildItem.isPresent();
 
-        boolean createDefaultBlockingMongoClient = false;
-        boolean createDefaultReactiveMongoClient = false;
-        if (makeUnremovable || mongoClientBuildTimeConfig.forceDefaultClients) {
-            // all clients are expected to exist in this case
-            createDefaultBlockingMongoClient = true;
-            createDefaultReactiveMongoClient = true;
-        } else {
-            // we only create the default client if they are actually used by injection points
-            for (InjectionPointInfo injectionPoint : registrationPhase.getContext().get(BuildExtension.Key.INJECTION_POINTS)) {
-                DotName injectionPointType = injectionPoint.getRequiredType().name();
-                if (injectionPointType.equals(MONGO_CLIENT) && injectionPoint.hasDefaultedQualifier()) {
-                    createDefaultBlockingMongoClient = true;
-                } else if (injectionPointType.equals(REACTIVE_MONGO_CLIENT) && injectionPoint.hasDefaultedQualifier()) {
-                    createDefaultReactiveMongoClient = true;
-                }
-
-                if (createDefaultBlockingMongoClient && createDefaultReactiveMongoClient) {
-                    break;
-                }
-            }
-        }
-
-        if (createDefaultBlockingMongoClient) {
-            syntheticBeanBuildItemBuildProducer.produce(createBlockingSyntheticBean(recorder, mongodbConfig,
-                    makeUnremovable || mongoClientBuildTimeConfig.forceDefaultClients,
-                    MongoClientBeanUtil.DEFAULT_MONGOCLIENT_NAME, false));
-        }
-        if (createDefaultReactiveMongoClient) {
-            syntheticBeanBuildItemBuildProducer.produce(createReactiveSyntheticBean(recorder, mongodbConfig,
-                    makeUnremovable || mongoClientBuildTimeConfig.forceDefaultClients,
-                    MongoClientBeanUtil.DEFAULT_MONGOCLIENT_NAME, false));
-        }
+        // default blocking client
+        syntheticBeanBuildItemBuildProducer.produce(createBlockingSyntheticBean(recorder, mongodbConfig, makeUnremovable,
+                MongoClientBeanUtil.DEFAULT_MONGOCLIENT_NAME));
+        // default reactive client
+        syntheticBeanBuildItemBuildProducer.produce(createReactiveSyntheticBean(recorder, mongodbConfig, makeUnremovable,
+                MongoClientBeanUtil.DEFAULT_MONGOCLIENT_NAME));
 
         for (MongoClientNameBuildItem mongoClientName : mongoClientNames) {
             // named blocking client
             syntheticBeanBuildItemBuildProducer
-                    .produce(createBlockingSyntheticBean(recorder, mongodbConfig, makeUnremovable, mongoClientName.getName(),
-                            mongoClientName.isAddQualifier()));
+                    .produce(createBlockingSyntheticBean(recorder, mongodbConfig, makeUnremovable, mongoClientName.getName()));
             // named reactive client
             syntheticBeanBuildItemBuildProducer
-                    .produce(createReactiveSyntheticBean(recorder, mongodbConfig, makeUnremovable, mongoClientName.getName(),
-                            mongoClientName.isAddQualifier()));
+                    .produce(createReactiveSyntheticBean(recorder, mongodbConfig, makeUnremovable, mongoClientName.getName()));
         }
     }
 
     private SyntheticBeanBuildItem createBlockingSyntheticBean(MongoClientRecorder recorder, MongodbConfig mongodbConfig,
-            boolean makeUnremovable, String clientName, boolean addMongoClientQualifier) {
+            boolean makeUnremovable, String clientName) {
 
         SyntheticBeanBuildItem.ExtendedBeanConfigurator configurator = SyntheticBeanBuildItem
                 .configure(MongoClient.class)
@@ -233,11 +198,11 @@ public class MongoClientProcessor {
                 .supplier(recorder.mongoClientSupplier(clientName, mongodbConfig))
                 .setRuntimeInit();
 
-        return applyCommonBeanConfig(makeUnremovable, clientName, addMongoClientQualifier, configurator);
+        return applyCommonBeanConfig(makeUnremovable, clientName, configurator);
     }
 
     private SyntheticBeanBuildItem createReactiveSyntheticBean(MongoClientRecorder recorder, MongodbConfig mongodbConfig,
-            boolean makeUnremovable, String clientName, boolean addMongoClientQualifier) {
+            boolean makeUnremovable, String clientName) {
 
         SyntheticBeanBuildItem.ExtendedBeanConfigurator configurator = SyntheticBeanBuildItem
                 .configure(ReactiveMongoClient.class)
@@ -247,11 +212,11 @@ public class MongoClientProcessor {
                 .supplier(recorder.reactiveMongoClientSupplier(clientName, mongodbConfig))
                 .setRuntimeInit();
 
-        return applyCommonBeanConfig(makeUnremovable, clientName, addMongoClientQualifier, configurator);
+        return applyCommonBeanConfig(makeUnremovable, clientName, configurator);
     }
 
     private SyntheticBeanBuildItem applyCommonBeanConfig(boolean makeUnremovable, String clientName,
-            boolean addMongoClientQualifier, SyntheticBeanBuildItem.ExtendedBeanConfigurator configurator) {
+            SyntheticBeanBuildItem.ExtendedBeanConfigurator configurator) {
         if (makeUnremovable) {
             configurator.unremovable();
         }
@@ -261,9 +226,7 @@ public class MongoClientProcessor {
         } else {
             String namedQualifier = MongoClientBeanUtil.namedQualifier(clientName, false);
             configurator.addQualifier().annotation(DotNames.NAMED).addValue("value", namedQualifier).done();
-            if (addMongoClientQualifier) {
-                configurator.addQualifier().annotation(MONGO_CLIENT_ANNOTATION).addValue("value", clientName).done();
-            }
+            configurator.addQualifier().annotation(MONGOCLIENT_ANNOTATION).addValue("value", clientName).done();
         }
         return configurator.done();
     }
