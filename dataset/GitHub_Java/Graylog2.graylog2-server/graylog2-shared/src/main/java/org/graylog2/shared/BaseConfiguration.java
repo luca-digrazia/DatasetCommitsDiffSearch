@@ -20,12 +20,14 @@
 package org.graylog2.shared;
 
 import com.github.joschi.jadconfig.Parameter;
+import com.github.joschi.jadconfig.validators.InetPortValidator;
 import com.github.joschi.jadconfig.validators.PositiveIntegerValidator;
 import com.lmax.disruptor.*;
 import org.graylog2.plugin.Tools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetAddress;
 import java.net.URI;
 
 /**
@@ -43,20 +45,23 @@ public abstract class BaseConfiguration {
     @Parameter(value = "processor_wait_strategy", required = true)
     private String processorWaitStrategy = "blocking";
 
-    @Parameter(value = "rest_enable_cors", required = false)
+    @Parameter(value = "rest_enable_cors")
     private boolean restEnableCors = false;
 
-    @Parameter(value = "rest_enable_gzip", required = false)
+    @Parameter(value = "rest_enable_gzip")
     private boolean restEnableGzip = false;
 
-    @Parameter(value = "groovy_shell_enable", required = false)
+    @Parameter(value = "groovy_shell_enable")
     private boolean groovyShellEnable = false;
 
-    @Parameter(value = "groovy_shell_port", required = false)
+    @Parameter(value = "groovy_shell_port", validator = InetPortValidator.class)
     private int groovyShellPort = 6789;
 
-    @Parameter(value = "plugin_dir", required = false)
+    @Parameter(value = "plugin_dir")
     private String pluginDir = "plugin";
+
+    @Parameter(value = "async_eventbus_processors")
+    private int asyncEventbusProcessors = 2;
 
     public URI getRestTransportUri() {
         if (restTransportUri == null || restTransportUri.isEmpty()) {
@@ -71,20 +76,23 @@ public abstract class BaseConfiguration {
     }
 
     public URI getDefaultRestTransportUri() {
-        URI transportUri;
-        URI listenUri = getRestListenUri();
+        final URI transportUri;
+        final URI listenUri = getRestListenUri();
 
         if (listenUri.getHost().equals("0.0.0.0")) {
-            String guessedIf;
+            final InetAddress guessedAddress;
             try {
-                guessedIf = Tools.guessPrimaryNetworkAddress().getHostAddress();
+                guessedAddress = Tools.guessPrimaryNetworkAddress();
+
+                if(guessedAddress.isLoopbackAddress()) {
+                    LOG.debug("Using loopback address {}", guessedAddress);
+                }
             } catch (Exception e) {
                 LOG.error("Could not guess primary network address for rest_transport_uri. Please configure it in your graylog2.conf.", e);
-                throw new RuntimeException("No rest_transport_uri.");
+                throw new RuntimeException("No rest_transport_uri.", e);
             }
 
-            String transportStr = "http://" + guessedIf + ":" + listenUri.getPort();
-            transportUri = Tools.getUriStandard(transportStr);
+            transportUri = Tools.getUriStandard("http://" + guessedAddress.getHostAddress() + ":" + listenUri.getPort());
         } else {
             transportUri = listenUri;
         }
@@ -136,6 +144,10 @@ public abstract class BaseConfiguration {
 
     public String getPluginDir() {
         return pluginDir;
+    }
+
+    public int getAsyncEventbusProcessors() {
+        return asyncEventbusProcessors;
     }
 
     public abstract String getNodeIdFile();
