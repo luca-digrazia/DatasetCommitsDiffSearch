@@ -14,11 +14,14 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
+import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
-import com.google.devtools.build.lib.rules.apple.Platform;
+import com.google.devtools.build.lib.rules.apple.ApplePlatform;
+import com.google.devtools.build.lib.rules.apple.XcodeConfigProvider;
 
 /**
  * Support for registering actions using the Apple tool "lipo", which combines artifacts of
@@ -35,23 +38,35 @@ public class LipoSupport {
    * Registers an action to invoke "lipo" on all artifacts in {@code inputBinaries} to create the
    * {@code outputBinary} multi-architecture artifact, built for platform {@code platform}.
    *
+   * <p>If there is only one input binary given, since "lipo" is an expensive action, this will only
+   * symlink the output location to the input binary.
+   *
    * @return this object
    */
-  public LipoSupport registerCombineArchitecturesAction(NestedSet<Artifact> inputBinaries,
-      Artifact outputBinary, Platform platform) {
-
-    ruleContext.registerAction(ObjcRuleClasses.spawnAppleEnvActionBuilder(ruleContext, platform)
-        .setMnemonic("ObjcCombiningArchitectures")
-        .addTransitiveInputs(inputBinaries)
-        .addOutput(outputBinary)
-        .setExecutable(CompilationSupport.xcrunwrapper(ruleContext))
-        .setCommandLine(CustomCommandLine.builder()
-            .add(ObjcRuleClasses.LIPO)
-            .addExecPaths("-create", inputBinaries)
-            .addExecPath("-o", outputBinary)
-            .build())
-        .build(ruleContext));
-    
+  public LipoSupport registerCombineArchitecturesAction(
+      NestedSet<Artifact> inputBinaries, Artifact outputBinary, ApplePlatform platform) {
+    if (inputBinaries.toList().size() > 1) {
+      ruleContext.registerAction(
+          ObjcRuleClasses.spawnAppleEnvActionBuilder(
+                  XcodeConfigProvider.fromRuleContext(ruleContext), platform)
+              .setMnemonic("ObjcCombiningArchitectures")
+              .addTransitiveInputs(inputBinaries)
+              .addOutput(outputBinary)
+              .setExecutable(CompilationSupport.xcrunwrapper(ruleContext))
+              .addCommandLine(
+                  CustomCommandLine.builder()
+                      .add(ObjcRuleClasses.LIPO)
+                      .addExecPaths("-create", inputBinaries)
+                      .addExecPath("-o", outputBinary)
+                      .build())
+              .build(ruleContext));
+    } else {
+      ruleContext.registerAction(SymlinkAction.toArtifact(
+          ruleContext.getActionOwner(),
+          Iterables.getOnlyElement(inputBinaries),
+          outputBinary,
+          "Symlinking single-architecture binary"));
+    }
     return this;
   }
 }

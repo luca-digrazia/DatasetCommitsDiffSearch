@@ -73,11 +73,11 @@ public class CcToolchainProviderHelper {
    * Returns the profile name with the same file name as fdoProfile and an extension that matches
    * {@link FileType}.
    */
-  private static String getLLVMProfileFileName(FdoInputFile fdoProfile, FileType type) {
+  private static String getLLVMProfileFileName(PathFragment fdoProfile, FileType type) {
     if (type.matches(fdoProfile)) {
-      return fdoProfile.getBasename();
+      return fdoProfile.getBaseName();
     } else {
-      return FileSystemUtils.removeExtension(fdoProfile.getBasename())
+      return FileSystemUtils.removeExtension(fdoProfile.getBaseName())
           + type.getExtensions().get(0);
     }
   }
@@ -208,32 +208,13 @@ public class CcToolchainProviderHelper {
     return prefetchHintsArtifact;
   }
 
-  private static void symlinkTo(
-      RuleContext ruleContext,
-      Artifact symlink,
-      FdoInputFile fdoInputFile,
-      String progressMessage) {
-    if (fdoInputFile.getArtifact() != null) {
-      ruleContext.registerAction(
-          SymlinkAction.toArtifact(
-              ruleContext.getActionOwner(), fdoInputFile.getArtifact(), symlink, progressMessage));
-    } else {
-      ruleContext.registerAction(
-          SymlinkAction.toAbsolutePath(
-              ruleContext.getActionOwner(),
-              fdoInputFile.getAbsolutePath(),
-              symlink,
-              progressMessage));
-    }
-  }
-
   /*
    * This function checks the format of the input profile data and converts it to
    * the indexed format (.profdata) if necessary.
    */
   private static Artifact convertLLVMRawProfileToIndexed(
       CcToolchainAttributesProvider attributes,
-      FdoInputFile fdoProfile,
+      PathFragment fdoProfile,
       CppToolchainInfo toolchainInfo,
       RuleContext ruleContext) {
 
@@ -245,11 +226,11 @@ public class CcToolchainProviderHelper {
 
     // If the profile file is already in the desired format, symlink to it and return.
     if (CppFileTypes.LLVM_PROFILE.matches(fdoProfile)) {
-      symlinkTo(
-          ruleContext,
-          profileArtifact,
+      ruleContext.registerAction(SymlinkAction.toAbsolutePath(
+          ruleContext.getActionOwner(),
           fdoProfile,
-          "Symlinking LLVM Profile " + fdoProfile.getBasename());
+          profileArtifact,
+          "Symlinking LLVM Profile " + fdoProfile.getPathString()));
       return profileArtifact;
     }
 
@@ -276,12 +257,12 @@ public class CcToolchainProviderHelper {
       // Symlink to the zipped profile file to extract the contents.
       Artifact zipProfileArtifact =
           ruleContext.getUniqueDirectoryArtifact(
-              "fdo", fdoProfile.getBasename(), ruleContext.getBinOrGenfilesDirectory());
-      symlinkTo(
-          ruleContext,
-          zipProfileArtifact,
+              "fdo", fdoProfile.getBaseName(), ruleContext.getBinOrGenfilesDirectory());
+      ruleContext.registerAction(SymlinkAction.toAbsolutePath(
+          ruleContext.getActionOwner(),
           fdoProfile,
-          "Symlinking LLVM ZIP Profile " + fdoProfile.getBasename());
+          zipProfileArtifact,
+          "Symlinking LLVM ZIP Profile " + fdoProfile.getPathString()));
 
       // Unzip the profile.
       ruleContext.registerAction(
@@ -308,11 +289,11 @@ public class CcToolchainProviderHelper {
               "fdo",
               getLLVMProfileFileName(fdoProfile, CppFileTypes.LLVM_PROFILE_RAW),
               ruleContext.getBinOrGenfilesDirectory());
-      symlinkTo(
-          ruleContext,
+      ruleContext.registerAction(SymlinkAction.toAbsolutePath(
+          ruleContext.getActionOwner(),
+          PathFragment.create(fdoProfile.getPathString()),
           rawProfileArtifact,
-          fdoProfile,
-          "Symlinking LLVM Raw Profile " + fdoProfile.getBasename());
+          "Symlinking LLVM Raw Profile " + fdoProfile.getPathString()));
     }
 
     if (toolchainInfo.getToolPathFragment(Tool.LLVM_PROFDATA) == null) {
@@ -351,7 +332,6 @@ public class CcToolchainProviderHelper {
         Preconditions.checkNotNull(configuration.getFragment(CppConfiguration.class));
 
     PathFragment fdoZip = null;
-    FdoInputFile fdoInputFile = null;
     FdoInputFile prefetchHints = null;
     Artifact protoProfileArtifact = null;
     boolean allowInference = true;
@@ -365,21 +345,56 @@ public class CcToolchainProviderHelper {
       } else if (cppConfiguration.getFdoOptimizeLabel() != null) {
         // If fdo_profile rule is used, do not allow inferring proto.profile from AFDO profile.
         allowInference = false;
+
         FdoProfileProvider fdoProfileProvider = attributes.getFdoOptimizeProvider();
         if (fdoProfileProvider != null) {
-          fdoInputFile = fdoProfileProvider.getInputFile();
+          fdoZip = fdoProfileProvider.getProfilePathFragment();
           protoProfileArtifact = fdoProfileProvider.getProtoProfileArtifact();
         } else {
-          fdoInputFile = fdoInputFileFromArtifacts(ruleContext, attributes);
+          ImmutableList<Artifact> fdoArtifacts = attributes.getFdoOptimizeArtifacts();
+          if (fdoArtifacts.size() != 1) {
+            ruleContext.ruleError("--fdo_optimize does not point to a single target");
+            return null;
+          }
+
+          Artifact fdoArtifact = fdoArtifacts.get(0);
+          if (!fdoArtifact.isSourceArtifact()) {
+            ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
+            return null;
+          }
+          Label fdoLabel = attributes.getFdoOptimize().getLabel();
+          if (!fdoLabel
+              .getPackageIdentifier()
+              .getPathUnderExecRoot()
+              .getRelative(fdoLabel.getName())
+              .equals(fdoArtifact.getExecPath())) {
+            ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
+            return null;
+          }
+          fdoZip = fdoArtifact.getPath().asFragment();
         }
       } else if (cppConfiguration.getFdoProfileLabel() != null) {
         FdoProfileProvider fdoProvider = attributes.getFdoProfileProvider();
-        fdoInputFile = fdoProvider.getInputFile();
+        fdoZip = fdoProvider.getProfilePathFragment();
         protoProfileArtifact = fdoProvider.getProtoProfileArtifact();
       }
     }
 
-    if (ruleContext.hasErrors()) {
+    FdoMode fdoMode;
+    if (fdoZip == null) {
+      fdoMode = FdoMode.OFF;
+    } else if (CppFileTypes.GCC_AUTO_PROFILE.matches(fdoZip)) {
+      fdoMode = FdoMode.AUTO_FDO;
+    } else if (CppFileTypes.XBINARY_PROFILE.matches(fdoZip)) {
+      fdoMode = FdoMode.XBINARY_FDO;
+    } else if (CppFileTypes.LLVM_PROFILE.matches(fdoZip)) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else if (CppFileTypes.LLVM_PROFILE_RAW.matches(fdoZip)) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else if (CppFileTypes.LLVM_PROFILE_ZIP.matches(fdoZip)) {
+      fdoMode = FdoMode.LLVM_FDO;
+    } else {
+      ruleContext.ruleError("invalid extension for FDO profile file.");
       return null;
     }
 
@@ -403,32 +418,6 @@ public class CcToolchainProviderHelper {
       throw new IllegalStateException("Should not be reached");
     }
     if (skyframeEnv.valuesMissing()) {
-      return null;
-    }
-
-    if (fdoZip != null) {
-      // fdoZip should be set if the profile is a path, fdoInputFile if it is an artifact, but never
-      // both
-      Preconditions.checkState(fdoInputFile == null);
-      fdoInputFile =
-          FdoInputFile.fromAbsolutePath(ccSkyframeSupportValue.getFdoZipPath().asFragment());
-    }
-
-    FdoMode fdoMode;
-    if (fdoInputFile == null) {
-      fdoMode = FdoMode.OFF;
-    } else if (CppFileTypes.GCC_AUTO_PROFILE.matches(fdoInputFile)) {
-      fdoMode = FdoMode.AUTO_FDO;
-    } else if (CppFileTypes.XBINARY_PROFILE.matches(fdoInputFile)) {
-      fdoMode = FdoMode.XBINARY_FDO;
-    } else if (CppFileTypes.LLVM_PROFILE.matches(fdoInputFile)) {
-      fdoMode = FdoMode.LLVM_FDO;
-    } else if (CppFileTypes.LLVM_PROFILE_RAW.matches(fdoInputFile)) {
-      fdoMode = FdoMode.LLVM_FDO;
-    } else if (CppFileTypes.LLVM_PROFILE_ZIP.matches(fdoInputFile)) {
-      fdoMode = FdoMode.LLVM_FDO;
-    } else {
-      ruleContext.ruleError("invalid extension for FDO profile file.");
       return null;
     }
 
@@ -549,32 +538,27 @@ public class CcToolchainProviderHelper {
     Artifact profileArtifact = null;
     if (fdoMode == FdoMode.LLVM_FDO) {
       profileArtifact =
-          convertLLVMRawProfileToIndexed(attributes, fdoInputFile, toolchainInfo, ruleContext);
+          convertLLVMRawProfileToIndexed(
+              attributes,
+              ccSkyframeSupportValue.getFdoZipPath().asFragment(),
+              toolchainInfo,
+              ruleContext);
       if (ruleContext.hasErrors()) {
         return null;
       }
     } else if (fdoMode == FdoMode.AUTO_FDO || fdoMode == FdoMode.XBINARY_FDO) {
+      Path fdoProfile = ccSkyframeSupportValue.getFdoZipPath();
       profileArtifact =
           ruleContext.getUniqueDirectoryArtifact(
-              "fdo", fdoInputFile.getBasename(), ruleContext.getBinOrGenfilesDirectory());
-      symlinkTo(
-          ruleContext,
+              "fdo", fdoProfile.getBaseName(), ruleContext.getBinOrGenfilesDirectory());
+      ruleContext.registerAction(SymlinkAction.toAbsolutePath(
+          ruleContext.getActionOwner(),
+          fdoProfile.asFragment(),
           profileArtifact,
-          fdoInputFile,
-          "Symlinking FDO profile " + fdoInputFile.getBasename());
+          "Symlinking FDO profile " + fdoProfile.getPathString()));
     }
 
     Artifact prefetchHintsArtifact = getPrefetchHintsArtifact(prefetchHints, ruleContext);
-
-    // This relies on ccSkyframeSupportValue containing a Path if the FDO profile is not an
-    // artifact. Not nice, but will do until the Path#exists() call on proto.profile can go away and
-    // we can forget about this nightmare.
-    Path fdoZipPath =
-        fdoInputFile == null
-            ? null
-            : fdoInputFile.getArtifact() != null
-                ? fdoInputFile.getArtifact().getPath()
-                : ccSkyframeSupportValue.getFdoZipPath();
 
     reportInvalidOptions(ruleContext, toolchainInfo);
     return new CcToolchainProvider(
@@ -617,7 +601,7 @@ public class CcToolchainProviderHelper {
         sysroot,
         fdoMode,
         new FdoProvider(
-            fdoZipPath,
+            ccSkyframeSupportValue.getFdoZipPath(),
             fdoMode,
             cppConfiguration.getFdoInstrument(),
             profileArtifact,
@@ -627,33 +611,6 @@ public class CcToolchainProviderHelper {
         cppConfiguration.useLLVMCoverageMapFormat(),
         configuration.isCodeCoverageEnabled(),
         configuration.isHostConfiguration());
-  }
-
-  private static FdoInputFile fdoInputFileFromArtifacts(
-      RuleContext ruleContext, CcToolchainAttributesProvider attributes) {
-    ImmutableList<Artifact> fdoArtifacts = attributes.getFdoOptimizeArtifacts();
-    if (fdoArtifacts.size() != 1) {
-      ruleContext.ruleError("--fdo_optimize does not point to a single target");
-      return null;
-    }
-
-    Artifact fdoArtifact = fdoArtifacts.get(0);
-    if (!fdoArtifact.isSourceArtifact()) {
-      ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
-      return null;
-    }
-
-    Label fdoLabel = attributes.getFdoOptimize().getLabel();
-    if (!fdoLabel
-        .getPackageIdentifier()
-        .getPathUnderExecRoot()
-        .getRelative(fdoLabel.getName())
-        .equals(fdoArtifact.getExecPath())) {
-      ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
-      return null;
-    }
-
-    return FdoInputFile.fromArtifact(fdoArtifact);
   }
 
   /** Finds an appropriate {@link CppToolchainInfo} for this target. */

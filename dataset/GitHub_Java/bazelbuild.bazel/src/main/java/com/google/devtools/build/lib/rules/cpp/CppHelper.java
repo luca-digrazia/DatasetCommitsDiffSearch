@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
-import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -397,29 +396,23 @@ public class CppHelper {
       RuleContext ruleContext, boolean linkingStatically) {
     final Function<TransitiveInfoCollection, Runfiles> runfilesForLinkingDynamically =
         input -> {
-          CcInfo provider = input.get(CcInfo.PROVIDER);
+          CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
           return provider == null
               ? Runfiles.EMPTY
               : new Runfiles.Builder(ruleContext.getWorkspaceName())
                   .addTransitiveArtifacts(
-                      provider
-                          .getCcLinkingInfo()
-                          .getDynamicModeParamsForExecutable()
-                          .getDynamicLibrariesForRuntime())
+                      provider.getDynamicModeParamsForExecutable().getDynamicLibrariesForRuntime())
                   .build();
         };
 
     final Function<TransitiveInfoCollection, Runfiles> runfilesForLinkingStatically =
         input -> {
-          CcInfo provider = input.get(CcInfo.PROVIDER);
+          CcLinkingInfo provider = input.get(CcLinkingInfo.PROVIDER);
           return provider == null
               ? Runfiles.EMPTY
               : new Runfiles.Builder(ruleContext.getWorkspaceName())
                   .addTransitiveArtifacts(
-                      provider
-                          .getCcLinkingInfo()
-                          .getStaticModeParamsForExecutable()
-                          .getDynamicLibrariesForRuntime())
+                      provider.getStaticModeParamsForExecutable().getDynamicLibrariesForRuntime())
                   .build();
         };
     return linkingStatically ? runfilesForLinkingStatically : runfilesForLinkingDynamically;
@@ -602,13 +595,7 @@ public class CppHelper {
                 ? SolibSymlinkAction.getCppRuntimeSymlink(
                     ruleContext, artifact, solibDir, solibDirOverride, configuration)
                 : SolibSymlinkAction.getDynamicLibrarySymlink(
-                    /* actionRegistry= */ ruleContext,
-                    /* actionConstructionContext= */ ruleContext,
-                    solibDir,
-                    artifact,
-                    /* preserveName= */ false,
-                    /* prefixConsumer= */ true,
-                    configuration));
+                    ruleContext, solibDir, artifact, false, true, configuration));
       }
       artifacts = symlinkedArtifacts;
       purpose += "_with_solib";
@@ -831,15 +818,5 @@ public class CppHelper {
       result.addTransitive(dep.getTransitiveCcNativeLibraries());
     }
     return new CcNativeLibraryProvider(result.build());
-  }
-
-  public static void checkProtoLibrariesInDeps(RuleContext ruleContext,
-      Iterable<TransitiveInfoCollection> deps) {
-    for (TransitiveInfoCollection dep : deps) {
-      if (dep.getProvider(ProtoSourcesProvider.class) != null && dep.get(CcInfo.PROVIDER) == null) {
-        ruleContext.attributeError("deps",
-            String.format("proto_library '%s' does not produce output for C++", dep.getLabel()));
-      }
-    }
   }
 }
