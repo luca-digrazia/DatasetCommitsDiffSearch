@@ -121,21 +121,8 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @return the model.
      */
     public static Classifier<double[]> fit(double[][] x, int[] y, double C, double tol) {
-        return fit(x, y, C, tol, 1);
-    }
-
-    /**
-     * Fits a binary linear SVM.
-     * @param x training samples.
-     * @param y training labels of {-1, +1}.
-     * @param C the soft margin penalty parameter.
-     * @param tol the tolerance of convergence test.
-     * @param epochs the number of epochs, usually 1 or 2 is sufficient.
-     * @return the model.
-     */
-    public static Classifier<double[]> fit(double[][] x, int[] y, double C, double tol, int epochs) {
         LASVM<double[]> lasvm = new LASVM<>(new LinearKernel(), C, tol);
-        KernelMachine<double[]> svm = lasvm.fit(x, y, epochs);
+        KernelMachine<double[]> svm = lasvm.fit(x, y);
 
         IntSet labels = new IntSet(new int[]{-1, +1});
         return new AbstractClassifier<double[]>(labels) {
@@ -158,22 +145,8 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @return the model.
      */
     public static Classifier<int[]> fit(int[][] x, int[] y, int p, double C, double tol) {
-        return fit(x, y, p, C, tol, 1);
-    }
-
-    /**
-     * Fits a binary linear SVM of binary sparse data.
-     * @param x training samples.
-     * @param y training labels of {-1, +1}.
-     * @param p the dimension of input vector.
-     * @param C the soft margin penalty parameter.
-     * @param tol the tolerance of convergence test.
-     * @param epochs the number of epochs, usually 1 or 2 is sufficient.
-     * @return the model.
-     */
-    public static Classifier<int[]> fit(int[][] x, int[] y, int p, double C, double tol, int epochs) {
         LASVM<int[]> lasvm = new LASVM<>(new BinarySparseLinearKernel(), C, tol);
-        KernelMachine<int[]> svm = lasvm.fit(x, y, epochs);
+        KernelMachine<int[]> svm = lasvm.fit(x, y);
 
         IntSet labels = new IntSet(new int[]{-1, +1});
         return new AbstractClassifier<int[]>(labels) {
@@ -196,22 +169,8 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @return the model.
      */
     public static Classifier<SparseArray> fit(SparseArray[] x, int[] y, int p, double C, double tol) {
-        return fit(x, y, p, C, tol, 1);
-    }
-
-    /**
-     * Fits a binary linear SVM.
-     * @param x training samples.
-     * @param y training labels of {-1, +1}.
-     * @param p the dimension of input vector.
-     * @param C the soft margin penalty parameter.
-     * @param tol the tolerance of convergence test.
-     * @param epochs the number of epochs, usually 1 or 2 is sufficient.
-     * @return the model.
-     */
-    public static Classifier<SparseArray> fit(SparseArray[] x, int[] y, int p, double C, double tol, int epochs) {
         LASVM<SparseArray> lasvm = new LASVM<>(new SparseLinearKernel(), C, tol);
-        KernelMachine<SparseArray> svm = lasvm.fit(x, y, epochs);
+        KernelMachine<SparseArray> svm = lasvm.fit(x, y);
 
         IntSet labels = new IntSet(new int[]{-1, +1});
         return new AbstractClassifier<SparseArray>(labels) {
@@ -235,23 +194,8 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
      * @return the model.
      */
     public static <T> SVM<T> fit(T[] x, int[] y, MercerKernel<T> kernel, double C, double tol) {
-        return fit(x, y, kernel, C, tol, 1);
-    }
-
-    /**
-     * Fits a binary SVM.
-     * @param x training samples.
-     * @param y training labels of {-1, +1}.
-     * @param kernel the kernel function.
-     * @param C the soft margin penalty parameter.
-     * @param tol the tolerance of convergence test.
-     * @param epochs the number of epochs, usually 1 or 2 is sufficient.
-     * @param <T> the data type.
-     * @return the model.
-     */
-    public static <T> SVM<T> fit(T[] x, int[] y, MercerKernel<T> kernel, double C, double tol, int epochs) {
         LASVM<T> lasvm = new LASVM<>(kernel, C, tol);
-        return lasvm.fit(x, y, epochs).toSVM();
+        return lasvm.fit(x, y).toSVM();
     }
 
     /**
@@ -265,22 +209,21 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
         MercerKernel<double[]> kernel = MercerKernel.of(params.getProperty("smile.svm.kernel", "linear"));
         double C = Double.parseDouble(params.getProperty("smile.svm.C", "1.0"));
         double tol = Double.parseDouble(params.getProperty("smile.svm.tolerance", "1E-3"));
-        int epochs = Integer.parseInt(params.getProperty("smile.svm.epochs", "1"));
 
         int[] classes = MathEx.unique(y);
         String trainer = params.getProperty("smile.svm.type", classes.length == 2 ? "binary" : "ovr").toLowerCase();
         switch (trainer) {
             case "ovr":
                 if (kernel instanceof LinearKernel) {
-                    return OneVersusRest.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, C, tol, epochs));
+                    return OneVersusRest.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, C, tol));
                 } else {
-                    return OneVersusRest.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, kernel, C, tol, epochs));
+                    return OneVersusRest.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, kernel, C, tol));
                 }
             case "ovo":
                 if (kernel instanceof LinearKernel) {
-                    return OneVersusOne.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, C, tol, epochs));
+                    return OneVersusOne.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, C, tol));
                 } else {
-                    return OneVersusOne.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, kernel, C, tol, epochs));
+                    return OneVersusOne.fit(x, y, (xi, yi) -> SVM.fit(xi, yi, kernel, C, tol));
                 }
             case "binary":
                 Arrays.sort(classes);
@@ -291,9 +234,9 @@ public class SVM<T> extends KernelMachine<T> implements Classifier<T> {
                     }
                 }
                 if (kernel instanceof LinearKernel) {
-                    return SVM.fit(x, y, C, tol, epochs);
+                    return SVM.fit(x, y, C, tol);
                 } else {
-                    return SVM.fit(x, y, kernel, C, tol, epochs);
+                    return SVM.fit(x, y, kernel, C, tol);
                 }
             default:
                 throw new IllegalArgumentException("Unknown SVM type: " + trainer);
