@@ -348,7 +348,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
   private class GraphBuildingObserver implements TargetEdgeObserver {
 
     @Override
-    public void edge(Target from, Attribute attribute, Target to) {
+    public synchronized void edge(Target from, Attribute attribute, Target to) {
       Preconditions.checkState(attribute == null ||
           dependencyFilter.apply(((Rule) from), attribute),
           "Disallowed edge from LabelVisitor: %s --> %s", from, to);
@@ -356,7 +356,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
 
     @Override
-    public void node(Target node) {
+    public synchronized void node(Target node) {
       graph.createNode(node);
     }
 
@@ -386,6 +386,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
       final QueryExpression caller,
       ThreadSafeMutableSet<Target> nodes,
       boolean buildFiles,
+      boolean subincludes,
       boolean loads)
       throws QueryException {
     ThreadSafeMutableSet<Target> dependentFiles = createThreadSafeMutableSet();
@@ -404,25 +405,28 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
         }
 
         List<Label> extensions = new ArrayList<>();
+        if (subincludes) {
+          extensions.addAll(pkg.getSubincludeLabels());
+        }
         if (loads) {
           extensions.addAll(pkg.getSkylarkFileDependencies());
         }
 
-        for (Label extension : extensions) {
+        for (Label subinclude : extensions) {
 
-          Node<Target> loadTarget = getLoadTarget(extension, pkg);
-          addIfUniqueLabel(loadTarget, seenLabels, dependentFiles);
+          Node<Target> subincludeTarget = getSubincludeTarget(subinclude, pkg);
+          addIfUniqueLabel(subincludeTarget, seenLabels, dependentFiles);
 
-          // Also add the BUILD file of the extension.
+          // Also add the BUILD file of the subinclude.
           if (buildFiles) {
-            Path buildFileForLoad =
+            Path buildFileForSubinclude =
                 cachingPackageLocator.getBuildFileForPackage(
-                    loadTarget.getLabel().getLabel().getPackageIdentifier());
-            if (buildFileForLoad != null) {
+                    subincludeTarget.getLabel().getLabel().getPackageIdentifier());
+            if (buildFileForSubinclude != null) {
               Label buildFileLabel =
                   Label.createUnvalidated(
-                      loadTarget.getLabel().getLabel().getPackageIdentifier(),
-                      buildFileForLoad.getBaseName());
+                      subincludeTarget.getLabel().getLabel().getPackageIdentifier(),
+                      buildFileForSubinclude.getBaseName());
               addIfUniqueLabel(
                   getNode(new FakeLoadTarget(buildFileLabel, pkg)), seenLabels, dependentFiles);
             }
@@ -452,7 +456,7 @@ public class BlazeQueryEnvironment extends AbstractBlazeQueryEnvironment<Target>
     }
   }
 
-  private Node<Target> getLoadTarget(Label label, Package pkg) {
+  private Node<Target> getSubincludeTarget(Label label, Package pkg) {
     return getNode(new FakeLoadTarget(label, pkg));
   }
 
