@@ -23,7 +23,6 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.Consumer;
 import com.rabbitmq.client.DefaultConsumer;
 import com.rabbitmq.client.Envelope;
 import com.yammer.metrics.Metrics;
@@ -122,9 +121,29 @@ public class AMQPConsumer implements Runnable {
     }
 
     public void consume() throws IOException {
-        boolean autoAck = false;
+        boolean autoAck = true;
+        channel.basicConsume(queueConfig.getQueueName(), autoAck,
+            new DefaultConsumer(channel) {
+                @Override
+                public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
+                    try {
+                        handledMessages.mark();
 
-        channel.basicConsume(queueConfig.getQueueName(), autoAck, createConsumer(channel));
+                        switch (queueConfig.getInputType()) {
+                            case GELF:
+                                GELFMessage gelf = new GELFMessage(body);
+                                gelfProcessor.messageReceived(gelf);
+                                break;
+                            case SYSLOG:
+                                syslogProcessor.messageReceived(new String(body), connection.getAddress());
+                                break;
+                        }
+                    } catch(Exception e) {
+                        LOG.error("Could not handle message from AMQP.", e);
+                    }
+                }
+             }
+        );
     }
 
     private Channel connect() throws IOException {
@@ -144,33 +163,8 @@ public class AMQPConsumer implements Runnable {
         return connection.createChannel();
     }
     
-    public Consumer createConsumer(final Channel channel) {
-    	 return new DefaultConsumer(channel) {
-             @Override
-             public void handleDelivery(String consumerTag, Envelope envelope, AMQP.BasicProperties properties, byte[] body) throws IOException {
-                 try {
-                     handledMessages.mark();
-
-                     switch (queueConfig.getInputType()) {
-                         case GELF:
-                             GELFMessage gelf = new GELFMessage(body);
-                             gelfProcessor.messageReceived(gelf);
-                             break;
-                         case SYSLOG:
-                             syslogProcessor.messageReceived(new String(body), connection.getAddress());
-                             break;
-                     }
-                     
-                     channel.basicAck(envelope.getDeliveryTag(), false);
-                     
-                 } catch(Exception e) {
-                     LOG.error("Could not handle message from AMQP.", e);
-                 }
-             }
-    	 };
-    }
-    
     public String getQueueName() {
         return queueConfig.getQueueName();
     }
+    
 }
