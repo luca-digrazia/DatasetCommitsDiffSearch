@@ -26,10 +26,12 @@ import com.google.common.net.InetAddresses;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.io.OutputStreamWriter;
 import java.lang.management.ManagementFactory;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.text.ParseException;
 import java.text.ParsePosition;
@@ -52,8 +54,8 @@ import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 
 /**
- * A simple file-based logging handler that points a short symlink to the current log file and
- * provides an API for getting the current log file.
+ * A simple file-based logging handler that provides an API for getting the current log file and
+ * (optionally) in addition creates a short symlink to the current log file.
  *
  * <p>The log file path is concatenated from 4 elements: the prefix (a fixed string, typically a
  * directory); the pattern (allowing some % variable substitutions); the timestamp; and the
@@ -82,8 +84,11 @@ public final class SimpleLogHandler extends Handler {
   private final String extension;
   /** True if the log file extension is not the process ID. */
   private final boolean isStaticExtension;
-  /** Absolute path to symbolic link to current log file. */
-  private final Path symlinkPath;
+  /**
+   * Absolute path to symbolic link to current log file, or {@code Optional#empty()} if the link
+   * should not be created.
+   */
+  private final Optional<Path> symlinkPath;
   /** Absolute path to common base name of log files. */
   @VisibleForTesting final Path baseFilePath;
   /** Log file currently in use. */
@@ -141,7 +146,8 @@ public final class SimpleLogHandler extends Handler {
     private String prefix;
     private String pattern;
     private String extension;
-    private String symlink;
+    private String symlinkName;
+    private Boolean createSymlink;
     private Integer rotateLimitBytes;
     private Integer totalLimitBytes;
     private Level logLevel;
@@ -202,8 +208,23 @@ public final class SimpleLogHandler extends Handler {
      *     directory part matches the prefix
      * @return this {@code Builder} object
      */
-    public Builder setSymlink(String symlink) {
-      this.symlink = symlink;
+    public Builder setSymlinkName(String symlinkName) {
+      this.symlinkName = symlinkName;
+      return this;
+    }
+
+    /**
+     * Sets whether symlinks to the log file should be created.
+     *
+     * <p>If unset, the value of "create_symlink" from the JVM logging configuration for {@link
+     * SimpleLogHandler} will be used; and if that's unset, the default behavior will depend on the
+     * platform: false on Windows (because by default, only administrator accounts can create
+     * symbolic links there) and true on other platforms.
+     *
+     * @return this {@code Builder} object
+     */
+    public Builder setCreateSymlink(boolean createSymlink) {
+      this.createSymlink = Boolean.valueOf(createSymlink);
       return this;
     }
 
@@ -288,7 +309,8 @@ public final class SimpleLogHandler extends Handler {
           prefix,
           pattern,
           extension,
-          symlink,
+          symlinkName,
+          createSymlink,
           rotateLimitBytes,
           totalLimitBytes,
           logLevel,
@@ -305,7 +327,7 @@ public final class SimpleLogHandler extends Handler {
    *     see {@link SimpleLogHandler.Builder} documentation
    */
   public SimpleLogHandler() {
-    this(null, null, null, null, null, null, null, null, null);
+    this(null, null, null, null, null, null, null, null, null, null);
   }
 
   /**
@@ -320,7 +342,8 @@ public final class SimpleLogHandler extends Handler {
       @Nullable String prefix,
       @Nullable String pattern,
       @Nullable String extension,
-      @Nullable String symlink,
+      @Nullable String symlinkName,
+      @Nullable Boolean createSymlink,
       @Nullable Integer rotateLimitBytes,
       @Nullable Integer totalLimit,
       @Nullable Level logLevel,
@@ -330,13 +353,20 @@ public final class SimpleLogHandler extends Handler {
         getBaseFilePath(
             getConfiguredStringProperty(prefix, "prefix", DEFAULT_PREFIX_STRING),
             getConfiguredStringProperty(pattern, "pattern", DEFAULT_BASE_FILE_NAME_PATTERN));
+
+    String configuredSymlinkName =
+        getConfiguredStringProperty(
+            symlinkName,
+            "symlink",
+            getConfiguredStringProperty(prefix, "prefix", DEFAULT_PREFIX_STRING));
+    boolean configuredCreateSymlink =
+        getConfiguredBooleanProperty(
+            createSymlink, "create_symlink", OS.getCurrent() != OS.WINDOWS);
     this.symlinkPath =
-        getSymlinkAbsolutePath(
-            this.baseFilePath.getParent(),
-            getConfiguredStringProperty(
-                symlink,
-                "symlink",
-                getConfiguredStringProperty(prefix, "prefix", DEFAULT_PREFIX_STRING)));
+        configuredCreateSymlink
+            ? Optional.of(
+                getSymlinkAbsolutePath(this.baseFilePath.getParent(), configuredSymlinkName))
+            : Optional.empty();
     this.extension = getConfiguredStringProperty(extension, "extension", getPidString());
     this.isStaticExtension = (getConfiguredStringProperty(extension, "extension", null) != null);
     this.rotateLimitBytes = getConfiguredIntProperty(rotateLimitBytes, "rotate_limit_bytes", 0);
@@ -364,8 +394,11 @@ public final class SimpleLogHandler extends Handler {
     return output.isOpen() ? Optional.of(output.getPath()) : Optional.empty();
   }
 
-  /** Returns the expected absolute path for the symbolic link to the current log file. */
-  public Path getSymbolicLinkPath() {
+  /**
+   * Returns the expected absolute path for the symbolic link to the current log file, or {@code
+   * Optional#empty()} if not used.
+   */
+  public Optional<Path> getSymbolicLinkPath() {
     return symlinkPath;
   }
 
@@ -381,6 +414,8 @@ public final class SimpleLogHandler extends Handler {
       return;
     }
 
+    // This allows us to do the I/O while not forgetting that we were interrupted.
+    boolean isInterrupted = Thread.interrupted();
     try {
       String message = getFormatter().format(record);
       openOutputIfNeeded();
@@ -389,6 +424,9 @@ public final class SimpleLogHandler extends Handler {
       reportError(null, e, ErrorManager.WRITE_FAILURE);
       // Failing to log is non-fatal. Continue to try to rotate the log if necessary, which may fix
       // the underlying IO problem with the file.
+      if (e instanceof InterruptedIOException) {
+        isInterrupted = true;
+      }
     }
 
     try {
@@ -398,34 +436,57 @@ public final class SimpleLogHandler extends Handler {
       }
     } catch (IOException e) {
       reportError("Failed to rotate log file", e, ErrorManager.GENERIC_FAILURE);
+      if (e instanceof InterruptedIOException) {
+        isInterrupted = true;
+      }
+    }
+    if (isInterrupted) {
+      Thread.currentThread().interrupt();
     }
   }
 
   @Override
   public synchronized void flush() {
+    boolean isInterrupted = Thread.interrupted();
     if (output.isOpen()) {
       try {
         output.flush();
       } catch (IOException e) {
         reportError(null, e, ErrorManager.FLUSH_FAILURE);
+        if (e instanceof InterruptedIOException) {
+          isInterrupted = true;
+        }
       }
+    }
+    if (isInterrupted) {
+      Thread.currentThread().interrupt();
     }
   }
 
   @Override
   public synchronized void close() {
+    boolean isInterrupted = Thread.interrupted();
     if (output.isOpen()) {
       try {
         output.write(getFormatter().getTail(this));
       } catch (IOException e) {
         reportError("Failed to write log tail", e, ErrorManager.WRITE_FAILURE);
+        if (e instanceof InterruptedIOException) {
+          isInterrupted = true;
+        }
       }
 
       try {
         output.close();
       } catch (IOException e) {
         reportError(null, e, ErrorManager.CLOSE_FAILURE);
+        if (e instanceof InterruptedIOException) {
+          isInterrupted = true;
+        }
       }
+    }
+    if (isInterrupted) {
+      Thread.currentThread().interrupt();
     }
   }
 
@@ -441,7 +502,8 @@ public final class SimpleLogHandler extends Handler {
    *     configured in the JVM logging configuration
    * @param <T> value type
    */
-  private static @Nullable <T> T getConfiguredProperty(
+  @Nullable
+  private static <T> T getConfiguredProperty(
       @Nullable T builderValue,
       String configuredName,
       Function<String, T> parse,
@@ -463,6 +525,33 @@ public final class SimpleLogHandler extends Handler {
   private static String getConfiguredStringProperty(
       String builderValue, String configuredName, String fallbackValue) {
     return getConfiguredProperty(builderValue, configuredName, val -> val.trim(), fallbackValue);
+  }
+
+  /**
+   * Matches java.logging.* configuration behavior; "true" and "1" are true, "false" and "0" are
+   * false.
+   *
+   * @throws IllegalArgumentException if the configured boolean property cannot be parsed
+   */
+  private static boolean getConfiguredBooleanProperty(
+      Boolean builderValue, String configuredName, boolean fallbackValue) {
+    Boolean value =
+        getConfiguredProperty(
+            builderValue,
+            configuredName,
+            val -> {
+              val = val.trim().toLowerCase();
+              if ("true".equals(val) || "1".equals(val)) {
+                return true;
+              } else if ("false".equals(val) || "0".equals(val)) {
+                return false;
+              } else if (val.length() == 0) {
+                return null;
+              }
+              throw new IllegalArgumentException("Cannot parse boolean property value");
+            },
+            null);
+    return value != null ? value.booleanValue() : fallbackValue;
   }
 
   /**
@@ -631,11 +720,11 @@ public final class SimpleLogHandler extends Handler {
 
   private static final class Output {
     /** Log file currently in use. */
-    private @Nullable File file;
+    @Nullable private File file;
     /** Output stream for {@link #file} which counts the number of bytes written. */
-    private @Nullable CountingOutputStream stream;
+    @Nullable private CountingOutputStream stream;
     /** Writer for {@link #stream}. */
-    private @Nullable OutputStreamWriter writer;
+    @Nullable private OutputStreamWriter writer;
 
     public boolean isOpen() {
       return writer != null;
@@ -756,14 +845,17 @@ public final class SimpleLogHandler extends Handler {
 
       // Try to create relative symlink from currentLogFile to baseFile, but don't treat a failure
       // as fatal.
-      try {
-        checkState(symlinkPath.getParent().equals(output.getPath().getParent()));
-        if (Files.exists(symlinkPath)) {
-          Files.delete(symlinkPath);
+      if (symlinkPath.isPresent()) {
+        try {
+          checkState(symlinkPath.get().getParent().equals(output.getPath().getParent()));
+          if (Files.exists(symlinkPath.get(), LinkOption.NOFOLLOW_LINKS)) {
+            Files.delete(symlinkPath.get());
+          }
+          Files.createSymbolicLink(symlinkPath.get(), output.getPath().getFileName());
+        } catch (IOException e) {
+          reportError(
+              "Failed to create symbolic link to log file", e, ErrorManager.GENERIC_FAILURE);
         }
-        Files.createSymbolicLink(symlinkPath, output.getPath().getFileName());
-      } catch (IOException e) {
-        reportError("Failed to create symbolic link to log file", e, ErrorManager.GENERIC_FAILURE);
       }
     }
   }
