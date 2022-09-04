@@ -63,7 +63,7 @@ public class PythonOptions extends FragmentOptions {
   public PythonVersion hostForcePython;
 
   public PythonVersion getPythonVersion() {
-    return getPythonVersion(PythonVersion.getDefaultTargetValue());
+    return getPythonVersion(PythonVersion.DEFAULT);
   }
 
   public PythonVersion getPythonVersion(PythonVersion defaultVersion) {

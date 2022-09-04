@@ -74,15 +74,16 @@ public class JavaOptions extends FragmentOptions {
   }
 
   @Option(
-      name = "javabase",
-      defaultValue = "@bazel_tools//tools/jdk:jdk",
-      converter = LabelConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "JAVABASE used for the JDK invoked by Blaze. This is the "
-              + "java_runtime which will be used to execute "
-              + "external Java commands.")
+    name = "javabase",
+    defaultValue = "@bazel_tools//tools/jdk:jdk",
+    converter = LabelConverter.class,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help =
+        "JAVABASE used for the JDK invoked by Blaze. This is the "
+            + "java_runtime_suite which will be used to execute "
+            + "external Java commands."
+  )
   public Label javaBase;
 
   @Option(
@@ -106,14 +107,15 @@ public class JavaOptions extends FragmentOptions {
   public Label hostJavaToolchain;
 
   @Option(
-      name = "host_javabase",
-      defaultValue = "@bazel_tools//tools/jdk:host_jdk",
-      converter = LabelConverter.class,
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "JAVABASE used for the host JDK. This is the java_runtime which is used to execute "
-              + "tools during a build.")
+    name = "host_javabase",
+    defaultValue = "@bazel_tools//tools/jdk:host_jdk",
+    converter = LabelConverter.class,
+    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+    effectTags = {OptionEffectTag.UNKNOWN},
+    help =
+        "JAVABASE used for the host JDK. This is the java_runtime_suite which is used to execute "
+            + "tools during a build."
+  )
   public Label hostJavaBase;
 
   @Option(
@@ -457,15 +459,6 @@ public class JavaOptions extends FragmentOptions {
   )
   public boolean strictDepsJavaProtos;
 
-  // TODO(twerth): Remove flag after it's turned on globally.
-  @Option(
-      name = "experimental_proto_generated_strict_deps",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.EAGERNESS_TO_EXIT},
-      help = "Enables strict deps mode for the java compilation of proto generated Java code.")
-  public boolean protoGeneratedStrictDeps;
-
   @Option(
     name = "experimental_java_header_compilation_disable_javac_fallback",
     defaultValue = "false",
@@ -583,8 +576,6 @@ public class JavaOptions extends FragmentOptions {
     host.allowRuntimeDepsOnNeverLink = allowRuntimeDepsOnNeverLink;
 
     host.jplPropagateCcLinkParamsStore = jplPropagateCcLinkParamsStore;
-
-    host.protoGeneratedStrictDeps = protoGeneratedStrictDeps;
 
     return host;
   }

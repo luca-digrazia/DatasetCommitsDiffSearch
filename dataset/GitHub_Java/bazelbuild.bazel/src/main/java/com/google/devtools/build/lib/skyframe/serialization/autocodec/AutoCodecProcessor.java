@@ -156,7 +156,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
         .addSuperinterface(RegisteredSingletonDoNotUse.class)
         .addField(
             FieldSpec.builder(
-                    Object.class,
+                    TypeName.get(symbol.asType()),
                     CodecScanningConstants.REGISTERED_SINGLETON_INSTANCE_VAR_NAME,
                     Modifier.PUBLIC,
                     Modifier.STATIC,
@@ -323,7 +323,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
       if (method.getModifiers().contains(Modifier.STATIC)
           && !method.getModifiers().contains(Modifier.ABSTRACT)
           && method.getParameters().isEmpty()
-          && isSameReturnType(method, builderType)) {
+          && method.getReturnType().equals(builderType.asType())) {
         if (builderMethod != null) {
           throw new IllegalArgumentException(
               "Type "
@@ -353,7 +353,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
         continue;
       }
       if (method.getParameters().isEmpty()
-          && isSameReturnType(method, encodedType)
+          && method.getReturnType().equals(encodedType.asType())
           && method.getModifiers().contains(Modifier.ABSTRACT)) {
           if (abstractBuildMethod != null) {
             throw new IllegalArgumentException(
@@ -422,7 +422,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
       if (!method.getModifiers().contains(Modifier.STATIC)
           && !method.getModifiers().contains(Modifier.PRIVATE)
           && setterNames.contains(method.getSimpleName().toString())
-          && isSameReturnType(method, builderType)
+          && method.getReturnType().equals(builderType.asType())
           && method.getParameters().size() == 1
           && env.getTypeUtils()
               .isSubtype(type, Iterables.getOnlyElement(method.getParameters()).asType())) {
@@ -760,8 +760,11 @@ public class AutoCodecProcessor extends AbstractProcessor {
     return Optional.empty();
   }
 
-  private boolean isSameReturnType(ExecutableElement method, TypeElement typeElement) {
-    return env.getTypeUtils().isSameType(method.getReturnType(), typeElement.asType());
+  /** True when {@code type} has the same type as {@code clazz}. */
+  private boolean matchesType(TypeMirror type, Class<?> clazz) {
+    return env.getTypeUtils()
+        .isSameType(
+            type, env.getElementUtils().getTypeElement((clazz.getCanonicalName())).asType());
   }
 
   /** Emits a note to BUILD log during annotation processing for debugging. */

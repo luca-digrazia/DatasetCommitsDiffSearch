@@ -15,10 +15,12 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.OptionsUtils.PathFragmentConverter;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -30,18 +32,18 @@ import java.io.Serializable;
 import javax.annotation.Nullable;
 
 /** A configuration fragment that tells where the shell is. */
-public class ShellConfiguration extends Fragment {
+@AutoCodec
+public class ShellConfiguration extends BuildConfiguration.Fragment {
   private static final ImmutableMap<OS, PathFragment> OS_SPECIFIC_SHELL =
       ImmutableMap.<OS, PathFragment>builder()
           .put(OS.WINDOWS, PathFragment.create("c:/tools/msys64/usr/bin/bash.exe"))
           .put(OS.FREEBSD, PathFragment.create("/usr/local/bin/bash"))
-          .put(OS.OPENBSD, PathFragment.create("/usr/local/bin/bash"))
           .build();
 
   private final PathFragment shellExecutable;
   private final boolean useShBinaryStubScript;
 
-  private ShellConfiguration(PathFragment shellExecutable, boolean useShBinaryStubScript) {
+  public ShellConfiguration(PathFragment shellExecutable, boolean useShBinaryStubScript) {
     this.shellExecutable = shellExecutable;
     this.useShBinaryStubScript = useShBinaryStubScript;
   }

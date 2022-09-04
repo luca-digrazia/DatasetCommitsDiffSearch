@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.rules.apple;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.DefaultLabelConverter;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.LabelConverter;
@@ -180,34 +181,6 @@ public class AppleCommandLineOptions extends FragmentOptions {
   public String iosCpu;
 
   @Option(
-    name = "apple_compiler",
-    defaultValue = "null",
-    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-    effectTags = {
-      OptionEffectTag.AFFECTS_OUTPUTS,
-      OptionEffectTag.LOADING_AND_ANALYSIS,
-      OptionEffectTag.LOSES_INCREMENTAL_STATE,
-    },
-    help = "The Apple target compiler. Useful for selecting variants of a toolchain "
-               + "(e.g. xcode-beta)."
-  )
-  public String cppCompiler;
-
-  @Option(
-    name = "apple_grte_top",
-    defaultValue = "null",
-    converter = LabelConverter.class,
-    documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-    effectTags = {
-      OptionEffectTag.CHANGES_INPUTS,
-      OptionEffectTag.LOADING_AND_ANALYSIS,
-      OptionEffectTag.LOSES_INCREMENTAL_STATE,
-    },
-    help = "The Apple target grte_top."
-  )
-  public Label appleLibcTop;
-
-  @Option(
     name = "apple_crosstool_top",
     defaultValue = "@bazel_tools//tools/cpp:toolchain",
     converter = LabelConverter.class,
@@ -348,7 +321,26 @@ public class AppleCommandLineOptions extends FragmentOptions {
             + "Values: 'none', 'embedded_markers', 'embedded'."
   )
   public AppleBitcodeMode appleBitcodeMode;
-  
+
+  @Option(
+    name = "apple_crosstool_transition",
+    defaultValue = "true",
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    effectTags = {OptionEffectTag.CHANGES_INPUTS},
+    metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
+    help = "If true, the apple crosstool is used for all apple rules."
+  )
+  public boolean enableAppleCrosstoolTransition;
+
+  @Option(
+    name = "target_uses_apple_crosstool",
+    defaultValue = "false",
+    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+    effectTags = {OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION},
+    help = "If true, this target uses the apple crosstool.  Do not set this flag manually."
+  )
+  public boolean targetUsesAppleCrosstool;
+
   /** Returns whether the minimum OS version is explicitly set for the current platform. */
   public DottedVersion getMinimumOsVersion() {
     switch (applePlatformType) {
@@ -362,6 +354,34 @@ public class AppleCommandLineOptions extends FragmentOptions {
         return watchosMinimumOs;
       default:
         throw new IllegalStateException();
+    }
+  }
+
+  /**
+   * Returns the architecture implied by these options.
+   *
+   * <p>In contexts in which a configuration instance is present, prefer {@link
+   * AppleConfiguration#getSingleArchitecture}.
+   */
+  public String getSingleArchitecture() {
+    if (!Strings.isNullOrEmpty(appleSplitCpu)) {
+      return appleSplitCpu;
+    }
+    switch (applePlatformType) {
+      case IOS:
+        if (!iosMultiCpus.isEmpty()) {
+          return iosMultiCpus.get(0);
+        } else {
+          return iosCpu;
+        }
+      case WATCHOS:
+        return watchosCpus.get(0);
+      case TVOS:
+        return tvosCpus.get(0);
+      case MACOS:
+        return macosCpus.get(0);
+      default:
+        throw new IllegalArgumentException("Unhandled platform type " + applePlatformType);
     }
   }
 
