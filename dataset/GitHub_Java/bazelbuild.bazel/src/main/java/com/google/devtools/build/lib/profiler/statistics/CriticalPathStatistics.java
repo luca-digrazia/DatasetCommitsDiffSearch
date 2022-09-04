@@ -13,41 +13,61 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler.statistics;
 
-import static com.google.devtools.build.lib.profiler.ProfilerTask.CRITICAL_PATH;
-
-import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.analysis.ProfileInfo;
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.Task;
-import java.time.Duration;
-import java.util.ArrayList;
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.CriticalPathEntry;
+import java.util.Iterator;
 
 /**
- * Keeps a predefined list of {@link Task}'s cumulative durations and allows iterating over pairs of
- * their descriptions and relative durations.
+ * Keeps a predefined list of {@link CriticalPathEntry}'s cumulative durations and allows iterating
+ * over pairs of their descriptions and relative durations.
  */
 public final class CriticalPathStatistics {
-  private final ImmutableList<Task> criticalPathEntries;
-  private Duration totalDuration = Duration.ZERO;
+  /**
+   * The actual critical path.
+   */
+  private final CriticalPathEntry totalPath;
 
   public CriticalPathStatistics(ProfileInfo info) {
-    ArrayList<Task> criticalPathEntries = new ArrayList<>();
-    for (Task task : info.rootTasksById) {
-      if (task.type == CRITICAL_PATH) {
-        for (Task criticalPathEntry : task.subtasks) {
-          totalDuration = totalDuration.plus(Duration.ofNanos(criticalPathEntry.durationNanos));
-          criticalPathEntries.add(criticalPathEntry);
-        }
-      }
-    }
-    this.criticalPathEntries = ImmutableList.copyOf(criticalPathEntries);
+    totalPath = info.getCriticalPath();
   }
 
-  public Duration getTotalDuration() {
-    return totalDuration;
+  /**
+   * @return the critical path obtained by not filtering out any {@link ProfilerTask}
+   */
+  public CriticalPathEntry getTotalPath() {
+    return totalPath;
   }
 
-  public ImmutableList<Task> getCriticalPathEntries() {
-    return criticalPathEntries;
+  /**
+   * Constructs a filtered Iterable from a critical path.
+   *
+   * <p>Ignores all fake (task id < 0) path entries.
+   */
+  public Iterable<CriticalPathEntry> getFilteredPath(final CriticalPathEntry path) {
+    return () ->
+        new Iterator<CriticalPathEntry>() {
+          private CriticalPathEntry nextEntry = path;
+
+          @Override
+          public boolean hasNext() {
+            return nextEntry != null;
+          }
+
+          @Override
+          public CriticalPathEntry next() {
+            CriticalPathEntry current = nextEntry;
+            do {
+              nextEntry = nextEntry.next;
+            } while (nextEntry != null && nextEntry.task.isFake());
+            return current;
+          }
+
+          @Override
+          public void remove() {
+            throw new UnsupportedOperationException();
+          }
+        };
   }
 }
 

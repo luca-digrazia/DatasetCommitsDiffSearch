@@ -13,7 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.profiler.output;
 
-import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.Task;
+import com.google.devtools.build.lib.profiler.analysis.ProfileInfo.CriticalPathEntry;
 import com.google.devtools.build.lib.profiler.statistics.CriticalPathStatistics;
 import com.google.devtools.build.lib.util.TimeUtilities;
 import java.io.PrintStream;
@@ -33,17 +33,23 @@ public final class CriticalPathText extends TextPrinter {
    * Print total and optimal critical paths if available.
    */
   public void printCriticalPaths() {
-    long totalPathTimeNanos = criticalPathStats.getTotalDuration().toNanos();
-    lnPrintf("%s (%s):", "Critical path", TimeUtilities.prettyTime(totalPathTimeNanos));
+    CriticalPathEntry totalPath = criticalPathStats.getTotalPath();
+    printCriticalPath("Critical path", totalPath);
+  }
+
+  private void printCriticalPath(String title, CriticalPathEntry path) {
+    lnPrintf("%s (%s):", title, TimeUtilities.prettyTime(path.cumulativeDuration));
     lnPrintf("%6s %11s %8s   %s", "Id", "Time", "Percentage", "Description");
 
-    for (Task pathEntry : criticalPathStats.getCriticalPathEntries()) {
-      String desc = pathEntry.getDescription().replace(':', ' ');
+    long totalPathTime = path.cumulativeDuration;
+
+    for (CriticalPathEntry pathEntry : criticalPathStats.getFilteredPath(path)) {
+      String desc = pathEntry.task.getDescription().replace(':', ' ');
       lnPrintf(
           "%6d %11s %8s   %s",
-          pathEntry.id,
-          TimeUtilities.prettyTime(pathEntry.durationNanos),
-          prettyPercentage((double) pathEntry.durationNanos / totalPathTimeNanos),
+          pathEntry.task.id,
+          TimeUtilities.prettyTime(pathEntry.duration),
+          prettyPercentage((double) pathEntry.duration / totalPathTime),
           desc);
     }
   }
