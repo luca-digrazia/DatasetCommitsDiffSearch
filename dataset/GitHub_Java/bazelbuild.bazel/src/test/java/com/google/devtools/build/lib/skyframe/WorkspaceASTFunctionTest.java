@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
@@ -32,7 +33,6 @@ import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import java.io.IOException;
 import java.util.List;
-import java.util.Optional;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -74,7 +74,7 @@ public class WorkspaceASTFunctionTest extends BuildViewTestCase {
         .thenReturn(fakeWorkspaceFileValue);
     Mockito.when(
             env.getValue(MockitoHamcrest.argThat(new SkyKeyMatchers(SkyFunctions.PRECOMPUTED))))
-        .thenReturn(new PrecomputedValue(Optional.empty()));
+        .thenReturn(new PrecomputedValue(Optional.<RootedPath>absent()));
     Mockito.when(
             env.getValue(
                 MockitoHamcrest.argThat(

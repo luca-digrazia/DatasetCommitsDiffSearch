@@ -35,6 +35,7 @@ import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledg
 import com.google.devtools.build.lib.rules.repository.ManagedDirectoriesKnowledgeImpl.ManagedDirectoriesListener;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -121,6 +122,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     scratch.file("BUILD", "");
     RootedPath workspace =
         createWorkspaceFile(
+            "WORKSPACE",
             "workspace(name = 'good')",
             "load('//:a.bzl', 'a')",
             "x = 1  #for chunk break",
@@ -143,6 +145,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     scratch.file("BUILD", "");
     RootedPath workspace =
         createWorkspaceFile(
+            "WORKSPACE",
             "workspace(name = 'good')",
             "load('//:a.bzl', 'a')",
             "x = 1  #for chunk break",
@@ -258,9 +261,6 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
       createWorkspaceFileValueForTest();
 
-      // Test intentionally introduces errors.
-      reporter.removeHandler(failFastHandler);
-
       assertManagedDirectoriesParsingError(
           "{'@repo1': 'dir1', '@repo2': ['dir3']}",
           "managed_directories attribute value should be of the type attr.string_list_dict(),"
@@ -340,7 +340,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     Package pkg = workspaceFileValue.getPackage();
     if (pkg.containsErrors()) {
       throw new RuntimeException(
-          Preconditions.checkNotNull(Iterables.getFirst(eventCollector, null)).getMessage());
+          Preconditions.checkNotNull(Iterables.getFirst(pkg.getEvents(), null)).getMessage());
     }
     return workspaceFileValue;
   }
@@ -350,7 +350,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     WorkspaceFileValue workspaceFileValue = parseWorkspaceFileValueImpl(lines);
     Package pkg = workspaceFileValue.getPackage();
     assertThat(pkg.containsErrors()).isTrue();
-    assertContainsEvent(expectedError);
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), expectedError);
   }
 
   private WorkspaceFileValue parseWorkspaceFileValueImpl(String[] lines)
@@ -363,15 +363,12 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
 
   @Test
   public void testInvalidRepo() throws Exception {
-    // Test intentionally introduces errors.
-    reporter.removeHandler(failFastHandler);
-
     RootedPath workspacePath = createWorkspaceFile("workspace(name = 'foo$')");
     SkyKey key = ExternalPackageFunction.key(workspacePath);
     EvaluationResult<PackageValue> evaluationResult = eval(key);
     Package pkg = evaluationResult.get(key).getPackage();
     assertThat(pkg.containsErrors()).isTrue();
-    assertContainsEvent("foo$ is not a legal workspace name");
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), "foo$ is not a legal workspace name");
   }
 
   @Test
@@ -384,7 +381,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     Package pkg = evaluationResult.get(key).getPackage();
     assertThat(getLabelMapping(pkg, "foo/bar"))
         .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
-    assertNoEvents();
+    MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 
   @Test
@@ -397,14 +394,11 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     Package pkg = evaluationResult.get(key).getPackage();
     assertThat(getLabelMapping(pkg, "foo/bar"))
         .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
-    assertNoEvents();
+    MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 
   @Test
   public void testNonExternalBinding() throws Exception {
-    // Test intentionally introduces errors.
-    reporter.removeHandler(failFastHandler);
-
     // name must be a valid label name.
     String[] lines = {"bind(name = 'foo:bar', actual = '//bar/baz')"};
     RootedPath workspacePath = createWorkspaceFile(lines);
@@ -413,14 +407,11 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     EvaluationResult<PackageValue> evaluationResult = eval(key);
     Package pkg = evaluationResult.get(key).getPackage();
     assertThat(pkg.containsErrors()).isTrue();
-    assertContainsEvent("target names may not contain ':'");
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), "target names may not contain ':'");
   }
 
   @Test
   public void testWorkspaceFileParsingError() throws Exception {
-    // Test intentionally introduces errors.
-    reporter.removeHandler(failFastHandler);
-
     // //external:bar:baz is not a legal package.
     String[] lines = {"bind(name = 'foo/bar', actual = '//external:bar:baz')"};
     RootedPath workspacePath = createWorkspaceFile(lines);
@@ -429,7 +420,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     EvaluationResult<PackageValue> evaluationResult = eval(key);
     Package pkg = evaluationResult.get(key).getPackage();
     assertThat(pkg.containsErrors()).isTrue();
-    assertContainsEvent("target names may not contain ':'");
+    MoreAsserts.assertContainsEvent(pkg.getEvents(), "target names may not contain ':'");
   }
 
   @Test
@@ -442,7 +433,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     EvaluationResult<PackageValue> evaluationResult = eval(key);
     Package pkg = evaluationResult.get(key).getPackage();
     assertThat(pkg.containsErrors()).isFalse();
-    assertNoEvents();
+    MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 
   @Test
@@ -457,7 +448,7 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
     Package pkg = evaluationResult.get(key).getPackage();
     assertThat(getLabelMapping(pkg, "foo/bar"))
         .isEqualTo(Label.parseAbsolute("//foo:bar", ImmutableMap.of()));
-    assertNoEvents();
+    MoreAsserts.assertNoEvents(pkg.getEvents());
   }
 
   @Test
@@ -504,9 +495,6 @@ public class WorkspaceFileFunctionTest extends BuildViewTestCase {
               parseWorkspaceFileValue("toplevel_output_directories(paths = [])")
                   .getDoNotSymlinkInExecrootPaths())
           .isEmpty();
-
-      // Test now intentionally introduces errors.
-      reporter.removeHandler(failFastHandler);
 
       parseWorkspaceFileValueWithError(
           "toplevel_output_directories should not "
