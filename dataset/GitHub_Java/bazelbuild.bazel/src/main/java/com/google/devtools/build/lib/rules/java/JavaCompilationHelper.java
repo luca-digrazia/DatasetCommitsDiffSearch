@@ -205,7 +205,6 @@ public final class JavaCompilationHelper {
     builder.setSourcePathEntries(attributes.getSourcePath());
     builder.setExtdirInputs(getExtdirInputs());
     builder.setLangtoolsJar(javaToolchain.getJavac());
-    builder.setToolsJars(javaToolchain.getTools());
     builder.setJavaBuilderJar(javaToolchain.getJavaBuilder());
     builder.setOutputJar(classJar);
     builder.setManifestProtoOutput(manifestProtoOutput);
@@ -394,7 +393,6 @@ public final class JavaCompilationHelper {
             .addAll(additionalJavaBaseInputs)
             .build());
     builder.setJavacJar(javaToolchain.getJavac());
-    builder.setToolsJars(javaToolchain.getTools());
     builder.build(javaToolchain);
 
     artifactBuilder.setCompileTimeDependencies(headerDeps);
@@ -459,7 +457,10 @@ public final class JavaCompilationHelper {
                 .addOutput(genClassJar)
                 .addTransitiveInputs(getHostJavabaseInputs(getRuleContext()))
                 .setJarExecutable(
-                    JavaCommon.getHostJavaExecutable(ruleContext),
+                    getRuleContext()
+                        .getHostConfiguration()
+                        .getFragment(Jvm.class)
+                        .getJavaExecutable(),
                     getGenClassJar(ruleContext),
                     javaToolchain.getJvmOptions())
                 .setCommandLine(
@@ -542,7 +543,8 @@ public final class JavaCompilationHelper {
   private JavaCompileAction.Builder createJavaCompileActionBuilder(
       JavaSemantics semantics) {
     JavaCompileAction.Builder builder = new JavaCompileAction.Builder(ruleContext, semantics);
-    builder.setJavaExecutable(JavaCommon.getHostJavaExecutable(ruleContext));
+    builder.setJavaExecutable(
+        ruleContext.getHostConfiguration().getFragment(Jvm.class).getJavaExecutable());
     builder.setJavaBaseInputs(
         NestedSetBuilder
             .fromNestedSet(hostJavabase)
