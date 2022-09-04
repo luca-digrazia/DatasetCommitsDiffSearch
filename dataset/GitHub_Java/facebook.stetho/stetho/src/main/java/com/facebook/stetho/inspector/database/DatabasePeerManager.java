@@ -9,6 +9,7 @@
 
 package com.facebook.stetho.inspector.database;
 
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
@@ -142,20 +143,19 @@ public class DatabasePeerManager extends ChromePeerManager {
     Util.throwIfNull(handler);
     SQLiteDatabase database = openDatabase(databaseName);
     try {
-      String firstWordUpperCase = getFirstWord(query).toUpperCase();
-      switch (firstWordUpperCase) {
-        case "UPDATE":
-        case "DELETE":
-          return executeUpdateDelete(database, query, handler);
-        case "INSERT":
-          return executeInsert(database, query, handler);
-        case "SELECT":
-        case "PRAGMA":
-        case "EXPLAIN":
-          return executeSelect(database, query, handler);
-        default:
-          return executeRawQuery(database, query, handler);
+      String firstWord = getFirstWord(query);
+
+      if (firstWord.equalsIgnoreCase("UPDATE") || firstWord.equalsIgnoreCase("DELETE")) {
+        return executeUpdateDelete(database, query, handler);
+      } else if (firstWord.equalsIgnoreCase("INSERT")) {
+        return executeInsert(database, query, handler);
+      } else if (firstWord.equalsIgnoreCase("SELECT") ||
+          firstWord.equalsIgnoreCase("PRAGMA")) {
+        return executeSelect(database, query, handler);
+      } else {
+        return executeRawQuery(database, query, handler);
       }
+
     } finally {
       database.close();
     }
