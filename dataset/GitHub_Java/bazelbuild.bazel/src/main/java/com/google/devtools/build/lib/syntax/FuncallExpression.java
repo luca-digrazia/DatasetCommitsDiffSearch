@@ -279,20 +279,10 @@ public final class FuncallExpression extends Expression {
     return printer.toString();
   }
 
-  /**
-   * Returns either the class itself or, if the class is {@link String}, the proxy class
-   * containing all 'string' methods.
-   */
-  private static Class<?> getClassOrProxyClass(Class<?> clazz) {
-    return String.class.isAssignableFrom(clazz)
-        ? StringModule.class
-        : clazz;
-  }
-
   /** Returns the Skylark callable Method of objClass with structField=true and the given name. */
   public static MethodDescriptor getStructField(Class<?> objClass, String methodName) {
     try {
-      return fieldCache.get(getClassOrProxyClass(objClass)).get(methodName);
+      return fieldCache.get(objClass).get(methodName);
     } catch (ExecutionException e) {
       throw new IllegalStateException("Method loading failed: " + e);
     }
@@ -301,7 +291,7 @@ public final class FuncallExpression extends Expression {
   /** Returns the list of names of Skylark callable Methods of objClass with structField=true. */
   public static Set<String> getStructFieldNames(Class<?> objClass) {
     try {
-      return fieldCache.get(getClassOrProxyClass(objClass)).keySet();
+      return fieldCache.get(objClass).keySet();
     } catch (ExecutionException e) {
       throw new IllegalStateException("Method loading failed: " + e);
     }
@@ -310,7 +300,7 @@ public final class FuncallExpression extends Expression {
   /** Returns the list of Skylark callable Methods of objClass with the given name. */
   public static List<MethodDescriptor> getMethods(Class<?> objClass, String methodName) {
     try {
-      return methodCache.get(getClassOrProxyClass(objClass)).get(methodName);
+      return methodCache.get(objClass).get(methodName);
     } catch (ExecutionException e) {
       throw new IllegalStateException("Method loading failed: " + e);
     }
@@ -322,7 +312,7 @@ public final class FuncallExpression extends Expression {
    */
   public static Set<String> getMethodNames(Class<?> objClass) {
     try {
-      return methodCache.get(getClassOrProxyClass(objClass)).keySet();
+      return methodCache.get(objClass).keySet();
     } catch (ExecutionException e) {
       throw new IllegalStateException("Method loading failed: " + e);
     }
@@ -439,7 +429,7 @@ public final class FuncallExpression extends Expression {
                   String.format(
                       "type '%s' has multiple matches for function %s",
                       EvalUtils.getDataTypeNameFromClass(objClass),
-                      formatMethod(objClass, methodName, args, kwargs)));
+                      formatMethod(methodName, args, kwargs)));
             }
           }
         }
@@ -455,14 +445,14 @@ public final class FuncallExpression extends Expression {
             String.format(
                 "type '%s' has no method %s",
                 EvalUtils.getDataTypeNameFromClass(objClass),
-                formatMethod(objClass, methodName, args, kwargs));
+                formatMethod(methodName, args, kwargs));
 
       } else {
         errorMessage =
             String.format(
                 "%s, in method call %s of '%s'",
                 argumentListConversionResult.getError(),
-                formatMethod(objClass, methodName, args, kwargs),
+                formatMethod(methodName, args, kwargs),
                 EvalUtils.getDataTypeNameFromClass(objClass));
       }
       throw new EvalException(getLocation(), errorMessage);
@@ -650,13 +640,7 @@ public final class FuncallExpression extends Expression {
     return ArgumentListConversionResult.fromArgumentList(builder.build());
   }
 
-  private static String formatMethod(
-      Class<?> objClass, String name, List<Object> args, Map<String, Object> kwargs) {
-    if (objClass == StringModule.class) {
-      // StringModule is a special case, and begins with a String "self" parameter which should
-      // be omitted from the method format.
-      args = args.subList(1, args.size());
-    }
+  private static String formatMethod(String name, List<Object> args, Map<String, Object> kwargs) {
     StringBuilder sb = new StringBuilder();
     sb.append(name).append("(");
     boolean first = true;
@@ -738,24 +722,6 @@ public final class FuncallExpression extends Expression {
     }
   }
 
-  private boolean includeSelfAsArg(
-      Object value, @Nullable BaseFunction globalBuiltinRegistryFunction) {
-    if (value instanceof String) {
-      // String is a special case, as it is treated like a skylark value but cannot be subclassed
-      // in java. Callable functions which represent methods on string objects must thus be given
-      // the string 'self' object.
-      return true;
-    }
-    if (globalBuiltinRegistryFunction != null && !isNamespace(value.getClass())) {
-      // Non-namespace objects which have registered static functions in the global builtin registry
-      // need to have the instance object passed to the method invocation.
-      // TODO(cparsons): Global builtin registry functions are going away, so this use-case is
-      // deprecated.
-      return true;
-    }
-    return false;
-  }
-
   /**
    * Call a method depending on the type of an object it is called on.
    *
@@ -771,15 +737,15 @@ public final class FuncallExpression extends Expression {
       throws EvalException, InterruptedException {
     Location location = call.getLocation();
     Object value = positionals.get(0);
+    ImmutableList<Object> positionalArgs = positionals.subList(1, positionals.size());
     BaseFunction function = Runtime.getBuiltinRegistry().getFunction(value.getClass(), method);
     Object fieldValue =
         (value instanceof ClassObject) ? ((ClassObject) value).getValue(method) : null;
-    ImmutableList<Object> positionalArgs =
-        includeSelfAsArg(value, function)
-            ? positionals
-            : positionals.subList(1, positionals.size());
-
     if (function != null) {
+      if (!isNamespace(value.getClass())) {
+        // Use self as an implicit parameter in front.
+        positionalArgs = positionals;
+      }
       return function.call(
           positionalArgs, ImmutableMap.copyOf(keyWordArgs), call, env);
     } else if (fieldValue != null) {
@@ -799,11 +765,6 @@ public final class FuncallExpression extends Expression {
         // Static call
         obj = null;
         objClass = (Class<?>) value;
-      } else if (value instanceof String) {
-        // String is special-cased, since it can't be subclassed. Methods on strings defer
-        // to StringModule.
-        obj = StringModule.INSTANCE;
-        objClass = StringModule.class;
       } else {
         obj = value;
         objClass = value.getClass();

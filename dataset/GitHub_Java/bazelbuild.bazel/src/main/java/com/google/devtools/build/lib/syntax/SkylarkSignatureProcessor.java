@@ -51,7 +51,7 @@ public class SkylarkSignatureProcessor {
     SkylarkCallable annotation = descriptor.getAnnotation();
 
     // TODO(cparsons): Validate these properties with the annotation processor instead.
-    Preconditions.checkArgument(name.equals(annotation.name()),
+    Preconditions.checkArgument(annotation.name().isEmpty() || name.equals(annotation.name()),
         "%s != %s", name, annotation.name());
     boolean documented = annotation.documented();
     if (annotation.doc().isEmpty() && documented) {
@@ -63,8 +63,7 @@ public class SkylarkSignatureProcessor {
 
     for (int paramIndex = 0; paramIndex < annotation.mandatoryPositionals(); paramIndex++) {
       Parameter<Object, SkylarkType> parameter =
-          new Parameter.Mandatory<Object, SkylarkType>(
-              Identifier.of("arg" + paramIndex),
+          new Parameter.Mandatory<Object, SkylarkType>("arg" + paramIndex,
               SkylarkType.of(javaMethodSignatureParams[paramIndex]));
       parameters.add(parameter);
     }
@@ -227,17 +226,17 @@ public class SkylarkSignatureProcessor {
       paramDoc.put(param.name(), param.doc());
     }
     if (starStar) {
-      return new Parameter.StarStar<>(Identifier.of(param.name()), officialType);
+      return new Parameter.StarStar<>(param.name(), officialType);
     } else if (star) {
-      return new Parameter.Star<>(Identifier.of(param.name()), officialType);
+      return new Parameter.Star<>(param.name(), officialType);
     } else if (mandatory) {
-      return new Parameter.Mandatory<>(Identifier.of(param.name()), officialType);
+      return new Parameter.Mandatory<>(param.name(), officialType);
     } else if (defaultValue != null && enforcedType != null) {
       Preconditions.checkArgument(enforcedType.contains(defaultValue),
           "In function '%s', parameter '%s' has default value %s that isn't of enforced type %s",
           name, param.name(), Printer.repr(defaultValue), enforcedType);
     }
-    return new Parameter.Optional<>(Identifier.of(param.name()), officialType, defaultValue);
+    return new Parameter.Optional<>(param.name(), officialType, defaultValue);
   }
 
   static Object getDefaultValue(Param param, Iterator<Object> iterator) {
