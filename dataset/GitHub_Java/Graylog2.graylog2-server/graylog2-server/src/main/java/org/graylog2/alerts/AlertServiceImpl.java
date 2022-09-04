@@ -37,7 +37,6 @@ import org.mongojack.JacksonDBCollection;
 
 import javax.inject.Inject;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -143,9 +142,10 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public AlertCondition updateFromRequest(AlertCondition alertCondition, CreateConditionRequest ccr) {
-        final Map<String, Object> parameters = new HashMap<>();
-        parameters.putAll(alertCondition.getParameters());
-        parameters.putAll(ccr.parameters());
+        final Map<String, Object> parameters = ImmutableMap.<String, Object>builder()
+            .putAll(alertCondition.getParameters())
+            .putAll(ccr.parameters())
+            .build();
 
         return this.alertConditionFactory.createAlertCondition(
             alertCondition.getType(),
