@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.util.ResourceUsage;
 import com.google.devtools.build.skyframe.AbstractSkyFunctionEnvironment;
 import com.google.devtools.build.skyframe.BuildDriver;
-import com.google.devtools.build.skyframe.EvaluationContext;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
@@ -52,15 +51,9 @@ public class SkyFunctionEnvironmentForTesting extends AbstractSkyFunctionEnviron
       Iterable<? extends SkyKey> depKeys) throws InterruptedException {
     ImmutableMap.Builder<SkyKey, ValueOrUntypedException> resultMap = ImmutableMap.builder();
     Iterable<SkyKey> keysToEvaluate = ImmutableList.copyOf(depKeys);
-    EvaluationContext evaluationContext =
-        EvaluationContext.newBuilder()
-            .setKeepGoing(true)
-            .setNumThreads(ResourceUsage.getAvailableProcessors())
-            .setEventHander(eventHandler)
-            .build();
     EvaluationResult<SkyValue> evaluationResult =
         skyframeExecutor.evaluateSkyKeys(eventHandler, keysToEvaluate, true);
-    buildDriver.evaluate(depKeys, evaluationContext);
+        buildDriver.evaluate(depKeys, true, ResourceUsage.getAvailableProcessors(), eventHandler);
     for (SkyKey depKey : ImmutableSet.copyOf(depKeys)) {
       resultMap.put(depKey, ValueOrUntypedException.ofValueUntyped(evaluationResult.get(depKey)));
     }

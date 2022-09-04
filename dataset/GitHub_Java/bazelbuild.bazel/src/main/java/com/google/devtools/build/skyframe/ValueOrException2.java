@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.annotations.VisibleForTesting;
 import javax.annotation.Nullable;
 
 /** Wrapper for a value or the typed exception thrown when trying to compute it. */
@@ -24,8 +23,7 @@ public abstract class ValueOrException2<E1 extends Exception, E2 extends Excepti
   @Nullable
   public abstract SkyValue get() throws E1, E2;
 
-  @VisibleForTesting
-  public static <E1 extends Exception, E2 extends Exception>
+  static <E1 extends Exception, E2 extends Exception>
       ValueOrException2<E1, E2> fromUntypedException(
           ValueOrUntypedException voe, Class<E1> exceptionClass1, Class<E2> exceptionClass2) {
     SkyValue value = voe.getValue();

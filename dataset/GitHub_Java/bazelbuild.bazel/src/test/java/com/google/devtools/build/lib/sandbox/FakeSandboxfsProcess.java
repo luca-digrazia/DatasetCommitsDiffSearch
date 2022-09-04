@@ -17,6 +17,7 @@ package com.google.devtools.build.lib.sandbox;
 import static com.google.common.base.Preconditions.checkState;
 
 import com.google.devtools.build.lib.vfs.FileSystem;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -113,6 +114,6 @@ final class FakeSandboxfsProcess implements SandboxfsProcess {
 
     checkState(mapping.isAbsolute(), "Mapping specifications are expected to be absolute"
         + " but %s is not", mapping);
-    fileSystem.getPath(mountPoint).getRelative(mapping.toRelative()).deleteTree();
+    FileSystemUtils.deleteTree(fileSystem.getPath(mountPoint).getRelative(mapping.toRelative()));
   }
 }

@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -61,8 +60,7 @@ public class SandboxfsSandboxedSpawnTest extends SandboxTestCase {
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
             ImmutableMap.of(PathFragment.create("such/input.txt"), helloTxt),
-            SandboxOutputs.create(
-                ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of()),
+            ImmutableSet.of(PathFragment.create("very/output.txt")),
             ImmutableSet.of(PathFragment.create("wow/writable")));
 
     spawn.createFileSystem();
@@ -79,16 +77,14 @@ public class SandboxfsSandboxedSpawnTest extends SandboxTestCase {
     Path helloTxt = workspaceDir.getRelative("hello.txt");
     FileSystemUtils.createEmptyFile(helloTxt);
 
-    SandboxedSpawn spawn =
-        new SandboxfsSandboxedSpawn(
-            sandboxfs,
-            outerDir,
-            ImmutableList.of("/bin/true"),
-            ImmutableMap.of(),
-            ImmutableMap.of(PathFragment.create("such/input.txt"), helloTxt),
-            SandboxOutputs.create(
-                ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of()),
-            ImmutableSet.of(PathFragment.create("wow/writable")));
+    SandboxedSpawn spawn = new SandboxfsSandboxedSpawn(
+        sandboxfs,
+        outerDir,
+        ImmutableList.of("/bin/true"),
+        ImmutableMap.of(),
+        ImmutableMap.of(PathFragment.create("such/input.txt"), helloTxt),
+        ImmutableSet.of(PathFragment.create("very/output.txt")),
+        ImmutableSet.of(PathFragment.create("wow/writable")));
     spawn.createFileSystem();
     Path execRoot = spawn.getSandboxExecRoot();
 
@@ -115,7 +111,7 @@ public class SandboxfsSandboxedSpawnTest extends SandboxTestCase {
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
             ImmutableMap.of(),
-            SandboxOutputs.create(ImmutableSet.of(outputFile), ImmutableSet.of()),
+            ImmutableSet.of(outputFile),
             ImmutableSet.of());
     spawn.createFileSystem();
     Path execRoot = spawn.getSandboxExecRoot();
@@ -130,15 +126,14 @@ public class SandboxfsSandboxedSpawnTest extends SandboxTestCase {
   }
 
   @Test
-  public void testSymlinksAreKeptAsIs() throws Exception {
+  public void testSymlinksAreNotExposed() throws Exception {
     Path helloTxt = workspaceDir.getRelative("dir1/hello.txt");
     helloTxt.getParentDirectory().createDirectory();
     FileSystemUtils.createEmptyFile(helloTxt);
 
     Path linkToHello = workspaceDir.getRelative("dir2/link-to-hello");
     linkToHello.getParentDirectory().createDirectory();
-    PathFragment linkTarget = PathFragment.create("../dir1/hello.txt");
-    linkToHello.createSymbolicLink(linkTarget);
+    linkToHello.createSymbolicLink(PathFragment.create("../dir1/hello.txt"));
 
     // Ensure that the symlink we have created has a relative target, as otherwise we wouldn't
     // exercise the functionality we are trying to test.
@@ -151,14 +146,16 @@ public class SandboxfsSandboxedSpawnTest extends SandboxTestCase {
             ImmutableList.of("/bin/true"),
             ImmutableMap.of(),
             ImmutableMap.of(PathFragment.create("such/input.txt"), linkToHello),
-            SandboxOutputs.create(
-                ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of()),
+            ImmutableSet.of(PathFragment.create("very/output.txt")),
             ImmutableSet.of());
 
     spawn.createFileSystem();
     Path execRoot = spawn.getSandboxExecRoot();
 
     assertThat(execRoot.getRelative("such/input.txt").isSymbolicLink()).isTrue();
-    assertThat(execRoot.getRelative("such/input.txt").readSymbolicLink()).isEqualTo(linkTarget);
+    // We expect the target of the input file to be the final target of the input in use, not the
+    // intermediate symlink we specified. Otherwise, the exposed symlink in the sandbox would be
+    // broken because its relative target is not transitively exposed.
+    assertThat(execRoot.getRelative("such/input.txt").resolveSymbolicLinks()).isEqualTo(helloTxt);
   }
 }
