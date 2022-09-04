@@ -39,8 +39,6 @@ import com.google.devtools.build.lib.analysis.EmptyConfiguredTarget;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
-import com.google.devtools.build.lib.analysis.ToolchainCollection;
-import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
@@ -61,7 +59,6 @@ import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ExecGroup;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Package;
@@ -73,7 +70,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.BuildViewProvider;
-import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext.UnloadedToolchainContextKey;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -83,7 +79,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -255,7 +250,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     SkyframeDependencyResolver resolver = view.createDependencyResolver(env);
 
-    ToolchainCollection<UnloadedToolchainContext> unloadedToolchainContexts = null;
+    UnloadedToolchainContext unloadedToolchainContext = null;
 
     // TODO(janakr): this call may tie up this thread indefinitely, reducing the parallelism of
     //  Skyframe. This is a strict improvement over the prior state of the code, in which we ran
@@ -289,7 +284,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       }
 
       // Determine what toolchains are needed by this target.
-      unloadedToolchainContexts = computeUnloadedToolchainContexts(env, ctgValue);
+      unloadedToolchainContext = computeUnloadedToolchainContext(env, ctgValue);
       if (env.valuesMissing()) {
         return null;
       }
@@ -302,9 +297,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               ctgValue,
               ImmutableList.<Aspect>of(),
               configConditions,
-              unloadedToolchainContexts == null
-                  ? null
-                  : unloadedToolchainContexts.asToolchainContexts(),
+              unloadedToolchainContext,
               ruleClassProvider,
               view.getHostConfiguration(configuration),
               transitivePackagesForPackageRootResolution,
@@ -321,22 +314,15 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       Preconditions.checkNotNull(depValueMap);
 
       // Load the requested toolchains into the ToolchainContext, now that we have dependencies.
-      ToolchainCollection<ResolvedToolchainContext> toolchainContexts = null;
-      if (unloadedToolchainContexts != null) {
+      ResolvedToolchainContext toolchainContext = null;
+      if (unloadedToolchainContext != null) {
         String targetDescription = target.toString();
-        ToolchainCollection.Builder<ResolvedToolchainContext> contextsBuilder =
-            new ToolchainCollection.Builder<>();
-        for (Map.Entry<String, UnloadedToolchainContext> unloadedContext :
-            unloadedToolchainContexts.getContextMap().entrySet()) {
-          contextsBuilder.addContext(
-              unloadedContext.getKey(),
-              ResolvedToolchainContext.load(
-                  target.getPackage().getRepositoryMapping(),
-                  unloadedContext.getValue(),
-                  targetDescription,
-                  depValueMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY)));
-        }
-        toolchainContexts = contextsBuilder.build();
+        toolchainContext =
+            ResolvedToolchainContext.load(
+                target.getPackage().getRepositoryMapping(),
+                unloadedToolchainContext,
+                targetDescription,
+                depValueMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
       }
 
       ConfiguredTargetValue ans =
@@ -348,7 +334,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               configuredTargetKey,
               depValueMap,
               configConditions,
-              toolchainContexts,
+              toolchainContext,
               transitivePackagesForPackageRootResolution);
       if (configuredTargetProgress != null) {
         configuredTargetProgress.doneConfigureTarget();
@@ -359,10 +345,8 @@ public final class ConfiguredTargetFunction implements SkyFunction {
         ConfiguredValueCreationException cvce = (ConfiguredValueCreationException) e.getCause();
 
         // Check if this is caused by an unresolved toolchain, and report it as such.
-        // TODO(b/151742236): check non-default {@link ExecGroup} toolchains as well.
-        if (unloadedToolchainContexts != null) {
-          UnloadedToolchainContext finalUnloadedToolchainContext =
-              unloadedToolchainContexts.getDefaultToolchainContext();
+        if (unloadedToolchainContext != null) {
+          UnloadedToolchainContext finalUnloadedToolchainContext = unloadedToolchainContext;
           Set<Label> toolchainDependencyErrors =
               cvce.getRootCauses().toList().stream()
                   .map(Cause::getLabel)
@@ -435,7 +419,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    * to check the result is valid.
    */
   @Nullable
-  private ToolchainCollection<UnloadedToolchainContext> computeUnloadedToolchainContexts(
+  private UnloadedToolchainContext computeUnloadedToolchainContext(
       Environment env, TargetAndConfiguration targetAndConfig)
       throws InterruptedException, ToolchainException {
     if (!(targetAndConfig.getTarget() instanceof Rule)) {
@@ -447,14 +431,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     }
     BuildConfiguration configuration = targetAndConfig.getConfiguration();
 
-    ImmutableSet<Label> requiredDefaultToolchains =
-        rule.getRuleClassObject().getRequiredToolchains();
-    // Collect local (target, rule) constraints for filtering out execution platforms.
-    ImmutableSet<Label> defaultExecConstraintLabels =
-        getExecutionPlatformConstraints(
-            rule, configuration.getFragment(PlatformConfiguration.class));
-
-    ImmutableMap<String, ExecGroup> execGroups = rule.getRuleClassObject().getExecGroups();
+    ImmutableSet<Label> requiredToolchains = rule.getRuleClassObject().getRequiredToolchains();
 
     // The toolchain context's options are the parent rule's options with manual trimming
     // auto-applied. This means toolchains don't inherit feature flags. This helps build
@@ -487,50 +464,19 @@ public final class ConfiguredTargetFunction implements SkyFunction {
             configuration.getFragmentsMap().keySet(),
             BuildOptions.diffForReconstruction(defaultBuildOptions, toolchainOptions));
 
-    Map<String, UnloadedToolchainContextKey> unloadedToolchainContextKeys = new HashMap<>();
-    String targetUnloadedToolchainContext = "target-unloaded-toolchain-context";
-    unloadedToolchainContextKeys.put(
-        targetUnloadedToolchainContext,
-        UnloadedToolchainContext.key()
-            .configurationKey(toolchainConfig)
-            .requiredToolchainTypeLabels(requiredDefaultToolchains)
-            .execConstraintLabels(defaultExecConstraintLabels)
-            .shouldSanityCheckConfiguration(configuration.trimConfigurationsRetroactively())
-            .build());
-    for (Map.Entry<String, ExecGroup> group : execGroups.entrySet()) {
-      ExecGroup execGroup = group.getValue();
-      unloadedToolchainContextKeys.put(
-          group.getKey(),
-          UnloadedToolchainContext.key()
-              .configurationKey(toolchainConfig)
-              .requiredToolchainTypeLabels(execGroup.getRequiredToolchains())
-              .execConstraintLabels(execGroup.getExecutionPlatformConstraints())
-              .shouldSanityCheckConfiguration(configuration.trimConfigurationsRetroactively())
-              .build());
-    }
-
-    Map<SkyKey, ValueOrException<ToolchainException>> values =
-        env.getValuesOrThrow(unloadedToolchainContextKeys.values(), ToolchainException.class);
-
-    boolean valuesMissing = env.valuesMissing();
-
-    ToolchainCollection.Builder<UnloadedToolchainContext> toolchainContexts =
-        valuesMissing ? null : new ToolchainCollection.Builder<>();
-    for (Map.Entry<String, UnloadedToolchainContextKey> unloadedToolchainContextKey :
-        unloadedToolchainContextKeys.entrySet()) {
-      UnloadedToolchainContext unloadedToolchainContext =
-          (UnloadedToolchainContext) values.get(unloadedToolchainContextKey.getValue()).get();
-      if (!valuesMissing) {
-        String execGroup = unloadedToolchainContextKey.getKey();
-        if (execGroup.equals(targetUnloadedToolchainContext)) {
-          toolchainContexts.addDefaultContext(unloadedToolchainContext);
-        } else {
-          toolchainContexts.addContext(execGroup, unloadedToolchainContext);
-        }
-      }
-    }
-
-    return valuesMissing ? null : toolchainContexts.build();
+    // Collect local (target, rule) constraints for filtering out execution platforms.
+    ImmutableSet<Label> execConstraintLabels =
+        getExecutionPlatformConstraints(
+            rule, configuration.getFragment(PlatformConfiguration.class));
+    return (UnloadedToolchainContext)
+        env.getValueOrThrow(
+            UnloadedToolchainContext.key()
+                .configurationKey(toolchainConfig)
+                .requiredToolchainTypeLabels(requiredToolchains)
+                .execConstraintLabels(execConstraintLabels)
+                .shouldSanityCheckConfiguration(configuration.trimConfigurationsRetroactively())
+                .build(),
+            ToolchainException.class);
   }
 
   /**
@@ -567,7 +513,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
    * @param ctgValue the label and the configuration of the node
    * @param aspects
    * @param configConditions the configuration conditions for evaluating the attributes of the node
-   * @param toolchainContexts the toolchain context for this target
+   * @param toolchainContext the toolchain context for this target
    * @param ruleClassProvider rule class provider for determining the right configuration fragments
    *     to apply to deps
    * @param hostConfiguration the host configuration. There's a noticeable performance hit from
@@ -584,7 +530,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       TargetAndConfiguration ctgValue,
       Iterable<Aspect> aspects,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainCollection<ToolchainContext> toolchainContexts,
+      @Nullable UnloadedToolchainContext toolchainContext,
       RuleClassProvider ruleClassProvider,
       BuildConfiguration hostConfiguration,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution,
@@ -601,7 +547,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               hostConfiguration,
               aspects,
               configConditions,
-              toolchainContexts,
+              toolchainContext,
               transitiveRootCauses,
               ((ConfiguredRuleClassProvider) ruleClassProvider).getTrimmingTransitionFactory());
     } catch (EvalException e) {
@@ -922,7 +868,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> depValueMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts,
+      @Nullable ResolvedToolchainContext toolchainContext,
       @Nullable NestedSetBuilder<Package> transitivePackagesForPackageRootResolution)
       throws ConfiguredTargetFunctionException, InterruptedException {
     StoredEventHandler events = new StoredEventHandler();
@@ -948,7 +894,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               configuredTargetKey,
               depValueMap,
               configConditions,
-              toolchainContexts);
+              toolchainContext);
     } catch (MissingDepException e) {
       Preconditions.checkState(env.valuesMissing(), e.getMessage());
       return null;
