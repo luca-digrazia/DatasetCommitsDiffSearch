@@ -561,7 +561,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
         return sum;
     }
 
-    class PCGMatrix implements Matrix, Preconditioner {
+    class PCGMatrix extends Matrix implements Preconditioner {
 
         Matrix A;
         Matrix AtA;
@@ -578,6 +578,7 @@ public class LASSO  implements Regression<double[]>, Serializable {
             this.d2 = d2;
             this.prb = prb;
             this.prs = prs;
+            setSymmetric(true);
 
             int n = A.nrows();
             ax = new double[n];
@@ -586,11 +587,6 @@ public class LASSO  implements Regression<double[]>, Serializable {
             if ((A.ncols() < 10000) && (A instanceof DenseMatrix)) {
                 AtA = A.ata();
             }
-        }
-
-        @Override
-        public boolean isSymmetric() {
-            return true;
         }
 
         @Override
