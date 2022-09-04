@@ -1,26 +1,8 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 package org.graylog2.plugin.inputs;
 
 import com.google.common.collect.Maps;
 import org.graylog2.plugin.Tools;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.joda.time.DateTime;
 
 import java.util.Map;
@@ -33,7 +15,6 @@ public class InputState {
     public enum InputStateType {
         CREATED,
         INITIALIZED,
-        INVALID_CONFIGURATION,
         STARTING,
         RUNNING,
         FAILED,
@@ -44,7 +25,7 @@ public class InputState {
     protected MessageInput messageInput;
     protected String id;
     protected InputStateType state;
-    protected DateTime startedAt;
+    protected String startedAt;
     protected String detailedMessage;
 
     public InputState(MessageInput input) {
@@ -63,7 +44,7 @@ public class InputState {
         this.state = state;
         this.messageInput = input;
         this.id = id;
-        this.startedAt = DateTime.now();
+        this.startedAt = Tools.getISO8601String(DateTime.now());
     }
 
 
@@ -84,11 +65,11 @@ public class InputState {
         this.setDetailedMessage(null);
     }
 
-    public DateTime getStartedAt() {
+    public String getStartedAt() {
         return startedAt;
     }
 
-    public void setStartedAt(DateTime startedAt) {
+    public void setStartedAt(String startedAt) {
         this.startedAt = startedAt;
     }
 
@@ -104,43 +85,10 @@ public class InputState {
         Map<String, Object> inputStateMap = Maps.newHashMap();
         inputStateMap.put("id", id);
         inputStateMap.put("state", state.toString().toLowerCase());
-        inputStateMap.put("started_at", Tools.getISO8601String(startedAt));
+        inputStateMap.put("started_at", startedAt);
         inputStateMap.put("message_input", messageInput.asMap());
         inputStateMap.put("detailed_message", detailedMessage);
 
         return inputStateMap;
-    }
-
-    @Override
-    public String toString() {
-        return "InputState{" +
-                "messageInput=" + messageInput +
-                ", id='" + id + '\'' +
-                ", state=" + state +
-                ", startedAt=" + startedAt +
-                ", detailedMessage='" + detailedMessage + '\'' +
-                '}';
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        InputState that = (InputState) o;
-
-        if (!id.equals(that.id)) return false;
-        if (!messageInput.equals(that.messageInput)) return false;
-        if (state != that.state) return false;
-
-        return true;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = messageInput.hashCode();
-        result = 31 * result + id.hashCode();
-        result = 31 * result + state.hashCode();
-        return result;
     }
 }
