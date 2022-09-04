@@ -38,6 +38,7 @@ import com.google.devtools.build.lib.buildeventstream.TestFileNameConstants;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.rules.test.TestAttempt;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -97,7 +98,12 @@ public class StandaloneTestStrategy extends TestStrategy {
             binTools,
             action.getLocalShellEnvironment(),
             action.isEnableRunfiles());
-    Path tmpDir = tmpDirRoot.getChild(TestStrategy.getTmpDirName(action));
+    Path tmpDir =
+        tmpDirRoot.getChild(
+            getTmpDirName(
+                action.getExecutionSettings().getExecutable().getExecPath(),
+                action.getShardNum(),
+                action.getRunNumber()));
     Map<String, String> env = setupEnvironment(
         action, actionExecutionContext.getClientEnv(), execRoot, runfilesDir, tmpDir);
     Path workingDirectory = runfilesDir.getRelative(action.getRunfilesPrefix());
@@ -361,15 +367,8 @@ public class StandaloneTestStrategy extends TestStrategy {
             .setPassedLog(testLogPath.getPathString());
       } catch (SpawnExecException e) {
         // If this method returns normally, then the higher level will rerun the test (up to
-        // --flaky_test_attempts times).
-        if (e.isCatastrophic()) {
-          // Rethrow as the error was catastrophic and thus the build has to be halted.
-          throw e;
-        }
-        if (!e.getSpawnResult().setupSuccess()) {
-          // Rethrow as the test could not be run and thus there's no point in retrying.
-          throw e;
-        }
+        // --flaky_test_attempts times). We don't catch any other ExecException here, so those never
+        // get retried.
         builder
             .setTestPassed(false)
             .setStatus(e.hasTimedOut() ? BlazeTestStatus.TIMEOUT : BlazeTestStatus.FAILED)

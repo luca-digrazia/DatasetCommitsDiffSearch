@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.test.TestActionContext;
@@ -162,7 +161,7 @@ public abstract class TestStrategy implements TestActionContext {
    * @return the command line as string list.
    * @throws ExecException 
    */
-  public static ImmutableList<String> getArgs(String coverageScript, TestRunnerAction testAction)
+  protected ImmutableList<String> getArgs(String coverageScript, TestRunnerAction testAction)
       throws ExecException {
     List<String> args = Lists.newArrayList();
     // TODO(ulfjack): This is incorrect for remote execution, where we need to consider the target
@@ -278,11 +277,11 @@ public abstract class TestStrategy implements TestActionContext {
     }
   }
 
-  public static String getTmpDirName(TestRunnerAction action) {
+  protected String getTmpDirName(PathFragment execPath, int shard, int run) {
     Fingerprint digest = new Fingerprint();
-    digest.addPath(action.getExecutionSettings().getExecutable().getExecPath());
-    digest.addInt(action.getShardNum());
-    digest.addInt(action.getRunNumber());
+    digest.addPath(execPath);
+    digest.addInt(shard);
+    digest.addInt(run);
     return digest.hexDigestAndReset();
   }
 
@@ -343,11 +342,6 @@ public abstract class TestStrategy implements TestActionContext {
       boolean enableRunfiles)
       throws ExecException, InterruptedException {
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();
-
-    if (execSettings.getInputManifest() == null) {
-      throw new TestExecException("cannot run local tests with --nobuild_runfile_manifests");
-    }
-
     Path runfilesDir = execSettings.getRunfilesDir();
 
     // If the symlink farm is already created then return the existing directory. If not we
@@ -416,12 +410,7 @@ public abstract class TestStrategy implements TestActionContext {
 
     new SymlinkTreeHelper(execSettings.getInputManifest().getPath(), runfilesDir, false)
         .createSymlinks(
-            testAction,
-            actionExecutionContext,
-            binTools,
-            shellEnvironment,
-            execSettings.getInputManifest(),
-            enableRunfiles);
+            testAction, actionExecutionContext, binTools, shellEnvironment, enableRunfiles);
 
     actionExecutionContext.getEventHandler()
         .handle(Event.progress(testAction.getProgressMessage()));

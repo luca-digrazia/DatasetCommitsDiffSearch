@@ -105,7 +105,7 @@ public abstract class AbstractSpawnStrategy implements SandboxedSpawnActionConte
       throw new EnvironmentalExecException("Unexpected IO error.", e);
     }
 
-    if (spawnResult.status() != Status.SUCCESS) {
+    if ((spawnResult.status() != Status.SUCCESS) || (spawnResult.exitCode() != 0)) {
       String cwd = actionExecutionContext.getExecRoot().getPathString();
       String message =
           CommandFailureUtils.describeCommandFailure(

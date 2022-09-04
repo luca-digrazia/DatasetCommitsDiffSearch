@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -55,7 +54,6 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
@@ -110,8 +108,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
   private final ExtraActionInfoSupplier<?> extraActionInfoSupplier;
 
-  @Nullable private final PlatformInfo executionPlatform;
-
   /**
    * Constructs a SpawnAction using direct initialization arguments.
    *
@@ -157,7 +153,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         EmptyRunfilesSupplier.INSTANCE,
         mnemonic,
         false,
-        null,
         null);
   }
 
@@ -199,8 +194,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       RunfilesSupplier runfilesSupplier,
       String mnemonic,
       boolean executeUnconditionally,
-      ExtraActionInfoSupplier<?> extraActionInfoSupplier,
-      @Nullable PlatformInfo executionPlatform) {
+      ExtraActionInfoSupplier<?> extraActionInfoSupplier) {
     super(owner, tools, inputs, runfilesSupplier, outputs, env);
     this.resourceSet = resourceSet;
     this.executionInfo = executionInfo;
@@ -210,7 +204,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     this.mnemonic = mnemonic;
     this.executeUnconditionally = executeUnconditionally;
     this.extraActionInfoSupplier = extraActionInfoSupplier;
-    this.executionPlatform = executionPlatform;
   }
 
   @Override
@@ -339,8 +332,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException {
+  protected String computeKey() throws CommandLineExpansionException {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     f.addStrings(argv.arguments());
@@ -405,9 +397,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   @Override
-  public ExtraActionInfo.Builder getExtraActionInfo(ActionKeyContext actionKeyContext)
-      throws CommandLineExpansionException {
-    ExtraActionInfo.Builder builder = super.getExtraActionInfo(actionKeyContext);
+  public ExtraActionInfo.Builder getExtraActionInfo() throws CommandLineExpansionException {
+    ExtraActionInfo.Builder builder = super.getExtraActionInfo();
     if (extraActionInfoSupplier == null) {
       SpawnInfo spawnInfo = getExtraActionSpawnInfo();
       return builder
@@ -464,12 +455,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
   protected SpawnActionContext getContext(ActionExecutionContext actionExecutionContext) {
     return actionExecutionContext.getSpawnActionContext(getMnemonic());
-  }
-
-  @Override
-  @Nullable
-  public PlatformInfo getExecutionPlatform() {
-    return executionPlatform;
   }
 
   /**
@@ -623,7 +608,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     private String mnemonic = "Unknown";
     protected ExtraActionInfoSupplier<?> extraActionInfoSupplier = null;
     private boolean disableSandboxing = false;
-    @Nullable private PlatformInfo executionPlatform;
 
     /**
      * Creates a SpawnAction builder.
@@ -651,7 +635,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
       this.commandLines = Lists.newArrayList(other.commandLines);
       this.progressMessage = other.progressMessage;
       this.mnemonic = other.mnemonic;
-      this.executionPlatform = other.executionPlatform;
     }
 
     /**
@@ -673,7 +656,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
      */
     @CheckReturnValue
     public Action[] build(ActionConstructionContext context) {
-      setExecutionPlatform(context.getExecutionPlatform());
       return build(context.getActionOwner(), context.getAnalysisEnvironment(),
           context.getConfiguration());
     }
@@ -821,8 +803,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           progressMessage,
           new CompositeRunfilesSupplier(
               Iterables.concat(this.inputRunfilesSuppliers, this.toolRunfilesSuppliers)),
-          mnemonic,
-          executionPlatform);
+          mnemonic);
     }
 
     /**
@@ -853,8 +834,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         ImmutableMap<String, String> executionInfo,
         CharSequence progressMessage,
         RunfilesSupplier runfilesSupplier,
-        String mnemonic,
-        PlatformInfo executionPlatform) {
+        String mnemonic) {
       return new SpawnAction(
           owner,
           tools,
@@ -869,8 +849,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
           runfilesSupplier,
           mnemonic,
           executeUnconditionally,
-          extraActionInfoSupplier,
-          executionPlatform);
+          extraActionInfoSupplier);
     }
 
     private ImmutableList<String> buildExecutableArgs(
@@ -1370,11 +1349,6 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
     public Builder disableSandboxing() {
       this.disableSandboxing = true;
-      return this;
-    }
-
-    public Builder setExecutionPlatform(@Nullable PlatformInfo executionPlatform) {
-      this.executionPlatform = executionPlatform;
       return this;
     }
   }

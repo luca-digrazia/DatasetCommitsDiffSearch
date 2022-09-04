@@ -26,7 +26,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.BaseSpawn;
@@ -125,10 +124,10 @@ public class JavaHeaderCompileAction extends SpawnAction {
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint().addString(GUID);
     try {
-      f.addString(super.computeKey(actionKeyContext));
+      f.addString(super.computeKey());
       f.addStrings(directCommandLine.arguments());
     } catch (CommandLineExpansionException e) {
       throw new AssertionError("JavaHeaderCompileAction command line expansion cannot fail");
@@ -545,8 +544,6 @@ public class JavaHeaderCompileAction extends SpawnAction {
       }
 
       result.addAll("--javacopts", javacOpts);
-      // terminate --javacopts with `--` to support javac flags that start with `--`
-      result.add("--");
 
       if (ruleKind != null) {
         result.add("--rule_kind", ruleKind);

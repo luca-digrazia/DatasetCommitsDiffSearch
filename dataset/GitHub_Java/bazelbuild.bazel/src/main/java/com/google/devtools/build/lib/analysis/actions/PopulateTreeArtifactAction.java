@@ -25,12 +25,10 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.BaseSpawn;
@@ -76,7 +74,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
 
   private final Artifact archive;
   private final Artifact archiveManifest;
-  private final SpecialArtifact outputTreeArtifact;
+  private final Artifact outputTreeArtifact;
   private final FilesToRunProvider zipper;
 
   /**
@@ -93,7 +91,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
       ActionOwner owner,
       Artifact archive,
       Artifact archiveManifest,
-      SpecialArtifact treeArtifactToPopulate,
+      Artifact treeArtifactToPopulate,
       FilesToRunProvider zipper) {
     super(
         owner,
@@ -115,7 +113,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
   }
 
   private static class PopulateTreeArtifactSpawn extends BaseSpawn {
-    private final SpecialArtifact treeArtifact;
+    private final Artifact treeArtifact;
     private final Iterable<PathFragment> entriesToExtract;
 
     // The output TreeFileArtifacts are created lazily outside of the contructor because potentially
@@ -123,7 +121,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
     private Collection<TreeFileArtifact> outputTreeFileArtifacts;
 
     PopulateTreeArtifactSpawn(
-        SpecialArtifact treeArtifact,
+        Artifact treeArtifact,
         Iterable<PathFragment> entriesToExtract,
         Iterable<String> commandLine,
         RunfilesSupplier runfilesSupplier,
@@ -211,7 +209,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
   }
 
   @Override
-  protected String computeKey(ActionKeyContext actionKeyContext) {
+  protected String computeKey() {
     Fingerprint f = new Fingerprint();
     f.addString(GUID);
     f.addString(getMnemonic());

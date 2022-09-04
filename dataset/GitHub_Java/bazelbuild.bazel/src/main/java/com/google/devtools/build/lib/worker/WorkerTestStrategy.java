@@ -124,7 +124,7 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
 
     TestResultData.Builder builder = TestResultData.newBuilder();
 
-    Path testLogPath = actionExecutionContext.getInputPath(action.getTestLog());
+    Path testLogPath = action.getTestLog().getPath();
     Worker worker = null;
     WorkerKey key = null;
     long startTime = actionExecutionContext.getClock().currentTimeMillis();
@@ -242,7 +242,7 @@ public class WorkerTestStrategy extends StandaloneTestStrategy {
   }
 
   private List<String> getStartUpArgs(TestRunnerAction action) throws ExecException {
-    List<String> args = getArgs(action);
+    List<String> args = getArgs(/*coverageScript=*/ "coverage-is-not-supported", action);
     ImmutableList.Builder<String> startupArgs = ImmutableList.builder();
     // Add test setup with no echo to prevent stdout corruption.
     startupArgs.add(args.get(0)).add("--no_echo");
