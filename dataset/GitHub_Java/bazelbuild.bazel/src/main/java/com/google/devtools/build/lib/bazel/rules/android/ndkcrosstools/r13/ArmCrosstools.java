@@ -94,7 +94,6 @@ final class ArmCrosstools {
                 CompilationModeFlags.newBuilder()
                     .setMode(CompilationMode.DBG)
                     .addCompilerFlag("-O0")
-                    .addCompilerFlag("-g")
                     .addCompilerFlag("-UNDEBUG"));
 
     stlImpl.addStlImpl(toolchain, "4.9");
