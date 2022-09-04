@@ -255,21 +255,14 @@ public class Package {
   }
 
   /**
-   * Returns the repository mapping for the requested external repository.
+   * Returns the workspace mappings for the repository with the given absolute name.
    *
    * @throws LabelSyntaxException if repository is not a valid {@link RepositoryName}
-   * @throws UnsupportedOperationException if called from any package other than the //external
-   *     package
    */
-  public ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping(String repository)
-      throws LabelSyntaxException, UnsupportedOperationException {
+  public ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping(
+      String repository) throws LabelSyntaxException {
     RepositoryName repositoryName = RepositoryName.create(repository);
     return getRepositoryMapping(repositoryName);
-  }
-
-  /** Get the repository mapping for this package. */
-  public ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping() {
-    return repositoryMapping;
   }
 
   /**
@@ -402,7 +395,7 @@ public class Package {
     this.posts = ImmutableList.copyOf(builder.posts);
     this.registeredExecutionPlatforms = ImmutableList.copyOf(builder.registeredExecutionPlatforms);
     this.registeredToolchains = ImmutableList.copyOf(builder.registeredToolchains);
-    this.repositoryMapping = Preconditions.checkNotNull(builder.repositoryMapping);
+    this.repositoryMapping = builder.repositoryMapping;
     ImmutableMap.Builder<RepositoryName, ImmutableMap<RepositoryName, RepositoryName>>
         repositoryMappingsBuilder = ImmutableMap.builder();
     if (!builder.externalPackageRepositoryMappings.isEmpty() && !builder.isWorkspace()) {
@@ -929,13 +922,8 @@ public class Package {
      * package)
      */
     Builder setRepositoryMapping(ImmutableMap<RepositoryName, RepositoryName> repositoryMapping) {
-      this.repositoryMapping = Preconditions.checkNotNull(repositoryMapping);
+      this.repositoryMapping = repositoryMapping;
       return this;
-    }
-
-    /** Get the repository mapping for this package */
-    ImmutableMap<RepositoryName, RepositoryName> getRepositoryMapping() {
-      return this.repositoryMapping;
     }
 
     /**
