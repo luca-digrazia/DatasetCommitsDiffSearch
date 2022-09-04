@@ -19,18 +19,18 @@ public class LoggingConfiguration {
 
     public static class ConsoleConfiguration {
         @JsonProperty
-        protected boolean enabled = true;
+        private boolean enabled = true;
 
         @NotNull
         @JsonProperty
-        protected Level threshold = Level.ALL;
+        private Level threshold = Level.ALL;
 
         @NotNull
         @JsonProperty
-        protected TimeZone timeZone = UTC;
+        private TimeZone timeZone = UTC;
 
         @JsonProperty
-        protected String logFormat;
+        private String logFormat;
 
         public boolean isEnabled() {
             return enabled;
@@ -64,29 +64,29 @@ public class LoggingConfiguration {
     @SuppressWarnings("CanBeFinal")
     public static class FileConfiguration {
         @JsonProperty
-        protected boolean enabled = false;
+        private boolean enabled = false;
 
         @NotNull
         @JsonProperty
-        protected Level threshold = Level.ALL;
+        private Level threshold = Level.ALL;
 
         @JsonProperty
-        protected String currentLogFilename;
+        private String currentLogFilename;
 
         @JsonProperty
-        protected String archivedLogFilenamePattern;
+        private String archivedLogFilenamePattern;
 
         @Min(1)
         @Max(50)
         @JsonProperty
-        protected int archivedFileCount = 5;
+        private int archivedFileCount = 5;
 
         @NotNull
         @JsonProperty
-        protected TimeZone timeZone = UTC;
+        private TimeZone timeZone = UTC;
 
         @JsonProperty
-        protected String logFormat;
+        private String logFormat;
 
         @ValidationMethod(message = "must have logging.file.currentLogFilename and " +
                 "logging.file.archivedLogFilenamePattern if logging.file.enabled is true")
@@ -125,15 +125,15 @@ public class LoggingConfiguration {
 
     public static class SyslogConfiguration {
         @JsonProperty
-        protected boolean enabled = false;
+        private boolean enabled = false;
 
         @NotNull
         @JsonProperty
-        protected Level threshold = Level.ALL;
+        private Level threshold = Level.ALL;
 
         @NotNull
         @JsonProperty
-        protected String host = "localhost";
+        private String host = "localhost";
 
         @NotNull
         @JsonProperty
@@ -141,14 +141,14 @@ public class LoggingConfiguration {
                 regexp = "(auth|authpriv|daemon|cron|ftp|lpr|kern|mail|news|syslog|user|uucp|local[0-7])",
                 message = "must be a valid syslog facility"
         )
-        protected String facility = "local0";
+        private String facility = "local0";
 
         @NotNull
         @JsonProperty
-        protected TimeZone timeZone = UTC;
+        private TimeZone timeZone = UTC;
 
         @JsonProperty
-        protected String logFormat;
+        private String logFormat;
 
         public boolean isEnabled() {
             return enabled;
@@ -177,26 +177,26 @@ public class LoggingConfiguration {
 
     @NotNull
     @JsonProperty
-    protected Level level = Level.INFO;
+    private Level level = Level.INFO;
 
     @NotNull
     @JsonProperty
-    protected ImmutableMap<String, Level> loggers = ImmutableMap.of();
-
-    @Valid
-    @NotNull
-    @JsonProperty
-    protected ConsoleConfiguration console = new ConsoleConfiguration();
+    private ImmutableMap<String, Level> loggers = ImmutableMap.of();
 
     @Valid
     @NotNull
     @JsonProperty
-    protected FileConfiguration file = new FileConfiguration();
+    private ConsoleConfiguration console = new ConsoleConfiguration();
 
     @Valid
     @NotNull
     @JsonProperty
-    protected SyslogConfiguration syslog = new SyslogConfiguration();
+    private FileConfiguration file = new FileConfiguration();
+
+    @Valid
+    @NotNull
+    @JsonProperty
+    private SyslogConfiguration syslog = new SyslogConfiguration();
 
     public Level getLevel() {
         return level;
