@@ -201,7 +201,7 @@ public final class CcCompilationHelper {
   private final List<Artifact> additionalIncludeScanningRoots = new ArrayList<>();
   private final List<PathFragment> additionalExportedHeaders = new ArrayList<>();
   private final List<CppModuleMap> additionalCppModuleMaps = new ArrayList<>();
-  private final LinkedHashMap<Artifact, CppSource> compilationUnitSources = new LinkedHashMap<>();
+  private final Set<CppSource> compilationUnitSources = new LinkedHashSet<>();
   private final List<Artifact> objectFiles = new ArrayList<>();
   private final List<Artifact> picObjectFiles = new ArrayList<>();
   private ImmutableList<String> copts = ImmutableList.of();
@@ -408,10 +408,8 @@ public final class CcCompilationHelper {
     Preconditions.checkState(isHeader || isTextualInclude);
 
     if (ccToolchain.shouldProcessHeaders(featureConfiguration) && !isTextualInclude) {
-      compilationUnitSources.put(
-          privateHeader, CppSource.create(privateHeader, label, CppSource.Type.HEADER));
+      compilationUnitSources.add(CppSource.create(privateHeader, label, CppSource.Type.HEADER));
     }
-    
     this.privateHeaders.add(privateHeader);
     return this;
   }
@@ -466,8 +464,7 @@ public final class CcCompilationHelper {
     if (isTextualInclude || !isHeader || !ccToolchain.shouldProcessHeaders(featureConfiguration)) {
       return;
     }
-
-    compilationUnitSources.put(header, CppSource.create(header, label, CppSource.Type.HEADER));
+    compilationUnitSources.add(CppSource.create(header, label, CppSource.Type.HEADER));
   }
 
   /** Adds a header to {@code publicHeaders}, but not to this target's module map. */
@@ -500,7 +497,7 @@ public final class CcCompilationHelper {
     } else {
       type = CppSource.Type.SOURCE;
     }
-    compilationUnitSources.put(source, CppSource.create(source, label, type));
+    compilationUnitSources.add(CppSource.create(source, label, type));
   }
 
   /**
@@ -510,7 +507,7 @@ public final class CcCompilationHelper {
    * compilation.
    */
   public ImmutableSet<CppSource> getCompilationUnitSources() {
-    return ImmutableSet.copyOf(this.compilationUnitSources.values());
+    return ImmutableSet.copyOf(this.compilationUnitSources);
   }
 
   /**
@@ -1235,7 +1232,7 @@ public final class CcCompilationHelper {
    * for all artifacts.
    */
   private ImmutableMap<Artifact, String> calculateOutputNameMapByType(
-      Map<Artifact, CppSource> sources, String prefixDir) {
+      Set<CppSource> sources, String prefixDir) {
     ImmutableMap.Builder<Artifact, String> builder = ImmutableMap.builder();
     builder.putAll(
         calculateOutputNameMap(
@@ -1251,15 +1248,13 @@ public final class CcCompilationHelper {
   }
 
   private NestedSet<Artifact> getSourceArtifactsByType(
-      Map<Artifact, CppSource> sources, CppSource.Type type) {
+    Set<CppSource> sources, CppSource.Type type) {
     NestedSetBuilder<Artifact> result = NestedSetBuilder.stableOrder();
-    result.addAll(
-        sources
-            .values()
-            .stream()
-            .filter(source -> source.getType().equals(type))
-            .map(CppSource::getSource)
-            .collect(Collectors.toList()));
+    result.addAll(sources
+        .stream()
+        .filter(source -> source.getType().equals(type))
+        .map(CppSource::getSource)
+        .collect(Collectors.toList()));
     return result.build();
   }
 
@@ -1304,7 +1299,7 @@ public final class CcCompilationHelper {
       outputNameMap = calculateOutputNameMapByType(compilationUnitSources, outputNamePrefixDir);
     }
 
-    for (CppSource source : compilationUnitSources.values()) {
+    for (CppSource source : compilationUnitSources) {
       Artifact sourceArtifact = source.getSource();
       Label sourceLabel = source.getLabel();
       CppCompileActionBuilder builder = initializeCompileAction(sourceArtifact);
