@@ -3,10 +3,9 @@ package com.example.gsyvideoplayer;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
-import androidx.appcompat.app.AppCompatActivity;
+import android.support.v7.app.AppCompatActivity;
 import android.transition.Explode;
 import android.view.Window;
-import android.view.WindowManager;
 import android.widget.AbsListView;
 import android.widget.ListView;
 import android.widget.RelativeLayout;
@@ -33,7 +32,6 @@ public class ListVideoActivity extends AppCompatActivity {
         // 设置一个exit transition
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             getWindow().requestFeature(Window.FEATURE_CONTENT_TRANSITIONS);
-            getWindow().addFlags(WindowManager.LayoutParams.FLAG_TRANSLUCENT_STATUS);
             getWindow().setEnterTransition(new Explode());
             getWindow().setExitTransition(new Explode());
         }
