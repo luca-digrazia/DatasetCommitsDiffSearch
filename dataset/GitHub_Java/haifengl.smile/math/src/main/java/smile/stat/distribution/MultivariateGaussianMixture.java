@@ -59,7 +59,6 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
      * Fits the Gaussian mixture model with the EM algorithm.
      * @param data the training data.
      * @param k the number of components.
-     * @return the distribution.
      */
     public static MultivariateGaussianMixture fit(int k, double[][] data) {
         return fit(k, data, false);
@@ -70,7 +69,6 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
      * @param data the training data.
      * @param k the number of components.
      * @param diagonal true if the components have diagonal covariance matrix.
-     * @return the distribution.
      */
     public static MultivariateGaussianMixture fit(int k, double[][] data, boolean diagonal) {
         if (k < 2)
@@ -145,7 +143,6 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
      * Fits the Gaussian mixture model with the EM algorithm.
      * The number of components will be selected by BIC.
      * @param data the training data.
-     * @return the distribution.
      */
     public static MultivariateGaussianMixture fit(double[][] data) {
         return fit(data, false);
@@ -156,7 +153,6 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
      * The number of components will be selected by BIC.
      * @param data the training data.
      * @param diagonal true if the components have diagonal covariance matrix.
-     * @return the distribution.
      */
     public static MultivariateGaussianMixture fit(double[][] data, boolean diagonal) {
         if (data.length < 20)

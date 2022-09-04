@@ -46,7 +46,7 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
     private Matrix sigmaL;
     private double sigmaDet;
     private double pdfConstant;
-    private final int length;
+    private int length;
 
     /**
      * Constructor. The distribution will have a diagonal covariance matrix of
@@ -118,7 +118,6 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
     /**
      * Estimates the mean and diagonal covariance by MLE.
      * @param data the training data.
-     * @return the distribution.
      */
     public static MultivariateGaussianDistribution fit(double[][] data) {
         return fit(data, false);
@@ -128,7 +127,6 @@ public class MultivariateGaussianDistribution implements MultivariateDistributio
      * Estimates the mean and covariance by MLE.
      * @param data the training data.
      * @param diagonal true if covariance matrix is diagonal.
-     * @return the distribution.
      */
     public static MultivariateGaussianDistribution fit(double[][] data, boolean diagonal) {
         double[] mu = MathEx.colMeans(data);

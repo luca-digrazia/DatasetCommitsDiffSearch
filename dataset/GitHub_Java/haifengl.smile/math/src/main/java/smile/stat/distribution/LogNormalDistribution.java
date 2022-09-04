@@ -64,8 +64,6 @@ public class LogNormalDistribution extends AbstractDistribution {
 
     /**
      * Estimates the distribution parameters by MLE.
-     * @param data the training data.
-     * @return the distribution.
      */
     public static LogNormalDistribution fit(double[] data) {
         double[] x = new double[data.length];

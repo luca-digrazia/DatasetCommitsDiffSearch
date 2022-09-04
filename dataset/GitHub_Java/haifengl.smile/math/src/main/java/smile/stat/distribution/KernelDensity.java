@@ -42,7 +42,7 @@ public class KernelDensity implements Distribution {
      */
     private final GaussianDistribution gaussian;
     /**
-     * {@code h > 0} is a smoothing parameter called the bandwidth.
+     * h > 0 is a smoothing parameter called the bandwidth.
      */
     private final double h;
     /**

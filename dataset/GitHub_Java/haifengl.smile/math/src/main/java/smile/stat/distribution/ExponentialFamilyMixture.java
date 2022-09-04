@@ -70,7 +70,6 @@ public class ExponentialFamilyMixture extends Mixture {
      * @param components the initial configuration of mixture. Components may have
      *                   different distribution form.
      * @param x the training data.
-     * @return the distribution.
      */
     public static ExponentialFamilyMixture fit(double[] x, Component... components) {
         return fit(x, components, 0.0, 500, 1E-4);
@@ -87,7 +86,6 @@ public class ExponentialFamilyMixture extends Mixture {
      *              be 0 in general.
      * @param maxIter the maximum number of iterations.
      * @param tol the tolerance of convergence test.
-     * @return the distribution.
      */
     public static ExponentialFamilyMixture fit(double[] x, Component[] components, double gamma, int maxIter, double tol) {
         if (x.length < components.length / 2) {
