@@ -30,7 +30,6 @@ import org.graylog2.search.SearchQuery;
 import org.graylog2.search.SearchQueryField;
 import org.graylog2.search.SearchQueryParser;
 import org.graylog2.shared.rest.resources.RestResource;
-import org.graylog2.shared.security.RestPermissions;
 
 import javax.inject.Inject;
 import javax.ws.rs.BadRequestException;
@@ -54,11 +53,14 @@ public class DashboardsResource extends RestResource {
             .put("summary", SearchQueryField.create(ViewDTO.FIELD_DESCRIPTION))
             .build();
     private final ViewService dbService;
+    private final ViewPermissionChecks permissionChecks;
     private final SearchQueryParser searchQueryParser;
 
     @Inject
-    public DashboardsResource(ViewService dbService) {
+    public DashboardsResource(ViewService dbService,
+                              ViewPermissionChecks permissionChecks) {
         this.dbService = dbService;
+        this.permissionChecks = permissionChecks;
         this.searchQueryParser = new SearchQueryParser(ViewDTO.FIELD_TITLE, SEARCH_FIELD_MAPPING);
     }
 
@@ -68,9 +70,9 @@ public class DashboardsResource extends RestResource {
     public PaginatedResponse<ViewDTO> views(@ApiParam(name = "page") @QueryParam("page") @DefaultValue("1") int page,
                                             @ApiParam(name = "per_page") @QueryParam("per_page") @DefaultValue("50") int perPage,
                                             @ApiParam(name = "sort",
-                                                      value = "The field to sort the result on",
-                                                      required = true,
-                                                      allowableValues = "id,title,created_at") @DefaultValue(ViewDTO.FIELD_TITLE) @QueryParam("sort") String sortField,
+                                                    value = "The field to sort the result on",
+                                                    required = true,
+                                                    allowableValues = "id,title,created_at") @DefaultValue(ViewDTO.FIELD_TITLE) @QueryParam("sort") String sortField,
                                             @ApiParam(name = "order", value = "The sort direction", allowableValues = "asc, desc") @DefaultValue("asc") @QueryParam("order") String order,
                                             @ApiParam(name = "query") @QueryParam("query") String query) {
 
@@ -83,8 +85,7 @@ public class DashboardsResource extends RestResource {
             final PaginatedList<ViewDTO> result = dbService.searchPaginatedByType(
                     ViewDTO.Type.DASHBOARD,
                     searchQuery,
-                    view -> isPermitted(ViewsRestPermissions.VIEW_READ, view.id())
-                            || isPermitted(RestPermissions.DASHBOARDS_READ, view.id()),
+                    view -> permissionChecks.allowedToSeeDashboard(getCurrentUser(), view, this::isPermitted),
                     order,
                     sortField,
                     page,
