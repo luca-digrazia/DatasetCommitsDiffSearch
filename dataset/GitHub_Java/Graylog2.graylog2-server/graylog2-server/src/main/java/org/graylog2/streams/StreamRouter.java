@@ -60,7 +60,7 @@ public class StreamRouter {
     private Boolean useCaching = false;
 
     public StreamRouter() {
-        this(true);
+        this(false);
     }
 
     public StreamRouter(Boolean useCaching) {

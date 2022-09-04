@@ -38,7 +38,6 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.alarms.AlarmReceiver;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.plugin.streams.StreamRule;
-import org.graylog2.rest.resources.streams.requests.CreateRequest;
 import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -252,17 +251,4 @@ public class StreamImpl extends Persisted implements Stream {
         }
         super.destroy();
     }
-
-    public void update(CreateRequest cr) throws ValidationException {
-        if (cr.title != null) {
-            this.fields.put("title", cr.title);
-        }
-
-        if (cr.description != null) {
-            this.fields.put("description", cr.description);
-        }
-
-        save();
-    }
-
 }

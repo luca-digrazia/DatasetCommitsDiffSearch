@@ -215,12 +215,12 @@ public class Message {
         }
     }
 
-    public void addLongFields(Map<String, Long> fields) {
+    public void addIntegerFields(Map<String, Integer> fields) {
         if(fields == null) {
             return;
         }
 
-        for (Map.Entry<String, Long> field : fields.entrySet()) {
+        for (Map.Entry<String, Integer> field : fields.entrySet()) {
             addField(field.getKey(), field.getValue());
         }
     }
