@@ -1,11 +1,15 @@
 package io.quarkus.rest.client.reactive.deployment;
 
+import static io.quarkus.rest.client.reactive.deployment.DotNames.REGISTER_CLIENT_HEADERS;
+import static io.quarkus.rest.client.reactive.deployment.DotNames.REGISTER_PROVIDER;
+import static io.quarkus.rest.client.reactive.deployment.DotNames.REGISTER_PROVIDERS;
 import static org.jboss.resteasy.reactive.common.processor.EndpointIndexer.CDI_WRAPPER_SUFFIX;
 import static org.jboss.resteasy.reactive.common.processor.scanning.ResteasyReactiveScanner.BUILTIN_HTTP_ANNOTATIONS_TO_METHOD;
 
 import java.lang.annotation.RetentionPolicy;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -18,6 +22,7 @@ import javax.ws.rs.core.MediaType;
 
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.rest.client.ext.QueryParamStyle;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.jboss.jandex.AnnotationInstance;
@@ -26,6 +31,7 @@ import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.CompositeIndex;
 import org.jboss.jandex.DotName;
+import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
@@ -38,11 +44,15 @@ import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.ScopeInfo;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.Capability;
+import io.quarkus.deployment.Feature;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.ConfigurationTypeBuildItem;
+import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
+import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.FieldDescriptor;
 import io.quarkus.gizmo.MethodCreator;
@@ -51,10 +61,10 @@ import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.jaxrs.client.reactive.deployment.JaxrsClientReactiveEnricherBuildItem;
 import io.quarkus.jaxrs.client.reactive.deployment.RestClientDefaultConsumesBuildItem;
 import io.quarkus.jaxrs.client.reactive.deployment.RestClientDefaultProducesBuildItem;
-import io.quarkus.rest.client.reactive.ReactiveResteasyMpClientConfig;
 import io.quarkus.rest.client.reactive.runtime.HeaderCapturingServerFilter;
 import io.quarkus.rest.client.reactive.runtime.HeaderContainer;
 import io.quarkus.rest.client.reactive.runtime.RestClientCDIDelegateBuilder;
+import io.quarkus.rest.client.reactive.runtime.RestClientReactiveConfig;
 import io.quarkus.rest.client.reactive.runtime.RestClientRecorder;
 import io.quarkus.resteasy.reactive.spi.ContainerRequestFilterBuildItem;
 
@@ -67,6 +77,21 @@ class ReactiveResteasyMpClientProcessor {
 
     private static final String DELEGATE = "delegate";
     private static final String CREATE_DELEGATE = "createDelegate";
+
+    @BuildStep
+    void announceFeature(BuildProducer<FeatureBuildItem> features) {
+        features.produce(new FeatureBuildItem(Feature.REST_CLIENT_REACTIVE));
+    }
+
+    @BuildStep
+    void registerQueryParamStyleForConfig(BuildProducer<ConfigurationTypeBuildItem> configurationTypes) {
+        configurationTypes.produce(new ConfigurationTypeBuildItem(QueryParamStyle.class));
+    }
+
+    @BuildStep
+    ExtensionSslNativeSupportBuildItem activateSslNativeSupport() {
+        return new ExtensionSslNativeSupportBuildItem(Feature.REST_CLIENT_REACTIVE);
+    }
 
     @BuildStep
     void setUpDefaultMediaType(BuildProducer<RestClientDefaultConsumesBuildItem> consumes,
@@ -112,7 +137,7 @@ class ReactiveResteasyMpClientProcessor {
     @BuildStep
     void registerHeaderFactoryBeans(CombinedIndexBuildItem index,
             BuildProducer<AdditionalBeanBuildItem> additionalBeans) {
-        Collection<AnnotationInstance> annotations = index.getIndex().getAnnotations(DotNames.REGISTER_CLIENT_HEADERS);
+        Collection<AnnotationInstance> annotations = index.getIndex().getAnnotations(REGISTER_CLIENT_HEADERS);
 
         for (AnnotationInstance registerClientHeaders : annotations) {
             AnnotationValue value = registerClientHeaders.value();
@@ -127,10 +152,29 @@ class ReactiveResteasyMpClientProcessor {
     }
 
     @BuildStep
+    AdditionalBeanBuildItem registerProviderBeans(CombinedIndexBuildItem combinedIndex) {
+        IndexView index = combinedIndex.getIndex();
+        List<AnnotationInstance> allInstances = new ArrayList<>(index.getAnnotations(REGISTER_PROVIDER));
+        for (AnnotationInstance annotation : index.getAnnotations(REGISTER_PROVIDERS)) {
+            allInstances.addAll(Arrays.asList(annotation.value().asNestedArray()));
+        }
+        allInstances.addAll(index.getAnnotations(REGISTER_CLIENT_HEADERS));
+        AdditionalBeanBuildItem.Builder builder = AdditionalBeanBuildItem.builder().setUnremovable();
+        for (AnnotationInstance annotationInstance : allInstances) {
+            // Make sure all providers not annotated with @Provider but used in @RegisterProvider are registered as beans
+            AnnotationValue value = annotationInstance.value();
+            if (value != null) {
+                builder.addBeanClass(value.asClass().toString());
+            }
+        }
+        return builder.build();
+    }
+
+    @BuildStep
     void addRestClientBeans(Capabilities capabilities,
             CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<GeneratedBeanBuildItem> generatedBeans,
-            ReactiveResteasyMpClientConfig clientConfig) {
+            RestClientReactiveConfig clientConfig) {
 
         CompositeIndex index = CompositeIndex.create(combinedIndexBuildItem.getIndex());
         Set<AnnotationInstance> registerRestClientAnnos = new HashSet<>(index.getAnnotations(REGISTER_REST_CLIENT));
@@ -264,7 +308,7 @@ class ReactiveResteasyMpClientProcessor {
     private ScopeInfo computeDefaultScope(Capabilities capabilities, Config config,
             ClassInfo restClientInterface,
             String configPrefix,
-            ReactiveResteasyMpClientConfig mpClientConfig) {
+            RestClientReactiveConfig mpClientConfig) {
         ScopeInfo scopeToUse = null;
         final Optional<String> scopeConfig = config
                 .getOptionalValue(String.format(RestClientCDIDelegateBuilder.REST_SCOPE_FORMAT, configPrefix), String.class);
