@@ -18,10 +18,11 @@ package org.androidannotations.helper;
 import static java.util.Arrays.asList;
 
 import java.lang.annotation.Annotation;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
@@ -40,111 +41,89 @@ public class ValidatorParameterHelper {
 		void validate(ExecutableElement executableElement, IsValid valid);
 	}
 
-	public class NoParamValidator implements Validator {
+	public interface ParameterValidator<T> extends Validator {
+		T extendsType(String fullyQualifiedName);
 
-		@Override
-		public void validate(ExecutableElement executableElement, IsValid valid) {
-			if (!executableElement.getParameters().isEmpty()) {
-				annotationHelper.printAnnotationError(executableElement, "%s cannot have any parameters");
-				valid.invalidate();
-			}
-		}
+		T type(String fullyQualifiedName);
+
+		T anyType();
 	}
 
-	public class OneParamValidator implements Validator {
+	public static class ParameterRequirement<O extends Validator> implements Validator {
 
-		private ParameterRequirement parameterRequirement;
+		protected final ParameterValidator<?> validator;
 
-		public OneParamValidator(ParameterRequirement param) {
-			parameterRequirement = param;
+		protected final MethodParameter lastParameter;
+
+		public ParameterRequirement(ParameterValidator<?> anyOrderParameterValidator, MethodParameter lastParameter) {
+			this.validator = anyOrderParameterValidator;
+			this.lastParameter = lastParameter;
 		}
 
-		public OneParamValidator optional() {
-			parameterRequirement.optional();
+		@SuppressWarnings("unchecked")
+		public final O optional() {
+			lastParameter.required = false;
+			return (O) validator;
+		}
+
+		@SuppressWarnings("unchecked")
+		public final O required() {
+			return (O) validator;
+		}
+
+		@Override
+		public final void validate(ExecutableElement executableElement, IsValid valid) {
+			validator.validate(executableElement, valid);
+		}
+
+	}
+
+	public static class ChainableParameterRequirement<O extends Validator> extends ParameterRequirement<O> implements ParameterValidator<ParameterRequirement<O>> {
+		public ChainableParameterRequirement(ParameterValidator<?> anyOrderParameterValidator, MethodParameter lastParameter) {
+			super(anyOrderParameterValidator, lastParameter);
+		}
+
+		@Override
+		public final ParameterRequirement<O> extendsType(String fullyQualifiedName) {
+			validator.extendsType(fullyQualifiedName);
 			return this;
 		}
 
-		public OneParamValidator multiple() {
-			parameterRequirement.multiple();
+		@Override
+		public final ParameterRequirement<O> type(String fullyQualifiedName) {
+			validator.extendsType(fullyQualifiedName);
 			return this;
 		}
 
 		@Override
-		public void validate(ExecutableElement executableElement, IsValid valid) {
-			List<? extends VariableElement> parameters = executableElement.getParameters();
-			if (!parameterRequirement.multiple) {
-				if (parameterRequirement.required && parameters.size() != 1) {
-					invalidate(executableElement, valid);
-					return;
-				}
-				if (!parameterRequirement.required && parameters.size() > 1) {
-					invalidate(executableElement, valid);
-					return;
-				}
-			}
-
-			for (VariableElement parameter : parameters) {
-				if (!parameterRequirement.isSatisfied(parameter)) {
-					invalidate(executableElement, valid);
-					return;
-				}
-			}
-		}
-
-		protected void invalidate(ExecutableElement element, IsValid valid) {
-			annotationHelper.printAnnotationError(element, "%s can only have the following parameter: " + parameterRequirement);
-			valid.invalidate();
+		public ParameterRequirement<O> anyType() {
+			validator.anyType();
+			return this;
 		}
 	}
 
-	private abstract class BaseParamValidator<V extends BaseParamValidator<?>> implements Validator {
+	abstract class ParameterValidatorBase<T> implements ParameterValidator<T> {
+		protected Set<MethodParameter> expectedParameters = new LinkedHashSet<MethodParameter>();
 
-		private List<ParameterRequirement> parameterRequirements = new ArrayList<ParameterRequirement>();
-		private List<ParameterRequirement> originalparameterRequirements;
-
-		@Override
-		public void validate(ExecutableElement executableElement, IsValid valid) {
-			originalparameterRequirements = new ArrayList<ParameterRequirement>(parameterRequirements);
+		protected MethodParameter addExpectedParameter(String fullyQualifiedName, boolean required, boolean extending) {
+			MethodParameter param = new MethodParameter(fullyQualifiedName, required, extending);
+			expectedParameters.add(param);
+			return param;
 		}
 
-		public V type(String qualifiedName) {
-			parameterRequirements.add(new ParameterRequirement(qualifiedName, false));
-			return castThis();
-		}
+		protected final boolean extendsType(VariableElement param, String fullyQualifiedName) {
+			TypeMirror elementType = param.asType();
 
-		public V extendsType(String qualifiedName) {
-			parameterRequirements.add(new ParameterRequirement(qualifiedName, true));
-			return castThis();
-		}
-
-		public V anyType() {
-			return extendsType(CanonicalNameConstants.OBJECT);
-		}
-
-		public V annotatedWith(Class<? extends Annotation> annotationClass) {
-			parameterRequirements.add(new ParameterRequirement(annotationClass));
-			return castThis();
-		}
-
-		public V optional() {
-			lastParam().optional();
-			return castThis();
-		}
-
-		public V multiple() {
-			lastParam().multiple();
-			return castThis();
-		}
-
-		protected List<ParameterRequirement> getParamRequirements() {
-			return parameterRequirements;
-		}
-
-		private ParameterRequirement lastParam() {
-			if (parameterRequirements.isEmpty()) {
-				throw new IllegalStateException("Call type, extendsType or annotatedWith before");
+			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(fullyQualifiedName);
+			if (typeElement != null) {
+				TypeMirror expectedType = typeElement.asType();
+				return annotationHelper.isSubtype(elementType, expectedType);
 			}
-			return parameterRequirements.get(parameterRequirements.size() - 1);
+			return false;
+		}
+
+		protected final boolean exactType(VariableElement param, String fullyQualifiedName) {
+			return param.asType().toString().equals(fullyQualifiedName);
 		}
 
 		protected void invalidate(ExecutableElement executableElement, IsValid valid) {
@@ -159,108 +138,86 @@ public class ValidatorParameterHelper {
 		protected String createMessage(ExecutableElement element) {
 			StringBuilder builder = new StringBuilder();
 			builder.append("[ ");
-			for (ParameterRequirement parameterRequirement : originalparameterRequirements) {
-				builder.append(parameterRequirement).append(", ");
+			for (MethodParameter parameter : expectedParameters) {
+				builder.append(parameter).append(",");
 			}
 			return builder.append(" ]").toString();
 		}
 
-		@SuppressWarnings("unchecked")
-		private V castThis() {
-			return (V) this;
-		}
-
-	}
-
-	public class InOrderParamValidator extends BaseParamValidator<InOrderParamValidator> {
-
-		private int index = -1;
-		private ParameterRequirement currentParameterRequirement;
-
-		private void nextParameterRequirement() {
-			index++;
-			if (index < getParamRequirements().size()) {
-				currentParameterRequirement = getParamRequirements().get(index);
-			} else {
-				currentParameterRequirement = null;
-			}
-		}
-
 		@Override
 		public void validate(ExecutableElement executableElement, IsValid valid) {
-			super.validate(executableElement, valid);
+			List<? extends VariableElement> parameters = executableElement.getParameters();
 
-			nextParameterRequirement();
-			for (VariableElement parameter : executableElement.getParameters()) {
-				if (!validate(parameter)) {
+			if (parameters.size() > expectedParameters.size()) {
+				invalidate(executableElement, valid);
+				return;
+			}
+
+			int index = 0;
+
+			for (MethodParameter expectedParameter : expectedParameters) {
+				if (index < parameters.size()) {
+					VariableElement parameter = parameters.get(index);
+
+					if (expectedParameter.extending && !extendsType(parameter, expectedParameter.typeName)) {
+						invalidate(executableElement, valid);
+						return;
+					} else if (!expectedParameter.extending && !exactType(parameter, expectedParameter.typeName)) {
+						invalidate(executableElement, valid);
+						return;
+					}
+				} else if (expectedParameter.required) {
 					invalidate(executableElement, valid);
-					return;
 				}
-			}
 
-			for (ParameterRequirement expectedParameter : getParamRequirements()) {
-				if (expectedParameter.required && !expectedParameter.hasBeenSatisfied) {
-					invalidate(executableElement, valid);
-					return;
-				}
+				++index;
 			}
-		}
-
-		private boolean validate(VariableElement parameter) {
-			if (currentParameterRequirement == null) {
-				return false;
-			}
-			if (!currentParameterRequirement.isSatisfied(parameter)) {
-				if (currentParameterRequirement.required && !currentParameterRequirement.hasBeenSatisfied) {
-					return false;
-				} else {
-					nextParameterRequirement();
-					return validate(parameter);
-				}
-			} else if (!currentParameterRequirement.multiple) {
-				nextParameterRequirement();
-			}
-			return true;
 		}
 
 		@Override
-		protected String createMessage(ExecutableElement element) {
-			return super.createMessage(element) + " in the order above";
+		public T anyType() {
+			return extendsType(CanonicalNameConstants.OBJECT);
 		}
 	}
 
-	public class AnyOrderParamValidator extends BaseParamValidator<AnyOrderParamValidator> {
+	public class AnyOrderParameterValidator extends ParameterValidatorBase<ChainableParameterRequirement<AnyOrderParameterValidator>> {
 
 		@Override
 		public void validate(ExecutableElement executableElement, IsValid valid) {
-			super.validate(executableElement, valid);
-
 			for (VariableElement parameter : executableElement.getParameters()) {
-				ParameterRequirement foundParameter = null;
+				MethodParameter foundParameter = null;
 
-				for (ParameterRequirement expectedParameter : getParamRequirements()) {
-					if (expectedParameter.isSatisfied(parameter)) {
+				for (MethodParameter expectedParameter : expectedParameters) {
+					if (exactType(parameter, expectedParameter.typeName) || extendsType(parameter, expectedParameter.typeName)) {
 						foundParameter = expectedParameter;
 						break;
 					}
 				}
 
-				if (foundParameter == null) {
-					invalidate(executableElement, valid);
-					return;
-				}
-
-				if (!foundParameter.multiple) {
-					getParamRequirements().remove(foundParameter);
-				}
-			}
-
-			for (ParameterRequirement expectedParameter : getParamRequirements()) {
-				if (expectedParameter.required && !expectedParameter.hasBeenSatisfied) {
+				if (foundParameter != null) {
+					expectedParameters.remove(foundParameter);
+				} else {
 					invalidate(executableElement, valid);
 					return;
 				}
 			}
+
+			for (MethodParameter expectedParameter : expectedParameters) {
+				if (expectedParameter.required) {
+					invalidate(executableElement, valid);
+					return;
+				}
+			}
+		}
+
+		@Override
+		public ChainableParameterRequirement<AnyOrderParameterValidator> extendsType(String fullyQualifiedName) {
+			return new ChainableParameterRequirement<AnyOrderParameterValidator>(this, addExpectedParameter(fullyQualifiedName, true, true));
+		}
+
+		@Override
+		public ChainableParameterRequirement<AnyOrderParameterValidator> type(String fullyQualifiedName) {
+			return new ChainableParameterRequirement<AnyOrderParameterValidator>(this, addExpectedParameter(fullyQualifiedName, true, false));
 		}
 
 		@Override
@@ -269,106 +226,81 @@ public class ValidatorParameterHelper {
 		}
 	}
 
-	public class ParameterRequirement {
+	public class InOrderParameterValidator extends ParameterValidatorBase<ChainableParameterRequirement<InOrderParameterValidator>> {
+
+		@Override
+		public ChainableParameterRequirement<InOrderParameterValidator> extendsType(String fullyQualifiedName) {
+			return new ChainableParameterRequirement<InOrderParameterValidator>(this, addExpectedParameter(fullyQualifiedName, true, true));
+		}
+
+		@Override
+		public ChainableParameterRequirement<InOrderParameterValidator> type(String fullyQualifiedName) {
+			return new ChainableParameterRequirement<InOrderParameterValidator>(this, addExpectedParameter(fullyQualifiedName, true, false));
+		}
+
+		@Override
+		protected String createMessage(ExecutableElement element) {
+			return super.createMessage(element) + " in the order above";
+		}
+	}
+
+	public class OneParamValidator extends ParameterValidatorBase<ParameterRequirement<Validator>> {
+
+		@Override
+		public ParameterRequirement<Validator> extendsType(String fullyQualifiedName) {
+			return new ParameterRequirement<Validator>(this, addExpectedParameter(fullyQualifiedName, true, true));
+		}
+
+		@Override
+		public ParameterRequirement<Validator> type(String fullyQualifiedName) {
+			return new ParameterRequirement<Validator>(this, addExpectedParameter(fullyQualifiedName, true, false));
+		}
+
+	}
+
+	public class NoParamValidator implements Validator {
+
+		@Override
+		public void validate(ExecutableElement executableElement, IsValid valid) {
+			if (!executableElement.getParameters().isEmpty()) {
+				annotationHelper.printAnnotationError(executableElement, "%s cannot have any parameters");
+				valid.invalidate();
+			}
+		}
+	}
+
+	public class MethodParameter {
 
 		private String typeName;
+		private boolean required;
 		private boolean extending;
-		private Class<? extends Annotation> annotationClass;
-		private boolean required = true;
-		private boolean multiple = false;
-		private boolean hasBeenSatisfied = false;
 
-		public ParameterRequirement(String typeName, boolean extending) {
+		public MethodParameter(String typeName, boolean required, boolean extending) {
 			this.typeName = typeName;
+			this.required = required;
 			this.extending = extending;
-		}
-
-		public ParameterRequirement(Class<? extends Annotation> annotationClass) {
-			this.annotationClass = annotationClass;
-		}
-
-		public void multiple() {
-			multiple = true;
-		}
-
-		public void optional() {
-			required = false;
-		}
-
-		public boolean isSatisfied(VariableElement param) {
-			boolean isSatisfied;
-			if (annotationClass != null) {
-				isSatisfied = isAnnotated(param);
-			} else if (typeName == null) {
-				isSatisfied = true;
-			} else if (extending) {
-				isSatisfied = extendsType(param);
-			} else {
-				isSatisfied = exactType(param);
-			}
-
-			if (isSatisfied) {
-				hasBeenSatisfied = true;
-			}
-			return isSatisfied;
-		}
-
-		private boolean isAnnotated(VariableElement param) {
-			return param.getAnnotation(annotationClass) != null;
-		}
-
-		private boolean extendsType(VariableElement param) {
-			TypeMirror elementType = param.asType();
-			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(typeName);
-			if (typeElement != null) {
-				TypeMirror expectedType = typeElement.asType();
-				return annotationHelper.isSubtype(elementType, expectedType);
-			}
-			return false;
-		}
-
-		private boolean exactType(VariableElement param) {
-			return param.asType().toString().equals(typeName);
 		}
 
 		@Override
 		public String toString() {
-			String baseRequirement;
-			if (annotationClass != null) {
-				baseRequirement = "annotated with " + annotationClass.getSimpleName();
-			} else {
-				baseRequirement = (extending ? "extending " : "") + typeName;
-			}
-			return String.format("[ %s %s%s]", baseRequirement, required ? "" : "(optional) ", multiple ? "(multiple) " : "");
+			return "[ " + (extending ? " extending " : "") + typeName + (required ? " (required) " : " (optional) " + "]");
 		}
 	}
 
-	public Validator noParam() {
+	public Validator noparam() {
 		return new NoParamValidator();
 	}
 
-	public OneParamValidator type(String qualifiedName) {
-		return new OneParamValidator(new ParameterRequirement(qualifiedName, false));
+	public OneParamValidator oneparam() {
+		return new OneParamValidator();
 	}
 
-	public OneParamValidator extendsType(String qualifiedName) {
-		return new OneParamValidator(new ParameterRequirement(qualifiedName, true));
+	public InOrderParameterValidator inorder() {
+		return new InOrderParameterValidator();
 	}
 
-	public OneParamValidator anyType() {
-		return extendsType(CanonicalNameConstants.OBJECT);
-	}
-
-	public OneParamValidator annotatedWith(Class<? extends Annotation> annotationClass) {
-		return new OneParamValidator(new ParameterRequirement(annotationClass));
-	}
-
-	public InOrderParamValidator inOrder() {
-		return new InOrderParamValidator();
-	}
-
-	public AnyOrderParamValidator anyOrder() {
-		return new AnyOrderParamValidator();
+	public AnyOrderParameterValidator anyorder() {
+		return new AnyOrderParameterValidator();
 	}
 
 	private static final List<String> ANDROID_SHERLOCK_MENU_ITEM_QUALIFIED_NAMES = asList(CanonicalNameConstants.MENU_ITEM, CanonicalNameConstants.SHERLOCK_MENU_ITEM);
