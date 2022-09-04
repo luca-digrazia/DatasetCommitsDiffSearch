@@ -86,10 +86,8 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     }
 
     @Override
-    public Input find(String id) throws NotFoundException {
+    public Input find(String id) {
         DBObject o = get(org.graylog2.inputs.InputImpl.class, id);
-        if (o == null)
-            throw new NotFoundException("Input <" + id + "> not found!");
         return new org.graylog2.inputs.InputImpl((ObjectId) o.get("_id"), o.toMap());
     }
 
@@ -267,8 +265,7 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         removeEmbedded(input, InputImpl.EMBEDDED_STATIC_FIELDS_KEY, InputImpl.EMBEDDED_STATIC_FIELDS, key);
     }
 
-    @Override
-    public MessageInput buildMessageInput(Input io) throws NoSuchInputTypeException {
+    public MessageInput getMessageInput(Input io) throws NoSuchInputTypeException {
         MessageInput input = messageInputFactory.create(io.getType());
 
         // Add all standard fields.
@@ -289,12 +286,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
             input.addStaticField(field.getKey(), field.getValue());
         }
 
-        return input;
-    }
-
-    @Override
-    public MessageInput getMessageInput(Input io) throws NoSuchInputTypeException {
-        MessageInput input = buildMessageInput(io);
         input.initialize(new Configuration(io.getConfiguration()));
 
         return input;
