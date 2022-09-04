@@ -1,16 +1,13 @@
 package io.dropwizard.jersey.filter;
 
-import com.google.common.annotations.VisibleForTesting;
-import io.dropwizard.util.Duration;
-
+import java.io.IOException;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.PreMatching;
 import javax.ws.rs.ext.Provider;
-import java.io.IOException;
-import java.util.function.Supplier;
+import io.dropwizard.util.Duration;
 
 /**
  * This class adds an "X-Runtime" HTTP response header that includes the time
@@ -27,16 +24,9 @@ public class RuntimeFilter implements ContainerRequestFilter, ContainerResponseF
     private static final String RUNTIME_HEADER = "X-Runtime";
     private static final String RUNTIME_PROPERTY = "io.dropwizard.jersey.filter.runtime";
 
-    private Supplier<Long> currentTimeProvider = System::nanoTime;
-
-    @VisibleForTesting
-    void setCurrentTimeProvider(Supplier<Long> currentTimeProvider) {
-        this.currentTimeProvider = currentTimeProvider;
-    }
-
     @Override
     public void filter(final ContainerRequestContext request) throws IOException {
-        request.setProperty(RUNTIME_PROPERTY, currentTimeProvider.get());
+        request.setProperty(RUNTIME_PROPERTY, System.nanoTime());
     }
 
     @Override
@@ -45,7 +35,7 @@ public class RuntimeFilter implements ContainerRequestFilter, ContainerResponseF
 
         final Long startTime = (Long) request.getProperty(RUNTIME_PROPERTY);
         if (startTime != null) {
-            final float seconds = (currentTimeProvider.get() - startTime) / NANOS_IN_SECOND;
+            final float seconds = (System.nanoTime() - startTime) / NANOS_IN_SECOND;
             response.getHeaders().putSingle(RUNTIME_HEADER, String.format("%.6f", seconds));
         }
     }

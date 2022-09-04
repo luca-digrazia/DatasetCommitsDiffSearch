@@ -10,8 +10,6 @@ import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.ext.Provider;
-
-import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import com.google.common.base.Strings;
@@ -27,14 +25,8 @@ import com.google.common.base.Strings;
 @Priority(Priorities.USER)
 public class RequestIdFilter implements ContainerResponseFilter {
 
+    private static final Logger LOGGER = LoggerFactory.getLogger(RequestIdFilter.class);
     private static final String REQUEST_ID = "X-Request-Id";
-
-    private Logger logger = LoggerFactory.getLogger(RequestIdFilter.class);
-
-    @VisibleForTesting
-    void setLogger(Logger logger) {
-        this.logger = logger;
-    }
 
     @Override
     public void filter(final ContainerRequestContext request,
@@ -44,8 +36,8 @@ public class RequestIdFilter implements ContainerResponseFilter {
         if (Strings.isNullOrEmpty(id)) {
             id = generateRandomUuid().toString();
         }
-
-        logger.trace("method={} path={} request_id={} status={} length={}",
+        
+        LOGGER.trace("method={} path={} request_id={} status={} length={}",
                 request.getMethod(), request.getUriInfo().getPath(), id,
                 response.getStatus(), response.getLength());
         response.getHeaders().putSingle(REQUEST_ID, id);
