@@ -19,7 +19,6 @@
 package controllers;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import lib.BreadcrumbList;
@@ -47,7 +46,6 @@ import javax.inject.Inject;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.SortedMap;
 
 public class InputsController extends AuthenticatedController {
 
@@ -78,10 +76,8 @@ public class InputsController extends AuthenticatedController {
             }
 
             for (Map.Entry<Input, Map<ClusterEntity, InputState>> entry : inputService.loadAllInputStatesByInput().entrySet()) {
-                if (entry.getKey().getGlobal()) {
-                    final SortedMap<ClusterEntity, InputState> inputStates = ImmutableSortedMap.copyOf(entry.getValue());
-                    globalInputs.put(entry.getKey(), inputStates);
-                }
+                if (entry.getKey().getGlobal())
+                    globalInputs.put(entry.getKey(), entry.getValue());
             }
 
             List<Node> nodes = servernodes.all();
@@ -244,14 +240,13 @@ public class InputsController extends AuthenticatedController {
         return configuration;
     }
 
-    public Result launch() {
+    public Result launch(String nodeIdParam) {
         if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT)) {
             return redirect(routes.StartpageController.redirect());
         }
 
         final Form<LaunchInputRequest> form = launchInputRequestForm.bindFromRequest();
         final LaunchInputRequest request = form.get();
-        final String nodeIdParam = request.node;
 
         try {
             final InputTypeSummaryResponse inputInfo = getInputInfo(nodeIdParam, request);
@@ -270,8 +265,7 @@ public class InputsController extends AuthenticatedController {
                 if (request.global) {
                     result = (inputService.launchGlobal(request.title, request.type, configuration, inputInfo.isExclusive) != null);
                 } else {
-                    final InputLaunchResponse response = nodeService.loadMasterNode().launchInput(request.title, request.type, request.global, configuration, inputInfo.isExclusive, nodeIdParam);
-                    result = node.launchExistingInput(response.id);
+                    result = (node.launchInput(request.title, request.type, request.global, configuration, inputInfo.isExclusive) != null);
                 }
 
                 if (!result) {
@@ -294,6 +288,8 @@ public class InputsController extends AuthenticatedController {
     }
 
     private InputTypeSummaryResponse getInputInfo(String nodeIdParam, LaunchInputRequest request) throws NodeService.NodeNotFoundException, APIException, IOException {
+        InputTypeSummaryResponse inputInfo = null;
+
         final ClusterEntity node = getClusterEntity(nodeIdParam, request);
 
         if (node == null)
@@ -315,15 +311,54 @@ public class InputsController extends AuthenticatedController {
 
         if (request.global)
             node = nodeService.loadMasterNode();
-        else if (nodeId != null) {
-            try {
-                node = nodeService.loadNode(nodeId);
-            } catch (NodeService.NodeNotFoundException e) {
-                node = nodeService.loadRadio(nodeId);
+        else
+            if (nodeId != null) {
+                try {
+                    node = nodeService.loadNode(nodeId);
+                } catch (NodeService.NodeNotFoundException e) {
+                    node = nodeService.loadRadio(nodeId);
+                }
             }
-        }
 
         return node;
+    }
+
+    public Result launchRadio(String radioId) {
+        if (!Permissions.isPermitted(RestPermissions.INPUTS_EDIT)) {
+            return redirect(routes.StartpageController.redirect());
+        }
+        final Form<LaunchInputRequest> form = launchInputRequestForm.bindFromRequest();
+        final LaunchInputRequest request = form.get();
+
+        try {
+            final Radio radio = nodeService.loadRadio(radioId);
+            final InputTypeSummaryResponse inputInfo = radio.getInputTypeInformation(request.type);
+
+            final Map<String, Object> configuration;
+            try {
+                configuration = extractConfiguration(request.configuration, inputInfo);
+            } catch (IllegalArgumentException e) {
+                return status(400, views.html.errors.error.render("Invalid input configuration", new RuntimeException("Invalid configuration for input " + request.title), request()));
+            }
+
+            try {
+                if (radio.launchInput(request.title, request.type, false, configuration, inputInfo.isExclusive) == null) {
+                    return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, new RuntimeException("Could not launch input " + request.title), request()));
+                }
+            } catch (ExclusiveInputException e) {
+                flash("error", "This input is exclusive and already running.");
+                return redirect(routes.InputsController.index());
+            }
+
+            return redirect(routes.InputsController.index());
+        } catch (IOException e) {
+            return status(500, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
+        } catch (APIException e) {
+            String message = "Could not launch input. We expected HTTP 202, but got a HTTP " + e.getHttpCode() + ".";
+            return status(500, views.html.errors.error.render(message, e, request()));
+        } catch (NodeService.NodeNotFoundException e) {
+            return status(404, views.html.errors.error.render(ApiClient.ERROR_MSG_NODE_NOT_FOUND, e, request()));
+        }
     }
 
     public Result update(String inputId) throws APIException, NodeService.NodeNotFoundException, IOException {
@@ -352,7 +387,7 @@ public class InputsController extends AuthenticatedController {
 
         try {
             final Node node = nodeService.loadMasterNode();
-            final InputLaunchResponse response = node.updateInput(inputId, request.title, request.type, request.global, configuration, request.node);
+            final InputLaunchResponse response = node.updateInput(inputId, request.title, request.type, request.global, configuration);
             inputService.restart(inputId);
         } catch (APIException | IOException e) {
             e.printStackTrace();
