@@ -24,7 +24,7 @@ import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.skylarkbuildapi.TopLevelBootstrap;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidAssetsInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.android.AndroidBinaryDataInfoApi;
@@ -63,7 +63,7 @@ import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeActionsInfoProvider;
 import com.google.devtools.build.skydoc.fakebuildapi.FakeBuildApiGlobals;
@@ -158,9 +158,9 @@ public class SkydocMain {
   public static void main(String[] args)
       throws IOException, InterruptedException, LabelSyntaxException {
     OptionsParser parser =
-        OptionsParser.newOptionsParser(StarlarkSemanticsOptions.class, SkydocOptions.class);
+        OptionsParser.newOptionsParser(SkylarkSemanticsOptions.class, SkydocOptions.class);
     parser.parseAndExitUponError(args);
-    StarlarkSemanticsOptions semanticsOptions = parser.getOptions(StarlarkSemanticsOptions.class);
+    SkylarkSemanticsOptions semanticsOptions = parser.getOptions(SkylarkSemanticsOptions.class);
     SkydocOptions skydocOptions = parser.getOptions(SkydocOptions.class);
 
     String targetFileLabelString;
@@ -325,7 +325,7 @@ public class SkydocMain {
    * @throws InterruptedException if evaluation is interrupted
    */
   public Environment eval(
-      StarlarkSemantics semantics,
+      SkylarkSemantics semantics,
       Label label,
       ImmutableMap.Builder<String, RuleInfo> ruleInfoMap,
       ImmutableList.Builder<RuleInfo> unknownNamedRules,
@@ -384,7 +384,7 @@ public class SkydocMain {
    * @throws InterruptedException if evaluation is interrupted
    */
   private Environment recursiveEval(
-      StarlarkSemantics semantics,
+      SkylarkSemantics semantics,
       Label label,
       List<RuleInfo> ruleInfoList,
       List<ProviderInfo> providerInfoList)
@@ -416,8 +416,7 @@ public class SkydocMain {
         throw new IllegalStateException(
             String.format(
                 "File %s imported '%s', yet %s was not found, even at roots %s.",
-                path, anImport.getImportString(), pathOfLabel(relativeLabel), depRoots),
-            noSuchFileException);
+                path, anImport.getImportString(), pathOfLabel(relativeLabel), depRoots));
       }
     }
 
@@ -451,7 +450,7 @@ public class SkydocMain {
 
   /** Evaluates the AST from a single skylark file, given the already-resolved imports. */
   private Environment evalSkylarkBody(
-      StarlarkSemantics semantics,
+      SkylarkSemantics semantics,
       BuildFileAST buildFileAST,
       Map<String, Extension> imports,
       List<RuleInfo> ruleInfoList,
@@ -574,7 +573,7 @@ public class SkydocMain {
   }
 
   private static Environment createEnvironment(
-      StarlarkSemantics semantics,
+      SkylarkSemantics semantics,
       EventHandler eventHandler,
       GlobalFrame globals,
       Map<String, Extension> imports) {

@@ -23,7 +23,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.UserDefinedFunction;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -88,11 +88,13 @@ public final class SkydocTest extends SkylarkTestCase {
         ")");
 
     ImmutableMap.Builder<String, RuleInfo> ruleInfoMap = ImmutableMap.builder();
+    ImmutableList.Builder<RuleInfo> unexportedRuleInfos = ImmutableList.builder();
 
     skydocMain.eval(
-        StarlarkSemantics.DEFAULT_SEMANTICS,
+        SkylarkSemantics.DEFAULT_SEMANTICS,
         Label.parseAbsoluteUnchecked("//test:test.bzl"),
         ruleInfoMap,
+        unexportedRuleInfos,
         ImmutableMap.builder(),
         ImmutableMap.builder());
     Map<String, RuleInfo> ruleInfos = ruleInfoMap.build();
@@ -109,6 +111,7 @@ public final class SkydocTest extends SkylarkTestCase {
         AttributeInfo.Type.STRING_DICT,
         AttributeInfo.Type.OUTPUT,
         AttributeInfo.Type.BOOLEAN).inOrder();
+    assertThat(unexportedRuleInfos.build()).isEmpty();
   }
 
   private static Iterable<String> getAttrNames(RuleInfo ruleInfo) {
@@ -149,15 +152,22 @@ public final class SkydocTest extends SkylarkTestCase {
         ")");
 
     ImmutableMap.Builder<String, RuleInfo> ruleInfoMap = ImmutableMap.builder();
+    ImmutableList.Builder<RuleInfo> unexportedRuleInfos = ImmutableList.builder();
 
     skydocMain.eval(
-        StarlarkSemantics.DEFAULT_SEMANTICS,
+        SkylarkSemantics.DEFAULT_SEMANTICS,
         Label.parseAbsoluteUnchecked("//test:test.bzl"),
         ruleInfoMap,
+        unexportedRuleInfos,
         ImmutableMap.builder(),
         ImmutableMap.builder());
 
     assertThat(ruleInfoMap.build().keySet()).containsExactly("rule_one", "rule_two");
+
+    assertThat(unexportedRuleInfos.build().stream()
+            .map(ruleInfo -> ruleInfo.getDocString())
+            .collect(Collectors.toList()))
+        .containsExactly("This rule is not named", "This rule also is not named");
   }
 
   @Test
@@ -197,9 +207,10 @@ public final class SkydocTest extends SkylarkTestCase {
     ImmutableMap.Builder<String, RuleInfo> ruleInfoMapBuilder = ImmutableMap.builder();
 
     skydocMain.eval(
-        StarlarkSemantics.DEFAULT_SEMANTICS,
+        SkylarkSemantics.DEFAULT_SEMANTICS,
         Label.parseAbsoluteUnchecked("//test:main.bzl"),
         ruleInfoMapBuilder,
+        ImmutableList.builder(),
         ImmutableMap.builder(),
         ImmutableMap.builder());
 
@@ -248,9 +259,10 @@ public final class SkydocTest extends SkylarkTestCase {
     ImmutableMap.Builder<String, RuleInfo> ruleInfoMapBuilder = ImmutableMap.builder();
 
     skydocMain.eval(
-        StarlarkSemantics.DEFAULT_SEMANTICS,
+        SkylarkSemantics.DEFAULT_SEMANTICS,
         Label.parseAbsoluteUnchecked("//test:main.bzl"),
         ruleInfoMapBuilder,
+        ImmutableList.builder(),
         ImmutableMap.builder(),
         ImmutableMap.builder());
 
@@ -286,9 +298,10 @@ public final class SkydocTest extends SkylarkTestCase {
             IllegalStateException.class,
             () ->
                 skydocMain.eval(
-                    StarlarkSemantics.DEFAULT_SEMANTICS,
+                    SkylarkSemantics.DEFAULT_SEMANTICS,
                     Label.parseAbsoluteUnchecked("//test:main.bzl"),
                     ruleInfoMapBuilder,
+                    ImmutableList.builder(),
                     ImmutableMap.builder(),
                     ImmutableMap.builder()));
 
@@ -318,9 +331,10 @@ public final class SkydocTest extends SkylarkTestCase {
     ImmutableMap.Builder<String, UserDefinedFunction> functionInfoBuilder = ImmutableMap.builder();
 
     skydocMain.eval(
-        StarlarkSemantics.DEFAULT_SEMANTICS,
+        SkylarkSemantics.DEFAULT_SEMANTICS,
         Label.parseAbsoluteUnchecked("//test:main.bzl"),
         ImmutableMap.builder(),
+        ImmutableList.builder(),
         ImmutableMap.builder(),
         functionInfoBuilder);
 
