@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.runtime;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -75,12 +76,11 @@ import com.google.devtools.build.lib.windows.WindowsFileSystem;
 import com.google.devtools.build.lib.windows.WindowsSubprocessFactory;
 import com.google.devtools.common.options.CommandNameCache;
 import com.google.devtools.common.options.InvocationPolicyParser;
-import com.google.devtools.common.options.OptionDefinition;
+import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionPriority;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsClassProvider;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParser.ConstructionException;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.OptionsProvider;
 import com.google.devtools.common.options.TriState;
@@ -101,7 +101,6 @@ import java.util.UUID;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
@@ -653,16 +652,11 @@ public final class BlazeRuntime {
     }
 
     for (Field field : startupFields) {
-      try {
-        OptionDefinition optionDefinition = OptionDefinition.extractOptionDefinition(field);
-        prefixes.add("--" + optionDefinition.getOptionName());
+      if (field.isAnnotationPresent(Option.class)) {
+        prefixes.add("--" + field.getAnnotation(Option.class).name());
         if (field.getType() == boolean.class || field.getType() == TriState.class) {
-          prefixes.add("--no" + optionDefinition.getOptionName());
+          prefixes.add("--no" + field.getAnnotation(Option.class).name());
         }
-      } catch (ConstructionException e) {
-        // Do nothing, just ignore fields that are not actually options. OptionsBases technically
-        // shouldn't have fields that are not @Options, but this is a requirement that isn't yet
-        // being enforced, so this should not cause a failure here.
       }
     }
 
