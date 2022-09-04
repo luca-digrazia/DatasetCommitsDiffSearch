@@ -31,7 +31,7 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.test.CoverageReportActionFactory;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploaderFactoryMap;
+import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploaderMap;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.events.Event;
@@ -45,10 +45,8 @@ import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.MemoryProfiler;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.Profiler.Format;
 import com.google.devtools.build.lib.profiler.Profiler.ProfiledTaskKinds;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
 import com.google.devtools.build.lib.query2.QueryEnvironmentFactory;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment.QueryFunction;
@@ -156,7 +154,7 @@ public final class BlazeRuntime {
   private final String defaultsPackageContent;
   private final SubscriberExceptionHandler eventBusExceptionHandler;
   private final String productName;
-  private final BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap;
+  private final BuildEventArtifactUploaderMap buildEventArtifactUploaders;
   private final ActionKeyContext actionKeyContext;
 
   // Workspace state (currently exactly one workspace per server)
@@ -181,7 +179,7 @@ public final class BlazeRuntime {
       InvocationPolicy moduleInvocationPolicy,
       Iterable<BlazeCommand> commands,
       String productName,
-      BuildEventArtifactUploaderFactoryMap buildEventArtifactUploaderFactoryMap) {
+      BuildEventArtifactUploaderMap buildEventArtifactUploaders) {
     // Server state
     this.fileSystem = fileSystem;
     this.blazeModules = blazeModules;
@@ -208,7 +206,7 @@ public final class BlazeRuntime {
     CommandNameCache.CommandNameCacheInstance.INSTANCE.setCommandNameCache(
         new CommandNameCacheImpl(getCommandMap()));
     this.productName = productName;
-    this.buildEventArtifactUploaderFactoryMap = buildEventArtifactUploaderFactoryMap;
+    this.buildEventArtifactUploaders = buildEventArtifactUploaders;
   }
 
   public BlazeWorkspace initWorkspace(BlazeDirectories directories, BinTools binTools)
@@ -229,8 +227,8 @@ public final class BlazeRuntime {
     for (BlazeModule module : blazeModules) {
       CoverageReportActionFactory factory = module.getCoverageReportFactory(commandOptions);
       if (factory != null) {
-        Preconditions.checkState(
-            firstFactory == null, "only one Bazel Module can have a Coverage Report Factory");
+        Preconditions.checkState(firstFactory == null,
+            "only one Blaze Module can have a Coverage Report Factory");
         firstFactory = factory;
       }
     }
@@ -263,7 +261,7 @@ public final class BlazeRuntime {
   }
 
   /** Configure profiling based on the provided options. */
-  Path initProfiler(
+  void initProfiler(
       EventHandler eventHandler,
       BlazeWorkspace workspace,
       CommonCommandOptions options,
@@ -273,28 +271,18 @@ public final class BlazeRuntime {
     boolean recordFullProfilerData = false;
     ProfiledTaskKinds profiledTasks = ProfiledTaskKinds.NONE;
     Profiler.Format format = Profiler.Format.BINARY_BAZEL_FORMAT;
-    Path profilePath = null;
     try {
       if (options.enableTracer) {
-        format =
-            options.enableTracerCompression
-                ? Format.JSON_TRACE_FILE_COMPRESSED_FORMAT
-                : Profiler.Format.JSON_TRACE_FILE_FORMAT;
-        if (options.profilePath != null) {
-          profilePath = workspace.getWorkspace().getRelative(options.profilePath);
-        } else {
-          String profileName = "command.profile";
-          if (format == Format.JSON_TRACE_FILE_COMPRESSED_FORMAT) {
-            profileName = "command.profile.gz";
-          }
-          profilePath = workspace.getOutputBase().getRelative(profileName);
-        }
+        Path profilePath = options.profilePath != null
+            ? workspace.getWorkspace().getRelative(options.profilePath)
+            : workspace.getOutputBase().getRelative("command.profile");
         recordFullProfilerData = false;
         out = profilePath.getOutputStream();
         eventHandler.handle(Event.info("Writing tracer profile to '" + profilePath + "'"));
         profiledTasks = ProfiledTaskKinds.ALL_FOR_TRACE;
+        format = Profiler.Format.JSON_TRACE_FILE_FORMAT;
       } else if (options.profilePath != null) {
-        profilePath = workspace.getWorkspace().getRelative(options.profilePath);
+        Path profilePath = workspace.getWorkspace().getRelative(options.profilePath);
 
         recordFullProfilerData = options.recordFullProfilerData;
         out = profilePath.getOutputStream();
@@ -335,7 +323,6 @@ public final class BlazeRuntime {
     } catch (IOException e) {
       eventHandler.handle(Event.error("Error while creating profile file: " + e.getMessage()));
     }
-    return profilePath;
   }
 
   public FileSystem getFileSystem() {
@@ -405,12 +392,12 @@ public final class BlazeRuntime {
           options = optionsFromModule;
         } else {
           throw new IllegalArgumentException(
-              "Two or more bazel modules contained default build options.");
+              "Two or more blaze modules contained default build options.");
         }
       }
     }
     if (options == null) {
-      throw new IllegalArgumentException("No default build options specified in any Bazel module");
+      throw new IllegalArgumentException("No default build options specified in any Blaze module");
     }
     return options;
   }
@@ -494,9 +481,7 @@ public final class BlazeRuntime {
     notifyCommandComplete(exitCode);
 
     for (BlazeModule module : blazeModules) {
-      try (SilentCloseable c = Profiler.instance().profile(module + ".afterCommand")) {
-        module.afterCommand();
-      }
+      module.afterCommand();
     }
 
     // Wipe the dependency graph if requested. Note that this method always runs at the end of
@@ -648,7 +633,10 @@ public final class BlazeRuntime {
       System.exit(batchMain(modules, args));
     }
     logger.info(
-        "Starting Bazel server with " + maybeGetPidString() + "args " + Arrays.toString(args));
+        "Starting Blaze server with "
+            + maybeGetPidString()
+            + "args "
+            + Arrays.toString(args));
     try {
       // Run Blaze in server mode.
       System.exit(serverMain(modules, OutErr.SYSTEM_OUT_ERR, args));
@@ -791,7 +779,7 @@ public final class BlazeRuntime {
       @Override
       public void run() {
         logger.info("User interrupt");
-        OutErr.SYSTEM_OUT_ERR.printErrLn("Bazel received an interrupt");
+        OutErr.SYSTEM_OUT_ERR.printErrLn("Blaze received an interrupt");
         mainThread.interrupt();
 
         int curNumInterrupts = numInterrupts.incrementAndGet();
@@ -815,7 +803,7 @@ public final class BlazeRuntime {
     InterruptSignalHandler signalHandler = captureSigint();
     CommandLineOptions commandLineOptions = splitStartupOptions(modules, args);
     logger.info(
-        "Running Bazel in batch mode with "
+        "Running Blaze in batch mode with "
             + maybeGetPidString()
             + "startup args "
             + commandLineOptions.getStartupArgs());
@@ -1265,8 +1253,8 @@ public final class BlazeRuntime {
     return productName;
   }
 
-  public BuildEventArtifactUploaderFactoryMap getBuildEventArtifactUploaderFactoryMap() {
-    return buildEventArtifactUploaderFactoryMap;
+  public BuildEventArtifactUploaderMap getBuildEventArtifactUploaders() {
+    return buildEventArtifactUploaders;
   }
 
   /**
