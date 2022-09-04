@@ -1026,9 +1026,7 @@ public final class RuleContext extends TargetContext
     }
 
     List<ConfiguredTargetAndData> prerequisiteConfiguredTargets;
-    // android_binary and android_test override deps to use a split transition.
-    if ((getRule().getRuleClass().equals("android_binary")
-            || getRule().getRuleClass().equals("android_test"))
+    if (getRule().getRuleClass().equals("android_binary")
         && attributeName.equals("deps")
         && attributes().getAttributeDefinition(attributeName).getTransitionFactory().isSplit()) {
       // TODO(b/168038145): Restore legacy behavior of returning the prerequisites from the first

@@ -18,40 +18,22 @@ import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.StarlarkProvider;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.util.BazelMockAndroidSupport;
-import com.google.devtools.build.lib.rules.android.AndroidStarlarkTest.WithPlatforms;
-import com.google.devtools.build.lib.rules.android.AndroidStarlarkTest.WithoutPlatforms;
-import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.syntax.Starlark;
 import java.util.List;
 import java.util.Map;
-import net.starlark.java.eval.Starlark;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
-import org.junit.runners.Suite;
-import org.junit.runners.Suite.SuiteClasses;
 
-/** Tests Android Starlark APIs. */
-@RunWith(Suite.class)
-@SuiteClasses({WithoutPlatforms.class, WithPlatforms.class})
-public abstract class AndroidStarlarkTest extends AndroidBuildViewTestCase {
-  /** Use legacy toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithoutPlatforms extends AndroidStarlarkTest {}
-
-  /** Use platform-based toolchain resolution. */
-  @RunWith(JUnit4.class)
-  public static class WithPlatforms extends AndroidStarlarkTest {
-    @Override
-    protected boolean platformBasedToolchains() {
-      return true;
-    }
-  }
+@RunWith(JUnit4.class)
+public class AndroidStarlarkTest extends BuildViewTestCase {
 
   private void writeAndroidSplitTransitionTestFiles() throws Exception {
     scratch.file(
@@ -228,26 +210,9 @@ public abstract class AndroidStarlarkTest extends AndroidBuildViewTestCase {
         "load('//:foo_library.bzl', 'foo_library')",
         "filegroup(name = 'new_sdk')",
         "foo_library(name = 'lib')");
-    if (platformBasedToolchains()) {
-      // TODO(b/161709111): fails to find a matching Android toolchain.
-      if (true) {
-        return;
-      }
-      scratch.file(
-          "platform_toolchain_defs/BUILD",
-          "toolchain(",
-          "    name = 'new_sdk_toolchain',",
-          String.format("    toolchain_type = '%s',", TestConstants.ANDROID_TOOLCHAIN_TYPE_LABEL),
-          "toolchain = '//:new_sdk',",
-          ")");
-      useConfiguration(
-          "--extra_toolchains=//platform_toolchain_defs:new_sdk_toolchain",
-          "--android_sdk=//:new_sdk");
-    } else {
-      useConfiguration("--android_sdk=//:new_sdk");
-    }
-
+    useConfiguration("--android_sdk=//:new_sdk");
     ConfiguredTarget ct = getConfiguredTarget("//:lib");
+
     assertThat(getMyInfoFromTarget(ct).getValue("foo"))
         .isEqualTo(Label.parseAbsoluteUnchecked("//:new_sdk"));
   }
