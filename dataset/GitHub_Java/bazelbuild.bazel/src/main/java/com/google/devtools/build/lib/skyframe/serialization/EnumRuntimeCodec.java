@@ -14,9 +14,14 @@
 
 package com.google.devtools.build.lib.skyframe.serialization;
 
+import com.google.protobuf.ByteString;
 import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.nio.ByteBuffer;
 
 @SuppressWarnings("rawtypes")
 class EnumRuntimeCodec implements ObjectCodec<Enum> {
@@ -27,16 +32,27 @@ class EnumRuntimeCodec implements ObjectCodec<Enum> {
   }
 
   @Override
-  public void serialize(SerializationContext context, Enum value, CodedOutputStream codedOut)
+  public void serialize(SerializationContext unusedContext, Enum value, CodedOutputStream codedOut)
       throws IOException, SerializationException {
-    context.serialize(value.getDeclaringClass(), codedOut);
-    codedOut.writeInt32NoTag(value.ordinal());
+    // We're using Java serialization below because Enums are serializable by default and a
+    // hand-rolled version is going to be very similar.
+    ByteString.Output out = ByteString.newOutput();
+    ObjectOutputStream objOut = new ObjectOutputStream(out);
+    objOut.writeObject(value);
+    codedOut.writeBytesNoTag(out.toByteString());
   }
 
   @Override
-  public Enum deserialize(DeserializationContext context, CodedInputStream codedIn)
+  public Enum deserialize(DeserializationContext unusedContext, CodedInputStream codedIn)
       throws SerializationException, IOException {
-    Class<? extends Enum> enumType = context.deserialize(codedIn);
-    return enumType.getEnumConstants()[codedIn.readInt32()];
+    ByteBuffer buffer = codedIn.readByteBuffer();
+    ObjectInputStream objIn =
+        new ObjectInputStream(
+            new ByteArrayInputStream(buffer.array(), buffer.arrayOffset(), buffer.remaining()));
+    try {
+      return (Enum) objIn.readObject();
+    } catch (ClassNotFoundException e) {
+      throw new SerializationException("Couldn't find class for Enum deserialization?", e);
+    }
   }
 }
