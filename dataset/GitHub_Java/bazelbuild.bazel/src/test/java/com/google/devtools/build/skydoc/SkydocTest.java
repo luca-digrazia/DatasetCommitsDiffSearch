@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.skydoc.fakebuildapi.FakeDescriptor.Type;
 import com.google.devtools.build.skydoc.rendering.RuleInfo;
 import java.io.IOException;
 import java.nio.file.Paths;
@@ -50,7 +49,7 @@ public final class SkydocTest extends SkylarkTestCase {
 
       @Override
       public ParserInputSource inputSource(String pathString) throws IOException {
-        Path path = fileSystem.getPath("/" + pathString);
+        Path path = fileSystem.getPath(pathString);
         byte[] bytes = FileSystemUtils.asByteSource(path).read();
         return ParserInputSource.create(bytes, path.asFragment());
       }
@@ -68,10 +67,10 @@ public final class SkydocTest extends SkylarkTestCase {
         "    doc = 'This is my rule. It does stuff.',",
         "    implementation = rule_impl,",
         "    attrs = {",
-        "        'a': attr.label(mandatory=True, allow_files=True, single_file=True),",
-        "        'b': attr.string_dict(mandatory=True),",
-        "        'c': attr.output(mandatory=True),",
-        "        'd': attr.bool(default=False, mandatory=False),",
+        "        'first': attr.label(mandatory=True, allow_files=True, single_file=True),",
+        "        'second': attr.string_dict(mandatory=True),",
+        "        'third': attr.output(mandatory=True),",
+        "        'fourth': attr.bool(default=False, mandatory=False),",
         "    },",
         ")");
 
@@ -89,23 +88,12 @@ public final class SkydocTest extends SkylarkTestCase {
     assertThat(ruleInfo.getKey()).isEqualTo("my_rule");
     assertThat(ruleInfo.getValue().getDocString()).isEqualTo("This is my rule. It does stuff.");
     assertThat(getAttrNames(ruleInfo.getValue())).containsExactly(
-        "name", "a", "b", "c", "d").inOrder();
-    assertThat(getAttrTypes(ruleInfo.getValue())).containsExactly(
-        Type.STRING.getDescription(),
-        Type.LABEL.getDescription(),
-        Type.STRING_DICT.getDescription(),
-        Type.LABEL.getDescription(),
-        Type.BOOLEAN.getDescription()).inOrder();
+        "first", "fourth", "second", "third").inOrder();
     assertThat(unexportedRuleInfos.build()).isEmpty();
   }
 
   private static Iterable<String> getAttrNames(RuleInfo ruleInfo) {
     return ruleInfo.getAttributes().stream().map(attr -> attr.getName())
-        .collect(Collectors.toList());
-  }
-
-  private static Iterable<String> getAttrTypes(RuleInfo ruleInfo) {
-    return ruleInfo.getAttributes().stream().map(attr -> attr.getTypeString())
         .collect(Collectors.toList());
   }
 
@@ -168,10 +156,7 @@ public final class SkydocTest extends SkylarkTestCase {
         "load('//lib:rule_impl.bzl', 'rule_impl')",
         "load(':docstring.bzl', 'doc_string')",
         "",
-        "_hidden_rule = rule(",
-        "    doc = doc_string,",
-        "    implementation = rule_impl,",
-        ")",
+        "some_var = 1",
         "",
         "dep_rule = rule(",
         "    doc = doc_string,",
@@ -181,7 +166,7 @@ public final class SkydocTest extends SkylarkTestCase {
     scratch.file(
         "/test/main.bzl",
         "load('//lib:rule_impl.bzl', 'rule_impl')",
-        "load('//deps/foo:dep_rule.bzl', 'dep_rule')",
+        "load('//deps/foo:dep_rule.bzl', 'some_var')",
         "",
         "main_rule = rule(",
         "    doc = 'Main rule',",
@@ -197,8 +182,6 @@ public final class SkydocTest extends SkylarkTestCase {
 
     Map<String, RuleInfo> ruleInfoMap = ruleInfoMapBuilder.build();
 
-    // dep_rule is available here, even though it was not defined in main.bzl, because it is
-    // imported in main.bzl. Thus, it's a top-level symbol in main.bzl.
     assertThat(ruleInfoMap.keySet()).containsExactly("main_rule", "dep_rule");
     assertThat(ruleInfoMap.get("main_rule").getDocString()).isEqualTo("Main rule");
     assertThat(ruleInfoMap.get("dep_rule").getDocString()).isEqualTo("Dep rule");
@@ -232,6 +215,6 @@ public final class SkydocTest extends SkylarkTestCase {
                 ruleInfoMapBuilder,
                 ImmutableList.builder()));
 
-    assertThat(expected).hasMessageThat().contains("cycle with test/main.bzl");
+    assertThat(expected).hasMessageThat().contains("cycle with /test/main.bzl");
   }
 }
