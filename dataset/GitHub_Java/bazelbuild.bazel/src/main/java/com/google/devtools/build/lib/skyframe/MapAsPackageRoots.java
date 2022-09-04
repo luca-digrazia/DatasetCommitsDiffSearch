@@ -15,10 +15,10 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.PackageRoots;
-import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
-import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.lib.vfs.Root;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -28,28 +28,32 @@ import java.util.Optional;
  * planted for execution.
  */
 public class MapAsPackageRoots implements PackageRoots {
-  private final ImmutableMap<PackageIdentifier, Path> packageRootsMap;
+  private final ImmutableMap<PackageIdentifier, Root> packageRootsMap;
 
-  MapAsPackageRoots(ImmutableMap<PackageIdentifier, Path> packageRootsMap) {
+  MapAsPackageRoots(ImmutableMap<PackageIdentifier, Root> packageRootsMap) {
     this.packageRootsMap = packageRootsMap;
   }
 
   @Override
-  public Optional<ImmutableMap<PackageIdentifier, Path>> getPackageRootsMap() {
+  public Optional<ImmutableMap<PackageIdentifier, Root>> getPackageRootsMap() {
     return Optional.of(packageRootsMap);
   }
 
   @Override
   public PackageRootLookup getPackageRootLookup() {
-    Map<Path, Root> rootMap = new HashMap<>();
+    Map<Root, Root> deduper = new HashMap<>();
     Map<PackageIdentifier, Root> realPackageRoots = new HashMap<>();
-    for (Map.Entry<PackageIdentifier, Path> entry : packageRootsMap.entrySet()) {
-      Root root = rootMap.get(entry.getValue());
-      if (root == null) {
-        root = Root.asSourceRoot(entry.getValue(), entry.getKey().getRepository().isMain());
-        rootMap.put(entry.getValue(), root);
-      }
-      realPackageRoots.put(entry.getKey(), root);
+    for (Map.Entry<PackageIdentifier, Root> entry : packageRootsMap.entrySet()) {
+      Root newRoot = entry.getValue();
+      Root oldRoot = deduper.putIfAbsent(newRoot, newRoot);
+      realPackageRoots.put(entry.getKey(), oldRoot == null ? newRoot : oldRoot);
+    }
+    if (deduper.size() == 1) {
+      // This will return a root more often than in the multi-root case, which only returns a root
+      // for an exact match, but there are no negative consequences to being *more* informed about
+      // a file's potential root.
+      Root onlyRoot = Iterables.getOnlyElement(deduper.keySet());
+      return k -> onlyRoot;
     }
     return realPackageRoots::get;
   }
