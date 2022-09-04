@@ -297,6 +297,12 @@ import com.sun.codemodel.JCodeModel;
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 
+	/**
+	 * We do not need multiple round processing, since the generated classes do
+	 * not need to be processed.
+	 */
+	private boolean alreadyProcessed = false;
+
 	private final TimeStats timeStats = new TimeStats();
 
 	@Override
@@ -330,6 +336,8 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 			return;
 		}
 
+		alreadyProcessed = true;
+
 		AnnotationElementsHolder extractedModel = extractAnnotations(annotations, roundEnv);
 
 		AndroidManifest androidManifest = extractAndroidManifest();
@@ -346,7 +354,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 	}
 
 	private boolean nothingToDo(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-		return roundEnv.processingOver() || annotations.size() == 0;
+		return roundEnv.processingOver() || annotations.size() == 0 || alreadyProcessed;
 	}
 
 	private AnnotationElementsHolder extractAnnotations(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
