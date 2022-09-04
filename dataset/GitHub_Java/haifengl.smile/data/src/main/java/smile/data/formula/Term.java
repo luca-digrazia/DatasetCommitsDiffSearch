@@ -15,78 +15,29 @@
  *******************************************************************************/
 package smile.data.formula;
 
-import smile.data.Tuple;
-import smile.data.type.DataType;
-
-import java.util.Collections;
+import java.io.Serializable;
 import java.util.List;
+import java.util.Set;
+
+import smile.data.type.StructType;
 
 /**
- * A term is recursively constructed from constant symbols,
- * variables and function symbols. A term returns a single value
- * when applied to a data object (e.g. Tuple).
+ * A model consists of a series of terms. The terms themselves
+ * consist of a single factor or can be expanded to multiple
+ * factors including the the interaction of multiple factors.
+ *
+ * While formulae usually involve just variable and factor names,
+ * they can also involve arithmetic expressions.
  *
  * @author Haifeng Li
  */
-public interface Term extends HyperTerm {
-    @Override
-    default List<Term> terms() {
-        return Collections.singletonList(this);
-    }
+public interface Term extends Serializable {
+    /** Binds the term to a schema. */
+    void bind(StructType schema);
 
-    /** Returns the data type of output values. */
-    DataType type();
+    /** Returns the list of factors after expanding the term. */
+    List<? extends Factor> factors();
 
-    /** Applies the term on a data object. */
-    Object apply(Tuple o);
-
-    /** Applies the term on a data object and produces an double-valued result. */
-    default double applyAsDouble(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Applies the term on a data object and produces an float-valued result. */
-    default float applyAsFloat(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Applies the term on a data object and produces an int-valued result. */
-    default int applyAsInt(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Applies the term on a data object and produces an long-valued result. */
-    default long applyAsLong(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Applies the term on a data object and produces an boolean-valued result. */
-    default boolean applyAsBoolean(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Applies the term on a data object and produces an byte-valued result. */
-    default byte applyAsByte(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Applies the term on a data object and produces an short-valued result. */
-    default short applyAsShort(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Applies the term on a data object and produces an char-valued result. */
-    default char applyAsChar(Tuple o) {
-        throw new UnsupportedOperationException();
-    }
-
-    /** Returns true if the term represents a plain variable. */
-    default boolean isVariable() {
-        return false;
-    }
-
-    /** Returns true if the term represents a constant value. */
-    default boolean isConstant() {
-        return false;
-    }
+    /** Returns the list of variables used in this term. */
+    Set<String> variables();
 }
