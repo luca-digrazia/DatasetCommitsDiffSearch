@@ -1,31 +1,32 @@
-/**
- * This file is part of Graylog.
+/*
+ * Copyright (C) 2020 Graylog, Inc.
  *
- * Graylog is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the Server Side Public License, version 1,
+ * as published by MongoDB, Inc.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * Server Side Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * You should have received a copy of the Server Side Public License
+ * along with this program. If not, see
+ * <http://www.mongodb.com/licensing/server-side-public-license>.
  */
 package org.graylog2.indexer.indices;
 
+import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
-import org.assertj.jodatime.api.Assertions;
 import org.graylog.testing.elasticsearch.ElasticsearchBaseTest;
 import org.graylog2.audit.NullAuditEventSender;
 import org.graylog2.indexer.IndexMappingFactory;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.IndexSetStatsCreator;
 import org.graylog2.indexer.TestIndexSet;
 import org.graylog2.indexer.cluster.Node;
 import org.graylog2.indexer.cluster.NodeAdapter;
@@ -40,6 +41,7 @@ import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
 import org.graylog2.indexer.searches.IndexRangeStats;
 import org.graylog2.plugin.system.NodeId;
+import org.graylog2.rest.resources.system.indexer.responses.IndexSetStats;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
@@ -55,9 +57,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public abstract class IndicesIT extends ElasticsearchBaseTest {
     private static final String INDEX_NAME = "graylog_0";
@@ -256,7 +260,7 @@ public abstract class IndicesIT extends ElasticsearchBaseTest {
 
         final Optional<DateTime> indexCreationDate = indices.indexCreationDate(indexName);
         assertThat(indexCreationDate).isNotEmpty()
-                .hasValueSatisfying(date -> Assertions.assertThat(date).isEqualToIgnoringMillis(now));
+                .hasValueSatisfying(date -> assertThat(date.toDate()).isCloseTo(now.toDate(), TimeUnit.SECONDS.toMillis(1)));
     }
 
     @Test
@@ -361,12 +365,13 @@ public abstract class IndicesIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void retrievesCreationTimeOfIndex() {
+    public void retrievesCreationTimeOfIndexInUTC() {
         final String index = client().createRandomIndex("foo");
 
         final Optional<DateTime> creationDate = indices.indexCreationDate(index);
 
-        assertThat(creationDate).isNotEmpty();
+        assertThat(creationDate).hasValueSatisfying(dt ->
+                assertThat(dt.getZone()).isEqualTo(DateTimeZone.UTC));
     }
 
     @Test
@@ -396,5 +401,70 @@ public abstract class IndicesIT extends ElasticsearchBaseTest {
         final Set<IndexStatistics> indicesStats = indices.getIndicesStats(Collections.singleton(index));
 
         assertThat(indicesStats).isNotEmpty();
+    }
+
+    @Test
+    public void cyclingDeflectorMovesAliasFromOldToNewTarget() {
+        final String deflector = "indices_it_deflector";
+
+        final String index1 = client().createRandomIndex("indices_it_");
+        final String index2 = client().createRandomIndex("indices_it_");
+
+        client().addAliasMapping(index1, deflector);
+
+        assertThat(indices.aliasTarget(deflector)).hasValue(index1);
+
+        indices.cycleAlias(deflector, index2, index1);
+
+        assertThat(indices.aliasTarget(deflector)).hasValue(index2);
+    }
+
+    @Test
+    public void retrievingIndexStatsForWildcard() {
+        final IndexSetStatsCreator indexSetStatsCreator = new IndexSetStatsCreator(indices);
+        final String indexPrefix = "indices_wildcard_";
+        final String wildcard = indexPrefix + "*";
+        final IndexSet indexSet = mock(IndexSet.class);
+        when(indexSet.getIndexWildcard()).thenReturn(wildcard);
+
+        client().createRandomIndex(indexPrefix);
+        client().createRandomIndex(indexPrefix);
+
+        final IndexSetStats indexSetStats = indexSetStatsCreator.getForIndexSet(indexSet);
+
+        assertThat(indexSetStats.indices()).isEqualTo(2L);
+        assertThat(indexSetStats.size()).isNotZero();
+    }
+
+    @Test
+    public void waitForRedIndexReturnsStatus() {
+        final HealthStatus healthStatus = indices.waitForRecovery("this_index_does_not_exist", 0);
+
+        assertThat(healthStatus).isEqualTo(HealthStatus.Red);
+    }
+
+    @Test
+    public void numberOfMessagesReturnsCorrectSize() {
+        importFixture("org/graylog2/indexer/indices/IndicesIT.json");
+
+        assertThat(indices.numberOfMessages("graylog_0")).isEqualTo(10);
+    }
+
+    @Test
+    public void optimizeIndexJobDoesNotThrowException() {
+        importFixture("org/graylog2/indexer/indices/IndicesIT.json");
+
+        indices.optimizeIndex("graylog_0", 1, Duration.minutes(1));
+    }
+
+    @Test
+    public void aliasTargetReturnsListOfTargetsGivenAliasIsPointingToWithWildcards() {
+        final String index = client().createRandomIndex("indices_it_");
+        final String alias = "graylog_alias_target";
+        assertThat(indices.aliasTarget(alias)).isEmpty();
+
+        client().addAliasMapping(index, alias);
+
+        assertThat(indices.aliasTarget("graylog_alias_*")).contains(index);
     }
 }
