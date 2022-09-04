@@ -210,6 +210,7 @@ public class SubsamplingScaleImageView extends View {
         isPanning = false;
         isPressed = false;
         fullImageSampleSize = 0;
+        tileMap = null;
         vCenterStart = null;
         vDistStart = 0;
         flingStart = 0;
@@ -235,7 +236,6 @@ public class SubsamplingScaleImageView extends View {
                     }
                 }
             }
-            tileMap = null;
         }
     }
 
