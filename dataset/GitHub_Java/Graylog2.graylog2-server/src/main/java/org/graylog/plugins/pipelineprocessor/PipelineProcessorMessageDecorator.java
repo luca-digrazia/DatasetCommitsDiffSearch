@@ -1,36 +1,51 @@
+/**
+ * This file is part of Graylog Pipeline Processor.
+ *
+ * Graylog Pipeline Processor is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog Pipeline Processor is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog Pipeline Processor.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.pipelineprocessor;
 
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Multimap;
 import com.google.inject.assistedinject.Assisted;
 import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
 import org.graylog.plugins.pipelineprocessor.processors.listeners.NoopInterpreterListener;
 import org.graylog2.decorators.Decorator;
-import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.configuration.fields.ConfigurationField;
 import org.graylog2.plugin.configuration.fields.DropdownField;
-import org.graylog2.plugin.decorators.MessageDecorator;
+import org.graylog2.plugin.decorators.SearchResponseDecorator;
+import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
+import org.graylog2.rest.resources.search.responses.SearchResponse;
 
 import javax.inject.Inject;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-public class PipelineProcessorMessageDecorator implements MessageDecorator {
+public class PipelineProcessorMessageDecorator implements SearchResponseDecorator {
     private static final String CONFIG_FIELD_PIPELINE = "pipeline";
 
     private final PipelineInterpreter pipelineInterpreter;
     private final ImmutableSet<String> pipelines;
 
-    public interface Factory extends MessageDecorator.Factory {
+    public interface Factory extends SearchResponseDecorator.Factory {
         @Override
         PipelineProcessorMessageDecorator create(Decorator decorator);
 
@@ -41,7 +56,7 @@ public class PipelineProcessorMessageDecorator implements MessageDecorator {
         Descriptor getDescriptor();
     }
 
-    public static class Config implements MessageDecorator.Config {
+    public static class Config implements SearchResponseDecorator.Config {
         private final PipelineService pipelineService;
 
         @Inject
@@ -65,9 +80,9 @@ public class PipelineProcessorMessageDecorator implements MessageDecorator {
         };
     }
 
-    public static class Descriptor extends MessageDecorator.Descriptor {
+    public static class Descriptor extends SearchResponseDecorator.Descriptor {
         public Descriptor() {
-            super("Pipeline Processor Decorator", false, "http://docs.graylog.org/en/2.0/pages/pipelines.html", "Pipeline Processor Decorator");
+            super("Pipeline Processor Decorator", "http://docs.graylog.org/en/2.0/pages/pipelines.html", "Pipeline Processor Decorator");
         }
     }
 
@@ -84,26 +99,31 @@ public class PipelineProcessorMessageDecorator implements MessageDecorator {
     }
 
     @Override
-    public List<ResultMessage> apply(List<ResultMessage> resultMessages) {
-        final List<ResultMessage> results = new ArrayList<>();
+    public SearchResponse apply(SearchResponse searchResponse) {
+        final List<ResultMessageSummary> results = new ArrayList<>();
         if (pipelines.isEmpty()) {
-            return resultMessages;
+            return searchResponse;
         }
-        resultMessages.forEach((inMessage) -> {
-            final Message message = inMessage.getMessage();
+        searchResponse.messages().forEach((inMessage) -> {
+            final Message message = new Message(inMessage.message());
             final List<Message> additionalCreatedMessages = pipelineInterpreter.processForPipelines(message,
                     message.getId(),
                     pipelines,
                     new NoopInterpreterListener());
-            final ResultMessage outMessage = ResultMessage.createFromMessage(message, inMessage.getIndex(), inMessage.getHighlightRanges());
 
-            results.add(outMessage);
+            results.add(ResultMessageSummary.create(inMessage.highlightRanges(), message.getFields(), inMessage.index()));
             additionalCreatedMessages.forEach((additionalMessage) -> {
                 // TODO: pass proper highlight ranges. Need to rebuild them for new messages.
-                results.add(ResultMessage.createFromMessage(additionalMessage, "[created from decorator]", ImmutableMultimap.of()));
+                results.add(ResultMessageSummary.create(
+                        ImmutableMultimap.of(),
+                        additionalMessage.getFields(),
+                        "[created from decorator]"
+                ));
             });
         });
 
-        return results;
+        pipelineInterpreter.stop();
+
+        return searchResponse.toBuilder().messages(results).build();
     }
 }

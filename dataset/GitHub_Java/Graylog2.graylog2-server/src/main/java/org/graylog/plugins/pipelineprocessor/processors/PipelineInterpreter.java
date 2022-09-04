@@ -18,9 +18,6 @@ package org.graylog.plugins.pipelineprocessor.processors;
 
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.cache.CacheBuilder;
-import com.google.common.cache.CacheLoader;
-import com.google.common.cache.LoadingCache;
 import com.google.common.collect.HashMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -31,26 +28,24 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
-import com.google.common.util.concurrent.FutureCallback;
-import com.google.common.util.concurrent.Futures;
-import com.google.common.util.concurrent.ListeningScheduledExecutorService;
-import com.google.common.util.concurrent.MoreExecutors;
 import org.graylog.plugins.pipelineprocessor.EvaluationContext;
 import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.ast.Stage;
 import org.graylog.plugins.pipelineprocessor.ast.statements.Statement;
-import org.graylog.plugins.pipelineprocessor.db.PipelineSourceService;
-import org.graylog.plugins.pipelineprocessor.db.PipelineStreamAssignmentService;
-import org.graylog.plugins.pipelineprocessor.db.RuleSourceService;
+import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
+import org.graylog.plugins.pipelineprocessor.db.PipelineService;
+import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
+import org.graylog.plugins.pipelineprocessor.db.RuleDao;
+import org.graylog.plugins.pipelineprocessor.db.RuleService;
+import org.graylog.plugins.pipelineprocessor.events.PipelineConnectionsChangedEvent;
 import org.graylog.plugins.pipelineprocessor.events.PipelinesChangedEvent;
 import org.graylog.plugins.pipelineprocessor.events.RulesChangedEvent;
 import org.graylog.plugins.pipelineprocessor.parser.ParseException;
 import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineSource;
-import org.graylog.plugins.pipelineprocessor.rest.PipelineStreamAssignment;
-import org.graylog.plugins.pipelineprocessor.rest.RuleSource;
-import org.graylog2.events.ClusterEventBus;
+import org.graylog.plugins.pipelineprocessor.processors.listeners.InterpreterListener;
+import org.graylog.plugins.pipelineprocessor.processors.listeners.NoopInterpreterListener;
+import org.graylog.plugins.pipelineprocessor.rest.PipelineConnections;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.MessageCollection;
 import org.graylog2.plugin.Messages;
@@ -58,71 +53,134 @@ import org.graylog2.plugin.messageprocessors.MessageProcessor;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.journal.Journal;
-import org.jooq.lambda.Seq;
 import org.jooq.lambda.tuple.Tuple2;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.inject.Named;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static com.google.common.cache.CacheLoader.asyncReloading;
 import static org.jooq.lambda.tuple.Tuple.tuple;
 
 public class PipelineInterpreter implements MessageProcessor {
     private static final Logger log = LoggerFactory.getLogger(PipelineInterpreter.class);
 
-    private final PipelineSourceService pipelineSourceService;
+    public static final String GL2_PROCESSING_ERROR = "gl2_processing_error";
+
+    private final RuleService ruleService;
+    private final PipelineService pipelineService;
+    private final PipelineStreamConnectionsService pipelineStreamConnectionsService;
     private final PipelineRuleParser pipelineRuleParser;
     private final Journal journal;
+    private final MetricRegistry metricRegistry;
+    private final ScheduledExecutorService scheduler;
     private final Meter filteredOutMessages;
-    private final LoadingCache<String, Rule> ruleCache;
-    private final ListeningScheduledExecutorService scheduledExecutorService;
+    private EventBus serverEventBus;
 
-    private final AtomicReference<ImmutableMap<String, Pipeline>> currentPipelines = new AtomicReference<>();
-    private final AtomicReference<ImmutableSetMultimap<String, Pipeline>> streamPipelineAssignments = new AtomicReference<>(ImmutableSetMultimap.of());
+    private final AtomicReference<ImmutableMap<String, Pipeline>> currentPipelines = new AtomicReference<>(ImmutableMap.of());
+    private final AtomicReference<ImmutableSetMultimap<String, Pipeline>> streamPipelineConnections = new AtomicReference<>(ImmutableSetMultimap.of());
 
     @Inject
-    public PipelineInterpreter(RuleSourceService ruleSourceService,
-                               PipelineSourceService pipelineSourceService,
-                               PipelineStreamAssignmentService pipelineStreamAssignmentService,
+    public PipelineInterpreter(RuleService ruleService,
+                               PipelineService pipelineService,
+                               PipelineStreamConnectionsService pipelineStreamConnectionsService,
                                PipelineRuleParser pipelineRuleParser,
                                Journal journal,
                                MetricRegistry metricRegistry,
-                               @Named("daemonScheduler") ScheduledExecutorService scheduledExecutorService,
-                               @ClusterEventBus EventBus clusterBus) {
-        this.pipelineSourceService = pipelineSourceService;
+                               @Named("daemonScheduler") ScheduledExecutorService scheduler,
+                               EventBus serverEventBus) {
+        this.ruleService = ruleService;
+        this.pipelineService = pipelineService;
+        this.pipelineStreamConnectionsService = pipelineStreamConnectionsService;
         this.pipelineRuleParser = pipelineRuleParser;
-        this.journal = journal;
-        this.scheduledExecutorService = MoreExecutors.listeningDecorator(scheduledExecutorService);
-        this.filteredOutMessages = metricRegistry.meter(name(ProcessBufferProcessor.class, "filteredOutMessages"));
-        clusterBus.register(this);
-        ruleCache = CacheBuilder.newBuilder()
-                .build(asyncReloading(new RuleLoader(ruleSourceService, pipelineRuleParser), scheduledExecutorService));
 
-        // prime the cache with all presently stored rules
-        try {
-            final List<String> ruleIds = ruleSourceService.loadAll().stream().map(RuleSource::id).collect(Collectors.toList());
-            log.info("Compiling {} processing rules", ruleIds.size());
-            // TODO this sucks, because it is completely async and we can't use listenable futures to trigger the pipeline updates
-            ruleCache.getAll(ruleIds);
-            triggerPipelineUpdate();
-        } catch (ExecutionException ignored) {
+        this.journal = journal;
+        this.metricRegistry = metricRegistry;
+        this.scheduler = scheduler;
+        this.filteredOutMessages = metricRegistry.meter(name(ProcessBufferProcessor.class, "filteredOutMessages"));
+        this.serverEventBus = serverEventBus;
+
+        // listens to cluster wide Rule, Pipeline and pipeline stream connection changes
+        serverEventBus.register(this);
+
+        reload();
+    }
+
+    /*
+     * Allow to unregister PipelineInterpreter from the event bus, allowing the object to be garbage collected.
+     * This is needed in some classes, when new PipelineInterpreter instances are created per request.
+     */
+    public void stop() {
+        serverEventBus.unregister(this);
+    }
+
+    // this should not run in parallel
+    private synchronized void reload() {
+        // read all rules and compile them
+        Map<String, Rule> ruleNameMap = Maps.newHashMap();
+        for (RuleDao ruleDao : ruleService.loadAll()) {
+            Rule rule;
+            try {
+                rule = pipelineRuleParser.parseRule(ruleDao.id(), ruleDao.source(), false);
+            } catch (ParseException e) {
+                rule = Rule.alwaysFalse("Failed to parse rule: " + ruleDao.id());
+            }
+            ruleNameMap.put(rule.name(), rule);
         }
+
+        Map<String, Pipeline> pipelineIdMap = Maps.newHashMap();
+        // read all pipelines and compile them
+        for (PipelineDao pipelineDao : pipelineService.loadAll()) {
+            Pipeline pipeline;
+            try {
+                pipeline =  pipelineRuleParser.parsePipeline(pipelineDao.id(), pipelineDao.source());
+            } catch (ParseException e) {
+                pipeline = Pipeline.empty("Failed to parse pipeline" + pipelineDao.id());
+            }
+            pipelineIdMap.put(pipelineDao.id(), pipeline);
+        }
+
+        // resolve all rules in the stages
+        pipelineIdMap.values().stream()
+                .flatMap(pipeline -> {
+                    log.debug("Resolving pipeline {}", pipeline.name());
+                    return pipeline.stages().stream();
+                })
+                .forEach(stage -> {
+                    final List<Rule> resolvedRules = stage.ruleReferences().stream().
+                            map(ref -> {
+                                Rule rule = ruleNameMap.get(ref);
+                                if (rule == null) {
+                                    rule = Rule.alwaysFalse("Unresolved rule " + ref);
+                                }
+                                log.debug("Resolved rule `{}` to {}", ref, rule);
+                                return rule;
+                            })
+                            .collect(Collectors.toList());
+                    stage.setRules(resolvedRules);
+                });
+        currentPipelines.set(ImmutableMap.copyOf(pipelineIdMap));
+
+        // read all stream connections of those pipelines to allow processing messages through them
+        final HashMultimap<String, Pipeline> connections = HashMultimap.create();
+        for (PipelineConnections streamConnection : pipelineStreamConnectionsService.loadAll()) {
+            streamConnection.pipelineIds().stream()
+                    .map(pipelineIdMap::get)
+                    .filter(Objects::nonNull)
+                    .forEach(pipeline -> connections.put(streamConnection.streamId(), pipeline));
+        }
+        streamPipelineConnections.set(ImmutableSetMultimap.copyOf(connections));
+
     }
 
     /**
@@ -131,6 +189,11 @@ public class PipelineInterpreter implements MessageProcessor {
      */
     @Override
     public Messages process(Messages messages) {
+        return process(messages, new NoopInterpreterListener());
+    }
+
+    public Messages process(Messages messages, InterpreterListener interpreterListener) {
+        interpreterListener.startProcessing();
         // message id + stream id
         final Set<Tuple2<String, String>> processingBlacklist = Sets.newHashSet();
 
@@ -152,94 +215,38 @@ public class PipelineInterpreter implements MessageProcessor {
                 // this makes a copy of the list!
                 final Set<String> initialStreamIds = message.getStreams().stream().map(Stream::getId).collect(Collectors.toSet());
 
-                final ImmutableSetMultimap<String, Pipeline> streamAssignment = streamPipelineAssignments.get();
+                final ImmutableSetMultimap<String, Pipeline> streamConnection = streamPipelineConnections.get();
 
                 if (initialStreamIds.isEmpty()) {
                     if (processingBlacklist.contains(tuple(msgId, "default"))) {
                         // already processed default pipeline for this message
                         pipelinesToRun = ImmutableSet.of();
-                        log.info("[{}] already processed default stream, skipping", msgId);
+                        log.debug("[{}] already processed default stream, skipping", msgId);
                     } else {
-                        // get the default stream pipeline assignments for this message
-                        pipelinesToRun = streamAssignment.get("default");
-                        log.info("[{}] running default stream pipelines: [{}]",
-                                 msgId,
-                                 pipelinesToRun.stream().map(Pipeline::name).toArray());
+                        // get the default stream pipeline connections for this message
+                        pipelinesToRun = streamConnection.get("default");
+                        interpreterListener.processDefaultStream(message, pipelinesToRun);
+                        if (log.isDebugEnabled()) {
+                            log.debug("[{}] running default stream pipelines: [{}]",
+                                      msgId,
+                                      pipelinesToRun.stream().map(Pipeline::name).toArray());
+                        }
                     }
                 } else {
                     // 2. if a message-stream combination has already been processed (is in the set), skip that execution
                     final Set<String> streamsIds = initialStreamIds.stream()
                             .filter(streamId -> !processingBlacklist.contains(tuple(msgId, streamId)))
-                            .filter(streamAssignment::containsKey)
+                            .filter(streamConnection::containsKey)
                             .collect(Collectors.toSet());
                     pipelinesToRun = ImmutableSet.copyOf(streamsIds.stream()
-                            .flatMap(streamId -> streamAssignment.get(streamId).stream())
+                            .flatMap(streamId -> streamConnection.get(streamId).stream())
                             .collect(Collectors.toSet()));
-                    log.info("[{}] running pipelines {} for streams {}", msgId, pipelinesToRun, streamsIds);
+                    interpreterListener.processStreams(message, pipelinesToRun, streamsIds);
+                    log.debug("[{}] running pipelines {} for streams {}", msgId, pipelinesToRun, streamsIds);
                 }
 
-                final StageIterator stages = new StageIterator(pipelinesToRun);
-                final Set<Pipeline> pipelinesToProceedWith = Sets.newHashSet();
+                toProcess.addAll(processForPipelines(message, msgId, pipelinesToRun.stream().map(Pipeline::id).collect(Collectors.toSet()), interpreterListener));
 
-                // iterate through all stages for all matching pipelines, per "stage slice" instead of per pipeline.
-                // pipeline execution ordering is not guaranteed
-                while (stages.hasNext()) {
-                    final Set<Tuple2<Stage, Pipeline>> stageSet = stages.next();
-                    for (Tuple2<Stage, Pipeline> pair : stageSet) {
-                        final Stage stage = pair.v1();
-                        final Pipeline pipeline = pair.v2();
-                        if (!pipelinesToProceedWith.isEmpty() &&
-                                !pipelinesToProceedWith.contains(pipeline)) {
-                            log.info("[{}] previous stage result prevents further processing of pipeline `{}`",
-                                     msgId,
-                                     pipeline.name());
-                            continue;
-                        }
-                        log.info("[{}] evaluating rule conditions in stage {}: match {}",
-                                 msgId,
-                                 stage.stage(),
-                                 stage.matchAll() ? "all" : "either");
-
-                        // TODO the message should be decorated to allow layering changes and isolate stages
-                        final EvaluationContext context = new EvaluationContext(message);
-
-                        // 3. iterate over all the stages in these pipelines and execute them in order
-                        final ArrayList<Rule> rulesToRun = Lists.newArrayListWithCapacity(stage.getRules().size());
-                        for (Rule rule : stage.getRules()) {
-                            if (rule.when().evaluateBool(context)) {
-                                log.info("[{}] rule `{}` matches, scheduling to run", msgId, rule.name());
-                                rulesToRun.add(rule);
-                            } else {
-                                log.info("[{}] rule `{}` does not match", msgId, rule.name());
-                            }
-                        }
-                        for (Rule rule : rulesToRun) {
-                            log.info("[{}] rule `{}` matched running actions", msgId, rule.name());
-                            for (Statement statement : rule.then()) {
-                                statement.evaluate(context);
-                            }
-                        }
-                        // stage needed to match all rule conditions to enable the next stage,
-                        // record that it is ok to proceed with this pipeline
-                        // OR
-                        // any rule could match, but at least one had to,
-                        // record that it is ok to proceed with the pipeline
-                        if ((stage.matchAll() && (rulesToRun.size() == stage.getRules().size()))
-                                || (rulesToRun.size() > 0)) {
-                            log.info("[{}] stage for pipeline `{}` required match: {}, ok to proceed with next stage",
-                                     msgId, pipeline.name(), stage.matchAll() ? "all" : "either");
-                            pipelinesToProceedWith.add(pipeline);
-                        }
-
-                        // 4. after each complete stage run, merge the processing changes, stages are isolated from each other
-                        // TODO message changes become visible immediately for now
-
-                        // 4a. also add all new messages from the context to the toProcess work list
-                        Iterables.addAll(toProcess, context.createdMessages());
-                        context.clearCreatedMessages();
-                    }
-
-                }
                 boolean addedStreams = false;
                 // 5. add each message-stream combination to the blacklist set
                 for (Stream stream : message.getStreams()) {
@@ -259,175 +266,192 @@ public class PipelineInterpreter implements MessageProcessor {
                 }
                 // 6. go to 1 and iterate over all messages again until no more streams are being assigned
                 if (!addedStreams || message.getFilterOut()) {
-                    log.info("[{}] no new streams matches or dropped message, not running again", msgId);
+                    log.debug("[{}] no new streams matches or dropped message, not running again", msgId);
                     fullyProcessed.add(message);
                 } else {
                     // process again, we've added a stream
-                    log.info("[{}] new streams assigned, running again for those streams", msgId);
+                    log.debug("[{}] new streams assigned, running again for those streams", msgId);
                     toProcess.add(message);
                 }
             }
         }
+
+        interpreterListener.finishProcessing();
         // 7. return the processed messages
         return new MessageCollection(fullyProcessed);
+    }
+
+    public List<Message> processForPipelines(Message message, String msgId, Set<String> pipelines, InterpreterListener interpreterListener) {
+        final ImmutableSet<Pipeline> pipelinesToRun = ImmutableSet.copyOf(pipelines
+                .stream()
+                .map(pipelineId -> this.currentPipelines.get().get(pipelineId))
+                .filter(pipeline -> pipeline != null)
+                .collect(Collectors.toSet()));
+
+        return processForResolvedPipelines(message, msgId, pipelinesToRun, interpreterListener);
+    }
+
+    public List<Message> processForResolvedPipelines(Message message, String msgId, Set<Pipeline> pipelines, InterpreterListener interpreterListener) {
+        final List<Message> result = new ArrayList<>();
+        // record execution of pipeline in metrics
+        pipelines.forEach(pipeline -> metricRegistry.counter(name(Pipeline.class, pipeline.id(), "executed")).inc());
+
+        final StageIterator stages = new StageIterator(pipelines);
+        final Set<Pipeline> pipelinesToSkip = Sets.newHashSet();
+
+        // iterate through all stages for all matching pipelines, per "stage slice" instead of per pipeline.
+        // pipeline execution ordering is not guaranteed
+        while (stages.hasNext()) {
+            final Set<Tuple2<Stage, Pipeline>> stageSet = stages.next();
+            for (Tuple2<Stage, Pipeline> pair : stageSet) {
+                final Stage stage = pair.v1();
+                final Pipeline pipeline = pair.v2();
+                if (pipelinesToSkip.contains(pipeline)) {
+                    log.debug("[{}] previous stage result prevents further processing of pipeline `{}`",
+                             msgId,
+                             pipeline.name());
+                    continue;
+                }
+                metricRegistry.counter(name(Pipeline.class, pipeline.id(), "stage", String.valueOf(stage.stage()), "executed")).inc();
+                interpreterListener.enterStage(stage);
+                log.debug("[{}] evaluating rule conditions in stage {}: match {}",
+                         msgId,
+                         stage.stage(),
+                         stage.matchAll() ? "all" : "either");
+
+                // TODO the message should be decorated to allow layering changes and isolate stages
+                final EvaluationContext context = new EvaluationContext(message);
+
+                // 3. iterate over all the stages in these pipelines and execute them in order
+                final ArrayList<Rule> rulesToRun = Lists.newArrayListWithCapacity(stage.getRules().size());
+                boolean anyRulesMatched = false;
+                for (Rule rule : stage.getRules()) {
+                    interpreterListener.evaluateRule(rule, pipeline);
+                    if (rule.when().evaluateBool(context)) {
+                        anyRulesMatched = true;
+                        countRuleExecution(rule, pipeline, stage, "matched");
+
+                        if (context.hasEvaluationErrors()) {
+                            final EvaluationContext.EvalError lastError = Iterables.getLast(context.evaluationErrors());
+                            appendProcessingError(rule, message, lastError.toString());
+                            interpreterListener.failEvaluateRule(rule, pipeline);
+                            log.debug("Encountered evaluation error during condition, skipping rule actions: {}",
+                                      lastError);
+                            continue;
+                        }
+                        interpreterListener.satisfyRule(rule, pipeline);
+                        log.debug("[{}] rule `{}` matches, scheduling to run", msgId, rule.name());
+                        rulesToRun.add(rule);
+                    } else {
+                        countRuleExecution(rule, pipeline, stage, "not-matched");
+                        interpreterListener.dissatisfyRule(rule, pipeline);
+                        log.debug("[{}] rule `{}` does not match", msgId, rule.name());
+                    }
+                }
+                RULES:
+                for (Rule rule : rulesToRun) {
+                    countRuleExecution(rule, pipeline, stage, "executed");
+                    interpreterListener.executeRule(rule, pipeline);
+                    log.debug("[{}] rule `{}` matched running actions", msgId, rule.name());
+                    for (Statement statement : rule.then()) {
+                        statement.evaluate(context);
+                        if (context.hasEvaluationErrors()) {
+                            // if the last statement resulted in an error, do not continue to execute this rules
+                            final EvaluationContext.EvalError lastError = Iterables.getLast(context.evaluationErrors());
+                            appendProcessingError(rule, message, lastError.toString());
+                            interpreterListener.failExecuteRule(rule, pipeline);
+                            log.debug("Encountered evaluation error, skipping rest of the rule: {}",
+                                      lastError);
+                            countRuleExecution(rule, pipeline, stage, "failed");
+                            break RULES;
+                        }
+                    }
+                }
+                // stage needed to match all rule conditions to enable the next stage,
+                // record that it is ok to proceed with this pipeline
+                // OR
+                // any rule could match, but at least one had to,
+                // record that it is ok to proceed with the pipeline
+                if ((stage.matchAll() && (rulesToRun.size() == stage.getRules().size()))
+                        || (rulesToRun.size() > 0 && anyRulesMatched)) {
+                    interpreterListener.continuePipelineExecution(pipeline, stage);
+                    log.debug("[{}] stage {} for pipeline `{}` required match: {}, ok to proceed with next stage",
+                             msgId, stage.stage(), pipeline.name(), stage.matchAll() ? "all" : "either");
+                } else {
+                    // no longer execute stages from this pipeline, the guard prevents it
+                    interpreterListener.stopPipelineExecution(pipeline, stage);
+                    log.debug("[{}] stage {} for pipeline `{}` required match: {}, NOT ok to proceed with next stage",
+                              msgId, stage.stage(), pipeline.name(), stage.matchAll() ? "all" : "either");
+                    pipelinesToSkip.add(pipeline);
+                }
+
+                // 4. after each complete stage run, merge the processing changes, stages are isolated from each other
+                // TODO message changes become visible immediately for now
+
+                // 4a. also add all new messages from the context to the toProcess work list
+                Iterables.addAll(result, context.createdMessages());
+                context.clearCreatedMessages();
+                interpreterListener.exitStage(stage);
+            }
+        }
+
+        // 7. return the processed messages
+        return result;
+    }
+
+    private void countRuleExecution(Rule rule, Pipeline pipeline, Stage stage, String type) {
+        metricRegistry.counter(name(Rule.class, rule.id(), type)).inc();
+        metricRegistry.counter(name(Rule.class, rule.id(), pipeline.id(), String.valueOf(stage.stage()), type)).inc();
+    }
+
+    private void appendProcessingError(Rule rule, Message message, String errorString) {
+        final String msg = "For rule '" + rule.name() + "': " + errorString;
+        if (message.hasField(GL2_PROCESSING_ERROR)) {
+            message.addField(GL2_PROCESSING_ERROR, message.getFieldAs(String.class, GL2_PROCESSING_ERROR) + "," + msg);
+        } else {
+            message.addField(GL2_PROCESSING_ERROR, msg);
+        }
     }
 
     @Subscribe
     public void handleRuleChanges(RulesChangedEvent event) {
         event.deletedRuleIds().forEach(id -> {
-            ruleCache.invalidate(id);
-            log.info("Invalidated rule {}", id);
+            log.debug("Invalidated rule {}", id);
+            metricRegistry.removeMatching((name, metric) -> name.startsWith(name(Rule.class, id)));
         });
         event.updatedRuleIds().forEach(id -> {
-            ruleCache.refresh(id);
-            log.info("Refreshing rule {}", id);
+            log.debug("Refreshing rule {}", id);
         });
-
-        triggerPipelineUpdate();
+        scheduler.schedule((Runnable) this::reload, 0, TimeUnit.SECONDS);
     }
 
     @Subscribe
     public void handlePipelineChanges(PipelinesChangedEvent event) {
         event.deletedPipelineIds().forEach(id -> {
-            log.info("Invalidated pipeline {}", id);
+            log.debug("Invalidated pipeline {}", id);
+            metricRegistry.removeMatching((name, metric) -> name.startsWith(name(Pipeline.class, id)));
         });
         event.updatedPipelineIds().forEach(id -> {
-            log.info("Refreshing pipeline {}", id);
+            log.debug("Refreshing pipeline {}", id);
         });
-
-        triggerPipelineUpdate();
+        scheduler.schedule((Runnable) this::reload, 0, TimeUnit.SECONDS);
     }
 
     @Subscribe
-    public void handlePipelineAssignmentChanges(PipelineStreamAssignment assignment) {
-        // rebuild the stream -> pipelines multimap
-        // default stream is represented as "default" in the map
-        final String streamId = assignment.streamId();
-        final Set<String> pipelineIds = assignment.pipelineIds();
-
-        final ImmutableSetMultimap<String, Pipeline> multimap = streamPipelineAssignments.get();
-        final ImmutableMap<String, Pipeline> pipelines = currentPipelines.get();
-
-        // set the new per-stream mapping
-        final HashMultimap<String, Pipeline> newMap = HashMultimap.create(multimap);
-        newMap.removeAll(streamId);
-        pipelineIds.stream().map(pipelines::get).forEach(pipeline -> newMap.put(streamId, pipeline));
-
-        streamPipelineAssignments.set(ImmutableSetMultimap.copyOf(newMap));
+    public void handlePipelineConnectionChanges(PipelineConnectionsChangedEvent event) {
+        log.debug("Pipeline stream connection changed: {}", event);
+        scheduler.schedule((Runnable) this::reload, 0, TimeUnit.SECONDS);
     }
 
-    private void triggerPipelineUpdate() {
-        Futures.addCallback(
-                scheduledExecutorService.schedule(new PipelineResolver(), 500, TimeUnit.MILLISECONDS),
-                new FutureCallback<ImmutableSet<Pipeline>>() {
-                    @Override
-                    public void onSuccess(@Nullable ImmutableSet<Pipeline> result) {
-                        // TODO how do we deal with concurrent updates? canceling earlier attempts?
-                        if (result == null) {
-                            currentPipelines.set(ImmutableMap.of());
-                        } else {
-                            currentPipelines.set(Maps.uniqueIndex(result, Pipeline::id));
-                        }
-                    }
-                    @Override
-                    public void onFailure(Throwable t) {
-                        // do not touch the existing pipeline configuration
-                        log.error("Unable to update pipeline processor", t);
-                    }
-                });
-    }
-
-    private static class RuleLoader extends CacheLoader<String, Rule> {
-        private final RuleSourceService ruleSourceService;
-        private final PipelineRuleParser pipelineRuleParser;
-
-        public RuleLoader(RuleSourceService ruleSourceService, PipelineRuleParser pipelineRuleParser) {
-            this.ruleSourceService = ruleSourceService;
-            this.pipelineRuleParser = pipelineRuleParser;
+    public static class Descriptor implements MessageProcessor.Descriptor {
+        @Override
+        public String name() {
+            return "Pipeline Processor";
         }
 
         @Override
-        public Map<String, Rule> loadAll(Iterable<? extends String> keys) throws Exception {
-            final Map<String, Rule> all = Maps.newHashMap();
-            final HashSet<String> keysToLoad = Sets.newHashSet(keys);
-            for (RuleSource ruleSource : ruleSourceService.loadAll()) {
-                if (!keysToLoad.isEmpty()) {
-                    if (!keysToLoad.contains(ruleSource.id())) {
-                        continue;
-                    }
-                }
-                try {
-                    all.put(ruleSource.id(), pipelineRuleParser.parseRule(ruleSource.source()));
-                } catch (ParseException e) {
-                    log.error("Unable to parse rule: " + e.getMessage());
-                    all.put(ruleSource.id(), Rule.alwaysFalse("Failed to parse rule: " + ruleSource.id()));
-                }
-            }
-            return all;
-        }
-
-        @Override
-        public Rule load(@Nullable String ruleId) throws Exception {
-            final RuleSource ruleSource = ruleSourceService.load(ruleId);
-            try {
-                return pipelineRuleParser.parseRule(ruleSource.source());
-            } catch (ParseException e) {
-                log.error("Unable to parse rule: " + e.getMessage());
-                // return dummy rule
-                return Rule.alwaysFalse("Failed to parse rule: " + ruleSource.id());
-            }
-        }
-    }
-
-    private class PipelineResolver implements Callable<ImmutableSet<Pipeline>> {
-        private final Logger log = LoggerFactory.getLogger(PipelineResolver.class);
-
-
-        @Override
-        public ImmutableSet<Pipeline> call() throws Exception {
-            log.info("Updating pipeline processor after rule/pipeline update");
-
-            final Collection<PipelineSource> allPipelineSources = pipelineSourceService.loadAll();
-            log.info("Found {} pipelines to resolve", allPipelineSources.size());
-
-            // compile all pipelines
-            Set<Pipeline> pipelines = Sets.newHashSetWithExpectedSize(allPipelineSources.size());
-            for (PipelineSource source : allPipelineSources) {
-                try {
-                    final Pipeline pipeline = pipelineRuleParser.parsePipeline(source);
-                    pipelines.add(pipeline);
-                    log.info("Parsed pipeline {} with {} stages", pipeline.name(), pipeline.stages().size());
-                } catch (ParseException e) {
-                    log.warn("Unable to compile pipeline {}: {}", source.title(), e);
-                }
-            }
-
-            // change the rule cache to be able to quickly look up rules by name
-            final Map<String, Rule> nameRuleMap =
-                    Seq.toMap(Seq.seq(ruleCache.asMap())
-                                      .map(entry -> tuple(entry.v2().name(), entry.v2())));
-
-            // resolve all rules
-            pipelines.stream()
-                    .flatMap(pipeline -> {
-                        log.info("Resolving pipeline {}", pipeline.name());
-                        return pipeline.stages().stream();
-                    })
-                    .forEach(stage -> {
-                        final List<Rule> resolvedRules = stage.ruleReferences().stream().
-                                map(ref -> {
-                                    Rule rule = nameRuleMap.get(ref);
-                                    if (rule == null) {
-                                        rule = Rule.alwaysFalse("Unresolved rule " + ref);
-                                    }
-                                    log.info("Resolved rule `{}` to {}", ref, rule);
-                                    return rule;
-                                })
-                                .collect(Collectors.toList());
-                        stage.setRules(resolvedRules);
-                    });
-
-            return ImmutableSet.copyOf(pipelines);
+        public String className() {
+            return PipelineInterpreter.class.getCanonicalName();
         }
     }
 
