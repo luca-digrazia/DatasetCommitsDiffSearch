@@ -50,7 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class StreamRouter {
-    protected final Logger LOG = LoggerFactory.getLogger(this.getClass());
+    protected final Logger LOG = LoggerFactory.getLogger(StreamRouter.class);
 
     private final Map<String, Meter> streamIncomingMeters = Maps.newHashMap();
     private final Map<String, Timer> streamExecutionTimers = Maps.newHashMap();
@@ -119,15 +119,14 @@ public class StreamRouter {
                 }
             } catch (Exception e) {
                 AtomicInteger faultCount = getFaultCount(stream.getId());
-                Integer streamFaultCount = faultCount.incrementAndGet();
-                if (maxFaultCount > 0 && streamFaultCount >= maxFaultCount) {
+                if (maxFaultCount > 0 && faultCount.incrementAndGet() >= maxFaultCount) {
                     streamService.pause(stream);
-                    faultCount.set(0);
+                    Integer streamFaultCount = faultCount.getAndSet(0);
                     LOG.error("Processing of stream <" + stream.getId() + "> failed to return within " + timeout + "ms for more than " + maxFaultCount + " times. Disabling stream.");
 
                     Notification notification = notificationService.buildNow()
                             .addType(Notification.Type.STREAM_PROCESSING_DISABLED)
-                            .addSeverity(Notification.Severity.URGENT)
+                            .addSeverity(Notification.Severity.NORMAL)
                             .addDetail("stream_id", stream.getId())
                             .addDetail("fault_count", streamFaultCount);
                     notificationService.publishIfFirst(notification);
