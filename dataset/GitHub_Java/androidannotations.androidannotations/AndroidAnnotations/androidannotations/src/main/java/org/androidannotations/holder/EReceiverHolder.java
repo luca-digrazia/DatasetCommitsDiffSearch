@@ -35,7 +35,6 @@ public class EReceiverHolder extends EComponentHolder {
 	private JBlock onReceiveBody;
 	private JVar onReceiveIntentAction;
 	private JVar onReceiveIntent;
-	private JVar onReceiveContext;
 	private JMethod onReceiveMethod;
 
 	public EReceiverHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
@@ -58,13 +57,13 @@ public class EReceiverHolder extends EComponentHolder {
 
 	private void createOnReceive() {
 		onReceiveMethod = generatedClass.method(PUBLIC, codeModel().VOID, "onReceive");
-		onReceiveContext = onReceiveMethod.param(classes().CONTEXT, "context");
+		JVar contextParam = onReceiveMethod.param(classes().CONTEXT, "context");
 		onReceiveIntent = onReceiveMethod.param(classes().INTENT, "intent");
 		onReceiveMethod.annotate(Override.class);
 		onReceiveBody = onReceiveMethod.body();
-		onReceiveBody.assign(getContextField(), onReceiveContext);
+		onReceiveBody.assign(getContextField(), contextParam);
 		onReceiveBody.invoke(getInit());
-		onReceiveBody.invoke(JExpr._super(), onReceiveMethod).arg(onReceiveContext).arg(onReceiveIntent);
+		onReceiveBody.invoke(JExpr._super(), onReceiveMethod).arg(contextParam).arg(onReceiveIntent);
 
 		JInvocation getActionInvocation = JExpr.invoke(onReceiveIntent, "getAction");
 		onReceiveIntentAction = onReceiveBody.decl(classes().STRING, "action", getActionInvocation);
@@ -89,13 +88,6 @@ public class EReceiverHolder extends EComponentHolder {
 			createOnReceive();
 		}
 		return onReceiveIntent;
-	}
-
-	public JVar getOnReceiveContext() {
-		if (onReceiveContext == null) {
-			createOnReceive();
-		}
-		return onReceiveContext;
 	}
 
 	public JVar getOnReceiveIntentAction() {
