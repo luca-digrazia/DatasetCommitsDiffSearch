@@ -1,18 +1,21 @@
 package io.dropwizard.client;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import io.dropwizard.client.proxy.ProxyConfiguration;
+import io.dropwizard.client.ssl.TlsConfiguration;
 import io.dropwizard.util.Duration;
 
+import javax.annotation.Nullable;
+import javax.validation.Valid;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
-
-// TODO: 5/15/13 <coda> -- write tests for HttpClientConfiguration
+import java.util.Optional;
 
 /**
  * The configuration class used by {@link HttpClientBuilder}.
  *
- * @see <a href="http://www.dropwizard.io/manual/client/#configuration-defaults">Http Client Configuration</a>
+ * @see <a href="http://dropwizard.io/0.9.1/docs/manual/configuration.html#httpclient">Http Client Configuration</a>
  */
 public class HttpClientConfiguration {
     @NotNull
@@ -22,9 +25,14 @@ public class HttpClientConfiguration {
     private Duration connectionTimeout = Duration.milliseconds(500);
 
     @NotNull
+    private Duration connectionRequestTimeout = Duration.milliseconds(500);
+
+    @NotNull
     private Duration timeToLive = Duration.hours(1);
 
     private boolean cookiesEnabled = false;
+
+    private boolean normalizeUriEnabled = true;
 
     @Min(1)
     @Max(Integer.MAX_VALUE)
@@ -41,10 +49,23 @@ public class HttpClientConfiguration {
     @Max(1000)
     private int retries = 0;
 
-    @JsonProperty
+    @NotNull
+    private Optional<String> userAgent = Optional.empty();
+
+    @Valid
+    @Nullable
+    private ProxyConfiguration proxyConfiguration;
+
+    @NotNull
+    private Duration validateAfterInactivityPeriod = Duration.microseconds(0);
+
     public Duration getKeepAlive() {
         return keepAlive;
     }
+
+    @Valid
+    @Nullable
+    private TlsConfiguration tlsConfiguration;
 
     @JsonProperty
     public void setKeepAlive(Duration keepAlive) {
@@ -92,6 +113,16 @@ public class HttpClientConfiguration {
     }
 
     @JsonProperty
+    public Duration getConnectionRequestTimeout() {
+        return connectionRequestTimeout;
+    }
+
+    @JsonProperty
+    public void setConnectionRequestTimeout(Duration connectionRequestTimeout) {
+        this.connectionRequestTimeout = connectionRequestTimeout;
+    }
+
+    @JsonProperty
     public void setTimeToLive(Duration timeToLive) {
         this.timeToLive = timeToLive;
     }
@@ -99,6 +130,22 @@ public class HttpClientConfiguration {
     @JsonProperty
     public void setCookiesEnabled(boolean enabled) {
         this.cookiesEnabled = enabled;
+    }
+
+    /**
+     * @since 2.0
+     */
+    @JsonProperty
+    public boolean isNormalizeUriEnabled() {
+        return normalizeUriEnabled;
+    }
+
+    /**
+     * @since 2.0
+     */
+    @JsonProperty
+    public void setNormalizeUriEnabled(final boolean normalizeUriEnabled) {
+        this.normalizeUriEnabled = normalizeUriEnabled;
     }
 
     @JsonProperty
@@ -119,5 +166,47 @@ public class HttpClientConfiguration {
     @JsonProperty
     public void setRetries(int retries) {
         this.retries = retries;
+    }
+
+    @JsonProperty
+    public Optional<String> getUserAgent() {
+        return userAgent;
+    }
+
+    @JsonProperty
+    public void setUserAgent(Optional<String> userAgent) {
+        this.userAgent = userAgent;
+    }
+
+    @JsonProperty("proxy")
+    @Nullable
+    public ProxyConfiguration getProxyConfiguration() {
+        return proxyConfiguration;
+    }
+
+    @JsonProperty("proxy")
+    public void setProxyConfiguration(ProxyConfiguration proxyConfiguration) {
+        this.proxyConfiguration = proxyConfiguration;
+    }
+
+    @JsonProperty
+    public Duration getValidateAfterInactivityPeriod() {
+        return validateAfterInactivityPeriod;
+    }
+
+    @JsonProperty
+    public void setValidateAfterInactivityPeriod(Duration validateAfterInactivityPeriod) {
+        this.validateAfterInactivityPeriod = validateAfterInactivityPeriod;
+    }
+
+    @JsonProperty("tls")
+    @Nullable
+    public TlsConfiguration getTlsConfiguration() {
+        return tlsConfiguration;
+    }
+
+    @JsonProperty("tls")
+    public void setTlsConfiguration(TlsConfiguration tlsConfiguration) {
+        this.tlsConfiguration = tlsConfiguration;
     }
 }

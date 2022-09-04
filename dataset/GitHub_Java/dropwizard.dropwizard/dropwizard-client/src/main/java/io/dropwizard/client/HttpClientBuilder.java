@@ -62,7 +62,6 @@ import java.util.List;
  * </p>
  */
 public class HttpClientBuilder {
-    @SuppressWarnings("UnnecessaryLambda")
     private static final HttpRequestRetryHandler NO_RETRIES = (exception, executionCount, context) -> false;
 
     private final MetricRegistry metricRegistry;
@@ -149,7 +148,7 @@ public class HttpClientBuilder {
     }
 
     /**
-     * Use the given {@link HostnameVerifier} instance.
+     * Use the give (@link HostnameVerifier} instance.
      *
      * @param verifier a {@link HostnameVerifier} instance
      * @return {@code this}

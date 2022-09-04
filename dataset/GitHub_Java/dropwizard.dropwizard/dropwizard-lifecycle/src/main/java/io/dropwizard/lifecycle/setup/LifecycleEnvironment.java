@@ -1,6 +1,6 @@
 package io.dropwizard.lifecycle.setup;
 
-import com.google.common.collect.Lists;
+import com.codahale.metrics.MetricRegistry;
 import io.dropwizard.lifecycle.JettyManaged;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.lifecycle.ServerLifecycleListener;
@@ -11,19 +11,27 @@ import org.eclipse.jetty.util.component.LifeCycle;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ThreadFactory;
 
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
 public class LifecycleEnvironment {
     private static final Logger LOGGER = LoggerFactory.getLogger(LifecycleEnvironment.class);
 
     private final List<LifeCycle> managedObjects;
     private final List<LifeCycle.Listener> lifecycleListeners;
+    private final MetricRegistry metricRegistry;
 
-    public LifecycleEnvironment() {
-        this.managedObjects = Lists.newArrayList();
-        this.lifecycleListeners = Lists.newArrayList();
+    public LifecycleEnvironment(MetricRegistry metricRegistry) {
+        this.managedObjects = new ArrayList<>();
+        this.lifecycleListeners = new ArrayList<>();
+        this.metricRegistry = metricRegistry;
+    }
+
+    public List<LifeCycle> getManagedObjects() {
+        return managedObjects;
     }
 
     /**
@@ -34,7 +42,7 @@ public class LifecycleEnvironment {
      * @param managed a managed object
      */
     public void manage(Managed managed) {
-        managedObjects.add(new JettyManaged(checkNotNull(managed)));
+        managedObjects.add(new JettyManaged(requireNonNull(managed)));
     }
 
     /**
@@ -43,15 +51,27 @@ public class LifecycleEnvironment {
      * @param managed a Jetty-managed object
      */
     public void manage(LifeCycle managed) {
-        managedObjects.add(checkNotNull(managed));
+        managedObjects.add(requireNonNull(managed));
     }
 
     public ExecutorServiceBuilder executorService(String nameFormat) {
         return new ExecutorServiceBuilder(this, nameFormat);
     }
 
+    public ExecutorServiceBuilder executorService(String nameFormat, ThreadFactory factory) {
+        return new ExecutorServiceBuilder(this, nameFormat, factory);
+    }
+
     public ScheduledExecutorServiceBuilder scheduledExecutorService(String nameFormat) {
-        return new ScheduledExecutorServiceBuilder(this, nameFormat);
+        return scheduledExecutorService(nameFormat, false);
+    }
+
+    public ScheduledExecutorServiceBuilder scheduledExecutorService(String nameFormat, ThreadFactory factory) {
+        return new ScheduledExecutorServiceBuilder(this, nameFormat, factory);
+    }
+
+    public ScheduledExecutorServiceBuilder scheduledExecutorService(String nameFormat, boolean useDaemonThreads) {
+        return new ScheduledExecutorServiceBuilder(this, nameFormat, useDaemonThreads);
     }
 
     public void addServerLifecycleListener(ServerLifecycleListener listener) {
@@ -75,6 +95,13 @@ public class LifecycleEnvironment {
         for (LifeCycle.Listener listener : lifecycleListeners) {
             container.addLifeCycleListener(listener);
         }
+    }
+
+    /**
+     * @since 2.0
+     */
+    public MetricRegistry getMetricRegistry() {
+        return metricRegistry;
     }
 
     private static class ServerListener extends AbstractLifeCycle.AbstractLifeCycleListener {

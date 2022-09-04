@@ -2,53 +2,55 @@ package io.dropwizard.util;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
-import com.google.common.base.CharMatcher;
-import com.google.common.collect.ImmutableMap;
 
+import java.io.Serializable;
+import java.util.Collections;
 import java.util.Locale;
+import java.util.SortedMap;
+import java.util.TreeMap;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Objects.requireNonNull;
 
-public class Size {
-    private static final Pattern PATTERN = Pattern.compile("[\\d]+[\\s]*(B|byte(s)?|" +
-                                                                   "KB|KiB|kilobyte(s)?|" +
-                                                                   "MB|MiB|megabyte(s)?|" +
-                                                                   "GB|GiB|gigabyte(s)?|" +
-                                                                   "TB|TiB|terabyte(s)?)");
+/**
+ * @deprecated Use {@link DataSize} for correct SI and IEC prefixes.
+ */
+@Deprecated
+public class Size implements Comparable<Size>, Serializable {
+    private static final long serialVersionUID = 6790991929249604526L;
 
-    private static final ImmutableMap<String, SizeUnit> SUFFIXES;
+    private static final Pattern SIZE_PATTERN = Pattern.compile("(\\d+)\\s*(\\S+)");
+    private static final SortedMap<String, SizeUnit> SUFFIXES;
 
     static {
-        final ImmutableMap.Builder<String, SizeUnit> suffixes = ImmutableMap.builder();
+        final SortedMap<String, SizeUnit> suffixes = new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
         suffixes.put("B", SizeUnit.BYTES);
         suffixes.put("byte", SizeUnit.BYTES);
         suffixes.put("bytes", SizeUnit.BYTES);
-
+        suffixes.put("K", SizeUnit.KILOBYTES);
         suffixes.put("KB", SizeUnit.KILOBYTES);
         suffixes.put("KiB", SizeUnit.KILOBYTES);
         suffixes.put("kilobyte", SizeUnit.KILOBYTES);
         suffixes.put("kilobytes", SizeUnit.KILOBYTES);
-
+        suffixes.put("M", SizeUnit.MEGABYTES);
         suffixes.put("MB", SizeUnit.MEGABYTES);
         suffixes.put("MiB", SizeUnit.MEGABYTES);
         suffixes.put("megabyte", SizeUnit.MEGABYTES);
         suffixes.put("megabytes", SizeUnit.MEGABYTES);
-
+        suffixes.put("G", SizeUnit.GIGABYTES);
         suffixes.put("GB", SizeUnit.GIGABYTES);
         suffixes.put("GiB", SizeUnit.GIGABYTES);
         suffixes.put("gigabyte", SizeUnit.GIGABYTES);
         suffixes.put("gigabytes", SizeUnit.GIGABYTES);
-
+        suffixes.put("T", SizeUnit.TERABYTES);
         suffixes.put("TB", SizeUnit.TERABYTES);
         suffixes.put("TiB", SizeUnit.TERABYTES);
         suffixes.put("terabyte", SizeUnit.TERABYTES);
         suffixes.put("terabytes", SizeUnit.TERABYTES);
-
-        SUFFIXES = suffixes.build();
+        SUFFIXES = Collections.unmodifiableSortedMap(suffixes);
     }
-    
+
     public static Size bytes(long count) {
         return new Size(count, SizeUnit.BYTES);
     }
@@ -69,21 +71,20 @@ public class Size {
         return new Size(count, SizeUnit.TERABYTES);
     }
 
-    private static long parseCount(String s) {
-        checkArgument(PATTERN.matcher(s).matches(), "Invalid size: %s", s);
-        final String value = CharMatcher.WHITESPACE.removeFrom(s);
-        return Long.parseLong(CharMatcher.JAVA_LETTER.trimTrailingFrom(value));
-    }
-
-    private static SizeUnit parseUnit(String s) {
-        final String value = CharMatcher.WHITESPACE.removeFrom(s);
-        final String suffix = CharMatcher.DIGIT.trimLeadingFrom(value).trim();
-        return SUFFIXES.get(suffix);
-    }
-
     @JsonCreator
     public static Size parse(String size) {
-        return new Size(parseCount(size), parseUnit(size));
+        final Matcher matcher = SIZE_PATTERN.matcher(size);
+        if (!matcher.matches()) {
+            throw new IllegalArgumentException("Invalid size: " + size);
+        }
+
+        final long count = Long.parseLong(matcher.group(1));
+        final SizeUnit unit = SUFFIXES.get(matcher.group(2));
+        if (unit == null) {
+            throw new IllegalArgumentException("Invalid size: " + size + ". Wrong size unit");
+        }
+
+        return new Size(count, unit);
     }
 
     private final long count;
@@ -91,7 +92,7 @@ public class Size {
 
     private Size(long count, SizeUnit unit) {
         this.count = count;
-        this.unit = checkNotNull(unit);
+        this.unit = requireNonNull(unit);
     }
 
     public long getQuantity() {
@@ -124,10 +125,14 @@ public class Size {
 
     @Override
     public boolean equals(Object obj) {
-        if (this == obj) { return true; }
-        if ((obj == null) || (getClass() != obj.getClass())) { return false; }
+        if (this == obj) {
+            return true;
+        }
+        if ((obj == null) || (getClass() != obj.getClass())) {
+            return false;
+        }
         final Size size = (Size) obj;
-        return (count == size.count) && (unit == size.unit);
+        return this.compareTo(size) == 0;
     }
 
     @Override
@@ -143,5 +148,66 @@ public class Size {
             units = units.substring(0, units.length() - 1);
         }
         return Long.toString(count) + ' ' + units;
+    }
+
+    @Override
+    public int compareTo(Size other) {
+        if (unit == other.unit) {
+            return Long.compare(count, other.count);
+        }
+
+        return Long.compare(toBytes(), other.toBytes());
+    }
+
+    /**
+     * @since 2.0
+     */
+    public DataSize toDataSize() {
+        switch (unit) {
+            case BYTES:
+                return DataSize.bytes(count);
+            case KILOBYTES:
+                return DataSize.kibibytes(count);
+            case MEGABYTES:
+                return DataSize.mebibytes(count);
+            case GIGABYTES:
+                return DataSize.gibibytes(count);
+            case TERABYTES:
+                return DataSize.tebibytes(count);
+            default:
+                throw new IllegalArgumentException("Unknown unit: " + getUnit());
+        }
+    }
+
+    /**
+     * @since 2.0
+     */
+    public static Size fromDataSize(DataSize dataSize) {
+        switch (dataSize.getUnit()) {
+            case BYTES:
+                return Size.bytes(dataSize.getQuantity());
+            case KIBIBYTES:
+                return Size.kilobytes(dataSize.getQuantity());
+            case KILOBYTES:
+                return Size.bytes(dataSize.toBytes());
+            case MEBIBYTES:
+                return Size.megabytes(dataSize.getQuantity());
+            case MEGABYTES:
+                return Size.bytes(dataSize.toBytes());
+            case GIBIBYTES:
+                return Size.gigabytes(dataSize.getQuantity());
+            case GIGABYTES:
+                return Size.bytes(dataSize.toBytes());
+            case TEBIBYTES:
+                return Size.terabytes(dataSize.getQuantity());
+            case TERABYTES:
+                return Size.bytes(dataSize.toBytes());
+            case PEBIBYTES:
+                return Size.terabytes(dataSize.toTebibytes() * 1024L);
+            case PETABYTES:
+                return Size.bytes(dataSize.toBytes());
+            default:
+                throw new IllegalArgumentException("Unknown unit: " + dataSize.getUnit());
+        }
     }
 }

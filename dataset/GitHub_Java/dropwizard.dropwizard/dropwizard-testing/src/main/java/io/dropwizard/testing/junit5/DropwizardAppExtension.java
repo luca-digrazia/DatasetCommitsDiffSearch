@@ -20,9 +20,6 @@ import javax.ws.rs.client.Client;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import org.junit.jupiter.api.extension.AfterAllCallback;
-import org.junit.jupiter.api.extension.BeforeAllCallback;
-import org.junit.jupiter.api.extension.ExtensionContext;
 
 //@formatter:off
 /**
@@ -36,8 +33,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
  * @param <C> the configuration type
  */
 //@formatter:on
-public class DropwizardAppExtension<C extends Configuration> implements DropwizardExtension,
-    BeforeAllCallback, AfterAllCallback {
+public class DropwizardAppExtension<C extends Configuration> implements DropwizardExtension {
 
     private static final int DEFAULT_CONNECT_TIMEOUT_MS = 1000;
     private static final int DEFAULT_READ_TIMEOUT_MS = 5000;
@@ -177,16 +173,6 @@ public class DropwizardAppExtension<C extends Configuration> implements Dropwiza
                 environment.lifecycle().manage(managed);
             }
         });
-    }
-
-    @Override
-    public void beforeAll(ExtensionContext extensionContext) throws Exception {
-        this.before();
-    }
-
-    @Override
-    public void afterAll(ExtensionContext extensionContext) {
-        this.after();
     }
 
     @Override

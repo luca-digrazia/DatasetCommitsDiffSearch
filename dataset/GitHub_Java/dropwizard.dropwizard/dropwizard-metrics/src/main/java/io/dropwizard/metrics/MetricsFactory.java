@@ -2,7 +2,6 @@ package io.dropwizard.metrics;
 
 import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.google.common.collect.ImmutableList;
 import io.dropwizard.lifecycle.setup.LifecycleEnvironment;
 import io.dropwizard.util.Duration;
 import org.slf4j.Logger;
@@ -10,6 +9,9 @@ import org.slf4j.LoggerFactory;
 
 import javax.validation.Valid;
 import javax.validation.constraints.NotNull;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * A factory for configuring the metrics sub-system for the environment.
@@ -34,6 +36,11 @@ import javax.validation.constraints.NotNull;
  *         <td>No reporters.</td>
  *         <td>A list of {@link ReporterFactory reporters} to report metrics.</td>
  *     </tr>
+ *     <tr>
+ *         <td>reportOnStop</td>
+ *         <td>{@code false}</td>
+ *         <td>To report metrics one last time when stopping Dropwizard.</td>
+ *     </tr>
  * </table>
  */
 public class MetricsFactory {
@@ -45,16 +52,18 @@ public class MetricsFactory {
 
     @Valid
     @NotNull
-    private ImmutableList<ReporterFactory> reporters = ImmutableList.of();
+    private List<ReporterFactory> reporters = Collections.emptyList();
+
+    private boolean reportOnStop = false;
 
     @JsonProperty
-    public ImmutableList<ReporterFactory> getReporters() {
+    public List<ReporterFactory> getReporters() {
         return reporters;
     }
 
     @JsonProperty
-    public void setReporters(ImmutableList<ReporterFactory> reporters) {
-        this.reporters = reporters;
+    public void setReporters(List<ReporterFactory> reporters) {
+        this.reporters = new ArrayList<>(reporters);
     }
 
     @JsonProperty
@@ -66,6 +75,28 @@ public class MetricsFactory {
     public void setFrequency(Duration frequency) {
         this.frequency = frequency;
     }
+
+    /**
+     * @since 2.0
+     */
+    @JsonProperty
+    public boolean isReportOnStop() {
+        return reportOnStop;
+    }
+
+    /**
+     * @since 2.0
+     */
+    @JsonProperty
+    public void setReportOnStop(boolean reportOnStop) {
+        this.reportOnStop = reportOnStop;
+    }
+
+    /**
+     * @since 2.0
+     */
+    @JsonProperty
+
 
     /**
      * Configures the given lifecycle with the {@link com.codahale.metrics.ScheduledReporter
@@ -84,11 +115,17 @@ public class MetricsFactory {
             try {
                 final ScheduledReporterManager manager =
                         new ScheduledReporterManager(reporter.build(registry),
-                                                     reporter.getFrequency().or(getFrequency()));
+                                                     reporter.getFrequency().orElseGet(this::getFrequency),
+                                                     isReportOnStop());
                 environment.manage(manager);
             } catch (Exception e) {
                 LOGGER.warn("Failed to create reporter, metrics may not be properly reported.", e);
             }
         }
+    }
+
+    @Override
+    public String toString() {
+        return "MetricsFactory{frequency=" + frequency + ", reporters=" + reporters + ", reportOnStop=" + reportOnStop + '}';
     }
 }
