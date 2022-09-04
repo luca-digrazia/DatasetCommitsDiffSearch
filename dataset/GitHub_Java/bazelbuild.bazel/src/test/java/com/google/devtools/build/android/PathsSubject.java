@@ -48,7 +48,7 @@ import org.xml.sax.InputSource;
 import org.xml.sax.SAXException;
 
 /** A testing utility that allows assertions against Paths. */
-public class PathsSubject extends Subject {
+public class PathsSubject extends Subject<PathsSubject, Path> {
 
   private static final String PATH_NORMALIZER =
       String.format(
