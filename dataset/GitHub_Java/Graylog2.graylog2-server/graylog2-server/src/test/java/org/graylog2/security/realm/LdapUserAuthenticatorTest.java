@@ -17,6 +17,8 @@
 package org.graylog2.security.realm;
 
 import com.google.common.collect.Maps;
+import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
+import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import org.apache.directory.ldap.client.api.LdapConnectionConfig;
 import org.apache.directory.server.annotations.CreateLdapServer;
 import org.apache.directory.server.annotations.CreateTransport;
@@ -38,7 +40,6 @@ import org.graylog2.plugin.database.users.User;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsImpl;
 import org.graylog2.security.ldap.LdapSettingsService;
-import org.graylog2.shared.security.AuthenticationServiceUnavailableException;
 import org.graylog2.shared.security.Permissions;
 import org.graylog2.shared.security.ldap.LdapEntry;
 import org.graylog2.shared.security.ldap.LdapSettings;
@@ -55,7 +56,6 @@ import java.util.Collections;
 import java.util.HashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
@@ -157,8 +157,7 @@ public class LdapUserAuthenticatorTest extends AbstractLdapTestUnit {
                 .syncFromLdapEntry(any(LdapEntry.class),any(LdapSettings.class), anyString());
 
         assertThat(authenticator.doGetAuthenticationInfo(VALID_TOKEN)).isNotNull();
-        assertThatExceptionOfType(AuthenticationServiceUnavailableException.class).isThrownBy(() ->
-                authenticator.doGetAuthenticationInfo(INVALID_TOKEN));
+        assertThat(authenticator.doGetAuthenticationInfo(INVALID_TOKEN)).isNull();
     }
 
     @Test
@@ -176,6 +175,7 @@ public class LdapUserAuthenticatorTest extends AbstractLdapTestUnit {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void testSyncFromLdapEntry() {
         final LdapUserAuthenticator authenticator = spy(new LdapUserAuthenticator(ldapConnector,
                                                                                   ldapSettingsService,
@@ -205,6 +205,7 @@ public class LdapUserAuthenticatorTest extends AbstractLdapTestUnit {
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void testSyncFromLdapEntryExistingUser() {
         final LdapUserAuthenticator authenticator = spy(new LdapUserAuthenticator(ldapConnector,
                                                                                   ldapSettingsService,
