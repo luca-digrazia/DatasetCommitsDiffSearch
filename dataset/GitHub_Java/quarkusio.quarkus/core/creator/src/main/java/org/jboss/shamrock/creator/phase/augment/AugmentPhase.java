@@ -63,6 +63,7 @@ import org.jboss.shamrock.deployment.ShamrockAugmentor;
 import org.jboss.shamrock.deployment.builditem.BytecodeTransformerBuildItem;
 import org.jboss.shamrock.deployment.builditem.MainClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.substrate.SubstrateOutputBuildItem;
+import org.jboss.shamrock.dev.CopyUtils;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
@@ -213,7 +214,6 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
         final AppArtifactResolver depResolver = appState.getArtifactResolver();
         final List<AppDependency> appDeps = appState.getEffectiveDeps();
 
-        URLClassLoader runnerClassLoader = null;
         try {
             // we need to make sure all the deployment artifacts are on the class path
             final List<URL> cpUrls = new ArrayList<>();
@@ -266,7 +266,7 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                 throw new AppCreatorException(problems.toString());
             }
 
-            runnerClassLoader = new URLClassLoader(cpUrls.toArray(new URL[cpUrls.size()]), getClass().getClassLoader());
+            final URLClassLoader runnerClassLoader = new URLClassLoader(cpUrls.toArray(new URL[cpUrls.size()]), getClass().getClassLoader());
             final Path wiringClassesDirectory = wiringClassesDir;
             ClassOutput classOutput = new ClassOutput() {
                 @Override
@@ -339,10 +339,8 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
                             transformed.add(executorPool.submit(new Callable<FutureEntry>() {
                                 @Override
                                 public FutureEntry call() throws Exception {
-                                    if (Files.size(path) > Integer.MAX_VALUE) {
-                                        throw new RuntimeException("Can't process class files larger than Integer.MAX_VALUE bytes");
-                                    }
-                                    ClassReader cr = new ClassReader(Files.readAllBytes(path));
+                                    final byte[] fileContent = CopyUtils.readFileContent(path);
+                                    ClassReader cr = new ClassReader(fileContent);
                                     ClassWriter writer = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
                                     ClassVisitor visitor = writer;
                                     for (BiFunction<String, ClassVisitor, ClassVisitor> i : visitors) {
@@ -370,14 +368,6 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
             }
         } catch (Exception e) {
             throw new AppCreatorException("Failed to augment application classes", e);
-        } finally {
-            if(runnerClassLoader != null) {
-                try {
-                    runnerClassLoader.close();
-                } catch (IOException e) {
-                    log.warn("Failed to close runner classloader", e);
-                }
-            }
         }
     }
 
@@ -418,7 +408,7 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
 
     @Override
     public String getConfigPropertyName() {
-        return "augment";
+        return "augment-only";
     }
 
     @Override
@@ -431,7 +421,6 @@ public class AugmentPhase implements AppCreationPhase<AugmentPhase>, AugmentOutc
         }
         .map("output", (AugmentPhase t, String value) -> t.setOutputDir(Paths.get(value)))
         .map("classes", (AugmentPhase t, String value) -> t.setAppClassesDir(Paths.get(value)))
-        .map("transformed-classes", (AugmentPhase t, String value) -> t.setTransformedClassesDir(Paths.get(value)))
         .map("wiring-classes", (AugmentPhase t, String value) -> t.setWiringClassesDir(Paths.get(value)));
     }
 }
