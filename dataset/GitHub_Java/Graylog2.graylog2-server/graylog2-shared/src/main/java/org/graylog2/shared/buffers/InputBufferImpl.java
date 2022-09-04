@@ -47,9 +47,7 @@ public class InputBufferImpl implements InputBuffer {
     @Inject
     public InputBufferImpl(MetricRegistry metricRegistry,
                            BaseConfiguration configuration,
-                           Provider<DirectMessageHandler> directMessageHandlerProvider,
-                           Provider<RawMessageEncoderHandler> rawMessageEncoderHandlerProvider,
-                           Provider<SpoolingMessageHandler> spoolingMessageHandlerProvider) {
+                           Provider<DirectMessageHandler> directMessageHandlerProvider) {
         final Disruptor<RawMessageEvent> disruptor = new Disruptor<>(
                 RawMessageEvent.FACTORY,
                 configuration.getRingSize(),
@@ -73,15 +71,7 @@ public class InputBufferImpl implements InputBuffer {
                 LOG.error("", ex);
             }
         });
-        if (configuration.isMessageJournalEnabled()) {
-            LOG.info("Message journal is enabled.");
-            disruptor.handleEventsWithWorkerPool(rawMessageEncoderHandlerProvider.get()) // TODO count based on config
-                    .then(spoolingMessageHandlerProvider.get());
-        } else{
-            LOG.info("Message journal is disabled.");
-            disruptor.handleEventsWithWorkerPool(directMessageHandlerProvider.get()); // TODO count based on config
-        }
-
+        disruptor.handleEventsWithWorkerPool(directMessageHandlerProvider.get()); // TODO switch implementation + count based on config
         ringBuffer = disruptor.start();
     }
 

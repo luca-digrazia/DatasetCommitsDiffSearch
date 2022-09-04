@@ -20,7 +20,10 @@ import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import com.lmax.disruptor.WaitStrategy;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
@@ -34,26 +37,37 @@ import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.buffers.ProcessingDisabledException;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.journal.RawMessage;
+import org.graylog2.shared.buffers.processors.DecodingProcessor;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class ProcessBuffer extends Buffer {
+
+    private final Timer parseTime;
+
+    public interface Factory {
+        public ProcessBuffer create(InputCache inputCache, AtomicInteger processBufferWatermark);
+    }
+
     private static final Logger LOG = LoggerFactory.getLogger(ProcessBuffer.class);
 
     public static String SOURCE_INPUT_ATTR_NAME;
     public static String SOURCE_NODE_ATTR_NAME;
 
     private final BaseConfiguration configuration;
+    private final DecodingProcessor.Factory decodingProcessorFactory;
     private final InputCache inputCache;
+    private final AtomicInteger processBufferWatermark;
     private final ExecutorService executor;
 
     private final Meter incomingMessages;
@@ -62,19 +76,25 @@ public class ProcessBuffer extends Buffer {
 
     private final ServerStatus serverStatus;
 
-    @Inject
+    @AssistedInject
     public ProcessBuffer(MetricRegistry metricRegistry,
                          ServerStatus serverStatus,
                          BaseConfiguration configuration,
-                         InputCache inputCache) {
+                         DecodingProcessor.Factory decodingProcessorFactory,
+                         @Assisted InputCache inputCache,
+                         @Assisted AtomicInteger processBufferWatermark) {
         this.serverStatus = serverStatus;
         this.configuration = configuration;
+        this.decodingProcessorFactory = decodingProcessorFactory;
         this.inputCache = inputCache;
+        this.processBufferWatermark = processBufferWatermark;
 
         this.executor = executorService(metricRegistry);
         this.incomingMessages = metricRegistry.meter(name(ProcessBuffer.class, "incomingMessages"));
         this.rejectedMessages = metricRegistry.meter(name(ProcessBuffer.class, "rejectedMessages"));
         this.cachedMessages = metricRegistry.meter(name(ProcessBuffer.class, "cachedMessages"));
+
+        this.parseTime = metricRegistry.timer(name(ProcessBuffer.class, "parseTime"));
 
         if (serverStatus.hasCapability(ServerStatus.Capability.RADIO)) {
             SOURCE_INPUT_ATTR_NAME = "gl2_source_radio_input";
@@ -99,7 +119,9 @@ public class ProcessBuffer extends Buffer {
         return inputCache;
     }
 
-    public void initialize(ProcessBufferProcessor[] processors, int ringBufferSize, WaitStrategy waitStrategy, int processBufferProcessors) {
+    public void initialize(ProcessBufferProcessor[] processors,
+                           int ringBufferSize,
+                           WaitStrategy waitStrategy) {
         Disruptor<MessageEvent> disruptor = new Disruptor<>(
                 MessageEvent.EVENT_FACTORY,
                 ringBufferSize,
@@ -112,7 +134,7 @@ public class ProcessBuffer extends Buffer {
                         + "and wait strategy <{}>.", ringBufferSize,
                 waitStrategy.getClass().getSimpleName());
 
-        disruptor.handleEventsWith(processors);
+        disruptor.handleEventsWith(decodingProcessorFactory.create(parseTime)).then(processors);
 
         ringBuffer = disruptor.start();
     }
@@ -231,8 +253,18 @@ public class ProcessBuffer extends Buffer {
         afterInsert(length);
     }
 
+    public void insertBlocking(RawMessage rawMessage) {
+        long sequence = ringBuffer.next();
+        MessageEvent event = ringBuffer.get(sequence);
+        event.setRaw(rawMessage);
+        ringBuffer.publish(sequence);
+        afterInsert(1);
+    }
+
     @Override
     protected void afterInsert(int n) {
+        this.processBufferWatermark.addAndGet(n);
         incomingMessages.mark(n);
     }
+
 }

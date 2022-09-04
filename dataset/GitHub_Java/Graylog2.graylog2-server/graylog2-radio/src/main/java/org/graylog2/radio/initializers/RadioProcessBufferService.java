@@ -1,6 +1,4 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,14 +14,12 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.radio.initializers;
 
 import com.google.common.util.concurrent.AbstractIdleService;
 import org.graylog2.inputs.InputCache;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
-import org.graylog2.radio.transports.RadioTransport;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.ProcessBufferWatermark;
 import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
@@ -40,7 +36,6 @@ public class RadioProcessBufferService extends AbstractIdleService {
     private final RadioProcessBufferProcessor.Factory processBufferProcessorFactory;
     private final Configuration configuration;
     private final ProcessBuffer processBuffer;
-    private final RadioTransport transport;
     private final ProcessBufferWatermark processBufferWatermark;
 
     @Inject
@@ -48,13 +43,11 @@ public class RadioProcessBufferService extends AbstractIdleService {
                                      RadioProcessBufferProcessor.Factory processBufferProcessorFactory,
                                      Configuration configuration,
                                      ProcessBuffer processBuffer,
-                                     RadioTransport transport,
                                      ProcessBufferWatermark processBufferWatermark) {
         this.inputCache = inputCache;
         this.processBufferProcessorFactory = processBufferProcessorFactory;
         this.configuration = configuration;
         this.processBuffer = processBuffer;
-        this.transport = transport;
         this.processBufferWatermark = processBufferWatermark;
     }
 
@@ -67,13 +60,11 @@ public class RadioProcessBufferService extends AbstractIdleService {
         for (int i = 0; i < processBufferProcessorCount; i++) {
             processors[i] = processBufferProcessorFactory.create(this.processBufferWatermark,
                     i,
-                    processBufferProcessorCount,
-                    transport);
+                    processBufferProcessorCount);
         }
 
         processBuffer.initialize(processors, configuration.getRingSize(),
-                configuration.getProcessorWaitStrategy(),
-                configuration.getProcessBufferProcessors()
+                configuration.getProcessorWaitStrategy()
         );
     }
 

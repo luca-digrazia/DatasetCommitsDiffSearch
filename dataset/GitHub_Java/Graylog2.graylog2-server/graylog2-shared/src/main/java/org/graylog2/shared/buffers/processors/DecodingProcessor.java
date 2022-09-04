@@ -27,14 +27,10 @@ import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.journal.RawMessage;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
 public class DecodingProcessor implements EventHandler<MessageEvent> {
-    private static final Logger log = LoggerFactory.getLogger(DecodingProcessor.class);
-
     public interface Factory {
         public DecodingProcessor create(@Assisted("parseTime") Timer parseTime);
     }
@@ -58,10 +54,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
     @Override
     public void onEvent(MessageEvent event, long sequence, boolean endOfBatch) throws Exception {
         final RawMessage raw = event.getRaw();
-        if (raw == null) {
-            log.warn("Ignoring null message");
-            return;
-        }
         final Codec codec = codecFactory.get(raw.getCodecName()).create(raw.getCodecConfig());
 
         /*
@@ -88,7 +80,6 @@ public class DecodingProcessor implements EventHandler<MessageEvent> {
         // TODO Create parse times per codec as well. (add some more metrics too)
         try (Timer.Context ignored = parseTime.time()) {
             message = codec.decode(raw);
-            message.setJournalOffset(raw.getJournalOffset());
         } catch (RuntimeException e) {
             throw e;
             //failures.mark();
