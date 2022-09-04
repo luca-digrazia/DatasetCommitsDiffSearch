@@ -2758,10 +2758,6 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     // are consecutive.
     MoreAsserts.assertContainsSublist(getGeneratingSpawnActionArgs(artifact),
         "-obfuscationdictionary", "java/com/google/android/dictionary.txt");
-    MoreAsserts.assertContainsSublist(getGeneratingSpawnActionArgs(artifact),
-        "-classobfuscationdictionary", "java/com/google/android/dictionary.txt");
-    MoreAsserts.assertContainsSublist(getGeneratingSpawnActionArgs(artifact),
-        "-packageobfuscationdictionary", "java/com/google/android/dictionary.txt");
   }
 
   @Test
