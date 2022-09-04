@@ -193,7 +193,7 @@ public class SelfValidationTest {
     private final Validator validator = BaseValidator.newValidator();
 
     @Test
-    void failingExample() {
+    public void failingExample() {
         assertThat(ConstraintViolations.format(validator.validate(new FailingExample())))
                 .containsExactlyInAnyOrder(FAILED_RESULT);
         assertThat(TestLoggerFactory.getAllLoggingEvents())
@@ -201,7 +201,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void subClassExample() {
+    public void subClassExample() {
         assertThat(ConstraintViolations.format(validator.validate(new SubclassExample())))
                 .containsExactlyInAnyOrder(
                         FAILED_RESULT,
@@ -212,7 +212,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void annotatedSubClassExample() {
+    public void annotatedSubClassExample() {
         assertThat(ConstraintViolations.format(validator.validate(new AnnotatedSubclassExample())))
                 .containsExactlyInAnyOrder(
                         FAILED_RESULT,
@@ -223,7 +223,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void overridingSubClassExample() {
+    public void overridingSubClassExample() {
         assertThat(ConstraintViolations.format(validator.validate(new OverridingExample())))
                 .isEmpty();
         assertThat(TestLoggerFactory.getAllLoggingEvents())
@@ -231,7 +231,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void correctExample() {
+    public void correctExample() {
         assertThat(ConstraintViolations.format(validator.validate(new CorrectExample())))
                 .isEmpty();
         assertThat(TestLoggerFactory.getAllLoggingEvents())
@@ -239,7 +239,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void multipleTestingOfSameClass() {
+    public void multipleTestingOfSameClass() {
         assertThat(ConstraintViolations.format(validator.validate(new CorrectExample())))
                 .isEmpty();
         assertThat(ConstraintViolations.format(validator.validate(new CorrectExample())))
@@ -249,7 +249,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void testDirectContextUsage() {
+    public void testDirectContextUsage() {
         assertThat(ConstraintViolations.format(validator.validate(new DirectContextExample())))
                 .containsExactlyInAnyOrder(FAILED_RESULT);
         assertThat(TestLoggerFactory.getAllLoggingEvents())
@@ -257,7 +257,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void complexExample() {
+    public void complexExample() {
         assertThat(ConstraintViolations.format(validator.validate(new ComplexExample())))
                 .containsExactly(
                         " failed1",
@@ -269,7 +269,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void invalidExample() throws Exception {
+    public void invalidExample() throws Exception {
         assertThat(ConstraintViolations.format(validator.validate(new InvalidExample())))
                 .isEmpty();
         assertThat(TestLoggerFactory.getAllLoggingEvents())
@@ -294,7 +294,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void giveWarningIfNoValidationMethods() {
+    public void giveWarningIfNoValidationMethods() {
         assertThat(ConstraintViolations.format(validator.validate(new NoValidations())))
                 .isEmpty();
         assertThat(TestLoggerFactory.getAllLoggingEvents())
@@ -309,7 +309,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void violationMessagesAreEscapedByDefault() {
+    public void violationMessagesAreEscapedByDefault() {
         assertThat(ConstraintViolations.format(validator.validate(new InjectionExample()))).containsExactly(
                 " $\\A{1+1}",
                 " ${'value'}",
@@ -322,9 +322,9 @@ public class SelfValidationTest {
     }
 
     @Test
-    void violationMessagesAreInterpolatedIfEscapingDisabled() {
+    public void violationMessagesAreInterpolatedIfEscapingDisabled() {
         assertThat(ConstraintViolations.format(validator.validate(new EscapingDisabledExample()))).containsExactly(
-                " $\\A{1+1}",
+                " A2",
                 " TEST",
                 " value",
                 "${'property'} value",
@@ -335,7 +335,7 @@ public class SelfValidationTest {
     }
 
     @Test
-    void messageParametersExample() {
+    public void messageParametersExample() {
         assertThat(ConstraintViolations.format(validator.validate(new MessageParametersExample()))).containsExactly(
                 " Mixed value VALUE",
                 " Nested ${'nested'}",
