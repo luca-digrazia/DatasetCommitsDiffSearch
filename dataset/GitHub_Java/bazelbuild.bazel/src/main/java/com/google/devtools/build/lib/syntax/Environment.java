@@ -470,7 +470,7 @@ public final class Environment implements Freezable, Debuggable {
     @Nullable final Continuation continuation;
 
     /** The lexical Frame of the caller. */
-    final Frame lexicalFrame;
+    final LexicalFrame lexicalFrame;
 
     /** The global Frame of the caller. */
     final GlobalFrame globalFrame;
@@ -482,7 +482,7 @@ public final class Environment implements Freezable, Debuggable {
         @Nullable Continuation continuation,
         BaseFunction function,
         @Nullable FuncallExpression caller,
-        Frame lexicalFrame,
+        LexicalFrame lexicalFrame,
         GlobalFrame globalFrame,
         @Nullable LinkedHashSet<String> knownGlobalVariables) {
       this.continuation = continuation;
@@ -655,7 +655,7 @@ public final class Environment implements Freezable, Debuggable {
    * Static Frame for lexical variables that are always looked up in the current Environment
    * or for the definition Environment of the function currently being evaluated.
    */
-  private Frame lexicalFrame;
+  private LexicalFrame lexicalFrame;
 
   /**
    * Static Frame for global variables; either the current lexical Frame if evaluation is currently
@@ -728,7 +728,7 @@ public final class Environment implements Freezable, Debuggable {
    */
   void enterScope(
       BaseFunction function,
-      Frame lexical,
+      LexicalFrame lexical,
       @Nullable FuncallExpression caller,
       GlobalFrame globals) {
     continuation =
@@ -782,13 +782,18 @@ public final class Environment implements Freezable, Debuggable {
    * as opposed to inside the body of a function.
    */
   boolean isGlobal() {
-    return lexicalFrame instanceof GlobalFrame;
+    return lexicalFrame == null;
   }
 
   @Override
   public Mutability mutability() {
     // the mutability of the environment is that of its dynamic frame.
     return dynamicFrame.mutability();
+  }
+
+  /** Returns the current Frame, in which variable side-effects happen. */
+  private Frame currentFrame() {
+    return isGlobal() ? globalFrame : lexicalFrame;
   }
 
   /** Returns the global variables for the Environment (not including dynamic bindings). */
@@ -858,7 +863,6 @@ public final class Environment implements Freezable, Debuggable {
       @Nullable String fileContentHashCode,
       Phase phase,
       @Nullable Label callerLabel) {
-    this.lexicalFrame = Preconditions.checkNotNull(globalFrame);
     this.globalFrame = Preconditions.checkNotNull(globalFrame);
     this.dynamicFrame = Preconditions.checkNotNull(dynamicFrame);
     Preconditions.checkArgument(!globalFrame.mutability().isFrozen());
@@ -986,9 +990,19 @@ public final class Environment implements Freezable, Debuggable {
    * @return this Environment, in fluid style
    */
   public Environment setupDynamic(String varname, Object value) {
-    if (lookup(varname) != null) {
+    if (dynamicFrame.get(varname) != null) {
       throw new AssertionError(
           String.format("Trying to bind dynamic variable '%s' but it is already bound",
+              varname));
+    }
+    if (lexicalFrame != null && lexicalFrame.get(varname) != null) {
+      throw new AssertionError(
+          String.format("Trying to bind dynamic variable '%s' but it is already bound lexically",
+              varname));
+    }
+    if (globalFrame.get(varname) != null) {
+      throw new AssertionError(
+          String.format("Trying to bind dynamic variable '%s' but it is already bound globally",
               varname));
     }
     try {
@@ -1007,7 +1021,7 @@ public final class Environment implements Freezable, Debuggable {
   /** Remove variable from local bindings. */
   void removeLocalBinding(String varname) {
     try {
-      lexicalFrame.remove(this, varname);
+      currentFrame().remove(this, varname);
     } catch (MutabilityException e) {
       throw new AssertionError(e);
     }
@@ -1034,7 +1048,7 @@ public final class Environment implements Freezable, Debuggable {
           null, String.format("Trying to update read-only global variable '%s'", varname));
     }
     try {
-      lexicalFrame.put(this, varname, Preconditions.checkNotNull(value));
+      currentFrame().put(this, varname, Preconditions.checkNotNull(value));
     } catch (MutabilityException e) {
       // Note that since at this time we don't accept the global keyword, and don't have closures,
       // end users should never be able to mutate a frozen Environment, and a MutabilityException
@@ -1082,9 +1096,11 @@ public final class Environment implements Freezable, Debuggable {
    */
   public Object lookup(String varname) {
     // Lexical frame takes precedence, then globals, then dynamics.
-    Object lexicalValue = lexicalFrame.get(varname);
-    if (lexicalValue != null) {
-      return lexicalValue;
+    if (lexicalFrame != null) {
+      Object lexicalValue = lexicalFrame.get(varname);
+      if (lexicalValue != null) {
+        return lexicalValue;
+      }
     }
     Object globalValue = globalFrame.get(varname);
     Object dynamicValue = dynamicFrame.get(varname);
@@ -1122,8 +1138,9 @@ public final class Environment implements Freezable, Debuggable {
    */
   public Set<String> getVariableNames() {
     LinkedHashSet<String> vars = new LinkedHashSet<>();
-    vars.addAll(lexicalFrame.getTransitiveBindings().keySet());
-    // No-op when globalFrame = lexicalFrame
+    if (lexicalFrame != null) {
+      vars.addAll(lexicalFrame.getTransitiveBindings().keySet());
+    }
     vars.addAll(globalFrame.getTransitiveBindings().keySet());
     vars.addAll(dynamicFrame.getTransitiveBindings().keySet());
     return vars;
@@ -1173,7 +1190,7 @@ public final class Environment implements Freezable, Debuggable {
     ImmutableList.Builder<DebugFrame> frameListBuilder = ImmutableList.builder();
 
     Continuation currentContinuation = continuation;
-    Frame currentFrame = lexicalFrame;
+    Frame currentFrame = currentFrame();
 
     // if there's a continuation then the current frame is a lexical frame
     while (currentContinuation != null) {
