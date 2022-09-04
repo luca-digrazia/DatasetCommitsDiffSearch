@@ -52,6 +52,7 @@ public class ExecutorRecorder {
                 }
             });
             executor = devModeExecutor;
+            Runtime.getRuntime().addShutdownHook(new Thread(shutdownTask, "Executor shutdown thread"));
         } else {
             shutdownContext.addLastShutdownTask(shutdownTask);
             executor = underlying;
@@ -91,11 +92,7 @@ public class ExecutorRecorder {
                 long interruptRemaining = threadPoolConfig.shutdownInterrupt.toNanos();
 
                 long start = System.nanoTime();
-                int loop = 1;
-                for (;;) {
-                    // This log can be very useful when debugging problems
-                    log.debugf("loop: %s, remaining: %s, intervalRemaining: %s, interruptRemaining: %s", loop++, remaining,
-                            intervalRemaining, interruptRemaining);
+                for (;;)
                     try {
                         if (!executor.awaitTermination(Math.min(remaining, intervalRemaining), TimeUnit.NANOSECONDS)) {
                             long elapsed = System.nanoTime() - start;
@@ -149,12 +146,10 @@ public class ExecutorRecorder {
                                     break;
                                 }
                             }
-                        } else {
-                            return;
                         }
+                        return;
                     } catch (InterruptedException ignored) {
                     }
-                }
             }
         };
     }

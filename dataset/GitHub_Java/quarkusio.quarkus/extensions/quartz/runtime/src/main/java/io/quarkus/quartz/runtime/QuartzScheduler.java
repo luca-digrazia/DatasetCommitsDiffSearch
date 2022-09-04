@@ -4,8 +4,6 @@ import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
-import java.util.OptionalLong;
 import java.util.Properties;
 
 import javax.annotation.PreDestroy;
@@ -28,7 +26,6 @@ import org.quartz.JobBuilder;
 import org.quartz.JobDetail;
 import org.quartz.JobExecutionContext;
 import org.quartz.JobExecutionException;
-import org.quartz.JobKey;
 import org.quartz.ScheduleBuilder;
 import org.quartz.SchedulerException;
 import org.quartz.SchedulerFactory;
@@ -74,6 +71,7 @@ public class QuartzScheduler implements Scheduler {
             Event<SkippedExecution> skippedExecutionEvent, Instance<Job> jobs, Instance<UserTransaction> userTransaction) {
         enabled = schedulerRuntimeConfig.enabled;
         final QuartzRuntimeConfig runtimeConfig = quartzSupport.getRuntimeConfig();
+        warnDeprecated(runtimeConfig);
 
         boolean forceStart;
         if (runtimeConfig.startMode != QuartzStartMode.NORMAL) {
@@ -81,7 +79,7 @@ public class QuartzScheduler implements Scheduler {
             forceStart = startHalted || (runtimeConfig.startMode == QuartzStartMode.FORCED);
         } else {
             startHalted = false;
-            forceStart = false;
+            forceStart = runtimeConfig.forceStart.orElse(false);
         }
 
         if (!enabled) {
@@ -138,9 +136,6 @@ public class QuartzScheduler implements Scheduler {
 
                         String cron = SchedulerUtils.lookUpPropertyValue(scheduled.cron());
                         if (!cron.isEmpty()) {
-                            if (SchedulerUtils.isOff(cron)) {
-                                continue;
-                            }
                             if (!CronType.QUARTZ.equals(cronType)) {
                                 // Migrate the expression
                                 Cron cronExpr = parser.parse(cron);
@@ -157,12 +152,8 @@ public class QuartzScheduler implements Scheduler {
                             }
                             scheduleBuilder = CronScheduleBuilder.cronSchedule(cron);
                         } else if (!scheduled.every().isEmpty()) {
-                            OptionalLong everyMillis = SchedulerUtils.parseEveryAsMillis(scheduled);
-                            if (!everyMillis.isPresent()) {
-                                continue;
-                            }
                             scheduleBuilder = SimpleScheduleBuilder.simpleSchedule()
-                                    .withIntervalInMilliseconds(everyMillis.getAsLong())
+                                    .withIntervalInMilliseconds(SchedulerUtils.parseEveryAsMillis(scheduled))
                                     .repeatForever();
                         } else {
                             throw new IllegalArgumentException("Invalid schedule configuration: " + scheduled);
@@ -207,6 +198,18 @@ public class QuartzScheduler implements Scheduler {
         }
     }
 
+    /**
+     * Warn if there's any deprecated configuration
+     *
+     * @param runtimeConfig {@link QuartzRuntimeConfig} quartz scheduler configurations
+     */
+    private static void warnDeprecated(QuartzRuntimeConfig runtimeConfig) {
+        if (runtimeConfig.forceStart.isPresent()) {
+            LOGGER.warn("`quarkus.quartz.force-start` is deprecated and will be removed in a future version - it is "
+                    + "recommended to switch to `quarkus.quartz.start-mode`");
+        }
+    }
+
     @Produces
     @Singleton
     org.quartz.Scheduler produceQuartzScheduler() {
@@ -227,22 +230,8 @@ public class QuartzScheduler implements Scheduler {
                     scheduler.standby();
                 }
             } catch (SchedulerException e) {
-                throw new RuntimeException("Unable to pause scheduler", e);
+                LOGGER.warn("Unable to pause scheduler", e);
             }
-        }
-    }
-
-    @Override
-    public void pause(String identity) {
-        Objects.requireNonNull(identity, "Cannot pause - identity is null");
-        if (identity.isEmpty()) {
-            LOGGER.warn("Cannot pause - identity is empty");
-            return;
-        }
-        try {
-            scheduler.pauseJob(new JobKey(SchedulerUtils.lookUpPropertyValue(identity), Scheduler.class.getName()));
-        } catch (SchedulerException e) {
-            throw new RuntimeException("Unable to pause job", e);
         }
     }
 
@@ -256,22 +245,8 @@ public class QuartzScheduler implements Scheduler {
                     scheduler.start();
                 }
             } catch (SchedulerException e) {
-                throw new RuntimeException("Unable to resume scheduler", e);
+                LOGGER.warn("Unable to resume scheduler", e);
             }
-        }
-    }
-
-    @Override
-    public void resume(String identity) {
-        Objects.requireNonNull(identity, "Cannot resume - identity is null");
-        if (identity.isEmpty()) {
-            LOGGER.warn("Cannot resume - identity is empty");
-            return;
-        }
-        try {
-            scheduler.resumeJob(new JobKey(SchedulerUtils.lookUpPropertyValue(identity), Scheduler.class.getName()));
-        } catch (SchedulerException e) {
-            throw new RuntimeException("Unable to resume job", e);
         }
     }
 
