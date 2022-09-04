@@ -1,6 +1,7 @@
 package io.quarkus.arc.processor;
 
 import static io.quarkus.arc.processor.IndexClassLookupUtils.getClassByName;
+import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
 
 import io.quarkus.arc.impl.GenericArrayTypeImpl;
 import io.quarkus.arc.impl.ParameterizedTypeImpl;
@@ -57,13 +58,9 @@ final class Types {
     }
 
     static ResultHandle getTypeHandle(BytecodeCreator creator, Type type) {
-        return getTypeHandle(creator, type, null);
-    }
-
-    static ResultHandle getTypeHandle(BytecodeCreator creator, Type type, ResultHandle tccl) {
         if (Kind.CLASS.equals(type.kind())) {
             String className = type.asClassType().name().toString();
-            return doLoadClass(creator, className, tccl);
+            return doLoadClass(creator, className);
         } else if (Kind.TYPE_VARIABLE.equals(type.kind())) {
             // E.g. T -> new TypeVariableImpl("T")
             TypeVariable typeVariable = type.asTypeVariable();
@@ -74,7 +71,7 @@ final class Types {
             } else {
                 boundsHandle = creator.newArray(java.lang.reflect.Type.class, creator.load(bounds.size()));
                 for (int i = 0; i < bounds.size(); i++) {
-                    creator.writeArrayValue(boundsHandle, i, getTypeHandle(creator, bounds.get(i), tccl));
+                    creator.writeArrayValue(boundsHandle, i, getTypeHandle(creator, bounds.get(i)));
                 }
             }
             return creator.newInstance(
@@ -88,18 +85,18 @@ final class Types {
             List<Type> arguments = parameterizedType.arguments();
             ResultHandle typeArgsHandle = creator.newArray(java.lang.reflect.Type.class, creator.load(arguments.size()));
             for (int i = 0; i < arguments.size(); i++) {
-                creator.writeArrayValue(typeArgsHandle, i, getTypeHandle(creator, arguments.get(i), tccl));
+                creator.writeArrayValue(typeArgsHandle, i, getTypeHandle(creator, arguments.get(i)));
             }
             return creator.newInstance(
                     MethodDescriptor.ofConstructor(ParameterizedTypeImpl.class, java.lang.reflect.Type.class,
                             java.lang.reflect.Type[].class),
-                    doLoadClass(creator, parameterizedType.name().toString(), tccl), typeArgsHandle);
+                    doLoadClass(creator, parameterizedType.name().toString()), typeArgsHandle);
 
         } else if (Kind.ARRAY.equals(type.kind())) {
             Type componentType = type.asArrayType().component();
             // E.g. String[] -> new GenericArrayTypeImpl(String.class)
             return creator.newInstance(MethodDescriptor.ofConstructor(GenericArrayTypeImpl.class, java.lang.reflect.Type.class),
-                    getTypeHandle(creator, componentType, tccl));
+                    getTypeHandle(creator, componentType));
 
         } else if (Kind.WILDCARD_TYPE.equals(type.kind())) {
             // E.g. ? extends Number -> WildcardTypeImpl.withUpperBound(Number.class)
@@ -109,12 +106,12 @@ final class Types {
                 return creator.invokeStaticMethod(
                         MethodDescriptor.ofMethod(WildcardTypeImpl.class, "withUpperBound",
                                 java.lang.reflect.WildcardType.class, java.lang.reflect.Type.class),
-                        getTypeHandle(creator, wildcardType.extendsBound(), tccl));
+                        getTypeHandle(creator, wildcardType.extendsBound()));
             } else {
                 return creator.invokeStaticMethod(
                         MethodDescriptor.ofMethod(WildcardTypeImpl.class, "withLowerBound",
                                 java.lang.reflect.WildcardType.class, java.lang.reflect.Type.class),
-                        getTypeHandle(creator, wildcardType.superBound(), tccl));
+                        getTypeHandle(creator, wildcardType.superBound()));
             }
         } else if (Kind.PRIMITIVE.equals(type.kind())) {
             switch (type.asPrimitiveType().primitive()) {
@@ -142,14 +139,16 @@ final class Types {
         }
     }
 
-    private static ResultHandle doLoadClass(BytecodeCreator creator, String className, ResultHandle tccl) {
+    private static ResultHandle doLoadClass(BytecodeCreator creator, String className) {
         //we need to use Class.forName as the class may be package private
-        if (tccl == null) {
-            ResultHandle currentThread = creator
-                    .invokeStaticMethod(MethodDescriptors.THREAD_CURRENT_THREAD);
-            tccl = creator.invokeVirtualMethod(MethodDescriptors.THREAD_GET_TCCL, currentThread);
-        }
-        return creator.invokeStaticMethod(MethodDescriptors.CL_FOR_NAME, creator.load(className), creator.load(true), tccl);
+        ResultHandle currentThread = creator
+                .invokeStaticMethod(ofMethod(Thread.class, "currentThread", Thread.class));
+        ResultHandle tccl = creator.invokeVirtualMethod(
+                ofMethod(Thread.class, "getContextClassLoader", ClassLoader.class),
+                currentThread);
+        return creator.invokeStaticMethod(
+                ofMethod(Class.class, "forName", Class.class, String.class, boolean.class, ClassLoader.class),
+                creator.load(className), creator.load(true), tccl);
     }
 
     static Type getProviderType(ClassInfo classInfo) {
