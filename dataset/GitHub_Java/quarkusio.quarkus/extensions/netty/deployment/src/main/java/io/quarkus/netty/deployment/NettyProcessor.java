@@ -169,14 +169,12 @@ class NettyProcessor {
                 .supplier(boss)
                 .scope(ApplicationScoped.class)
                 .addQualifier(BossEventLoopGroup.class)
-                .unremovable()
                 .done());
 
         syntheticBeans.produce(SyntheticBeanBuildItem.configure(EventLoopGroup.class)
                 .supplier(main)
                 .scope(ApplicationScoped.class)
                 .addQualifier(MainEventLoopGroup.class)
-                .unremovable()
                 .done());
     }
 
