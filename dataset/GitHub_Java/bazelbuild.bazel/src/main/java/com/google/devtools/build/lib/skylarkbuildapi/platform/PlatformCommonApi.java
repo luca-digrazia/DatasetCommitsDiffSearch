@@ -14,34 +14,53 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi.platform;
 
-import com.google.devtools.build.lib.skylarkbuildapi.ProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.syntax.StarlarkValue;
 
-/**
- * Module containing functions to interact with the platform APIs.
- */
-@SkylarkModule(
+/** Module containing functions to interact with the platform APIs. */
+@StarlarkBuiltin(
     name = "platform_common",
-    doc = "Functions for Skylark to interact with the platform APIs."
-)
-public interface PlatformCommonApi {
-
+    doc = "Functions for Starlark to interact with the platform APIs.")
+public interface PlatformCommonApi extends StarlarkValue {
   @SkylarkCallable(
       name = "TemplateVariableInfo",
-      doc = "The provider used to retrieve the provider that contains the template variables "
-          + "defined by a particular toolchain, for example by calling "
-          + "ctx.attr._cc_toolchain[platform_common.TemplateVariableInfo].make_variables[<name>]",
-      structField = true
-  )
-  public ProviderApi getMakeVariableProvider();
+      doc =
+          "The constructor/key for the <a href='TemplateVariableInfo.html'>"
+              + "TemplateVariableInfo</a> provider.",
+      structField = true)
+  ProviderApi getMakeVariableProvider();
 
   @SkylarkCallable(
-    name = "ToolchainInfo",
-    doc =
-        "The provider constructor for ToolchainInfo. The constructor takes the type of the "
-            + "toolchain, and a map of the toolchain's data.",
-    structField = true
-  )
-  public ProviderApi getToolchainInfoConstructor();
+      name = "ToolchainInfo",
+      doc = "The constructor/key for the <a href='ToolchainInfo.html'>ToolchainInfo</a> provider.",
+      structField = true)
+  ProviderApi getToolchainInfoConstructor();
+
+  @SkylarkCallable(
+      name = "PlatformInfo",
+      doc =
+          "The constructor/key for the <a href='PlatformInfo.html'>PlatformInfo</a> provider."
+              + PlatformInfoApi.EXPERIMENTAL_WARNING,
+      structField = true)
+  ProviderApi getPlatformInfoConstructor();
+
+  @SkylarkCallable(
+      name = "ConstraintSettingInfo",
+      doc =
+          "The constructor/key for the <a href='ConstraintSettingInfo.html'>"
+              + "ConstraintSettingInfo</a> provider."
+              + PlatformInfoApi.EXPERIMENTAL_WARNING,
+      structField = true)
+  ProviderApi getConstraintSettingInfoConstructor();
+
+  @SkylarkCallable(
+      name = "ConstraintValueInfo",
+      doc =
+          "The constructor/key for the <a href='ConstraintValueInfo.html'>"
+              + "ConstraintValueInfo</a> provider."
+              + PlatformInfoApi.EXPERIMENTAL_WARNING,
+      structField = true)
+  ProviderApi getConstraintValueInfoConstructor();
 }

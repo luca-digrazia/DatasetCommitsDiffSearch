@@ -15,25 +15,43 @@
 package com.google.devtools.build.lib.skylarkbuildapi.platform;
 
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.skylarkbuildapi.StructApi;
+import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
+import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import javax.annotation.Nullable;
 
-/**
- * Info object representing a specific constraint setting that may be used to define a platform.
- */
-@SkylarkModule(
+/** Info object representing a specific constraint setting that may be used to define a platform. */
+@StarlarkBuiltin(
     name = "ConstraintSettingInfo",
-    doc = "A specific constraint setting that may be used to define a platform.",
-    category = SkylarkModuleCategory.PROVIDER
-)
+    doc =
+        "A specific constraint setting that may be used to define a platform. See "
+            + "<a href='../../platforms.html#defining-constraints-and-platforms'>Defining "
+            + "Constraints and Platforms</a> for more information."
+            + PlatformInfoApi.EXPERIMENTAL_WARNING,
+    category = StarlarkDocumentationCategory.PROVIDER)
 public interface ConstraintSettingInfoApi extends StructApi {
 
   @SkylarkCallable(
-    name = "label",
-    doc = "The label of the target that created this constraint.",
-    structField = true
-  )
-  public Label label();
+      name = "label",
+      doc = "The label of the target that created this constraint.",
+      structField = true,
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
+  Label label();
+
+  @SkylarkCallable(
+      name = "default_constraint_value",
+      doc = "The default constraint_value for this setting.",
+      structField = true,
+      allowReturnNones = true,
+      enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
+  @Nullable
+  ConstraintValueInfoApi defaultConstraintValue();
+
+  @SkylarkCallable(
+      name = "has_default_constraint_value",
+      doc = "Whether there is a default constraint_value for this setting.",
+      structField = true)
+  boolean hasDefaultConstraintValue();
 }
