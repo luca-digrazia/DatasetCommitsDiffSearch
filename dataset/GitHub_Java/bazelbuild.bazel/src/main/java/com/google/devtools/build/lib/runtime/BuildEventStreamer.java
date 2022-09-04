@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.Bui
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransportClosedEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstraint;
-import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
 import com.google.devtools.build.lib.buildeventstream.ProgressEvent;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
@@ -265,19 +264,18 @@ public class BuildEventStreamer implements EventHandler {
 
   private ScheduledFuture<?> bepUploadWaitEvent(ScheduledExecutorService executor) {
     final long startNanos = System.nanoTime();
-    return executor.scheduleAtFixedRate(
-        () -> {
-          long deltaNanos = System.nanoTime() - startNanos;
-          long deltaSeconds = TimeUnit.NANOSECONDS.toSeconds(deltaNanos);
-          Event waitEvt =
-              of(PROGRESS, null, "Waiting for build event protocol upload: " + deltaSeconds + "s");
-          if (reporter != null) {
-            reporter.handle(waitEvt);
-          }
-        },
-        0,
-        1,
-        TimeUnit.SECONDS);
+    return executor.scheduleAtFixedRate(new Runnable() {
+      @Override
+      public void run() {
+        long deltaNanos = System.nanoTime() - startNanos;
+        long deltaSeconds = TimeUnit.NANOSECONDS.toSeconds(deltaNanos);
+        Event waitEvt =
+            of(PROGRESS, null, "Waiting for build event protocol upload: " + deltaSeconds + "s");
+        if (reporter != null) {
+          reporter.handle(waitEvt);
+        }
+      }
+    }, 0, 1, TimeUnit.SECONDS);
   }
 
   private void close() {
@@ -287,13 +285,14 @@ public class BuildEventStreamer implements EventHandler {
       List<ListenableFuture<Void>> closeFutures = new ArrayList<>(transports.size());
       for (final BuildEventTransport transport : transports) {
         ListenableFuture<Void> closeFuture = transport.close();
-        closeFuture.addListener(
-            () -> {
-              if (reporter != null) {
-                reporter.post(new BuildEventTransportClosedEvent(transport));
-              }
-            },
-            executor);
+        closeFuture.addListener(new Runnable() {
+          @Override
+          public void run() {
+            if (reporter != null) {
+              reporter.post(new BuildEventTransportClosedEvent(transport));
+            }
+          }
+        }, executor);
         closeFutures.add(closeFuture);
       }
 
@@ -333,18 +332,14 @@ public class BuildEventStreamer implements EventHandler {
   }
 
   private void maybeReportConfiguration(BuildConfiguration configuration) {
-    BuildEvent event = configuration;
-    if (configuration == null) {
-      event = new NullConfiguration();
-    }
-    BuildEventId id = event.getEventId();
+    BuildEventId id = configuration.getEventId();
     synchronized (this) {
       if (configurationsPosted.contains(id)) {
         return;
       }
       configurationsPosted.add(id);
     }
-    post(event);
+    post(configuration);
   }
 
   @Override
