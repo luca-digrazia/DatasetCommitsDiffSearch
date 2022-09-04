@@ -16,12 +16,14 @@
  */
 package org.graylog2.indexer.fieldtypes;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Streams;
 import com.mongodb.BasicDBObject;
 import org.bson.types.ObjectId;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.database.MongoDBUpsertRetryer;
+import org.graylog2.streams.StreamService;
 import org.mongojack.DBQuery;
 import org.mongojack.JacksonDBCollection;
 import org.mongojack.WriteResult;
@@ -29,20 +31,25 @@ import org.mongojack.WriteResult;
 import javax.inject.Inject;
 import java.util.Collection;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Stream;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
- * Manages the "index_field_Types" MongoDB collection.
+ * Manages the "index_field_types" MongoDB collection.
  */
 public class IndexFieldTypesService {
     private static final String FIELDS_FIELD_NAMES = String.format(Locale.US, "%s.%s", IndexFieldTypesDTO.FIELD_FIELDS, FieldTypeDTO.FIELD_NAME);
 
     private final JacksonDBCollection<IndexFieldTypesDTO, ObjectId> db;
+    private final StreamService streamService;
 
     @Inject
     public IndexFieldTypesService(MongoConnection mongoConnection,
+                                  StreamService streamService,
                                   MongoJackObjectMapperProvider objectMapperProvider) {
+        this.streamService = streamService;
         this.db = JacksonDBCollection.wrap(mongoConnection.getDatabase().getCollection("index_field_types"),
                 IndexFieldTypesDTO.class,
                 ObjectId.class,
@@ -54,6 +61,7 @@ public class IndexFieldTypesService {
         )), new BasicDBObject("unique", true));
         this.db.createIndex(new BasicDBObject(IndexFieldTypesDTO.FIELD_INDEX_NAME, 1), new BasicDBObject("unique", true));
         this.db.createIndex(new BasicDBObject(FIELDS_FIELD_NAMES, 1));
+        this.db.createIndex(new BasicDBObject(IndexFieldTypesDTO.FIELD_INDEX_SET_ID, 1));
     }
 
     public Optional<IndexFieldTypesDTO> get(String idOrIndexName) {
@@ -71,7 +79,7 @@ public class IndexFieldTypesService {
     }
 
     public Optional<IndexFieldTypesDTO> upsert(IndexFieldTypesDTO dto) {
-        final WriteResult<IndexFieldTypesDTO, ObjectId> update = db.update(
+        final WriteResult<IndexFieldTypesDTO, ObjectId> update = MongoDBUpsertRetryer.run(() -> db.update(
                 DBQuery.and(
                         DBQuery.is(IndexFieldTypesDTO.FIELD_INDEX_NAME, dto.indexName()),
                         DBQuery.is(IndexFieldTypesDTO.FIELD_INDEX_SET_ID, dto.indexSetId())
@@ -79,7 +87,7 @@ public class IndexFieldTypesService {
                 dto,
                 true,
                 false
-        );
+        ));
 
         final Object upsertedId = update.getUpsertedId();
         if (upsertedId instanceof ObjectId) {
@@ -99,28 +107,44 @@ public class IndexFieldTypesService {
         }
     }
 
-    public Stream<IndexFieldTypesDTO> streamForIndexSet(String indexSetId) {
-        return streamQuery(DBQuery.is(IndexFieldTypesDTO.FIELD_INDEX_SET_ID, indexSetId));
+    public Collection<IndexFieldTypesDTO> findForIndexSet(String indexSetId) {
+        return findByQuery(DBQuery.is(IndexFieldTypesDTO.FIELD_INDEX_SET_ID, indexSetId));
     }
 
-    public Stream<IndexFieldTypesDTO> streamForFieldNames(Collection<String> fieldNames) {
-        return streamQuery(DBQuery.in(FIELDS_FIELD_NAMES, fieldNames));
+    public Collection<IndexFieldTypesDTO> findForIndexSets(Collection<String> indexSetIds) {
+        return findByQuery(
+                DBQuery.in(IndexFieldTypesDTO.FIELD_INDEX_SET_ID, indexSetIds)
+        );
     }
 
-    public Stream<IndexFieldTypesDTO> streamForFieldNamesAndIndices(Collection<String> fieldNames, Collection<String> indexNames) {
+    public Collection<IndexFieldTypesDTO> findForFieldNames(Collection<String> fieldNames) {
+        return findByQuery(DBQuery.in(FIELDS_FIELD_NAMES, fieldNames));
+    }
+
+    public Collection<IndexFieldTypesDTO> findForFieldNamesAndIndices(Collection<String> fieldNames, Collection<String> indexNames) {
         final DBQuery.Query query = DBQuery.and(
                 DBQuery.in(IndexFieldTypesDTO.FIELD_INDEX_NAME, indexNames),
                 DBQuery.in(FIELDS_FIELD_NAMES, fieldNames)
         );
 
-        return streamQuery(query);
+        return findByQuery(query);
     }
 
-    public Stream<IndexFieldTypesDTO> streamAll() {
-        return streamQuery(DBQuery.empty());
+    public Collection<IndexFieldTypesDTO> findForStreamIds(Collection<String> streamIds) {
+        final Set<String> indexSetIds = streamService.loadByIds(streamIds)
+                .stream()
+                .filter(Objects::nonNull)
+                .map(stream -> stream.getIndexSet().getConfig().id())
+                .collect(Collectors.toSet());
+
+        return findForIndexSets(indexSetIds);
     }
 
-    private Stream<IndexFieldTypesDTO> streamQuery(DBQuery.Query query) {
-        return Streams.stream((Iterable<IndexFieldTypesDTO>) db.find(query));
+    public Collection<IndexFieldTypesDTO> findAll() {
+        return findByQuery(DBQuery.empty());
+    }
+
+    private Collection<IndexFieldTypesDTO> findByQuery(DBQuery.Query query) {
+        return ImmutableList.copyOf((Iterable<IndexFieldTypesDTO>) db.find(query));
     }
 }
