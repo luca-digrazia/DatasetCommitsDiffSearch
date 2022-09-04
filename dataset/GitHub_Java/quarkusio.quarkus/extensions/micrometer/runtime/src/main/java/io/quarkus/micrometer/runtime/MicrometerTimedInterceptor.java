@@ -8,8 +8,6 @@ import javax.interceptor.AroundInvoke;
 import javax.interceptor.Interceptor;
 import javax.interceptor.InvocationContext;
 
-import org.jboss.logging.Logger;
-
 import io.micrometer.core.annotation.Timed;
 import io.micrometer.core.instrument.LongTaskTimer;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -25,7 +23,6 @@ import io.micrometer.core.instrument.Timer;
 @MicrometerTimed
 @Priority(Interceptor.Priority.LIBRARY_BEFORE + 10)
 public class MicrometerTimedInterceptor {
-    private static final Logger log = Logger.getLogger(MicrometerTimedInterceptor.class);
     public static final String DEFAULT_METRIC_NAME = "method.timed";
 
     private final MeterRegistry meterRegistry;
@@ -97,9 +94,7 @@ public class MicrometerTimedInterceptor {
 
             sample.stop(meterRegistry, builder);
         } catch (Exception e) {
-            // ignoring on purpose: possible meter registration error should not interrupt main code flow.
-            log.warnf(e, "Unable to record observed timer value for %s with exceptionClass %s",
-                    metricName, exceptionClass);
+            // ignoring on purpose
         }
     }
 
@@ -112,10 +107,9 @@ public class MicrometerTimedInterceptor {
 
         if (stopWhenCompleted) {
             try {
-                return ((CompletionStage<?>) context.proceed())
-                        .whenComplete((result, throwable) -> stopLongTaskTimer(metricName, sample));
+                return ((CompletionStage<?>) context.proceed()).whenComplete((result, throwable) -> stopLongTaskTimer(sample));
             } catch (Exception ex) {
-                stopLongTaskTimer(metricName, sample);
+                stopLongTaskTimer(sample);
                 throw ex;
             }
         }
@@ -123,7 +117,7 @@ public class MicrometerTimedInterceptor {
         try {
             return context.proceed();
         } finally {
-            stopLongTaskTimer(metricName, sample);
+            stopLongTaskTimer(sample);
         }
     }
 
@@ -138,18 +132,15 @@ public class MicrometerTimedInterceptor {
                     .register(meterRegistry)
                     .start();
         } catch (Exception e) {
-            // ignoring on purpose: possible meter registration error should not interrupt main code flow.
-            log.warnf(e, "Unable to create long task timer named %s", metricName);
             return null;
         }
     }
 
-    private void stopLongTaskTimer(String metricName, LongTaskTimer.Sample sample) {
+    private void stopLongTaskTimer(LongTaskTimer.Sample sample) {
         try {
             sample.stop();
         } catch (Exception e) {
             // ignoring on purpose
-            log.warnf(e, "Unable to update long task timer named %s", metricName);
         }
     }
 
