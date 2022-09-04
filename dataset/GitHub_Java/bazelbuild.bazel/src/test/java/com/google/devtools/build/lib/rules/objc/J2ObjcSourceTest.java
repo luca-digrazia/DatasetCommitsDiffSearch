@@ -15,10 +15,9 @@
 package com.google.devtools.build.lib.rules.objc;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.vfs.Path;
@@ -33,13 +32,13 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class J2ObjcSourceTest {
-  private ArtifactRoot rootDir;
+  private Root rootDir;
 
   @Before
   public final void setRootDir() throws Exception  {
     Scratch scratch = new Scratch();
     Path execRoot = scratch.getFileSystem().getPath("/exec");
-    rootDir = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/exec/root"));
+    rootDir = Root.asDerivedRoot(execRoot, scratch.dir("/exec/root"));
   }
 
   @Test
@@ -62,7 +61,7 @@ public class J2ObjcSourceTest {
 
   private J2ObjcSource getJ2ObjcSource(String label, String fileName,
       J2ObjcSource.SourceType sourceType) throws Exception {
-    Label ruleLabel = Label.parseAbsolute(label, ImmutableMap.of());
+    Label ruleLabel = Label.parseAbsolute(label);
     PathFragment path = ruleLabel.toPathFragment();
     return new J2ObjcSource(
         ruleLabel,

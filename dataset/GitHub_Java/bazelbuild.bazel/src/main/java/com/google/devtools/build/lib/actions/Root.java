@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,16 +14,18 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.syntax.SkylarkCallable;
-import com.google.devtools.build.lib.syntax.SkylarkModule;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
 import java.io.Serializable;
 import java.util.Objects;
-
 import javax.annotation.Nullable;
 
 /**
@@ -43,26 +45,29 @@ import javax.annotation.Nullable;
  * that is the root of the merged directory tree.
  */
 @SkylarkModule(name = "root",
+    category = SkylarkModuleCategory.BUILTIN,
     doc = "A root for files. The roots are the directories containing files, and they are mapped "
         + "together into a single directory tree to form the execution environment.")
-public final class Root implements Comparable<Root>, Serializable {
+@Immutable
+public final class Root implements Comparable<Root>, Serializable, SkylarkValue {
 
-  /**
-   * Returns the given path as a source root. The path may not be {@code null}.
-   */
-  public static Root asSourceRoot(Path path) {
-    return new Root(null, path);
+  // This must always be consistent with Package.getSourceRoot; otherwise computing source roots
+  // from exec paths does not work, which can break the action cache for input-discovering actions.
+  public static Root computeSourceRoot(Path packageRoot, RepositoryName repository) {
+    if (repository.isMain()) {
+      return asSourceRoot(packageRoot);
+    } else {
+      Path actualRoot = packageRoot;
+      for (int i = 0; i < repository.getSourceRoot().segmentCount(); i++) {
+        actualRoot = actualRoot.getParentDirectory();
+      }
+      return asSourceRoot(actualRoot);
+    }
   }
 
-  /**
-   * DO NOT USE IN PRODUCTION CODE!
-   *
-   * <p>Returns the given path as a derived root. This method only exists as a convenience for
-   * tests, which don't need a proper Root object.
-   */
-  @VisibleForTesting
-  public static Root asDerivedRoot(Path path) {
-    return new Root(path, path);
+  /** Returns the given path as a source root. The path may not be {@code null}. */
+  public static Root asSourceRoot(Path path) {
+    return new Root(null, path);
   }
 
   /**
@@ -85,23 +90,16 @@ public final class Root implements Comparable<Root>, Serializable {
     return new Root(execRoot, root, true);
   }
 
-  /**
-   * Returns the exec root as a derived root. The exec root should never be treated as a derived
-   * root, but this is currently allowed. Do not add any further uses besides the ones that already
-   * exist!
-   */
-  static Root execRootAsDerivedRoot(Path execRoot) {
-    return new Root(execRoot, execRoot);
-  }
-
   @Nullable private final Path execRoot;
   private final Path path;
   private final boolean isMiddlemanRoot;
+  private final PathFragment execPath;
 
   private Root(@Nullable Path execRoot, Path path, boolean isMiddlemanRoot) {
     this.execRoot = execRoot;
     this.path = Preconditions.checkNotNull(path);
     this.isMiddlemanRoot = isMiddlemanRoot;
+    this.execPath = isSourceRoot() ? PathFragment.EMPTY_FRAGMENT : path.relativeTo(execRoot);
   }
 
   private Root(@Nullable Path execRoot, Path path) {
@@ -117,7 +115,7 @@ public final class Root implements Comparable<Root>, Serializable {
    * the empty fragment.
    */
   public PathFragment getExecPath() {
-    return isSourceRoot() ? PathFragment.EMPTY_FRAGMENT : path.relativeTo(execRoot);
+    return execPath;
   }
 
   @SkylarkCallable(name = "path", structField = true,
@@ -126,11 +124,16 @@ public final class Root implements Comparable<Root>, Serializable {
     return getExecPath().getPathString();
   }
 
+  @Nullable
+  public Path getExecRoot() {
+    return execRoot;
+  }
+
   public boolean isSourceRoot() {
     return execRoot == null;
   }
 
-  public boolean isMiddlemanRoot() {
+  boolean isMiddlemanRoot() {
     return isMiddlemanRoot;
   }
 
@@ -158,6 +161,11 @@ public final class Root implements Comparable<Root>, Serializable {
 
   @Override
   public String toString() {
-    return path.toString() + (isSourceRoot() ? "[source]" : "[derived]");
+    return path + (isSourceRoot() ? "[source]" : "[derived]");
+  }
+
+  @Override
+  public void repr(SkylarkPrinter printer) {
+    printer.append(isSourceRoot() ? "<source root>" : "<derived root>");
   }
 }

@@ -23,8 +23,7 @@ import static java.util.Arrays.asList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsInOutputGroup;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactHelper.ArtifactsToBuild;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -46,14 +45,14 @@ public class TopLevelArtifactHelperTest {
   private OutputGroupInfo groupProvider;
 
   private Path path;
-  private ArtifactRoot root;
+  private Root root;
   private int artifactIdx;
 
   @Before
   public final void setRootDir() throws Exception {
     Scratch scratch = new Scratch();
     Path execRoot = scratch.getFileSystem().getPath("/");
-    root = ArtifactRoot.asDerivedRoot(execRoot, "blaze-out");
+    root = Root.asDerivedRoot(execRoot, scratch.dir("/blaze-out"));
     path = scratch.dir("/blaze-out/foo");
   }
 
@@ -65,7 +64,7 @@ public class TopLevelArtifactHelperTest {
       mapBuilder.put(
           groupArtifact.getFirst(), newArtifacts(checkNotNull(groupArtifact.getSecond())));
     }
-    ctx = new TopLevelArtifactContext(false, false, setBuilder.build());
+    ctx = new TopLevelArtifactContext(false, setBuilder.build());
     groupProvider = new OutputGroupInfo(mapBuilder.build());
   }
 
@@ -74,20 +73,20 @@ public class TopLevelArtifactHelperTest {
     setup(asList(Pair.of("foo", 3), Pair.of("bar", 2)));
 
     ArtifactsToBuild allArtifacts = getAllArtifactsToBuild(groupProvider, null, ctx);
-    assertThat(allArtifacts.getAllArtifacts().toList()).hasSize(5);
-    assertThat(allArtifacts.getImportantArtifacts().toList()).hasSize(5);
+    assertThat(allArtifacts.getAllArtifacts()).hasSize(5);
+    assertThat(allArtifacts.getImportantArtifacts()).hasSize(5);
 
     NestedSet<ArtifactsInOutputGroup> artifactsByGroup =
         allArtifacts.getAllArtifactsByOutputGroup();
     // Two groups
-    assertThat(artifactsByGroup.toList()).hasSize(2);
+    assertThat(artifactsByGroup).hasSize(2);
 
-    for (ArtifactsInOutputGroup artifacts : artifactsByGroup.toList()) {
+    for (ArtifactsInOutputGroup artifacts : artifactsByGroup) {
       String outputGroup = artifacts.getOutputGroup();
       if ("foo".equals(outputGroup)) {
-        assertThat(artifacts.getArtifacts().toList()).hasSize(3);
+        assertThat(artifacts.getArtifacts()).hasSize(3);
       } else if ("bar".equals(outputGroup)) {
-        assertThat(artifacts.getArtifacts().toList()).hasSize(2);
+        assertThat(artifacts.getArtifacts()).hasSize(2);
       }
     }
   }
@@ -97,13 +96,13 @@ public class TopLevelArtifactHelperTest {
     setup(asList(Pair.of("foo", 1), Pair.of("bar", 0)));
 
     ArtifactsToBuild allArtifacts = getAllArtifactsToBuild(groupProvider, null, ctx);
-    assertThat(allArtifacts.getAllArtifacts().toList()).hasSize(1);
-    assertThat(allArtifacts.getImportantArtifacts().toList()).hasSize(1);
+    assertThat(allArtifacts.getAllArtifacts()).hasSize(1);
+    assertThat(allArtifacts.getImportantArtifacts()).hasSize(1);
 
     NestedSet<ArtifactsInOutputGroup> artifactsByGroup =
         allArtifacts.getAllArtifactsByOutputGroup();
     // The bar list should not appear here, as it contains no artifacts.
-    assertThat(artifactsByGroup.toList()).hasSize(1);
+    assertThat(artifactsByGroup).hasSize(1);
     assertThat(artifactsByGroup.toList().get(0).getOutputGroup()).isEqualTo("foo");
   }
 
@@ -112,8 +111,8 @@ public class TopLevelArtifactHelperTest {
     setup(asList(Pair.of(HIDDEN_OUTPUT_GROUP_PREFIX + "notimportant", 1), Pair.of("important", 2)));
 
     ArtifactsToBuild allArtifacts = getAllArtifactsToBuild(groupProvider, null, ctx);
-    assertThat(allArtifacts.getAllArtifacts().toList()).hasSize(3);
-    assertThat(allArtifacts.getImportantArtifacts().toList()).hasSize(2);
+    assertThat(allArtifacts.getAllArtifacts()).hasSize(3);
+    assertThat(allArtifacts.getImportantArtifacts()).hasSize(2);
   }
 
   private NestedSet<Artifact> newArtifacts(int num) {
@@ -125,6 +124,6 @@ public class TopLevelArtifactHelperTest {
   }
 
   private Artifact newArtifact() {
-    return ActionsTestUtil.createArtifact(root, path.getRelative(Integer.toString(artifactIdx++)));
+    return new Artifact(path.getRelative(Integer.toString(artifactIdx++)), root);
   }
 }

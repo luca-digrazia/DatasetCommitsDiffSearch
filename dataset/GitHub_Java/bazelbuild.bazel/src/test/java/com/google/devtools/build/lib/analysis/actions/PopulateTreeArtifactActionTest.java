@@ -31,9 +31,9 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.Executor;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.cache.Md5Digest;
@@ -106,12 +106,12 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
     }
   };
 
-  private ArtifactRoot root;
+  private Root root;
 
   @Before
   public void setRootDir() throws Exception  {
     Path execRoot = scratch.getFileSystem().getPath("/exec");
-    root = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/exec/out"));
+    root = Root.asDerivedRoot(execRoot, scratch.dir("/exec/out"));
   }
 
   @Test
@@ -266,8 +266,8 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
   public void testComputeKey() throws Exception {
     final Artifact archiveA = getSourceArtifact("myArchiveA.zip");
     final Artifact archiveB = getSourceArtifact("myArchiveB.zip");
-    final SpecialArtifact treeArtifactToPopulateA = createTreeArtifact("testA/archive_member");
-    final SpecialArtifact treeArtifactToPopulateB = createTreeArtifact("testB/archive_member");
+    final Artifact treeArtifactToPopulateA = createTreeArtifact("testA/archive_member");
+    final Artifact treeArtifactToPopulateB = createTreeArtifact("testB/archive_member");
     final Artifact archiveManifestA = getSourceArtifact("archiveManifestA.txt");
     final Artifact archiveManifestB = getSourceArtifact("archiveManifestB.txt");
     final FilesToRunProvider zipperA = FilesToRunProvider.fromSingleExecutableArtifact(
@@ -282,7 +282,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
           public Action generate(ImmutableSet<KeyAttributes> attributesToFlip) {
             Artifact archive =
                 attributesToFlip.contains(KeyAttributes.ARCHIVE) ? archiveA : archiveB;
-            SpecialArtifact treeArtifactToPopulate =
+            Artifact treeArtifactToPopulate =
                 attributesToFlip.contains(KeyAttributes.TREE_ARTIFACT)
                     ? treeArtifactToPopulateA
                     : treeArtifactToPopulateB;
@@ -306,7 +306,7 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
 
   private PopulateTreeArtifactAction createPopulateTreeArtifactAction() throws Exception {
     Artifact archive = getSourceArtifact("myArchive.zip");
-    SpecialArtifact treeArtifactToPopulate = createTreeArtifact("test/archive_member");
+    Artifact treeArtifactToPopulate = createTreeArtifact("test/archive_member");
     Artifact archiveManifest = getSourceArtifact("archiveManifest.txt");
     FilesToRunProvider unzip = FilesToRunProvider.fromSingleExecutableArtifact(
         getSourceArtifact("unzipBinary"));
@@ -343,13 +343,13 @@ public class PopulateTreeArtifactActionTest extends BuildViewTestCase {
         null);
   }
 
-  private SpecialArtifact createTreeArtifact(String rootRelativePath) {
+  private Artifact createTreeArtifact(String rootRelativePath) {
     PathFragment relpath = PathFragment.create(rootRelativePath);
     return new SpecialArtifact(
-        root.getRoot().getRelative(relpath),
+        root.getPath().getRelative(relpath),
         root,
         root.getExecPath().getRelative(relpath),
-        ArtifactOwner.NullArtifactOwner.INSTANCE,
+        ArtifactOwner.NULL_OWNER,
         SpecialArtifactType.TREE);
   }
 

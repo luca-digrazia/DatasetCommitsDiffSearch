@@ -28,9 +28,9 @@ import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.SpecialArtifactType;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
 import com.google.devtools.build.lib.analysis.util.ActionTester;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
@@ -50,14 +50,14 @@ import org.junit.runners.JUnit4;
 /** Tests for ParamFileWriteAction. */
 @RunWith(JUnit4.class)
 public class ParamFileWriteActionTest extends BuildViewTestCase {
-  private ArtifactRoot rootDir;
+  private Root rootDir;
   private Artifact outputArtifact;
-  private SpecialArtifact treeArtifact;
+  private Artifact treeArtifact;
 
   @Before
   public void createArtifacts() throws Exception  {
     Path execRoot = scratch.getFileSystem().getPath("/exec");
-    rootDir = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/exec/out"));
+    rootDir = Root.asDerivedRoot(execRoot, scratch.dir("/exec/out"));
     outputArtifact = getBinArtifactWithNoOwner("destination.txt");
     FileSystemUtils.createDirectoryAndParents(outputArtifact.getPath().getParentDirectory());
     treeArtifact = createTreeArtifact("artifact/myTreeFileArtifact");
@@ -108,18 +108,18 @@ public class ParamFileWriteActionTest extends BuildViewTestCase {
                 + "out/artifact/myTreeFileArtifact/artifacts/treeFileArtifact2");
   }
 
-  private SpecialArtifact createTreeArtifact(String rootRelativePath) {
+  private Artifact createTreeArtifact(String rootRelativePath) {
     PathFragment relpath = PathFragment.create(rootRelativePath);
     return new SpecialArtifact(
-        rootDir.getRoot().getRelative(relpath),
+        rootDir.getPath().getRelative(relpath),
         rootDir,
         rootDir.getExecPath().getRelative(relpath),
-        ArtifactOwner.NullArtifactOwner.INSTANCE,
+        ArtifactOwner.NULL_OWNER,
         SpecialArtifactType.TREE);
   }
 
   private TreeFileArtifact createTreeFileArtifact(
-      SpecialArtifact inputTreeArtifact, String parentRelativePath) {
+      Artifact inputTreeArtifact, String parentRelativePath) {
     return ActionInputHelper.treeFileArtifact(
         inputTreeArtifact,
         PathFragment.create(parentRelativePath));

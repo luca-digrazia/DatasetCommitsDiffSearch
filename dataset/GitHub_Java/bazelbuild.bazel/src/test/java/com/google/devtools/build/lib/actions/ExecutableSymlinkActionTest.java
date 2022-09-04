@@ -22,10 +22,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.util.DummyExecutor;
 import com.google.devtools.build.lib.analysis.actions.ExecutableSymlinkAction;
 import com.google.devtools.build.lib.exec.SingleBuildFileCache;
-import com.google.devtools.build.lib.skyframe.serialization.testutils.SerializationTester;
 import com.google.devtools.build.lib.testutil.Scratch;
 import com.google.devtools.build.lib.testutil.TestFileOutErr;
-import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import org.junit.Before;
@@ -37,8 +35,8 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ExecutableSymlinkActionTest {
   private Scratch scratch = new Scratch();
-  private ArtifactRoot inputRoot;
-  private ArtifactRoot outputRoot;
+  private Root inputRoot;
+  private Root outputRoot;
   TestFileOutErr outErr;
   private Executor executor;
   private final ActionKeyContext actionKeyContext = new ActionKeyContext();
@@ -47,8 +45,8 @@ public class ExecutableSymlinkActionTest {
   public final void createExecutor() throws Exception  {
     final Path inputDir = scratch.dir("/in");
     Path execRoot = scratch.getFileSystem().getPath("/");
-    inputRoot = ArtifactRoot.asDerivedRoot(execRoot, inputDir);
-    outputRoot = ArtifactRoot.asDerivedRoot(execRoot, scratch.dir("/out"));
+    inputRoot = Root.asDerivedRoot(execRoot, inputDir);
+    outputRoot = Root.asDerivedRoot(execRoot, scratch.dir("/out"));
     outErr = new TestFileOutErr();
     executor = new DummyExecutor(scratch.getFileSystem(), inputDir);
   }
@@ -68,8 +66,8 @@ public class ExecutableSymlinkActionTest {
 
   @Test
   public void testSimple() throws Exception {
-    Path inputFile = inputRoot.getRoot().getRelative("some-file");
-    Path outputFile = outputRoot.getRoot().getRelative("some-output");
+    Path inputFile = inputRoot.getPath().getChild("some-file");
+    Path outputFile = outputRoot.getPath().getChild("some-output");
     FileSystemUtils.createEmptyFile(inputFile);
     inputFile.setExecutable(/*executable=*/true);
     Artifact input = new Artifact(inputFile, inputRoot);
@@ -82,10 +80,10 @@ public class ExecutableSymlinkActionTest {
 
   @Test
   public void testFailIfInputIsNotAFile() throws Exception {
-    Path dir = inputRoot.getRoot().getRelative("some-dir");
+    Path dir = inputRoot.getPath().getChild("some-dir");
     FileSystemUtils.createDirectoryAndParents(dir);
     Artifact input = new Artifact(dir, inputRoot);
-    Artifact output = new Artifact(outputRoot.getRoot().getRelative("some-output"), outputRoot);
+    Artifact output = new Artifact(outputRoot.getPath().getChild("some-output"), outputRoot);
     ExecutableSymlinkAction action = new ExecutableSymlinkAction(NULL_ACTION_OWNER, input, output);
     try {
       action.execute(createContext());
@@ -97,11 +95,11 @@ public class ExecutableSymlinkActionTest {
 
   @Test
   public void testFailIfInputIsNotExecutable() throws Exception {
-    Path file = inputRoot.getRoot().getRelative("some-file");
+    Path file = inputRoot.getPath().getChild("some-file");
     FileSystemUtils.createEmptyFile(file);
     file.setExecutable(/*executable=*/false);
     Artifact input = new Artifact(file, inputRoot);
-    Artifact output = new Artifact(outputRoot.getRoot().getRelative("some-output"), outputRoot);
+    Artifact output = new Artifact(outputRoot.getPath().getChild("some-output"), outputRoot);
     ExecutableSymlinkAction action = new ExecutableSymlinkAction(NULL_ACTION_OWNER, input, output);
     try {
       action.execute(createContext());
@@ -113,29 +111,5 @@ public class ExecutableSymlinkActionTest {
           .that(got.contains(want))
           .isTrue();
     }
-  }
-
-  @Test
-  public void testCodec() throws Exception {
-    Path file = inputRoot.getRoot().getRelative("some-file");
-    FileSystemUtils.createEmptyFile(file);
-    file.setExecutable(/*executable=*/ false);
-    Artifact input = new Artifact(file, inputRoot);
-    Artifact output = new Artifact(outputRoot.getRoot().getRelative("some-output"), outputRoot);
-    ExecutableSymlinkAction action = new ExecutableSymlinkAction(NULL_ACTION_OWNER, input, output);
-    new SerializationTester(action)
-        .addDependency(FileSystem.class, scratch.getFileSystem())
-        .setVerificationFunction(
-            (in, out) -> {
-              ExecutableSymlinkAction inAction = (ExecutableSymlinkAction) in;
-              ExecutableSymlinkAction outAction = (ExecutableSymlinkAction) out;
-              assertThat(inAction.getPrimaryInput().getFilename())
-                  .isEqualTo(outAction.getPrimaryInput().getFilename());
-              assertThat(inAction.getPrimaryOutput().getFilename())
-                  .isEqualTo(outAction.getPrimaryOutput().getFilename());
-              assertThat(inAction.getOwner()).isEqualTo(outAction.getOwner());
-              assertThat(inAction.getProgressMessage()).isEqualTo(outAction.getProgressMessage());
-            })
-        .runTests();
   }
 }

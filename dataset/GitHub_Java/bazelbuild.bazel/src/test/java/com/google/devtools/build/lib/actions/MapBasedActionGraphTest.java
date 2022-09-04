@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.actions.util.ActionsTestUtil.UncheckedActio
 import com.google.devtools.build.lib.actions.util.TestAction;
 import com.google.devtools.build.lib.concurrent.AbstractQueueVisitor;
 import com.google.devtools.build.lib.concurrent.ErrorClassifier;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
@@ -37,7 +36,7 @@ import org.junit.runners.JUnit4;
  */
 @RunWith(JUnit4.class)
 public class MapBasedActionGraphTest {
-  private final FileSystem fileSystem = new InMemoryFileSystem(DigestHashFunction.MD5);
+  private final FileSystem fileSystem = new InMemoryFileSystem();
   private final ActionKeyContext actionKeyContext = new ActionKeyContext();
 
   @Test
@@ -46,13 +45,13 @@ public class MapBasedActionGraphTest {
     Path execRoot = fileSystem.getPath("/");
     Path root = fileSystem.getPath("/root");
     Path path = root.getRelative("foo");
-    Artifact output = new Artifact(path, ArtifactRoot.asDerivedRoot(execRoot, root));
+    Artifact output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
     Action action = new TestAction(TestAction.NO_EFFECT,
         ImmutableSet.<Artifact>of(), ImmutableSet.of(output));
     actionGraph.registerAction(action);
     actionGraph.unregisterAction(action);
     path = root.getRelative("bar");
-    output = new Artifact(path, ArtifactRoot.asDerivedRoot(execRoot, root));
+    output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
     Action action2 = new TestAction(TestAction.NO_EFFECT,
         ImmutableSet.<Artifact>of(), ImmutableSet.of(output));
     actionGraph.registerAction(action);
@@ -66,7 +65,7 @@ public class MapBasedActionGraphTest {
     Path execRoot = fileSystem.getPath("/");
     Path root = fileSystem.getPath("/root");
     Path path = root.getRelative("/root/foo");
-    Artifact output = new Artifact(path, ArtifactRoot.asDerivedRoot(execRoot, root));
+    Artifact output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
     Action action = new TestAction(TestAction.NO_EFFECT,
         ImmutableSet.<Artifact>of(), ImmutableSet.of(output));
     actionGraph.registerAction(action);
@@ -95,7 +94,7 @@ public class MapBasedActionGraphTest {
       Path execRoot = fileSystem.getPath("/");
       Path root = fileSystem.getPath("/root");
       Path path = root.getRelative("foo");
-      output = new Artifact(path, ArtifactRoot.asDerivedRoot(execRoot, root));
+      output = new Artifact(path, Root.asDerivedRoot(execRoot, root));
       allActions.add(new TestAction(
           TestAction.NO_EFFECT, ImmutableSet.<Artifact>of(), ImmutableSet.of(output)));
     }
