@@ -852,6 +852,23 @@ public final class BlazeRuntime {
 
   }
 
+  private static Function<String, String> sourceFunctionForMap(final Map<String, String> map) {
+    return new Function<String, String>() {
+      @Override
+      public String apply(String input) {
+        if (!map.containsKey(input)) {
+          return "default";
+        }
+
+        if (map.get(input).isEmpty()) {
+          return "command line";
+        }
+
+        return map.get(input);
+      }
+    };
+  }
+
   /**
    * Parses the command line arguments into a {@link OptionsParser} object.
    *
@@ -868,19 +885,8 @@ public final class BlazeRuntime {
     OptionsParser parser = OptionsParser.newOptionsParser(optionClasses);
     parser.setAllowResidue(false);
     parser.parse(OptionPriority.COMMAND_LINE, null, args);
-    Map<String, String> optionSources =
-        parser.getOptions(BlazeServerStartupOptions.class).optionSources;
-    Function<String, String> sourceFunction = option -> {
-      if (!optionSources.containsKey(option)) {
-        return "default";
-      }
-
-      if (optionSources.get(option).isEmpty()) {
-        return "command line";
-      }
-
-      return optionSources.get(option);
-    };
+    Function<? super String, String> sourceFunction =
+        sourceFunctionForMap(parser.getOptions(BlazeServerStartupOptions.class).optionSources);
 
     // Then parse the command line again, this time with the correct option sources
     parser = OptionsParser.newOptionsParser(optionClasses);

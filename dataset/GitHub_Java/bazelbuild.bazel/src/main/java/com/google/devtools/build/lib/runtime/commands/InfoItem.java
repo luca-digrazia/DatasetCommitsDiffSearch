@@ -40,14 +40,12 @@ import com.google.devtools.build.lib.util.StringUtilities;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.ByteArrayOutputStream;
-import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
 import java.lang.management.MemoryMXBean;
 import java.lang.management.MemoryUsage;
 import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Map;
 
@@ -108,8 +106,7 @@ public abstract class InfoItem {
       return (byte[]) value;
     }
     ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-    PrintWriter writer = new PrintWriter(new OutputStreamWriter(
-        outputStream, StandardCharsets.UTF_8));
+    PrintWriter writer = new PrintWriter(outputStream);
     writer.print(value + "\n");
     writer.flush();
     return outputStream.toByteArray();
@@ -202,8 +199,7 @@ public abstract class InfoItem {
     public byte[] get(Supplier<BuildConfiguration> configurationSupplier, CommandEnvironment env)
         throws AbruptExitException {
       checkNotNull(env);
-      return print(
-          env.getDirectories().getOutputPath(configurationSupplier.get().getMainRepositoryName()));
+      return print(env.getRuntime().getWorkspace().getOutputPath());
     }
   }
 
@@ -439,7 +435,7 @@ public abstract class InfoItem {
         throws AbruptExitException {
       // The documentation is not very clear on what it means to have more than
       // one GC MXBean, so we just sum them up.
-      long gcCount = 0;
+      int gcCount = 0;
       for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
         gcCount += gcBean.getCollectionCount();
       }
@@ -535,7 +531,7 @@ public abstract class InfoItem {
         throws AbruptExitException {
       // The documentation is not very clear on what it means to have more than
       // one GC MXBean, so we just sum them up.
-      long gcTime = 0;
+      int gcTime = 0;
       for (GarbageCollectorMXBean gcBean : ManagementFactory.getGarbageCollectorMXBeans()) {
         gcTime += gcBean.getCollectionTime();
       }

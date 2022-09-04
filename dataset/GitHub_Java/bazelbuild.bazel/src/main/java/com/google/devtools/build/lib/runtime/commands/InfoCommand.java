@@ -28,11 +28,9 @@ import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.io.OutErr;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsProvider;
-import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -63,14 +61,10 @@ import java.util.TreeMap;
 public class InfoCommand implements BlazeCommand {
 
   public static class Options extends OptionsBase {
-    @Option(
-      name = "show_make_env",
-      defaultValue = "false",
-      category = "misc",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help = "Include the \"Make\" environment in the output."
-    )
+    @Option(name = "show_make_env",
+            defaultValue = "false",
+            category = "misc",
+            help = "Include the \"Make\" environment in the output.")
     public boolean showMakeEnvironment;
   }
 
@@ -121,9 +115,10 @@ public class InfoCommand implements BlazeCommand {
           env.setupPackageCache(
               optionsProvider, runtime.getDefaultsPackageContent(optionsProvider));
           // TODO(bazel-team): What if there are multiple configurations? [multi-config]
-          env.getSkyframeExecutor().setConfigurationFactory(runtime.getConfigurationFactory());
-          return env.getSkyframeExecutor().getConfiguration(
-              env.getReporter(), runtime.createBuildOptions(optionsProvider));
+          configuration = env
+              .getConfigurations(optionsProvider)
+              .getTargetConfigurations().get(0);
+          return configuration;
         } catch (InvalidConfigurationException e) {
           env.getReporter().handle(Event.error(e.getMessage()));
           throw new ExitCausingRuntimeException(ExitCode.COMMAND_LINE_ERROR);

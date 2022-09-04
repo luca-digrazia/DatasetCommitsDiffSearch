@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
 import com.google.devtools.build.lib.actions.cache.Metadata;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -37,7 +36,6 @@ import javax.annotation.Nullable;
  * Value for TreeArtifacts, which contains a digest and the {@link FileArtifactValue}s of its child
  * {@link TreeFileArtifact}s.
  */
-@AutoCodec
 class TreeArtifactValue implements SkyValue {
   private static final Function<Artifact, PathFragment> PARENT_RELATIVE_PATHS =
       new Function<Artifact, PathFragment>() {
@@ -50,8 +48,7 @@ class TreeArtifactValue implements SkyValue {
   private final byte[] digest;
   private final Map<TreeFileArtifact, FileArtifactValue> childData;
 
-  @AutoCodec.VisibleForSerialization
-  TreeArtifactValue(byte[] digest, Map<TreeFileArtifact, FileArtifactValue> childData) {
+  private TreeArtifactValue(byte[] digest, Map<TreeFileArtifact, FileArtifactValue> childData) {
     this.digest = digest;
     this.childData = ImmutableMap.copyOf(childData);
   }
@@ -185,7 +182,8 @@ class TreeArtifactValue implements SkyValue {
       PathFragment pathToExplode, ImmutableSet.Builder<PathFragment> valuesBuilder)
       throws IOException {
     for (Path subpath : treeArtifact.getPath().getRelative(pathToExplode).getDirectoryEntries()) {
-      PathFragment canonicalSubpathFragment = pathToExplode.getChild(subpath.getBaseName());
+      PathFragment canonicalSubpathFragment =
+          pathToExplode.getChild(subpath.getBaseName()).normalize();
       if (subpath.isDirectory()) {
         explodeDirectory(treeArtifact,
             pathToExplode.getChild(subpath.getBaseName()), valuesBuilder);
@@ -204,7 +202,7 @@ class TreeArtifactValue implements SkyValue {
         // TreeArtifact into a/b/outside_dir.
         PathFragment intermediatePath = canonicalSubpathFragment.getParentDirectory();
         for (String pathSegment : linkTarget.getSegments()) {
-          intermediatePath = intermediatePath.getRelative(pathSegment);
+          intermediatePath = intermediatePath.getRelative(pathSegment).normalize();
           if (intermediatePath.containsUplevelReferences()) {
             String errorMessage = String.format(
                 "A TreeArtifact may not contain relative symlinks whose target paths traverse "
