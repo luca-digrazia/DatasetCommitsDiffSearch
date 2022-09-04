@@ -3,7 +3,7 @@ package io.quarkus.test;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.UncheckedIOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileVisitor;
@@ -239,10 +239,12 @@ public class QuarkusDevModeTest
                             byte[] data = FileUtil.readFileContents(in);
                             Path resolved = deploymentResourcePath.resolve(relative);
                             Files.createDirectories(resolved.getParent());
-                            Files.write(resolved, data);
+                            try (OutputStream out = Files.newOutputStream(resolved)) {
+                                out.write(data);
+                            }
                         }
                     } catch (IOException e) {
-                        throw new UncheckedIOException(e);
+                        throw new RuntimeException(e);
                     }
                 });
             }
@@ -326,14 +328,17 @@ public class QuarkusDevModeTest
                         content = mutator.apply(content);
 
                         sleepForFileChanges(path);
-                        Files.write(s, content.getBytes(StandardCharsets.UTF_8));
+                        try (OutputStream out = Files.newOutputStream(s)) {
+                            out.write(content.getBytes(StandardCharsets.UTF_8));
+                        }
+
                     } catch (IOException e) {
-                        throw new UncheckedIOException(e);
+                        throw new RuntimeException(e);
                     }
                 }
             });
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
 
     }
@@ -369,10 +374,12 @@ public class QuarkusDevModeTest
             String content = new String(data, StandardCharsets.UTF_8);
             content = mutator.apply(content);
 
-            Files.write(resourcePath, content.getBytes(StandardCharsets.UTF_8));
+            try (OutputStream out = Files.newOutputStream(resourcePath)) {
+                out.write(content.getBytes(StandardCharsets.UTF_8));
+            }
             sleepForFileChanges(resourcePath);
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -382,9 +389,11 @@ public class QuarkusDevModeTest
      */
     public void addResourceFile(String path, byte[] data) {
         try {
-            Files.write(deploymentResourcePath.resolve(path), data);
+            try (OutputStream out = Files.newOutputStream(deploymentResourcePath.resolve(path))) {
+                out.write(data);
+            }
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -396,7 +405,7 @@ public class QuarkusDevModeTest
         try {
             Files.delete(deploymentResourcePath.resolve(path));
         } catch (IOException e) {
-            throw new UncheckedIOException(e);
+            throw new RuntimeException(e);
         }
     }
 
@@ -432,10 +441,12 @@ public class QuarkusDevModeTest
                     byte[] data = FileUtil.readFileContents(in);
                     Path resolved = deploymentSourcesDir.resolve(relative);
                     Files.createDirectories(resolved.getParent());
-                    Files.write(resolved, data);
+                    try (OutputStream out = Files.newOutputStream(resolved)) {
+                        out.write(data);
+                    }
                     return resolved;
                 } catch (IOException e) {
-                    throw new UncheckedIOException(e);
+                    throw new RuntimeException(e);
                 }
             }
         }

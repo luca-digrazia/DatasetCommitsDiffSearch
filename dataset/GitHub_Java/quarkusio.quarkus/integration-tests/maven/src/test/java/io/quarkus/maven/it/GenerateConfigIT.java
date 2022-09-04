@@ -19,11 +19,13 @@ import org.apache.maven.shared.invoker.Invoker;
 import org.apache.maven.shared.invoker.InvokerLogger;
 import org.apache.maven.shared.invoker.MavenInvocationException;
 import org.apache.maven.shared.invoker.PrintStreamLogger;
-import org.junit.jupiter.api.Assertions;
+import org.junit.Assert;
 import org.junit.jupiter.api.Test;
 
-@DisableForNative
-class GenerateConfigIT extends QuarkusPlatformAwareMojoTestBase {
+import io.quarkus.maven.CreateProjectMojo;
+import io.quarkus.maven.utilities.MojoUtils;
+
+class GenerateConfigIT extends MojoTestBase {
 
     private static final String PROJECT_SOURCE_DIR = "projects/classic";
     private File testDir;
@@ -36,18 +38,18 @@ class GenerateConfigIT extends QuarkusPlatformAwareMojoTestBase {
         generateConfig("test.properties");
 
         String file = loadFile("test.properties");
-        Assertions.assertTrue(file.contains("#quarkus.log.level"));
-        Assertions.assertTrue(file.contains("The log level of the root category"));
-        Assertions.assertTrue(file.contains("#quarkus.thread-pool.growth-resistance=0"));
-        Assertions.assertTrue(file.contains("The executor growth resistance"));
+        Assert.assertTrue(file.contains("#quarkus.log.file.enable"));
+        Assert.assertTrue(file.contains("If file logging should be enabled"));
+        Assert.assertTrue(file.contains("#quarkus.thread-pool.growth-resistance=0"));
+        Assert.assertTrue(file.contains("The executor growth resistance"));
 
         generateConfig("application.properties");
         //the existing file should not add properties that already exist
         file = loadFile("application.properties");
-        Assertions.assertTrue(file.contains("quarkus.log.level=INFO"));
-        Assertions.assertFalse(file.contains("The log level of the root category"));
-        Assertions.assertTrue(file.contains("#quarkus.thread-pool.growth-resistance=0"));
-        Assertions.assertTrue(file.contains("The executor growth resistance"));
+        Assert.assertTrue(file.contains("quarkus.log.file.enable=false"));
+        Assert.assertFalse(file.contains("If file logging should be enabled"));
+        Assert.assertTrue(file.contains("#quarkus.thread-pool.growth-resistance=0"));
+        Assert.assertTrue(file.contains("The executor growth resistance"));
     }
 
     private String loadFile(String file) throws IOException {
@@ -62,8 +64,7 @@ class GenerateConfigIT extends QuarkusPlatformAwareMojoTestBase {
         InvocationRequest request = new DefaultInvocationRequest();
         request.setBatchMode(true);
         request.setGoals(Collections
-                .singletonList(getPluginGroupId() + ":" + getPluginArtifactId() + ":"
-                        + getPluginVersion() + ":generate-config"));
+                .singletonList(CreateProjectMojo.PLUGIN_KEY + ":" + MojoUtils.getPluginVersion() + ":generate-config"));
         Properties properties = new Properties();
         properties.setProperty("file", filename);
         request.setProperties(properties);
