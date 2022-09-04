@@ -117,7 +117,8 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     final String query = ruleContext.attributes().get("expression", Type.STRING);
 
     OptionsParser optionsParser =
-        OptionsParser.newOptionsParser(false, QueryOptions.class, KeepGoingOption.class);
+        OptionsParser.newOptionsParser(QueryOptions.class, KeepGoingOption.class);
+    optionsParser.setAllowResidue(false);
     try {
       optionsParser.parse(ruleContext.attributes().get("opts", Type.STRING_LIST));
     } catch (OptionsParsingException e) {
