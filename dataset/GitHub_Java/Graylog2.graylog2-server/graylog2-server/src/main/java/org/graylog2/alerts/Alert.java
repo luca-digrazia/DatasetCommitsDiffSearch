@@ -74,17 +74,12 @@ public class Alert extends Persisted {
         return new Alert(core, fields);
     }
 
-    public static List<Alert> loadRecentOfStream(Core core, String streamId, DateTime since) {
-        QueryBuilder qb = QueryBuilder.start("stream_id").is(streamId);
-
-        if (since != null) {
-            qb.and("triggered_at").greaterThanEquals(since.toDate());
-        }
-
+    public static List<Alert> loadRecentOfStream(Core core, String streamId) {
+        BasicDBObject query = new BasicDBObject("stream_id", streamId);
         BasicDBObject sort = new BasicDBObject("triggered_at", -1);
 
         final List<DBObject> alertObjects = query(
-                qb.get(),
+                query,
                 sort,
                 MAX_LIST_COUNT,
                 0,

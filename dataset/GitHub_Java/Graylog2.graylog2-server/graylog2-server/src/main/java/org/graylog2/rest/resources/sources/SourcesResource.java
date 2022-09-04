@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
  *
  * This file is part of Graylog2.
  *
@@ -15,6 +15,7 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 package org.graylog2.rest.resources.sources;
 
@@ -25,7 +26,6 @@ import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.indexer.IndexHelper;
-import org.graylog2.indexer.Indexer;
 import org.graylog2.indexer.results.TermsResult;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.indexer.searches.timeranges.RelativeRange;
@@ -35,7 +35,6 @@ import org.graylog2.security.RestPermissions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
@@ -60,13 +59,6 @@ public class SourcesResource extends RestResource {
             .expireAfterWrite(10, TimeUnit.SECONDS)
             .build();
 
-    private final Indexer indexer;
-
-    @Inject
-    public SourcesResource(Indexer indexer) {
-        this.indexer = indexer;
-    }
-
     @GET @Timed
     @ApiOperation(
             value = "Get a list of all sources (not more than 5000) that have messages in the current indices. " +
@@ -88,7 +80,7 @@ public class SourcesResource extends RestResource {
                 @Override
                 public TermsResult call() throws Exception {
                     try {
-                        return indexer.searches().terms("source", 5000, "*", new RelativeRange(range));
+                        return core.getIndexer().searches().terms("source", 5000, "*", new RelativeRange(range));
                     } catch (IndexHelper.InvalidRangeFormatException e) {
                         throw new ExecutionException(e);
                     } catch (InvalidRangeParametersException e) {
