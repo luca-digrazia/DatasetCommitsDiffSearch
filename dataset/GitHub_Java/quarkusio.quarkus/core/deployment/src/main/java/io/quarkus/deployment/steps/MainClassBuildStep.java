@@ -7,19 +7,20 @@ import java.io.File;
 import java.lang.reflect.Modifier;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.graalvm.nativeimage.ImageInfo;
 
 import io.quarkus.builder.Version;
-import io.quarkus.deployment.GizmoAdaptor;
+import io.quarkus.deployment.ClassOutput;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationClassNameBuildItem;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
 import io.quarkus.deployment.builditem.BytecodeRecorderObjectLoaderBuildItem;
+import io.quarkus.deployment.builditem.ClassOutputBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.JavaLibraryPathAdditionalPathBuildItem;
 import io.quarkus.deployment.builditem.LaunchModeBuildItem;
 import io.quarkus.deployment.builditem.MainBytecodeRecorderBuildItem;
@@ -39,9 +40,9 @@ import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.gizmo.TryBlock;
 import io.quarkus.runtime.Application;
 import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.NativeImageRuntimePropertiesRecorder;
 import io.quarkus.runtime.StartupContext;
 import io.quarkus.runtime.StartupTask;
+import io.quarkus.runtime.SubstrateRuntimePropertiesRecorder;
 import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.configuration.ProfileManager;
 
@@ -53,6 +54,8 @@ class MainClassBuildStep {
     private static final String JAVA_LIBRARY_PATH = "java.library.path";
     private static final String JAVAX_NET_SSL_TRUST_STORE = "javax.net.ssl.trustStore";
 
+    private static final AtomicInteger COUNT = new AtomicInteger();
+
     @BuildStep
     MainClassBuildItem build(List<StaticBytecodeRecorderBuildItem> staticInitTasks,
             List<ObjectSubstitutionBuildItem> substitutions,
@@ -63,15 +66,15 @@ class MainClassBuildStep {
             List<FeatureBuildItem> features,
             BuildProducer<ApplicationClassNameBuildItem> appClassNameProducer,
             List<BytecodeRecorderObjectLoaderBuildItem> loaders,
-            BuildProducer<GeneratedClassBuildItem> generatedClass,
+            ClassOutputBuildItem classOutput,
             LaunchModeBuildItem launchMode,
             ApplicationInfoBuildItem applicationInfo) {
 
-        appClassNameProducer.produce(new ApplicationClassNameBuildItem(APP_CLASS));
+        String appClassName = APP_CLASS + COUNT.incrementAndGet();
+        appClassNameProducer.produce(new ApplicationClassNameBuildItem(appClassName));
 
         // Application class
-        GizmoAdaptor gizmoOutput = new GizmoAdaptor(generatedClass, true);
-        ClassCreator file = new ClassCreator(gizmoOutput, APP_CLASS, null,
+        ClassCreator file = new ClassCreator(ClassOutput.gizmoAdaptor(classOutput.getClassOutput(), true), appClassName, null,
                 Application.class.getName());
 
         // Application class: static init
@@ -103,7 +106,7 @@ class MainClassBuildStep {
                 for (BytecodeRecorderObjectLoaderBuildItem item : loaders) {
                     recorder.registerObjectLoader(item.getObjectLoader());
                 }
-                recorder.writeBytecode(gizmoOutput);
+                recorder.writeBytecode(classOutput.getClassOutput());
 
                 ResultHandle dup = tryBlock.newInstance(ofConstructor(recorder.getClassName()));
                 tryBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup,
@@ -127,7 +130,7 @@ class MainClassBuildStep {
             mv.invokeStaticMethod(ofMethod(System.class, "setProperty", String.class, String.class, String.class),
                     mv.load(i.getKey()), mv.load(i.getValue()));
         }
-        mv.invokeStaticMethod(ofMethod(NativeImageRuntimePropertiesRecorder.class, "doRuntime", void.class));
+        mv.invokeStaticMethod(ofMethod(SubstrateRuntimePropertiesRecorder.class, "doRuntime", void.class));
 
         // Set the SSL system properties
         if (!javaLibraryPathAdditionalPaths.isEmpty()) {
@@ -183,7 +186,7 @@ class MainClassBuildStep {
                 for (BytecodeRecorderObjectLoaderBuildItem item : loaders) {
                     recorder.registerObjectLoader(item.getObjectLoader());
                 }
-                recorder.writeBytecode(gizmoOutput);
+                recorder.writeBytecode(classOutput.getClassOutput());
                 ResultHandle dup = tryBlock.newInstance(ofConstructor(recorder.getClassName()));
                 tryBlock.invokeInterfaceMethod(ofMethod(StartupTask.class, "deploy", void.class, StartupContext.class), dup,
                         startupContext);
@@ -224,13 +227,13 @@ class MainClassBuildStep {
 
         // Main class
 
-        file = new ClassCreator(gizmoOutput, MAIN_CLASS, null,
+        file = new ClassCreator(ClassOutput.gizmoAdaptor(classOutput.getClassOutput(), true), MAIN_CLASS, null,
                 Object.class.getName());
 
         mv = file.getMethodCreator("main", void.class, String[].class);
         mv.setModifiers(Modifier.PUBLIC | Modifier.STATIC);
 
-        final ResultHandle appClassInstance = mv.newInstance(ofConstructor(APP_CLASS));
+        final ResultHandle appClassInstance = mv.newInstance(ofConstructor(appClassName));
 
         // Set the application name
         mv.invokeVirtualMethod(ofMethod(Application.class, "setName", void.class, String.class), appClassInstance,

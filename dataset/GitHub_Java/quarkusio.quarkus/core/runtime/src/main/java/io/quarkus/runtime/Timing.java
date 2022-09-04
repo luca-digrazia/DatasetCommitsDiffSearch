@@ -1,16 +1,13 @@
 package io.quarkus.runtime;
 
 import java.math.BigDecimal;
-import java.util.logging.Handler;
 
 import org.jboss.logging.Logger;
-
-import io.quarkus.runtime.logging.InitialConfigurator;
 
 /**
  * Class that is responsible for printing out timing results.
  * <p>
- * It is modified in native mode by {@link io.quarkus.runtime.graal.TimingReplacement}, in that mainStarted it rewritten to
+ * It is modified on substrate by {@link io.quarkus.runtime.graal.TimingReplacement}, in that mainStarted it rewritten to
  * actually update the start time.
  */
 public class Timing {
@@ -26,15 +23,6 @@ public class Timing {
     public static void staticInitStarted() {
         if (bootStartTime < 0) {
             bootStartTime = System.nanoTime();
-        }
-    }
-
-    public static void staticInitStarted(ClassLoader cl) {
-        try {
-            Class<?> realTiming = cl.loadClass(Timing.class.getName());
-            realTiming.getMethod("staticInitStarted").invoke(null);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -55,22 +43,13 @@ public class Timing {
     }
 
     /**
-     * This method is replaced in native mode
+     * This method is replaced by substrate
      */
     public static void mainStarted() {
     }
 
     public static void restart() {
         bootStartTime = System.nanoTime();
-    }
-
-    public static void restart(ClassLoader cl) {
-        try {
-            Class<?> realTiming = cl.loadClass(Timing.class.getName());
-            realTiming.getMethod("restart").invoke(null);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
     }
 
     public static void printStartupTime(String name, String version, String quarkusVersion, String features, String profile,
@@ -84,7 +63,7 @@ public class Timing {
         if (UNSET_VALUE.equals(safeAppName) || UNSET_VALUE.equals(safeAppVersion)) {
             logger.infof("Quarkus %s started in %ss. %s", quarkusVersion, secondsRepresentation, httpServerInfo);
         } else {
-            logger.infof("%s %s (powered by Quarkus %s) started in %ss. %s", name, version, quarkusVersion,
+            logger.infof("%s %s (running on Quarkus %s) started in %ss. %s", name, version, quarkusVersion,
                     secondsRepresentation, httpServerInfo);
         }
         logger.infof("Profile %s activated. %s", profile, liveCoding ? "Live Coding activated." : "");
@@ -100,17 +79,6 @@ public class Timing {
                 (UNSET_VALUE.equals(name) || name == null || name.trim().isEmpty()) ? "Quarkus" : name,
                 secondsRepresentation);
         bootStopTime = -1;
-
-        /**
-         * We can safely close log handlers after stop time has been printed.
-         */
-        Handler[] handlers = InitialConfigurator.DELAYED_HANDLER.clearHandlers();
-        for (Handler handler : handlers) {
-            try {
-                handler.close();
-            } catch (Throwable ignored) {
-            }
-        }
     }
 
     public static BigDecimal convertToBigDecimalSeconds(final long timeNanoSeconds) {
