@@ -9,7 +9,6 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.text.TextUtils;
 
-import java.io.InputStream;
 import java.util.List;
 
 /**
@@ -60,16 +59,8 @@ public class SkiaImageDecoder implements ImageDecoder {
         } else if (uriString.startsWith(FILE_PREFIX)) {
             bitmap = BitmapFactory.decodeFile(uriString.substring(FILE_PREFIX.length()), options);
         } else {
-            InputStream inputStream = null;
-            try {
-                ContentResolver contentResolver = context.getContentResolver();
-                inputStream = contentResolver.openInputStream(uri);
-                bitmap = BitmapFactory.decodeStream(inputStream, null, options);
-            } finally {
-                if (inputStream != null) {
-                    try { inputStream.close(); } catch (Exception e) { }
-                }
-            }
+            ContentResolver contentResolver = context.getContentResolver();
+            bitmap = BitmapFactory.decodeStream(contentResolver.openInputStream(uri), null, options);
         }
         if (bitmap == null) {
             throw new RuntimeException("Skia image region decoder returned null bitmap - image format may not be supported");
