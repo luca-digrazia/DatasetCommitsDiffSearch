@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -297,7 +296,7 @@ public final class SkylarkAttr implements SkylarkValue {
       if (trans.equals("data")) {
         builder.cfg(ConfigurationTransition.DATA);
       } else if (trans.equals("host")) {
-        builder.cfg(HostTransition.INSTANCE);
+        builder.cfg(ConfigurationTransition.HOST);
       } else if (trans instanceof SplitTransition<?>) {
         builder.cfg((SplitTransition<?>) trans);
       } else if (trans instanceof SplitTransitionProvider) {
