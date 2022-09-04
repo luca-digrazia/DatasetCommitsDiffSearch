@@ -21,12 +21,12 @@ import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
+import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleConfiguredTargetUtil;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
-import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
@@ -78,10 +78,8 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
               .setStarlarkContext(
                   new BazelStarlarkContext(
                       toolsRepository,
-                      /* fragmentNameToClass=*/ null,
                       ruleContext.getRule().getPackage().getRepositoryMapping(),
-                      ruleContext.getSymbolGenerator(),
-                      ruleContext.getLabel()))
+                      ruleContext.getSymbolGenerator()))
               // NB: loading phase functions are not available: this is analysis already, so we do
               // *not* setLoadingPhase().
               .build();

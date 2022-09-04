@@ -51,9 +51,9 @@ import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.packages.Type.LabelClass;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.TreeMap;
@@ -448,14 +448,6 @@ public final class RuleConfiguredTargetBuilder {
     providersBuilder.put(provider);
     maybeAddSkylarkLegacyProvider(provider);
     return this;
-  }
-
-  /**
-   * Returns true if a provider matching the given provider key has already been added to the
-   * configured target builder.
-   */
-  public boolean containsProviderKey(Provider.Key providerKey) {
-    return providersBuilder.contains(providerKey);
   }
 
   /**
