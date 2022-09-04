@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.AllowedValueSet;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
@@ -27,7 +26,6 @@ import com.google.devtools.build.lib.packages.Attribute.SkylarkComputedDefaultTe
 import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.packages.AttributeValueSource;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -258,7 +256,7 @@ public final class SkylarkAttr {
       Object obj = arguments.get(PROVIDERS_ARG);
       SkylarkType.checkType(obj, SkylarkList.class, PROVIDERS_ARG);
       ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> providersList = buildProviderPredicate(
-          (SkylarkList<?>) obj, PROVIDERS_ARG, ast.getLocation());
+          (SkylarkList<?>) obj);
       builder.mandatoryProvidersList(providersList);
     }
 
@@ -290,84 +288,56 @@ public final class SkylarkAttr {
     return builder;
   }
 
-  /**
-   * Builds a list of sets of accepted providers from Skylark list {@code obj}.
-   * The list can either be a list of providers (in that case the result is a list with one
-   * set) or a list of lists of providers (then the result is the list of sets).
-   * @param argumentName used in error messages.
-   * @param location location for error messages.
-   */
-  static ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> buildProviderPredicate(
-      SkylarkList<?> obj, String argumentName, Location location) throws EvalException {
+  public static ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> buildProviderPredicate(
+      SkylarkList<?> obj) throws EvalException {
     if (obj.isEmpty()) {
       return ImmutableList.of();
     }
-    boolean isListOfProviders = true;
-    for (Object o : obj) {
-      if (!isProvider(o)) {
-        isListOfProviders = false;
+    boolean isSingleListOfStr = true;
+    for (Object o : (SkylarkList) obj) {
+      isSingleListOfStr = o instanceof String;
+      if (!isSingleListOfStr) {
         break;
       }
     }
-    if (isListOfProviders) {
-      return ImmutableList.of(getSkylarkProviderIdentifiers(obj, location));
+    if (isSingleListOfStr) {
+      return ImmutableList.of(getSkylarkProviderIdentifiers(obj));
     } else {
-      return getProvidersList(obj, argumentName, location);
+      return getProvidersList((SkylarkList) obj);
     }
   }
 
-  /**
-   * Returns true if {@code o} is a Skylark provider (either a declared provider or
-   * a legacy provider name.
-   */
-  static boolean isProvider(Object o) {
-    return o instanceof String || o instanceof ClassObjectConstructor;
-  }
-
-  /**
-   * Converts Skylark identifiers of providers (either a string or a provider value)
-   * to their internal representations.
-   */
-  static ImmutableSet<SkylarkProviderIdentifier> getSkylarkProviderIdentifiers(
-      SkylarkList<?> list, Location location) throws EvalException {
+  private static ImmutableSet<SkylarkProviderIdentifier> getSkylarkProviderIdentifiers(
+      SkylarkList<?> obj) throws EvalException {
     ImmutableList.Builder<SkylarkProviderIdentifier> result = ImmutableList.builder();
 
-    for (Object obj : list) {
-      if (obj instanceof String) {
-        result.add(SkylarkProviderIdentifier.forLegacy((String) obj));
-      } else if (obj instanceof ClassObjectConstructor) {
-        ClassObjectConstructor constructor = (ClassObjectConstructor) obj;
-        if (!constructor.isExported()) {
-          throw new EvalException(location,
-              "Providers should be assigned to top-level values in modules");
-        }
-        result.add(SkylarkProviderIdentifier.forKey(constructor.getKey()));
-      }
+    List<String> contents = obj.getContents(String.class, PROVIDERS_ARG);
+    for (String legacyId : contents) {
+      result.add(SkylarkProviderIdentifier.forLegacy(legacyId));
     }
     return ImmutableSet.copyOf(result.build());
   }
 
   private static ImmutableList<ImmutableSet<SkylarkProviderIdentifier>> getProvidersList(
-      SkylarkList<?> skylarkList, String argumentName, Location location) throws EvalException {
+      SkylarkList<?> skylarkList) throws EvalException {
     ImmutableList.Builder<ImmutableSet<SkylarkProviderIdentifier>> providersList =
         ImmutableList.builder();
     String errorMsg = "Illegal argument: element in '%s' is of unexpected type. "
-        + "Either all elements should be providers, "
-        + "or all elements should be lists of providers, but got %s.";
-
+        + "Should be list of string, but got %s. "
+        + "Notice: one single list of string as 'providers' is still supported.";
     for (Object o : skylarkList) {
       if (!(o instanceof SkylarkList)) {
-        throw new EvalException(location, String.format(errorMsg, PROVIDERS_ARG,
-            "an element of type " + EvalUtils.getDataTypeName(o, true)));
+        throw new EvalException(null, String.format(errorMsg, PROVIDERS_ARG,
+            EvalUtils.getDataTypeName(o, true)));
       }
       for (Object value : (SkylarkList) o) {
-        if (!isProvider(value)) {
-          throw new EvalException(location, String.format(errorMsg, argumentName,
+        if (!(value instanceof String)) {
+          throw new EvalException(null, String.format(errorMsg, PROVIDERS_ARG,
               "list with an element of type "
                   + EvalUtils.getDataTypeNameFromClass(value.getClass())));
         }
       }
-      providersList.add(getSkylarkProviderIdentifiers((SkylarkList<?>) o, location));
+      providersList.add(getSkylarkProviderIdentifiers((SkylarkList<?>) o));
     }
     return providersList.build();
   }
