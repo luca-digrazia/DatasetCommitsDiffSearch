@@ -666,8 +666,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       name = "experimental_android_use_nocompress_extensions_on_apk",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.NO_OP},
-      help = "This flag is deprecated and has no effect. It will be removed in a future release."
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Use the value of nocompress_extensions attribute with the SingleJar "
+              + "--nocompress_suffixes flag when building the APK."
     )
     public boolean useNocompressExtensionsOnApk;
 
@@ -805,6 +807,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final ResourceFilter resourceFilter;
   private final boolean compressJavaResources;
   private final boolean includeLibraryResourceJars;
+  private final boolean useNocompressExtensionsOnApk;
   private final boolean exportsManifestDefault;
   private final AndroidAaptVersion androidAaptVersion;
   private final boolean generateRobolectricRClass;
@@ -844,6 +847,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.resourceFilter = options.resourceFilter;
     this.compressJavaResources = options.compressJavaResources;
     this.includeLibraryResourceJars = options.includeLibraryResourceJars;
+    this.useNocompressExtensionsOnApk = options.useNocompressExtensionsOnApk;
     this.exportsManifestDefault = options.exportsManifestDefault;
     this.androidAaptVersion = options.androidAaptVersion;
     this.generateRobolectricRClass = options.generateRobolectricRClass;
@@ -968,6 +972,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean includeLibraryResourceJars() {
     return includeLibraryResourceJars;
+  }
+
+  boolean useNocompressExtensionsOnApk() {
+    return useNocompressExtensionsOnApk;
   }
 
   boolean getExportsManifestDefault() {
