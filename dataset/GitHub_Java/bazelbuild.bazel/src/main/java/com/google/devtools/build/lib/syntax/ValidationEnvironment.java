@@ -85,14 +85,14 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     }
   }
 
-  private final Environment env;
+  private final SkylarkSemantics semantics;
   private Block block;
   private int loopCount;
 
   /** Create a ValidationEnvironment for a given global Environment (containing builtins). */
   ValidationEnvironment(Environment env) {
     Preconditions.checkArgument(env.isGlobal());
-    this.env = env;
+    semantics = env.getSemantics();
     block = new Block(Scope.Universe, null);
     Set<String> builtinVariables = env.getVariableNames();
     block.variables.addAll(builtinVariables);
@@ -157,13 +157,6 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   public void visit(Identifier node) {
     @Nullable Block b = blockThatDefines(node.getName());
     if (b == null) {
-      // The identifier might not exist because it was restricted (hidden) by the current semantics.
-      // If this is the case, output a more helpful error message than 'not found'.
-      FlagGuardedValue result = env.getRestrictedBindings().get(node.getName());
-      if (result != null) {
-        throw new ValidationException(result.getEvalExceptionFromAttemptingAccess(
-            node.getLocation(), env.getSemantics(), node.getName()));
-      }
       throw new ValidationException(node.createInvalidIdentifierException(getAllSymbols()));
     }
     node.setScope(b.scope);
@@ -333,7 +326,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   /** Validates the AST and runs static checks. */
   private void validateAst(List<Statement> statements) {
     // Check that load() statements are on top.
-    if (env.getSemantics().incompatibleBzlDisallowLoadAfterStatement()) {
+    if (semantics.incompatibleBzlDisallowLoadAfterStatement()) {
       checkLoadAfterStatement(statements);
     }
 
