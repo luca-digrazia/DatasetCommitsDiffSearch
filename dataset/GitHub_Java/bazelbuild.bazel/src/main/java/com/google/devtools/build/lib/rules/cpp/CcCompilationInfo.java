@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -127,25 +126,5 @@ public final class CcCompilationInfo extends NativeInfo implements CcCompilation
       }
     }
     return ccCompilationContextsBuilder.build();
-  }
-
-  @Override
-  public boolean equals(Object otherObject) {
-    if (!(otherObject instanceof CcCompilationInfo)) {
-      return false;
-    }
-    CcCompilationInfo other = (CcCompilationInfo) otherObject;
-    if (this == other) {
-      return true;
-    }
-    if (!this.ccCompilationContext.equals(other.ccCompilationContext)) {
-      return false;
-    }
-    return true;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hashCode(ccCompilationContext);
   }
 }
