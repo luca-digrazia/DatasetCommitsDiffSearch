@@ -1097,13 +1097,9 @@ public class CompilationSupport {
   }
 
   private StrippingType getStrippingType(ExtraLinkArgs extraLinkArgs) {
-    if (Iterables.contains(extraLinkArgs, "-dynamiclib")) {
-      return StrippingType.DYNAMIC_LIB;
-    }
-    if (Iterables.contains(extraLinkArgs, "-kext")) {
-      return StrippingType.KERNEL_EXTENSION;
-    }
-    return StrippingType.DEFAULT;
+    return Iterables.contains(extraLinkArgs, "-dynamiclib")
+        ? StrippingType.DYNAMIC_LIB
+        : StrippingType.DEFAULT;
   }
 
   /**
@@ -1559,9 +1555,7 @@ public class CompilationSupport {
 
   /** Signals if stripping should include options for dynamic libraries. */
   private enum StrippingType {
-    DEFAULT,
-    DYNAMIC_LIB,
-    KERNEL_EXTENSION
+    DEFAULT, DYNAMIC_LIB
   }
 
   /**
@@ -1574,19 +1568,11 @@ public class CompilationSupport {
       // For test targets, only debug symbols are stripped off, since /usr/bin/strip is not able
       // to strip off all symbols in XCTest bundle.
       stripArgs = ImmutableList.of("-S");
+    } else if (strippingType == StrippingType.DYNAMIC_LIB) {
+      // For dynamic libs must pass "-x" to strip only local symbols.
+      stripArgs = ImmutableList.of("-x");
     } else {
-      switch (strippingType) {
-        case DYNAMIC_LIB:
-        case KERNEL_EXTENSION:
-          // For dylibs and kexts, must strip only local symbols.
-          stripArgs = ImmutableList.of("-x");
-          break;
-        case DEFAULT:
-          stripArgs = ImmutableList.<String>of();
-          break;
-        default:
-          throw new IllegalArgumentException("Unsupported stripping type " + strippingType);
-      }
+      stripArgs = ImmutableList.<String>of();
     }
 
     Artifact strippedBinary = intermediateArtifacts.strippedSingleArchitectureBinary();

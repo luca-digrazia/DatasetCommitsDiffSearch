@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery.DotdPruningMode;
 import com.google.devtools.build.lib.rules.cpp.IncludeProcessing;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
@@ -48,7 +47,6 @@ public class ObjcCppSemantics implements CppSemantics {
   private final boolean isHeaderThinningEnabled;
   private final IntermediateArtifacts intermediateArtifacts;
   private final BuildConfiguration buildConfiguration;
-  private final StarlarkSemantics starlarkSemantics;
 
   /**
    * Set of {@link com.google.devtools.build.lib.util.FileType} of source artifacts that are
@@ -80,15 +78,13 @@ public class ObjcCppSemantics implements CppSemantics {
       ObjcConfiguration config,
       boolean isHeaderThinningEnabled,
       IntermediateArtifacts intermediateArtifacts,
-      BuildConfiguration buildConfiguration,
-      StarlarkSemantics starlarkSemantics) {
+      BuildConfiguration buildConfiguration) {
     this.objcProvider = objcProvider;
     this.includeProcessing = includeProcessing;
     this.config = config;
     this.isHeaderThinningEnabled = isHeaderThinningEnabled;
     this.intermediateArtifacts = intermediateArtifacts;
     this.buildConfiguration = buildConfiguration;
-    this.starlarkSemantics = starlarkSemantics;
   }
 
   @Override
@@ -100,13 +96,9 @@ public class ObjcCppSemantics implements CppSemantics {
         // Because Bazel does not support include scanning, we need the entire crosstool filegroup,
         // including header files, as opposed to just the "compile" filegroup.
         .addTransitiveMandatoryInputs(actionBuilder.getToolchain().getAllFiles())
-        .setShouldScanIncludes(false);
-
-    if (!starlarkSemantics.incompatibleObjcFrameworkCleanup()) {
-      actionBuilder
-          .addTransitiveMandatoryInputs(objcProvider.get(STATIC_FRAMEWORK_FILE))
-          .addTransitiveMandatoryInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE));
-    }
+        .setShouldScanIncludes(false)
+        .addTransitiveMandatoryInputs(objcProvider.get(STATIC_FRAMEWORK_FILE))
+        .addTransitiveMandatoryInputs(objcProvider.get(DYNAMIC_FRAMEWORK_FILE));
 
     if (isHeaderThinningEnabled) {
       Artifact sourceFile = actionBuilder.getSourceFile();
