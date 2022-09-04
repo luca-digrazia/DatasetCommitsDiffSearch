@@ -36,7 +36,6 @@ import org.joda.time.DateTime;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 public class Stream {
 
@@ -233,16 +232,14 @@ public class Stream {
     }
 
     public long getThroughput() throws APIException, IOException {
-        long result = 0;
-        final Map<Node, StreamThroughputResponse> throughputResponses = api.path(routes.StreamResource().oneStreamThroughput(getId()), StreamThroughputResponse.class)
-                .fromAllNodes()
+        final StreamThroughputResponse throughputResponse = api.path(routes.StreamResource().oneStreamThroughput(getId()), StreamThroughputResponse.class)
                 .expect(200, 404)
-                .executeOnAll();
+                .execute();
 
-        for (StreamThroughputResponse throughputResponse : throughputResponses.values())
-            if (throughputResponse != null)
-                result += throughputResponse.throughput;
-        return result;
+        if (throughputResponse == null) {
+            return 0L;
+        }
+        return throughputResponse.throughput;
     }
 
 
