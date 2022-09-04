@@ -5,6 +5,8 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.Context;
 import android.content.DialogInterface;
+import android.graphics.Point;
+import android.graphics.drawable.Drawable;
 import android.text.TextUtils;
 import android.util.AttributeSet;
 import android.view.Gravity;
@@ -16,40 +18,100 @@ import android.view.Window;
 import android.view.WindowManager;
 import android.widget.ImageView;
 import android.widget.ProgressBar;
+import android.widget.RelativeLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
 
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.R;
+import com.shuyu.gsyvideoplayer.listener.LockClickListener;
 import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
+import com.shuyu.gsyvideoplayer.utils.Debuger;
+import com.shuyu.gsyvideoplayer.utils.NetworkUtils;
 
+import java.io.File;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import moe.codeest.enviews.ENDownloadView;
+import moe.codeest.enviews.ENPlayView;
+
+import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideNavKey;
+
+
 /**
+ * 标准播放器
  * Created by shuyu on 2016/11/11.
  */
 
 public class StandardGSYVideoPlayer extends GSYVideoPlayer {
 
 
-    protected static StandardVideoAllCallBack JC_BURIED_POINT_STANDARD;
-    protected static Timer DISSMISS_CONTROL_VIEW_TIMER;
+    protected Timer mDismissControlViewTimer;
 
-    public ImageView backButton;
-    public ProgressBar bottomProgressBar, loadingProgressBar;
-    public TextView titleTextView;
-    public ImageView thumbImageView;
-    public ImageView coverImageView;
+    protected ProgressBar mBottomProgressBar;
+
+    private View mLoadingProgressBar;
+
+    protected TextView mTitleTextView; //title
+
+    protected RelativeLayout mThumbImageViewLayout;//封面父布局
+
+    private View mThumbImageView; //封面
+
+    protected Dialog mBrightnessDialog;
+
+    protected TextView mBrightnessDialogTv;
+
+    protected Dialog mVolumeDialog;
+
+    protected ProgressBar mDialogVolumeProgressBar;
+
+    protected StandardVideoAllCallBack mStandardVideoAllCallBack;//标准播放器的回调
 
     protected DismissControlViewTimerTask mDismissControlViewTimerTask;
 
+    protected LockClickListener mLockClickListener;//点击锁屏的回调
 
-    public static void setJcBuriedPointStandard(StandardVideoAllCallBack jcBuriedPointStandard) {
-        JC_BURIED_POINT_STANDARD = jcBuriedPointStandard;
-        GSYVideoPlayer.setJcBuriedPoint(jcBuriedPointStandard);
+    protected Dialog mProgressDialog;
+    protected ProgressBar mDialogProgressBar;
+    protected TextView mDialogSeekTime;
+    protected TextView mDialogTotalTime;
+    protected ImageView mDialogIcon;
+    protected ImageView mLockScreen;
+
+    protected Drawable mBottomProgressDrawable;
+    protected Drawable mBottomShowProgressDrawable;
+    protected Drawable mBottomShowProgressThumbDrawable;
+    protected Drawable mVolumeProgressDrawable;
+    protected Drawable mDialogProgressBarDrawable;
+
+    protected boolean mLockCurScreen;//锁定屏幕点击
+
+    protected boolean mNeedLockFull;//是否需要锁定屏幕
+
+    private boolean mThumbPlay;//是否点击封面播放
+
+    private int mDialogProgressHighLightColor = -11;
+
+    private int mDialogProgressNormalColor = -11;
+
+
+    private int mDismissControlTime = 2500;
+
+
+    public void setStandardVideoAllCallBack(StandardVideoAllCallBack standardVideoAllCallBack) {
+        this.mStandardVideoAllCallBack = standardVideoAllCallBack;
+        setVideoAllCallBack(standardVideoAllCallBack);
+    }
+
+    /**
+     * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
+     */
+    public StandardGSYVideoPlayer(Context context, Boolean fullFlag) {
+        super(context, fullFlag);
     }
 
     public StandardGSYVideoPlayer(Context context) {
@@ -63,28 +125,85 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     @Override
     protected void init(Context context) {
         super.init(context);
-        bottomProgressBar = (ProgressBar) findViewById(R.id.bottom_progressbar);
-        titleTextView = (TextView) findViewById(R.id.title);
-        backButton = (ImageView) findViewById(R.id.back);
-        thumbImageView = (ImageView) findViewById(R.id.thumb);
-        coverImageView = (ImageView) findViewById(R.id.cover);
-        loadingProgressBar = (ProgressBar) findViewById(R.id.loading);
+        mBottomProgressBar = (ProgressBar) findViewById(R.id.bottom_progressbar);
+        mTitleTextView = (TextView) findViewById(R.id.title);
+        mThumbImageViewLayout = (RelativeLayout) findViewById(R.id.thumb);
+        mLockScreen = (ImageView) findViewById(R.id.lock_screen);
 
-        thumbImageView.setOnClickListener(this);
-        backButton.setOnClickListener(this);
+        mLoadingProgressBar = findViewById(R.id.loading);
+
+        mThumbImageViewLayout.setVisibility(GONE);
+        mThumbImageViewLayout.setOnClickListener(this);
+        mBackButton.setOnClickListener(this);
+        if (mThumbImageView != null && !mIfCurrentIsFullscreen) {
+            mThumbImageViewLayout.removeAllViews();
+            resolveThumbImage(mThumbImageView);
+        }
+
+
+        if (mBottomProgressDrawable != null) {
+            mBottomProgressBar.setProgressDrawable(mBottomProgressDrawable);
+        }
+
+        if (mBottomShowProgressDrawable != null) {
+            mProgressBar.setProgressDrawable(mBottomProgressDrawable);
+        }
+
+        if (mBottomShowProgressThumbDrawable != null) {
+            mProgressBar.setThumb(mBottomShowProgressThumbDrawable);
+        }
+
+        mLockScreen.setVisibility(GONE);
+
+        mLockScreen.setOnClickListener(new OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mCurrentState == CURRENT_STATE_AUTO_COMPLETE ||
+                        mCurrentState == CURRENT_STATE_ERROR) {
+                    return;
+                }
+                lockTouchLogic();
+                if (mLockClickListener != null) {
+                    mLockClickListener.onClick(v, mLockCurScreen);
+                }
+            }
+        });
 
     }
 
+    /**
+     * 设置播放URL
+     *
+     * @param url           播放url
+     * @param cacheWithPlay 是否边播边缓存
+     * @param title         title
+     * @return
+     */
     @Override
-    public boolean setUp(String url, boolean cacheWithPlay, Object... objects) {
-        if (objects.length == 0) return false;
-        if (super.setUp(url, cacheWithPlay, objects)) {
-            titleTextView.setText(objects[0].toString());
+    public boolean setUp(String url, boolean cacheWithPlay, String title) {
+        return setUp(url, cacheWithPlay, (File) null, title);
+    }
+
+    /**
+     * 设置播放URL
+     *
+     * @param url           播放url
+     * @param cacheWithPlay 是否边播边缓存
+     * @param cachePath     缓存路径，如果是M3U8或者HLS，请设置为false
+     * @param title         title
+     * @return
+     */
+    @Override
+    public boolean setUp(String url, boolean cacheWithPlay, File cachePath, String title) {
+        if (super.setUp(url, cacheWithPlay, cachePath, title)) {
+            if (title != null) {
+                mTitleTextView.setText(title);
+            }
             if (mIfCurrentIsFullscreen) {
-                fullscreenButton.setImageResource(R.drawable.video_shrink);
+                mFullscreenButton.setImageResource(getShrinkImageRes());
             } else {
-                fullscreenButton.setImageResource(R.drawable.video_enlarge);
-                backButton.setVisibility(View.GONE);
+                mFullscreenButton.setImageResource(getEnlargeImageRes());
+                mBackButton.setVisibility(View.GONE);
             }
             return true;
         }
@@ -102,6 +221,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         switch (mCurrentState) {
             case CURRENT_STATE_NORMAL:
                 changeUiToNormal();
+                cancelDismissControlViewTimer();
                 break;
             case CURRENT_STATE_PREPAREING:
                 changeUiToPrepareingShow();
@@ -121,7 +241,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             case CURRENT_STATE_AUTO_COMPLETE:
                 changeUiToCompleteShow();
                 cancelDismissControlViewTimer();
-                bottomProgressBar.setProgress(100);
+                mBottomProgressBar.setProgress(100);
                 break;
             case CURRENT_STATE_PLAYING_BUFFERING_START:
                 changeUiToPlayingBufferingShow();
@@ -143,7 +263,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
                     if (mChangePosition) {
                         int duration = getDuration();
                         int progress = mSeekTimePosition * 100 / (duration == 0 ? 1 : duration);
-                        bottomProgressBar.setProgress(progress);
+                        mBottomProgressBar.setProgress(progress);
                     }
                     if (!mChangePosition && !mChangeVolume && !mBrightness) {
                         onClickUiToggle();
@@ -160,6 +280,11 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
                     break;
             }
         }
+
+        if (mIfCurrentIsFullscreen && mLockCurScreen && mNeedLockFull) {
+            return true;
+        }
+
         return super.onTouch(v, event);
     }
 
@@ -168,44 +293,50 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         super.onClick(v);
         int i = v.getId();
         if (i == R.id.thumb) {
+            if (!mThumbPlay) {
+                return;
+            }
             if (TextUtils.isEmpty(mUrl)) {
                 Toast.makeText(getContext(), getResources().getString(R.string.no_url), Toast.LENGTH_SHORT).show();
                 return;
             }
             if (mCurrentState == CURRENT_STATE_NORMAL) {
-                if (!mUrl.startsWith("file") && !CommonUtil.isWifiConnected(getContext()) && !WIFI_TIP_DIALOG_SHOWED) {
+                if (!mUrl.startsWith("file") && !CommonUtil.isWifiConnected(getContext()) && mNeedShowWifiTip) {
                     showWifiDialog();
                     return;
                 }
-                startPlayLocic();
+                startPlayLogic();
             } else if (mCurrentState == CURRENT_STATE_AUTO_COMPLETE) {
                 onClickUiToggle();
             }
         } else if (i == R.id.surface_container) {
-            if (JC_BURIED_POINT_STANDARD != null && isCurrentMediaListener()) {
+            if (mStandardVideoAllCallBack != null && isCurrentMediaListener()) {
                 if (mIfCurrentIsFullscreen) {
-                    JC_BURIED_POINT_STANDARD.onClickBlankFullscreen(mUrl, mObjects);
+                    Debuger.printfLog("onClickBlankFullscreen");
+                    mStandardVideoAllCallBack.onClickBlankFullscreen(mOriginUrl, mTitle, StandardGSYVideoPlayer.this);
                 } else {
-                    JC_BURIED_POINT_STANDARD.onClickBlank(mUrl, mObjects);
+                    Debuger.printfLog("onClickBlank");
+                    mStandardVideoAllCallBack.onClickBlank(mOriginUrl, mTitle, StandardGSYVideoPlayer.this);
                 }
             }
             startDismissControlViewTimer();
-        } else if (i == R.id.back) {
-            backFullscreen();
         }
     }
 
     @Override
     public void showWifiDialog() {
         super.showWifiDialog();
+        if (!NetworkUtils.isAvailable(mContext)) {
+            Toast.makeText(mContext, getResources().getString(R.string.no_net), Toast.LENGTH_LONG).show();
+            return;
+        }
         AlertDialog.Builder builder = new AlertDialog.Builder(getContext());
         builder.setMessage(getResources().getString(R.string.tips_not_wifi));
         builder.setPositiveButton(getResources().getString(R.string.tips_not_wifi_confirm), new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int which) {
                 dialog.dismiss();
-                startPlayLocic();
-                WIFI_TIP_DIALOG_SHOWED = true;
+                startPlayLogic();
             }
         });
         builder.setNegativeButton(getResources().getString(R.string.tips_not_wifi_cancel), new DialogInterface.OnClickListener() {
@@ -217,41 +348,49 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         builder.create().show();
     }
 
-    public void startPlayLocic() {
-        if (JC_BURIED_POINT_STANDARD != null) {
-            JC_BURIED_POINT_STANDARD.onClickStartThumb(mUrl, mObjects);
+
+    @Override
+    public void startPlayLogic() {
+        if (mStandardVideoAllCallBack != null) {
+            Debuger.printfLog("onClickStartThumb");
+            mStandardVideoAllCallBack.onClickStartThumb(mOriginUrl, mTitle, StandardGSYVideoPlayer.this);
         }
         prepareVideo();
         startDismissControlViewTimer();
     }
 
-    private void onClickUiToggle() {
+    @Override
+    protected void onClickUiToggle() {
+        if (mIfCurrentIsFullscreen && mLockCurScreen && mNeedLockFull) {
+            mLockScreen.setVisibility(VISIBLE);
+            return;
+        }
         if (mCurrentState == CURRENT_STATE_PREPAREING) {
-            if (bottomContainer.getVisibility() == View.VISIBLE) {
+            if (mBottomContainer.getVisibility() == View.VISIBLE) {
                 changeUiToPrepareingClear();
             } else {
                 changeUiToPrepareingShow();
             }
         } else if (mCurrentState == CURRENT_STATE_PLAYING) {
-            if (bottomContainer.getVisibility() == View.VISIBLE) {
+            if (mBottomContainer.getVisibility() == View.VISIBLE) {
                 changeUiToPlayingClear();
             } else {
                 changeUiToPlayingShow();
             }
         } else if (mCurrentState == CURRENT_STATE_PAUSE) {
-            if (bottomContainer.getVisibility() == View.VISIBLE) {
+            if (mBottomContainer.getVisibility() == View.VISIBLE) {
                 changeUiToPauseClear();
             } else {
                 changeUiToPauseShow();
             }
         } else if (mCurrentState == CURRENT_STATE_AUTO_COMPLETE) {
-            if (bottomContainer.getVisibility() == View.VISIBLE) {
+            if (mBottomContainer.getVisibility() == View.VISIBLE) {
                 changeUiToCompleteClear();
             } else {
                 changeUiToCompleteShow();
             }
         } else if (mCurrentState == CURRENT_STATE_PLAYING_BUFFERING_START) {
-            if (bottomContainer.getVisibility() == View.VISIBLE) {
+            if (mBottomContainer.getVisibility() == View.VISIBLE) {
                 changeUiToPlayingBufferingClear();
             } else {
                 changeUiToPlayingBufferingShow();
@@ -262,166 +401,253 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
     @Override
     protected void setProgressAndTime(int progress, int secProgress, int currentTime, int totalTime) {
         super.setProgressAndTime(progress, secProgress, currentTime, totalTime);
-        if (progress != 0) bottomProgressBar.setProgress(progress);
-        if (secProgress != 0) bottomProgressBar.setSecondaryProgress(secProgress);
+        if (progress != 0) mBottomProgressBar.setProgress(progress);
+        if (secProgress != 0 && !mCacheFile) mBottomProgressBar.setSecondaryProgress(secProgress);
     }
 
     @Override
     protected void resetProgressAndTime() {
         super.resetProgressAndTime();
-        bottomProgressBar.setProgress(0);
-        bottomProgressBar.setSecondaryProgress(0);
+        mBottomProgressBar.setProgress(0);
+        mBottomProgressBar.setSecondaryProgress(0);
     }
 
     //Unified management Ui
     private void changeUiToNormal() {
-        topContainer.setVisibility(View.VISIBLE);
-        bottomContainer.setVisibility(View.INVISIBLE);
-        startButton.setVisibility(View.VISIBLE);
-        loadingProgressBar.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.VISIBLE);
-        coverImageView.setVisibility(View.VISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToNormal");
+        mTopContainer.setVisibility(View.VISIBLE);
+        mBottomContainer.setVisibility(View.INVISIBLE);
+        mStartButton.setVisibility(View.VISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.VISIBLE);
+        mCoverImageView.setVisibility(View.VISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility((mIfCurrentIsFullscreen && mNeedLockFull) ? VISIBLE : GONE);
         updateStartImage();
     }
 
     private void changeUiToPrepareingShow() {
-        topContainer.setVisibility(View.VISIBLE);
-        bottomContainer.setVisibility(View.VISIBLE);
-        startButton.setVisibility(View.INVISIBLE);
-        loadingProgressBar.setVisibility(View.VISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.VISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToPrepareingShow");
+        mTopContainer.setVisibility(View.VISIBLE);
+        mBottomContainer.setVisibility(View.VISIBLE);
+        mStartButton.setVisibility(View.INVISIBLE);
+        mLoadingProgressBar.setVisibility(View.VISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ENDownloadView enDownloadView = (ENDownloadView) mLoadingProgressBar;
+            if (enDownloadView.getCurrentState() == ENDownloadView.STATE_PRE) {
+                ((ENDownloadView) mLoadingProgressBar).start();
+            }
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        mCoverImageView.setVisibility(View.VISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility(GONE);
     }
 
     private void changeUiToPrepareingClear() {
-        topContainer.setVisibility(View.INVISIBLE);
-        bottomContainer.setVisibility(View.INVISIBLE);
-        startButton.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.VISIBLE);
+        Debuger.printfLog("changeUiToPrepareingClear");
+        mTopContainer.setVisibility(View.INVISIBLE);
+        mBottomContainer.setVisibility(View.INVISIBLE);
+        mStartButton.setVisibility(View.INVISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mCoverImageView.setVisibility(View.VISIBLE);
+        mLockScreen.setVisibility(GONE);
     }
 
     private void changeUiToPlayingShow() {
-        topContainer.setVisibility(View.VISIBLE);
-        bottomContainer.setVisibility(View.VISIBLE);
-        startButton.setVisibility(View.VISIBLE);
-        loadingProgressBar.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToPlayingShow");
+        mTopContainer.setVisibility(View.VISIBLE);
+        mBottomContainer.setVisibility(View.VISIBLE);
+        mStartButton.setVisibility(View.VISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        mCoverImageView.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility((mIfCurrentIsFullscreen && mNeedLockFull) ? VISIBLE : GONE);
         updateStartImage();
     }
 
     private void changeUiToPlayingClear() {
+        Debuger.printfLog("changeUiToPlayingClear");
         changeUiToClear();
-        bottomProgressBar.setVisibility(View.VISIBLE);
+        mBottomProgressBar.setVisibility(View.VISIBLE);
     }
 
     private void changeUiToPauseShow() {
-        topContainer.setVisibility(View.VISIBLE);
-        bottomContainer.setVisibility(View.VISIBLE);
-        startButton.setVisibility(View.VISIBLE);
-        loadingProgressBar.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToPauseShow");
+        mTopContainer.setVisibility(View.VISIBLE);
+        mBottomContainer.setVisibility(View.VISIBLE);
+        mStartButton.setVisibility(View.VISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        //mCoverImageView.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility((mIfCurrentIsFullscreen && mNeedLockFull) ? VISIBLE : GONE);
         updateStartImage();
+        updatePauseCover();
     }
 
     private void changeUiToPauseClear() {
+        Debuger.printfLog("changeUiToPauseClear");
         changeUiToClear();
-        bottomProgressBar.setVisibility(View.VISIBLE);
+        mBottomProgressBar.setVisibility(View.VISIBLE);
+        updatePauseCover();
     }
 
     private void changeUiToPlayingBufferingShow() {
-        topContainer.setVisibility(View.VISIBLE);
-        bottomContainer.setVisibility(View.VISIBLE);
-        startButton.setVisibility(View.INVISIBLE);
-        loadingProgressBar.setVisibility(View.VISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToPlayingBufferingShow");
+        mTopContainer.setVisibility(View.VISIBLE);
+        mBottomContainer.setVisibility(View.VISIBLE);
+        mStartButton.setVisibility(View.INVISIBLE);
+        mLoadingProgressBar.setVisibility(View.VISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ENDownloadView enDownloadView = (ENDownloadView) mLoadingProgressBar;
+            if (enDownloadView.getCurrentState() == ENDownloadView.STATE_PRE) {
+                ((ENDownloadView) mLoadingProgressBar).start();
+            }
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        mCoverImageView.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility(GONE);
     }
 
     private void changeUiToPlayingBufferingClear() {
-        topContainer.setVisibility(View.INVISIBLE);
-        bottomContainer.setVisibility(View.INVISIBLE);
-        startButton.setVisibility(View.INVISIBLE);
-        loadingProgressBar.setVisibility(View.VISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.VISIBLE);
+        Debuger.printfLog("changeUiToPlayingBufferingClear");
+        mTopContainer.setVisibility(View.INVISIBLE);
+        mBottomContainer.setVisibility(View.INVISIBLE);
+        mStartButton.setVisibility(View.INVISIBLE);
+        mLoadingProgressBar.setVisibility(View.VISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ENDownloadView enDownloadView = (ENDownloadView) mLoadingProgressBar;
+            if (enDownloadView.getCurrentState() == ENDownloadView.STATE_PRE) {
+                ((ENDownloadView) mLoadingProgressBar).start();
+            }
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        mCoverImageView.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.VISIBLE);
+        mLockScreen.setVisibility(GONE);
         updateStartImage();
     }
 
     private void changeUiToClear() {
-        topContainer.setVisibility(View.INVISIBLE);
-        bottomContainer.setVisibility(View.INVISIBLE);
-        startButton.setVisibility(View.INVISIBLE);
-        loadingProgressBar.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToClear");
+        mTopContainer.setVisibility(View.INVISIBLE);
+        mBottomContainer.setVisibility(View.INVISIBLE);
+        mStartButton.setVisibility(View.INVISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        mCoverImageView.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility(GONE);
     }
 
     private void changeUiToCompleteShow() {
-        topContainer.setVisibility(View.VISIBLE);
-        bottomContainer.setVisibility(View.VISIBLE);
-        startButton.setVisibility(View.VISIBLE);
-        loadingProgressBar.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.VISIBLE);
-        coverImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToCompleteShow");
+        mTopContainer.setVisibility(View.VISIBLE);
+        mBottomContainer.setVisibility(View.VISIBLE);
+        mStartButton.setVisibility(View.VISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.VISIBLE);
+        mCoverImageView.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility((mIfCurrentIsFullscreen && mNeedLockFull) ? VISIBLE : GONE);
         updateStartImage();
     }
 
     private void changeUiToCompleteClear() {
-        topContainer.setVisibility(View.INVISIBLE);
-        bottomContainer.setVisibility(View.INVISIBLE);
-        startButton.setVisibility(View.VISIBLE);
-        loadingProgressBar.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.VISIBLE);
-        coverImageView.setVisibility(View.INVISIBLE);
-        bottomProgressBar.setVisibility(View.VISIBLE);
+        Debuger.printfLog("changeUiToCompleteClear");
+        mTopContainer.setVisibility(View.INVISIBLE);
+        mBottomContainer.setVisibility(View.INVISIBLE);
+        mStartButton.setVisibility(View.VISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.VISIBLE);
+        mCoverImageView.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.VISIBLE);
+        mLockScreen.setVisibility((mIfCurrentIsFullscreen && mNeedLockFull) ? VISIBLE : GONE);
         updateStartImage();
     }
 
     private void changeUiToError() {
-        topContainer.setVisibility(View.INVISIBLE);
-        bottomContainer.setVisibility(View.INVISIBLE);
-        startButton.setVisibility(View.VISIBLE);
-        loadingProgressBar.setVisibility(View.INVISIBLE);
-        thumbImageView.setVisibility(View.INVISIBLE);
-        coverImageView.setVisibility(View.VISIBLE);
-        bottomProgressBar.setVisibility(View.INVISIBLE);
+        Debuger.printfLog("changeUiToError");
+        mTopContainer.setVisibility(View.INVISIBLE);
+        mBottomContainer.setVisibility(View.INVISIBLE);
+        mStartButton.setVisibility(View.VISIBLE);
+        mLoadingProgressBar.setVisibility(View.INVISIBLE);
+        if (mLoadingProgressBar instanceof ENDownloadView) {
+            ((ENDownloadView) mLoadingProgressBar).reset();
+        }
+        mThumbImageViewLayout.setVisibility(View.INVISIBLE);
+        mCoverImageView.setVisibility(View.VISIBLE);
+        mBottomProgressBar.setVisibility(View.INVISIBLE);
+        mLockScreen.setVisibility((mIfCurrentIsFullscreen && mNeedLockFull) ? VISIBLE : GONE);
         updateStartImage();
     }
 
-    private void updateStartImage() {
-        if (mCurrentState == CURRENT_STATE_PLAYING) {
-            startButton.setImageResource(R.drawable.video_click_pause_selector);
-        } else if (mCurrentState == CURRENT_STATE_ERROR) {
-            startButton.setImageResource(R.drawable.video_click_error_selector);
-        } else {
-            startButton.setImageResource(R.drawable.video_click_play_selector);
+    protected void updateStartImage() {
+        if(mStartButton instanceof ENPlayView) {
+            ENPlayView enPlayView = (ENPlayView) mStartButton;
+            enPlayView.setDuration(500);
+            if (mCurrentState == CURRENT_STATE_PLAYING) {
+                enPlayView.play();
+                //mStartButton.setImageResource(R.drawable.video_click_pause_selector);
+            } else if (mCurrentState == CURRENT_STATE_ERROR) {
+                enPlayView.pause();
+                //mStartButton.setImageResource(R.drawable.video_click_error_selector);
+            } else {
+                enPlayView.pause();
+                //mStartButton.setImageResource(R.drawable.video_click_play_selector);
+            }
         }
     }
 
-    protected Dialog mProgressDialog;
-    protected ProgressBar mDialogProgressBar;
-    protected TextView mDialogSeekTime;
-    protected TextView mDialogTotalTime;
-    protected ImageView mDialogIcon;
+
+    private void updatePauseCover() {
+        if ((mFullPauseBitmap == null || mFullPauseBitmap.isRecycled()) && mShowPauseCover) {
+            try {
+                mFullPauseBitmap = mTextureView.getBitmap(mTextureView.getSizeW(), mTextureView.getSizeH());
+            } catch (Exception e) {
+                e.printStackTrace();
+                mFullPauseBitmap = null;
+            }
+        }
+        showPauseCover();
+    }
 
     @Override
+    @SuppressWarnings("ResourceType")
     protected void showProgressDialog(float deltaX, String seekTime, int seekTimePosition, String totalTime, int totalTimeDuration) {
         super.showProgressDialog(deltaX, seekTime, seekTimePosition, totalTime, totalTimeDuration);
         if (mProgressDialog == null) {
             View localView = LayoutInflater.from(getContext()).inflate(R.layout.video_progress_dialog, null);
             mDialogProgressBar = ((ProgressBar) localView.findViewById(R.id.duration_progressbar));
+            if (mDialogProgressBarDrawable != null) {
+                mDialogProgressBar.setProgressDrawable(mDialogProgressBarDrawable);
+            }
             mDialogSeekTime = ((TextView) localView.findViewById(R.id.tv_current));
             mDialogTotalTime = ((TextView) localView.findViewById(R.id.tv_duration));
             mDialogIcon = ((ImageView) localView.findViewById(R.id.duration_image_tip));
@@ -430,10 +656,21 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             mProgressDialog.getWindow().addFlags(Window.FEATURE_ACTION_BAR);
             mProgressDialog.getWindow().addFlags(32);
             mProgressDialog.getWindow().addFlags(16);
-            mProgressDialog.getWindow().setLayout(-2, -2);
+            mProgressDialog.getWindow().setLayout(getWidth(), getHeight());
+            if (mDialogProgressNormalColor != -11) {
+                mDialogTotalTime.setTextColor(mDialogProgressNormalColor);
+            }
+            if (mDialogProgressHighLightColor != -11) {
+                mDialogSeekTime.setTextColor(mDialogProgressHighLightColor);
+            }
             WindowManager.LayoutParams localLayoutParams = mProgressDialog.getWindow().getAttributes();
-            localLayoutParams.gravity = 49;
-            localLayoutParams.y = getResources().getDimensionPixelOffset(R.dimen.video_progress_dialog_margin_top);
+            localLayoutParams.gravity = Gravity.TOP;
+            localLayoutParams.width = getWidth();
+            localLayoutParams.height = getHeight();
+            int location[] = new int[2];
+            getLocationOnScreen(location);
+            localLayoutParams.x = location[0];
+            localLayoutParams.y = location[1];
             mProgressDialog.getWindow().setAttributes(localLayoutParams);
         }
         if (!mProgressDialog.isShowing()) {
@@ -442,7 +679,8 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
 
         mDialogSeekTime.setText(seekTime);
         mDialogTotalTime.setText(" / " + totalTime);
-        mDialogProgressBar.setProgress(seekTimePosition * 100 / totalTimeDuration);
+        if (totalTimeDuration > 0)
+            mDialogProgressBar.setProgress(seekTimePosition * 100 / totalTimeDuration);
         if (deltaX > 0) {
             mDialogIcon.setBackgroundResource(R.drawable.video_forward_icon);
         } else {
@@ -456,14 +694,9 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         super.dismissProgressDialog();
         if (mProgressDialog != null) {
             mProgressDialog.dismiss();
+            mProgressDialog = null;
         }
     }
-
-
-    protected Dialog mBrightnessDialog;
-    protected TextView mBrightnessDialogTv;
-    protected Dialog mVolumeDialog;
-    protected ProgressBar mDialogVolumeProgressBar;
 
     @Override
     protected void showVolumeDialog(float deltaY, int volumePercent) {
@@ -471,6 +704,9 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         if (mVolumeDialog == null) {
             View localView = LayoutInflater.from(getContext()).inflate(R.layout.video_volume_dialog, null);
             mDialogVolumeProgressBar = ((ProgressBar) localView.findViewById(R.id.volume_progressbar));
+            if (mVolumeProgressDrawable != null) {
+                mDialogVolumeProgressBar.setProgressDrawable(mVolumeProgressDrawable);
+            }
             mVolumeDialog = new Dialog(getContext(), R.style.video_style_dialog_progress);
             mVolumeDialog.setContentView(localView);
             mVolumeDialog.getWindow().addFlags(8);
@@ -478,8 +714,13 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             mVolumeDialog.getWindow().addFlags(16);
             mVolumeDialog.getWindow().setLayout(-2, -2);
             WindowManager.LayoutParams localLayoutParams = mVolumeDialog.getWindow().getAttributes();
-            localLayoutParams.gravity = 19;
-            localLayoutParams.x = getContext().getResources().getDimensionPixelOffset(R.dimen.video_volume_dialog_margin_left);
+            localLayoutParams.gravity = Gravity.TOP | Gravity.LEFT;
+            localLayoutParams.width = getWidth();
+            localLayoutParams.height = getHeight();
+            int location[] = new int[2];
+            getLocationOnScreen(location);
+            localLayoutParams.x = location[0];
+            localLayoutParams.y = location[1];
             mVolumeDialog.getWindow().setAttributes(localLayoutParams);
         }
         if (!mVolumeDialog.isShowing()) {
@@ -494,6 +735,7 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         super.dismissVolumeDialog();
         if (mVolumeDialog != null) {
             mVolumeDialog.dismiss();
+            mVolumeDialog = null;
         }
     }
 
@@ -509,8 +751,13 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
             mBrightnessDialog.getWindow().addFlags(16);
             mBrightnessDialog.getWindow().setLayout(-2, -2);
             WindowManager.LayoutParams localLayoutParams = mBrightnessDialog.getWindow().getAttributes();
-            localLayoutParams.gravity = Gravity.CENTER;
-            localLayoutParams.x = ViewGroup.LayoutParams.WRAP_CONTENT;
+            localLayoutParams.gravity = Gravity.TOP | Gravity.RIGHT;
+            localLayoutParams.width = getWidth();
+            localLayoutParams.height = getHeight();
+            int location[] = new int[2];
+            getLocationOnScreen(location);
+            localLayoutParams.x = location[0];
+            localLayoutParams.y = location[1];
             mBrightnessDialog.getWindow().setAttributes(localLayoutParams);
         }
         if (!mBrightnessDialog.isShowing()) {
@@ -525,23 +772,141 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
         super.dismissVolumeDialog();
         if (mBrightnessDialog != null) {
             mBrightnessDialog.dismiss();
+            mBrightnessDialog = null;
         }
     }
 
+    @Override
+    protected void loopSetProgressAndTime() {
+        super.loopSetProgressAndTime();
+        mBottomProgressBar.setProgress(0);
+    }
+
+
+    @Override
+    public void onBackFullscreen() {
+        clearFullscreenLayout();
+    }
+
+
+    @Override
+    public void onAutoCompletion() {
+        super.onAutoCompletion();
+        if (mLockCurScreen) {
+            lockTouchLogic();
+            mLockScreen.setVisibility(GONE);
+        }
+    }
+
+    @Override
+    public void onError(int what, int extra) {
+        super.onError(what, extra);
+        if (mLockCurScreen) {
+            lockTouchLogic();
+            mLockScreen.setVisibility(GONE);
+        }
+    }
+
+    @Override
+    public GSYBaseVideoPlayer startWindowFullscreen(Context context, boolean actionBar, boolean statusBar) {
+        GSYBaseVideoPlayer gsyBaseVideoPlayer = super.startWindowFullscreen(context, actionBar, statusBar);
+        if (gsyBaseVideoPlayer != null) {
+            StandardGSYVideoPlayer gsyVideoPlayer = (StandardGSYVideoPlayer) gsyBaseVideoPlayer;
+            gsyVideoPlayer.setStandardVideoAllCallBack(mStandardVideoAllCallBack);
+            gsyVideoPlayer.setLockClickListener(mLockClickListener);
+            gsyVideoPlayer.setNeedLockFull(isNeedLockFull());
+            initFullUI(gsyVideoPlayer);
+            //比如你自定义了返回案件，但是因为返回按键底层已经设置了返回事件，所以你需要在这里重新增加的逻辑
+        }
+        return gsyBaseVideoPlayer;
+    }
+
+
+    @Override
+    public GSYBaseVideoPlayer showSmallVideo(Point size, boolean actionBar, boolean statusBar) {
+        GSYBaseVideoPlayer gsyBaseVideoPlayer = super.showSmallVideo(size, actionBar, statusBar);
+        if (gsyBaseVideoPlayer != null) {
+            StandardGSYVideoPlayer gsyVideoPlayer = (StandardGSYVideoPlayer) gsyBaseVideoPlayer;
+            gsyVideoPlayer.setIsTouchWiget(false);//小窗口不能点击
+            gsyVideoPlayer.setStandardVideoAllCallBack(mStandardVideoAllCallBack);
+        }
+        return gsyBaseVideoPlayer;
+    }
+
+    @Override
+    protected void setSmallVideoTextureView(View.OnTouchListener onTouchListener) {
+        super.setSmallVideoTextureView(onTouchListener);
+        //小窗口播放停止了也可以移动
+        mThumbImageViewLayout.setOnTouchListener(onTouchListener);
+    }
+
+    /**
+     * 处理锁屏屏幕触摸逻辑
+     */
+    private void lockTouchLogic() {
+        if (mLockCurScreen) {
+            mLockScreen.setImageResource(R.drawable.unlock);
+            mLockCurScreen = false;
+            if (mOrientationUtils != null)
+                mOrientationUtils.setEnable(mRotateViewAuto);
+        } else {
+            mLockScreen.setImageResource(R.drawable.lock);
+            mLockCurScreen = true;
+            if (mOrientationUtils != null)
+                mOrientationUtils.setEnable(false);
+            hideAllWidget();
+        }
+    }
+
+    /**
+     * 初始化为正常状态
+     */
+    public void initUIState() {
+        setStateAndUi(CURRENT_STATE_NORMAL);
+    }
+
+    /**
+     * 全屏的UI逻辑
+     */
+    private void initFullUI(StandardGSYVideoPlayer standardGSYVideoPlayer) {
+
+        if (mBottomProgressDrawable != null) {
+            standardGSYVideoPlayer.setBottomProgressBarDrawable(mBottomProgressDrawable);
+        }
+
+        if (mBottomShowProgressDrawable != null && mBottomShowProgressThumbDrawable != null) {
+            standardGSYVideoPlayer.setBottomShowProgressBarDrawable(mBottomShowProgressDrawable,
+                    mBottomShowProgressThumbDrawable);
+        }
+
+        if (mVolumeProgressDrawable != null) {
+            standardGSYVideoPlayer.setDialogVolumeProgressBar(mVolumeProgressDrawable);
+        }
+
+        if (mDialogProgressBarDrawable != null) {
+            standardGSYVideoPlayer.setDialogProgressBar(mDialogProgressBarDrawable);
+        }
+
+        if (mDialogProgressHighLightColor >= 0 && mDialogProgressNormalColor >= 0) {
+            standardGSYVideoPlayer.setDialogProgressColor(mDialogProgressHighLightColor, mDialogProgressNormalColor);
+        }
+    }
 
     private void startDismissControlViewTimer() {
         cancelDismissControlViewTimer();
-        DISSMISS_CONTROL_VIEW_TIMER = new Timer();
+        mDismissControlViewTimer = new Timer();
         mDismissControlViewTimerTask = new DismissControlViewTimerTask();
-        DISSMISS_CONTROL_VIEW_TIMER.schedule(mDismissControlViewTimerTask, 2500);
+        mDismissControlViewTimer.schedule(mDismissControlViewTimerTask, mDismissControlTime);
     }
 
     private void cancelDismissControlViewTimer() {
-        if (DISSMISS_CONTROL_VIEW_TIMER != null) {
-            DISSMISS_CONTROL_VIEW_TIMER.cancel();
+        if (mDismissControlViewTimer != null) {
+            mDismissControlViewTimer.cancel();
+            mDismissControlViewTimer = null;
         }
         if (mDismissControlViewTimerTask != null) {
             mDismissControlViewTimerTask.cancel();
+            mDismissControlViewTimerTask = null;
         }
 
     }
@@ -557,14 +922,149 @@ public class StandardGSYVideoPlayer extends GSYVideoPlayer {
                     ((Activity) getContext()).runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            bottomContainer.setVisibility(View.INVISIBLE);
-                            topContainer.setVisibility(View.INVISIBLE);
-                            bottomProgressBar.setVisibility(View.VISIBLE);
-                            startButton.setVisibility(View.INVISIBLE);
+                            hideAllWidget();
+                            mLockScreen.setVisibility(GONE);
+                            if (mHideKey && mIfCurrentIsFullscreen && mShowVKey) {
+                                hideNavKey(mContext);
+                            }
                         }
                     });
                 }
             }
         }
     }
+
+    protected void hideAllWidget() {
+        mBottomContainer.setVisibility(View.INVISIBLE);
+        mTopContainer.setVisibility(View.INVISIBLE);
+        mBottomProgressBar.setVisibility(View.VISIBLE);
+        mStartButton.setVisibility(View.INVISIBLE);
+    }
+
+    private void resolveThumbImage(View thumb) {
+        mThumbImageViewLayout.addView(thumb);
+        ViewGroup.LayoutParams layoutParams = thumb.getLayoutParams();
+        layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT;
+        layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+        thumb.setLayoutParams(layoutParams);
+    }
+
+    /***
+     * 设置封面
+     */
+    public void setThumbImageView(View view) {
+        if (mThumbImageViewLayout != null) {
+            mThumbImageView = view;
+            resolveThumbImage(view);
+        }
+    }
+
+    /***
+     * 清除封面
+     */
+    public void clearThumbImageView() {
+        if (mThumbImageViewLayout != null) {
+            mThumbImageViewLayout.removeAllViews();
+        }
+    }
+
+    /**
+     * 回去title
+     */
+    public TextView getTitleTextView() {
+        return mTitleTextView;
+    }
+
+
+    /**
+     * 底部进度条-弹出的
+     */
+    public void setBottomShowProgressBarDrawable(Drawable drawable, Drawable thumb) {
+        mBottomShowProgressDrawable = drawable;
+        mBottomShowProgressThumbDrawable = thumb;
+        if (mProgressBar != null) {
+            mProgressBar.setProgressDrawable(drawable);
+            mProgressBar.setThumb(thumb);
+        }
+    }
+
+    /**
+     * 底部进度条-非弹出
+     */
+    public void setBottomProgressBarDrawable(Drawable drawable) {
+        mBottomProgressDrawable = drawable;
+        if (mBottomProgressBar != null) {
+            mBottomProgressBar.setProgressDrawable(drawable);
+        }
+    }
+
+    /**
+     * 声音进度条
+     */
+    public void setDialogVolumeProgressBar(Drawable drawable) {
+        mVolumeProgressDrawable = drawable;
+    }
+
+
+    /**
+     * 中间进度条
+     */
+    public void setDialogProgressBar(Drawable drawable) {
+        mDialogProgressBarDrawable = drawable;
+    }
+
+    /**
+     * 中间进度条字体颜色
+     */
+    public void setDialogProgressColor(int highLightColor, int normalColor) {
+        mDialogProgressHighLightColor = highLightColor;
+        mDialogProgressNormalColor = normalColor;
+    }
+
+    /**
+     * 是否点击封面可以播放
+     */
+    public void setThumbPlay(boolean thumbPlay) {
+        this.mThumbPlay = thumbPlay;
+    }
+
+    /**
+     * 封面布局
+     */
+    public RelativeLayout getThumbImageViewLayout() {
+        return mThumbImageViewLayout;
+    }
+
+
+    public boolean isNeedLockFull() {
+        return mNeedLockFull;
+    }
+
+    /**
+     * 是否需要全屏锁定屏幕功能
+     * 如果单独使用请设置setIfCurrentIsFullscreen为true
+     */
+    public void setNeedLockFull(boolean needLoadFull) {
+        this.mNeedLockFull = needLoadFull;
+    }
+
+    /**
+     * 锁屏点击
+     */
+    public void setLockClickListener(LockClickListener lockClickListener) {
+        this.mLockClickListener = lockClickListener;
+    }
+
+    /**
+     * 设置触摸显示控制ui的消失时间
+     * @param dismissControlTime 毫秒，默认2500
+     */
+    public void setDismissControlTime(int dismissControlTime) {
+        this.mDismissControlTime = dismissControlTime;
+    }
+
+    public int getDismissControlTime() {
+        return mDismissControlTime;
+    }
+
 }
