@@ -230,7 +230,7 @@ public abstract class StarlarkSemantics {
           .incompatibleDepsetUnion(true)
           .incompatibleDisableThirdPartyLicenseChecking(true)
           .incompatibleDisableDeprecatedAttrParams(false)
-          .incompatibleDisableObjcProviderResources(true)
+          .incompatibleDisableObjcProviderResources(false)
           .incompatibleDisallowDictPlus(true)
           .incompatibleDisallowFileType(true)
           .incompatibleDisallowLegacyJavaProvider(false)

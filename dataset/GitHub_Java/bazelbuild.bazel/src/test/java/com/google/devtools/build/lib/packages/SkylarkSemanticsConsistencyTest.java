@@ -145,6 +145,7 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_disallow_legacy_java_provider=" + rand.nextBoolean(),
         "--incompatible_disallow_load_labels_to_cross_package_boundaries=" + rand.nextBoolean(),
         "--incompatible_disallow_native_in_build_file=" + rand.nextBoolean(),
+        "--incompatible_disallow_old_octal_notation=" + rand.nextBoolean(),
         "--incompatible_disallow_old_style_args_add=" + rand.nextBoolean(),
         "--incompatible_disallow_struct_provider_syntax=" + rand.nextBoolean(),
         "--incompatible_disallow_rule_execution_platform_constraints_allowed=" + rand.nextBoolean(),
@@ -154,6 +155,7 @@ public class SkylarkSemanticsConsistencyTest {
         "--incompatible_no_attr_license=" + rand.nextBoolean(),
         "--incompatible_no_kwargs_in_build_files=" + rand.nextBoolean(),
         "--incompatible_no_output_attr_default=" + rand.nextBoolean(),
+        "--incompatible_no_rule_outputs_param=" + rand.nextBoolean(),
         "--incompatible_no_support_tools_in_action_inputs=" + rand.nextBoolean(),
         "--incompatible_no_target_output_group=" + rand.nextBoolean(),
         "--incompatible_no_transitive_loads=" + rand.nextBoolean(),
@@ -196,6 +198,7 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleDisallowLegacyJavaProvider(rand.nextBoolean())
         .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(rand.nextBoolean())
         .incompatibleDisallowNativeInBuildFile(rand.nextBoolean())
+        .incompatibleDisallowOldOctalNotation(rand.nextBoolean())
         .incompatibleDisallowOldStyleArgsAdd(rand.nextBoolean())
         .incompatibleDisallowStructProviderSyntax(rand.nextBoolean())
         .incompatibleDisallowRuleExecutionPlatformConstraintsAllowed(rand.nextBoolean())
@@ -205,6 +208,7 @@ public class SkylarkSemanticsConsistencyTest {
         .incompatibleNoAttrLicense(rand.nextBoolean())
         .incompatibleNoKwargsInBuildFiles(rand.nextBoolean())
         .incompatibleNoOutputAttrDefault(rand.nextBoolean())
+        .incompatibleNoRuleOutputsParam(rand.nextBoolean())
         .incompatibleNoSupportToolsInActionInputs(rand.nextBoolean())
         .incompatibleNoTargetOutputGroup(rand.nextBoolean())
         .incompatibleNoTransitiveLoads(rand.nextBoolean())
