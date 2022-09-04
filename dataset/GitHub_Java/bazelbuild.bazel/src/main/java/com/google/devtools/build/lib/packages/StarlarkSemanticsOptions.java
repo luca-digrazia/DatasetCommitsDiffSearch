@@ -204,21 +204,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
   public boolean experimentalCcSharedLibrary;
 
   @Option(
-      name = "incompatible_require_linker_input_cc_api",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If set to true, rule create_linking_context will require linker_inputs instead of "
-              + "libraries_to_link. The old getters of linking_context will also be disabled and "
-              + "just linker_inputs will be available.")
-  public boolean incompatibleRequireLinkerInputCcApi;
-
-  @Option(
       name = "experimental_repo_remote_exec",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
@@ -228,41 +213,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
       },
       help = "If set to true, repository_rule gains some remote execution capabilities.")
   public boolean experimentalRepoRemoteExec;
-
-  @Option(
-      name = "experimental_disable_external_package",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS, OptionEffectTag.LOSES_INCREMENTAL_STATE},
-      metadataTags = {
-        OptionMetadataTag.EXPERIMENTAL,
-      },
-      help =
-          "If set to true, the auto-generated //external package will not be available anymore. "
-              + "Bazel will still be unable to parse the file 'external/BUILD', but globs reaching "
-              + "into external/ from the unnamed package will work.")
-  public boolean experimentalDisableExternalPackage;
-
-  @Option(
-      name = "experimental_sibling_repository_layout",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.STARLARK_SEMANTICS,
-      effectTags = {
-        OptionEffectTag.ACTION_COMMAND_LINES,
-        OptionEffectTag.BAZEL_INTERNAL_CONFIGURATION,
-        OptionEffectTag.LOADING_AND_ANALYSIS,
-        OptionEffectTag.LOSES_INCREMENTAL_STATE
-      },
-      metadataTags = {
-        OptionMetadataTag.EXPERIMENTAL,
-      },
-      help =
-          "If set to true, non-main repositories are planted as symlinks to the main repository in"
-              + " the execution root. That is, all repositories are direct children of the"
-              + " $output_base/execution_root directory. This has the side effect of freeing up"
-              + " $output_base/execution_root/__main__/external for the real top-level 'external' "
-              + "directory.")
-  public boolean experimentalSiblingRepositoryLayout;
 
   @Option(
       name = "incompatible_bzl_disallow_load_after_statement",
@@ -683,8 +633,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .experimentalStarlarkUnusedInputsList(experimentalStarlarkUnusedInputsList)
             .experimentalCcSharedLibrary(experimentalCcSharedLibrary)
             .experimentalRepoRemoteExec(experimentalRepoRemoteExec)
-            .experimentalDisableExternalPackage(experimentalDisableExternalPackage)
-            .experimentalSiblingRepositoryLayout(experimentalSiblingRepositoryLayout)
             .incompatibleApplicableLicenses(incompatibleApplicableLicenses)
             .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
             .incompatibleDepsetUnion(incompatibleDepsetUnion)
@@ -712,7 +660,6 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleDoNotSplitLinkingCmdline(incompatibleDoNotSplitLinkingCmdline)
             .incompatibleUseCcConfigureFromRulesCc(incompatibleUseCcConfigureFromRulesCc)
             .incompatibleDepsetForLibrariesToLinkGetter(incompatibleDepsetForLibrariesToLinkGetter)
-            .incompatibleRequireLinkerInputCcApi(incompatibleRequireLinkerInputCcApi)
             .incompatibleRestrictStringEscapes(incompatibleRestrictStringEscapes)
             .build();
     return INTERNER.intern(semantics);

@@ -53,10 +53,6 @@ public abstract class StarlarkSemantics {
     public static final String EXPERIMENTAL_ACTION_ARGS = "experimental_action_args";
     public static final String EXPERIMENTAL_ALLOW_INCREMENTAL_REPOSITORY_UPDATES =
         "experimental_allow_incremental_repository_updates";
-    public static final String EXPERIMENTAL_DISABLE_EXTERNAL_PACKGE =
-        "experimental_disable_external_package";
-    public static final String EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT =
-        "experimental_sibling_repository_layout";
     public static final String EXPERIMENTAL_ASPECT_OUTPUT_PROPAGATION =
         "experimental_aspect_output_propagation";
     public static final String EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS =
@@ -69,6 +65,7 @@ public abstract class StarlarkSemantics {
         "experimental_starlark_config_transition";
     public static final String EXPERIMENTAL_STARLARK_UNUSED_INPUTS_LIST =
         "experimental_starlark_unused_inputs_list";
+    public static final String EXPERIMENTAL_CC_SHARED_LIBRARY = "experimental_cc_shared_library";
     public static final String EXPERIMENTAL_REPO_REMOTE_EXEC = "experimental_repo_remote_exec";
     public static final String INCOMPATIBLE_APPLICABLE_LICENSES =
         "incompatible_applicable_licenses";
@@ -85,8 +82,6 @@ public abstract class StarlarkSemantics {
         "incompatible_allow_tags_propagation";
     public static final String INCOMPATIBLE_REMOVE_ENABLE_TOOLCHAIN_TYPES =
         "incompatible_remove_enable_toolchain_types";
-    public static final String INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API =
-        "incompatible_require_linker_input_cc_api";
   }
 
   // TODO(adonovan): replace the fields of StarlarkSemantics
@@ -99,10 +94,6 @@ public abstract class StarlarkSemantics {
         return experimentalActionArgs();
       case FlagIdentifier.EXPERIMENTAL_ALLOW_INCREMENTAL_REPOSITORY_UPDATES:
         return experimentalAllowIncrementalRepositoryUpdates();
-      case FlagIdentifier.EXPERIMENTAL_DISABLE_EXTERNAL_PACKGE:
-        return experimentalDisableExternalPackage();
-      case FlagIdentifier.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT:
-        return experimentalSiblingRepositoryLayout();
       case FlagIdentifier.EXPERIMENTAL_ASPECT_OUTPUT_PROPAGATION:
         return experimentalAspectOutputPropagation();
       case FlagIdentifier.EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS:
@@ -119,6 +110,8 @@ public abstract class StarlarkSemantics {
         return experimentalStarlarkConfigTransitions();
       case FlagIdentifier.EXPERIMENTAL_STARLARK_UNUSED_INPUTS_LIST:
         return experimentalStarlarkUnusedInputsList();
+      case FlagIdentifier.EXPERIMENTAL_CC_SHARED_LIBRARY:
+        return experimentalCcSharedLibrary();
       case FlagIdentifier.EXPERIMENTAL_REPO_REMOTE_EXEC:
         return experimentalRepoRemoteExec();
       case FlagIdentifier.INCOMPATIBLE_APPLICABLE_LICENSES:
@@ -137,8 +130,6 @@ public abstract class StarlarkSemantics {
         return experimentalAllowTagsPropagation();
       case FlagIdentifier.INCOMPATIBLE_REMOVE_ENABLE_TOOLCHAIN_TYPES:
         return incompatibleRemoveEnabledToolchainTypes();
-      case FlagIdentifier.INCOMPATIBLE_REQUIRE_LINKER_INPUT_CC_API:
-        return incompatibleRequireLinkerInputCcApi();
       default:
         throw new IllegalArgumentException(flag);
     }
@@ -208,10 +199,6 @@ public abstract class StarlarkSemantics {
 
   public abstract boolean experimentalRepoRemoteExec();
 
-  public abstract boolean experimentalDisableExternalPackage();
-
-  public abstract boolean experimentalSiblingRepositoryLayout();
-
   public abstract boolean incompatibleAlwaysCheckDepsetElements();
 
   public abstract boolean incompatibleApplicableLicenses();
@@ -259,8 +246,6 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleDoNotSplitLinkingCmdline();
 
   public abstract boolean incompatibleDepsetForLibrariesToLinkGetter();
-
-  public abstract boolean incompatibleRequireLinkerInputCcApi();
 
   public abstract boolean incompatibleRestrictStringEscapes();
 
@@ -316,8 +301,6 @@ public abstract class StarlarkSemantics {
           .experimentalStarlarkUnusedInputsList(true)
           .experimentalCcSharedLibrary(false)
           .experimentalRepoRemoteExec(false)
-          .experimentalDisableExternalPackage(false)
-          .experimentalSiblingRepositoryLayout(false)
           .incompatibleAlwaysCheckDepsetElements(false)
           .incompatibleApplicableLicenses(false)
           .incompatibleBzlDisallowLoadAfterStatement(true)
@@ -342,7 +325,6 @@ public abstract class StarlarkSemantics {
           .internalSkylarkFlagTestCanary(false)
           .incompatibleDoNotSplitLinkingCmdline(true)
           .incompatibleDepsetForLibrariesToLinkGetter(true)
-          .incompatibleRequireLinkerInputCcApi(false)
           .incompatibleRestrictStringEscapes(false)
           .incompatibleUseCcConfigureFromRulesCc(false)
           .build();
@@ -381,10 +363,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder experimentalCcSharedLibrary(boolean value);
 
     public abstract Builder experimentalRepoRemoteExec(boolean value);
-
-    public abstract Builder experimentalDisableExternalPackage(boolean value);
-
-    public abstract Builder experimentalSiblingRepositoryLayout(boolean value);
 
     public abstract Builder incompatibleAlwaysCheckDepsetElements(boolean value);
 
@@ -433,8 +411,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDoNotSplitLinkingCmdline(boolean value);
 
     public abstract Builder incompatibleDepsetForLibrariesToLinkGetter(boolean value);
-
-    public abstract Builder incompatibleRequireLinkerInputCcApi(boolean value);
 
     public abstract Builder incompatibleRestrictStringEscapes(boolean value);
 
