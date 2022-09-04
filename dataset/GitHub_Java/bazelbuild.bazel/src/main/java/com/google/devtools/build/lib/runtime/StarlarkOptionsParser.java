@@ -28,11 +28,14 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.Rule;
+import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.Converter;
@@ -48,7 +51,6 @@ import java.util.Map;
  * already parsed all native options (including those needed for loading). This class is in charge
  * of parsing and setting the starlark options for this {@link OptionsParser}.
  */
-// TODO(juliexxia): confront the spectre of aliased build settings
 public class StarlarkOptionsParser {
 
   private final SkyframeExecutor skyframeExecutor;
@@ -68,7 +70,15 @@ public class StarlarkOptionsParser {
   }
 
   static StarlarkOptionsParser newStarlarkOptionsParser(
-      CommandEnvironment env, OptionsParser optionsParser) {
+      CommandEnvironment env, OptionsParser optionsParser, BlazeRuntime runtime)
+      throws OptionsParsingException {
+    try {
+      env.syncPackageLoading(
+          optionsParser.getOptions(PackageCacheOptions.class),
+          optionsParser.getOptions(StarlarkSemanticsOptions.class));
+    } catch (AbruptExitException e) {
+      throw new OptionsParsingException(e.getMessage());
+    }
     return new StarlarkOptionsParser(
         env.getSkyframeExecutor(),
         env.getRelativeWorkingDirectory(),
