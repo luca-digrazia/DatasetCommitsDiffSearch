@@ -49,25 +49,13 @@ public class ConfiguredTargetKey extends ActionLookupKey {
     return of(configuredTarget, configuredTarget.getConfiguration());
   }
 
-  private static Label getLabel(ConfiguredTarget configuredTarget) {
-    AliasProvider aliasProvider = configuredTarget.getProvider(AliasProvider.class);
-    return aliasProvider != null
-        ? aliasProvider.getAliasChain().get(0)
-        : configuredTarget.getLabel();
-  }
-
   public static ConfiguredTargetKey of(
       ConfiguredTarget configuredTarget, BuildConfiguration buildConfiguration) {
-    return of(getLabel(configuredTarget), buildConfiguration);
+    AliasProvider aliasProvider = configuredTarget.getProvider(AliasProvider.class);
+    Label label =
+        aliasProvider != null ? aliasProvider.getAliasChain().get(0) : configuredTarget.getLabel();
+    return of(label, buildConfiguration);
   }
-
-  public static ConfiguredTargetKey of(
-      ConfiguredTarget configuredTarget,
-      BuildConfigurationValue.Key configurationKey,
-      boolean isHostConfiguration) {
-    return of(getLabel(configuredTarget), configurationKey, isHostConfiguration);
-  }
-
   /**
    * Caches so that the number of ConfiguredTargetKey instances is {@code O(configured targets)} and
    * not {@code O(edges between configured targets)}.

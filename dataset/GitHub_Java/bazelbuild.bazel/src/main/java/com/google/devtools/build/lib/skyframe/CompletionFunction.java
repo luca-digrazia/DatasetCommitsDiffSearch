@@ -79,8 +79,10 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     MissingInputFileException getMissingFilesException(
         TValue value, int missingCount, Environment env) throws InterruptedException;
 
-    /** Provides a successful completion value. */
-    TResult getResult();
+    /**
+     * Creates a successful completion value.
+     */
+    TResult createResult(TValue value);
 
     /** Creates a failed completion value. */
     ExtendedEventHandler.Postable createFailed(
@@ -155,8 +157,8 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
 
     @Override
-    public TargetCompletionValue getResult() {
-      return TargetCompletionValue.INSTANCE;
+    public TargetCompletionValue createResult(ConfiguredTargetValue value) {
+      return new TargetCompletionValue(value.getConfiguredTarget());
     }
 
     @Override
@@ -249,7 +251,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
     }
 
     @Override
-    public AspectCompletionValue getResult() {
+    public AspectCompletionValue createResult(AspectValue value) {
       return AspectCompletionValue.INSTANCE;
     }
 
@@ -320,7 +322,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
         missingCount++;
         final Label inputOwner = input.getOwner();
         if (inputOwner != null) {
-          Cause cause = new LabelCause(inputOwner, e.getMessage());
+          Cause cause = new LabelCause(inputOwner);
           rootCausesBuilder.add(cause);
           env.getListener().handle(completor.getRootCauseError(value, cause, env));
         }
@@ -367,7 +369,7 @@ public final class CompletionFunction<TValue extends SkyValue, TResult extends S
       return null;
     }
     env.getListener().post(postable);
-    return completor.getResult();
+    return completor.createResult(value);
   }
 
   @Override

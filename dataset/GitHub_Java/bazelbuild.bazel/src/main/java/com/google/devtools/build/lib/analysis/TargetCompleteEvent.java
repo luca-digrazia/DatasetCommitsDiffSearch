@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.TestSize;
-import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.syntax.Type;
@@ -64,14 +63,14 @@ public final class TargetCompleteEvent
   private final ConfiguredTargetAndData targetAndData;
   private final NestedSet<Cause> rootCauses;
   private final ImmutableList<BuildEventId> postedAfter;
-  private final NestedSet<ArtifactsInOutputGroup> outputs;
+  private final Iterable<ArtifactsInOutputGroup> outputs;
   private final NestedSet<Artifact> baselineCoverageArtifacts;
   private final boolean isTest;
 
   private TargetCompleteEvent(
       ConfiguredTargetAndData targetAndData,
       NestedSet<Cause> rootCauses,
-      NestedSet<ArtifactsInOutputGroup> outputs,
+      Iterable<ArtifactsInOutputGroup> outputs,
       boolean isTest) {
     this.targetAndData = targetAndData;
     this.rootCauses =
@@ -122,8 +121,7 @@ public final class TargetCompleteEvent
   public static TargetCompleteEvent createFailed(
       ConfiguredTargetAndData ct, NestedSet<Cause> rootCauses) {
     Preconditions.checkArgument(!Iterables.isEmpty(rootCauses));
-    return new TargetCompleteEvent(
-        ct, rootCauses, NestedSetBuilder.emptySet(Order.STABLE_ORDER), false);
+    return new TargetCompleteEvent(ct, rootCauses, ImmutableList.of(), false);
   }
 
   /** Returns the target associated with the event. */
@@ -139,19 +137,6 @@ public final class TargetCompleteEvent
   /** Get the root causes of the target. May be empty. */
   public Iterable<Cause> getRootCauses() {
     return rootCauses;
-  }
-
-  public Iterable<Artifact> getLegacyFilteredImportantArtifacts() {
-    // TODO(ulfjack): This duplicates code in ArtifactsToBuild.
-    NestedSetBuilder<Artifact> builder = new NestedSetBuilder<>(outputs.getOrder());
-    for (ArtifactsInOutputGroup artifactsInOutputGroup : outputs) {
-      if (artifactsInOutputGroup.areImportant()) {
-        builder.addTransitive(artifactsInOutputGroup.getArtifacts());
-      }
-    }
-    return Iterables.filter(
-        builder.build(),
-        (artifact) -> !artifact.isSourceArtifact() && !artifact.isMiddlemanArtifact());
   }
 
   @Override
@@ -224,7 +209,6 @@ public final class TargetCompleteEvent
     builder.addAllOutputGroup(getOutputFilesByGroup(converters.artifactGroupNamer()));
 
     if (isTest) {
-      builder.setTestTimeoutSeconds(getTestTimeoutSeconds(targetAndData));
       builder.setTestSize(
           TargetConfiguredEvent.bepTestSize(
               TestSize.getTestSize(targetAndData.getTarget().getAssociatedRule())));
@@ -232,7 +216,11 @@ public final class TargetCompleteEvent
 
     // TODO(aehlig): remove direct reporting of artifacts as soon as clients no longer
     // need it.
-    addImportantOutputs(builder, converters, getLegacyFilteredImportantArtifacts());
+    for (ArtifactsInOutputGroup group : outputs) {
+      if (group.areImportant()) {
+        addImportantOutputs(builder, converters, group.getArtifacts());
+      }
+    }
     if (baselineCoverageArtifacts != null) {
       addImportantOutputs(
           builder, (artifact -> BASELINE_COVERAGE), converters, baselineCoverageArtifacts);
@@ -303,18 +291,5 @@ public final class TargetCompleteEvent
               .build());
     }
     return groups.build();
-  }
-
-  /**
-   * Returns timeout value in seconds that should be used for all test actions under this configured
-   * target. We always use the "categorical timeouts" which are based on the --test_timeout flag. A
-   * rule picks its timeout but ends up with the same effective value as all other rules in that
-   * category and configuration.
-   */
-  private Long getTestTimeoutSeconds(ConfiguredTargetAndData targetAndData) {
-    BuildConfiguration configuration = targetAndData.getConfiguration();
-    Rule associatedRule = targetAndData.getTarget().getAssociatedRule();
-    TestTimeout categoricalTimeout = TestTimeout.getTestTimeout(associatedRule);
-    return configuration.getTestTimeout().get(categoricalTimeout).getSeconds();
   }
 }

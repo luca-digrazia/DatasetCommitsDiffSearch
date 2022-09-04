@@ -56,9 +56,7 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject,
   BuildConfiguration getConfiguration();
 
   default String getConfigurationChecksum() {
-    return getConfigurationKey() == null
-        ? null
-        : getConfigurationKey().getOptionsDiff().getChecksum();
+    return getConfiguration() == null ? null : getConfiguration().checksum();
   }
 
   /**
