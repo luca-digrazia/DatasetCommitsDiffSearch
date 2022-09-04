@@ -33,8 +33,6 @@
  */
 package org.graylog2.inputs.transports;
 
-import com.codahale.metrics.InstrumentedExecutorService;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
@@ -49,11 +47,9 @@ import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
 import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
 import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
 
+import javax.inject.Named;
+import javax.inject.Provider;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-
-import static com.codahale.metrics.MetricRegistry.name;
 
 public class UdpTransport extends NettyTransport {
 
@@ -61,18 +57,11 @@ public class UdpTransport extends NettyTransport {
 
     @AssistedInject
     public UdpTransport(@Assisted Configuration configuration,
+                        @Named("cached") Provider<Executor> workerPoolProvider,
                         ThroughputCounter throughputCounter,
                         LocalMetricRegistry localRegistry) {
         super(configuration, throughputCounter, localRegistry);
-        this.workerExecutor = executorService("worker", "udp-transport-worker-%d", localRegistry);
-    }
-
-    private static Executor executorService(final String executorName, final String threadNameFormat, final LocalMetricRegistry localRegistry) {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(threadNameFormat).build();
-        return new InstrumentedExecutorService(
-                Executors.newCachedThreadPool(threadFactory),
-                localRegistry,
-                name(UdpTransport.class, executorName, "executor-service"));
+        this.workerExecutor = workerPoolProvider.get();
     }
 
     @Override

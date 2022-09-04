@@ -27,12 +27,11 @@ import com.google.inject.Key;
 import com.google.inject.TypeLiteral;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.multibindings.MapBinder;
-import org.graylog2.plugin.ConfigClass;
-import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.plugin.inputs.annotations.ConfigClass;
+import org.graylog2.plugin.inputs.annotations.FactoryClass;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.inputs.transports.Transport;
-import org.graylog2.plugin.outputs.MessageOutput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -81,6 +80,16 @@ public abstract class Graylog2Module extends AbstractModule {
                         .build(factoryClass));
 
         mapBinder.addBinding(name).to(factoryKey);
+    }
+
+    protected void installCodec(MapBinder<String, Codec.Factory<? extends Codec>> mapBinder, Class<? extends Codec> codecClass) {
+        if (codecClass.isAnnotationPresent(org.graylog2.plugin.inputs.annotations.Codec.class)) {
+            final org.graylog2.plugin.inputs.annotations.Codec a = codecClass.getAnnotation(org.graylog2.plugin.inputs.annotations.Codec.class);
+            installCodec(mapBinder, a.name(), codecClass);
+        } else {
+            log.error("Codec {} not annotated with {}. Cannot determine its id. This is a bug, please use that annotation, this codec will not be available",
+                      codecClass, org.graylog2.plugin.inputs.annotations.Codec.class);
+        }
     }
 
     protected void installCodec(
@@ -177,19 +186,5 @@ public abstract class Graylog2Module extends AbstractModule {
                                                          Class<? extends MessageInput.Factory<T>> targetFactory) {
         install(new FactoryModuleBuilder().implement(MessageInput.class, target).build(targetFactory));
         inputMapBinder.addBinding(target.getCanonicalName()).to(Key.get(targetFactory));
-    }
-
-    protected MapBinder<String, MessageOutput.Factory<? extends MessageOutput>> outputsMapBinder() {
-        return MapBinder.newMapBinder(binder(),
-                TypeLiteral.get(String.class),
-                new TypeLiteral<MessageOutput.Factory<? extends MessageOutput>>() {
-                });
-    }
-
-    protected <T extends MessageOutput> void installOutput(MapBinder<String, MessageOutput.Factory<? extends MessageOutput>> outputMapBinder,
-                                                           Class<T> target,
-                                                           Class<? extends MessageOutput.Factory<T>> targetFactory) {
-        install(new FactoryModuleBuilder().implement(MessageOutput.class, target).build(targetFactory));
-        outputMapBinder.addBinding(target.getCanonicalName()).to(Key.get(targetFactory));
     }
 }

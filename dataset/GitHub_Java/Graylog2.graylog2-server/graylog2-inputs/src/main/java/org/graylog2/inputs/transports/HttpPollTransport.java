@@ -77,7 +77,6 @@ public class HttpPollTransport extends ThrottleableTransport {
                              EventBus serverEventBus,
                              ServerStatus serverStatus,
                              @Named("daemonScheduler") ScheduledExecutorService scheduler) {
-        super(serverEventBus, configuration);
         this.configuration = configuration;
         this.serverEventBus = serverEventBus;
         this.serverStatus = serverStatus;
@@ -126,7 +125,7 @@ public class HttpPollTransport extends ThrottleableTransport {
     }
 
     @Override
-    public void doLaunch(final MessageInput input) throws MisfireException {
+    public void launch(final MessageInput input) throws MisfireException {
         serverStatus.awaitRunning(new Runnable() {
             @Override
             public void run() {
@@ -160,10 +159,6 @@ public class HttpPollTransport extends ThrottleableTransport {
                     LOG.debug("Message processing paused, not polling HTTP resource {}.", url);
                     return;
                 }
-                if (isThrottled()) {
-                    // this transport won't block, but we can simply skip this iteration
-                    LOG.debug("Not polling HTTP resource {} because we are throttled.", url);
-                }
                 try (AsyncHttpClient client = new AsyncHttpClient()) {
                     final AsyncHttpClient.BoundRequestBuilder requestBuilder = client.prepareGet(url);
 
@@ -195,7 +190,7 @@ public class HttpPollTransport extends ThrottleableTransport {
     }
 
     @Override
-    public void doStop() {
+    public void stop() {
         serverEventBus.unregister(this);
         if (scheduledFuture != null) {
             scheduledFuture.cancel(true);

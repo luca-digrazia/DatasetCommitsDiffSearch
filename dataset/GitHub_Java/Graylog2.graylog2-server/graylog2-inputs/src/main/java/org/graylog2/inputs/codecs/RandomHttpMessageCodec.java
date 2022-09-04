@@ -52,9 +52,8 @@ public class RandomHttpMessageCodec extends AbstractCodec {
     @Nullable
     @Override
     public Message decode(@Nonnull RawMessage rawMessage) {
-        if (!rawMessage.getCodecName().equals(getName())) {
-            log.error("Cannot decode payload type {}, skipping message {}",
-                      rawMessage.getCodecName(), rawMessage.getId());
+        if (!rawMessage.getPayloadType().equals(getName())) {
+            log.error("Cannot decode payload type {}, skipping message {}", rawMessage.getPayloadType(), rawMessage.getId());
             return null;
         }
         try {

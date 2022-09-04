@@ -60,7 +60,7 @@ public class RadioAmqpTransport extends AmqpTransport {
         }
 
         @Override
-        protected String defaultRoutingKey() {
+        protected String defaultRouttingKey() {
             return "graylog2-radio-message";
         }
 

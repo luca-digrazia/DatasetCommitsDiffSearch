@@ -16,10 +16,7 @@
  */
 package org.graylog2.inputs.transports;
 
-import com.codahale.metrics.InstrumentedExecutorService;
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Maps;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
@@ -44,10 +41,7 @@ import javax.inject.Provider;
 import java.util.LinkedHashMap;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executor;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 
-import static com.codahale.metrics.MetricRegistry.name;
 import static org.jboss.netty.channel.Channels.fireMessageReceived;
 import static org.jboss.netty.handler.codec.http.HttpHeaders.*;
 import static org.jboss.netty.handler.codec.http.HttpResponseStatus.*;
@@ -62,6 +56,7 @@ public class HttpTransport extends AbstractTcpTransport {
     @AssistedInject
     public HttpTransport(@Assisted Configuration configuration,
                          @Named("bossPool") Executor bossPool,
+                         @Named("cached") Provider<Executor> workerPoolProvider,
                          ThroughputCounter throughputCounter,
                          ConnectionCounter connectionCounter,
                          LocalMetricRegistry localRegistry) {
@@ -69,18 +64,10 @@ public class HttpTransport extends AbstractTcpTransport {
               throughputCounter,
               localRegistry,
               bossPool,
-              executorService("worker", "http-transport-worker-%d", localRegistry),
+              workerPoolProvider,
               connectionCounter);
 
         enableCors = configuration.getBoolean(CK_ENABLE_CORS);
-    }
-
-    private static Executor executorService(final String executorName, final String threadNameFormat, final MetricRegistry metricRegistry) {
-        final ThreadFactory threadFactory = new ThreadFactoryBuilder().setNameFormat(threadNameFormat).build();
-        return new InstrumentedExecutorService(
-                Executors.newCachedThreadPool(threadFactory),
-                metricRegistry,
-                name(HttpTransport.class, executorName, "executor-service"));
     }
 
     @Override

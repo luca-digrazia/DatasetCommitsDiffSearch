@@ -94,7 +94,12 @@ public class RadioMessageCodec extends AbstractCodec {
     }
 
     @ConfigClass
-    public static class Config extends AbstractCodec.Config {
+    public static class Config implements AbstractCodec.Config {
+        @Override
+        public ConfigurationRequest getRequestedConfiguration() {
+            return new ConfigurationRequest();
+        }
+
         @Override
         public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
 
