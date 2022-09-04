@@ -67,9 +67,6 @@ public class BatchedElasticSearchOutput extends ElasticSearchOutput {
     public void write(Message message) throws Exception {
         synchronized (this.buffer) {
             this.buffer.add(message);
-            if (LOG.isTraceEnabled()) {
-                LOG.trace("Buffering message id to [{}]: <{}>", getName(), message.getId());
-            }
             if (this.buffer.size() >= maxBufferSize) {
                 flush();
             }
@@ -85,7 +82,8 @@ public class BatchedElasticSearchOutput extends ElasticSearchOutput {
         LOG.debug("[{}] Starting flushing {} messages", Thread.currentThread(), mybuffer.size());
 
         try(Timer.Context context = this.processTime.time()) {
-            write(mybuffer);
+            for (Message message : mybuffer)
+                super.write(message);
             this.batchSize.update(mybuffer.size());
             this.bufferFlushes.mark();
         } catch (Exception e) {
@@ -105,22 +103,12 @@ public class BatchedElasticSearchOutput extends ElasticSearchOutput {
     }
 
     public void flush() {
-        flush(true);
-    }
-
-    // used in tests to avoid having to run the executor
-    public void flush(boolean async) {
         this.bufferFlushesRequested.mark();
         List<Message> mybuffer;
         synchronized (this.buffer) {
             mybuffer = Lists.newArrayList(this.buffer);
             this.buffer.clear();
         }
-        if (async) {
-            asynchronousFlush(mybuffer);
-        } else {
-            synchronousFlush(mybuffer);
-        }
+        asynchronousFlush(mybuffer);
     }
-
 }
