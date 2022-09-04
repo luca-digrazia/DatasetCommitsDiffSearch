@@ -105,7 +105,7 @@ public class PythonOptions extends FragmentOptions {
    */
   @Option(
       name = "incompatible_py3_is_default",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.GENERIC_INPUTS,
       effectTags = {
         OptionEffectTag.LOADING_AND_ANALYSIS,
@@ -125,7 +125,7 @@ public class PythonOptions extends FragmentOptions {
 
   @Option(
       name = "incompatible_py2_outputs_are_suffixed",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.GENERIC_INPUTS,
       effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
       metadataTags = {
@@ -230,14 +230,11 @@ public class PythonOptions extends FragmentOptions {
   public boolean incompatibleDisallowLegacyPyProvider;
 
   @Option(
-      name = "incompatible_use_python_toolchains",
+      // TODO(brandjon): Rename to --incompatible_use_python_toolchains when ready to make available
+      name = "experimental_use_python_toolchains",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.GENERIC_INPUTS,
       effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
       help =
           "If set to true, executable native Python rules will use the Python runtime specified by "
               + "the Python toolchain, rather than the runtime given by legacy flags like "
@@ -253,26 +250,6 @@ public class PythonOptions extends FragmentOptions {
           "Build the runfiles trees of py_binary targets that appear in the transitive "
               + "data runfiles of another binary.")
   public boolean buildTransitiveRunfilesTrees;
-
-  @Option(
-      name = "incompatible_windows_escape_python_args",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
-      effectTags = {
-        OptionEffectTag.ACTION_COMMAND_LINES,
-        OptionEffectTag.AFFECTS_OUTPUTS,
-      },
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "On Linux/macOS/non-Windows: no-op. On Windows: this flag affects how py_binary and"
-              + " py_test targets are built: how their launcher escapes command line flags. When"
-              + " this flag is true, the launcher escapes command line flags using Windows-style"
-              + " escaping (correct behavior). When the flag is false, the launcher uses Bash-style"
-              + " escaping (buggy behavior). See https://github.com/bazelbuild/bazel/issues/7958")
-  public boolean windowsEscapePythonArgs;
 
   @Override
   public Map<OptionDefinition, SelectRestriction> getSelectRestrictions() {
@@ -392,11 +369,6 @@ public class PythonOptions extends FragmentOptions {
     hostPythonOptions.buildPythonZip = buildPythonZip;
     hostPythonOptions.incompatibleDisallowLegacyPyProvider = incompatibleDisallowLegacyPyProvider;
     hostPythonOptions.incompatibleUsePythonToolchains = incompatibleUsePythonToolchains;
-    hostPythonOptions.windowsEscapePythonArgs = windowsEscapePythonArgs;
-
-    // Save host options in case of a further exec->host transition.
-    hostPythonOptions.hostForcePython = hostForcePython;
-
     return hostPythonOptions;
   }
 
