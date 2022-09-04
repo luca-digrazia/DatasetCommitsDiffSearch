@@ -30,9 +30,7 @@ public class UserCountryNotSetValidatorLocaleTest {
             }).setAfterAllCustomizer(new Runnable() {
                 @Override
                 public void run() {
-                    if (userCountry != null) {
-                        System.setProperty("user.country", userCountry);
-                    }
+                    System.setProperty("user.country", userCountry);
                     System.setProperty("user.language", userLanguage);
                 }
             });
