@@ -1,13 +1,25 @@
 package io.dropwizard.benchmarks.jersey;
 
-import com.codahale.metrics.MetricRegistry;
-import com.google.common.collect.ImmutableList;
 import io.dropwizard.jersey.DropwizardResourceConfig;
-import org.openjdk.jmh.annotations.*;
+import org.glassfish.jersey.test.JerseyTest;
+import org.openjdk.jmh.annotations.Benchmark;
+import org.openjdk.jmh.annotations.BenchmarkMode;
+import org.openjdk.jmh.annotations.Mode;
+import org.openjdk.jmh.annotations.OutputTimeUnit;
+import org.openjdk.jmh.annotations.Scope;
+import org.openjdk.jmh.annotations.Setup;
+import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-import javax.ws.rs.*;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.PUT;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.core.Application;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -16,14 +28,23 @@ import java.util.concurrent.TimeUnit;
 @State(Scope.Benchmark)
 public class DropwizardResourceConfigBenchmark {
 
-    private DropwizardResourceConfig dropwizardResourceConfig =
-            new DropwizardResourceConfig(true, new MetricRegistry());
+    private final DropwizardResourceConfig dropwizardResourceConfig = DropwizardResourceConfig.forTesting();
 
     @Setup
-    public void setUp() {
+    public void setUp() throws Exception {
         dropwizardResourceConfig.register(DistributionResource.class);
         dropwizardResourceConfig.register(AssetResource.class);
         dropwizardResourceConfig.register(ClustersResource.class);
+
+        final JerseyTest jerseyTest = new JerseyTest() {
+            @Override
+            protected Application configure() {
+                return dropwizardResourceConfig;
+            }
+        };
+
+        jerseyTest.setUp();
+        jerseyTest.tearDown();
     }
 
     @Benchmark
@@ -65,17 +86,19 @@ public class DropwizardResourceConfigBenchmark {
 
         @GET
         public List<String> getAll() {
-            return ImmutableList.of("first_asset", "second_asset");
+            return Arrays.asList("first_asset", "second_asset");
         }
 
         @DELETE
         @Path("{id}")
         public void delete(@PathParam("id") String id) {
+            // stub implementation
         }
 
         @PUT
         @Path("{id}")
         public void update(@PathParam("id") String id, String asset) {
+            // stub implementation
         }
     }
 
@@ -86,24 +109,28 @@ public class DropwizardResourceConfigBenchmark {
         @Path("{assetId}/clusters/{code}/start")
         public void start(@PathParam("assetId") String assetId,
                                       @PathParam("code") String code) {
+            // stub implementation
         }
 
         @POST
         @Path("{assetId}/clusters/{code}/complete")
         public void complete(@PathParam("assetId") String assetId,
                                          @PathParam("code") String code) {
+            // stub implementation
         }
 
         @POST
         @Path("{assetId}/clusters/{code}/abort")
         public void abort(@PathParam("assetId") String assetId,
                                       @PathParam("code") String code) {
+            // stub implementation
         }
 
         @POST
         @Path("{assetId}/clusters/{code}/delete")
         public void delete(@PathParam("assetId") String assetId,
                                        @PathParam("code") String code) {
+            // stub implementation
         }
 
         @GET
@@ -130,12 +157,13 @@ public class DropwizardResourceConfigBenchmark {
 
         @GET
         public List<String> getAll() {
-            return ImmutableList.of("first_cluster", "second_cluster", "third_cluster");
+            return Arrays.asList("first_cluster", "second_cluster", "third_cluster");
         }
 
         @DELETE
         @Path("{code}")
         public void delete(@PathParam("code") String code) {
+            // stub implementation
         }
     }
 }
