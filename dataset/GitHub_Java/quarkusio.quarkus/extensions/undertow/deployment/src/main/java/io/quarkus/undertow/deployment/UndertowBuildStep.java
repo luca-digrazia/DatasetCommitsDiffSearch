@@ -222,7 +222,7 @@ public class UndertowBuildStep {
      * look for Servlet container initializers
      *
      */
-    @BuildStep(loadsApplicationClasses = true)
+    @BuildStep
     public List<ServletContainerInitializerBuildItem> servletContainerInitializer(
             ApplicationArchivesBuildItem archives,
             CombinedIndexBuildItem combinedIndexBuildItem,
