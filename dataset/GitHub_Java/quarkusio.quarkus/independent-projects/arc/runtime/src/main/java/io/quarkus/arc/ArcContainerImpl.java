@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc;
 
 import io.quarkus.arc.ArcCDIProvider.ArcCDI;
@@ -259,22 +275,14 @@ class ArcContainerImpl implements ArcContainer {
             Set<Annotation> beforeDestroyQualifiers = new HashSet<>(4);
             beforeDestroyQualifiers.add(BeforeDestroyed.Literal.APPLICATION);
             beforeDestroyQualifiers.add(Any.Literal.INSTANCE);
-            try {
-                EventImpl.createNotifier(Object.class, Object.class, beforeDestroyQualifiers, this).notify(toString());
-            } catch (Exception e) {
-                LOGGER.warn("An error occured during delivery of the @BeforeDestroyed(ApplicationScoped.class) event", e);
-            }
+            EventImpl.createNotifier(Object.class, Object.class, beforeDestroyQualifiers, this).notify(toString());
             // Destroy contexts
             applicationContext.destroy();
             // Fire an event with qualifier @Destroyed(ApplicationScoped.class)
             Set<Annotation> destroyQualifiers = new HashSet<>(4);
             destroyQualifiers.add(Destroyed.Literal.APPLICATION);
             destroyQualifiers.add(Any.Literal.INSTANCE);
-            try {
-                EventImpl.createNotifier(Object.class, Object.class, destroyQualifiers, this).notify(toString());
-            } catch (Exception e) {
-                LOGGER.warn("An error occured during delivery of the @Destroyed(ApplicationScoped.class) event", e);
-            }
+            EventImpl.createNotifier(Object.class, Object.class, destroyQualifiers, this).notify(toString());
             singletonContext.destroy();
             // Clear caches
             contexts.clear();
