@@ -12,14 +12,12 @@ import org.jboss.tm.usertx.UserTransactionRegistry;
 import com.arjuna.ats.internal.jbossatx.jta.jca.XATerminator;
 import com.arjuna.ats.internal.jta.transaction.arjunacore.TransactionSynchronizationRegistryImple;
 import com.arjuna.ats.jbossatx.jta.RecoveryManagerService;
-import com.arjuna.ats.jta.TransactionManager;
 import com.arjuna.ats.jta.UserTransaction;
+
+import io.quarkus.arc.Unremovable;
 
 @Dependent
 public class NarayanaJtaProducers {
-
-    private static final javax.transaction.UserTransaction USER_TRANSACTION = UserTransaction.userTransaction();
-    private static final javax.transaction.TransactionManager TRANSACTION_MANAGER = TransactionManager.transactionManager();
 
     @Produces
     @ApplicationScoped
@@ -30,7 +28,7 @@ public class NarayanaJtaProducers {
     @Produces
     @ApplicationScoped
     public javax.transaction.UserTransaction userTransaction() {
-        return USER_TRANSACTION;
+        return UserTransaction.userTransaction();
     }
 
     @Produces
@@ -41,14 +39,9 @@ public class NarayanaJtaProducers {
 
     @Produces
     @ApplicationScoped
+    @Unremovable // needed by Arc for transactional observers
     public TransactionSynchronizationRegistry transactionSynchronizationRegistry() {
         return new TransactionSynchronizationRegistryImple();
-    }
-
-    @Produces
-    @ApplicationScoped
-    public javax.transaction.TransactionManager transactionManager() {
-        return TRANSACTION_MANAGER;
     }
 
     @Produces
