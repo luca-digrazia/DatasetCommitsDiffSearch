@@ -1,11 +1,13 @@
 package io.dropwizard.server;
 
+import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.dropwizard.configuration.YamlConfigurationFactory;
 import io.dropwizard.jackson.DiscoverableSubtypeResolver;
 import io.dropwizard.jackson.Jackson;
+import io.dropwizard.jersey.validation.Validators;
 import io.dropwizard.jetty.HttpConnectorFactory;
 import io.dropwizard.jetty.ServerPushFilterFactory;
 import io.dropwizard.logging.ConsoleAppenderFactory;
@@ -42,12 +44,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class DefaultServerFactoryTest {
-    private Environment environment = new Environment("test");
+public class DefaultServerFactoryTest {
+    private Environment environment = new Environment("test", Jackson.newObjectMapper(),
+            Validators.newValidator(), new MetricRegistry(),
+            ClassLoader.getSystemClassLoader());
     private DefaultServerFactory http;
 
     @BeforeEach
-    void setUp() throws Exception {
+    public void setUp() throws Exception {
 
         final ObjectMapper objectMapper = Jackson.newObjectMapper();
         objectMapper.getSubtypeResolver().registerSubtypes(ConsoleAppenderFactory.class,
@@ -62,13 +66,13 @@ class DefaultServerFactoryTest {
     }
 
     @Test
-    void loadsGzipConfig() throws Exception {
+    public void loadsGzipConfig() throws Exception {
         assertThat(http.getGzipFilterFactory().isEnabled())
                 .isFalse();
     }
 
     @Test
-    void loadsServerPushConfig() throws Exception {
+    public void loadsServerPushConfig() throws Exception {
         final ServerPushFilterFactory serverPush = http.getServerPush();
         assertThat(serverPush.isEnabled()).isTrue();
         assertThat(serverPush.getRefererHosts()).contains("dropwizard.io");
@@ -76,35 +80,35 @@ class DefaultServerFactoryTest {
     }
 
     @Test
-    void hasAMaximumNumberOfThreads() throws Exception {
+    public void hasAMaximumNumberOfThreads() throws Exception {
         assertThat(http.getMaxThreads())
                 .isEqualTo(101);
     }
 
     @Test
-    void hasAMinimumNumberOfThreads() throws Exception {
+    public void hasAMinimumNumberOfThreads() throws Exception {
         assertThat(http.getMinThreads())
                 .isEqualTo(89);
     }
 
     @Test
-    void hasApplicationContextPath() throws Exception {
+    public void hasApplicationContextPath() throws Exception {
         assertThat(http.getApplicationContextPath()).isEqualTo("/app");
     }
 
     @Test
-    void hasAdminContextPath() throws Exception {
+    public void hasAdminContextPath() throws Exception {
         assertThat(http.getAdminContextPath()).isEqualTo("/admin");
     }
 
     @Test
-    void isDiscoverable() throws Exception {
+    public void isDiscoverable() throws Exception {
         assertThat(new DiscoverableSubtypeResolver().getDiscoveredSubtypes())
                 .contains(DefaultServerFactory.class);
     }
 
     @Test
-    void registersDefaultExceptionMappers() throws Exception {
+    public void registersDefaultExceptionMappers() throws Exception {
         assertThat(http.getRegisterDefaultExceptionMappers()).isTrue();
 
         http.build(environment);
@@ -113,63 +117,39 @@ class DefaultServerFactoryTest {
     }
 
     @Test
-    void doesNotDefaultExceptionMappers() throws Exception {
+    public void doesNotDefaultExceptionMappers() throws Exception {
         http.setRegisterDefaultExceptionMappers(false);
         assertThat(http.getRegisterDefaultExceptionMappers()).isFalse();
-        Environment environment = new Environment("test");
+        Environment environment = new Environment("test", Jackson.newObjectMapper(),
+                Validators.newValidator(), new MetricRegistry(),
+                ClassLoader.getSystemClassLoader());
         http.build(environment);
         assertThat(environment.jersey().getResourceConfig().getSingletons())
             .filteredOn(x -> x instanceof ExceptionMapperBinder).isEmpty();
     }
 
     @Test
-    void defaultsDumpAfterStartFalse() throws Exception {
-        assertThat(http.getDumpAfterStart()).isFalse();
-        assertThat(http.build(environment).isDumpAfterStart()).isFalse();
-    }
-
-    @Test
-    void defaultsDumpBeforeStopFalse() throws Exception {
-        assertThat(http.getDumpBeforeStop()).isFalse();
-        assertThat(http.build(environment).isDumpBeforeStop()).isFalse();
-    }
-
-    @Test
-    void configuresDumpAfterStart() throws Exception {
-        http.setDumpAfterStart(true);
-        assertThat(http.build(environment).isDumpAfterStart()).isTrue();
-    }
-
-    @Test
-    void configuresDumpBeforeExit() throws Exception {
-        http.setDumpBeforeStop(true);
-        assertThat(http.build(environment).isDumpBeforeStop()).isTrue();
-    }
-
-    @Test
-    void defaultsDetailedJsonProcessingExceptionToFalse() {
+    public void defaultsDetailedJsonProcessingExceptionToFalse() throws Exception {
         http.build(environment);
         assertThat(environment.jersey().getResourceConfig().getSingletons())
             .filteredOn(x -> x instanceof ExceptionMapperBinder)
-            .map(x -> (ExceptionMapperBinder) x)
-            .singleElement()
-            .satisfies(x -> assertThat(x.isShowDetails()).isFalse());
+            .hasOnlyOneElementSatisfying(x ->
+                assertThat(((ExceptionMapperBinder) x).isShowDetails()).isFalse());
     }
 
     @Test
-    void doesNotDefaultDetailedJsonProcessingExceptionToFalse() {
+    public void doesNotDefaultDetailedJsonProcessingExceptionToFalse() throws Exception {
         http.setDetailedJsonProcessingExceptionMapper(true);
 
         http.build(environment);
         assertThat(environment.jersey().getResourceConfig().getSingletons())
             .filteredOn(x -> x instanceof ExceptionMapperBinder)
-            .map(x -> (ExceptionMapperBinder) x)
-            .singleElement()
-            .satisfies(x -> assertThat(x.isShowDetails()).isTrue());
+            .hasOnlyOneElementSatisfying(x ->
+                assertThat(((ExceptionMapperBinder) x).isShowDetails()).isTrue());
     }
 
     @Test
-    void testGracefulShutdown() throws Exception {
+    public void testGracefulShutdown() throws Exception {
         CountDownLatch requestReceived = new CountDownLatch(1);
         CountDownLatch shutdownInvoked = new CountDownLatch(1);
 
@@ -235,7 +215,7 @@ class DefaultServerFactoryTest {
     }
 
     @Test
-    void testConfiguredEnvironment() {
+    public void testConfiguredEnvironment() {
         http.configure(environment);
 
         assertEquals(http.getAdminContextPath(), environment.getAdminContext().getContextPath());
@@ -243,7 +223,7 @@ class DefaultServerFactoryTest {
     }
 
     @Test
-    void testDeserializeWithoutJsonAutoDetect() {
+    public void testDeserializeWithoutJsonAutoDetect() {
         final ObjectMapper objectMapper = Jackson.newObjectMapper()
             .setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE);
 
