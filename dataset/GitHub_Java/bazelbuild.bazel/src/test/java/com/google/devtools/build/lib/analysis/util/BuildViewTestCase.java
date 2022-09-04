@@ -338,7 +338,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected ResourceSet getStartingResources() {
     // Effectively disable ResourceManager by default.
-    return ResourceSet.createWithRamCpu(Double.MAX_VALUE, Double.MAX_VALUE);
+    return ResourceSet.createWithRamCpuIo(Double.MAX_VALUE, Double.MAX_VALUE, Double.MAX_VALUE);
   }
 
   protected final BuildConfigurationCollection createConfigurations(String... args)
@@ -353,7 +353,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     allArgs.add("--stamp");  // Stamp is now defaulted to false.
     allArgs.add("--experimental_extended_sanity_checks");
     allArgs.add("--features=cc_include_scanning");
-    allArgs.addAll(getAnalysisMock().getOptionOverrides());
 
     optionsParser.parse(allArgs);
     optionsParser.parse(args);
