@@ -17,6 +17,7 @@ import javax.inject.Inject;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
@@ -54,8 +55,10 @@ public class ConfiguredBeanTest {
 
     /**
      * Validate that the TestBuildAndRunTimeConfig is the same as seen at build time
+     * Currently disabled due to https://github.com/quarkusio/quarkus/issues/962
      */
     @Test
+    @Disabled("https://github.com/quarkusio/quarkus/issues/962")
     public void validateBuildTimeConfig() {
         TestBuildAndRunTimeConfig buildTimeConfig = configuredBean.getBuildTimeConfig();
         Assertions.assertEquals("StringBasedValue", buildTimeConfig.btSBV.getValue(),
