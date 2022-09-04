@@ -69,11 +69,12 @@ public class AlertScanner {
                     LOG.debug("Alert condition [{}] is triggered. Sending alerts.", alertCondition);
                     handleTriggeredAlert(result, stream, alertCondition);
                 } else {
+                    final Alert triggeredAlert = alert.get();
                     // There is already an alert for this condition and is unresolved
-                    if (alert.isPresent() && alertCondition.shouldRepeatNotifications()) {
+                    if (alertService.shouldRepeatNotifications(alertCondition, triggeredAlert)) {
                         // Repeat notifications because user wants to do that
                         LOG.debug("Alert condition [{}] is triggered and configured to repeat alert notifications. Sending alerts.", alertCondition);
-                        handleRepeatedAlert(stream, alertCondition, result, alert.get());
+                        handleRepeatedAlert(stream, alertCondition, result, triggeredAlert);
                     } else {
                         LOG.debug("Alert condition [{}] is triggered but alerts were already sent. Nothing to do.", alertCondition);
                     }
@@ -89,7 +90,12 @@ public class AlertScanner {
                 }
             }
         } catch (Exception e) {
-            LOG.error("Skipping alert check that threw an exception.", e);
+            if (LOG.isDebugEnabled()) {
+                LOG.error("Skipping alert check <{}/{}>", alertCondition.getTitle(), alertCondition.getId(), e);
+            } else {
+                LOG.error("Skipping alert check <{}/{}>: {} ({})", alertCondition.getTitle(),
+                        alertCondition.getId(), e.getMessage(), e.getClass().getSimpleName());
+            }
         }
         return false;
     }
