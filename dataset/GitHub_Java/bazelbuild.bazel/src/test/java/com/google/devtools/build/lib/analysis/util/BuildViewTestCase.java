@@ -36,7 +36,6 @@ import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.MapBasedActionGraph;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.actions.MutableActionGraph;
@@ -83,7 +82,6 @@ import com.google.devtools.build.lib.analysis.extra.ExtraAction;
 import com.google.devtools.build.lib.analysis.test.BaselineCoverageAction;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.buildtool.BuildRequest;
-import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -133,6 +131,7 @@ import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.testutil.BlazeTestUtils;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.testutil.TestConstants;
+import com.google.devtools.build.lib.util.BlazeClock;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtil;
@@ -234,7 +233,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
             ImmutableList.<DiffAwareness.Factory>of(),
             Predicates.<PathFragment>alwaysFalse(),
             analysisMock.getSkyFunctions(),
-            ImmutableList.of(),
+            getPrecomputedValues(),
             ImmutableList.<SkyValueDirtinessChecker>of(),
             PathFragment.EMPTY_FRAGMENT,
             analysisMock.getProductName(),
@@ -280,6 +279,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected Iterable<EnvironmentExtension> getEnvironmentExtensions() {
     return ImmutableList.<EnvironmentExtension>of();
+  }
+
+  protected ImmutableList<PrecomputedValue.Injected> getPrecomputedValues() {
+    return ImmutableList.of();
   }
 
   protected SkylarkSemanticsOptions getSkylarkSemantics() {
@@ -688,8 +691,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return (SpawnAction) getGeneratingAction(artifact);
   }
 
-  protected final List<String> getGeneratingSpawnActionArgs(Artifact artifact)
-      throws CommandLineExpansionException {
+  protected final List<String> getGeneratingSpawnActionArgs(Artifact artifact) {
     SpawnAction a = getGeneratingSpawnAction(artifact);
     ParameterFileWriteAction p = findParamsFileAction(a);
     return p == null

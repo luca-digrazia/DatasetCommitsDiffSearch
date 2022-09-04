@@ -390,7 +390,7 @@ public class BuildViewTest extends BuildViewTestBase {
     update("//package:top");
     ConfiguredTarget top = getConfiguredTarget("//package:top", getTargetConfiguration());
     Iterable<Dependency> targets = getView().getDirectPrerequisiteDependenciesForTesting(
-        reporter, top, getBuildConfigurationCollection(), /*toolchainContext=*/ null).values();
+        reporter, top, getBuildConfigurationCollection()).values();
 
     Dependency innerDependency =
         Dependency.withTransitionAndAspects(
@@ -1238,8 +1238,8 @@ public class BuildViewTest extends BuildViewTestBase {
     useConfiguration("--experimental_dynamic_configs=on");
     AnalysisResult res = update("//foo:x");
     ConfiguredTarget topLevelTarget = Iterables.getOnlyElement(res.getTargetsToBuild());
-    assertThat(topLevelTarget.getConfiguration().getAllFragments().keySet())
-        .containsExactly(ruleClassProvider.getUniversalFragment(), PlatformConfiguration.class);
+    assertThat(topLevelTarget.getConfiguration().getAllFragments().keySet()).containsExactly(
+        ruleClassProvider.getUniversalFragment());
   }
 
   @Test

@@ -1061,10 +1061,6 @@ public class BuildView {
     }
 
     class SilentDependencyResolver extends DependencyResolver {
-      private SilentDependencyResolver() {
-        super(ruleClassProvider.getDynamicTransitionMapper());
-      }
-
       @Override
       protected void invalidVisibilityReferenceHook(TargetAndConfiguration node, Label label) {
         throw new RuntimeException("bad visibility on " + label + " during testing unexpected");
