@@ -23,8 +23,6 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.Builder;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
-import com.google.devtools.build.lib.analysis.PlatformConfigurationLoader;
-import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
 import com.google.devtools.build.lib.bazel.rules.BazelToolchainType.BazelToolchainTypeRule;
@@ -121,7 +119,6 @@ import com.google.devtools.build.lib.rules.java.proto.JavaProtoSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleBinaryRule;
 import com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon;
 import com.google.devtools.build.lib.rules.objc.AppleStaticLibraryRule;
-import com.google.devtools.build.lib.rules.objc.AppleStubBinaryRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatch1ExtensionRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatch2ExtensionRule;
 import com.google.devtools.build.lib.rules.objc.AppleWatchExtensionBinaryRule;
@@ -244,9 +241,6 @@ public class BazelRuleClassProvider {
       new RuleSet() {
         @Override
         public void init(Builder builder) {
-          builder.addConfigurationOptions(PlatformOptions.class);
-          builder.addConfigurationFragment(new PlatformConfigurationLoader());
-
           builder.addRuleDefinition(new ConstraintSettingRule());
           builder.addRuleDefinition(new ConstraintValueRule());
           builder.addRuleDefinition(new PlatformRule());
@@ -564,7 +558,6 @@ public class BazelRuleClassProvider {
           builder.addNativeAspectClass(objcProtoAspect);
           builder.addRuleDefinition(new AppleBinaryRule(objcProtoAspect));
           builder.addRuleDefinition(new AppleStaticLibraryRule(objcProtoAspect));
-          builder.addRuleDefinition(new AppleStubBinaryRule());
           builder.addRuleDefinition(new ObjcProtoLibraryRule(objcProtoAspect));
 
           builder.addRuleDefinition(new AppleCcToolchainRule());
@@ -590,9 +583,9 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new ObjcRuleClasses.SimulatorRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CompilingRule());
           builder.addRuleDefinition(new ObjcRuleClasses.LinkingRule(objcProtoAspect));
-          builder.addRuleDefinition(new ObjcRuleClasses.PlatformRule());
           builder.addRuleDefinition(new ObjcRuleClasses.MultiArchPlatformRule());
           builder.addRuleDefinition(new ObjcRuleClasses.ResourcesRule());
+          builder.addRuleDefinition(new ObjcRuleClasses.XcodegenRule());
           builder.addRuleDefinition(new ObjcRuleClasses.AlwaysLinkRule());
           builder.addRuleDefinition(new ObjcRuleClasses.SdkFrameworksDependerRule());
           builder.addRuleDefinition(new ObjcRuleClasses.CompileDependencyRule());
