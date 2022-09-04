@@ -14,7 +14,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -24,7 +23,6 @@ import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.exporter.ExplodedExporter;
@@ -44,8 +42,6 @@ import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.app.RunningQuarkusApplication;
 import io.quarkus.bootstrap.classloading.ClassPathElement;
 import io.quarkus.bootstrap.classloading.QuarkusClassLoader;
-import io.quarkus.bootstrap.model.AppArtifact;
-import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.builder.BuildChainBuilder;
 import io.quarkus.builder.BuildContext;
 import io.quarkus.builder.BuildException;
@@ -87,13 +83,11 @@ public class QuarkusUnitTest
     private CuratedApplication curatedApplication;
     private RunningQuarkusApplication runningQuarkusApplication;
     private ClassLoader originalClassLoader;
-    private List<AppArtifact> forcedDependencies = Collections.emptyList();
 
     private boolean useSecureConnection;
 
     private Class<?> actualTestClass;
     private Object actualTestInstance;
-    private String[] commandLineParameters = new String[0];
 
     private boolean allowTestClassOutsideDeployment;
 
@@ -163,24 +157,6 @@ public class QuarkusUnitTest
     // set a Runnable that will run after EVERYTHING else is done
     public QuarkusUnitTest setAfterAllCustomizer(Runnable afterAllCustomizer) {
         this.afterAllCustomizer = afterAllCustomizer;
-        return this;
-    }
-
-    /**
-     * Provides a convenient way to either add additional dependencies to the application (if it doesn't already contain a
-     * dependency), or override a version (if the dependency already exists)
-     */
-    public QuarkusUnitTest setForcedDependencies(List<AppArtifact> forcedDependencies) {
-        this.forcedDependencies = forcedDependencies;
-        return this;
-    }
-
-    public String[] getCommandLineParameters() {
-        return commandLineParameters;
-    }
-
-    public QuarkusUnitTest setCommandLineParameters(String... commandLineParameters) {
-        this.commandLineParameters = commandLineParameters;
         return this;
     }
 
@@ -274,7 +250,7 @@ public class QuarkusUnitTest
         invocation.skip();
     }
 
-    private void runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext) throws Throwable {
+    private void runExtensionMethod(ReflectiveInvocationContext<Method> invocationContext) {
         Method newMethod = null;
         Class<?> c = actualTestClass;
         while (c != Object.class) {
@@ -294,7 +270,10 @@ public class QuarkusUnitTest
             newMethod.setAccessible(true);
             newMethod.invoke(actualTestInstance, invocationContext.getArguments().toArray());
         } catch (InvocationTargetException e) {
-            throw e.getCause();
+            if (e.getCause() instanceof RuntimeException) {
+                throw (RuntimeException) e.getCause();
+            }
+            throw new RuntimeException(e.getCause());
         } catch (IllegalAccessException e) {
             throw new RuntimeException(e);
         }
@@ -334,7 +313,7 @@ public class QuarkusUnitTest
 
                 @Override
                 public void close() throws Throwable {
-                    manager.close();
+                    manager.stop();
                 }
             });
         }
@@ -377,13 +356,10 @@ public class QuarkusUnitTest
             final Path testLocation = PathTestHelper.getTestClassesLocation(testClass);
 
             try {
-                QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder()
-                        .setApplicationRoot(deploymentDir)
+                QuarkusBootstrap.Builder builder = QuarkusBootstrap.builder(deploymentDir)
                         .setMode(QuarkusBootstrap.Mode.TEST)
                         .addExcludedPath(testLocation)
-                        .setProjectRoot(testLocation)
-                        .setForcedDependencies(forcedDependencies.stream().map(d -> new AppDependency(d, "compile"))
-                                .collect(Collectors.toList()));
+                        .setProjectRoot(testLocation);
                 if (!allowTestClassOutsideDeployment) {
                     builder
                             .setBaseClassLoader(
@@ -395,7 +371,7 @@ public class QuarkusUnitTest
 
                 runningQuarkusApplication = new AugmentActionImpl(curatedApplication, customizers)
                         .createInitialRuntimeApplication()
-                        .run(commandLineParameters);
+                        .run(new String[0]);
                 //we restore the CL at the end of the test
                 Thread.currentThread().setContextClassLoader(runningQuarkusApplication.getClassLoader());
                 if (assertException != null) {
