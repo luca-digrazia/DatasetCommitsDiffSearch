@@ -95,8 +95,4 @@ public class TestRecorder {
     public void relaxedObject(@RelaxedValidation ValidationFails validationFails) {
         RESULT.add(validationFails);
     }
-
-    public void ignoredProperties(IgnoredProperties ignoredProperties) {
-        RESULT.add(ignoredProperties);
-    }
 }
