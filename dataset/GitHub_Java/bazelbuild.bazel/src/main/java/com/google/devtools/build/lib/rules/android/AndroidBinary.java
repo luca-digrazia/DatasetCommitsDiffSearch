@@ -257,10 +257,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
             androidSemantics,
             resourceApk,
             ruleContext.getConfiguration().isCodeCoverageEnabled(),
-            /* collectJavaCompilationArgs= */ true,
-            /* isBinary= */ true,
+            true /* collectJavaCompilationArgs */,
+            true, /* isBinary */
             excludedRuntimeArtifacts,
-            /* generateExtensionRegistry= */ true);
+            true /* generateExtensionRegistry */);
     ruleContext.assertNoErrors();
 
     Function<Artifact, Artifact> derivedJarFunction =
@@ -558,12 +558,13 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     androidCommon.addTransitiveInfoProviders(
         builder,
-        /* aar= */ null,
+        null /* aar */,
         resourceApk,
         zipAlignedApk,
         apksUnderTest,
         nativeLibs,
-        androidCommon.isNeverLink());
+        androidCommon.isNeverLink()
+    );
 
     if (dexPostprocessingOutput.proguardMap() != null) {
       builder.addProvider(
