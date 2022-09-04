@@ -337,12 +337,12 @@ public class AndroidResourcesProcessorBuilder {
             .useParameterFile(ParameterFileType.UNQUOTED)
             .addTool(sdk.getAapt())
             .addTransitiveInputs(inputs.build())
-            .addOutputs(ImmutableList.copyOf(outs))
+            .addOutputs(ImmutableList.<Artifact>copyOf(outs))
             .setCommandLine(builder.build())
             .setExecutable(
                 ruleContext.getExecutablePrerequisite("$android_resources_busybox", Mode.HOST))
             .setProgressMessage("Processing Android resources for " + ruleContext.getLabel())
-            .setMnemonic("AaptPackage")
+            .setMnemonic("AndroidAapt")
             .build(context));
 
     // Return the full set of processed transitive dependencies.

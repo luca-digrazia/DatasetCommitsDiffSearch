@@ -570,8 +570,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "experimental_use_parallel_android_resource_processing",
       defaultValue = "true",
-      deprecationWarning =
-          "This flag is deprecated and is a no-op. It will be removed in a future release.",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
       effectTags = {OptionEffectTag.UNKNOWN},
       help =
@@ -598,6 +596,18 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
       help = "Build Android APKs with SingleJar."
     )
     public boolean useSingleJarApkBuilder;
+
+    @Option(
+      name = "experimental_android_use_singlejar_for_multidex",
+      defaultValue = "true",
+      metadataTags = {OptionMetadataTag.HIDDEN},
+      deprecationWarning =
+          "This flag is deprecated and is a no-op. It will be removed in a future release.",
+      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help = "This flag is deprecated and is a no-op. It will be removed in a future release."
+    )
+    public boolean useSingleJarForMultidex;
 
     @Option(
       name = "experimental_android_resource_filtering_method",
@@ -750,6 +760,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean useRexToCompressDexFiles;
   private final boolean allowAndroidLibraryDepsWithoutSrcs;
   private final boolean useAndroidResourceShrinking;
+  private final boolean useParallelResourceProcessing;
   private final AndroidManifestMerger manifestMerger;
   private final ApkSigningMethod apkSigningMethod;
   private final boolean useSingleJarApkBuilder;
@@ -785,6 +796,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.allowAndroidLibraryDepsWithoutSrcs = options.allowAndroidLibraryDepsWithoutSrcs;
     this.useAndroidResourceShrinking = options.useAndroidResourceShrinking
         || options.useExperimentalAndroidResourceShrinking;
+    this.useParallelResourceProcessing = options.useParallelResourceProcessing;
     this.manifestMerger = options.manifestMerger;
     this.apkSigningMethod = options.apkSigningMethod;
     this.useSingleJarApkBuilder = options.useSingleJarApkBuilder;
@@ -876,6 +888,10 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean useAndroidResourceShrinking() {
     return useAndroidResourceShrinking;
+  }
+
+  public boolean useParallelResourceProcessing() {
+    return useParallelResourceProcessing;
   }
 
   public AndroidAaptVersion getAndroidAaptVersion() {
