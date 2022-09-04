@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.rules.cpp;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
-import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationInfo;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationOutputs;
@@ -63,8 +62,7 @@ public class BazelCcModule extends CcModule
       SkylarkList<Artifact> headers,
       Object skylarkIncludes,
       Object skylarkCopts,
-      SkylarkList<CcCompilationContext> ccCompilationContexts,
-      Location location)
+      SkylarkList<CcCompilationContext> ccCompilationContexts)
       throws EvalException, InterruptedException {
     return BazelCcModule.compile(
         BazelCppSemantics.INSTANCE,
@@ -80,8 +78,7 @@ public class BazelCcModule extends CcModule
         /* skylarkAdditionalCompilationInputs= */ Runtime.NONE,
         /* skylarkAdditionalIncludeScanningRoots= */ Runtime.NONE,
         ccCompilationContexts,
-        /* purpose= */ Runtime.NONE,
-        location);
+        /* purpose= */ Runtime.NONE);
   }
 
   @Override
