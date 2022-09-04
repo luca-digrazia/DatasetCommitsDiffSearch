@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.apple.DottedVersionConverter;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
 import com.google.devtools.common.options.Option;
@@ -30,9 +31,13 @@ import java.util.List;
 /** Command-line options for building Objective-C targets. */
 @AutoCodec(strategy = AutoCodec.Strategy.PUBLIC_FIELDS)
 public class ObjcCommandLineOptions extends FragmentOptions {
+  public static final ObjectCodec<ObjcCommandLineOptions> CODEC =
+      new ObjcCommandLineOptions_AutoCodec();
+
   @Option(
     name = "ios_simulator_version",
     defaultValue = "9.3",
+    category = "run",
     converter = DottedVersionConverter.class,
     documentationCategory = OptionDocumentationCategory.TESTING,
     effectTags = {OptionEffectTag.TEST_RUNNER},
@@ -45,6 +50,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "ios_simulator_device",
     defaultValue = "iPhone 5s",
+    category = "run",
     documentationCategory = OptionDocumentationCategory.TESTING,
     effectTags = {OptionEffectTag.TEST_RUNNER},
     help =
@@ -57,6 +63,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "watchos_simulator_version",
     defaultValue = "2.0",
+    category = "run",
     converter = DottedVersionConverter.class,
     documentationCategory = OptionDocumentationCategory.TESTING,
     effectTags = {OptionEffectTag.TEST_RUNNER},
@@ -67,6 +74,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "watchos_simulator_device",
     defaultValue = "Apple Watch - 38mm",
+    category = "run",
     documentationCategory = OptionDocumentationCategory.TESTING,
     effectTags = {OptionEffectTag.TEST_RUNNER},
     help =
@@ -79,6 +87,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "tvos_simulator_version",
     defaultValue = "9.0",
+    category = "run",
     converter = DottedVersionConverter.class,
     documentationCategory = OptionDocumentationCategory.TESTING,
     effectTags = {OptionEffectTag.TEST_RUNNER},
@@ -89,6 +98,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "tvos_simulator_device",
     defaultValue = "Apple TV 1080p",
+    category = "run",
     documentationCategory = OptionDocumentationCategory.TESTING,
     effectTags = {OptionEffectTag.TEST_RUNNER},
     help =
@@ -101,6 +111,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "objc_generate_linkmap",
     defaultValue = "false",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     help = "Specifies whether to generate a linkmap file."
@@ -111,6 +122,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     name = "objccopt",
     allowMultiple = true,
     defaultValue = "",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
     help = "Additional options to pass to Objective C compilation."
@@ -120,6 +132,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "ios_memleaks",
     defaultValue = "false",
+    category = "misc",
     documentationCategory = OptionDocumentationCategory.TESTING,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
     help = "Enable checking for memory leaks in ios_test targets."
@@ -160,6 +173,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "objc_enable_binary_stripping",
     defaultValue = "false",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
     help =
@@ -172,6 +186,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "apple_generate_dsym",
     defaultValue = "false",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.ACTION_COMMAND_LINES},
     help = "Whether to generate debug symbol(.dSYM) file(s)."
@@ -181,6 +196,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "ios_signing_cert_name",
     defaultValue = "null",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.SIGNING,
     effectTags = {OptionEffectTag.ACTION_COMMAND_LINES},
     help =
@@ -204,6 +220,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "extra_entitlements",
     defaultValue = "null",
+    category = "flags",
     converter = LabelConverter.class,
     documentationCategory = OptionDocumentationCategory.SIGNING,
     effectTags = {OptionEffectTag.CHANGES_INPUTS},
@@ -216,6 +233,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "device_debug_entitlements",
     defaultValue = "true",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.SIGNING,
     effectTags = {OptionEffectTag.CHANGES_INPUTS},
     help =
@@ -227,6 +245,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "objc_use_dotd_pruning",
     defaultValue = "true",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
     help =
@@ -238,6 +257,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "enable_apple_binary_native_protos",
     defaultValue = "true",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
     effectTags = {OptionEffectTag.AFFECTS_OUTPUTS},
     metadataTags = {OptionMetadataTag.INCOMPATIBLE_CHANGE},
@@ -248,6 +268,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
   @Option(
     name = "experimental_objc_header_thinning",
     defaultValue = "false",
+    category = "flags",
     documentationCategory = OptionDocumentationCategory.BUILD_TIME_OPTIMIZATION,
     effectTags = {OptionEffectTag.CHANGES_INPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
     metadataTags = {OptionMetadataTag.EXPERIMENTAL},

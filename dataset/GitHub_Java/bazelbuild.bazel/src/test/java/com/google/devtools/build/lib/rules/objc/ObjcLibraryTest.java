@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
 import com.google.devtools.build.lib.analysis.util.ScratchAttributeWriter;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
@@ -120,58 +121,6 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         .containsAllOf("objc/a.m", "objc/hdr.h", "objc/private.h");
     assertThat(Artifact.toRootRelativePaths(compileA.getOutputs()))
         .containsExactly("objc/_objs/x/objc/a.o", "objc/_objs/x/objc/a.d");
-  }
-
-  @Test
-  public void testCompilesSourcesWithSameBaseNameWithNewObjPath() throws Exception {
-    useConfiguration("--experimental_shortened_obj_file_path=true");
-    createLibraryTargetWriter("//foo:lib")
-        .setAndCreateFiles("srcs", "a.m", "pkg1/a.m", "b.m")
-        .setAndCreateFiles("non_arc_srcs", "pkg2/a.m")
-        .write();
-
-    getConfiguredTarget("//foo:lib");
-
-    Artifact a0 = getBinArtifact("_objs/lib/arc/0/a.o", "//foo:lib");
-    Artifact a1 = getBinArtifact("_objs/lib/arc/1/a.o", "//foo:lib");
-    Artifact a2 = getBinArtifact("_objs/lib/non_arc/a.o", "//foo:lib");
-    Artifact b = getBinArtifact("_objs/lib/arc/b.o", "//foo:lib");
-
-    assertThat(getGeneratingAction(a0)).isNotNull();
-    assertThat(getGeneratingAction(a1)).isNotNull();
-    assertThat(getGeneratingAction(a2)).isNotNull();
-    assertThat(getGeneratingAction(b)).isNotNull();
-
-    assertThat(getGeneratingAction(a0).getInputs()).contains(getSourceArtifact("foo/a.m"));
-    assertThat(getGeneratingAction(a1).getInputs()).contains(getSourceArtifact("foo/pkg1/a.m"));
-    assertThat(getGeneratingAction(a2).getInputs()).contains(getSourceArtifact("foo/pkg2/a.m"));
-    assertThat(getGeneratingAction(b).getInputs()).contains(getSourceArtifact("foo/b.m"));
-  }
-
-  @Test
-  public void testCompilesSourcesWithSameBaseNameWithLegacyObjPath() throws Exception {
-    useConfiguration("--experimental_shortened_obj_file_path=false");
-    createLibraryTargetWriter("//foo:lib")
-        .setAndCreateFiles("srcs", "a.m", "pkg1/a.m", "b.m")
-        .setAndCreateFiles("non_arc_srcs", "pkg2/a.m")
-        .write();
-
-    getConfiguredTarget("//foo:lib");
-
-    Artifact a0 = getBinArtifact("_objs/lib/foo/a.o", "//foo:lib");
-    Artifact a1 = getBinArtifact("_objs/lib/foo/pkg1/a.o", "//foo:lib");
-    Artifact a2 = getBinArtifact("_objs/lib/foo/pkg2/a.o", "//foo:lib");
-    Artifact b = getBinArtifact("_objs/lib/foo/b.o", "//foo:lib");
-
-    assertThat(getGeneratingAction(a0)).isNotNull();
-    assertThat(getGeneratingAction(a1)).isNotNull();
-    assertThat(getGeneratingAction(a2)).isNotNull();
-    assertThat(getGeneratingAction(b)).isNotNull();
-
-    assertThat(getGeneratingAction(a0).getInputs()).contains(getSourceArtifact("foo/a.m"));
-    assertThat(getGeneratingAction(a1).getInputs()).contains(getSourceArtifact("foo/pkg1/a.m"));
-    assertThat(getGeneratingAction(a2).getInputs()).contains(getSourceArtifact("foo/pkg2/a.m"));
-    assertThat(getGeneratingAction(b).getInputs()).contains(getSourceArtifact("foo/b.m"));
   }
 
   @Test
@@ -1462,14 +1411,15 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "cc_library(",
         "    name = 'cc_lib_impl',",
         "    srcs = [",
-        "        'a.c',",
-        "        'a.h',",
+        "        'v1/a.c',",
+        "        'v1/a.h',",
         "    ],",
         ")",
         "",
-        "cc_library(",
+        "cc_inc_library(",
         "    name = 'cc_lib',",
-        "    hdrs = ['a.h'],",
+        "    hdrs = ['v1/a.h'],",
+        "    prefix = 'v1',",
         "    deps = [':cc_lib_impl'],",
         ")");
     createLibraryTargetWriter("//objc2:lib")
@@ -1623,10 +1573,10 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
         "    ],",
         ")",
         "",
-        "cc_library(",
+        "cc_inc_library(",
         "    name = 'cc_lib',",
         "    hdrs = ['v1/a.h'],",
-        "    strip_include_prefix = 'v1',",
+        "    prefix = 'v1',",
         "    deps = [':cc_lib_impl'],",
         ")");
 
@@ -1643,8 +1593,12 @@ public class ObjcLibraryTest extends ObjcRuleTestCase {
     String compileActionArgs = Joiner.on("")
         .join(compileAction.getArguments())
         .replace(" ", "");
-    assertThat(compileActionArgs)
-        .matches(".*-iquote.*/third_party/cc_lib/_virtual_includes/cc_lib.*");
+    String includeDir =
+        getAppleCrosstoolConfiguration()
+                .getIncludeDirectory(RepositoryName.MAIN)
+                .getExecPathString()
+            + "/third_party/cc_lib/_/cc_lib";
+    assertThat(compileActionArgs).contains("-I" + includeDir);
   }
 
   @Test

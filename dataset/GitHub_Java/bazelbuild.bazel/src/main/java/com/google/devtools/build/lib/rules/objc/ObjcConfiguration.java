@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -39,6 +40,8 @@ import javax.annotation.Nullable;
 )
 @Immutable
 public class ObjcConfiguration extends BuildConfiguration.Fragment {
+  public static final ObjectCodec<ObjcConfiguration> CODEC = new ObjcConfiguration_AutoCodec();
+
   @VisibleForTesting
   static final ImmutableList<String> DBG_COPTS =
       ImmutableList.of("-O0", "-DDEBUG=1", "-fstack-protector", "-fstack-protector-all", "-g");
@@ -92,13 +95,11 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment {
         Preconditions.checkNotNull(objcOptions.tvosSimulatorDevice, "tvosSimulatorDevice");
     this.tvosSimulatorVersion =
         Preconditions.checkNotNull(objcOptions.tvosSimulatorVersion, "tvosSimulatorVersion");
+    this.generateDsym = objcOptions.appleGenerateDsym;
     this.generateLinkmap = objcOptions.generateLinkmap;
     this.runMemleaks = objcOptions.runMemleaks;
     this.copts = ImmutableList.copyOf(objcOptions.copts);
     this.compilationMode = Preconditions.checkNotNull(options.compilationMode, "compilationMode");
-    this.generateDsym =
-        objcOptions.appleGenerateDsym
-            || (objcOptions.appleEnableAutoDsymDbg && this.compilationMode == CompilationMode.DBG);
     this.fastbuildOptions = ImmutableList.copyOf(objcOptions.fastbuildOptions);
     this.enableBinaryStripping = objcOptions.enableBinaryStripping;
     this.moduleMapsEnabled = objcOptions.enableModuleMaps;
