@@ -1,13 +1,15 @@
 package io.dropwizard.views.mustache;
 
 import com.codahale.metrics.MetricRegistry;
-import io.dropwizard.jersey.DropwizardResourceConfig;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.views.ViewMessageBodyWriter;
 import io.dropwizard.views.ViewRenderExceptionMapper;
 import io.dropwizard.views.ViewRenderer;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.test.JerseyTest;
+import org.glassfish.jersey.test.TestProperties;
 import org.junit.Test;
 
 import javax.ws.rs.GET;
@@ -16,7 +18,6 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.Application;
 import javax.ws.rs.core.MediaType;
-import java.util.Collections;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
@@ -62,10 +63,11 @@ public class MustacheViewRendererFileSystemTest extends JerseyTest {
 
     @Override
     protected Application configure() {
-        ResourceConfig config = DropwizardResourceConfig.forTesting();
+        forceSet(TestProperties.CONTAINER_PORT, "0");
+        ResourceConfig config = new ResourceConfig();
         final ViewRenderer renderer = new MustacheViewRenderer();
-        renderer.configure(Collections.singletonMap("fileRoot", "src/test/resources"));
-        config.register(new ViewMessageBodyWriter(new MetricRegistry(), Collections.singletonList(renderer)));
+        renderer.configure(ImmutableMap.of("fileRoot", "src/test/resources"));
+        config.register(new ViewMessageBodyWriter(new MetricRegistry(), ImmutableList.of(renderer)));
         config.register(new ViewRenderExceptionMapper());
         config.register(new ExampleResource());
         return config;
