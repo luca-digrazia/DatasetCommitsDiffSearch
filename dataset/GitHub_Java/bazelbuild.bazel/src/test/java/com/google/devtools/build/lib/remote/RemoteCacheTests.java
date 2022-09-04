@@ -1045,9 +1045,9 @@ public class RemoteCacheTests {
     MetadataInjector injector = mock(MetadataInjector.class);
 
     // act
-    BulkTransferException e =
+    IOException e =
         assertThrows(
-            BulkTransferException.class,
+            IOException.class,
             () ->
                 remoteCache.downloadMinimal(
                     r,
@@ -1057,8 +1057,7 @@ public class RemoteCacheTests {
                     execRoot,
                     injector,
                     outputFilesLocker));
-    assertThat(e.getSuppressed()).hasLength(1);
-    assertThat(e.getSuppressed()[0]).isEqualTo(downloadTreeException);
+    assertThat(e).isEqualTo(downloadTreeException);
 
     verify(outputFilesLocker, never()).lock();
   }

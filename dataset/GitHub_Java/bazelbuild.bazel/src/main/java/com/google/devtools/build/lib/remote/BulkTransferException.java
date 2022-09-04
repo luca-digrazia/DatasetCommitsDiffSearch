@@ -46,9 +46,4 @@ class BulkTransferException extends IOException {
   boolean onlyCausedByCacheNotFoundException() {
     return allCacheNotFoundException;
   }
-
-  static boolean isOnlyCausedByCacheNotFoundException(Exception e) {
-    return e instanceof BulkTransferException
-        && ((BulkTransferException) e).onlyCausedByCacheNotFoundException();
-  }
 }
