@@ -31,10 +31,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class AndroidSkylarkSplitTransitionTest extends BuildViewTestCase {
 
-  protected boolean keepGoing() {
-    return false;
-  }
-
   private void writeAndroidSplitTransitionTestFiles() throws Exception  {
     scratch.file(
         "test/skylark/my_rule.bzl",
@@ -54,7 +50,7 @@ public class AndroidSkylarkSplitTransitionTest extends BuildViewTestCase {
 
     scratch.file(
         "test/skylark/BUILD",
-        "load('/test/skylark/my_rule', 'my_rule')",
+        "load('//test/skylark:my_rule.bzl', 'my_rule')",
         "my_rule(name = 'test', deps = [':main1', ':main2'], dep = ':main1')",
         "cc_binary(name = 'main1', srcs = ['main1.c'])",
         "cc_binary(name = 'main2', srcs = ['main2.c'])");
@@ -108,8 +104,8 @@ public class AndroidSkylarkSplitTransitionTest extends BuildViewTestCase {
     for (ConfiguredTarget ct : attrDeps) {
       attrDepsMap.put(ct.getConfiguration().getCpu(), target);
     }
-    assertThat(attrDepsMap.get("k8")).hasSize(2);
-    assertThat(attrDepsMap.get("armeabi-v7a")).hasSize(2);
+    assertThat(attrDepsMap).valuesForKey("k8").hasSize(2);
+    assertThat(attrDepsMap).valuesForKey("armeabi-v7a").hasSize(2);
 
     // Check that even though my_rule.dep is defined as a single label, ctx.attr.dep is still a list
     // with multiple ConfiguredTarget objects because of the two different CPUs. 
@@ -120,8 +116,8 @@ public class AndroidSkylarkSplitTransitionTest extends BuildViewTestCase {
     for (ConfiguredTarget ct : attrDep) {
       attrDepMap.put(ct.getConfiguration().getCpu(), target);
     }
-    assertThat(attrDepMap.get("k8")).hasSize(1);
-    assertThat(attrDepMap.get("armeabi-v7a")).hasSize(1);
+    assertThat(attrDepMap).valuesForKey("k8").hasSize(1);
+    assertThat(attrDepMap).valuesForKey("armeabi-v7a").hasSize(1);
 
     // Check that the deps were correctly accessed from within Skylark.
     @SuppressWarnings("unchecked")
@@ -155,7 +151,7 @@ public class AndroidSkylarkSplitTransitionTest extends BuildViewTestCase {
   public void testAndroidSplitTransitionNoTransition() throws Exception {
     writeAndroidSplitTransitionTestFiles();
 
-    useConfiguration("--fat_apk_cpu=", "--android_crosstool_top=");
+    useConfiguration("--fat_apk_cpu=", "--android_crosstool_top=", "--cpu=k8");
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:test");
 
     @SuppressWarnings("unchecked")
