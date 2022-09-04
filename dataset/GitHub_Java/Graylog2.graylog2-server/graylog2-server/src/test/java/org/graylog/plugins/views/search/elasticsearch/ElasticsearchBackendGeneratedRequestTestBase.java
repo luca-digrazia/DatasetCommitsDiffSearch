@@ -36,9 +36,11 @@ import org.graylog.plugins.views.search.searchtypes.pivot.Pivot;
 import org.graylog.plugins.views.search.searchtypes.pivot.SeriesSpec;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Average;
 import org.graylog.plugins.views.search.searchtypes.pivot.series.Max;
+import org.graylog2.indexer.ranges.IndexRangeService;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.InvalidRangeParametersException;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
+import org.graylog2.streams.StreamService;
 import org.junit.Before;
 import org.junit.Rule;
 import org.mockito.ArgumentCaptor;
@@ -69,7 +71,9 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
     @Mock
     protected JestHttpClient jestClient;
     @Mock
-    protected IndexLookup indexLookup;
+    protected IndexRangeService indexRangeService;
+    @Mock
+    protected StreamService streamService;
 
     @Mock
     protected FieldTypesLookup fieldTypesLookup;
@@ -91,7 +95,8 @@ public class ElasticsearchBackendGeneratedRequestTestBase extends ElasticsearchB
         this.elasticsearchBackend = new ElasticsearchBackend(elasticSearchTypeHandlers,
                 queryStringParser,
                 jestClient,
-                indexLookup,
+                indexRangeService,
+                streamService,
                 new ESQueryDecorators.Fake(),
                 (elasticsearchBackend, ssb, job, query, results) -> new ESGeneratedQueryContext(elasticsearchBackend, ssb, job, query, results, fieldTypesLookup));
     }

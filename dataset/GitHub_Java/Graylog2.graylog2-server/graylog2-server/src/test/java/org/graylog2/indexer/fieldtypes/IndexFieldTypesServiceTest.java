@@ -18,12 +18,11 @@ package org.graylog2.indexer.fieldtypes;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableSet;
-import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
+import org.graylog.testing.mongodb.MongoDBInstance;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
-import org.graylog2.database.MongoConnectionRule;
+import org.graylog2.streams.StreamService;
 import org.junit.After;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -31,26 +30,25 @@ import java.util.Collections;
 import java.util.Set;
 
 import static com.google.common.collect.ImmutableSet.of;
-import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 public class IndexFieldTypesServiceTest {
-    @ClassRule
-    public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
     @Rule
-    public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
+    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
 
     private IndexFieldTypesService dbService;
 
     @Before
     public void setUp() throws Exception {
         final MongoJackObjectMapperProvider objectMapperProvider = new MongoJackObjectMapperProvider(new ObjectMapper());
-        this.dbService = new IndexFieldTypesService(mongoRule.getMongoConnection(), objectMapperProvider);
+        final StreamService streamService = mock(StreamService.class);
+        this.dbService = new IndexFieldTypesService(mongodb.mongoConnection(), streamService, objectMapperProvider);
     }
 
     @After
     public void tearDown() {
-        mongoRule.getMongoConnection().getMongoDatabase().drop();
+        mongodb.mongoConnection().getMongoDatabase().drop();
     }
 
     private IndexFieldTypesDTO createDto(String indexName, String indexSetId, Set<FieldTypeDTO> fields) {
@@ -99,7 +97,7 @@ public class IndexFieldTypesServiceTest {
                 .extracting("indexName")
                 .containsOnly("graylog_1");
 
-        assertThat(dbService.streamAll().count())
+        assertThat(dbService.findAll().size())
                 .as("check that all entries are returned as a stream")
                 .isEqualTo(2);
 
@@ -112,7 +110,7 @@ public class IndexFieldTypesServiceTest {
         final IndexFieldTypesDTO newDto1 = createDto("graylog_0", Collections.emptySet());
         final IndexFieldTypesDTO newDto2 = createDto("graylog_1", Collections.emptySet());
 
-        assertThat(dbService.streamAll().count()).isEqualTo(0);
+        assertThat(dbService.findAll().size()).isEqualTo(0);
 
         final IndexFieldTypesDTO upsertedDto1 = dbService.upsert(newDto1).orElse(null);
         final IndexFieldTypesDTO upsertedDto2 = dbService.upsert(newDto2).orElse(null);
@@ -123,12 +121,12 @@ public class IndexFieldTypesServiceTest {
         assertThat(upsertedDto1.indexName()).isEqualTo("graylog_0");
         assertThat(upsertedDto2.indexName()).isEqualTo("graylog_1");
 
-        assertThat(dbService.streamAll().count()).isEqualTo(2);
+        assertThat(dbService.findAll().size()).isEqualTo(2);
 
         assertThat(dbService.upsert(newDto1)).isNotPresent();
         assertThat(dbService.upsert(newDto2)).isNotPresent();
 
-        assertThat(dbService.streamAll().count()).isEqualTo(2);
+        assertThat(dbService.findAll().size()).isEqualTo(2);
     }
 
     @Test
@@ -141,11 +139,11 @@ public class IndexFieldTypesServiceTest {
         final IndexFieldTypesDTO savedDto2 = dbService.save(newDto2);
         final IndexFieldTypesDTO savedDto3 = dbService.save(newDto3);
 
-        assertThat(dbService.streamForIndexSet("abc").count()).isEqualTo(1);
-        assertThat(dbService.streamForIndexSet("xyz").count()).isEqualTo(2);
+        assertThat(dbService.findForIndexSet("abc").size()).isEqualTo(1);
+        assertThat(dbService.findForIndexSet("xyz").size()).isEqualTo(2);
 
-        assertThat(dbService.streamForIndexSet("abc").findFirst().orElse(null)).isEqualTo(savedDto1);
-        assertThat(dbService.streamForIndexSet("xyz").toArray()).containsExactly(savedDto2, savedDto3);
+        assertThat(dbService.findForIndexSet("abc")).first().isEqualTo(savedDto1);
+        assertThat(dbService.findForIndexSet("xyz").toArray()).containsExactly(savedDto2, savedDto3);
     }
 
     @Test
@@ -157,14 +155,14 @@ public class IndexFieldTypesServiceTest {
                 FieldTypeDTO.create("yolo1", "text")
         )));
 
-        assertThat(dbService.streamForFieldNames(of()).count()).isEqualTo(0);
-        assertThat(dbService.streamForFieldNames(of("message")).count()).isEqualTo(4);
-        assertThat(dbService.streamForFieldNames(of("message", "yolo_1")).count()).isEqualTo(4);
-        assertThat(dbService.streamForFieldNames(of("yolo1")).count()).isEqualTo(1);
-        assertThat(dbService.streamForFieldNames(of("source")).count()).isEqualTo(4);
-        assertThat(dbService.streamForFieldNames(of("source", "non-existent")).count()).isEqualTo(4);
-        assertThat(dbService.streamForFieldNames(of("non-existent")).count()).isEqualTo(0);
-        assertThat(dbService.streamForFieldNames(of("non-existent", "yolo1")).count()).isEqualTo(1);
+        assertThat(dbService.findForFieldNames(of()).size()).isEqualTo(0);
+        assertThat(dbService.findForFieldNames(of("message")).size()).isEqualTo(4);
+        assertThat(dbService.findForFieldNames(of("message", "yolo_1")).size()).isEqualTo(4);
+        assertThat(dbService.findForFieldNames(of("yolo1")).size()).isEqualTo(1);
+        assertThat(dbService.findForFieldNames(of("source")).size()).isEqualTo(4);
+        assertThat(dbService.findForFieldNames(of("source", "non-existent")).size()).isEqualTo(4);
+        assertThat(dbService.findForFieldNames(of("non-existent")).size()).isEqualTo(0);
+        assertThat(dbService.findForFieldNames(of("non-existent", "yolo1")).size()).isEqualTo(1);
     }
 
     @Test
@@ -176,24 +174,24 @@ public class IndexFieldTypesServiceTest {
                 FieldTypeDTO.create("yolo1", "text")
         )));
 
-        assertThat(dbService.streamForFieldNamesAndIndices(
+        assertThat(dbService.findForFieldNamesAndIndices(
                 of(),
                 of()
-        ).count()).isEqualTo(0);
+        ).size()).isEqualTo(0);
 
-        assertThat(dbService.streamForFieldNamesAndIndices(
+        assertThat(dbService.findForFieldNamesAndIndices(
                 of("message"),
                 of("graylog_1")
-        ).count()).isEqualTo(1);
+        ).size()).isEqualTo(1);
 
-        assertThat(dbService.streamForFieldNamesAndIndices(
+        assertThat(dbService.findForFieldNamesAndIndices(
                 of("message", "yolo1"),
                 of("graylog_1", "graylog_3")
-        ).count()).isEqualTo(2);
+        ).size()).isEqualTo(2);
 
-        assertThat(dbService.streamForFieldNamesAndIndices(
+        assertThat(dbService.findForFieldNamesAndIndices(
                 of("message", "yolo1"),
                 of("graylog_1", "graylog_3", "graylog_0")
-        ).count()).isEqualTo(3);
+        ).size()).isEqualTo(3);
     }
 }
