@@ -24,14 +24,12 @@ import io.quarkus.builder.location.Location;
  * @author <a href="mailto:david.lloyd@redhat.com">David M. Lloyd</a>
  */
 public final class BuildContext {
-    private final ClassLoader classLoader;
     private final StepInfo stepInfo;
     private final Execution execution;
     private final AtomicInteger dependencies;
     private volatile boolean running;
 
-    BuildContext(ClassLoader classLoader, final StepInfo stepInfo, final Execution execution) {
-        this.classLoader = classLoader;
+    BuildContext(final StepInfo stepInfo, final Execution execution) {
         this.stepInfo = stepInfo;
         this.execution = execution;
         dependencies = new AtomicInteger(stepInfo.getDependencies());
@@ -271,9 +269,7 @@ public final class BuildContext {
         try {
             if (!execution.isErrorReported()) {
                 running = true;
-                ClassLoader old = Thread.currentThread().getContextClassLoader();
                 try {
-                    Thread.currentThread().setContextClassLoader(classLoader);
                     buildStep.execute(this);
                 } catch (Throwable t) {
                     final List<Diagnostic> list = execution.getDiagnostics();
@@ -281,7 +277,6 @@ public final class BuildContext {
                     execution.setErrorReported();
                 } finally {
                     running = false;
-                    Thread.currentThread().setContextClassLoader(old);
                 }
             }
         } finally {
