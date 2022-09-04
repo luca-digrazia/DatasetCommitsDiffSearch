@@ -1,7 +1,6 @@
 package io.quarkus.security.deployment;
 
-import static io.quarkus.gizmo.FieldDescriptor.of;
-import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
+import static io.quarkus.gizmo.MethodDescriptor.ofConstructor;
 
 import java.util.function.Function;
 
@@ -26,13 +25,12 @@ public class SecurityCheckInstantiationUtil {
                             "Cannot use a null array to create an instance of " + RolesAllowedCheck.class.getName());
                 }
 
-                ResultHandle rolesAllowedArgs = creator.newArray(String.class, creator.load(rolesAllowed.length));
+                ResultHandle ctorArgs = creator.newArray(String.class, creator.load(rolesAllowed.length));
                 int i = 0;
                 for (String val : rolesAllowed) {
-                    creator.writeArrayValue(rolesAllowedArgs, i++, creator.load(val));
+                    creator.writeArrayValue(ctorArgs, i++, creator.load(val));
                 }
-                return creator.invokeStaticMethod(
-                        ofMethod(RolesAllowedCheck.class, "of", RolesAllowedCheck.class, String[].class), rolesAllowedArgs);
+                return creator.newInstance(ofConstructor(RolesAllowedCheck.class, String[].class), ctorArgs);
             }
         };
     }
@@ -41,7 +39,7 @@ public class SecurityCheckInstantiationUtil {
         return new Function<BytecodeCreator, ResultHandle>() {
             @Override
             public ResultHandle apply(BytecodeCreator creator) {
-                return creator.readStaticField(of(DenyAllCheck.class, "INSTANCE", DenyAllCheck.class));
+                return creator.newInstance(ofConstructor(DenyAllCheck.class));
             }
         };
     }
@@ -50,7 +48,7 @@ public class SecurityCheckInstantiationUtil {
         return new Function<BytecodeCreator, ResultHandle>() {
             @Override
             public ResultHandle apply(BytecodeCreator creator) {
-                return creator.readStaticField(of(PermitAllCheck.class, "INSTANCE", PermitAllCheck.class));
+                return creator.newInstance(ofConstructor(PermitAllCheck.class));
             }
         };
     }
@@ -59,7 +57,7 @@ public class SecurityCheckInstantiationUtil {
         return new Function<BytecodeCreator, ResultHandle>() {
             @Override
             public ResultHandle apply(BytecodeCreator creator) {
-                return creator.readStaticField(of(AuthenticatedCheck.class, "INSTANCE", AuthenticatedCheck.class));
+                return creator.newInstance(ofConstructor(AuthenticatedCheck.class));
             }
         };
     }

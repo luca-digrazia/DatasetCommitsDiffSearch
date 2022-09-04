@@ -10,7 +10,6 @@ import java.security.Provider;
 import java.security.Security;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -22,14 +21,12 @@ import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.AnnotationsTransformerBuildItem;
-import io.quarkus.arc.deployment.BeanArchiveIndexBuildItem;
 import io.quarkus.arc.deployment.BeanRegistrarBuildItem;
 import io.quarkus.arc.deployment.InterceptorBindingRegistrarBuildItem;
 import io.quarkus.arc.processor.BeanConfigurator;
@@ -39,6 +36,7 @@ import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
+import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
@@ -135,7 +133,7 @@ public class SecurityProcessor {
 
     @BuildStep
     void gatherSecurityChecks(BuildProducer<BeanRegistrarBuildItem> beanRegistrars,
-            BeanArchiveIndexBuildItem beanArchiveBuildItem,
+            ApplicationIndexBuildItem indexBuildItem,
             BuildProducer<ApplicationClassPredicateBuildItem> classPredicate,
             List<AdditionalSecuredClassesBuildIem> additionalSecuredClasses,
             List<AdditionalSecurityCheckBuildItem> additionalSecurityChecks, SecurityBuildTimeConfig config) {
@@ -150,9 +148,8 @@ public class SecurityProcessor {
 
             @Override
             public void register(RegistrationContext registrationContext) {
-                IndexView index = beanArchiveBuildItem.getIndex();
                 Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> securityChecks = gatherSecurityAnnotations(
-                        index, additionalSecured, config.denyUnannotated);
+                        indexBuildItem, additionalSecured, config.denyUnannotated);
                 for (AdditionalSecurityCheckBuildItem additionalSecurityCheck : additionalSecurityChecks) {
                     securityChecks.put(additionalSecurityCheck.getMethodInfo(),
                             additionalSecurityCheck.getSecurityCheckResultHandleCreator());
@@ -207,19 +204,19 @@ public class SecurityProcessor {
     }
 
     private Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> gatherSecurityAnnotations(
-            IndexView index,
+            ApplicationIndexBuildItem indexBuildItem,
             Set<ClassInfo> additionalSecuredClasses, boolean denyUnannotated) {
 
         Map<MethodInfo, AnnotationInstance> methodToInstanceCollector = new HashMap<>();
         Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> result = new HashMap<>(gatherSecurityAnnotations(
-                index, DotNames.ROLES_ALLOWED, methodToInstanceCollector,
+                indexBuildItem, DotNames.ROLES_ALLOWED, methodToInstanceCollector,
                 (instance -> rolesAllowedSecurityCheck(instance.value().asStringArray()))));
-        result.putAll(gatherSecurityAnnotations(index, DotNames.PERMIT_ALL, methodToInstanceCollector,
+        result.putAll(gatherSecurityAnnotations(indexBuildItem, DotNames.PERMIT_ALL, methodToInstanceCollector,
                 (instance -> permitAllSecurityCheck())));
-        result.putAll(gatherSecurityAnnotations(index, DotNames.AUTHENTICATED, methodToInstanceCollector,
+        result.putAll(gatherSecurityAnnotations(indexBuildItem, DotNames.AUTHENTICATED, methodToInstanceCollector,
                 (instance -> authenticatedSecurityCheck())));
 
-        result.putAll(gatherSecurityAnnotations(index, DotNames.DENY_ALL, methodToInstanceCollector,
+        result.putAll(gatherSecurityAnnotations(indexBuildItem, DotNames.DENY_ALL, methodToInstanceCollector,
                 (instance -> denyAllSecurityCheck())));
 
         /*
@@ -272,13 +269,13 @@ public class SecurityProcessor {
     }
 
     private Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> gatherSecurityAnnotations(
-            IndexView index, DotName dotName,
+            ApplicationIndexBuildItem indexBuildItem, DotName dotName,
             Map<MethodInfo, AnnotationInstance> alreadyCheckedMethods,
             Function<AnnotationInstance, Function<BytecodeCreator, ResultHandle>> securityCheckInstanceCreator) {
 
         Map<MethodInfo, Function<BytecodeCreator, ResultHandle>> result = new HashMap<>();
 
-        Collection<AnnotationInstance> instances = index.getAnnotations(dotName);
+        List<AnnotationInstance> instances = indexBuildItem.getIndex().getAnnotations(dotName);
         // make sure we process annotations on methods first
         for (AnnotationInstance instance : instances) {
             AnnotationTarget target = instance.target();
