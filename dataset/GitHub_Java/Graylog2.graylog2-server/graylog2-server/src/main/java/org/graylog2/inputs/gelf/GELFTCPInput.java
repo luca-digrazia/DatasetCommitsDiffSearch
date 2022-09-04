@@ -20,13 +20,21 @@
 
 package org.graylog2.inputs.gelf;
 
+import com.google.common.collect.Maps;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.plugin.inputs.*;
-import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.configuration.ConfigurationException;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
+import org.jboss.netty.bootstrap.ServerBootstrap;
+import org.jboss.netty.channel.ChannelException;
+import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.graylog2.Core;
 import org.graylog2.plugin.GraylogServer;
 
 /**
@@ -36,9 +44,9 @@ public class GELFTCPInput implements MessageInput {
 
     private static final Logger LOG = LoggerFactory.getLogger(GELFTCPInput.class);
 
-    public static final String NAME = "GELF TCP";
+    private static final String NAME = "GELF TCP";
 
-    private Configuration config;
+    private MessageInputConfiguration config;
     private GraylogServer server;
 
     @Override
@@ -47,7 +55,7 @@ public class GELFTCPInput implements MessageInput {
     }
 
     @Override
-    public void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException {
+    public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException {
         this.config = config;
         this.server = graylogServer;
     }
@@ -88,8 +96,8 @@ public class GELFTCPInput implements MessageInput {
     }
 
     @Override
-    public ConfigurationRequest getRequestedConfiguration() {
-        return new ConfigurationRequest();
+    public MessageInputConfigurationRequest getRequestedConfiguration() {
+        return new MessageInputConfigurationRequest();
     }
 
     @Override

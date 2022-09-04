@@ -1,7 +1,7 @@
 package org.graylog2.indexer;
 
+import com.beust.jcommander.internal.Sets;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.common.base.Joiner;
 import com.google.common.collect.Maps;
 import org.apache.commons.io.FileUtils;
 import org.elasticsearch.ElasticSearchTimeoutException;
@@ -9,6 +9,7 @@ import org.elasticsearch.action.WriteConsistencyLevel;
 import org.elasticsearch.action.admin.cluster.health.ClusterHealthRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoRequest;
 import org.elasticsearch.action.admin.cluster.node.info.NodesInfoResponse;
+import org.elasticsearch.action.admin.cluster.state.ClusterStateRequest;
 import org.elasticsearch.action.admin.indices.stats.IndexStats;
 import org.elasticsearch.action.bulk.BulkRequestBuilder;
 import org.elasticsearch.action.bulk.BulkResponse;
@@ -16,13 +17,16 @@ import org.elasticsearch.action.index.IndexRequest.OpType;
 import org.elasticsearch.action.index.IndexRequestBuilder;
 import org.elasticsearch.action.support.replication.ReplicationType;
 import org.elasticsearch.client.Client;
+import org.elasticsearch.cluster.ClusterState;
+import org.elasticsearch.cluster.metadata.IndexMetaData;
+import org.elasticsearch.cluster.metadata.MappingMetaData;
 import org.elasticsearch.common.settings.loader.YamlSettingsLoader;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.node.Node;
 import org.elasticsearch.node.NodeBuilder;
-import org.graylog2.Configuration;
 import org.graylog2.Core;
 import org.graylog2.UI;
+import org.graylog2.system.activities.Activity;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.counts.Counts;
 import org.graylog2.indexer.indices.Indices;
@@ -31,7 +35,6 @@ import org.graylog2.indexer.ranges.IndexRange;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.indexer.MessageGateway;
-import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -39,6 +42,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.elasticsearch.node.NodeBuilder.nodeBuilder;
@@ -78,25 +82,10 @@ public class Indexer {
 
         // Overwrite from a custom ElasticSearch config file.
         try {
-            if (graylogServer.getConfiguration().getElasticSearchConfigFile() != null) {
-                esSettings = FileUtils.readFileToString(new File(graylogServer.getConfiguration().getElasticSearchConfigFile()));
-                settings.putAll(new YamlSettingsLoader().load(esSettings));
-            }
+            esSettings = FileUtils.readFileToString(new File(graylogServer.getConfiguration().getElasticSearchConfigFile()));
+            settings.putAll(new YamlSettingsLoader().load(esSettings));
         } catch (IOException e) {
-            LOG.warn("Cannot read elasticsearch configuration.");
-        }
-
-        // override loaded settings with ours from graylog2.conf
-        final Configuration conf = server.getConfiguration();
-        settings.put("cluster.name", conf.getEsClusterName());
-        settings.put("node.name", conf.getEsNodeName());
-        settings.put("transport.tcp.port", String.valueOf(conf.getEsTransportTcpPort()));
-        settings.put("node.master", conf.isEsIsMasterEligible() ? "true" : "false");
-        settings.put("node.data", conf.isEsStoreData() ? "true" : "false");
-        settings.put("http.enabled", conf.isEsIsHttpEnabled() ? "true" : "false");
-        settings.put("discovery.zen.ping.multicast.enabled", conf.isEsMulticastDiscovery() ? "true" : "false");
-        if (conf.getEsUnicastHosts() != null) {
-            settings.put("discovery.zen.ping.unicast.hosts", Joiner.on(",").join(conf.getEsUnicastHosts()));
+            throw new RuntimeException("Cannot read elasticsearch configuration.", e);
         }
 
         builder.settings().put(settings);
@@ -106,8 +95,9 @@ public class Indexer {
         try {
             client.admin().cluster().health(new ClusterHealthRequest().waitForYellowStatus()).actionGet(5, TimeUnit.SECONDS);
         } catch(ElasticSearchTimeoutException e) {
-            UI.exitHardWithWall("No ElasticSearch master was found.", new String[]{ "graylog2-server/configuring-and-tuning-elasticsearch-for-graylog2-v0200" });
+            UI.exitHardWithWall("No ElasticSearch master was found.", new String[]{ "graylog2-server/connecting-to-an-elasticsearch-cluster" });
         }
+
 
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -194,6 +184,66 @@ public class Indexer {
                 new Object[] { response.getItems().length, response.getTookInMillis(), response.hasFailures() });
 
         return !response.hasFailures();
+    }
+
+    public Set<String> getAllMessageFields() {
+        Set<String> fields = Sets.newHashSet();
+
+        ClusterStateRequest csr = new ClusterStateRequest().filterBlocks(true).filterNodes(true);
+        ClusterState cs = client.admin().cluster().state(csr).actionGet().getState();
+        for (Map.Entry<String, IndexMetaData> d : cs.getMetaData().indices().entrySet()) {
+            try {
+                MappingMetaData mmd = d.getValue().mapping(TYPE);
+                if (mmd == null) {
+                    // There is no mapping if there are no messages in the index.
+                    continue;
+                }
+
+                Map<String, Object> mapping = (Map<String, Object>) mmd.getSourceAsMap().get("properties");
+
+                fields.addAll(mapping.keySet());
+            } catch(Exception e) {
+                LOG.error("Error while trying to get fields of <{}>", d.getKey(), e);
+                continue;
+            }
+        }
+
+        return fields;
+    }
+    
+    public void runIndexRetention() throws NoTargetIndexException {
+        Map<String, IndexStats> indices = server.getDeflector().getAllDeflectorIndices();
+        int indexCount = indices.size();
+        int maxIndices = server.getConfiguration().getMaxNumberOfIndices();
+        
+        // Do we have more indices than the configured maximum?
+        if (indexCount <= maxIndices) {
+            LOG.debug("Number of indices ({}) lower than limit ({}). Not performing any retention actions.",
+                    indexCount, maxIndices);
+            return;
+        }
+        
+        // We have more indices than the configured maximum! Remove as many as needed.
+        int remove = indexCount-maxIndices;
+        String msg = "Number of indices (" + indexCount + ") higher than limit (" + maxIndices + "). Deleting " + remove + " indices.";
+        LOG.info(msg);
+        server.getActivityWriter().write(new Activity(msg, Indexer.class));
+        
+        for (String indexName : IndexHelper.getOldestIndices(indices.keySet(), remove)) {
+            // Never delete the current deflector target.
+            if (server.getDeflector().getNewestTargetName().equals(indexName)) {
+                LOG.info("Not deleting current deflector target <{}>.", indexName);
+                continue;
+            }
+            
+            msg = "Retention cleaning: Deleting index <" + indexName + ">";
+            LOG.info(msg);
+            server.getActivityWriter().write(new Activity(msg, Indexer.class));
+            
+            // Sorry if this should ever go mad. Delete the index!
+            indices().delete(indexName);
+            IndexRange.destroy(server, indexName);
+        }
     }
     
     public Searches searches() {

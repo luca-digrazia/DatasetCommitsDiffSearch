@@ -21,7 +21,6 @@ package org.graylog2.inputs;
 
 
 import com.google.common.collect.Maps;
-import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.Core;
 import org.graylog2.plugin.inputs.MessageInput;
@@ -30,7 +29,6 @@ import org.graylog2.system.activities.Activity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
@@ -46,7 +44,6 @@ public class Inputs {
 
     private final Core core;
     private Map<String, MessageInput> runningInputs;
-    private Map<String, String> availableInputs;
 
     private ExecutorService executor = Executors.newCachedThreadPool(
             new ThreadFactoryBuilder().setNameFormat("systemjob-executor-%d").build()
@@ -55,7 +52,6 @@ public class Inputs {
     public Inputs(Core core) {
         this.core = core;
         runningInputs = Maps.newHashMap();
-        availableInputs = Maps.newHashMap();
     }
 
     public String launch(final MessageInput input) {
@@ -86,11 +82,7 @@ public class Inputs {
         return runningInputs;
     }
 
-    public Map<String, String> getAvailableInputs() {
-        return availableInputs;
-    }
-
-    public int runningCount() {
+    public int running() {
         return runningInputs.size();
     }
 
@@ -104,9 +96,4 @@ public class Inputs {
             throw new RuntimeException("Could not create input of type <" + type + ">", e);
         }
     }
-
-    public void register(Class clazz, String name) {
-        availableInputs.put(clazz.getCanonicalName(), name);
-    }
-
 }

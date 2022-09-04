@@ -22,45 +22,21 @@
 package org.graylog2.plugin.inputs;
 
 import org.graylog2.plugin.GraylogServer;
-import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.configuration.ConfigurationException;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
-
-import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public abstract class MessageInput {
+public interface MessageInput {
+    
+    public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException;
 
-    protected String inputId;
-    protected String persistId;
+    public void launch() throws MisfireException;
+    public void stop();
 
-    public abstract void configure(Configuration config, GraylogServer graylogServer) throws ConfigurationException;
-
-    public abstract void launch() throws MisfireException;
-    public abstract void stop();
-
-    public abstract ConfigurationRequest getRequestedConfiguration();
-
-    public abstract boolean isExclusive();
-    public abstract String getName();
-    public abstract Map<String, String> getAttributes();
-
-    public void setId(String id) {
-        this.inputId = id;
-    }
-
-    public void setPersistId(String id) {
-        this.persistId = id;
-    }
-
-    public String getId() {
-        return inputId;
-    }
-
-    public String getPersistId() {
-        return persistId;
-    }
+    public MessageInputConfigurationRequest getRequestedConfiguration();
+    public void setId(String id);
+    public String getId();
+    public boolean isExclusive();
+    public String getName();
     
 }
