@@ -21,24 +21,8 @@ package smile.data.type;
  * @author Haifeng Li
  */
 public class ObjectType implements DataType {
-    /** Object type. */
+    /** Singleton instance. */
     static ObjectType instance = new ObjectType(Object.class);
-    /** Boolean object type. */
-    static ObjectType BooleanObjectType = new ObjectType(Boolean.class);
-    /** Char object type. */
-    static ObjectType CharObjectType = new ObjectType(Character.class);
-    /** Byte object type. */
-    static ObjectType ByteObjectType = new ObjectType(Byte.class);
-    /** Short object type. */
-    static ObjectType ShortObjectType = new ObjectType(Short.class);
-    /** Integer object type. */
-    static ObjectType IntegerObjectType = new ObjectType(Integer.class);
-    /** Long object type. */
-    static ObjectType LongObjectType = new ObjectType(Long.class);
-    /** Float object type. */
-    static ObjectType FloatObjectType = new ObjectType(Float.class);
-    /** Double object type. */
-    static ObjectType DoubleObjectType = new ObjectType(Double.class);
 
     /** Object Class. */
     private Class clazz;
@@ -47,7 +31,7 @@ public class ObjectType implements DataType {
      * Constructor.
      * @param clazz the class of objects.
      */
-    ObjectType(Class clazz) {
+    public ObjectType(Class clazz) {
         this.clazz = clazz;
     }
 
@@ -61,38 +45,13 @@ public class ObjectType implements DataType {
     }
 
     @Override
-    public boolean isObject() {
-        return true;
-    }
-
-    @Override
-    public boolean isInt() {
-        return clazz == Integer.class;
-    }
-
-    @Override
-    public boolean isLong() {
-        return clazz == Long.class;
-    }
-
-    @Override
-    public boolean isFloat() {
-        return clazz == Float.class;
-    }
-
-    @Override
-    public boolean isDouble() {
-        return clazz == Double.class;
-    }
-
-    @Override
     public String name() {
-        return String.format("object[%s]", clazz.getName());
+        return String.format("class[%s]", clazz.getName());
     }
 
     @Override
     public String toString() {
-        return clazz.getSimpleName();
+        return name();
     }
 
     @Override

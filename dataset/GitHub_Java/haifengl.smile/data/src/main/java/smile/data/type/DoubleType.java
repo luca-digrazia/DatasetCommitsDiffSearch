@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.data.type;
 
+import java.text.ParseException;
+
 /**
  * Double data type.
  *
@@ -32,27 +34,17 @@ public class DoubleType implements DataType {
     }
 
     @Override
-    public boolean isDouble() {
-        return true;
-    }
-
-    @Override
-    public ID id() {
-        return ID.Double;
-    }
-
-    @Override
     public String name() {
         return "double";
     }
 
     @Override
     public String toString() {
-        return "double";
+        return name();
     }
 
     @Override
-    public Double valueOf(String s) {
+    public Double valueOf(String s) throws ParseException {
         return Double.valueOf(s);
     }
 

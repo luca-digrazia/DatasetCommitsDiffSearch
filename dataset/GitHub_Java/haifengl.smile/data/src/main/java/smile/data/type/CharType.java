@@ -34,18 +34,13 @@ public class CharType implements DataType {
     }
 
     @Override
-    public boolean isChar() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "char";
     }
 
     @Override
     public String toString() {
-        return "char";
+        return name();
     }
 
     @Override

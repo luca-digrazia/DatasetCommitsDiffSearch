@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.data.type;
 
+import java.text.ParseException;
+
 /**
  * Integer data type.
  *
@@ -32,27 +34,17 @@ public class IntegerType implements DataType {
     }
 
     @Override
-    public boolean isInt() {
-        return true;
-    }
-
-    @Override
     public String name() {
-        return "int";
-    }
-
-    @Override
-    public ID id() {
-        return ID.Integer;
+        return "integer";
     }
 
     @Override
     public String toString() {
-        return "int";
+        return name();
     }
 
     @Override
-    public Integer valueOf(String s) {
+    public Integer valueOf(String s) throws ParseException {
         return Integer.valueOf(s);
     }
 

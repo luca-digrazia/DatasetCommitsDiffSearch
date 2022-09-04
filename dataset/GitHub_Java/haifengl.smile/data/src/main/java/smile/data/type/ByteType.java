@@ -34,18 +34,13 @@ public class ByteType implements DataType {
     }
 
     @Override
-    public boolean isByte() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "byte";
     }
 
     @Override
     public String toString() {
-        return "byte";
+        return name();
     }
 
     @Override

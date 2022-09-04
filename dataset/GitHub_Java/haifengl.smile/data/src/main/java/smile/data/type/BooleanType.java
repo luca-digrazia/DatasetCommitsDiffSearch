@@ -34,18 +34,13 @@ public class BooleanType implements DataType {
     }
 
     @Override
-    public boolean isBoolean() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "boolean";
     }
 
     @Override
     public String toString() {
-        return "boolean";
+        return name();
     }
 
     @Override

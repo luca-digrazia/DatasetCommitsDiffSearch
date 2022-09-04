@@ -15,6 +15,8 @@
  *******************************************************************************/
 package smile.data.type;
 
+import java.text.ParseException;
+
 /**
  * Long data type.
  *
@@ -32,27 +34,17 @@ public class LongType implements DataType {
     }
 
     @Override
-    public boolean isLong() {
-        return true;
-    }
-
-    @Override
-    public ID id() {
-        return ID.Long;
-    }
-
-    @Override
     public String name() {
         return "long";
     }
 
     @Override
     public String toString() {
-        return "long";
+        return name();
     }
 
     @Override
-    public Long valueOf(String s) {
+    public Long valueOf(String s) throws ParseException {
         return Long.valueOf(s);
     }
 

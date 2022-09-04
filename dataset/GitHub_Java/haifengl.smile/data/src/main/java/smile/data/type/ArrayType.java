@@ -24,23 +24,6 @@ import java.util.Arrays;
  * @author Haifeng Li
  */
 public class ArrayType implements DataType {
-    /** Boolean array type. */
-    static ArrayType BooleanArrayType = new ArrayType(DataTypes.BooleanType);
-    /** Char array type. */
-    static ArrayType CharArrayType = new ArrayType(DataTypes.CharType);
-    /** Byte array type. */
-    static ArrayType ByteArrayType = new ArrayType(DataTypes.ByteType);
-    /** Short array type. */
-    static ArrayType ShortArrayType = new ArrayType(DataTypes.ShortType);
-    /** Integer array type. */
-    static ArrayType IntegerArrayType = new ArrayType(DataTypes.IntegerType);
-    /** Long array type. */
-    static ArrayType LongArrayType = new ArrayType(DataTypes.LongType);
-    /** Float array type. */
-    static ArrayType FloatArrayType = new ArrayType(DataTypes.FloatType);
-    /** Double array type. */
-    static ArrayType DoubleArrayType = new ArrayType(DataTypes.DoubleType);
-
     /** Element data type. */
     private DataType type;
 
@@ -48,7 +31,7 @@ public class ArrayType implements DataType {
      * Constructor.
      * @param type element data type.
      */
-    ArrayType(DataType type) {
+    public ArrayType(DataType type) {
         this.type = type;
     }
 
@@ -61,17 +44,17 @@ public class ArrayType implements DataType {
 
     @Override
     public String name() {
-        return String.format("array%s", type.name());
+        return String.format("array[%s]", type.name());
     }
 
     @Override
     public String toString() {
-        return String.format("%s[]", type);
+        return name();
     }
 
     @Override
     public String toString(Object o) {
-        return Arrays.toString((Object[]) o);
+        return String.format("[%s]", Arrays.toString((Object[]) o));
     }
 
     @Override

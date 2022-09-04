@@ -40,7 +40,7 @@ public class StructType implements DataType {
     /**
      * Constructor.
      */
-    StructType(StructField... fields) {
+    public StructType(StructField... fields) {
         this.fields = fields;
         initFieldIndex();
     }
@@ -48,7 +48,7 @@ public class StructType implements DataType {
     /**
      * Constructor.
      */
-    StructType(List<StructField> fields) {
+    public StructType(List<StructField> fields) {
         this.fields = fields.toArray(new StructField[fields.size()]);
         initFieldIndex();
     }
@@ -73,22 +73,21 @@ public class StructType implements DataType {
 
     @Override
     public String name() {
-        return Arrays.stream(fields)
-                .map(field -> String.format("%s: %s", field.name, field.type.name()))
-                .collect(Collectors.joining(", ", "struct[", "]"));
+        return String.format("struct[%s]", Arrays.toString(fields));
     }
 
     @Override
     public String toString() {
-        return Arrays.toString(fields);
+        return name();
     }
 
     @Override
     public String toString(Object o) {
         Tuple t = (Tuple) o;
-        return Arrays.stream(fields)
-                .map(field -> String.format("%s: %s", field.name, field.type.toString(t.get(field.name))))
-                .collect(Collectors.joining(",\n", "{", "}"));
+        String s = Arrays.stream(fields)
+                .map(field -> String.format("%s : %s", field.name, field.type.toString(t.get(field.name))))
+                .collect(Collectors.joining(",\n"));
+        return String.format("{%s}", s);
     }
 
     @Override

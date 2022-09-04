@@ -34,18 +34,13 @@ public class ShortType implements DataType {
     }
 
     @Override
-    public boolean isShort() {
-        return true;
-    }
-
-    @Override
     public String name() {
         return "short";
     }
 
     @Override
     public String toString() {
-        return "short";
+        return name();
     }
 
     @Override

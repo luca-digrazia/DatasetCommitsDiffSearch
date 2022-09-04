@@ -1,90 +1,48 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.data.type;
-
-import java.io.Serializable;
-import smile.data.measure.ContinuousMeasure;
-import smile.data.measure.DiscreteMeasure;
-import smile.data.measure.Measure;
-import smile.data.measure.NominalScale;
 
 /**
  * A field in a Struct data type.
  *
  * @author Haifeng Li
  */
-public class StructField implements Serializable {
-    private static final long serialVersionUID = 2L;
-
+public class StructField {
     /** Field name. */
     public final String name;
     /** Field data type. */
     public final DataType type;
-    /** Optional levels of measurements. */
-    public final Measure measure;
 
     /**
-     * Constructor.
+     * Constructor with the ISO date formatter that formats
+     * or parses a date without an offset, such as '2011-12-03'.
      */
     public StructField(String name, DataType type) {
-        this(name, type, null);
-    }
-
-    /**
-     * Constructor.
-     */
-    public StructField(String name, DataType type, Measure measure) {
-        if (measure instanceof ContinuousMeasure && !type.isFloating()) {
-            throw new IllegalArgumentException(String.format("%s values cannot be of measure %s", type, measure));
-        }
-
-        if (measure instanceof DiscreteMeasure && !type.isIntegral()) {
-            throw new IllegalArgumentException(String.format("%s values cannot be of measure %s", type, measure));
-        }
-
         this.name = name;
         this.type = type;
-        this.measure = measure;
     }
 
     @Override
     public String toString() {
-        return measure != null ? String.format("%s: %s %s", name, type, measure) : String.format("%s: %s", name, type);
+        return String.format("%s : %s", name, type.name());
     }
 
     /** Returns the string representation of the field with given value. */
     public String toString(Object o) {
-        if (o == null) return "null";
-        return measure != null ? measure.toString(o) : type.toString(o);
-    }
-
-    /** Returns the string representation of the field with given value. */
-    public Object valueOf(String s) {
-        return measure != null ? measure.valueOf(s) : type.valueOf(s);
-    }
-
-    /** Returns true if the field is of integer or floating but not nominal scale. */
-    public boolean isNumeric() {
-        if (measure instanceof NominalScale) {
-            return false;
-        }
-
-        return type.isFloating() || type.isIntegral();
+        return String.format("%s : %s", name, type.toString(o));
     }
 
     @Override

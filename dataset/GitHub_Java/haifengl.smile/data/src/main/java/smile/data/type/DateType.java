@@ -24,9 +24,6 @@ import java.time.format.DateTimeFormatter;
  * @author Haifeng Li
  */
 public class DateType implements DataType {
-    /** Default instance. */
-    static DateType instance = new DateType();
-
     /** Date format pattern. */
     private String pattern;
     /** Date formatter. */
@@ -36,7 +33,7 @@ public class DateType implements DataType {
      * Constructor with the ISO date formatter that formats
      * or parses a date without an offset, such as '2011-12-03'.
      */
-    DateType() {
+    public DateType() {
         pattern = "uuuu-MM-dd";
         formatter = DateTimeFormatter.ISO_LOCAL_DATE;
     }
@@ -60,7 +57,7 @@ public class DateType implements DataType {
 
     @Override
     public String toString() {
-        return "date";
+        return name();
     }
 
     @Override
