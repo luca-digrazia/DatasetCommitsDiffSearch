@@ -36,7 +36,7 @@ public class ReverseDepsUtilImplTest {
   private static final SkyFunctionName NODE_TYPE = SkyFunctionName.create("Type");
   private final int numElements;
 
-  @Parameters
+  @Parameters(name = "numElements-{0}")
   public static List<Object[]> paramenters() {
     List<Object[]> params = new ArrayList<>();
     for (int i = 0; i < 20; i++) {
@@ -57,11 +57,6 @@ public class ReverseDepsUtilImplTest {
         }
 
         @Override
-        void setSingleReverseDep(Example container, boolean singleObject) {
-          container.single = singleObject;
-        }
-
-        @Override
         void setDataToConsolidate(Example container, List<Object> dataToConsolidate) {
           container.dataToConsolidate = dataToConsolidate;
         }
@@ -69,11 +64,6 @@ public class ReverseDepsUtilImplTest {
         @Override
         Object getReverseDepsObject(Example container) {
           return container.reverseDeps;
-        }
-
-        @Override
-        boolean isSingleReverseDep(Example container) {
-          return container.single;
         }
 
         @Override
@@ -99,13 +89,14 @@ public class ReverseDepsUtilImplTest {
     for (int numRemovals = 0; numRemovals <= numElements; numRemovals++) {
       Example example = new Example();
       for (int j = 0; j < numElements; j++) {
-        REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(new SkyKey(NODE_TYPE, j)));
+        REVERSE_DEPS_UTIL.addReverseDeps(
+            example, Collections.singleton(SkyKey.create(NODE_TYPE, j)));
       }
       // Not a big test but at least check that it does not blow up.
       assertThat(REVERSE_DEPS_UTIL.toString(example)).isNotEmpty();
       assertThat(REVERSE_DEPS_UTIL.getReverseDeps(example)).hasSize(numElements);
       for (int i = 0; i < numRemovals; i++) {
-        REVERSE_DEPS_UTIL.removeReverseDep(example, new SkyKey(NODE_TYPE, i));
+        REVERSE_DEPS_UTIL.removeReverseDep(example, SkyKey.create(NODE_TYPE, i));
       }
       assertThat(REVERSE_DEPS_UTIL.getReverseDeps(example)).hasSize(numElements - numRemovals);
       assertThat(example.dataToConsolidate).isNull();
@@ -119,12 +110,12 @@ public class ReverseDepsUtilImplTest {
       Example example = new Example();
       List<SkyKey> toAdd = new ArrayList<>();
       for (int j = 0; j < numElements; j++) {
-        toAdd.add(new SkyKey(NODE_TYPE, j));
+        toAdd.add(SkyKey.create(NODE_TYPE, j));
       }
       REVERSE_DEPS_UTIL.addReverseDeps(example, toAdd);
       assertThat(REVERSE_DEPS_UTIL.getReverseDeps(example)).hasSize(numElements);
       for (int i = 0; i < numRemovals; i++) {
-        REVERSE_DEPS_UTIL.removeReverseDep(example, new SkyKey(NODE_TYPE, i));
+        REVERSE_DEPS_UTIL.removeReverseDep(example, SkyKey.create(NODE_TYPE, i));
       }
       assertThat(REVERSE_DEPS_UTIL.getReverseDeps(example)).hasSize(numElements - numRemovals);
       assertThat(example.dataToConsolidate).isNull();
@@ -135,10 +126,10 @@ public class ReverseDepsUtilImplTest {
   public void testDuplicateCheckOnGetReverseDeps() {
     Example example = new Example();
     for (int i = 0; i < numElements; i++) {
-      REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(new SkyKey(NODE_TYPE, i)));
+      REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(SkyKey.create(NODE_TYPE, i)));
     }
     // Should only fail when we call getReverseDeps().
-    REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(new SkyKey(NODE_TYPE, 0)));
+    REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(SkyKey.create(NODE_TYPE, 0)));
     try {
       REVERSE_DEPS_UTIL.getReverseDeps(example);
       assertThat(numElements).isEqualTo(0);
@@ -149,7 +140,7 @@ public class ReverseDepsUtilImplTest {
   @Test
   public void doubleAddThenRemove() {
     Example example = new Example();
-    SkyKey key = new SkyKey(NODE_TYPE, 0);
+    SkyKey key = SkyKey.create(NODE_TYPE, 0);
     REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
     // Should only fail when we call getReverseDeps().
     REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
@@ -164,8 +155,8 @@ public class ReverseDepsUtilImplTest {
   @Test
   public void doubleAddThenRemoveCheckedOnSize() {
     Example example = new Example();
-    SkyKey fixedKey = new SkyKey(NODE_TYPE, 0);
-    SkyKey key = new SkyKey(NODE_TYPE, 1);
+    SkyKey fixedKey = SkyKey.create(NODE_TYPE, 0);
+    SkyKey key = SkyKey.create(NODE_TYPE, 1);
     REVERSE_DEPS_UTIL.addReverseDeps(example, ImmutableList.of(fixedKey, key));
     // Should only fail when we reach the limit.
     REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
@@ -181,8 +172,8 @@ public class ReverseDepsUtilImplTest {
   @Test
   public void addRemoveAdd() {
     Example example = new Example();
-    SkyKey fixedKey = new SkyKey(NODE_TYPE, 0);
-    SkyKey key = new SkyKey(NODE_TYPE, 1);
+    SkyKey fixedKey = SkyKey.create(NODE_TYPE, 0);
+    SkyKey key = SkyKey.create(NODE_TYPE, 1);
     REVERSE_DEPS_UTIL.addReverseDeps(example, ImmutableList.of(fixedKey, key));
     REVERSE_DEPS_UTIL.removeReverseDep(example, key);
     REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(key));
@@ -193,12 +184,12 @@ public class ReverseDepsUtilImplTest {
   public void testMaybeCheck() {
     Example example = new Example();
     for (int i = 0; i < numElements; i++) {
-      REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(new SkyKey(NODE_TYPE, i)));
+      REVERSE_DEPS_UTIL.addReverseDeps(example, Collections.singleton(SkyKey.create(NODE_TYPE, i)));
       // This should always succeed, since the next element is still not present.
-      REVERSE_DEPS_UTIL.maybeCheckReverseDepNotPresent(example, new SkyKey(NODE_TYPE, i + 1));
+      REVERSE_DEPS_UTIL.maybeCheckReverseDepNotPresent(example, SkyKey.create(NODE_TYPE, i + 1));
     }
     try {
-      REVERSE_DEPS_UTIL.maybeCheckReverseDepNotPresent(example, new SkyKey(NODE_TYPE, 0));
+      REVERSE_DEPS_UTIL.maybeCheckReverseDepNotPresent(example, SkyKey.create(NODE_TYPE, 0));
       // Should only fail if empty or above the checking threshold.
       assertThat(numElements == 0 || numElements >= ReverseDepsUtilImpl.MAYBE_CHECK_THRESHOLD)
           .isTrue();
