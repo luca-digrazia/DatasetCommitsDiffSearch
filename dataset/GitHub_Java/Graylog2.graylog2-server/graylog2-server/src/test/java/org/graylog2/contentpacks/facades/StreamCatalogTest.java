@@ -20,24 +20,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
-import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
-import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
-import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.bson.types.ObjectId;
+import org.graylog.events.legacy.V20190722150700_LegacyAlertConditionMigration;
+import org.graylog.security.entities.EntityOwnershipService;
+import org.graylog.testing.mongodb.MongoDBFixtures;
+import org.graylog.testing.mongodb.MongoDBInstance;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
 import org.graylog2.alerts.AlertService;
+import org.graylog2.contentpacks.EntityDescriptorIds;
 import org.graylog2.contentpacks.model.ModelId;
 import org.graylog2.contentpacks.model.ModelTypes;
 import org.graylog2.contentpacks.model.entities.Entity;
 import org.graylog2.contentpacks.model.entities.EntityDescriptor;
 import org.graylog2.contentpacks.model.entities.EntityExcerpt;
 import org.graylog2.contentpacks.model.entities.EntityV1;
-import org.graylog2.contentpacks.model.entities.EntityWithConstraints;
 import org.graylog2.contentpacks.model.entities.StreamEntity;
 import org.graylog2.contentpacks.model.entities.references.ValueReference;
-import org.graylog2.dashboards.DashboardImpl;
 import org.graylog2.database.MongoConnection;
-import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.indexer.MongoIndexSet;
 import org.graylog2.indexer.indexset.IndexSetService;
@@ -48,6 +47,7 @@ import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.plugin.streams.StreamRuleType;
 import org.graylog2.shared.SuppressForbidden;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
+import org.graylog2.shared.users.UserService;
 import org.graylog2.streams.OutputImpl;
 import org.graylog2.streams.OutputService;
 import org.graylog2.streams.StreamImpl;
@@ -58,7 +58,6 @@ import org.graylog2.streams.StreamService;
 import org.graylog2.streams.StreamServiceImpl;
 import org.graylog2.streams.matchers.StreamRuleMock;
 import org.junit.Before;
-import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -71,16 +70,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.Executors;
 
-import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
 public class StreamCatalogTest {
-    @ClassRule
-    public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
-
     @Rule
-    public final MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
+    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
 
     @Rule
     public final MockitoRule mockitoRule = MockitoJUnit.rule();
@@ -99,12 +94,18 @@ public class StreamCatalogTest {
     private NotificationService notificationService;
     @Mock
     private AlarmCallbackConfigurationService alarmCallbackConfigurationService;
+    @Mock
+    private V20190722150700_LegacyAlertConditionMigration legacyAlertConditionMigration;
+    @Mock
+    private EntityOwnershipService entityOwnershipService;
+    @Mock
+    private UserService userService;
     private StreamFacade facade;
 
     @Before
     @SuppressForbidden("Using Executors.newSingleThreadExecutor() is okay in tests")
     public void setUp() throws Exception {
-        final MongoConnection mongoConnection = mongoRule.getMongoConnection();
+        final MongoConnection mongoConnection = mongodb.mongoConnection();
         final ClusterEventBus clusterEventBus = new ClusterEventBus("cluster-event-bus", Executors.newSingleThreadExecutor());
         final StreamRuleService streamRuleService = new StreamRuleServiceImpl(mongoConnection, clusterEventBus);
         final StreamService streamService = new StreamServiceImpl(
@@ -115,13 +116,14 @@ public class StreamCatalogTest {
                 indexSetService,
                 mongoIndexSetFactory,
                 notificationService,
+                entityOwnershipService,
                 clusterEventBus,
                 alarmCallbackConfigurationService);
         when(outputService.load("5adf239e4b900a0fdb4e5197")).thenReturn(
                 OutputImpl.create("5adf239e4b900a0fdb4e5197", "Title", "Type", "admin", Collections.emptyMap(), new Date(1524654085L), null)
         );
 
-        facade = new StreamFacade(objectMapper, streamService, streamRuleService, indexSetService);
+        facade = new StreamFacade(objectMapper, streamService, streamRuleService, alertService, alarmCallbackConfigurationService, legacyAlertConditionMigration, indexSetService, userService);
     }
 
     @Test
@@ -147,11 +149,12 @@ public class StreamCatalogTest {
         final ImmutableSet<Output> outputs = ImmutableSet.of();
         final ObjectId streamId = new ObjectId();
         final StreamImpl stream = new StreamImpl(streamId, streamFields, streamRules, outputs, null);
-        final EntityWithConstraints entityWithConstraints = facade.exportNativeEntity(stream);
-        final Entity entity = entityWithConstraints.entity();
+        final EntityDescriptor descriptor = EntityDescriptor.create(stream.getId(), ModelTypes.STREAM_V1);
+        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(descriptor);
+        final Entity entity = facade.exportNativeEntity(stream, entityDescriptorIds);
 
         assertThat(entity).isInstanceOf(EntityV1.class);
-        assertThat(entity.id()).isEqualTo(ModelId.of(streamId.toHexString()));
+        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(descriptor).orElse(null)));
         assertThat(entity.type()).isEqualTo(ModelTypes.STREAM_V1);
 
         final EntityV1 entityV1 = (EntityV1) entity;
@@ -165,7 +168,7 @@ public class StreamCatalogTest {
     @Test
     public void createExcerpt() {
         final ImmutableMap<String, Object> fields = ImmutableMap.of(
-                DashboardImpl.FIELD_TITLE, "Stream Title"
+                "title", "Stream Title"
         );
         final StreamImpl stream = new StreamImpl(fields);
         final EntityExcerpt excerpt = facade.createExcerpt(stream);
@@ -177,7 +180,7 @@ public class StreamCatalogTest {
 
 
     @Test
-    @UsingDataSet(locations = "/org/graylog2/contentpacks/streams.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @MongoDBFixtures("StreamCatalogTest.json")
     public void listEntityExcerpts() {
         final EntityExcerpt expectedEntityExcerpt1 = EntityExcerpt.builder()
                 .id(ModelId.of("000000000000000000000001"))
@@ -195,21 +198,24 @@ public class StreamCatalogTest {
     }
 
     @Test
-    @UsingDataSet(locations = "/org/graylog2/contentpacks/streams.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    @MongoDBFixtures("StreamCatalogTest.json")
     public void collectEntity() {
-        final Optional<EntityWithConstraints> collectedEntity = facade.exportEntity(EntityDescriptor.create("5adf23894b900a0fdb4e517d", ModelTypes.STREAM_V1));
+        final EntityDescriptor descriptor = EntityDescriptor.create("5adf23894b900a0fdb4e517d", ModelTypes.STREAM_V1);
+        final EntityDescriptor outputDescriptor = EntityDescriptor.create("5adf239e4b900a0fdb4e5197", ModelTypes.OUTPUT_V1);
+        final EntityDescriptorIds entityDescriptorIds = EntityDescriptorIds.of(descriptor, outputDescriptor);
+        final Optional<Entity> collectedEntity = facade.exportEntity(descriptor, entityDescriptorIds);
         assertThat(collectedEntity)
                 .isPresent()
-                .map(EntityWithConstraints::entity)
                 .containsInstanceOf(EntityV1.class);
 
-        final EntityV1 entity = (EntityV1) collectedEntity.map(EntityWithConstraints::entity).orElseThrow(AssertionError::new);
-        assertThat(entity.id()).isEqualTo(ModelId.of("5adf23894b900a0fdb4e517d"));
+        final EntityV1 entity = (EntityV1) collectedEntity.orElseThrow(AssertionError::new);
+        assertThat(entity.id()).isEqualTo(ModelId.of(entityDescriptorIds.get(descriptor).orElse(null)));
         assertThat(entity.type()).isEqualTo(ModelTypes.STREAM_V1);
         final StreamEntity streamEntity = objectMapper.convertValue(entity.data(), StreamEntity.class);
         assertThat(streamEntity.title()).isEqualTo(ValueReference.of("Test"));
         assertThat(streamEntity.description()).isEqualTo(ValueReference.of("Description"));
         assertThat(streamEntity.matchingType()).isEqualTo(ValueReference.of(Stream.MatchingType.AND));
         assertThat(streamEntity.streamRules()).hasSize(7);
+        assertThat(streamEntity.outputs()).containsExactly(ValueReference.of(entityDescriptorIds.get(outputDescriptor).orElse(null)));
     }
 }
