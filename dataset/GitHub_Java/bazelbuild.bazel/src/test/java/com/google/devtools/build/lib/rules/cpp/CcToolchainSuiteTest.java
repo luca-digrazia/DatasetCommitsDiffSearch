@@ -145,18 +145,15 @@ public class CcToolchainSuiteTest extends BuildViewTestCase {
     useConfiguration("--crosstool_top=//cc:suite", "--cpu=k8");
     ConfiguredTarget c = getConfiguredTarget("//a:b");
     CppConfiguration config = getConfiguration(c).getFragment(CppConfiguration.class);
-    assertThat(config.getRuleProvidingCcToolchainProvider().toString())
-        .isEqualTo("//cc:k8-default-from-cpu");
+    assertThat(config.getCcToolchainRuleLabel().toString()).isEqualTo("//cc:k8-default-from-cpu");
 
     useConfiguration("--crosstool_top=//cc:suite", "--compiler=compiler", "--cpu=ppc");
     config = getConfiguration(getConfiguredTarget("//a:b")).getFragment(CppConfiguration.class);
-    assertThat(config.getRuleProvidingCcToolchainProvider().toString())
-        .isEqualTo("//cc:ppc-compiler");
+    assertThat(config.getCcToolchainRuleLabel().toString()).isEqualTo("//cc:ppc-compiler");
 
     useConfiguration("--crosstool_top=//cc:suite", "--compiler=compiler", "--cpu=k8");
     config = getConfiguration(getConfiguredTarget("//a:b")).getFragment(CppConfiguration.class);
-    assertThat(config.getRuleProvidingCcToolchainProvider().toString())
-        .isEqualTo("//cc:k8-compiler");
+    assertThat(config.getCcToolchainRuleLabel().toString()).isEqualTo("//cc:k8-compiler");
 
     try {
       useConfiguration("--crosstool_top=//cc:suite", "--cpu=ppc");
