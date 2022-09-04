@@ -24,14 +24,14 @@ import static javax.servlet.DispatcherType.REQUEST;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.lang.reflect.ParameterizedType;
+import java.lang.reflect.Type;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -108,7 +108,9 @@ import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
 import io.quarkus.deployment.logging.LogCleanupFilterBuildItem;
 import io.quarkus.deployment.recording.RecorderContext;
+import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
+import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.undertow.runtime.HttpConfig;
 import io.quarkus.undertow.runtime.ServletProducer;
@@ -275,17 +277,11 @@ public class UndertowBuildStep {
         if (webMetaData.getServlets() != null) {
             for (ServletMetaData servlet : webMetaData.getServlets()) {
                 reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
-                Map<String, String> params = new HashMap<>();
-                for (Map.Entry<String, String> i : params.entrySet()) {
-                    params.put(i.getKey(), i.getValue());
-                }
                 RuntimeValue<ServletInfo> sref = template.registerServlet(deployment, servlet.getServletName(),
                         context.classProxy(servlet.getServletClass()),
                         servlet.isAsyncSupported(),
                         servlet.getLoadOnStartupInt(),
-                        bc.getValue(),
-                        params,
-                        null);
+                        bc.getValue());
                 if (servlet.getInitParam() != null) {
                     for (ParamValueMetaData init : servlet.getInitParam()) {
                         template.addServletInitParam(sref, init.getParamName(), init.getParamValue());
@@ -343,16 +339,11 @@ public class UndertowBuildStep {
         if (webMetaData.getFilters() != null) {
             for (FilterMetaData filter : webMetaData.getFilters()) {
                 reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, filter.getFilterClass()));
-                Map<String, String> params = new HashMap<>();
-                for (Map.Entry<String, String> i : params.entrySet()) {
-                    params.put(i.getKey(), i.getValue());
-                }
                 RuntimeValue<FilterInfo> sref = template.registerFilter(deployment,
                         filter.getFilterName(),
                         context.classProxy(filter.getFilterClass()),
                         filter.isAsyncSupported(),
-                        bc.getValue(),
-                        params, null);
+                        bc.getValue());
                 if (filter.getInitParam() != null) {
                     for (ParamValueMetaData init : filter.getInitParam()) {
                         template.addFilterInitParam(sref, init.getParamName(), init.getParamValue());
@@ -390,8 +381,7 @@ public class UndertowBuildStep {
                 reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
             }
             template.registerServlet(deployment, servlet.getName(), context.classProxy(servletClass),
-                    servlet.isAsyncSupported(), servlet.getLoadOnStartup(), bc.getValue(), servlet.getInitParams(),
-                    servlet.getInstanceFactory());
+                    servlet.isAsyncSupported(), servlet.getLoadOnStartup(), bc.getValue());
 
             for (String m : servlet.getMappings()) {
                 template.addServletMapping(deployment, servlet.getName(), m);
@@ -402,7 +392,7 @@ public class UndertowBuildStep {
             String filterClass = filter.getFilterClass();
             reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, filterClass));
             template.registerFilter(deployment, filter.getName(), context.classProxy(filterClass), filter.isAsyncSupported(),
-                    bc.getValue(), filter.getInitParams(), filter.getInstanceFactory());
+                    bc.getValue());
             for (FilterBuildItem.FilterMappingInfo m : filter.getMappings()) {
                 if (m.getMappingType() == FilterBuildItem.FilterMappingInfo.MappingType.URL) {
                     template.addFilterURLMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
