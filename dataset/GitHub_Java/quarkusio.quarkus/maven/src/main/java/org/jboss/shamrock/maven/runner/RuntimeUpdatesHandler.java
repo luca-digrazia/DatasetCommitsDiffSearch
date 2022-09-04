@@ -17,10 +17,9 @@ import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import org.jboss.shamrock.maven.CopyUtils;
-
 import org.fakereplace.core.Fakereplace;
 import org.fakereplace.replacement.AddedClass;
+import org.jboss.shamrock.undertow.runtime.UndertowDeploymentTemplate;
 
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
@@ -30,7 +29,7 @@ public class RuntimeUpdatesHandler implements HttpHandler {
 
     private static final long TWO_SECONDS = 2000;
 
-    private final HttpHandler next;
+    private volatile HttpHandler next;
     private final Path classesDir;
     private final Path sourcesDir;
     private volatile long nextUpdate;
@@ -64,69 +63,66 @@ public class RuntimeUpdatesHandler implements HttpHandler {
             exchange.dispatch(this);
         }
         if (nextUpdate > System.currentTimeMillis()) {
-            if (RunMojoMain.deploymentProblem != null) {
-                ReplacementDebugPage.handleRequest(exchange, RunMojoMain.deploymentProblem);
-                return;
-            }
             next.handleRequest(exchange);
             return;
         }
         synchronized (this) {
             if (nextUpdate < System.currentTimeMillis()) {
-                doScan();
-                //we update at most once every 2s
-                nextUpdate = System.currentTimeMillis() + TWO_SECONDS;
+                try {
+                    if (doScan()) {
+                        //TODO: this should be handled better
+                        next = UndertowDeploymentTemplate.ROOT_HANDLER;
+                        UndertowDeploymentTemplate.ROOT_HANDLER.handleRequest(exchange);
+                        return;
+                    }
+                    //we update at most once every 2s
+                    nextUpdate = System.currentTimeMillis() + TWO_SECONDS;
 
+                } catch (Throwable e) {
+                    displayErrorPage(exchange, e);
+                    return;
+                }
             }
-        }
-        if (RunMojoMain.deploymentProblem != null) {
-            ReplacementDebugPage.handleRequest(exchange, RunMojoMain.deploymentProblem);
-            return;
         }
         next.handleRequest(exchange);
     }
 
-    private void doScan() throws IOException {
+    private boolean doScan() throws IOException {
         final Set<File> changedSourceFiles;
         final long start = System.currentTimeMillis();
         if (sourcesDir != null) {
             try (final Stream<Path> sourcesStream = Files.walk(sourcesDir)) {
                 changedSourceFiles = sourcesStream
-                        .parallel()
-                        .filter(p -> p.toString().endsWith(".java"))
-                        .filter(p -> wasRecentlyModified(p))
-                        .map(Path::toFile)
-                        //Needing a concurrent Set, not many standard options:
-                        .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
+                      .parallel()
+                      .filter(p -> p.toString().endsWith(".java"))
+                      .filter(p -> wasRecentlyModified(p))
+                      .map(Path::toFile)
+                      //Needing a concurrent Set, not many standard options:
+                      .collect(Collectors.toCollection(ConcurrentSkipListSet::new));
             }
-        } else {
+        }
+        else {
             changedSourceFiles = Collections.EMPTY_SET;
         }
         if (!changedSourceFiles.isEmpty()) {
-            try {
-                compiler.compile(changedSourceFiles);
-            } catch (Exception e) {
-                RunMojoMain.deploymentProblem = e;
-                return;
-            }
+            compiler.compile(changedSourceFiles);
         }
         final ConcurrentMap<String, byte[]> changedClasses;
         try (final Stream<Path> classesStream = Files.walk(classesDir)) {
             changedClasses = classesStream
-                    .parallel()
-                    .filter(p -> p.toString().endsWith(".class"))
-                    .filter(p -> wasRecentlyModified(p))
-                    .collect(Collectors.toConcurrentMap(
-                            p -> pathToClassName(p),
-                            p -> CopyUtils.readFileContentNoIOExceptions( p))
-                    );
+                  .parallel()
+                  .filter(p -> p.toString().endsWith(".class"))
+                  .filter(p -> wasRecentlyModified(p))
+                  .collect(Collectors.toConcurrentMap(
+                        p -> pathToClassName(p),
+                        p -> readFileContentNoIOExceptions(p))
+                  );
         }
         if (changedClasses.isEmpty()) {
-            return;
+            return false;
         }
 
         lastChange = System.currentTimeMillis();
-
         if (FAKEREPLACE_HANDLER == null) {
             RunMojoMain.restartApp(false);
         } else {
@@ -134,6 +130,8 @@ public class RuntimeUpdatesHandler implements HttpHandler {
             RunMojoMain.restartApp(true);
         }
         System.out.println("Hot replace total time: " + (System.currentTimeMillis() - start) + "ms");
+
+        return true;
     }
 
     private boolean wasRecentlyModified(final Path p) {
@@ -148,6 +146,65 @@ public class RuntimeUpdatesHandler implements HttpHandler {
         String pathName = classesDir.relativize(path).toString();
         String className = pathName.substring(0, pathName.length() - 6).replace("/", ".");
         return className;
+    }
+
+    private byte[] readFileContentNoIOExceptions(final Path path) {
+        try {
+            return readFileContent(path);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private byte[] readFileContent(final Path path) throws IOException {
+        final File file = path.toFile();
+        final long fileLength = file.length();
+        if (fileLength>Integer.MAX_VALUE) {
+            throw new RuntimeException("Can't process class files larger than Integer.MAX_VALUE bytes");
+        }
+        try (FileInputStream stream = new FileInputStream(file)) {
+            //Might be large but we need a single byte[] at the end of things, might as well allocate it in one shot:
+            ByteArrayOutputStream out = new ByteArrayOutputStream((int)fileLength);
+            byte[] buf = new byte[1024];
+            int r;
+            try (FileInputStream in = new FileInputStream(path.toFile())) {
+                while ((r = in.read(buf)) > 0) {
+                    out.write(buf, 0, r);
+                }
+                return out.toByteArray();
+            }
+        }
+    }
+
+    public static void displayErrorPage(HttpServerExchange exchange, final Throwable exception) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        //todo: make this good
+        sb.append("<html><head><title>ERROR</title>");
+        sb.append("</head><body><div class=\"header\"><div class=\"error-div\"></div><div class=\"error-text-div\">Hot Class Change Error</div></div>");
+        writeLabel(sb, "Stack Trace", "");
+
+        sb.append("<pre>");
+        StringWriter stringWriter = new StringWriter();
+        exception.printStackTrace(new PrintWriter(stringWriter));
+        sb.append(escapeBodyText(stringWriter.toString()));
+        sb.append("</pre></body></html>");
+        exchange.getResponseHeaders().put(Headers.CONTENT_TYPE, "text/html; charset=UTF-8;");
+        exchange.getResponseSender().send(sb.toString());
+    }
+
+    private static void writeLabel(StringBuilder sb, String label, String value) {
+        sb.append("<div class=\"label\">");
+        sb.append(escapeBodyText(label));
+        sb.append(":</div><div class=\"value\">");
+        sb.append(escapeBodyText(value));
+        sb.append("</div><br/>");
+    }
+
+    public static String escapeBodyText(final String bodyText) {
+        if (bodyText == null) {
+            return "null";
+        }
+        return bodyText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     interface UpdateHandler {
