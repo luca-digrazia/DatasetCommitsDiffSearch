@@ -50,7 +50,7 @@ public class NetFlowV9Parser {
 
         final List<NetFlowV9Template> allTemplates = new ArrayList<>();
         NetFlowV9OptionTemplate optTemplate = optionTemplate;
-        List<NetFlowV9BaseRecord> records = Collections.emptyList();
+        List<NetFlowV9BaseRecord> records = new ArrayList<>();
         while (bb.isReadable()) {
             bb.markReaderIndex();
             int flowSetId = bb.readUnsignedShort();
@@ -67,7 +67,7 @@ public class NetFlowV9Parser {
                 if (cache.isEmpty() && optTemplate == null) {
                     throw new EmptyTemplateException("Unable to parse NetFlow 9 records without template. Discarding packet.");
                 }
-                records = parseRecords(bb, cache, optionTemplate);
+                records.addAll(parseRecords(bb, cache, optionTemplate));
             }
         }
 
@@ -341,6 +341,10 @@ public class NetFlowV9Parser {
                 records.add(NetFlowV9OptionRecord.create(fields.build(), scopes.build()));
             } else {
                 records.add(NetFlowV9Record.create(fields.build()));
+            }
+            // This flowset cannot contain another record, treat as padding
+            if (end - bb.readerIndex() < unitSize) {
+                break;
             }
         }
 
