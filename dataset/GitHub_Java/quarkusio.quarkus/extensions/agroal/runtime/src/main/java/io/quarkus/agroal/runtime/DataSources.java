@@ -3,18 +3,13 @@ package io.quarkus.agroal.runtime;
 import java.sql.Connection;
 import java.sql.Driver;
 import java.sql.Statement;
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import javax.annotation.PreDestroy;
-import javax.enterprise.inject.Any;
-import javax.enterprise.inject.Default;
-import javax.enterprise.inject.Instance;
 import javax.inject.Singleton;
 import javax.transaction.TransactionManager;
 import javax.transaction.TransactionSynchronizationRegistry;
@@ -22,7 +17,6 @@ import javax.transaction.TransactionSynchronizationRegistry;
 import org.jboss.logging.Logger;
 
 import io.agroal.api.AgroalDataSource;
-import io.agroal.api.AgroalPoolInterceptor;
 import io.agroal.api.configuration.AgroalConnectionPoolConfiguration.ConnectionValidator;
 import io.agroal.api.configuration.AgroalDataSourceConfiguration;
 import io.agroal.api.configuration.AgroalDataSourceConfiguration.DataSourceImplementation;
@@ -76,7 +70,6 @@ public class DataSources {
     private final TransactionManager transactionManager;
     private final TransactionSynchronizationRegistry transactionSynchronizationRegistry;
     private final DataSourceSupport dataSourceSupport;
-    private final Instance<AgroalPoolInterceptor> agroalPoolInterceptors;
 
     private final ConcurrentMap<String, AgroalDataSource> dataSources = new ConcurrentHashMap<>();
 
@@ -86,8 +79,7 @@ public class DataSources {
             LegacyDataSourcesJdbcBuildTimeConfig legacyDataSourcesJdbcBuildTimeConfig,
             LegacyDataSourcesRuntimeConfig legacyDataSourcesRuntimeConfig,
             LegacyDataSourcesJdbcRuntimeConfig legacyDataSourcesJdbcRuntimeConfig, TransactionManager transactionManager,
-            TransactionSynchronizationRegistry transactionSynchronizationRegistry, DataSourceSupport dataSourceSupport,
-            @Any Instance<AgroalPoolInterceptor> agroalPoolInterceptors) {
+            TransactionSynchronizationRegistry transactionSynchronizationRegistry, DataSourceSupport dataSourceSupport) {
         this.dataSourcesBuildTimeConfig = dataSourcesBuildTimeConfig;
         this.dataSourcesRuntimeConfig = dataSourcesRuntimeConfig;
         this.dataSourcesJdbcBuildTimeConfig = dataSourcesJdbcBuildTimeConfig;
@@ -98,7 +90,6 @@ public class DataSources {
         this.transactionManager = transactionManager;
         this.transactionSynchronizationRegistry = transactionSynchronizationRegistry;
         this.dataSourceSupport = dataSourceSupport;
-        this.agroalPoolInterceptors = agroalPoolInterceptors;
     }
 
     /**
@@ -206,16 +197,6 @@ public class DataSources {
                 new AgroalEventLoggingListener(dataSourceName));
         log.debugv("Started datasource {0} connected to {1}", dataSourceName,
                 agroalConfiguration.connectionPoolConfiguration().connectionFactoryConfiguration().jdbcUrl());
-
-        // Set pool interceptors for this datasource
-        Collection<AgroalPoolInterceptor> interceptorList = agroalPoolInterceptors
-                .select(dataSourceName == null || DataSourceUtil.isDefault(dataSourceName)
-                        ? Default.Literal.INSTANCE
-                        : new DataSource.DataSourceLiteral(dataSourceName))
-                .stream().collect(Collectors.toList());
-        if (!interceptorList.isEmpty()) {
-            dataSource.setPoolInterceptors(interceptorList);
-        }
 
         return dataSource;
     }
