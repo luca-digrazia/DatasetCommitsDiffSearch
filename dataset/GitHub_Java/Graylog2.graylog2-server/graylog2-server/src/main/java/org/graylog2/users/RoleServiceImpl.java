@@ -61,7 +61,6 @@ public class RoleServiceImpl implements RoleService {
     private final JacksonDBCollection<RoleImpl, ObjectId> dbCollection;
     private final Validator validator;
     private final String adminRoleObjectId;
-    private final String readerRoleObjectId;
 
     @Inject
     protected RoleServiceImpl(MongoConnection mongoConnection,
@@ -80,8 +79,8 @@ public class RoleServiceImpl implements RoleService {
         // make sure the two built-in roles actually exist
         adminRoleObjectId = checkNotNull(ensureBuiltinRole(ADMIN_ROLENAME, Sets.newHashSet("*"), "Admin",
                                                            "Grants all permissions for Graylog administrators (built-in)"));
-        readerRoleObjectId = checkNotNull(ensureBuiltinRole(READER_ROLENAME, RestPermissions.READER_BASE_PERMISSIONS, "Reader",
-                          "Grants basic permissions for every Graylog user (built-in)"));
+        ensureBuiltinRole(READER_ROLENAME, RestPermissions.READER_BASE_PERMISSIONS, "Reader",
+                          "Grants basic permissions for every Graylog user (built-in)");
 
     }
 
@@ -201,10 +200,5 @@ public class RoleServiceImpl implements RoleService {
     @Override
     public String getAdminRoleObjectId() {
         return adminRoleObjectId;
-    }
-
-    @Override
-    public String getReaderRoleObjectId() {
-        return readerRoleObjectId;
     }
 }
