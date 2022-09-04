@@ -27,8 +27,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class ValidationTest extends EvaluationTestCase {
 
-  // TODO(adonovan): break dependency on EvaluationTestCase.
-
   @Test
   public void testAssignmentNotValidLValue() {
     checkError("cannot assign to '\"a\"'", "'a' = 1");
@@ -46,9 +44,7 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testLoadAfterStatement() throws Exception {
-    thread =
-        newStarlarkThreadWithSkylarkOptions(
-            "--incompatible_bzl_disallow_load_after_statement=true");
+    env = newEnvironmentWithSkylarkOptions("--incompatible_bzl_disallow_load_after_statement=true");
     checkError(
         "load() statements must be called before any other statement",
         "a = 5",
@@ -57,18 +53,9 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testAllowLoadAfterStatement() throws Exception {
-    thread =
-        newStarlarkThreadWithSkylarkOptions(
-            "--incompatible_bzl_disallow_load_after_statement=false");
+    env =
+        newEnvironmentWithSkylarkOptions("--incompatible_bzl_disallow_load_after_statement=false");
     parse("a = 5", "load(':b.bzl', 'c')");
-  }
-
-  @Test
-  public void testLoadDuplicateSymbols() throws Exception {
-    checkError("load statement defines 'x' more than once", "load('module', 'x', 'x')");
-    checkError("load statement defines 'x' more than once", "load('module', 'x', x='y')");
-    checkError("load statement defines 'x' more than once", "x=1; load('module', 'x')");
-    checkError("load statement defines 'x' more than once", "load('module', 'x'); x=1");
   }
 
   @Test
@@ -146,13 +133,13 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testGlobalDefinedBelow() throws Exception {
-    thread = newStarlarkThreadWithSkylarkOptions();
+    env = newEnvironmentWithSkylarkOptions();
     parse("def bar(): return x", "x = 5\n");
   }
 
   @Test
   public void testLocalVariableDefinedBelow() throws Exception {
-    thread = newStarlarkThreadWithSkylarkOptions();
+    env = newEnvironmentWithSkylarkOptions();
     parse(
         "def bar():",
         "    for i in range(5):",
@@ -172,7 +159,7 @@ public class ValidationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testDictExpressionDifferentValueTypeWorks() throws Exception {
+  public void testDictLiteralDifferentValueTypeWorks() throws Exception {
     parse("{'a': 1, 'b': 'c'}");
   }
 
@@ -254,6 +241,7 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testPositionalAfterStarArg() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_strict_argument_ordering=true");
     checkError(
         "positional argument is misplaced (positional arguments come first)",
         "def fct(*args, **kwargs): pass",
@@ -262,6 +250,7 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testTwoStarArgs() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_strict_argument_ordering=true");
     checkError(
         "*arg argument is misplaced",
         "def fct(*args, **kwargs):",
@@ -271,28 +260,11 @@ public class ValidationTest extends EvaluationTestCase {
 
   @Test
   public void testKeywordArgAfterStarArg() throws Exception {
+    env = newEnvironmentWithSkylarkOptions("--incompatible_strict_argument_ordering=true");
     checkError(
         "keyword argument is misplaced (keyword arguments must be before any *arg or **kwarg)",
         "def fct(*args, **kwargs): pass",
         "fct(1, *[2], a=3)");
-  }
-
-  @Test
-  public void testTopLevelForFails() throws Exception {
-    setFailFast(false);
-    parseFile("for i in []: 0\n");
-    assertContainsError("for loops are not allowed at the top level");
-  }
-
-  @Test
-  public void testNestedFunctionFails() throws Exception {
-    setFailFast(false);
-    parseFile(
-        "def func(a):", //
-        "  def bar(): return 0",
-        "  return bar()",
-        "");
-    assertContainsError("nested functions are not allowed. Move the function to the top level");
   }
 
   private void parse(String... lines) {

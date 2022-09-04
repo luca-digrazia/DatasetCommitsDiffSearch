@@ -22,9 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -1335,9 +1333,7 @@ public final class PackageFactory {
         newExternalPackageBuilder(
                 RootedPath.toRootedPath(
                     buildFile.getRoot(),
-                    buildFile
-                        .getRootRelativePath()
-                        .getRelative(LabelConstants.WORKSPACE_FILE_NAME)),
+                    buildFile.getRootRelativePath().getRelative(Label.WORKSPACE_FILE_NAME)),
                 "TESTING")
             .build();
     return createPackageForTesting(
@@ -1616,17 +1612,15 @@ public final class PackageFactory {
     StoredEventHandler eventHandler = new StoredEventHandler();
 
     try (Mutability mutability = Mutability.create("package %s", packageId)) {
-      BazelStarlarkContext starlarkContext =
-          new BazelStarlarkContext(ruleClassProvider.getToolsRepository());
       Environment pkgEnv =
           Environment.builder(mutability)
               .setGlobals(BazelLibrary.GLOBALS)
               .setSemantics(skylarkSemantics)
               .setEventHandler(eventHandler)
               .setImportedExtensions(imports)
-              .setStarlarkContext(starlarkContext)
               .build();
       SkylarkUtils.setPhase(pkgEnv, Phase.LOADING);
+      SkylarkUtils.setToolsRepository(pkgEnv, ruleClassProvider.getToolsRepository());
 
       pkgBuilder.setFilename(buildFilePath)
           .setDefaultVisibility(defaultVisibility)

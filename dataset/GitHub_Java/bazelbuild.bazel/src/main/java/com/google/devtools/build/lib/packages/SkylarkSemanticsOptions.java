@@ -100,19 +100,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       help = "If set to true, enables the use of the `repo_mapping` attribute in WORKSPACE files.")
   public boolean experimentalEnableRepoMapping;
 
-  // This flag is declared in SkylarkSemanticsOptions instead of JavaOptions because there is no
-  // way to retrieve the java configuration from the Java implementation of
-  // java_common.create_provider.
-  @Option(
-      name = "experimental_java_common_create_provider_enabled_packages",
-      converter = CommaSeparatedOptionListConverter.class,
-      defaultValue = "",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
-      help = "Passes list of packages that can use the java_common.create_provider Starlark API.")
-  public List<String> experimentalJavaCommonCreateProviderEnabledPackages;
-
   @Option(
       name = "experimental_remap_main_repo",
       defaultValue = "false",
@@ -203,20 +190,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
           "If set to true, disable the deprecated parameters 'single_file' and 'non_empty' on "
               + "attribute definition methods, such as attr.label().")
   public boolean incompatibleDisableDeprecatedAttrParams;
-
-  @Option(
-      name = "incompatible_require_feature_configuration_for_pic",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.TOOLCHAIN,
-      effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help =
-          "If true, cc_toolchain_info.use_pic_for_dynamic_libraries will require "
-              + "feature_configuration argument (see #7007).")
-  public boolean requireFeatureConfigurationForPic;
 
   @Option(
     name = "incompatible_disable_objc_provider_resources",
@@ -462,6 +435,34 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleRangeType;
 
   @Option(
+      name = "incompatible_remove_native_git_repository",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If set to true, the native git_repository rules are disabled; only the Starlark version "
+              + "will be available")
+  public boolean incompatibleRemoveNativeGitRepository;
+
+  @Option(
+      name = "incompatible_remove_native_http_archive",
+      defaultValue = "true",
+      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If set to true, the native http_archive rules are disabled; only the Starlark version "
+              + "will be available")
+  public boolean incompatibleRemoveNativeHttpArchive;
+
+  @Option(
       name = "incompatible_remove_native_maven_jar",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -491,7 +492,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
 
   @Option(
       name = "incompatible_string_is_not_iterable",
-      defaultValue = "true",
+      defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
       metadataTags = {
@@ -500,7 +501,8 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
       },
       help =
           "If set to true, iterating over a string will throw an error. String indexing and `len` "
-              + "are still allowed.")
+              + "are still allowed."
+  )
   public boolean incompatibleStringIsNotIterable;
 
   /** Used in an integration test to confirm that flags are visible to the interpreter. */
@@ -512,16 +514,6 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   )
   public boolean internalSkylarkFlagTestCanary;
 
-  @Option(
-      name = "experimental_use_toolchain_resolution_for_java_rules",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = OptionEffectTag.UNKNOWN,
-      help =
-          "If set to true, toolchain resolution will be used to resolve java_toolchain and"
-              + " java_runtime.")
-  public boolean useToolchainResolutionForJavaRules;
-
   /** Constructs a {@link SkylarkSemantics} object corresponding to this set of option values. */
   public SkylarkSemantics toSkylarkSemantics() {
     return SkylarkSemantics.builder()
@@ -531,11 +523,8 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .experimentalEnableAndroidMigrationApis(experimentalEnableAndroidMigrationApis)
         .experimentalEnableRepoMapping(experimentalEnableRepoMapping)
         .experimentalRemapMainRepo(experimentalRemapMainRepo)
-        .experimentalJavaCommonCreateProviderEnabledPackages(
-            experimentalJavaCommonCreateProviderEnabledPackages)
         .experimentalPlatformsApi(experimentalPlatformsApi)
         .experimentalStarlarkConfigTransitions(experimentalStarlarkConfigTransitions)
-        .experimentalUseToolchainResolutionForJavaRules(useToolchainResolutionForJavaRules)
         .incompatibleBzlDisallowLoadAfterStatement(incompatibleBzlDisallowLoadAfterStatement)
         .incompatibleDepsetIsNotIterable(incompatibleDepsetIsNotIterable)
         .incompatibleDepsetUnion(incompatibleDepsetUnion)
@@ -559,8 +548,9 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
         .incompatibleNoTransitiveLoads(incompatibleNoTransitiveLoads)
         .incompatibleRangeType(incompatibleRangeType)
+        .incompatibleRemoveNativeGitRepository(incompatibleRemoveNativeGitRepository)
+        .incompatibleRemoveNativeHttpArchive(incompatibleRemoveNativeHttpArchive)
         .incompatibleRemoveNativeMavenJar(incompatibleRemoveNativeMavenJar)
-        .incompatibleRequireFeatureConfigurationForPic(requireFeatureConfigurationForPic)
         .incompatibleStricArgumentOrdering(incompatibleStricArgumentOrdering)
         .incompatibleStringIsNotIterable(incompatibleStringIsNotIterable)
         .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)
