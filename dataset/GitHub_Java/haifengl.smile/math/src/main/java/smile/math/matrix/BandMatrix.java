@@ -266,7 +266,7 @@ public class BandMatrix implements Matrix, LinearSolver {
     }
 
     @Override
-    public double[] ax(double[] x, double[] y) {
+    public void ax(double[] x, double[] y) {
         if (x.length != n) {
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but x is %d x 1", n, n, x.length));
         }
@@ -283,12 +283,10 @@ public class BandMatrix implements Matrix, LinearSolver {
                 y[i] += A[i][j] * x[j + k];
             }
         }
-
-        return y;
     }
 
     @Override
-    public double[] axpy(double[] x, double[] y) {
+    public void axpy(double[] x, double[] y) {
         if (x.length != n) {
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but x is %d x 1", n, n, x.length));
         }
@@ -304,12 +302,10 @@ public class BandMatrix implements Matrix, LinearSolver {
                 y[i] += A[i][j] * x[j + k];
             }
         }
-
-        return y;
     }
 
     @Override
-    public double[] axpy(double[] x, double[] y, double b) {
+    public void axpy(double[] x, double[] y, double b) {
         if (x.length != n) {
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but x is %d x 1", n, n, x.length));
         }
@@ -326,12 +322,10 @@ public class BandMatrix implements Matrix, LinearSolver {
                 y[i] += A[i][j] * x[j + k];
             }
         }
-
-        return y;
     }
 
     @Override
-    public double[] atx(double[] x, double[] y) {
+    public void atx(double[] x, double[] y) {
         if (x.length != n) {
             throw new IllegalArgumentException(String.format("Column dimensions do not agree: A is %d x %d, but x is 1 x %d", n, n, x.length));
         }
@@ -348,12 +342,10 @@ public class BandMatrix implements Matrix, LinearSolver {
                 }
             }
         }
-
-        return y;
     }
 
     @Override
-    public double[] atxpy(double[] x, double[] y) {
+    public void atxpy(double[] x, double[] y) {
         if (x.length != n) {
             throw new IllegalArgumentException(String.format("Column dimensions do not agree: A is %d x %d, but x is 1 x %d", n, n, x.length));
         }
@@ -369,12 +361,10 @@ public class BandMatrix implements Matrix, LinearSolver {
                 }
             }
         }
-
-        return y;
     }
 
     @Override
-    public double[] atxpy(double[] x, double[] y, double b) {
+    public void atxpy(double[] x, double[] y, double b) {
         if (x.length != n) {
             throw new IllegalArgumentException(String.format("Column dimensions do not agree: A is %d x %d, but x is 1 x %d", n, n, x.length));
         }
@@ -391,8 +381,6 @@ public class BandMatrix implements Matrix, LinearSolver {
                 }
             }
         }
-
-        return y;
     }
 
     @Override
@@ -411,7 +399,7 @@ public class BandMatrix implements Matrix, LinearSolver {
      * @param x   is output vector so that L*U*X = b(piv,:)
      * @throws RuntimeException if matrix is singular.
      */
-    public double[] solve(double[] b, double[] x) {
+    public void solve(double[] b, double[] x) {
         if (b.length != n) {
             throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but b is %d x 1", n, n, b.length));
         }
@@ -458,8 +446,6 @@ public class BandMatrix implements Matrix, LinearSolver {
                 l++;
             }
         }
-
-        return x;
     }
 
     /**
