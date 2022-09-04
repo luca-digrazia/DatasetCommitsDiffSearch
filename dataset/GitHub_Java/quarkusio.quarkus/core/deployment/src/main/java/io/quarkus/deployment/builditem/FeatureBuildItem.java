@@ -17,20 +17,18 @@ public final class FeatureBuildItem extends MultiBuildItem {
     public static final String ELASTICSEARCH_REST_CLIENT = "elasticsearch-rest-client";
     public static final String FLYWAY = "flyway";
     public static final String HIBERNATE_ORM = "hibernate-orm";
-    public static final String HIBERNATE_ORM_PANACHE = "hibernate-orm-panache";
     public static final String HIBERNATE_VALIDATOR = "hibernate-validator";
     public static final String HIBERNATE_SEARCH_ELASTICSEARCH = "hibernate-search-elasticsearch";
     public static final String INFINISPAN_CLIENT = "infinispan-client";
-    public static final String INFINISPAN_EMBEDDED = "infinispan-embedded";
     public static final String JAEGER = "jaeger";
-    public static final String JDBC_DERBY = "jdbc-derby";
     public static final String JDBC_H2 = "jdbc-h2";
-    public static final String JDBC_POSTGRESQL = "jdbc-postgresql";
     public static final String JDBC_MARIADB = "jdbc-mariadb";
+    public static final String JDBC_POSTGRESQL = "jdbc-postgresql";
     public static final String JDBC_MSSQL = "jdbc-mssql";
     public static final String JDBC_MYSQL = "jdbc-mysql";
     public static final String JGIT = "jgit";
     public static final String KAFKA_STREAMS = "kafka-streams";
+    public static final String KEYCLOAK = "keycloak";
     public static final String KOGITO = "kogito";
     public static final String KOTLIN = "kotlin";
     public static final String KUBERNETES = "kubernetes";
@@ -74,7 +72,6 @@ public final class FeatureBuildItem extends MultiBuildItem {
     public static final String SWAGGER_UI = "swagger-ui";
     public static final String TIKA = "tika";
     public static final String UNDERTOW_WEBSOCKETS = "undertow-websockets";
-    public static final String VAULT = "vault";
     public static final String VERTX = "vertx";
     public static final String VERTX_WEB = "vertx-web";
 
