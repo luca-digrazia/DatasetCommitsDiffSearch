@@ -17,12 +17,13 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.function.BooleanSupplier;
 
 import org.jboss.logging.Logger;
 
 import io.quarkus.bootstrap.util.IoUtils;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 import io.quarkus.deployment.pkg.NativeConfig;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
@@ -54,7 +55,7 @@ public class NativeImageBuildStep {
      */
     private static final String PATH = "PATH";
 
-    @BuildStep(onlyIf = NativeBuild.class)
+    @BuildStep(onlyIf = NativeRequired.class)
     ArtifactResultBuildItem result(NativeImageBuildItem image) {
         return new ArtifactResultBuildItem(image.getPath(), PackageConfig.NATIVE, Collections.emptyMap());
     }
@@ -63,7 +64,7 @@ public class NativeImageBuildStep {
     public NativeImageBuildItem build(NativeConfig nativeConfig, NativeImageSourceJarBuildItem nativeImageSourceJarBuildItem,
             OutputTargetBuildItem outputTargetBuildItem,
             PackageConfig packageConfig,
-            List<NativeImageSystemPropertyBuildItem> nativeImageProperties) {
+            List<SubstrateSystemPropertyBuildItem> substrateProperties) {
         Path runnerJar = nativeImageSourceJarBuildItem.getPath();
         log.info("Building native image from " + runnerJar);
         Path outputDir = nativeImageSourceJarBuildItem.getPath().getParent();
@@ -77,21 +78,20 @@ public class NativeImageBuildStep {
 
         String noPIE = "";
 
-        if (!"".equals(nativeConfig.containerRuntime) || nativeConfig.containerBuild) {
-            String containerRuntime = nativeConfig.containerRuntime.isEmpty() ? "docker" : nativeConfig.containerRuntime;
+        if (!"".equals(nativeConfig.containerRuntime)) {
             // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm quarkus/graalvm-native-image"
             nativeImage = new ArrayList<>();
-            Collections.addAll(nativeImage, containerRuntime, "run", "-v",
+            Collections.addAll(nativeImage, nativeConfig.containerRuntime, "run", "-v",
                     outputDir.toAbsolutePath() + ":/project:z");
 
             if (IS_LINUX) {
-                if ("docker".equals(containerRuntime)) {
+                if ("docker".equals(nativeConfig.containerRuntime)) {
                     String uid = getLinuxID("-ur");
                     String gid = getLinuxID("-gr");
                     if (uid != null & gid != null & !"".equals(uid) & !"".equals(gid)) {
                         Collections.addAll(nativeImage, "--user", uid + ":" + gid);
                     }
-                } else if ("podman".equals(containerRuntime)) {
+                } else if ("podman".equals(nativeConfig.containerRuntime)) {
                     // Needed to avoid AccessDeniedExceptions
                     nativeImage.add("--userns=keep-id");
                 }
@@ -144,7 +144,7 @@ public class NativeImageBuildStep {
                 process.waitFor();
             }
             Boolean enableSslNative = false;
-            for (NativeImageSystemPropertyBuildItem prop : nativeImageProperties) {
+            for (SubstrateSystemPropertyBuildItem prop : substrateProperties) {
                 //todo: this should be specific build items
                 if (prop.getKey().equals("quarkus.ssl.native") && prop.getValue() != null) {
                     enableSslNative = Boolean.parseBoolean(prop.getValue());
@@ -299,10 +299,10 @@ public class NativeImageBuildStep {
     private boolean isThisGraalVMVersionObsolete() {
         final String vmName = System.getProperty("java.vm.name");
         log.info("Running Quarkus native-image plugin on " + vmName);
-        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.", "19.2.0");
+        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.");
         final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(vmName::contains);
         if (vmVersionIsObsolete) {
-            log.error("Out of date build of GraalVM detected! Please upgrade to GraalVM 19.2.1.");
+            log.error("Out of date build of GraalVM detected! Please upgrade to GraalVM 19.2.0.");
             return true;
         }
         return false;
@@ -409,6 +409,20 @@ public class NativeImageBuildStep {
         }
 
         return "";
+    }
+
+    static class NativeRequired implements BooleanSupplier {
+
+        private final PackageConfig packageConfig;
+
+        NativeRequired(PackageConfig packageConfig) {
+            this.packageConfig = packageConfig;
+        }
+
+        @Override
+        public boolean getAsBoolean() {
+            return packageConfig.types.contains(PackageConfig.NATIVE);
+        }
     }
 
 }
