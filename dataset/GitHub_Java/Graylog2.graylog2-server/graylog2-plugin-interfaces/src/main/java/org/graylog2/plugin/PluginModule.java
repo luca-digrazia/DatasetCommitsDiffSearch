@@ -19,11 +19,9 @@
 
 package org.graylog2.plugin;
 
-import com.google.common.util.concurrent.Service;
 import com.google.inject.AbstractModule;
 import com.google.inject.TypeLiteral;
 import com.google.inject.multibindings.Multibinder;
-import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.filters.MessageFilter;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.periodical.Periodical;
@@ -32,10 +30,6 @@ import org.graylog2.plugin.periodical.Periodical;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public abstract class PluginModule extends AbstractModule {
-    protected void registerPlugin(Class<? extends PluginMetaData> pluginMetaData) {
-        Multibinder<PluginMetaData> pluginMetaDataMultibinder = Multibinder.newSetBinder(binder(), PluginMetaData.class);
-        pluginMetaDataMultibinder.addBinding().to(pluginMetaData);
-    }
     protected void addMessageInput(Class<? extends MessageInput> messageInputClass) {
         TypeLiteral<Class<? extends MessageInput>> typeLiteral = new TypeLiteral<Class<? extends MessageInput>>(){};
         Multibinder<Class<? extends MessageInput>> messageInputs = Multibinder.newSetBinder(binder(), typeLiteral);
@@ -50,16 +44,5 @@ public abstract class PluginModule extends AbstractModule {
     protected void addPeriodical(Class<? extends Periodical> periodicalClass) {
         Multibinder<Periodical> periodicalBinder = Multibinder.newSetBinder(binder(), Periodical.class);
         periodicalBinder.addBinding().to(periodicalClass);
-    }
-
-    protected void addAlarmCallback(Class<? extends AlarmCallback> alarmCallbackClass) {
-        TypeLiteral<Class<? extends AlarmCallback>> type = new TypeLiteral<Class<? extends AlarmCallback>>(){};
-        Multibinder<Class<? extends AlarmCallback>> alarmCallbackBinder = Multibinder.newSetBinder(binder(), type);
-        alarmCallbackBinder.addBinding().toInstance(alarmCallbackClass);
-    }
-
-    protected void addInitializer(Class<? extends Service> initializerClass) {
-        Multibinder<Service> serviceBinder = Multibinder.newSetBinder(binder(), Service.class);
-        serviceBinder.addBinding().to(initializerClass);
     }
 }
