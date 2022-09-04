@@ -98,12 +98,8 @@ public final class Main {
             System.exit(1);
         }
 
-        // If we only want to check our configuration, we just initialize the rules engine to check if the rules compile
+        // If we only want to check our configuration, we can gracefully exit here
         if (commandLineArguments.isConfigTest()) {
-            GraylogServer server = new GraylogServer();
-            DroolsInitializer drools = new DroolsInitializer(server, configuration);
-            drools.initialize();
-            // rules have been checked, exit gracefully
             System.exit(0);
         }
 
