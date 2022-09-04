@@ -26,7 +26,6 @@ import javax.ws.rs.Path;
 import javax.ws.rs.ext.Provider;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class DropwizardResourceConfig extends ScanningResourceConfig {
     private static final String NEWLINE = String.format("%n");
@@ -61,9 +60,9 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
     public void validate() {
         super.validate();
 
-        LOGGER.debug("resources = {}", getResources());
-        LOGGER.debug("providers = {}", getProviders());
-        LOGGER.info(getEndpointsInfo());;
+        logResources();
+        logProviders();
+        logEndpoints();
     }
 
     public String getUrlPattern() {
@@ -74,7 +73,7 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
         this.urlPattern = urlPattern;
     }
 
-    private Set<String> getResources() {
+    private void logResources() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
 
         for (Class<?> klass : getClasses()) {
@@ -97,10 +96,10 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
             }
         }
 
-        return builder.build();
+        LOGGER.debug("resources = {}", builder.build());
     }
 
-    private Set<String> getProviders() {
+    private void logProviders() {
         final ImmutableSet.Builder<String> builder = ImmutableSet.builder();
 
         for (Class<?> klass : getClasses()) {
@@ -115,10 +114,10 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
             }
         }
 
-        return builder.build();
+        LOGGER.debug("providers = {}", builder.build());
     }
 
-    public String getEndpointsInfo() {
+    private void logEndpoints() {
         final StringBuilder msg = new StringBuilder(1024);
         msg.append("The following paths were found for the configured resources:");
         msg.append(NEWLINE).append(NEWLINE);
@@ -164,7 +163,7 @@ public class DropwizardResourceConfig extends ScanningResourceConfig {
             }
         }
 
-        return msg.toString();
+        LOGGER.info(msg.toString());
     }
 
     private void populateEndpoints(List<String> endpoints, String basePath, Class<?> klass,
