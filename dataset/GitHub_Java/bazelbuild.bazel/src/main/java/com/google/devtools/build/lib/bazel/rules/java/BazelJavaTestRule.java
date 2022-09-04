@@ -58,7 +58,7 @@ public final class BazelJavaTestRule implements RuleDefinition {
         // Primarily this is intended to help test changes to Proguard.
         .add(
             attr(":proguard", LABEL)
-                .cfg(HostTransition.createFactory())
+                .cfg(HostTransition.INSTANCE)
                 .value(JavaSemantics.PROGUARD)
                 .exec())
         .add(attr(":extra_proguard_specs", LABEL_LIST).value(JavaSemantics.EXTRA_PROGUARD_SPECS))
@@ -73,7 +73,7 @@ public final class BazelJavaTestRule implements RuleDefinition {
                         "@bazel_tools//tools/test/CoverageOutputGenerator/java/com/google/devtools/coverageoutputgenerator:Main")))
         .add(
             attr("$jacocorunner", LABEL)
-                .value(env.getToolsLabel("//tools/jdk:JacocoCoverageRunner")))
+                .value(Label.parseAbsoluteUnchecked("@bazel_tools//tools/jdk:JacocoCoverage")))
         /* <!-- #BLAZE_RULE(java_test).ATTRIBUTE(test_class) -->
         The Java class to be loaded by the test runner.<br/>
         <p>
