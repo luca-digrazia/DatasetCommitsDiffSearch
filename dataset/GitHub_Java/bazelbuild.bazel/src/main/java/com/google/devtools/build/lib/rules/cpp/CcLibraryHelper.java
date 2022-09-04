@@ -254,7 +254,6 @@ public final class CcLibraryHelper {
   private final List<Artifact> nonModuleMapHeaders = new ArrayList<>();
   private final List<Artifact> publicTextualHeaders = new ArrayList<>();
   private final List<Artifact> privateHeaders = new ArrayList<>();
-  private final List<Artifact> additionalInputs = new ArrayList<>();
   private final List<PathFragment> additionalExportedHeaders = new ArrayList<>();
   private final List<CppModuleMap> additionalCppModuleMaps = new ArrayList<>();
   private final Set<CppSource> compilationUnitSources = new LinkedHashSet<>();
@@ -478,12 +477,6 @@ public final class CcLibraryHelper {
    */
   public CcLibraryHelper addSources(Artifact... sources) {
     return addSources(Arrays.asList(sources));
-  }
-
-  /** Add the corresponding files as non-header, non-source input files. */
-  public CcLibraryHelper addAdditionalInputs(Collection<Artifact> inputs) {
-    Iterables.addAll(additionalInputs, inputs);
-    return this;
   }
 
   /**
@@ -1197,13 +1190,13 @@ public final class CcLibraryHelper {
 
     PathFragment prefix =
         ruleContext.attributes().isAttributeValueExplicitlySpecified("include_prefix")
-            ? PathFragment.create(ruleContext.attributes().get("include_prefix", Type.STRING))
+            ? new PathFragment(ruleContext.attributes().get("include_prefix", Type.STRING))
             : null;
 
     PathFragment stripPrefix;
     if (ruleContext.attributes().isAttributeValueExplicitlySpecified("strip_include_prefix")) {
-      stripPrefix =
-          PathFragment.create(ruleContext.attributes().get("strip_include_prefix", Type.STRING));
+      stripPrefix = new PathFragment(
+          ruleContext.attributes().get("strip_include_prefix", Type.STRING));
       if (stripPrefix.isAbsolute()) {
         stripPrefix = ruleContext.getLabel().getPackageIdentifier().getRepository().getSourceRoot()
             .getRelative(stripPrefix.toRelative());
@@ -1330,8 +1323,6 @@ public final class CcLibraryHelper {
     contextBuilder.addDeclaredIncludeSrcs(publicHeaders.getHeaders());
     contextBuilder.addDeclaredIncludeSrcs(publicTextualHeaders);
     contextBuilder.addDeclaredIncludeSrcs(privateHeaders);
-    contextBuilder.addDeclaredIncludeSrcs(additionalInputs);
-    contextBuilder.addNonCodeInputs(additionalInputs);
     contextBuilder.addModularHdrs(publicHeaders.getHeaders());
     contextBuilder.addModularHdrs(privateHeaders);
     contextBuilder.addTextualHdrs(publicTextualHeaders);
