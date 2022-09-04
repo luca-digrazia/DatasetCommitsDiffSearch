@@ -65,11 +65,12 @@ import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
+import com.google.devtools.build.lib.skyframe.serialization.InjectingObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.Pair;
+import com.google.devtools.build.lib.vfs.FileSystemProvider;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.view.config.crosstool.CrosstoolConfig.LipoMode;
 import java.util.ArrayList;
@@ -574,10 +575,10 @@ public class CppHelper {
    * A header that has been grepped for #include statements. Includes the original header as well as
    * a stripped version of that header that contains only #include statements.
    */
-  @AutoCodec
+  @AutoCodec(dependency = FileSystemProvider.class)
   @AutoValue
   abstract static class PregreppedHeader {
-    public static final ObjectCodec<PregreppedHeader> CODEC =
+    public static final InjectingObjectCodec<PregreppedHeader, FileSystemProvider> CODEC =
         new CppHelper_PregreppedHeader_AutoCodec();
 
     @AutoCodec.Instantiator
@@ -945,11 +946,10 @@ public class CppHelper {
             featureConfiguration.getToolForAction(CppCompileAction.STRIP_ACTION_NAME));
     Variables variables =
         new Variables.Builder(toolchain.getBuildVariables())
-            .addStringVariable(
-                CcCompilationHelper.OUTPUT_FILE_VARIABLE_NAME, output.getExecPathString())
+            .addStringVariable(CppModel.OUTPUT_FILE_VARIABLE_NAME, output.getExecPathString())
             .addStringSequenceVariable(
-                CcCommon.STRIPOPTS_VARIABLE_NAME, cppConfiguration.getStripOpts())
-            .addStringVariable(CcCommon.INPUT_FILE_VARIABLE_NAME, input.getExecPathString())
+                CppModel.STRIPOPTS_VARIABLE_NAME, cppConfiguration.getStripOpts())
+            .addStringVariable(CppModel.INPUT_FILE_VARIABLE_NAME, input.getExecPathString())
             .build();
     ImmutableList<String> commandLine =
         ImmutableList.copyOf(
