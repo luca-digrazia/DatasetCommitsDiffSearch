@@ -359,8 +359,7 @@ public class SpringDIProcessor {
             }
         } else if (target.kind() == AnnotationTarget.Kind.METHOD) {
             final MethodInfo methodInfo = target.asMethod();
-            if (methodInfo.hasAnnotation(BEAN_ANNOTATION)
-                    && methodInfo.declaringClass().classAnnotation(CONFIGURATION_ANNOTATION) != null) {
+            if (methodInfo.hasAnnotation(BEAN_ANNOTATION)) {
                 annotationsToAdd.add(create(
                         CDI_PRODUCES_ANNOTATION,
                         target,
