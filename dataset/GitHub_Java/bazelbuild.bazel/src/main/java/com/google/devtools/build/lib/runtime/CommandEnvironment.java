@@ -40,10 +40,8 @@ import com.google.devtools.build.lib.pkgcache.PackageManager;
 import com.google.devtools.build.lib.pkgcache.TargetPatternEvaluator;
 import com.google.devtools.build.lib.profiler.AutoProfiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
-import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.skyframe.SkyframeBuildView;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -487,8 +485,7 @@ public final class CommandEnvironment {
 
   /**
    * Initializes the package cache using the given options, and syncs the package cache. Also
-   * injects a defaults package and the skylark semantics using the options for the {@link
-   * BuildConfiguration}.
+   * injects a defaults package using the options for the {@link BuildConfiguration}.
    *
    * @see DefaultsPackage
    */
@@ -498,14 +495,9 @@ public final class CommandEnvironment {
     if (!skyframeExecutor.hasIncrementalState()) {
       skyframeExecutor.resetEvaluator();
     }
-
-    for (BlazeModule module : runtime.getBlazeModules()) {
-      skyframeExecutor.injectExtraPrecomputedValues(module.getPrecomputedValues());
-    }
     skyframeExecutor.sync(
         reporter,
         options.getOptions(PackageCacheOptions.class),
-        options.getOptions(SkylarkSemanticsOptions.class),
         getOutputBase(),
         getWorkingDirectory(),
         defaultsPackageContents,
@@ -532,18 +524,14 @@ public final class CommandEnvironment {
   }
 
   /**
-   * Hook method called by the BlazeCommandDispatcher prior to the dispatch of each command.
+   * Hook method called by the BlazeCommandDispatcher prior to the dispatch of
+   * each command.
    *
    * @param options The CommonCommandOptions used by every command.
    * @throws AbruptExitException if this command is unsuitable to be run as specified
    */
-  void beforeCommand(
-      Command command,
-      OptionsParser optionsParser,
-      CommonCommandOptions options,
-      long execStartTimeNanos,
-      long waitTimeInMs,
-      InvocationPolicy invocationPolicy)
+  void beforeCommand(Command command, OptionsParser optionsParser,
+      CommonCommandOptions options, long execStartTimeNanos, long waitTimeInMs)
       throws AbruptExitException {
     commandStartTime -= options.startupTime;
     if (runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).watchFS) {
@@ -558,8 +546,7 @@ public final class CommandEnvironment {
     this.commandName = command.name();
     this.options = optionsParser;
 
-    eventBus.post(
-        new GotOptionsEvent(runtime.getStartupOptionsProvider(), optionsParser, invocationPolicy));
+    eventBus.post(new GotOptionsEvent(runtime.getStartupOptionsProvider(), optionsParser));
     throwPendingException();
 
     outputService = null;
