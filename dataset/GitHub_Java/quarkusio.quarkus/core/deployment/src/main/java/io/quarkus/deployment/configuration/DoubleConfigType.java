@@ -52,7 +52,8 @@ public class DoubleConfigType extends LeafConfigType {
     public void acceptConfigurationValueIntoGroup(final Object enclosing, final Field field, final NameIterator name,
             final SmallRyeConfig config) {
         try {
-            field.setDouble(enclosing, config.getValue(name.toString(), OptionalDouble.class).orElse(0.0));
+            field.setDouble(enclosing, config.getValue(name.toString(), OptionalDouble.class)
+                    .orElse(config.convert(defaultValue, Double.class).doubleValue()));
         } catch (IllegalAccessException e) {
             throw toError(e);
         }
@@ -60,7 +61,7 @@ public class DoubleConfigType extends LeafConfigType {
 
     public void generateAcceptConfigurationValueIntoGroup(final BytecodeCreator body, final ResultHandle enclosing,
             final MethodDescriptor setter, final ResultHandle name, final ResultHandle config) {
-        // config.getValue(name.toString(), OptionalDouble.class).orElse(0.0)
+        // config.getValue(name.toString(), OptionalDouble.class).orElse(config.convert(defaultValue, Double.class).doubleValue())
         final ResultHandle optionalValue = body.checkCast(body.invokeVirtualMethod(
                 SRC_GET_VALUE,
                 config,
@@ -68,10 +69,12 @@ public class DoubleConfigType extends LeafConfigType {
                         OBJ_TO_STRING_METHOD,
                         name),
                 body.loadClass(OptionalDouble.class)), OptionalDouble.class);
-        final ResultHandle doubleValue = body.invokeVirtualMethod(
+        final ResultHandle convertedDefault = getConvertedDefault(body, config);
+        final ResultHandle defaultedValue = body.checkCast(body.invokeVirtualMethod(
                 OPTDOUBLE_OR_ELSE_METHOD,
                 optionalValue,
-                body.load(0.0));
+                convertedDefault), Double.class);
+        final ResultHandle doubleValue = body.invokeVirtualMethod(DOUBLE_VALUE_METHOD, defaultedValue);
         body.invokeStaticMethod(setter, enclosing, doubleValue);
     }
 

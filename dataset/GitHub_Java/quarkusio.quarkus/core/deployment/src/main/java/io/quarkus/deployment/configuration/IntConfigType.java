@@ -51,7 +51,8 @@ public class IntConfigType extends LeafConfigType {
     public void acceptConfigurationValueIntoGroup(final Object enclosing, final Field field, final NameIterator name,
             final SmallRyeConfig config) {
         try {
-            field.setInt(enclosing, config.getValue(name.toString(), OptionalInt.class).orElse(0));
+            field.setInt(enclosing, config.getValue(name.toString(), OptionalInt.class)
+                    .orElse(config.convert(defaultValue, Integer.class).intValue()));
         } catch (IllegalAccessException e) {
             throw toError(e);
         }
@@ -59,7 +60,7 @@ public class IntConfigType extends LeafConfigType {
 
     public void generateAcceptConfigurationValueIntoGroup(final BytecodeCreator body, final ResultHandle enclosing,
             final MethodDescriptor setter, final ResultHandle name, final ResultHandle config) {
-        // config.getValue(name.toString(), OptionalInt.class).orElse(0)
+        // config.getValue(name.toString(), OptionalInt.class).orElse(config.convert(defaultValue, Integer.class).intValue())
         final ResultHandle optionalValue = body.checkCast(body.invokeVirtualMethod(
                 SRC_GET_VALUE,
                 config,
@@ -67,10 +68,12 @@ public class IntConfigType extends LeafConfigType {
                         OBJ_TO_STRING_METHOD,
                         name),
                 body.loadClass(OptionalInt.class)), OptionalInt.class);
-        final ResultHandle intValue = body.invokeVirtualMethod(
+        final ResultHandle convertedDefault = getConvertedDefault(body, config);
+        final ResultHandle defaultedValue = body.checkCast(body.invokeVirtualMethod(
                 OPTINT_OR_ELSE_METHOD,
                 optionalValue,
-                body.load(0));
+                convertedDefault), Integer.class);
+        final ResultHandle intValue = body.invokeVirtualMethod(INT_VALUE_METHOD, defaultedValue);
         body.invokeStaticMethod(setter, enclosing, intValue);
     }
 
