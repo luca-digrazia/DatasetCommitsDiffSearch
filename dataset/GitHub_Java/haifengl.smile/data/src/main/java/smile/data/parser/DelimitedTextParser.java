@@ -19,18 +19,17 @@ package smile.data.parser;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URI;
 import java.text.ParseException;
+
+import java.util.ArrayList;
+import java.util.List;
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
-import smile.data.Datum;
-import smile.data.NominalAttribute;
 import smile.data.NumericAttribute;
-import smile.data.StringAttribute;
 
 /**
  * The delimited text file parser. By default, the parser expects a
@@ -74,6 +73,10 @@ public class DelimitedTextParser {
      * The column index of dependent/response variable.
      */
     private int responseIndex = -1;
+    /**
+     * Indices of columns to ignore
+     */
+    private List<Integer> ignoredColumns = new ArrayList<>();
 
     /**
      * Constructor with default delimiter of white space, comment line
@@ -142,6 +145,31 @@ public class DelimitedTextParser {
     }
 
     /**
+     * Sets the list of column indices to ignore (starting at 0)
+     */
+    public DelimitedTextParser setIgnoredColumns(List<Integer> ignoredColumns) {
+        this.ignoredColumns = ignoredColumns;
+        return this;
+    }
+
+    /**
+     * Adds one columns index to ignore
+     */
+    public DelimitedTextParser addIgnoredColumn(int index) {
+        this.ignoredColumns.add(index);
+        return this;
+    }
+
+    /**
+     * Adds several column indices to ignore
+     */
+    public DelimitedTextParser addIgnoredColumns(List<Integer> ignoredColumns) {
+        this.ignoredColumns.addAll(ignoredColumns);
+        return this;
+    }
+
+
+    /**
      * Returns if the dataset has row names (at column 0).
      */
     public boolean hasRowNames() {
@@ -204,6 +232,16 @@ public class DelimitedTextParser {
      * @param attributes the list attributes of data in proper order.
      * @throws java.io.FileNotFoundException
      */
+    public AttributeDataset parse(Attribute[] attributes, String path) throws IOException, ParseException {
+        return parse(attributes, new File(path));
+    }
+
+    /**
+     * Parse a dataset from given file.
+     * @param path the file path of data source.
+     * @param attributes the list attributes of data in proper order.
+     * @throws java.io.FileNotFoundException
+     */
     public AttributeDataset parse(String name, Attribute[] attributes, String path) throws IOException, ParseException {
         return parse(name, attributes, new File(path));
     }
@@ -221,9 +259,9 @@ public class DelimitedTextParser {
     /**
      * Parse a dataset from given file.
      * @param file the file of data source.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
-    public AttributeDataset parse(String name, File file) throws FileNotFoundException, IOException, ParseException {
+    public AttributeDataset parse(String name, File file) throws IOException, ParseException {
         return parse(name, new FileInputStream(file));
     }
 
@@ -231,7 +269,7 @@ public class DelimitedTextParser {
      * Parse a dataset from given file.
      * @param file the file of data source.
      * @param attributes the list attributes of data in proper order.
-     * @throws java.io.FileNotFoundException
+     * @throws java.io.IOException
      */
     public AttributeDataset parse(Attribute[] attributes, File file) throws IOException, ParseException {
         String name = file.getPath();
@@ -245,11 +283,9 @@ public class DelimitedTextParser {
      * @throws java.io.FileNotFoundException
      */
     public AttributeDataset parse(String name, Attribute[] attributes, File file) throws IOException, ParseException {
-        AttributeDataset data = new AttributeDataset(name, attributes, response);
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(file)))) {
-           parse(data, reader);
+           return parse(name, attributes, reader);
         }
-        return data;
     }
 
     /**
@@ -260,69 +296,98 @@ public class DelimitedTextParser {
      */
     public AttributeDataset parse(String name, InputStream stream) throws IOException, ParseException {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream))) {
-            // process header
-            String line = reader.readLine();
-            while (line != null) {
-                if (line.isEmpty() || line.startsWith(comment)) {
-                    line = reader.readLine();
-                } else {
-                    break;
+            return parse(name, null, reader);
+        }
+    }
+    
+    /**
+     * Parse a dataset from a buffered reader.
+     * @param name the name of dataset.
+     * @param attributes the list attributes of data in proper order.
+     * @param reader the buffered reader for data.
+     * @throws java.io.IOException
+     */
+    private AttributeDataset parse(String name, Attribute[] attributes, BufferedReader reader) throws IOException, ParseException {
+        String line = reader.readLine();
+        while (line != null) {
+            if (line.isEmpty() || line.startsWith(comment)) {
+                line = reader.readLine();
+            } else {
+                break;
+            }
+        }
+
+        if (line == null) {
+            throw new IOException("Empty data source.");
+        }
+
+        if (hasRowNames) {
+            addIgnoredColumn(0);
+        }
+
+        String[] s = line.split(delimiter, 0);
+
+        int p = s.length - ignoredColumns.size();
+
+        if (p <= 0) {
+          throw new IllegalArgumentException("There are more ignored columns (" + ignoredColumns.size() + ") than columns in the file (" + s.length + ").");
+        }
+
+        if (responseIndex >= s.length) {
+          throw new ParseException("Invalid response variable index: " + responseIndex, responseIndex);
+        }
+
+        if (ignoredColumns.contains(responseIndex)) {
+          throw new IllegalArgumentException("The response variable is present in the list of ignored columns.");
+        }
+
+        if (p == 1) {
+          throw new IllegalArgumentException("All columns are ignored, except the response variable.");
+        }
+
+        if (responseIndex >= 0) {
+          p--;
+        }
+
+        if (attributes == null) {
+            attributes = new Attribute[p];
+            for (int i = 0, k = 0; i < s.length; i++) {
+                if (!ignoredColumns.contains(i) && i != responseIndex) {
+                    attributes[k++] = new NumericAttribute("V" + (i + 1));
                 }
             }
+        }
 
-            if (line == null) {
-                throw new IOException("Empty data source.");
-            }
+        int ncols = attributes.length;
 
-            String[] s = line.split(delimiter, 0);
-            int start = 0;
-            int dimension = s.length;
-            if (hasRowNames) {
-                dimension--;
-                start = 1;
-            }
+        if (responseIndex >= 0) {
+            ncols++;
+        }
 
-            if (responseIndex >= s.length) {
-                throw new ParseException("Invalid response variable index: " + responseIndex, responseIndex);
-            }
+        ncols += ignoredColumns.size();
 
-            if (responseIndex >= 0) {
-                dimension--;
-            }
+        if (ncols != s.length)
+            throw new ParseException(String.format("%d columns, expected %d", s.length, ncols), s.length);
 
-            Attribute[] attributes = new Attribute[dimension];
+        AttributeDataset data = new AttributeDataset(name, attributes, response);
 
-            if (hasColumnNames) {
-                for (int i = 0, j = start; i < dimension; j++) {
-                    if (j != responseIndex) {
-                        attributes[i++] = new NumericAttribute(s[j]);
+        if (hasColumnNames) {
+            for (int i = 0, k = 0; i < s.length; i++) {
+                if (!ignoredColumns.contains(i)) {
+                    if (i != responseIndex) {
+                        attributes[k++].setName(s[i]);
                     } else {
-                        switch (response.getType()) {
-                        case NOMINAL:
-                            response = new NominalAttribute(s[j]);
-                            break;
-                        case NUMERIC:
-                            response = new NumericAttribute(s[j]);
-                            break;
-                        default:
-                            throw new IllegalStateException("Invalid response variable type.");
-                        }
+                        response.setName(s[i]);
                     }
                 }
-            } else {
-                for (int i = 0; i < dimension; i++) {
-                    attributes[i] = new NumericAttribute("V" + (i + 1));
-                }
             }
+        } else {
+            String rowName = hasRowNames ? s[0] : null;
+            double[] x = new double[attributes.length];
+            double y = Double.NaN;
 
-            AttributeDataset data = new AttributeDataset(name, attributes, response);
-
-            if (!hasColumnNames) {
-                String rowName = hasRowNames ? s[0] : null;
-                double[] x = new double[attributes.length];
-                double y = Double.NaN;
-
-                for (int i = hasRowNames ? 1 : 0, k = 0; i < s.length; i++) {
+            for (int i = 0, k = 0; i < s.length; i++) {
+                if (!ignoredColumns.contains(i)) {
                     if (i == responseIndex) {
                         y = response.valueOf(s[i]);
                     } else if (missing != null && missing.equalsIgnoreCase(s[i])) {
@@ -332,96 +397,43 @@ public class DelimitedTextParser {
                         k++;
                     }
                 }
-
-                Datum<double[]> datum = new Datum<double[]>(x, y);
-                datum.name = rowName;
-                data.add(datum);
             }
 
-            parse(data, reader);
-
-            for (Attribute attribute : attributes) {
-                if (attribute instanceof NominalAttribute) {
-                    NominalAttribute a = (NominalAttribute) attribute;
-                    a.setOpen(false);
-                }
-
-                if (attribute instanceof StringAttribute) {
-                    StringAttribute a = (StringAttribute) attribute;
-                    a.setOpen(false);
-                }
-            }
-
-            return data;
-        }
-    }
-    
-    /**
-     * Parse a dataset from a buffered reader.
-     * @param data the dataset.
-     * @param reader the buffered reader for data.
-     * @throws java.io.IOException
-     */
-    private void parse(AttributeDataset data, BufferedReader reader) throws IOException, ParseException {
-        Attribute[] attributes = data.attributes();
-        
-        int n = attributes.length;
-        
-        if (hasRowNames) {
-            n = n + 1;
+            AttributeDataset.Row datum = Double.isNaN(y) ? data.add(x) : data.add(x, y);
+            datum.name = rowName;
         }
 
-        if (responseIndex >= 0) {
-            n = n + 1;
-        } 
-        
-        String line = null;
-        boolean firstLine = true;
         while ((line = reader.readLine()) != null) {
-            if (line.isEmpty()) {
+            if (line.isEmpty() || line.startsWith(comment)) {
                 continue;
             }
 
-            if (line.startsWith(comment)) {
-                continue;
-            }
-
-            String[] s = line.split(delimiter, 0);
-            if (s.length != n) {
-                throw new ParseException(String.format("%d columns, expected %d", s.length, n), s.length);
-            }
-
-            if (hasColumnNames && firstLine) {
-                firstLine = false;
-                for (int i = hasRowNames ? 1 : 0, k = 0; i < s.length; i++) {
-                    if (i == responseIndex) {
-                        response.setName(s[i]);
-                    } else {
-                        attributes[k].setName(s[i]);
-                        k++;
-                    }
-                }
-                continue;
+            s = line.split(delimiter, 0);
+            if (s.length != ncols) {
+                throw new ParseException(String.format("%d columns, expected %d", s.length, ncols), s.length);
             }
 
             String rowName = hasRowNames ? s[0] : null;
             double[] x = new double[attributes.length];
             double y = Double.NaN;
 
-            for (int i = hasRowNames ? 1 : 0, k = 0; i < s.length; i++) {
-                if (i == responseIndex) {
-                    y = response.valueOf(s[i]);
-                } else if (missing != null && missing.equalsIgnoreCase(s[i])) {
-                    x[k++] = Double.NaN;
-                } else {
-                    x[k] = attributes[k].valueOf(s[i]);
-                    k++;
+            for (int i = 0, k = 0; i < s.length; i++) {
+                if (!ignoredColumns.contains(i)) {
+                    if (i == responseIndex) {
+                        y = response.valueOf(s[i]);
+                    } else if (missing != null && missing.equalsIgnoreCase(s[i])) {
+                        x[k++] = Double.NaN;
+                    } else {
+                        x[k] = attributes[k].valueOf(s[i]);
+                        k++;
+                    }
                 }
             }
 
-            Datum<double[]> datum = new Datum<double[]>(x, y);
+            AttributeDataset.Row datum = Double.isNaN(y) ? data.add(x) : data.add(x, y);
             datum.name = rowName;
-            data.add(datum);
         }
+
+        return data;
     }
 }
