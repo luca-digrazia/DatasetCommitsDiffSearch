@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog2.decorators;
 
 import com.google.common.collect.ImmutableList;
@@ -32,12 +48,15 @@ public class LinkFieldDecoratorTest {
     public void verifyUnsafeLinksAreRemoved() {
 
         // Verify that real, safe URLs are rendered as links.
-        Assert.assertEquals("http://full-local-should-match", getDecoratorUrl("http://full-local-should-match"));
-        Assert.assertEquals("http://full-url-should-match.com", getDecoratorUrl("http://full-url-should-match.com"));
-        Assert.assertEquals("http://full-url-should-match.com/test", getDecoratorUrl("http://full-url-should-match.com/test"));
-        Assert.assertEquals("http://full-url-should-match.com/test?with=param", getDecoratorUrl("http://full-url-should-match.com/test?with=param"));
+        Assert.assertEquals("http://full-local-allowed", getDecoratorUrl("http://full-local-allowed"));
+        Assert.assertEquals("http://full-url-allowed.com", getDecoratorUrl("http://full-url-allowed.com"));
+        Assert.assertEquals("http://full-url-allowed.com/test", getDecoratorUrl("http://full-url-allowed.com/test"));
+        Assert.assertEquals("http://full-url-allowed.com/test?with=param", getDecoratorUrl("http://full-url-allowed.com/test?with=param"));
         Assert.assertEquals("https://https-is-allowed-too.com", getDecoratorUrl("https://https-is-allowed-too.com"));
         Assert.assertEquals("HTTPS://upper-case-https-all-good.com", getDecoratorUrl("HTTPS://upper-case-https-all-good.com"));
+
+        // Links with double slashes should be allowed.
+        Assert.assertEquals("https://graylog.com//releases", getDecoratorUrl("https://graylog.com//releases"));
 
         // Verify that unsafe URLs are rendered as text.
         Assert.assertEquals("javascript:alert('Javascript is not allowed.')", getDecoratorMessage("javascript:alert('Javascript is not allowed.')"));
@@ -45,11 +64,17 @@ public class LinkFieldDecoratorTest {
         Assert.assertEquals("ntp://other-stuff-is-not-allowed", getDecoratorMessage("ntp://other-stuff-is-not-allowed"));
     }
 
+    /**
+     * @return Dig out and return the message value directly displayed by the UI.
+     */
     private Object getDecoratorMessage(String urlFieldValue) {
 
         return executeDecoratorGetFirstMessage(urlFieldValue).message().get(TEST_FIELD);
     }
 
+    /**
+     * @return Dig out and return the href link property used by the UI.
+     */
     private Object getDecoratorUrl(String urlFieldValue) {
 
         return ((HashMap) executeDecoratorGetFirstMessage(urlFieldValue).message().get(TEST_FIELD)).get("href");

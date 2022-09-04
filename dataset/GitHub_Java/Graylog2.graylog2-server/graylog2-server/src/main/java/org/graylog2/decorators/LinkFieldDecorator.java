@@ -37,9 +37,6 @@ import static java.util.Objects.requireNonNull;
 public class LinkFieldDecorator implements SearchResponseDecorator {
 
     public static final String CK_LINK_FIELD = "link_field";
-    // UrlValidator.ALLOW_LOCAL_URLS allows local links to be permitted such as http://my-local-server
-    // Some users may reference such local URLs, and there should be no issue with doing so.
-    private final static UrlValidator URL_VALIDATOR = new UrlValidator(new String[]{"http", "https"}, UrlValidator.ALLOW_LOCAL_URLS + UrlValidator.ALLOW_2_SLASHES);
 
     private final String linkField;
 
@@ -118,6 +115,10 @@ public class LinkFieldDecorator implements SearchResponseDecorator {
      *  - or any other javascript expressions.
      */
     private boolean isValidUrl(String url) {
-        return URL_VALIDATOR.isValid(url);
+        String[] schemes = {"http", "https"};
+        // UrlValidator.ALLOW_LOCAL_URLS allows local links to be permitted such as http://my-local-server
+        // Some users may reference such local URLs, and there should be no issue with doing so.
+        UrlValidator urlValidator = new UrlValidator(schemes, UrlValidator.ALLOW_LOCAL_URLS + UrlValidator.ALLOW_2_SLASHES);
+        return urlValidator.isValid(url);
     }
 }
