@@ -480,16 +480,16 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
       }
       switch (name) {
         case "src":
-          assertConfigurationsEqual(getTargetConfiguration(), getConfiguration(prereq));
+          assertConfigurationsEqual(getTargetConfiguration(), prereq.getConfiguration());
           foundSrc = true;
           break;
         case "tool":
-          assertThat(getHostConfiguration().equalsOrIsSupersetOf(getConfiguration(prereq)))
+          assertThat(getHostConfiguration().equalsOrIsSupersetOf(prereq.getConfiguration()))
               .isTrue();
           foundTool = true;
           break;
         case GENRULE_SETUP_PATH:
-          assertThat(getConfiguration(prereq)).isNull();
+          assertThat(prereq.getConfiguration()).isNull();
           foundSetup = true;
           break;
         default:
