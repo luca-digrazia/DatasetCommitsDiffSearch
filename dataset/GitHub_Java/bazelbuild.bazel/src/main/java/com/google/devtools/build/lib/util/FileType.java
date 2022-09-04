@@ -41,36 +41,11 @@ public abstract class FileType implements Predicate<String> {
       };
 
   public static FileType of(final String ext) {
-    return new SingletonFileType(ext);
+    return new ListFileType(ImmutableList.of(ext));
   }
 
   public static FileType of(final List<String> extensions) {
     return new ListFileType(ImmutableList.copyOf(extensions));
-  }
-
-  public static FileType of(final String... extensions) {
-    return of(Arrays.asList(extensions));
-  }
-
-  @AutoCodec.VisibleForSerialization
-  @AutoCodec
-  static final class SingletonFileType extends FileType {
-    private final String ext;
-
-    @AutoCodec.VisibleForSerialization
-    SingletonFileType(String ext) {
-      this.ext = ext;
-    }
-
-    @Override
-    public boolean apply(String path) {
-      return path.endsWith(ext);
-    }
-
-    @Override
-    public List<String> getExtensions() {
-      return ImmutableList.of(ext);
-    }
   }
 
   @AutoCodec.VisibleForSerialization
@@ -85,9 +60,8 @@ public abstract class FileType implements Predicate<String> {
 
     @Override
     public boolean apply(String path) {
-      // Do not use an iterator based for loop here as that creates excessive garbage.
-      for (int i = 0; i < extensions.size(); i++) {
-        if (path.endsWith(extensions.get(i))) {
+      for (String ext : extensions) {
+        if (path.endsWith(ext)) {
           return true;
         }
       }
@@ -109,6 +83,10 @@ public abstract class FileType implements Predicate<String> {
       return (obj instanceof ListFileType
           && this.extensions.equals(((ListFileType) obj).extensions));
     }
+  }
+
+  public static FileType of(final String... extensions) {
+    return of(Arrays.asList(extensions));
   }
 
   @Override
