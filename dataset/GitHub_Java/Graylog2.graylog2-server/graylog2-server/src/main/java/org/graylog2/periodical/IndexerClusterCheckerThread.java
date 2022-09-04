@@ -16,8 +16,6 @@ public class IndexerClusterCheckerThread extends Periodical {
 
     @Override
     public void run() {
-        if (!Notification.isFirst(core, Notification.Type.ES_OPEN_FILES))
-            return;
         boolean allHigher = true;
         for (NodeInfo node : core.getIndexer().cluster().getDataNodes()) {
             // Check number of maximum open files.
