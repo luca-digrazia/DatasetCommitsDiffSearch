@@ -17,8 +17,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
 /**
@@ -26,15 +24,11 @@ import com.google.devtools.build.lib.vfs.PathFragment;
  * C++ rules.
  */
 @Immutable
-@AutoCodec
 public class FdoSupportProvider implements TransitiveInfoProvider {
-  public static final ObjectCodec<FdoSupportProvider> CODEC = new FdoSupportProvider_AutoCodec();
-
   private final FdoSupport fdoSupport;
   private final Artifact profileArtifact;
   private final ImmutableMap<PathFragment, Artifact> gcdaArtifacts;
 
-  @AutoCodec.Instantiator
   public FdoSupportProvider(FdoSupport fdoSupport, Artifact profileArtifact,
       ImmutableMap<PathFragment, Artifact> gcdaArtifacts) {
     this.fdoSupport = fdoSupport;

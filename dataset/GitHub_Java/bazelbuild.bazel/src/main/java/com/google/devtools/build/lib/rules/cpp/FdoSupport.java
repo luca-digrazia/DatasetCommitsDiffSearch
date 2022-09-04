@@ -24,6 +24,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
@@ -502,7 +503,7 @@ public class FdoSupport {
   public void configureCompilation(CppCompileActionBuilder builder,
       CcToolchainFeatures.Variables.Builder buildVariables, RuleContext ruleContext,
       PathFragment sourceName, PathFragment sourceExecPath, boolean usePic,
-      FeatureConfiguration featureConfiguration, FdoSupportProvider fdoSupportProvider) {
+      FeatureConfiguration featureConfiguration) {
     // It is a bug if this method is called with useLipo if lipo is disabled. However, it is legal
     // if is is called with !useLipo, even though lipo is enabled.
     LipoContextProvider lipoInputProvider = CppHelper.getLipoContextProvider(ruleContext);
@@ -525,7 +526,7 @@ public class FdoSupport {
         return;
       }
       Iterable<Artifact> auxiliaryInputs = getAuxiliaryInputs(
-          ruleContext, sourceName, sourceExecPath, usePic, lipoInputProvider, fdoSupportProvider);
+          ruleContext, sourceName, sourceExecPath, usePic, lipoInputProvider);
       builder.addMandatoryInputs(auxiliaryInputs);
       if (!Iterables.isEmpty(auxiliaryInputs)) {
         if (featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)) {
@@ -550,13 +551,13 @@ public class FdoSupport {
    */
   private Iterable<Artifact> getAuxiliaryInputs(
       RuleContext ruleContext, PathFragment sourceName, PathFragment sourceExecPath, boolean usePic,
-      LipoContextProvider lipoContextProvider, FdoSupportProvider fdoSupportProvider) {
+      LipoContextProvider lipoContextProvider) {
     // If --fdo_optimize was not specified, we don't have any additional inputs.
     if (fdoProfile == null) {
       return ImmutableSet.of();
     } else if (fdoMode == FdoMode.AUTO_FDO || fdoMode == FdoMode.LLVM_FDO) {
       ImmutableSet.Builder<Artifact> auxiliaryInputs = ImmutableSet.builder();
-      auxiliaryInputs.add(fdoSupportProvider.getProfileArtifact());
+      auxiliaryInputs.add(getFdoSupportProvider(ruleContext).getProfileArtifact());
       if (lipoContextProvider != null) {
         auxiliaryInputs.addAll(getAutoFdoImports(ruleContext, sourceExecPath, lipoContextProvider));
       }
@@ -569,15 +570,13 @@ public class FdoSupport {
 
       Label lipoLabel = ruleContext.getLabel();
       auxiliaryInputs.addAll(
-          getGcdaArtifactsForObjectFileName(
-              ruleContext, fdoSupportProvider, objectName, lipoLabel));
+          getGcdaArtifactsForObjectFileName(ruleContext, objectName, lipoLabel));
 
       if (lipoContextProvider != null) {
         for (PathFragment importedFile : getImports(
             getNonLipoObjDir(ruleContext, lipoLabel), objectName)) {
           if (CppFileTypes.COVERAGE_DATA.matches(importedFile.getBaseName())) {
-            Artifact gcdaArtifact =
-                getGcdaArtifactsForGcdaPath(ruleContext, fdoSupportProvider, importedFile);
+            Artifact gcdaArtifact = getGcdaArtifactsForGcdaPath(ruleContext, importedFile);
             if (gcdaArtifact == null) {
               ruleContext.ruleError(String.format(
                   ".gcda file %s is not in the FDO zip (referenced by source file %s)",
@@ -606,13 +605,12 @@ public class FdoSupport {
    * Returns the .gcda file artifacts for a .gcda path from the .gcda.imports file or null if the
    * referenced .gcda file is not in the FDO zip.
    */
-  private Artifact getGcdaArtifactsForGcdaPath(RuleContext ruleContext,
-      FdoSupportProvider fdoSupportProvider, PathFragment gcdaPath) {
+  private Artifact getGcdaArtifactsForGcdaPath(RuleContext ruleContext, PathFragment gcdaPath) {
     if (!gcdaFiles.contains(gcdaPath)) {
       return null;
     }
 
-    return fdoSupportProvider.getGcdaArtifacts().get(gcdaPath);
+    return getFdoSupportProvider(ruleContext).getGcdaArtifacts().get(gcdaPath);
   }
 
   private PathFragment getNonLipoObjDir(RuleContext ruleContext, Label label) {
@@ -628,7 +626,7 @@ public class FdoSupport {
    * symlink to it).
    */
   private ImmutableList<Artifact> getGcdaArtifactsForObjectFileName(RuleContext ruleContext,
-      FdoSupportProvider fdoSupportProvider, PathFragment objectFileName, Label lipoLabel) {
+      PathFragment objectFileName, Label lipoLabel) {
     // We put the .gcda files relative to the location of the .o file in the instrumentation run.
     String gcdaExt = Iterables.getOnlyElement(CppFileTypes.COVERAGE_DATA.getExtensions());
     PathFragment baseName = FileSystemUtils.replaceExtension(objectFileName, gcdaExt);
@@ -649,7 +647,7 @@ public class FdoSupport {
       }
     }
 
-    return ImmutableList.of(fdoSupportProvider.getGcdaArtifacts().get(gcdaFile));
+    return ImmutableList.of(getFdoSupportProvider(ruleContext).getGcdaArtifacts().get(gcdaFile));
   }
 
 
@@ -696,14 +694,13 @@ public class FdoSupport {
    * If AutoFDO is disabled, no build variable is added and returns null.
    */
   @ThreadSafe
-  public Artifact buildProfileForLtoBackend(FdoSupportProvider fdoSupportProvider,
-      FeatureConfiguration featureConfiguration,
+  public Artifact buildProfileForLtoBackend(FeatureConfiguration featureConfiguration,
       CcToolchainFeatures.Variables.Builder buildVariables, RuleContext ruleContext) {
     if (!featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)) {
       return null;
     }
 
-    Artifact profile = fdoSupportProvider.getProfileArtifact();
+    Artifact profile = getFdoSupportProvider(ruleContext).getProfileArtifact();
     buildVariables.addStringVariable("fdo_profile_path", profile.getExecPathString());
     return profile;
   }
@@ -740,6 +737,11 @@ public class FdoSupport {
     }
 
     return new FdoSupportProvider(this, profileArtifact, gcdaArtifacts.build());
+  }
+
+  private static FdoSupportProvider getFdoSupportProvider(RuleContext ruleContext) {
+    return ruleContext.getPrerequisite(
+        ":cc_toolchain", Mode.TARGET).getProvider(FdoSupportProvider.class);
   }
 
   /**
