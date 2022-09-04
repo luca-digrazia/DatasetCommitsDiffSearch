@@ -2,7 +2,6 @@ package com.example.gsyvideoplayer.video;
 
 import android.content.Context;
 import android.util.AttributeSet;
-import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ImageView;
@@ -17,8 +16,6 @@ import com.shuyu.gsyvideoplayer.video.base.GSYVideoPlayer;
  * CustomGSYVideoPlayer是试验中，建议使用的时候使用StandardGSYVideoPlayer
  */
 public class LandLayoutVideo extends StandardGSYVideoPlayer {
-
-    private boolean isLinkScroll = false;
 
     /**
      * 1.5.0开始加入，如果需要不同布局区分功能，需要重载
@@ -73,15 +70,5 @@ public class LandLayoutVideo extends StandardGSYVideoPlayer {
         return R.drawable.custom_shrink;
     }
 
-    @Override
-    public boolean onInterceptTouchEvent(MotionEvent ev) {
-        if (isLinkScroll && !isIfCurrentIsFullscreen()) {
-            getParent().requestDisallowInterceptTouchEvent(true);
-        }
-        return super.onInterceptTouchEvent(ev);
-    }
 
-    public void setLinkScroll(boolean linkScroll) {
-        isLinkScroll = linkScroll;
-    }
 }
