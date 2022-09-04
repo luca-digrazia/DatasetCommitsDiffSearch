@@ -267,11 +267,12 @@ public abstract class AbstractParallelEvaluator {
             graph.getBatch(skyKey, Reason.ENQUEUING_CHILD, unknownStatusDeps);
         Preconditions.checkState(
             oldChildren.size() == unknownStatusDeps.size(),
-            "Not all old children were present: %s %s %s %s",
+            "Not all old children were present: %s %s %s %s %s",
             skyKey,
             state,
             unknownStatusDeps,
-            oldChildren);
+            oldChildren,
+            directDepsToCheck);
         for (Map.Entry<SkyKey, ? extends NodeEntry> e : oldChildren.entrySet()) {
           SkyKey directDep = e.getKey();
           NodeEntry directDepEntry = e.getValue();
