@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactFactory;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
-import com.google.devtools.build.lib.actions.ArtifactResolver.ArtifactResolverSupplier;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.EnvironmentalExecException;
@@ -252,7 +251,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   // Under normal circumstances, the artifact factory persists for the life of a Blaze server, but
   // since it is not yet created when we create the value builders, we have to use a supplier,
   // initialized when the build view is created.
-  private final MutableArtifactFactorySupplier artifactFactory;
+  private final MutableSupplier<ArtifactFactory> artifactFactory = new MutableSupplier<>();
   // Used to give to WriteBuildInfoAction via a supplier. Relying on BuildVariableValue.BUILD_ID
   // would be preferable, but we have no way to have the Action depend on that value directly.
   // Having the BuildInfoFunction own the supplier is currently not possible either, because then
@@ -308,21 +307,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
   private static final Logger logger = Logger.getLogger(SkyframeExecutor.class.getName());
 
-  /** An {@link ArtifactResolverSupplier} that supports setting of an {@link ArtifactFactory}. */
-  public static class MutableArtifactFactorySupplier implements ArtifactResolverSupplier {
-
-    private ArtifactFactory artifactFactory;
-
-    void set(ArtifactFactory artifactFactory) {
-      this.artifactFactory = artifactFactory;
-    }
-
-    @Override
-    public ArtifactFactory get() {
-      return artifactFactory;
-    }
-  }
-
   protected SkyframeExecutor(
       EvaluatorSupplier evaluatorSupplier,
       PackageFactory pkgFactory,
@@ -340,8 +324,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       ActionOnIOExceptionReadingBuildFile actionOnIOExceptionReadingBuildFile,
       boolean shouldUnblockCpuWorkWhenFetchingDeps,
       BuildOptions defaultBuildOptions,
-      @Nullable PackageProgressReceiver packageProgress,
-      MutableArtifactFactorySupplier artifactResolverSupplier) {
+      @Nullable PackageProgressReceiver packageProgress) {
     // Strictly speaking, these arguments are not required for initialization, but all current
     // callsites have them at hand, so we might as well set them during construction.
     this.evaluatorSupplier = evaluatorSupplier;
@@ -373,7 +356,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         directories,
         this,
         (ConfiguredRuleClassProvider) ruleClassProvider);
-    this.artifactFactory = artifactResolverSupplier;
     this.artifactFactory.set(skyframeBuildView.getArtifactFactory());
     this.externalFilesHelper = ExternalFilesHelper.create(
         pkgLocator, this.externalFileAction, directories);
@@ -499,10 +481,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(
         SkyFunctions.BUILD_INFO_COLLECTION,
         new BuildInfoCollectionFunction(
-            actionKeyContext,
-            artifactFactory::get,
-            buildInfoFactories,
-            removeActionsAfterEvaluation));
+            actionKeyContext, artifactFactory, buildInfoFactories, removeActionsAfterEvaluation));
     map.put(
         SkyFunctions.BUILD_INFO,
         new WorkspaceStatusFunction(removeActionsAfterEvaluation, this::makeWorkspaceStatusAction));
@@ -667,15 +646,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     init();
     emittedEventState.clear();
     skyframeBuildView.clearLegacyData();
-  }
-
-  /**
-   * Notifies the executor that the command is complete. May safely be called multiple times for a
-   * single command, so callers should err on the side of calling it more frequently. Should be
-   * idempotent, so that calls after the first one in the same evaluation should be quick.
-   */
-  public final void notifyCommandComplete() throws InterruptedException {
-    memoizingEvaluator.noteEvaluationsAtSameVersionMayBeFinished();
   }
 
   protected abstract Differencer evaluatorDiffer();
