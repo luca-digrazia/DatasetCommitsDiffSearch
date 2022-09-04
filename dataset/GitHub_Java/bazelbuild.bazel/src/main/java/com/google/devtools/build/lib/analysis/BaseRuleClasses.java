@@ -33,9 +33,9 @@ import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.RunUnder;
 import com.google.devtools.build.lib.analysis.constraints.EnvironmentRule;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Attribute;
-import com.google.devtools.build.lib.packages.Attribute.LabelLateBoundDefault;
-import com.google.devtools.build.lib.packages.Attribute.LabelListLateBoundDefault;
+import com.google.devtools.build.lib.packages.Attribute.LateBoundDefault;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
@@ -43,6 +43,7 @@ import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TestSize;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
+import java.util.List;
 
 /**
  * Rule class definitions used by (almost) every rule.
@@ -74,15 +75,16 @@ public class BaseRuleClasses {
    * extra_actions themselves (to avoid cycles).
    */
   @VisibleForTesting
-  static final LabelListLateBoundDefault<?> ACTION_LISTENER =
-      LabelListLateBoundDefault.fromTargetConfiguration(
+  static final LateBoundDefault<?, List<Label>> ACTION_LISTENER =
+      LateBoundDefault.fromTargetConfiguration(
           BuildConfiguration.class,
+          ImmutableList.of(),
           (rule, attributes, configuration) -> configuration.getActionListeners());
 
   // TODO(b/65746853): provide a way to do this without passing the entire configuration
   /** Implementation for the :run_under attribute. */
-  public static final LabelLateBoundDefault<?> RUN_UNDER =
-      LabelLateBoundDefault.fromTargetConfiguration(
+  public static final LateBoundDefault<?, Label> RUN_UNDER =
+      LateBoundDefault.fromTargetConfiguration(
           BuildConfiguration.class,
           null,
           (rule, attributes, configuration) -> {

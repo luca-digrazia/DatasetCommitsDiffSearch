@@ -74,9 +74,9 @@ import com.google.devtools.build.lib.analysis.config.ConfigurationResolver;
 import com.google.devtools.build.lib.analysis.config.FragmentClassSet;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.MergedConfiguredTarget.DuplicateException;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -410,7 +410,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             packageProgress));
     map.put(SkyFunctions.PACKAGE_ERROR, new PackageErrorFunction());
     map.put(SkyFunctions.TARGET_MARKER, new TargetMarkerFunction());
-    map.put(SkyFunctions.TARGET_PATTERN_ERROR, new TargetPatternErrorFunction());
     map.put(SkyFunctions.TRANSITIVE_TARGET, new TransitiveTargetFunction(ruleClassProvider));
     map.put(Label.TRANSITIVE_TRAVERSAL, new TransitiveTraversalFunction());
     map.put(
@@ -1133,7 +1132,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     // The host configuration inherits the data, not target options. This is so host tools don't
     // apply LIPO.
     BuildConfiguration firstTargetConfig = topLevelTargetConfigs.get(0);
-    ConfigurationTransition dataTransition =
+    Transition dataTransition =
         ((ConfiguredRuleClassProvider) ruleClassProvider).getLipoDataTransition();
     BuildOptions dataOptions = dataTransition != NoTransition.INSTANCE
         ? ((PatchTransition) dataTransition).apply(firstTargetConfig.getOptions())
@@ -1650,7 +1649,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       ExtendedEventHandler eventHandler,
       Label label,
       BuildConfiguration configuration,
-      ConfigurationTransition transition) {
+      Transition transition) {
     ConfiguredTargetAndTarget configuredTargetAndTarget =
         Iterables.getFirst(
             getConfiguredTargetsForTesting(

@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
@@ -79,6 +78,7 @@ import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NullTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.transitions.Transition;
 import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
@@ -1508,14 +1508,16 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    * Returns the configuration created by applying the given transition to the source configuration.
    */
   protected BuildConfiguration getConfiguration(BuildConfiguration fromConfig,
-      PatchTransition transition) throws InterruptedException {
+      Transition transition) throws InterruptedException {
     if (transition == NoTransition.INSTANCE) {
       return fromConfig;
     } else if (transition == NullTransition.INSTANCE) {
       return null;
     } else {
-      return skyframeExecutor.getConfigurationForTesting(
-          reporter, fromConfig.fragmentClasses(), transition.apply(fromConfig.getOptions()));
+      PatchTransition patchTransition =
+          (PatchTransition) ruleClassProvider.getDynamicTransitionMapper().map(transition);
+      return skyframeExecutor.getConfigurationForTesting(reporter, fromConfig.fragmentClasses(),
+          patchTransition.apply(fromConfig.getOptions()));
     }
   }
 
@@ -1715,7 +1717,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
 
     @Override
-    public SpecialArtifact getTreeArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
+    public Artifact getTreeArtifact(PathFragment rootRelativePath, ArtifactRoot root) {
       throw new UnsupportedOperationException();
     }
 

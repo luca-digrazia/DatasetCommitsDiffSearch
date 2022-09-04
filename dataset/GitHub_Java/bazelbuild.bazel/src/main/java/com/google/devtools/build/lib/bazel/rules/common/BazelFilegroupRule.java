@@ -22,6 +22,7 @@ import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
+import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.filegroup.Filegroup;
 import com.google.devtools.build.lib.util.FileTypeSet;
 
@@ -30,7 +31,7 @@ import com.google.devtools.build.lib.util.FileTypeSet;
  */
 public final class BazelFilegroupRule implements RuleDefinition {
   @Override
-  public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
+  public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
     // filegroup ignores any filtering set with setSrcsAllowedFiles.
     return builder
         /*<!-- #BLAZE_RULE(filegroup).ATTRIBUTE(srcs) -->

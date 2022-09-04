@@ -112,10 +112,11 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainSuiteRule;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfigurationLoader;
 import com.google.devtools.build.lib.rules.cpp.CppOptions;
+import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CpuTransformer;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoAspect;
 import com.google.devtools.build.lib.rules.cpp.proto.CcProtoLibraryRule;
-import com.google.devtools.build.lib.rules.cpp.transitions.LipoDataTransitionRuleSet;
+import com.google.devtools.build.lib.rules.cpp.transitions.DisableLipoTransition;
 import com.google.devtools.build.lib.rules.extra.ActionListenerRule;
 import com.google.devtools.build.lib.rules.extra.ExtraActionRule;
 import com.google.devtools.build.lib.rules.genquery.GenQueryRule;
@@ -326,6 +327,23 @@ public class BazelRuleClassProvider {
         }
       };
 
+  /**
+   * Rules defined before this set will fail when trying to declare a data transition. So it's best
+   * to define this as early as possible.
+   */
+  public static final RuleSet LIPO_DATA_TRANSITION =
+      new RuleSet() {
+        @Override
+        public void init(Builder builder) {
+          builder.setLipoDataTransition(DisableLipoTransition.INSTANCE);
+        }
+
+        @Override
+        public ImmutableList<RuleSet> requires() {
+          return ImmutableList.of();
+        }
+      };
+
   public static final RuleSet CPP_RULES =
       new RuleSet() {
         @Override
@@ -333,7 +351,9 @@ public class BazelRuleClassProvider {
           builder.addSkylarkAccessibleTopLevels("cc_common", CcModule.INSTANCE);
 
           builder.addConfig(CppOptions.class, new CppConfigurationLoader(CpuTransformer.IDENTITY));
+
           builder.addBuildInfoFactory(new CppBuildInfo());
+          builder.addDynamicTransitionMaps(CppRuleClasses.DYNAMIC_TRANSITIONS_MAP);
 
           builder.addRuleDefinition(new CcToolchainRule());
           builder.addRuleDefinition(new CcToolchainSuiteRule());
@@ -622,9 +642,7 @@ public class BazelRuleClassProvider {
 
   private static final ImmutableSet<RuleSet> RULE_SETS =
       ImmutableSet.of(
-          // Rules defined before LipoDataTransitionRuleSet will fail when trying to declare a data
-          // transition.
-          LipoDataTransitionRuleSet.INSTANCE,
+          LIPO_DATA_TRANSITION,
           BAZEL_SETUP,
           CoreRules.INSTANCE,
           CoreWorkspaceRules.INSTANCE,
