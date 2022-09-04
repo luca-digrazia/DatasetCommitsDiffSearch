@@ -25,7 +25,6 @@ import static com.google.devtools.build.android.desugar.strconcat.IndyStringConc
 
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Throwables;
 import com.google.common.collect.ConcurrentHashMultiset;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -89,6 +88,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.objectweb.asm.Attribute;
@@ -499,8 +499,9 @@ public class Desugar {
         Iterables.concat(inputFiles.toInputFileStreams(), nestDigest.getCompanionFileProviders())) {
       String inputFilename = inputFileProvider.getBinaryPathName();
       if ("module-info.class".equals(inputFilename)
-          || inputFilename.startsWith("META-INF/versions/")) {
-        continue; // drop module-info.class and META-INF/versions/ since d8 will drop them anyway
+          || (inputFilename.endsWith("/module-info.class")
+              && Pattern.matches("META-INF/versions/[0-9]+/module-info.class", inputFilename))) {
+        continue; // Drop module-info.class since it has no meaning on Android
       }
       if (OutputFileProvider.DESUGAR_DEPS_FILENAME.equals(inputFilename)) {
         // TODO(kmb): rule out that this happens or merge input file with what's in depsCollector
@@ -941,16 +942,10 @@ public class Desugar {
   public static void main(String[] args) throws Exception {
     verifyLambdaDumpDirectoryRegistered(DUMP_DIRECTORY);
 
-    // In persistent worker mode, Bazel sends the list of arguments
-    // both over argv to the Java process, and over stdin as a serialized
-    // proto. We check that it's running in the persistent worker mode
-    // by checking the first arg of the list, and parse it into DesugarOptions
-    // from the proto in runPersistentWorker later.
-    if (args.length > 0 && "--persistent_worker".equals(args[0])) {
+    DesugarOptions options = DesugarOptions.parseCommandLineOptions(args);
+    if (options.persistentWorker) {
       runPersistentWorker(DUMP_DIRECTORY);
     } else {
-      // If not, parse it regularly from argv.
-      DesugarOptions options = DesugarOptions.parseCommandLineOptions(args);
       processRequest(options, DUMP_DIRECTORY);
     }
   }
@@ -958,6 +953,7 @@ public class Desugar {
   private static void runPersistentWorker(Path dumpDirectory) throws Exception {
     while (true) {
       WorkRequest request = WorkRequest.parseDelimitedFrom(System.in);
+
       if (request == null) {
         break;
       }
@@ -967,27 +963,19 @@ public class Desugar {
 
       DesugarOptions options = DesugarOptions.parseCommandLineOptions(argList);
 
-      WorkResponse wr;
       try {
         processRequest(options, dumpDirectory);
-        wr = WorkResponse.newBuilder().setExitCode(0).build();
-        logger.atInfo().log("Processing Request success: %s", wr);
+        logger.atInfo().log(
+            "Processing Request success: %s", WorkResponse.newBuilder().setExitCode(0).build());
       } catch (Exception e) {
-        wr =
-            WorkResponse.newBuilder()
-                .setExitCode(1)
-                .setOutput(Throwables.getStackTraceAsString(e))
-                .build();
-        logger.atWarning().withCause(e).log("Processing Request exception: %s", wr);
+        logger.atWarning().withCause(e).log(
+            "Processing Request exception: %s",
+            WorkResponse.newBuilder().setExitCode(1).setOutput(e.getMessage()).build());
       }
-
-      // We are in persistent worker mode, so send the persistent worker response back to Bazel
-      // through stdout. Without this, Bazel will timeout while waiting for the worker's response.
-      wr.writeDelimitedTo(System.out);
     }
   }
 
-  private static void processRequest(DesugarOptions options, Path dumpDirectory) throws Exception {
+  private static int processRequest(DesugarOptions options, Path dumpDirectory) throws Exception {
     checkArgument(!options.inputJars.isEmpty(), "--input is required");
     checkArgument(
         options.inputJars.size() == options.outputJars.size(),
@@ -1010,6 +998,8 @@ public class Desugar {
       logger.atInfo().log("Lambda classes will be written under %s%n", dumpDirectory);
     }
     new Desugar(options, dumpDirectory).desugar();
+
+    return 0;
   }
 
   static void verifyLambdaDumpDirectoryRegistered(Path dumpDirectory) throws IOException {
