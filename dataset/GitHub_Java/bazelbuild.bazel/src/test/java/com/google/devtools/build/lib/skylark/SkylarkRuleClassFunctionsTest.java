@@ -136,7 +136,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     return ((SkylarkRuleFunction) lookup(name)).getRuleClass();
   }
 
-  private void registerDummyStarlarkFunction() throws Exception {
+  private void registerDummyUserDefinedFunction() throws Exception {
     eval("def impl():", "  pass");
   }
 
@@ -776,7 +776,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testRuleUnknownKeyword() throws Exception {
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     checkErrorContains(
         "unexpected keyword 'bad_keyword', for call to function rule(",
         "rule(impl, bad_keyword = 'some text')");
@@ -791,7 +791,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testRuleBadTypeForAdd() throws Exception {
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     checkErrorContains(
         "expected value of type 'dict or NoneType' for parameter 'attrs', "
             + "for call to function rule(",
@@ -800,7 +800,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testRuleBadTypeInAdd() throws Exception {
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     checkErrorContains(
         "expected <String, Descriptor> type for 'attrs' but got <string, string> instead",
         "rule(impl, attrs = {'a1': 'some text'})");
@@ -808,7 +808,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testRuleBadTypeForDoc() throws Exception {
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     checkErrorContains(
         "expected value of type 'string' for parameter 'doc', for call to function rule(",
         "rule(impl, doc = 1)");
@@ -1216,9 +1216,16 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testGetattr() throws Exception {
-    eval("s = struct(a='val')", "x = getattr(s, 'a')", "y = getattr(s, 'b', 'def')");
+    eval(
+        "s = struct(a='val')",
+        "x = getattr(s, 'a')",
+        "y = getattr(s, 'b', 'def')",
+        "z = getattr(s, 'b', default = 'def')",
+        "w = getattr(s, 'a', default='ignored')");
     assertThat(lookup("x")).isEqualTo("val");
     assertThat(lookup("y")).isEqualTo("def");
+    assertThat(lookup("z")).isEqualTo("def");
+    assertThat(lookup("w")).isEqualTo("val");
   }
 
   @Test
@@ -1568,7 +1575,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void aspectBadTypeForDoc() throws Exception {
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     checkErrorContains(
         "expected value of type 'string' for parameter 'doc', for call to function aspect(",
         "aspect(impl, doc = 1)");
@@ -1730,7 +1737,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testRuleAddExecutionConstraints() throws Exception {
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
     evalAndExport(
         "r1 = rule(",
@@ -1752,7 +1759,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     ev = createEvaluationTestCase(semantics);
     ev.initialize();
 
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
     evalAndExport(
         "r1 = rule(impl, ",
@@ -1773,7 +1780,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     ev = createEvaluationTestCase(semantics);
     ev.initialize();
 
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
     evalAndExport(
         "r1 = rule(impl, ",
@@ -1795,7 +1802,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     ev.setFailFast(false);
     ev.initialize();
 
-    registerDummyStarlarkFunction();
+    registerDummyUserDefinedFunction();
     scratch.file("test/BUILD", "toolchain_type(name = 'my_toolchain_type')");
     evalAndExport(
         "r1 = rule(impl, ",

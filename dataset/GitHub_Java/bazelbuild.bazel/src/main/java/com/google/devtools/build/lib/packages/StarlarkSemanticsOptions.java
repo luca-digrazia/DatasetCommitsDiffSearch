@@ -341,8 +341,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
         OptionMetadataTag.INCOMPATIBLE_CHANGE,
         OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
-      help = "Deprecated. No-op.")
-  // TODO(elenairina): Move option to graveyard after the flag is removed from the global blazerc.
+      help = "If set to true, old-style JavaInfo provider construction is disallowed.")
   public boolean incompatibleDisallowLegacyJavaInfo;
 
   @Option(
@@ -673,6 +672,7 @@ public class StarlarkSemanticsOptions extends OptionsBase implements Serializabl
             .incompatibleDisableDepsetItems(incompatibleDisableDepsetItems)
             .incompatibleDisallowDictPlus(incompatibleDisallowDictPlus)
             .incompatibleDisallowEmptyGlob(incompatibleDisallowEmptyGlob)
+            .incompatibleDisallowLegacyJavaInfo(incompatibleDisallowLegacyJavaInfo)
             .incompatibleDisallowLegacyJavaProvider(incompatibleDisallowLegacyJavaProvider)
             .incompatibleDisallowOldStyleArgsAdd(incompatibleDisallowOldStyleArgsAdd)
             .incompatibleDisallowStructProviderSyntax(incompatibleDisallowStructProviderSyntax)
