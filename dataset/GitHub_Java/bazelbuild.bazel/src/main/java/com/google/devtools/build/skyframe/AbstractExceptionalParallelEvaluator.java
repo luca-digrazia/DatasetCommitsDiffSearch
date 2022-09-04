@@ -85,8 +85,8 @@ public abstract class AbstractExceptionalParallelEvaluator<E extends Exception>
   AbstractExceptionalParallelEvaluator(
       ProcessableGraph graph,
       Version graphVersion,
-      ImmutableMap<SkyFunctionName, SkyFunction> skyFunctions,
-      ExtendedEventHandler reporter,
+      ImmutableMap<SkyFunctionName, ? extends SkyFunction> skyFunctions,
+      final ExtendedEventHandler reporter,
       EmittedEventState emittedEventState,
       EventFilter storedEventFilter,
       ErrorInfoManager errorInfoManager,

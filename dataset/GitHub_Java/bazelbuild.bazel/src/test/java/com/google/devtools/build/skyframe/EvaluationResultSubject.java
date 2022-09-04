@@ -13,40 +13,67 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
-import com.google.common.truth.DefaultSubject;
-import com.google.common.truth.FailureStrategy;
+import static com.google.common.truth.Fact.simpleFact;
+
+import com.google.common.collect.ImmutableList;
+import com.google.common.truth.FailureMetadata;
+import com.google.common.truth.IterableSubject;
+import com.google.common.truth.MapSubject;
 import com.google.common.truth.Subject;
-import com.google.common.truth.Truth;
 
 /**
  * {@link Subject} for {@link EvaluationResult}. Please add to this class if you need more
  * functionality!
  */
-public class EvaluationResultSubject extends Subject<EvaluationResultSubject, EvaluationResult<?>> {
+public class EvaluationResultSubject extends Subject {
+  private final EvaluationResult<?> actual;
+
   public EvaluationResultSubject(
-      FailureStrategy failureStrategy, EvaluationResult<?> evaluationResult) {
-    super(failureStrategy, evaluationResult);
+      FailureMetadata failureMetadata, EvaluationResult<?> evaluationResult) {
+    super(failureMetadata, evaluationResult);
+    this.actual = evaluationResult;
   }
 
   public void hasError() {
-    if (!getSubject().hasError()) {
-      fail("has error");
+    if (!actual.hasError()) {
+      failWithActual(simpleFact("expected to have error"));
     }
   }
 
   public void hasNoError() {
-    if (getSubject().hasError()) {
-      fail("has no error");
+    if (actual.hasError()) {
+      failWithActual(simpleFact("expected to have no error"));
     }
   }
 
-  public DefaultSubject hasEntryThat(SkyKey key) {
-    return Truth.assertThat(getSubject().get(key)).named("Entry for " + getDisplaySubject());
+  public Subject hasEntryThat(SkyKey key) {
+    return check("get(%s)", key).that(actual.get(key));
   }
 
-  public DefaultSubject hasErrorEntryForKeyThat(SkyKey key) {
-    return Truth.assertThat(getSubject().getError(key))
-        .named("Error entry for " + getDisplaySubject());
+  public ErrorInfoSubject hasErrorEntryForKeyThat(SkyKey key) {
+    return check("getError(%s)", key)
+        .about(new ErrorInfoSubjectFactory())
+        .that(actual.getError(key));
   }
 
+  public IterableSubject hasDirectDepsInGraphThat(SkyKey parent) throws InterruptedException {
+    return check("directDeps(%s)", parent)
+        .that(actual.getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent));
+  }
+
+  public IterableSubject hasReverseDepsInGraphThat(SkyKey child) throws InterruptedException {
+    return check("reverseDeps(%s)", child)
+        .that(actual.getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child));
+  }
+
+  public MapSubject hasErrorMapThat() {
+    return check("errorMap()").that(actual.errorMap());
+  }
+
+  public ErrorInfoSubject hasSingletonErrorThat(SkyKey key) {
+    hasError();
+    hasErrorMapThat().hasSize(1);
+    check("keyNames()").that(actual.keyNames()).isEmpty();
+    return hasErrorEntryForKeyThat(key);
+  }
 }

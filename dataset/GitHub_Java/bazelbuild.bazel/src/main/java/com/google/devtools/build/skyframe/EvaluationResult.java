@@ -165,13 +165,10 @@ public class EvaluationResult<T extends SkyValue> {
     }
 
     /** Adds an error to the result. A successful value for this key must not already be present. */
-    Builder<T> addError(SkyKey key, ErrorInfo error) {
+    public Builder<T> addError(SkyKey key, ErrorInfo error) {
       errors.put(key, Preconditions.checkNotNull(error, key));
       Preconditions.checkState(
           !result.containsKey(key), "%s in both result and errors: %s %s", error, result);
-      if (error.isCatastrophic()) {
-        setCatastrophe(error.getException());
-      }
       return this;
     }
 
@@ -194,10 +191,6 @@ public class EvaluationResult<T extends SkyValue> {
     public Builder<T> setCatastrophe(Exception catastrophe) {
       this.catastrophe = catastrophe;
       return this;
-    }
-
-    boolean hasCatastrophe() {
-      return this.catastrophe != null;
     }
   }
 }

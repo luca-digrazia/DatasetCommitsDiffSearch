@@ -607,7 +607,12 @@ public class PackageFunctionTest extends BuildViewTestCase {
   @Test
   public void testNonExistingStarlarkExtension() throws Exception {
     reporter.removeHandler(failFastHandler);
-    scratch.file("test/starlark/BUILD", "load('//test/starlark:bad_extension.bzl', 'some_symbol')");
+    scratch.file(
+        "test/starlark/BUILD",
+        "load('//test/starlark:bad_extension.bzl', 'some_symbol')",
+        "genrule(name = gr,",
+        "    outs = ['out.txt'],",
+        "    cmd = 'echo hello >@')");
     invalidatePackages();
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/starlark"));
@@ -631,7 +636,12 @@ public class PackageFunctionTest extends BuildViewTestCase {
         "test/starlark/extension.bzl",
         "load('//test/starlark:bad_extension.bzl', 'some_symbol')",
         "a = 'a'");
-    scratch.file("test/starlark/BUILD", "load('//test/starlark:extension.bzl', 'a')");
+    scratch.file(
+        "test/starlark/BUILD",
+        "load('//test/starlark:extension.bzl', 'a')",
+        "genrule(name = gr,",
+        "    outs = ['out.txt'],",
+        "    cmd = 'echo hello >@')");
     invalidatePackages();
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/starlark"));
@@ -655,7 +665,12 @@ public class PackageFunctionTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     Path extensionFilePath = scratch.resolve("/workspace/test/starlark/extension.bzl");
     FileSystemUtils.ensureSymbolicLink(extensionFilePath, PathFragment.create("extension.bzl"));
-    scratch.file("test/starlark/BUILD", "load('//test/starlark:extension.bzl', 'a')");
+    scratch.file(
+        "test/starlark/BUILD",
+        "load('//test/starlark:extension.bzl', 'a')",
+        "genrule(name = gr,",
+        "    outs = ['out.txt'],",
+        "    cmd = 'echo hello >@')");
     invalidatePackages();
 
     SkyKey skyKey = PackageValue.key(PackageIdentifier.parse("@//test/starlark"));
@@ -1246,13 +1261,11 @@ public class PackageFunctionTest extends BuildViewTestCase {
   public void veryBrokenPackagePostsDoneToProgressReceiver() throws Exception {
     reporter.removeHandler(failFastHandler);
 
-    // Note: syntax error (recovered), non-existent .bzl file.
     scratch.file("pkg/BUILD", "load('//does_not:exist.bzl', 'broken'");
     SkyKey key = PackageValue.key(PackageIdentifier.parse("@//pkg"));
     EvaluationResult<PackageValue> result =
         SkyframeExecutorTestUtils.evaluate(getSkyframeExecutor(), key, false, reporter);
-    assertThatEvaluationResult(result).hasErrorEntryForKeyThat(key);
-    assertContainsEvent("syntax error at 'newline': expected ,");
+    assertThatEvaluationResult(result).hasError();
     assertThat(getSkyframeExecutor().getPackageProgressReceiver().progressState())
         .isEqualTo(new Pair<String, String>("1 packages loaded", ""));
   }

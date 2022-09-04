@@ -13,23 +13,22 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import static com.google.common.base.Preconditions.checkNotNull;
-
 import com.google.common.collect.MapMaker;
 import com.google.common.collect.Maps;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.skyframe.ArtifactFunction.SourceArtifactException;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException3;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -50,7 +49,7 @@ import java.util.concurrent.ConcurrentMap;
  * <p>[1] Heuristic: If the size of the NestedSet exceeds a certain threshold, we evaluate it as an
  * ArtifactNestedSetKey.
  */
-class ArtifactNestedSetFunction implements SkyFunction {
+final class ArtifactNestedSetFunction implements SkyFunction {
 
   /**
    * A concurrent map from Artifacts' SkyKeys to their SkyValue, for Artifacts that are part of
@@ -100,14 +99,25 @@ class ArtifactNestedSetFunction implements SkyFunction {
   @Override
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws InterruptedException, ArtifactNestedSetFunctionException {
-    List<SkyKey> depKeys = getDepSkyKeys((ArtifactNestedSetKey) skyKey);
-    List<
+
+    NestedSet<Artifact> set = ((ArtifactNestedSetKey) skyKey).getSet();
+    List<SkyKey> keys = new ArrayList<>();
+    for (Artifact file : set.getLeaves()) {
+      keys.add(Artifact.key(file));
+    }
+    for (NestedSet<Artifact> nonLeaf : set.getNonLeaves()) {
+      keys.add(
+          nestedSetToSkyKey.computeIfAbsent(
+              nonLeaf.toNode(), (node) -> new ArtifactNestedSetKey(nonLeaf, node)));
+    }
+    Map<
+            SkyKey,
             ValueOrException3<
-                SourceArtifactException, ActionExecutionException, ArtifactNestedSetEvalException>>
+                IOException, ActionExecutionException, ArtifactNestedSetEvalException>>
         depsEvalResult =
-            env.getOrderedValuesOrThrow(
-                depKeys,
-                SourceArtifactException.class,
+            env.getValuesOrThrow(
+                keys,
+                IOException.class,
                 ActionExecutionException.class,
                 ArtifactNestedSetEvalException.class);
 
@@ -118,25 +128,23 @@ class ArtifactNestedSetFunction implements SkyFunction {
     // Throw a SkyFunctionException when a dep evaluation results in an exception.
     // Only non-null values should be committed to
     // ArtifactNestedSetFunction#artifacSkyKeyToSkyValue.
-    int i = 0;
-    for (ValueOrException3<
-            SourceArtifactException, ActionExecutionException, ArtifactNestedSetEvalException>
-        valueOrException : depsEvalResult) {
-      SkyKey key = depKeys.get(i++);
+    for (Map.Entry<
+            SkyKey,
+            ValueOrException3<
+                IOException, ActionExecutionException, ArtifactNestedSetEvalException>>
+        entry : depsEvalResult.entrySet()) {
       try {
         // Trigger the exception, if any.
-        SkyValue value = valueOrException.get();
-        if (key instanceof ArtifactNestedSetKey || value == null) {
+        SkyValue value = entry.getValue().get();
+        if (entry.getKey() instanceof ArtifactNestedSetKey || value == null) {
           continue;
         }
-        artifactSkyKeyToSkyValue.put(key, value);
-      } catch (SourceArtifactException e) {
-        removeStaleKeyBecauseOfException(key);
-        // SourceArtifactException is never catastrophic.
-        transitiveExceptionsBuilder.add(Pair.of(key, e));
+        artifactSkyKeyToSkyValue.put(entry.getKey(), value);
+      } catch (IOException e) {
+        // IOException is never catastrophic.
+        transitiveExceptionsBuilder.add(Pair.of(entry.getKey(), e));
       } catch (ActionExecutionException e) {
-        removeStaleKeyBecauseOfException(key);
-        transitiveExceptionsBuilder.add(Pair.of(key, e));
+        transitiveExceptionsBuilder.add(Pair.of(entry.getKey(), e));
         catastrophic |= e.isCatastrophe();
       } catch (ArtifactNestedSetEvalException e) {
         catastrophic |= e.isCatastrophic();
@@ -165,22 +173,10 @@ class ArtifactNestedSetFunction implements SkyFunction {
     return new ArtifactNestedSetValue();
   }
 
-  private List<SkyKey> getDepSkyKeys(ArtifactNestedSetKey skyKey) {
-    NestedSet<Artifact> set = skyKey.getSet();
-    List<SkyKey> keys = new ArrayList<>();
-    for (Artifact file : set.getLeaves()) {
-      keys.add(Artifact.key(file));
-    }
-    for (NestedSet<Artifact> nonLeaf : set.getNonLeaves()) {
-      keys.add(
-          nestedSetToSkyKey.computeIfAbsent(
-              nonLeaf.toNode(), (node) -> new ArtifactNestedSetKey(nonLeaf, node)));
-    }
-    return keys;
-  }
-
   static ArtifactNestedSetFunction getInstance() {
-    checkNotNull(singleton);
+    if (singleton == null) {
+      return createInstance();
+    }
     return singleton;
   }
 
@@ -205,10 +201,6 @@ class ArtifactNestedSetFunction implements SkyFunction {
 
   void updateValueForKey(SkyKey skyKey, SkyValue skyValue) {
     artifactSkyKeyToSkyValue.put(skyKey, skyValue);
-  }
-
-  void removeStaleKeyBecauseOfException(SkyKey skyKey) {
-    artifactSkyKeyToSkyValue.remove(skyKey);
   }
 
   @Override
