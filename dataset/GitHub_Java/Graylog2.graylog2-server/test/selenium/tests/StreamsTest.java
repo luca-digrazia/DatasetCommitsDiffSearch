@@ -59,9 +59,9 @@ public class StreamsTest extends LoggedIn {
             URL saucelabs = new URL("http://" + sauceUser + ":" + saucePassword + "@localhost:4445/wd/hub");
 
             // https://saucelabs.com/docs/platforms
-            DesiredCapabilities capabilities = DesiredCapabilities.firefox();
-            capabilities.setCapability("platform", "Windows 8");
-            capabilities.setCapability("version", "21");
+            DesiredCapabilities capabilities = DesiredCapabilities.chrome();
+            capabilities.setCapability("platform", "OS X 10.8");
+            capabilities.setCapability("version", "26");
 
             driver = new RemoteWebDriver(saucelabs, capabilities);
         } else {
@@ -81,15 +81,13 @@ public class StreamsTest extends LoggedIn {
         running(testServer(3333), new Runnable() {
             public void run() {
                 Result r = login(testBrowser(driver), serverStub, "lennart", "123123123");
+                assertTrue("Login failed", r.isSuccess());
 
-                // DEBUG
                 try {
-                    Thread.sleep(300000);
+                    Thread.sleep(5000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();  //To change body of catch statement use File | Settings | File Templates.
                 }
-
-                assertTrue("Login failed", r.isSuccess());
             }
         });
     }
