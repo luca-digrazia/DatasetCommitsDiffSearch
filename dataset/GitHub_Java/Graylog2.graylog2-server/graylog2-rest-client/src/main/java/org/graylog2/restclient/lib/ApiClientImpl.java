@@ -37,6 +37,7 @@ import com.ning.http.client.AsyncHttpClient;
 import com.ning.http.client.AsyncHttpClientConfig;
 import com.ning.http.client.FluentCaseInsensitiveStringsMap;
 import com.ning.http.client.ListenableFuture;
+import com.ning.http.client.PerRequestConfig;
 import com.ning.http.client.Realm;
 import com.ning.http.client.Request;
 import com.ning.http.client.Response;
@@ -70,7 +71,6 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -92,12 +92,12 @@ class ApiClientImpl implements ApiClient {
     @Inject
     private ApiClientImpl(ServerNodes serverNodes, @Named("Default Timeout") Long defaultTimeout) {
         this(serverNodes, defaultTimeout,
-                new ObjectMapper()
-                        .setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES)
-                        .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
-                        .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
-                        .registerModule(new GuavaModule())
-                        .registerModule(new JodaModule()));
+             new ObjectMapper()
+                     .setPropertyNamingStrategy(PropertyNamingStrategy.CAMEL_CASE_TO_LOWER_CASE_WITH_UNDERSCORES)
+                     .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+                     .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
+                     .registerModule(new GuavaModule())
+                     .registerModule(new JodaModule()));
     }
 
     private ApiClientImpl(ServerNodes serverNodes, Long defaultTimeout, ObjectMapper objectMapper) {
@@ -109,7 +109,7 @@ class ApiClientImpl implements ApiClient {
     @Override
     public void start() {
         AsyncHttpClientConfig.Builder builder = new AsyncHttpClientConfig.Builder();
-        builder.setAllowPoolingConnections(false);
+        builder.setAllowPoolingConnection(false);
         builder.setUserAgent("graylog2-web/" + Version.VERSION);
         client = new AsyncHttpClient(builder.build());
 
@@ -603,7 +603,7 @@ class ApiClientImpl implements ApiClient {
                 final ListenableFuture<Response> future = context.listenableFuture;
                 try {
                     final Response response = future.get(timeoutValue, timeoutUnit);
-                    if (response == null) {
+                    if(response == null) {
                         LOG.error("Didn't receive response from node {}", node);
                         node.markFailure();
                         continue;
@@ -662,7 +662,7 @@ class ApiClientImpl implements ApiClient {
             }
 
             applyBasicAuthentication(requestBuilder, userInfo);
-            requestBuilder.setRequestTimeout((int) timeoutUnit.toMillis(timeoutValue));
+            requestBuilder.setPerRequestConfig(new PerRequestConfig(null, (int) timeoutUnit.toMillis(timeoutValue)));
 
             if (body != null) {
                 if (method != Method.PUT && method != Method.POST) {
@@ -704,13 +704,16 @@ class ApiClientImpl implements ApiClient {
                 } else {
                     path = MessageFormat.format(pathTemplate, pathParams.toArray());
                 }
-                final List<String> queryParamsValues = Lists.newArrayList();
                 final UriBuilder uriBuilder = UriBuilder.fromUri(target.getTransportAddress());
                 uriBuilder.path(path);
                 for (String key : queryParams.keySet()) {
                     for (String value : queryParams.get(key)) {
-                        uriBuilder.queryParam(key, "{" + key + "}");
-                        queryParamsValues.add(value);
+                        // Jersey's UriBuilderImpl doesn't encode double quotes, which is correct per RFC 3986
+                        // (http://tools.ietf.org/html/rfc3986#section-3.4), but causes problems down the stack,
+                        // see https://github.com/Graylog2/graylog2-server/issues/793
+                        // So we fall back manually encoding double quotes right now because URLEncoder.encode does
+                        // too much and we'd end up with partially double encoded URIs. F... my life.
+                        uriBuilder.queryParam(key, value.replace("\"", "%22"));
                     }
                 }
 
@@ -721,7 +724,7 @@ class ApiClientImpl implements ApiClient {
                     // pass the current session id via basic auth and special "password"
                     uriBuilder.userInfo(sessionId + ":session");
                 }
-                builtUrl = uriBuilder.build(queryParamsValues.toArray());
+                builtUrl = uriBuilder.build();
                 return builtUrl.toURL();
             } catch (MalformedURLException e) {
                 LOG.error("Could not build target URL", e);
@@ -776,12 +779,13 @@ class ApiClientImpl implements ApiClient {
                     }
 
                     @Override
-                    public void onBytesSent(long amount, long current, long total) {
+                    public void onBytesReceived(ByteBuffer buffer) throws IOException {
+                        stream.putBuffer(buffer);
                     }
 
                     @Override
-                    public void onBytesReceived(byte[] bytes) throws IOException {
-                        stream.putBuffer(ByteBuffer.wrap(bytes));
+                    public void onBytesSent(ByteBuffer buffer) {
+
                     }
 
                     @Override
@@ -795,7 +799,10 @@ class ApiClientImpl implements ApiClient {
                     }
                 }));
                 return stream;
-            } catch (Exception e) {
+            } catch (MalformedURLException e) {
+                LOG.error("Malformed URL", e);
+                throw new RuntimeException("Malformed URL.", e);
+            } catch (IOException e) {
                 LOG.error("unhandled IOException", rootCause(e));
                 target.markFailure();
                 throw e;
