@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -34,13 +33,6 @@ public class ZipFilterBuilder {
     DONT_CHANGE;
   }
 
-  /** Modes of performing content hash checking during zip filtering. */
-  public enum CheckHashMismatchMode {
-    NONE,
-    WARN,
-    ERROR;
-  }
-
   private final RuleContext ruleContext;
   private Artifact inputZip;
   private Artifact outputZip;
@@ -48,7 +40,7 @@ public class ZipFilterBuilder {
   private final ImmutableSet.Builder<String> filterFileTypesBuilder;
   private final ImmutableSet.Builder<String> explicitFilterBuilder;
   private Compression outputMode = Compression.DONT_CHANGE;
-  private CheckHashMismatchMode checkHashMismatch = CheckHashMismatchMode.WARN;
+  private boolean checkHashMismatch = true;
 
   /** Creates a builder using the configuration of the rule as the action configuration. */
   public ZipFilterBuilder(RuleContext ruleContext) {
@@ -95,8 +87,8 @@ public class ZipFilterBuilder {
   }
 
   /** Enable checking of hash mismatches for files with the same name. */
-  public ZipFilterBuilder setCheckHashMismatchMode(CheckHashMismatchMode mode) {
-    this.checkHashMismatch = mode;
+  public ZipFilterBuilder setCheckHashMismatch(boolean enabled) {
+    this.checkHashMismatch = enabled;
     return this;
   }
 
@@ -118,16 +110,8 @@ public class ZipFilterBuilder {
     if (!explicitFilters.isEmpty()) {
       args.addAll("--explicitFilters", VectorArg.join(",").each(explicitFilters));
     }
-    switch (checkHashMismatch) {
-      case WARN:
-        args.add("--checkHashMismatch").add("WARN");
-        break;
-      case ERROR:
-        args.add("--checkHashMismatch").add("ERROR");
-        break;
-      case NONE:
-        args.add("--checkHashMismatch").add("IGNORE");
-        break;
+    if (!checkHashMismatch) {
+      args.add("--checkHashMismatch").add("IGNORE");
     }
     args.add("--outputMode");
     switch (outputMode) {

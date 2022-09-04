@@ -101,11 +101,10 @@ public class AndroidResourceClassWriter implements Flushable, AndroidResourceSym
   }
 
   private void writeAsJava(FieldInitializers initializers) throws IOException {
-    RSourceGenerator.with(outputBasePath, initializers, /* finalFields= */ false)
-        .write(packageName);
+    RSourceGenerator.with(outputBasePath, initializers, false /* finalFields */).write(packageName);
   }
 
   private void writeAsClass(FieldInitializers initializers) throws IOException {
-    RClassGenerator.with(outputBasePath, initializers, /* finalFields= */ false).write(packageName);
+    RClassGenerator.with(outputBasePath, initializers, false /* finalFields */).write(packageName);
   }
 }

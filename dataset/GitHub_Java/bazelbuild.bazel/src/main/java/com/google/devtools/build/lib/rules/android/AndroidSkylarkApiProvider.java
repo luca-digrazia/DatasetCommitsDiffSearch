@@ -23,12 +23,12 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import java.util.function.Function;
 import javax.annotation.Nullable;
 
 /**
@@ -50,11 +50,6 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
   public static final String NAME = "android";
 
   private final IdlInfo idlInfo = new IdlInfo();
-  private final AndroidResourcesInfo resourceInfo;
-
-  public AndroidSkylarkApiProvider(AndroidResourcesInfo resourceInfo) {
-    this.resourceInfo = resourceInfo;
-  }
 
   @SkylarkCallable(
     name = "apk",
@@ -155,7 +150,7 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
     doc = "Returns resources defined by this target."
   )
   public NestedSet<Artifact> getResources() {
-    return collectDirectArtifacts(ValidatedAndroidData::getResources);
+    return collectDirectArtifacts(ResourceType.RESOURCES);
   }
 
   @SkylarkCallable(
@@ -179,9 +174,9 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
     return getIdeInfoProvider().getAar();
   }
 
-  private NestedSet<Artifact> collectDirectArtifacts(
-      final Function<ValidatedAndroidData, Iterable<Artifact>> artifactFunction) {
-    if (resourceInfo == null) {
+  private NestedSet<Artifact> collectDirectArtifacts(final ResourceType resources) {
+    AndroidResourcesProvider provider = getInfo().getProvider(AndroidResourcesProvider.class);
+    if (provider == null) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
     // This will iterate over all (direct) resources. If this turns out to be a performance
@@ -190,7 +185,9 @@ public class AndroidSkylarkApiProvider extends SkylarkApiProvider {
         Order.STABLE_ORDER,
         Iterables.concat(
             Iterables.transform(
-                resourceInfo.getDirectAndroidResources(), data -> artifactFunction.apply(data))));
+                provider.getDirectAndroidResources(),
+                (ResourceContainer resourceContainer) ->
+                    resourceContainer.getArtifacts(resources))));
   }
 
   /** Helper class to provide information about IDLs related to this rule. */

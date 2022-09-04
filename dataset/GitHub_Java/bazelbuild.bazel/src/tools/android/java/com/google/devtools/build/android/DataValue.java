@@ -29,8 +29,7 @@ public interface DataValue {
   DataSource source();
 
   /** Serializes to a supplied stream and returns the number of bytes written. */
-  int serializeTo(
-      DataSourceTable sourceTable, OutputStream output) throws IOException;
+  int serializeTo(DataKey key, DataSourceTable sourceTable, OutputStream output) throws IOException;
 
   DataValue update(DataSource source);
 
@@ -42,11 +41,4 @@ public interface DataValue {
    * equivalent to another given DataValue object
    */
   boolean valueEquals(DataValue value);
-
-  /**
-   * Compares priority in hopes of auto-resolving a merge conflict. Returns 1 if the value
-   * properties are higher in priority than those in another given DataValue object, -1 if lower
-   * priority, 0 if same priority (i.e. in conflict).
-   */
-  int compareMergePriorityTo(DataValue value);
 }

@@ -114,18 +114,19 @@ public final class AndroidDeployInfoAction extends AbstractFileWriteAction {
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    fp.addString(GUID);
+  protected String computeKey(ActionKeyContext actionKeyContext) {
+    Fingerprint f = new Fingerprint().addString(GUID);
 
     try (InputStream in = getByteString().newInput()) {
       byte[] buffer = new byte[512];
       int amountRead;
       while ((amountRead = in.read(buffer)) != -1) {
-        fp.addBytes(buffer, 0, amountRead);
+        f.addBytes(buffer, 0, amountRead);
       }
     } catch (IOException e) {
       throw new RuntimeException(e);
     }
+    return f.hexDigestAndReset();
   }
 
   private static AndroidDeployInfoOuterClass.Artifact makeArtifactProto(Artifact artifact) {

@@ -35,6 +35,7 @@ public final class ResourceApk {
   @Nullable private final Artifact manifest; // The non-binary XML version of AndroidManifest.xml
   @Nullable private final Artifact resourceProguardConfig;
   @Nullable private final Artifact mainDexProguardConfig;
+  private final boolean legacy;
 
   public ResourceApk(
       @Nullable Artifact resourceApk,
@@ -44,7 +45,8 @@ public final class ResourceApk {
       @Nullable ResourceContainer primaryResource,
       @Nullable Artifact manifest,
       @Nullable Artifact resourceProguardConfig,
-      @Nullable Artifact mainDexProguardConfig) {
+      @Nullable Artifact mainDexProguardConfig,
+      boolean legacy) {
     this.resourceApk = resourceApk;
     this.resourceJavaSrcJar = resourceJavaSrcJar;
     this.resourceJavaClassJar = resourceJavaClassJar;
@@ -53,6 +55,7 @@ public final class ResourceApk {
     this.manifest = manifest;
     this.resourceProguardConfig = resourceProguardConfig;
     this.mainDexProguardConfig = mainDexProguardConfig;
+    this.legacy = legacy;
   }
 
   public Artifact getArtifact() {
@@ -75,8 +78,12 @@ public final class ResourceApk {
     return resourceJavaClassJar;
   }
 
+  public boolean isLegacy() {
+    return legacy;
+  }
+
   public static ResourceApk fromTransitiveResources(ResourceDependencies resourceDeps) {
-    return new ResourceApk(null, null, null, resourceDeps, null, null, null, null);
+    return new ResourceApk(null, null, null, resourceDeps, null, null, null, null, false);
   }
 
   public Artifact getResourceProguardConfig() {
@@ -98,13 +105,16 @@ public final class ResourceApk {
    * contain the "forwarded" resources: The merged transitive and merged direct dependencies of this
    * library.
    *
+   * <p>If the ResourceApk was generated from a "resources" attribute, it will contain the
+   * "resources" container in the direct dependencies and the rest as transitive.
+   *
    * <p>If the ResourceApk was generated from local resources, that will be the direct dependencies
    * and the rest will be transitive.
    */
-  public AndroidResourcesProvider toResourceProvider(Label label) {
+  public AndroidResourcesProvider toResourceProvider(Label label, boolean isResourcesOnly) {
     if (primaryResource == null) {
-      return resourceDeps.toProvider(label);
+      return resourceDeps.toProvider(label, isResourcesOnly);
     }
-    return resourceDeps.toProvider(label, primaryResource);
+    return resourceDeps.toProvider(label, primaryResource, isResourcesOnly);
   }
 }

@@ -15,8 +15,6 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
@@ -28,22 +26,6 @@ public final class AndroidManifestMergeHelper {
 
   public static void createMergeManifestAction(
       RuleContext ruleContext,
-      Artifact merger,
-      Iterable<Artifact> mergees,
-      Collection<String> excludePermissions,
-      Artifact mergedManifest) {
-    createMergeManifestAction(
-        ruleContext,
-        ruleContext.getPrerequisite("$android_manifest_merge_tool", Mode.HOST),
-        merger,
-        mergees,
-        excludePermissions,
-        mergedManifest);
-  }
-
-  public static void createMergeManifestAction(
-      ActionConstructionContext context,
-      TransitiveInfoCollection manifestMerger,
       Artifact merger,
       Iterable<Artifact> mergees,
       Collection<String> excludePermissions,
@@ -60,15 +42,15 @@ public final class AndroidManifestMergeHelper {
 
     commandLine.addPrefixedExecPath("--output=", mergedManifest);
 
-    context.registerAction(
+    ruleContext.registerAction(
         new SpawnAction.Builder()
             .addInput(merger)
             .addInputs(mergees)
             .addOutput(mergedManifest)
-            .setExecutable(manifestMerger)
+            .setExecutable(ruleContext.getPrerequisite("$android_manifest_merge_tool", Mode.HOST))
             .setProgressMessage("Merging Android Manifests")
             .setMnemonic("AndroidManifestMerger")
             .addCommandLine(commandLine.build())
-            .build(context));
+            .build(ruleContext));
   }
 }

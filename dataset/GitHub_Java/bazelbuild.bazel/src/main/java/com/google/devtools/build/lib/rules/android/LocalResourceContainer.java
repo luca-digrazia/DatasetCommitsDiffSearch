@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import com.android.resources.ResourceFolderType;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -32,7 +31,6 @@ import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceTyp
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Arrays;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -86,6 +84,7 @@ public final class LocalResourceContainer {
    */
   public static void validateRuleContext(RuleContext ruleContext) throws RuleErrorException {
     validateAssetsAndAssetsDir(ruleContext);
+    validateNoResourcesAttribute(ruleContext);
     validateNoAndroidResourcesInSources(ruleContext);
     validateManifest(ruleContext);
   }
@@ -99,8 +98,20 @@ public final class LocalResourceContainer {
     }
   }
 
+  /** Validates that there are no resources defined if there are resource attributes defined. */
+  private static void validateNoResourcesAttribute(RuleContext ruleContext)
+      throws RuleErrorException {
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("resources")) {
+      ruleContext.throwWithAttributeError(
+          "resources",
+          String.format(
+              "resources cannot be set when any of %s are defined.",
+              Joiner.on(", ").join(RESOURCES_ATTRIBUTES)));
+    }
+  }
+
   /**
-   * Validates that there are no targets with resources in the srcs, as they
+   * Validates that there are no android_resources srcjars in the srcs, as android_resource rules
    * should not be used with the Android data logic.
    */
   private static void validateNoAndroidResourcesInSources(RuleContext ruleContext)
@@ -110,7 +121,7 @@ public final class LocalResourceContainer {
     for (AndroidResourcesProvider provider : resources) {
       ruleContext.throwWithAttributeError(
           "srcs",
-          String.format("srcs should not contain label with resources %s", provider.getLabel()));
+          String.format("srcs should not contain android_resource label %s", provider.getLabel()));
     }
   }
 
@@ -143,8 +154,7 @@ public final class LocalResourceContainer {
         PathFragment packageRelativePath = file.getRootRelativePath().relativeTo(packageFragment);
         if (packageRelativePath.startsWith(assetsDir)) {
           PathFragment relativePath = packageRelativePath.relativeTo(assetsDir);
-          PathFragment path = file.getExecPath();
-          assetRoots.add(path.subFragment(0, path.segmentCount() - relativePath.segmentCount()));
+          assetRoots.add(trimTail(file.getExecPath(), relativePath));
         } else {
           ruleContext.attributeError(
               ResourceType.ASSETS.getAttribute(),
@@ -168,25 +178,27 @@ public final class LocalResourceContainer {
   }
 
   /**
-   * Creates a {@link LocalResourceContainer} containing all the resources and assets in directory
-   * artifacts.
+   * Creates a {@link LocalResourceContainer} containing the resources included in a {@link
+   * FileProvider}.
    *
    * <p>In general, {@link #forAssetsAndResources(RuleContext, String, PathFragment, String)} should
    * be used instead. No assets or transitive resources will be included in the container produced
    * by this method.
    *
-   * @param assetsDir the tree artifact containing a {@code assets/} directory
-   * @param resourcesDir the tree artifact containing a {@code res/} directory
+   * @param ruleContext the current context
+   * @param resourceFileProvider the provider containing resources
+   * @param resourcesAttr the attribute used to refer to resource files in this target.
    */
-  static LocalResourceContainer forAssetsAndResourcesDirectories(
-      Artifact assetsDir, Artifact resourcesDir) {
-    Preconditions.checkArgument(resourcesDir.isTreeArtifact());
-    Preconditions.checkArgument(assetsDir.isTreeArtifact());
+  public static LocalResourceContainer forResourceFileProvider(
+      RuleContext ruleContext, FileProvider resourceFileProvider, String resourcesAttr)
+      throws RuleErrorException {
+    ImmutableList<Artifact> resources = getResources(ImmutableList.of(resourceFileProvider));
+
     return new LocalResourceContainer(
-        ImmutableList.of(resourcesDir),
-        ImmutableList.of(resourcesDir.getExecPath().getChild("res")),
-        ImmutableList.of(assetsDir),
-        ImmutableList.of(assetsDir.getExecPath().getChild("assets")));
+        resources,
+        getResourceRoots(ruleContext, resources, resourcesAttr),
+        ImmutableList.of(),
+        ImmutableList.of());
   }
 
   private static ImmutableList<Artifact> getResources(Iterable<FileProvider> targets) {
@@ -275,11 +287,8 @@ public final class LocalResourceContainer {
         file.getArtifactOwner().getLabel().getPackageIdentifier().getSourceRoot();
     PathFragment packageRelativePath = file.getRootRelativePath().relativeTo(packageFragment);
     try {
-      PathFragment path = file.getExecPath();
       resourceRoots.add(
-          path.subFragment(
-              0,
-              path.segmentCount() - segmentCountAfterAncestor(resourceDir, packageRelativePath)));
+          trimTail(file.getExecPath(), makeRelativeTo(resourceDir, packageRelativePath)));
     } catch (IllegalArgumentException e) {
       ruleErrorConsumer.attributeError(
           resourcesAttr,
@@ -309,7 +318,7 @@ public final class LocalResourceContainer {
     }
     // TODO(bazel-team): Expand Fileset to verify, or remove Fileset as an option for resources.
     if (artifact.isFileset() || artifact.isTreeArtifact()) {
-      return fragment.subFragment(segmentCount - 1);
+      return fragment.subFragment(segmentCount - 1, segmentCount);
     }
 
     // Check the resource folder type layout.
@@ -325,20 +334,23 @@ public final class LocalResourceContainer {
     return fragment.subFragment(segmentCount - 3, segmentCount - 2);
   }
 
-  private static int segmentCountAfterAncestor(PathFragment ancestor, PathFragment path) {
+  /**
+   * Returns the root-part of a given path by trimming off the end specified by a given tail.
+   * Assumes that the tail is known to match, and simply relies on the segment lengths.
+   */
+  private static PathFragment trimTail(PathFragment path, PathFragment tail) {
+    return path.subFragment(0, path.segmentCount() - tail.segmentCount());
+  }
+
+  private static PathFragment makeRelativeTo(PathFragment ancestor, PathFragment path) {
     String cutAtSegment = ancestor.getSegment(ancestor.segmentCount() - 1);
-    int index = -1;
-    List<String> segments = path.getSegments();
-    for (int i = segments.size() - 1; i >= 0; i--) {
-      if (segments.get(i).equals(cutAtSegment)) {
-        index = i;
-        break;
+    int totalPathSegments = path.segmentCount() - 1;
+    for (int i = totalPathSegments; i >= 0; i--) {
+      if (path.getSegment(i).equals(cutAtSegment)) {
+        return path.subFragment(i, totalPathSegments);
       }
     }
-    if (index == -1) {
-      throw new IllegalArgumentException("PathFragment " + path + " is not beneath " + ancestor);
-    }
-    return segments.size() - index - 1;
+    throw new IllegalArgumentException("PathFragment " + path + " is not beneath " + ancestor);
   }
 
   private final ImmutableList<Artifact> resources;

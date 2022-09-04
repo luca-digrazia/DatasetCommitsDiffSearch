@@ -19,7 +19,6 @@ import static com.google.common.base.Preconditions.checkState;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
-import com.google.auto.value.AutoValue;
 import com.google.common.base.Function;
 import com.google.common.base.Functions;
 import com.google.common.base.Preconditions;
@@ -44,7 +43,6 @@ import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorAr
 import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction.Builder;
 import com.google.devtools.build.lib.analysis.actions.SpawnActionTemplate;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -95,7 +93,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     CppSemantics cppSemantics = createCppSemantics();
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
-    androidSemantics.validateAndroidBinaryRuleContext(ruleContext);
     AndroidSdkProvider.verifyPresence(ruleContext);
 
     NestedSetBuilder<Artifact> filesBuilder = NestedSetBuilder.stableOrder();
@@ -150,6 +147,32 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       ruleContext.throwWithAttributeError(
           "proguard_apply_mapping",
           "'proguard_apply_dictionary' can only be used when 'proguard_specs' is also set");
+    }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rex_package_map")
+        && !ruleContext.attributes().get("rewrite_dexes_with_rex", Type.BOOLEAN)) {
+      ruleContext.throwWithAttributeError(
+          "rex_package_map",
+          "'rex_package_map' can only be used when 'rewrite_dexes_with_rex' is also set");
+    }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rex_package_map")
+        && ruleContext
+            .attributes()
+            .get(ProguardHelper.PROGUARD_SPECS, BuildType.LABEL_LIST)
+            .isEmpty()) {
+      ruleContext.throwWithAttributeError(
+          "rex_package_map",
+          "'rex_package_map' can only be used when 'proguard_specs' is also set");
+    }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rexopts")
+        && !ruleContext.attributes().get("rewrite_dexes_with_rex", Type.BOOLEAN)) {
+      ruleContext.throwWithAttributeError(
+          "rexopts", "'rexopts' can only be used when 'rewrite_dexes_with_rex' is also set");
+    }
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("resources")
+        && DataBinding.isEnabled(ruleContext)) {
+      ruleContext.throwWithRuleError(
+          "Data binding doesn't work with the \"resources\" attribute. "
+              + "Use \"resource_files\" instead.");
     }
     AndroidCommon.validateResourcesAttribute(ruleContext);
   }
@@ -384,13 +407,26 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
               .build();
     }
 
+    boolean rexEnabled =
+        ruleContext.getFragment(AndroidConfiguration.class).useRexToCompressDexFiles()
+            || (ruleContext.attributes().get("rewrite_dexes_with_rex", Type.BOOLEAN));
+
     // TODO(bazel-team): Verify that proguard spec files don't contain -printmapping directions
     // which this -printmapping command line flag will override.
     Artifact proguardOutputMap = null;
     if (ProguardHelper.genProguardMapping(ruleContext.attributes())
         || ProguardHelper.getJavaOptimizationMode(ruleContext).alwaysGenerateOutputMapping()
         || shrinkResources) {
-      proguardOutputMap = androidSemantics.getProguardOutputMap(ruleContext);
+      if (rexEnabled) {
+        proguardOutputMap =
+            ProguardHelper.getProguardTempArtifact(
+                ruleContext,
+                ProguardHelper.getJavaOptimizationMode(ruleContext).name().toLowerCase(),
+                "proguard_output_for_rex.map");
+      } else {
+        proguardOutputMap =
+            ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_MAP);
+      }
     }
 
     ProguardOutput proguardOutput =
@@ -426,12 +462,67 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
     NestedSet<Artifact> nativeLibsZips =
         AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).build();
 
-    DexPostprocessingOutput dexPostprocessingOutput =
-        androidSemantics.postprocessClassesDexZip(
-            ruleContext, filesBuilder, dexingOutput.classesDexZip, proguardOutput);
+    Artifact finalDexes;
+    Artifact finalProguardMap;
+    if (rexEnabled) {
+      finalDexes = getDxArtifact(ruleContext, "rexed_dexes.zip");
+      SpawnAction.Builder rexActionBuilder = new SpawnAction.Builder();
+      CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
+      rexActionBuilder
+          .useDefaultShellEnvironment()
+          .setExecutable(ruleContext.getExecutablePrerequisite("$rex_wrapper", Mode.HOST))
+          .setMnemonic("Rex")
+          .setProgressMessage("Rexing dex files")
+          .addInput(dexingOutput.classesDexZip)
+          .addOutput(finalDexes);
+      commandLine
+          .addExecPath("--dex_input", dexingOutput.classesDexZip)
+          .addExecPath("--dex_output", finalDexes);
+      if (proguardOutput.getMapping() != null) {
+        finalProguardMap =
+            ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_BINARY_PROGUARD_MAP);
+        Artifact finalRexPackageMap =
+            ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.REX_OUTPUT_PACKAGE_MAP);
+        rexActionBuilder
+            .addInput(proguardOutput.getMapping())
+            .addOutput(finalProguardMap)
+            .addOutput(finalRexPackageMap);
+        filesBuilder.add(finalRexPackageMap);
+        commandLine
+            .addExecPath("--proguard_input_map", proguardOutput.getMapping())
+            .addExecPath("--proguard_output_map", finalProguardMap)
+            .addExecPath("--rex_output_package_map", finalRexPackageMap);
+        if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rex_package_map")) {
+          Artifact rexPackageMap =
+              ruleContext.getPrerequisiteArtifact("rex_package_map", Mode.TARGET);
+          rexActionBuilder.addInput(rexPackageMap);
+          commandLine.addExecPath("--rex_input_package_map", rexPackageMap);
+        }
+      } else {
+        finalProguardMap = proguardOutput.getMapping();
+      }
+      // the Rex flag --keep-main-dex is used to support builds with API level below 21 that do not
+      // support native multi-dex. This flag indicates to Rex to use the main_dex_list file which
+      // can be provided by the user via the main_dex_list attribute or created automatically
+      // when multidex mode is set to legacy.
+      if (ruleContext.attributes().isAttributeValueExplicitlySpecified("main_dex_list")
+          || getMultidexMode(ruleContext) == MultidexMode.LEGACY) {
+        commandLine.add("--keep-main-dex");
+      }
+      // Pass rexopts to rex as a list of strings without validation
+      if (ruleContext.attributes().isAttributeValueExplicitlySpecified("rexopts")) {
+        List<String> rexopts = ruleContext.getExpander().withDataLocations().tokenized("rexopts");
+        commandLine.addAll(rexopts);
+      }
+      rexActionBuilder.addCommandLine(commandLine.build());
+      ruleContext.registerAction(rexActionBuilder.build(ruleContext));
+    } else {
+      finalDexes = dexingOutput.classesDexZip;
+      finalProguardMap = proguardOutput.getMapping();
+    }
 
     if (!proguardSpecs.isEmpty()) {
-      proguardOutput.addAllToSet(filesBuilder, dexPostprocessingOutput.proguardMap());
+      proguardOutput.addAllToSet(filesBuilder, finalProguardMap);
     }
 
     Artifact unsignedApk =
@@ -443,7 +534,7 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         ruleContext.getExecutablePrerequisite("$resource_extractor", Mode.HOST);
 
     ApkActionsBuilder.create("apk")
-        .setClassesDex(dexPostprocessingOutput.classesDexZip())
+        .setClassesDex(finalDexes)
         .addInputZip(resourceApk.getArtifact())
         .setJavaResourceZip(dexingOutput.javaResourceJar, resourceExtractor)
         .addInputZips(nativeLibsZips)
@@ -471,46 +562,17 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     // If this is an instrumentation APK, create the provider for android_instrumentation_test.
     if (isInstrumentation(ruleContext)) {
-      ApkProvider targetApkProvider =
-          ruleContext.getPrerequisite("instruments", Mode.TARGET, ApkProvider.class);
-
-      Artifact targetApk = targetApkProvider.getApk();
+      Artifact targetApk =
+          ruleContext
+              .getPrerequisite("instruments", Mode.TARGET)
+              .getProvider(ApkProvider.class)
+              .getApk();
       Artifact instrumentationApk = zipAlignedApk;
 
       AndroidInstrumentationInfo instrumentationProvider =
           new AndroidInstrumentationInfo(targetApk, instrumentationApk);
 
       builder.addNativeDeclaredProvider(instrumentationProvider);
-
-      // At this point, the Android manifests of both target and instrumentation APKs are finalized.
-      FilesToRunProvider checker =
-          ruleContext.getExecutablePrerequisite("$instrumentation_test_check", Mode.HOST);
-      Artifact targetManifest = targetApkProvider.getMergedManifest();
-      Artifact instrumentationManifest = applicationManifest.getManifest();
-      Artifact checkOutput =
-          ruleContext.getImplicitOutputArtifact(
-              AndroidRuleClasses.INSTRUMENTATION_TEST_CHECK_RESULTS);
-
-      SpawnAction.Builder checkAction =
-          new Builder()
-              .setExecutable(checker)
-              .addInput(targetManifest)
-              .addInput(instrumentationManifest)
-              .addOutput(checkOutput)
-              .setProgressMessage(
-                  "Validating the merged manifests of the target and instrumentation APKs")
-              .setMnemonic("AndroidManifestInstrumentationCheck");
-
-      CustomCommandLine commandLine =
-          CustomCommandLine.builder()
-              .addExecPath("--instrumentation_manifest", instrumentationManifest)
-              .addExecPath("--target_manifest", targetManifest)
-              .addExecPath("--output", checkOutput)
-              .build();
-
-      builder.addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, checkOutput);
-      checkAction.addCommandLine(commandLine);
-      ruleContext.registerAction(checkAction.build(ruleContext));
     }
 
     androidCommon.addTransitiveInfoProviders(
@@ -521,14 +583,10 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         zipAlignedApk,
         apksUnderTest,
         nativeLibs,
-        /* isResourcesOnly = */ false,
-        androidCommon.isNeverLink()
-    );
+        /* isResourcesOnly = */ false);
 
-    if (dexPostprocessingOutput.proguardMap() != null) {
-      builder.addProvider(
-          ProguardMappingProvider.class,
-          ProguardMappingProvider.create(dexPostprocessingOutput.proguardMap()));
+    if (proguardOutput.getMapping() != null) {
+      builder.add(ProguardMappingProvider.class, ProguardMappingProvider.create(finalProguardMap));
     }
 
     if (oneVersionEnforcementArtifact != null) {
@@ -794,25 +852,6 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
       this.javaResourceJar = javaResourceJar;
       this.shardDexZips = ImmutableList.copyOf(shardDexZips);
     }
-  }
-
-  /** All artifacts modified by any dex post-processing steps. */
-  @AutoValue
-  public abstract static class DexPostprocessingOutput {
-
-    public static DexPostprocessingOutput create(Artifact classesDexZip, Artifact proguardMap) {
-      return new AutoValue_AndroidBinary_DexPostprocessingOutput(classesDexZip, proguardMap);
-    }
-
-    /** A .zip of .dex files to include in the APK. */
-    abstract Artifact classesDexZip();
-
-    /**
-     * The proguard mapping corresponding to the post-processed dex files. This may be null if
-     * proguard was not run.
-     */
-    @Nullable
-    abstract Artifact proguardMap();
   }
 
   /** Creates one or more classes.dex files that correspond to {@code proguardedJar}. */

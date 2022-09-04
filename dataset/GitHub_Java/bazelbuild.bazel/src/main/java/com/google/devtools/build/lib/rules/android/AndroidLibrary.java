@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
@@ -28,7 +30,10 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.rules.android.AndroidLibraryAarProvider.Aar;
+import com.google.devtools.build.lib.rules.android.ResourceContainer.ResourceType;
 import com.google.devtools.build.lib.rules.java.JavaCommon;
+import com.google.devtools.build.lib.rules.java.JavaNeverlinkInfoProvider;
+import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaTargetAttributes;
@@ -46,6 +51,14 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
   /** Checks expected rule invariants, throws rule errors if anything is set wrong. */
   private static void validateRuleContext(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
+    if (ruleContext.attributes().isAttributeValueExplicitlySpecified("resources")
+        && DataBinding.isEnabled(ruleContext)) {
+      ruleContext.throwWithRuleError(
+          "Data binding doesn't work with the \"resources\" attribute. "
+              + "Use \"resource_files\" instead.");
+    }
+
+    AndroidCommon.validateResourcesAttribute(ruleContext);
 
     /**
      * TODO(b/14473160): Remove when deps are no longer implicitly exported.
@@ -107,6 +120,52 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     return !(hasManifest || hasInlineConsts || hasAssetsDir || hasExportsManifest);
   }
 
+  /**
+   * Attributes provided by android_library targets that provide information also supported by
+   * android_resources targets.
+   *
+   * <p>As part of migrating away from android_resources, we are allowing android_library targets to
+   * be used in the 'resources' attribute of android_binary, android_library, and android_test
+   * targets. However, android_library targets can specify information that cannot be propagated by
+   * the 'resources' attribute. By enumerating those attributes which can be propagated by
+   * 'resources' and having the {@link AndroidResourcesProvider} specify whether any other
+   * attributes are used, we can error out if an android_library is specified in a resources
+   * attribute despite having information incompatible with that output.
+   *
+   * <p>TODO(b/30307842): Remove this support once the resources attribute is completely removed.
+   *
+   * <p>With the exception of 'resource_files' and the generator attributes, these attributes are
+   * simply those provided by both android_library and android_resources. android_resources does
+   * provide the 'resources' attribute, but its behavior is like the android_library
+   * 'resource_files' attribute, not the android_library 'resources' attribute (which indicates a
+   * dependency on an android_resources target). The generator_* attributes are included when the
+   * rule is created by a macro.
+   */
+  private static final ImmutableSet<String> ATTRS_COMPATIBLE_WITH_ANDROID_RESOURCES =
+      ImmutableSet.of(
+          "assets",
+          "assets_dir",
+          "compatible_with",
+          "custom_package",
+          "deprecation",
+          "distribs",
+          "exports_manifest",
+          "features",
+          "inline_constants",
+          "javacopts",
+          "licenses",
+          "manifest",
+          "name",
+          "plugins",
+          "resource_files",
+          "restricted_to",
+          "tags",
+          "testonly",
+          "visibility",
+          "generator_name",
+          "generator_function",
+          "generator_location");
+
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
@@ -114,6 +173,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     JavaSemantics javaSemantics = createJavaSemantics();
     AndroidSemantics androidSemantics = createAndroidSemantics();
     AndroidSdkProvider.verifyPresence(ruleContext);
+    checkResourceInlining(ruleContext);
     NestedSetBuilder<Aar> transitiveAars = NestedSetBuilder.naiveLinkOrder();
     NestedSetBuilder<Artifact> transitiveAarArtifacts = NestedSetBuilder.stableOrder();
     collectTransitiveAars(ruleContext, transitiveAars, transitiveAarArtifacts);
@@ -134,13 +194,6 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       LocalResourceContainer.validateRuleContext(ruleContext);
     }
 
-    // TODO(b/69668042): Always correctly apply neverlinking for resources
-    boolean isNeverLink =
-        JavaCommon.isNeverLink(ruleContext)
-            && (definesLocalResources
-                || ruleContext.getFragment(AndroidConfiguration.class).fixedResourceNeverlinking());
-    ResourceDependencies resourceDeps = ResourceDependencies.fromRuleDeps(ruleContext, isNeverLink);
-
     final ResourceApk resourceApk;
     if (definesLocalResources) {
       ApplicationManifest applicationManifest =
@@ -150,7 +203,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
       resourceApk =
           applicationManifest.packLibraryWithDataAndResources(
               ruleContext,
-              resourceDeps,
+              ResourceDependencies.fromRuleDeps(ruleContext, JavaCommon.isNeverLink(ruleContext)),
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_R_TXT),
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_MERGED_SYMBOLS),
               ruleContext.getImplicitOutputArtifact(AndroidRuleClasses.ANDROID_PROCESSED_MANIFEST),
@@ -162,7 +215,12 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         return null;
       }
     } else {
-      resourceApk = ResourceApk.fromTransitiveResources(resourceDeps);
+      resourceApk =
+          ResourceApk.fromTransitiveResources(
+              ResourceDependencies.fromRuleResourceAndDeps(
+                  ruleContext,
+                  ruleContext.getFragment(AndroidConfiguration.class).fixedResourceNeverlinking()
+                      && JavaCommon.isNeverLink(ruleContext)));
     }
 
     JavaTargetAttributes javaTargetAttributes =
@@ -192,7 +250,14 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
 
       aar = Aar.create(aarOut, applicationManifest.getManifest());
       addAarToProvider(aar, transitiveAars, transitiveAarArtifacts);
+    } else if (AndroidCommon.getAndroidResources(ruleContext) != null) {
+      primaryResources =
+          Iterables.getOnlyElement(
+              AndroidCommon.getAndroidResources(ruleContext).getDirectAndroidResources());
+      aar = Aar.create(aarOut, primaryResources.getManifest());
+      addAarToProvider(aar, transitiveAars, transitiveAarArtifacts);
     } else {
+      // there are no local resources and resources attribute was not specified either
       aar = null;
       ApplicationManifest applicationManifest =
           ApplicationManifest.generatedManifest(ruleContext)
@@ -238,6 +303,15 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             ruleContext.getFragment(AndroidConfiguration.class).throwOnResourceConflict())
         .build(ruleContext);
 
+    boolean isResourcesOnly = true;
+    for (String attr : ruleContext.attributes().getAttributeNames()) {
+      if (ruleContext.attributes().isAttributeValueExplicitlySpecified(attr)
+          && !ATTRS_COMPATIBLE_WITH_ANDROID_RESOURCES.contains(attr)) {
+        isResourcesOnly = false;
+        break;
+      }
+    }
+
     RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
     androidCommon.addTransitiveInfoProviders(
         builder,
@@ -247,8 +321,7 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
         null,
         ImmutableList.<Artifact>of(),
         NativeLibs.EMPTY,
-        // TODO(elenairina): Use JavaCommon.isNeverlink(ruleContext) for consistency among rules.
-        androidCommon.isNeverLink());
+        isResourcesOnly);
 
     NestedSetBuilder<Artifact> transitiveResourcesJars = collectTransitiveResourceJars(ruleContext);
     if (androidCommon.getResourceClassJar() != null) {
@@ -261,11 +334,15 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
             new NativeLibsZipsProvider(
                 AndroidCommon.collectTransitiveNativeLibsZips(ruleContext).build()))
         .add(
+            JavaNeverlinkInfoProvider.class,
+            new JavaNeverlinkInfoProvider(androidCommon.isNeverLink()))
+        .add(
             JavaSourceInfoProvider.class,
             JavaSourceInfoProvider.fromJavaTargetAttributes(javaTargetAttributes, javaSemantics))
         .add(
             AndroidCcLinkParamsProvider.class,
             AndroidCcLinkParamsProvider.create(androidCommon.getCcLinkParamsStore()))
+        .add(JavaPluginInfoProvider.class, JavaCommon.getTransitivePlugins(ruleContext))
         .add(ProguardSpecProvider.class, new ProguardSpecProvider(transitiveProguardConfigs))
         .addOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL, transitiveProguardConfigs)
         .add(
@@ -292,6 +369,23 @@ public abstract class AndroidLibrary implements RuleConfiguredTargetFactory {
     }
     if (aar.getManifest() != null) {
       transitiveAarArtifacts.add(aar.getManifest());
+    }
+  }
+
+  private void checkResourceInlining(RuleContext ruleContext) {
+    AndroidResourcesProvider resources = AndroidCommon.getAndroidResources(ruleContext);
+    if (resources == null) {
+      return;
+    }
+
+    ResourceContainer container = Iterables.getOnlyElement(resources.getDirectAndroidResources());
+
+    if (container.getConstantsInlined()
+        && !container.getArtifacts(ResourceType.RESOURCES).isEmpty()) {
+      ruleContext.ruleError(
+          "This android library has some resources assigned, so the target '"
+              + resources.getLabel()
+              + "' should have the attribute inline_constants set to 0");
     }
   }
 

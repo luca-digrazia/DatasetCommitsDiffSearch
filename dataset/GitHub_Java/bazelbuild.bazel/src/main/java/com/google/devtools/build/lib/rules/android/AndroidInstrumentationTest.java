@@ -56,8 +56,8 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
       ruleContext.throwWithAttributeError(
           "instrumentation",
           String.format(
-              "The android_binary target %s is missing an 'instruments' attribute. Please set "
-                  + "it to the label of the android_binary under test.",
+              "The android_binary target at %s is missing an 'instruments' attribute. Please set "
+                  + "it as the label of the android_binary under test.",
               ruleContext.attributes().get("instrumentation", BuildType.LABEL)));
     }
   }
@@ -85,7 +85,6 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
             .addTargets(runfilesDeps, RunfilesProvider.DEFAULT_RUNFILES)
             .addTransitiveArtifacts(AndroidCommon.getSupportApks(ruleContext))
             .addTransitiveArtifacts(getAdb(ruleContext).getFilesToRun())
-            .merge(getAapt(ruleContext).getRunfilesSupport())
             .addArtifacts(getDataDeps(ruleContext))
             .build();
 
@@ -121,12 +120,12 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
         .add(Substitution.of("%workspace%", ruleContext.getWorkspaceName()))
         .add(Substitution.of("%test_label%", ruleContext.getLabel().getCanonicalForm()))
         .add(executableSubstitution("%adb%", getAdb(ruleContext)))
-        .add(executableSubstitution("%aapt%", getAapt(ruleContext)))
         .add(executableSubstitution("%device_script%", getTargetDevice(ruleContext)))
         .add(executableSubstitution("%test_entry_point%", getTestEntryPoint(ruleContext)))
         .add(artifactSubstitution("%target_apk%", getTargetApk(ruleContext)))
         .add(artifactSubstitution("%instrumentation_apk%", getInstrumentationApk(ruleContext)))
         .add(artifactListSubstitution("%support_apks%", getAllSupportApks(ruleContext)))
+        .add(Substitution.ofSpaceSeparatedMap("%test_args%", getTestArgs(ruleContext)))
         .add(Substitution.ofSpaceSeparatedMap("%fixture_args%", getFixtureArgs(ruleContext)))
         .add(Substitution.ofSpaceSeparatedMap("%log_levels%", getLogLevels(ruleContext)))
         .add(deviceScriptFixturesSubstitution(ruleContext))
@@ -252,9 +251,9 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
     return AndroidSdkProvider.fromRuleContext(ruleContext).getAdb();
   }
 
-  /** AAPT binary from the Android SDK. */
-  private static FilesToRunProvider getAapt(RuleContext ruleContext) {
-    return AndroidSdkProvider.fromRuleContext(ruleContext).getAapt();
+  /** Map of {@code test_args} for the test runner to make available to test test code. */
+  private static ImmutableMap<String, String> getTestArgs(RuleContext ruleContext) {
+    return ImmutableMap.copyOf(ruleContext.attributes().get("test_args", Type.STRING_DICT));
   }
 
   /** Map of {@code fixture_args} for the test runner to pass to the {@code fixtures}. */
@@ -300,7 +299,7 @@ public class AndroidInstrumentationTest implements RuleConfiguredTargetFactory {
 
   private static String getDeviceBrokerType(RuleContext ruleContext) {
     return ruleContext
-        .getPrerequisite("target_device", Mode.HOST, DeviceBrokerInfo.PROVIDER)
+        .getPrerequisite("target_device", Mode.HOST, DeviceBrokerTypeProvider.class)
         .getDeviceBrokerType();
   }
 

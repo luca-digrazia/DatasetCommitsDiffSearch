@@ -33,9 +33,9 @@ import javax.annotation.Nullable;
 public class CompiledResources implements ManifestContainer {
 
   private final Path resources;
-  @Nullable private final Path manifest;
+  private final Path manifest;
   private final List<Path> assetsDirs;
-  @Nullable private final Path stableIds;
+  private final Optional<Path> stableIds;
 
   /**
    * @param resources The path to the zip file containing the compiled resource result of aapt2
@@ -44,7 +44,7 @@ public class CompiledResources implements ManifestContainer {
    * @param stableIds The path to the file containing resource ID's to keep stable
    */
   private CompiledResources(
-      Path resources, @Nullable Path manifest, List<Path> assetsDirs, @Nullable Path stableIds) {
+      Path resources, Path manifest, List<Path> assetsDirs, Optional<Path> stableIds) {
     this.resources = resources;
     this.manifest = manifest;
     this.assetsDirs = assetsDirs;
@@ -62,7 +62,7 @@ public class CompiledResources implements ManifestContainer {
   public static CompiledResources from(
       Path resources, @Nullable Path manifest, @Nullable List<Path> assetDirs) {
     return new CompiledResources(
-        resources, manifest, assetDirs != null ? assetDirs : ImmutableList.of(), null);
+        resources, manifest, assetDirs != null ? assetDirs : ImmutableList.of(), Optional.empty());
   }
 
   /** This zip file contains resource flat files that are the result of aapt2 compile */
@@ -77,11 +77,8 @@ public class CompiledResources implements ManifestContainer {
   }
 
   @Override
-  @Nullable
   public Path getManifest() {
-    if (manifest != null) {
-      Preconditions.checkState(Files.exists(manifest));
-    }
+    Preconditions.checkState(Files.exists(manifest));
     return manifest;
   }
 
@@ -101,11 +98,11 @@ public class CompiledResources implements ManifestContainer {
     return new CompiledResources(resources, processManifest.apply(manifest), assetsDirs, stableIds);
   }
 
-  public CompiledResources addStableIds(Path stableIds) {
+  public CompiledResources addStableIds(Optional<Path> stableIds) {
     return new CompiledResources(resources, manifest, assetsDirs, stableIds);
   }
 
   public Optional<Path> getStableIds() {
-    return Optional.ofNullable(stableIds);
+    return stableIds;
   }
 }

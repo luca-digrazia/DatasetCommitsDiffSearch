@@ -276,13 +276,8 @@ public class AndroidResourceProcessor {
   }
 
   // TODO(bazel-team): Clean up this method call -- 13 params is too many.
-  /**
-   * Processes resources for generated sources, configs and packaging resources.
-   *
-   * <p>Returns a post-processed MergedAndroidData. Notably, the resources will be stripped of any
-   * databinding expressions.
-   */
-  public MergedAndroidData processResources(
+  /** Processes resources for generated sources, configs and packaging resources. */
+  public void processResources(
       Path tempRoot,
       Path aapt,
       Path androidJar,
@@ -361,7 +356,6 @@ public class AndroidResourceProcessor {
     if (publicResourcesOut != null && Files.exists(publicResourcesOut)) {
       Files.setLastModifiedTime(publicResourcesOut, FileTime.fromMillis(0L));
     }
-    return new MergedAndroidData(resourceDir, assetsDir, androidManifest);
   }
 
   public void runAapt(

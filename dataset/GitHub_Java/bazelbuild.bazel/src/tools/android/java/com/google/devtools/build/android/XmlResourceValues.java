@@ -33,6 +33,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.io.StringWriter;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -116,7 +117,7 @@ public class XmlResourceValues {
 
   static XmlResourceValue parseStyle(XMLEventReader eventReader, StartElement start)
       throws XMLStreamException {
-    Map<String, String> values = new LinkedHashMap<>();
+    Map<String, String> values = new HashMap<>();
     for (XMLEvent element = nextTag(eventReader);
         !isEndTag(element, TAG_STYLE);
         element = nextTag(eventReader)) {

@@ -50,6 +50,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
@@ -270,7 +271,7 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
   /** Finalizes all operations and flushes the buffers. */
   @Override
   public void flush() throws IOException {
-    for (Map.Entry<String, ResourceValuesDefinitions> entry : valueTags.entrySet()) {
+    for (Entry<String, ResourceValuesDefinitions> entry : valueTags.entrySet()) {
       writeTasks.add(
           executorService.submit(
               entry.getValue().createWritingTask(resourceDirectory().resolve(entry.getKey()))));
@@ -344,14 +345,14 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
                 StandardOpenOption.WRITE)) {
           writer.write(PRELUDE);
           writer.write(START_RESOURCES_TAG);
-          for (Map.Entry<String, String> prefixToUri : namespaces) {
+          for (Entry<String, String> prefixToUri : namespaces) {
             writer.write(" xmlns:");
             writer.write(prefixToUri.getKey());
             writer.write("=\"");
             writer.write(prefixToUri.getValue());
             writer.write("\"");
           }
-          for (Map.Entry<String, String> attribute : attributes.entrySet()) {
+          for (Entry<String, String> attribute : attributes.entrySet()) {
             writer.write(" ");
             writer.write(attribute.getKey());
             writer.write("=\"");
@@ -536,9 +537,9 @@ public class AndroidDataWriter implements AndroidDataWritingVisitor {
     }
 
     @Override
-    public StartTag addAttributesFrom(Iterable<Map.Entry<String, String>> entries) {
+    public StartTag addAttributesFrom(Iterable<Entry<String, String>> entries) {
       StartTag tag = this;
-      for (Map.Entry<String, String> entry : entries) {
+      for (Entry<String, String> entry : entries) {
         tag = tag.attribute(entry.getKey()).setTo(entry.getValue());
       }
       return tag;

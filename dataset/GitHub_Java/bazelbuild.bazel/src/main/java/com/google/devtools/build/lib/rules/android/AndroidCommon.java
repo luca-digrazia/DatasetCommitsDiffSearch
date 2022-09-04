@@ -792,8 +792,7 @@ public class AndroidCommon {
       Artifact zipAlignedApk,
       Iterable<Artifact> apksUnderTest,
       NativeLibs nativeLibs,
-      boolean isResourcesOnly,
-      boolean isNeverlink) {
+      boolean isResourcesOnly) {
 
     idlHelper.addTransitiveInfoProviders(builder, classJar, manifestProtoOutput);
 
@@ -827,12 +826,12 @@ public class AndroidCommon {
     javaCommon.addGenJarsProvider(builder, javaInfoBuilder, genClassJar, genSourceJar);
 
     DataBinding.maybeAddProvider(builder, ruleContext);
-    JavaInfo javaInfo = javaInfoBuilder
-        .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
-        .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
-        .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
-        .setNeverlink(isNeverlink)
-        .build();
+    JavaInfo javaInfo =
+        javaInfoBuilder
+            .addProvider(JavaCompilationArgsProvider.class, compilationArgsProvider)
+            .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
+            .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
+            .build();
 
     return builder
         .setFilesToBuild(filesToBuild)
@@ -989,7 +988,7 @@ public class AndroidCommon {
   }
 
   /** Returns {@link AndroidConfiguration} in given context. */
-  public static AndroidConfiguration getAndroidConfig(RuleContext context) {
+  static AndroidConfiguration getAndroidConfig(RuleContext context) {
     return context.getConfiguration().getFragment(AndroidConfiguration.class);
   }
 
@@ -1115,4 +1114,3 @@ public class AndroidCommon {
         .build();
   }
 }
-

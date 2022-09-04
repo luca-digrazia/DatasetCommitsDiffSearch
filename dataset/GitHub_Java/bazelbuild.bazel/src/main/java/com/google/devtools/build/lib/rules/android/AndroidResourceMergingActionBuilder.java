@@ -25,8 +25,7 @@ import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.ToArg;
-import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.ToArg.Includes;
+import com.google.devtools.build.lib.rules.android.ResourceContainerConverter.Builder.SeparatorType;
 import com.google.devtools.build.lib.util.OS;
 import java.util.ArrayList;
 import java.util.List;
@@ -42,18 +41,18 @@ public class AndroidResourceMergingActionBuilder {
 
   private static final ResourceContainerConverter.ToArg RESOURCE_CONTAINER_TO_ARG =
       ResourceContainerConverter.builder()
-          .include(Includes.ResourceRoots)
-          .include(Includes.Label)
-          .include(Includes.SymbolsBin)
-          .withSeparator(ToArg.SeparatorType.SEMICOLON_AMPERSAND)
+          .includeResourceRoots()
+          .includeLabel()
+          .includeSymbolsBin()
+          .withSeparator(SeparatorType.SEMICOLON_AMPERSAND)
           .toArgConverter();
 
   private static final ResourceContainerConverter.ToArg RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED =
       ResourceContainerConverter.builder()
-          .include(Includes.ResourceRoots)
-          .include(Includes.Label)
-          .include(Includes.CompiledSymbols)
-          .withSeparator(ToArg.SeparatorType.SEMICOLON_AMPERSAND)
+          .includeResourceRoots()
+          .includeLabel()
+          .includeCompiledSymbols()
+          .withSeparator(SeparatorType.SEMICOLON_AMPERSAND)
           .toArgConverter();
 
   private final RuleContext ruleContext;
@@ -167,7 +166,7 @@ public class AndroidResourceMergingActionBuilder {
     NestedSetBuilder<Artifact> inputs = createInputsForBuilder(builder);
 
     Preconditions.checkNotNull(primary);
-    builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED.map(primary));
+    builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG_FOR_COMPILED.apply(primary));
     inputs.addAll(primary.getArtifacts());
     inputs.add(primary.getCompiledSymbols());
 
@@ -203,7 +202,7 @@ public class AndroidResourceMergingActionBuilder {
     NestedSetBuilder<Artifact> inputs = createInputsForBuilder(builder);
 
     Preconditions.checkNotNull(primary);
-    builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG.map(primary));
+    builder.add("--primaryData", RESOURCE_CONTAINER_TO_ARG.apply(primary));
     inputs.addAll(primary.getArtifacts());
     inputs.add(primary.getSymbols());
 

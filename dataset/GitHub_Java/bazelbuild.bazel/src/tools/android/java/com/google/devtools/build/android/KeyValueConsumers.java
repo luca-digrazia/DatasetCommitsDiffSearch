@@ -18,26 +18,27 @@ import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
 /**
  * A group of {@link KeyValueConsumer}s for each DataValue type.
  *
- * This class acts as a parameter object for organizing the common grouping of consumer instances.
+ * <p>This class acts as a parameter object for organizing the common grouping of consumer
+ * instances.
  */
 class KeyValueConsumers {
   static KeyValueConsumers of(
       KeyValueConsumer<DataKey, DataResource> overwritingConsumer,
-      KeyValueConsumer<DataKey, DataResource> nonOverwritingConsumer,
+      KeyValueConsumer<DataKey, DataResource> combiningConsumer,
       KeyValueConsumer<DataKey, DataAsset> assetConsumer) {
-    return new KeyValueConsumers(overwritingConsumer, nonOverwritingConsumer, assetConsumer);
+    return new KeyValueConsumers(overwritingConsumer, combiningConsumer, assetConsumer);
   }
 
   final KeyValueConsumer<DataKey, DataResource> overwritingConsumer;
-  final KeyValueConsumer<DataKey, DataResource> nonOverwritingConsumer;
+  final KeyValueConsumer<DataKey, DataResource> combiningConsumer;
   final KeyValueConsumer<DataKey, DataAsset> assetConsumer;
 
   private KeyValueConsumers(
       KeyValueConsumer<DataKey, DataResource> overwritingConsumer,
-      KeyValueConsumer<DataKey, DataResource> nonOverwritingConsumer,
+      KeyValueConsumer<DataKey, DataResource> combiningConsumer,
       KeyValueConsumer<DataKey, DataAsset> assetConsumer) {
     this.overwritingConsumer = overwritingConsumer;
-    this.nonOverwritingConsumer = nonOverwritingConsumer;
+    this.combiningConsumer = combiningConsumer;
     this.assetConsumer = assetConsumer;
   }
 }

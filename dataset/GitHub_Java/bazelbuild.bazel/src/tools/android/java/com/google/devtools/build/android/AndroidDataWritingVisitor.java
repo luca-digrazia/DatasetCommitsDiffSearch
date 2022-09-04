@@ -20,7 +20,6 @@ import com.google.devtools.build.android.xml.StyleableXmlResourceValue;
 import java.io.Flushable;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Map;
 import java.util.Map.Entry;
 import javax.annotation.CheckReturnValue;
 import javax.xml.namespace.QName;
@@ -139,7 +138,7 @@ public interface AndroidDataWritingVisitor extends Flushable {
     /** Adds "name" attribute to the {@link StartTag}. */
     StartTag named(String key);
     /** Adds all the {@link Entry} as key="value" to the {@link StartTag}. */
-    StartTag addAttributesFrom(Iterable<Map.Entry<String, String>> entries);
+    StartTag addAttributesFrom(Iterable<Entry<String, String>> entries);
     /** Starts an attribute of prefix:name. */
     Attribute attribute(String prefix, String name);
     /** Starts an attribute of name. */

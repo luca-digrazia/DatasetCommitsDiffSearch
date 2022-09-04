@@ -61,8 +61,7 @@ public class AndroidCompiledResourceMergingAction {
     Preconditions.checkNotNull(options.classJarOutput);
 
     try (ScopedTemporaryDirectory scopedTmp =
-            new ScopedTemporaryDirectory("android_resource_merge_tmp");
-        ExecutorServiceCloser executorService = ExecutorServiceCloser.createWithFixedPoolOf(15)) {
+        new ScopedTemporaryDirectory("android_resource_merge_tmp")) {
       Path tmp = scopedTmp.getPath();
       Path generatedSources = tmp.resolve("generated_resources");
       Path processedManifest = tmp.resolve("manifest-processed/AndroidManifest.xml");
@@ -87,8 +86,7 @@ public class AndroidCompiledResourceMergingAction {
           options.directData,
           options.transitiveData,
           resourceClassWriter,
-          options.throwOnResourceConflict,
-          executorService);
+          options.throwOnResourceConflict);
       logger.fine(String.format("Merging finished at %sms", timer.elapsed(TimeUnit.MILLISECONDS)));
 
       AndroidResourceOutputs.createClassJar(generatedSources, options.classJarOutput);

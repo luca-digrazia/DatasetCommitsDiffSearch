@@ -75,7 +75,12 @@ public abstract class AndroidSdkProvider implements TransitiveInfoProvider {
    * not specified.
    */
   public static AndroidSdkProvider fromRuleContext(RuleContext ruleContext) {
-    return ruleContext.getPrerequisite(":android_sdk", Mode.TARGET, AndroidSdkProvider.class);
+    TransitiveInfoCollection androidSdkDep =
+        ruleContext.getPrerequisite(":android_sdk", Mode.TARGET);
+    AndroidSdkProvider androidSdk =
+        androidSdkDep == null ? null : androidSdkDep.getProvider(AndroidSdkProvider.class);
+
+    return androidSdk;
   }
 
   /** Throws an error if the Android SDK cannot be found. */

@@ -14,7 +14,8 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
+import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.packages.Attribute.SplitTransition;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -46,7 +47,7 @@ public class AndroidSkylarkCommon {
             + "the --fat_apk_cpu and --android_crosstool_top flags.",
     structField = true
   )
-  public SplitTransition getAndroidSplitTransition() {
+  public SplitTransition<BuildOptions> getAndroidSplitTransition() {
     return AndroidRuleClasses.ANDROID_SPLIT_TRANSITION;
   }
 }

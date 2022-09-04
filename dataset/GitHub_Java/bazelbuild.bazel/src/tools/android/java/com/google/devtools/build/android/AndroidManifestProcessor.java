@@ -271,8 +271,8 @@ public class AndroidManifestProcessor {
 
     if (newManifestPackage != null) {
       processManifest(
-          /* versionCode= */ -1,
-          /* versionName= */ null,
+          -1 /* versionCode */,
+          null /* versionName */,
           manifest,
           processedManifest,
           MergeType.LIBRARY,

@@ -41,24 +41,27 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
   @Immutable
   public static class SourceDirectory {
     final PathFragment relativePath;
+    final PathFragment rootExecutionPathFragment;
     final PathFragment rootPath;
     final boolean isSource;
 
     @VisibleForTesting
     public static SourceDirectory fromSourceRoot(PathFragment rootPath, PathFragment relativePath) {
-      return new SourceDirectory(rootPath, relativePath, true);
+      return new SourceDirectory(rootPath, PathFragment.EMPTY_FRAGMENT, relativePath, true);
     }
 
     public static SourceDirectory fromRoot(Root root, PathFragment relativePath) {
       return new SourceDirectory(
-          root.getPath().asFragment(), relativePath, root.isSourceRoot());
+          root.getPath().asFragment(), root.getExecPath(), relativePath, root.isSourceRoot());
     }
 
     private SourceDirectory(
         PathFragment rootPath,
+        PathFragment rootExecutionPathFragment,
         PathFragment relativePath,
         boolean isSource) {
       this.rootPath = rootPath;
+      this.rootExecutionPathFragment = rootExecutionPathFragment;
       this.relativePath = relativePath;
       this.isSource = isSource;
     }
@@ -73,6 +76,14 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
       return rootPath;
     }
 
+    /**
+     * The path from the execution root to the actual root. For source roots, this returns the empty
+     * fragment, {@link Root#getExecPath()}.
+     */
+    public PathFragment getRootExecutionPathFragment() {
+      return rootExecutionPathFragment;
+    }
+
     /** Indicates if the directory is in the gen files tree. */
     public boolean isSource() {
       return isSource;
@@ -80,7 +91,7 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
 
     @Override
     public int hashCode() {
-      return Objects.hash(relativePath, rootPath, isSource);
+      return Objects.hash(relativePath, rootPath, rootExecutionPathFragment, isSource);
     }
 
     @Override
@@ -88,6 +99,7 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
       if (other instanceof SourceDirectory) {
         SourceDirectory otherDir = (SourceDirectory) other;
         return Objects.equals(rootPath, otherDir.rootPath)
+            && Objects.equals(rootExecutionPathFragment, otherDir.rootExecutionPathFragment)
             && Objects.equals(relativePath, otherDir.relativePath)
             && Objects.equals(isSource, otherDir.isSource);
       }
@@ -100,6 +112,8 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
           + relativePath
           + ", rootPath="
           + rootPath
+          + ", executionRootPrefix="
+          + rootExecutionPathFragment
           + ", isSource="
           + isSource
           + "]";
@@ -241,6 +255,16 @@ public final class AndroidIdeInfoProvider implements TransitiveInfoProvider {
             SourceDirectory.fromRoot(
                 idl.getRoot(), idl.getRootRelativePath().getParentDirectory()));
       }
+    }
+
+    public Builder addAllResources(Collection<SourceDirectory> resources) {
+      resourceDirs.addAll(resources);
+      return this;
+    }
+
+    public Builder addAllAssets(Collection<SourceDirectory> assets) {
+      assetDirs.addAll(assets);
+      return this;
     }
 
     public Builder addResourceSource(Artifact resource) {

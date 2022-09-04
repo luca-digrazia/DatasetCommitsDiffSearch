@@ -47,7 +47,4 @@ public interface DataKey extends Comparable<DataKey> {
   }
 
   KeyType getKeyType();
-
-  /** Returns true if resources for this key should be compared for conflicts. */
-  boolean shouldDetectConflicts();
 }
