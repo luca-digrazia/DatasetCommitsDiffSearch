@@ -102,7 +102,6 @@ public class KafkaTransport extends ThrottleableTransport {
                           EventBus serverEventBus,
                           ServerStatus serverStatus,
                           @Named("daemonScheduler") ScheduledExecutorService scheduler) {
-        super(serverEventBus, configuration);
         this.configuration = configuration;
         this.localRegistry = localRegistry;
         this.nodeId = nodeId;
@@ -159,7 +158,7 @@ public class KafkaTransport extends ThrottleableTransport {
     }
 
     @Override
-    public void doLaunch(final MessageInput input) throws MisfireException {
+    public void launch(final MessageInput input) throws MisfireException {
         serverStatus.awaitRunning(new Runnable() {
             @Override
             public void run() {
@@ -214,9 +213,6 @@ public class KafkaTransport extends ThrottleableTransport {
                         if (stopped) {
                             break;
                         }
-                        if (isThrottled()) {
-                            blockUntilUnthrottled();
-                        }
 
                         // process the message, this will immediately mark the message as having been processed. this gets tricky
                         // if we get an exception about processing it down below.
@@ -255,7 +251,7 @@ public class KafkaTransport extends ThrottleableTransport {
     }
 
     @Override
-    public void doStop() {
+    public void stop() {
         stopped = true;
 
         serverEventBus.unregister(this);
