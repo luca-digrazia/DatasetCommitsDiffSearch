@@ -16,18 +16,29 @@
  */
 package org.graylog.benchmarks.pipeline;
 
-import com.codahale.metrics.ConsoleReporter;
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 import com.google.common.collect.MapMaker;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Multimap;
 import com.google.common.collect.MultimapBuilder;
+import com.google.common.io.LineProcessor;
 import com.google.inject.AbstractModule;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
+import com.google.inject.assistedinject.FactoryModuleBuilder;
+import com.google.inject.name.Names;
+
+import au.com.bytecode.opencsv.CSVParser;
+
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.Meter;
+import com.codahale.metrics.MetricRegistry;
+import com.eaio.uuid.UUID;
 import com.moandjiezana.toml.Toml;
+
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.DefaultParser;
 import org.apache.commons.cli.HelpFormatter;
@@ -43,6 +54,7 @@ import org.graylog.plugins.pipelineprocessor.db.RuleService;
 import org.graylog.plugins.pipelineprocessor.db.memory.InMemoryServicesModule;
 import org.graylog.plugins.pipelineprocessor.functions.ProcessorFunctionsModule;
 import org.graylog.plugins.pipelineprocessor.parser.PipelineRuleParser;
+import org.graylog.plugins.pipelineprocessor.processors.ConfigurationStateUpdater;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
 import org.graylog.plugins.pipelineprocessor.rest.PipelineConnections;
 import org.graylog2.database.NotFoundException;
@@ -66,13 +78,25 @@ import org.graylog2.shared.journal.NoopJournal;
 import org.graylog2.streams.StreamImpl;
 import org.graylog2.streams.StreamService;
 import org.joda.time.DateTime;
+import org.jooq.lambda.Seq;
+import org.jooq.lambda.tuple.Tuple2;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Param;
 import org.openjdk.jmh.annotations.Scope;
 import org.openjdk.jmh.annotations.Setup;
 import org.openjdk.jmh.annotations.State;
 import org.openjdk.jmh.annotations.TearDown;
+import org.openjdk.jmh.infra.BenchmarkParams;
 import org.openjdk.jmh.infra.Blackhole;
+import org.openjdk.jmh.infra.IterationParams;
+import org.openjdk.jmh.profile.GCProfiler;
+import org.openjdk.jmh.profile.InternalProfiler;
+import org.openjdk.jmh.results.AggregationPolicy;
+import org.openjdk.jmh.results.IterationResult;
+import org.openjdk.jmh.results.Result;
+import org.openjdk.jmh.results.RunResult;
+import org.openjdk.jmh.results.ScalarResult;
+import org.openjdk.jmh.results.format.ResultFormatType;
 import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
@@ -89,20 +113,27 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.SortedMap;
 import java.util.stream.Collectors;
+
+import javax.annotation.Nonnull;
 
 import static com.google.common.collect.Iterables.getOnlyElement;
 
 public class PipelinePerformanceBenchmarks {
     private static final Logger LOG = LoggerFactory.getLogger(PipelinePerformanceBenchmarks.class);
+    public static final Message MESSAGE = new Message("hallo welt", "127.0.0.1", Tools.nowUTC());
 
-    private static final String BENCHMARKS_RESOURCE_DIRECTORY = "/benchmarks";
-    private static final Message MESSAGE = new Message("hallo welt", "127.0.0.1", Tools.nowUTC());
     private static String benchmarkDir = System.getProperty("benchmarkDir", "benchmarks");
+
+    private static MetricRegistry metricRegistry;
 
     @State(Scope.Benchmark)
     public static class PipelineConfig {
@@ -110,9 +141,17 @@ public class PipelinePerformanceBenchmarks {
         // the parameter values are created dynamically
         @Param({})
         private String directoryName;
+
+        @Param({"false", "true"})
+        private String codeGenerator;
+
+        @Param({"false", "true"})
+        private String cachedStageIterators;
+
         private PipelineInterpreter interpreter;
         private BenchmarkConfig config;
         private Injector injector;
+        private Iterator<Message> messageCycler;
         // enable when using yourkit for single runs
 //        private Controller controller;
 
@@ -136,6 +175,9 @@ public class PipelinePerformanceBenchmarks {
                             bind(StreamService.class).toInstance(new DummyStreamService());
                             bind(GrokPatternService.class).to(InMemoryGrokPatternService.class);
                             bind(MetricRegistry.class).toProvider(MetricRegistryProvider.class);
+                            bindConstant().annotatedWith(Names.named("processbuffer_processors")).to(1);
+                            bindConstant().annotatedWith(Names.named("cached_stageiterators")).to(Boolean.valueOf(cachedStageIterators));
+                            install(new FactoryModuleBuilder().build(PipelineInterpreter.State.Factory.class));
                         }
                     });
 
@@ -156,6 +198,8 @@ public class PipelinePerformanceBenchmarks {
                             configFiles.put(Type.PIPELINE, inputFile);
                         } else if (name.equals("benchmark.toml")) {
                             configFiles.put(Type.CONFIG, inputFile);
+                        } else if (name.endsWith(".csv")) {
+                            configFiles.put(Type.MESSAGES, inputFile);
                         } else {
                             LOG.warn("unrecognized file {} found, it will be ignored.", inputFile);
                         }
@@ -229,6 +273,38 @@ public class PipelinePerformanceBenchmarks {
                 }
             }
 
+            final List<Message> loadedMessages = Lists.newArrayList();
+            configFiles.get(Type.MESSAGES).forEach(file -> {
+                try {
+                    loadedMessages.addAll(com.google.common.io.Files.readLines(file,
+                                                                               StandardCharsets.UTF_8,
+                                                                               new CsvMessageFileProcessor()));
+                } catch (IOException e) {
+                    System.err.println(e.getMessage());
+                    System.exit(-3);
+                }
+            });
+            if (!loadedMessages.isEmpty()) {
+                messageCycler = Iterators.cycle(loadedMessages);
+            }
+
+            if (!configFiles.containsKey(Type.MESSAGES)) {
+                if ("generate".equalsIgnoreCase(config.messages)) {
+                    final ArrayList<Message> objects = Lists.newArrayList();
+                    Seq.range(0, 25000).forEach(i -> objects.add(new Message("hallo welt",
+                                                                             "127.0.0.1",
+                                                                             Tools.nowUTC())));
+                    messageCycler = Iterators.cycle(objects);
+                } else {
+                    messageCycler = Iterators.cycle(MESSAGE);
+                }
+            }
+            final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
+            // make the registry available to the profiler
+            metricRegistry = metrics;
+
+            // toggle code generation
+            ConfigurationStateUpdater.setAllowCodeGeneration(Boolean.valueOf(codeGenerator));
             interpreter = injector.getInstance(PipelineInterpreter.class);
         }
 
@@ -236,14 +312,16 @@ public class PipelinePerformanceBenchmarks {
         public void dumpMetrics() throws Exception {
 
             // enable when using yourkit for single runs
-//            controller.captureSnapshot(Controller.SNAPSHOT_WITH_HEAP);
+//            if (controller != null) {
+//                controller.captureSnapshot(Controller.SNAPSHOT_WITH_HEAP);
+//            }
             final MetricRegistry metrics = injector.getInstance(MetricRegistry.class);
-
+            // make the registry available to the profiler
+            metricRegistry = metrics;
             final ConsoleReporter reporter = ConsoleReporter.forRegistry(metrics)
                     .outputTo(new PrintStream("/tmp/bench-" + directoryName + ".txt"))
                     .build();
             reporter.report();
-
         }
 
         private String readFile(File file) {
@@ -423,11 +501,46 @@ public class PipelinePerformanceBenchmarks {
             }
         }
 
+        private static class CsvMessageFileProcessor implements LineProcessor<List<Message>> {
+            String[] fieldNames;
+            private CSVParser csvParser = new CSVParser();
+            private List<Message> messages = Lists.newArrayList();
+            boolean firstLine = true;
+
+            @Override
+            public boolean processLine(@Nonnull String line) throws IOException {
+                final String[] strings = csvParser.parseLine(line);
+                if (strings == null) {
+                    return false;
+                }
+                if (firstLine) {
+                    fieldNames = strings;
+                    firstLine = false;
+                    return true;
+                }
+
+                final Map<String, Object> fields = Seq.of(fieldNames)
+                        .zipWithIndex()
+                        .map(nameAndIndex -> nameAndIndex.map2(index -> strings[Math.toIntExact(index)]))
+                        .collect(Collectors.toMap(Tuple2::v1, Tuple2::v2));
+                fields.put(Message.FIELD_ID, new UUID().toString());
+                messages.add(new Message(fields));
+                return true;
+            }
+
+            @Override
+            public List<Message> getResult() {
+                return messages;
+            }
+        }
+
         @SuppressWarnings({"unused", "MismatchedQueryAndUpdateOfCollection"})
         private class BenchmarkConfig {
             private String name;
 
             private List<StreamDescription> streams;
+
+            private String messages;
 
             private class StreamDescription {
                 private String name;
@@ -442,13 +555,15 @@ public class PipelinePerformanceBenchmarks {
         private enum Type {
             CONFIG,
             RULE,
+            MESSAGES,
             PIPELINE
         }
     }
 
     @Benchmark
     public void runPipeline(PipelineConfig config, Blackhole bh) {
-        bh.consume(config.interpreter.process(MESSAGE));
+        // forever loop over the messages
+        bh.consume(config.interpreter.process(config.messageCycler.next()));
     }
 
     public static void main(String[] args) throws RunnerException, URISyntaxException, IOException {
@@ -462,7 +577,7 @@ public class PipelinePerformanceBenchmarks {
                                   .desc("Benchmark directory (default: 'benchmarks')")
                                   .required(false)
                                   .build());
-        options.addOption(new Option("f", "Number of forks (default 1). Set to 0 to allow attaching a debugger/profiler"));
+        options.addOption("f", true, "Number of forks (default 1). Set to 0 to allow attaching a debugger/profiler");
         options.addOption(Option.builder("n")
                                   .longOpt("name")
                                   .desc("Only run benchmark with the given name")
@@ -496,7 +611,7 @@ public class PipelinePerformanceBenchmarks {
             }
 
             if (line.hasOption('f')) {
-                forks = Integer.parseInt(line.getOptionValue('f', "1"));;
+                forks = Integer.parseInt(line.getOptionValue('f', "1"));
             }
 
             if (line.hasOption('w')) {
@@ -516,14 +631,21 @@ public class PipelinePerformanceBenchmarks {
                 .warmupIterations(warmupIterations)
                 .warmupTime(TimeValue.seconds(5))
                 .measurementIterations(iterations)
-                .measurementTime(TimeValue.seconds(20))
+                .measurementTime(TimeValue.seconds(60))
+                .detectJvmArgs()
                 .threads(1)
                 .forks(forks)
                 .param("directoryName", benchmarkParams)
-                .jvmArgsAppend("-DbenchmarkDir="+benchmarkDir)
+//                .param("codeGenerator", "false")
+//                .param("cachedStageIterators", "false")
+                .jvmArgsAppend("-DbenchmarkDir=" + benchmarkDir)
+                .resultFormat(ResultFormatType.JSON)
+                .addProfiler(GCProfiler.class)
+                .addProfiler(MetricsProfiler.class)
                 .build();
 
-        new Runner(opt).run();
+        final Runner runner = new Runner(opt);
+        final Collection<RunResult> results = runner.run();
     }
 
 
@@ -538,4 +660,36 @@ public class PipelinePerformanceBenchmarks {
                 .collect(Collectors.toList());
     }
 
+    public static class MetricsProfiler implements InternalProfiler {
+
+        @Override
+        public String getDescription() {
+            return "Metrics profile via MetricRegistry";
+        }
+
+        @Override
+        public void beforeIteration(BenchmarkParams benchmarkParams, IterationParams iterationParams) {
+
+        }
+
+        @Override
+        public Collection<? extends Result> afterIteration(BenchmarkParams benchmarkParams,
+                                                           IterationParams iterationParams,
+                                                           IterationResult result) {
+            final ArrayList<Result> results = Lists.newArrayList();
+            if (metricRegistry == null) {
+                return results;
+            }
+            final SortedMap<String, Meter> counters = metricRegistry.getMeters((name, metric) -> {
+                return name.startsWith(MetricRegistry.name(Rule.class)) || name.startsWith(MetricRegistry.name(Pipeline.class));
+            });
+            counters.entrySet()
+                    .forEach(stringCounterEntry -> result.addResult(new ScalarResult(stringCounterEntry.getKey(),
+                                                                                     stringCounterEntry.getValue().getCount(),
+                                                                                     "calls",
+                                                                                     AggregationPolicy.SUM)));
+
+            return results;
+        }
+    }
 }

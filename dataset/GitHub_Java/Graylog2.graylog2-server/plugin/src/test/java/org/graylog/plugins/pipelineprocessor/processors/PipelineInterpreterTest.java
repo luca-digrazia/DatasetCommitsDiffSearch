@@ -27,7 +27,6 @@ import org.graylog.plugins.pipelineprocessor.ast.Pipeline;
 import org.graylog.plugins.pipelineprocessor.ast.Rule;
 import org.graylog.plugins.pipelineprocessor.ast.functions.Function;
 import org.graylog.plugins.pipelineprocessor.codegen.CodeGenerator;
-import org.graylog.plugins.pipelineprocessor.codegen.compiler.JavaCompiler;
 import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
 import org.graylog.plugins.pipelineprocessor.db.PipelineStreamConnectionsService;
@@ -107,7 +106,7 @@ public class PipelineInterpreterTest {
         functions.put(StringConversion.NAME, new StringConversion());
 
         final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
-        final PipelineRuleParser parser = new PipelineRuleParser(functionRegistry, new CodeGenerator(JavaCompiler::new));
+        final PipelineRuleParser parser = new PipelineRuleParser(functionRegistry, new CodeGenerator());
 
         final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
                 pipelineService,
@@ -122,6 +121,7 @@ public class PipelineInterpreterTest {
         final PipelineInterpreter interpreter = new PipelineInterpreter(
                 mock(Journal.class),
                 new MetricRegistry(),
+                mock(EventBus.class),
                 stateUpdater
         );
 
@@ -166,7 +166,7 @@ public class PipelineInterpreterTest {
         final Map<String, Function<?>> functions = Maps.newHashMap();
 
         final FunctionRegistry functionRegistry = new FunctionRegistry(functions);
-        final PipelineRuleParser parser = new PipelineRuleParser(functionRegistry, new CodeGenerator(JavaCompiler::new));
+        final PipelineRuleParser parser = new PipelineRuleParser(functionRegistry, new CodeGenerator());
 
         final MetricRegistry metricRegistry = new MetricRegistry();
         final ConfigurationStateUpdater stateUpdater = new ConfigurationStateUpdater(ruleService,
@@ -181,6 +181,7 @@ public class PipelineInterpreterTest {
         final PipelineInterpreter interpreter = new PipelineInterpreter(
                 mock(Journal.class),
                 metricRegistry,
+                mock(EventBus.class),
                 stateUpdater
         );
 

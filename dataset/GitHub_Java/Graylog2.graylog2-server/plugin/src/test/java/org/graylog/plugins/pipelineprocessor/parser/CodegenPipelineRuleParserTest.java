@@ -16,14 +16,10 @@
  */
 package org.graylog.plugins.pipelineprocessor.parser;
 
-import org.graylog.plugins.pipelineprocessor.codegen.PipelineClassloader;
-import org.junit.Ignore;
-
-@Ignore("code generation disabled")
 public class CodegenPipelineRuleParserTest extends PipelineRuleParserTest {
 
     // runs the same tests as in PipelineRuleParserTest but with dynamic code generation turned on.
     public CodegenPipelineRuleParserTest() {
-        classLoader = new PipelineClassloader();
+        classLoader = new ClassLoader(){};
     }
 }
