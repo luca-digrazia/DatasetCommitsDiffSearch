@@ -352,7 +352,7 @@ public class JavaHeaderCompileActionBuilder {
       mandatoryInputs.addTransitive(classpath);
 
       commandLine.addExecPaths("--classpath", classpath);
-      commandLine.add("--reduce_classpath_mode", "NONE");
+      commandLine.add("--noreduce_classpath");
 
       ruleContext.registerAction(
           new SpawnAction(
