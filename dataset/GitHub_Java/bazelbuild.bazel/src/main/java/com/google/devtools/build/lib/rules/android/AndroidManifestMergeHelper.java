@@ -14,22 +14,19 @@
 package com.google.devtools.build.lib.rules.android;
 
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import java.util.Collection;
 
 public final class AndroidManifestMergeHelper {
 
   private AndroidManifestMergeHelper() {}
 
-  public static void createMergeManifestAction(
-      RuleContext ruleContext,
-      Artifact merger,
-      Iterable<Artifact> mergees,
-      Collection<String> excludePermissions,
-      Artifact mergedManifest) {
+  public static void createMergeManifestAction(RuleContext ruleContext,
+      Artifact merger, Iterable<Artifact> mergees,
+      Collection<String> excludePermissions, Artifact mergedManifest) {
     CustomCommandLine.Builder commandLine = CustomCommandLine.builder();
     commandLine.addPrefixedExecPath("--merger=", merger);
     for (Artifact mergee : mergees) {
@@ -50,7 +47,8 @@ public final class AndroidManifestMergeHelper {
             .setExecutable(ruleContext.getPrerequisite("$android_manifest_merge_tool", Mode.HOST))
             .setProgressMessage("Merging Android Manifests")
             .setMnemonic("AndroidManifestMerger")
-            .addCommandLine(commandLine.build())
+            .setCommandLine(commandLine.build())
             .build(ruleContext));
   }
 }
+
