@@ -21,6 +21,7 @@ package org.graylog2.rest.resources.streams;
 
 import com.beust.jcommander.internal.Lists;
 import com.codahale.metrics.annotation.Timed;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.google.common.collect.Maps;
 import org.bson.types.ObjectId;
 import org.graylog2.database.NotFoundException;
@@ -52,7 +53,7 @@ public class StreamResource extends RestResource {
     @Timed
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
-    public Response create(String body) {
+    public Response create(String body, @QueryParam("pretty") boolean prettyPrint) {
         CreateRequest cr;
         try {
             cr = objectMapper.readValue(body, CreateRequest.class);
@@ -79,13 +80,13 @@ public class StreamResource extends RestResource {
         Map<String, Object> result = Maps.newHashMap();
         result.put("stream_id", id.toStringMongod());
 
-        return Response.status(Response.Status.CREATED).entity(json(result)).build();
+        return Response.status(Response.Status.CREATED).entity(json(result, prettyPrint)).build();
     }
     
     @GET
     @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String get() {
+    public String get(@QueryParam("pretty") boolean prettyPrint) {
         List<Map<String, Object>> streams = Lists.newArrayList();
         for (Stream stream : StreamImpl.loadAllEnabled(core)) {
         	streams.add(((StreamImpl) stream).asMap());
@@ -95,12 +96,21 @@ public class StreamResource extends RestResource {
         result.put("total", streams.size());
         result.put("streams", streams);
 
-        return json(result);
+        try {
+            if (prettyPrint) {
+                return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(result);
+            } else {
+                return objectMapper.writeValueAsString(result);
+            }
+        } catch (JsonProcessingException e) {
+            LOG.error("Error while generating JSON", e);
+            throw new WebApplicationException(e, Response.Status.INTERNAL_SERVER_ERROR);
+        }
     }
     
     @GET @Path("/{streamId}") @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String get(@PathParam("streamId") String streamId) {
+    public String get(@PathParam("streamId") String streamId, @QueryParam("pretty") boolean prettyPrint) {
         if (streamId == null || streamId.isEmpty()) {
         	LOG.error("Missing streamId. Returning HTTP 400.");
         	throw new WebApplicationException(400);
@@ -113,7 +123,7 @@ public class StreamResource extends RestResource {
         	throw new WebApplicationException(404);
         }
 
-        return json(stream.asMap());
+        return json(stream.asMap(), prettyPrint);
     }
 
     @DELETE @Path("/{streamId}") @Timed

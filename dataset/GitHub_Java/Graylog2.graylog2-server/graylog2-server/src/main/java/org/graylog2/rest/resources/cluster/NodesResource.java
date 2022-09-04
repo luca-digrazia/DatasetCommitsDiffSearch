@@ -58,7 +58,7 @@ public class NodesResource extends RestResource {
             throw new WebApplicationException(404);
         }
 
-        return json(nodeSummary(node));
+        return json(nodeSummary(node), prettyPrint);
     }
 
     @GET
@@ -75,14 +75,13 @@ public class NodesResource extends RestResource {
         result.put("total", nodes.size());
         result.put("nodes", nodes);
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
     private Map<String, Object> nodeSummary(Node node) {
         Map<String, Object> m  = Maps.newHashMap();
 
         m.put("node_id", node.getNodeId());
-        m.put("is_master", node.isMaster());
         m.put("hostname", Tools.getLocalCanonicalHostname());
         m.put("transport_address", node.getTransportAddress());
         m.put("last_seen", Tools.getISO8601String(node.getLastSeen()));

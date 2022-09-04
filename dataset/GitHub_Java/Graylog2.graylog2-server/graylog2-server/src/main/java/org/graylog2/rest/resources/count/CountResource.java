@@ -45,12 +45,12 @@ public class CountResource extends RestResource {
         Map<String, Long> result = Maps.newHashMap();
         result.put("events", core.getIndexer().counts().total());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
     @GET @Path("/histogram") @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String histogram(@QueryParam("interval") String interval, @QueryParam("timerange") int timerange) {
+    public String histogram(@QueryParam("interval") String interval, @QueryParam("timerange") int timerange, @QueryParam("pretty") boolean prettyPrint) {
         if (interval == null || interval.isEmpty()) {
             LOG.error("Missing parameters. Returning HTTP 400.");
             throw new WebApplicationException(400);
@@ -78,6 +78,6 @@ public class CountResource extends RestResource {
         result.put("results", dhr.getResults());
         result.put("time", dhr.took().millis());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 }

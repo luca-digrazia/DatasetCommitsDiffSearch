@@ -55,12 +55,12 @@ public class MessageResource extends RestResource {
 		} catch (IndexMissingException e) {
         	LOG.error("Index does not exist. Returning HTTP 404.");
         	throw new WebApplicationException(404);
-		} catch (DocumentNotFoundException e1) {
+		} catch (DocumentNotFoundException e) {
         	LOG.error("Message does not exist. Returning HTTP 404.");
         	throw new WebApplicationException(404);
 		}
 
-        return json(m);
+        return json(m, prettyPrint);
     }
     
     @GET @Path("/analyze") @Timed
@@ -82,7 +82,7 @@ public class MessageResource extends RestResource {
         Map<String, Object> result = Maps.newHashMap();
         result.put("tokens", tokens);
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
 }

@@ -21,8 +21,6 @@ package org.graylog2.rest.resources.system.indexer;
 
 import com.codahale.metrics.annotation.Timed;
 import com.google.common.collect.Maps;
-import org.graylog2.rest.documentation.annotations.Api;
-import org.graylog2.rest.documentation.annotations.ApiOperation;
 import org.graylog2.rest.resources.RestResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,13 +28,13 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-@Api(value = "Indexer/Cluster", description = "Indexer cluster information")
 @Path("/system/indexer/cluster")
 public class ClusterResource extends RestResource {
 
@@ -44,20 +42,18 @@ public class ClusterResource extends RestResource {
 
     @GET @Timed
     @Path("/name")
-    @ApiOperation(value = "Get the cluster name")
     @Produces(MediaType.APPLICATION_JSON)
-    public String name() {
+    public String name(@QueryParam("pretty") boolean prettyPrint) {
         Map<String, Object> result = Maps.newHashMap();
         result.put("name", core.getIndexer().cluster().getName());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
     @GET @Timed
     @Path("/health")
-    @ApiOperation(value = "Get cluster and shard health overview")
     @Produces(MediaType.APPLICATION_JSON)
-    public String health() {
+    public String health(@QueryParam("pretty") boolean prettyPrint) {
         Map<String, Integer> shards = Maps.newHashMap();
         shards.put("active", core.getIndexer().cluster().getActiveShards());
         shards.put("initializing", core.getIndexer().cluster().getInitializingShards());
@@ -68,7 +64,7 @@ public class ClusterResource extends RestResource {
         health.put("status", core.getIndexer().cluster().getHealth().toString().toLowerCase());
         health.put("shards", shards);
 
-        return json(health);
+        return json(health, prettyPrint);
     }
 
 }

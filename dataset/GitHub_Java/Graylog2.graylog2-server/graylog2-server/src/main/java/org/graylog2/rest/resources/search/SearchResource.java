@@ -42,13 +42,13 @@ public class SearchResource extends RestResource {
 
     @GET @Path("/universal") @Timed
     @Produces(MediaType.APPLICATION_JSON)
-    public String search(@QueryParam("query") String query, @QueryParam("timerange") int timerange, @QueryParam("limit") int limit, @QueryParam("pretty") boolean prettyPrint) {
+    public String search(@QueryParam("query") String query, @QueryParam("timerange") int timerange, @QueryParam("pretty") boolean prettyPrint) {
         if (query == null || query.isEmpty()) {
         	LOG.error("Missing parameters. Returning HTTP 400.");
         	throw new WebApplicationException(400);
         }
         
-        SearchResult sr = core.getIndexer().searches().universalSearch(query, timerange, limit);
+        SearchResult sr = core.getIndexer().searches().universalSearch(query, timerange);
         
         Map<String, Object> result = Maps.newHashMap();
         result.put("query", sr.getOriginalQuery());
@@ -57,7 +57,7 @@ public class SearchResource extends RestResource {
         result.put("time", sr.took().millis());
         result.put("total_results", sr.getTotalResults());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
     
     @GET @Path("/universal/histogram") @Timed
@@ -85,7 +85,7 @@ public class SearchResource extends RestResource {
         result.put("results", dhr.getResults());
         result.put("time", dhr.took().millis());
 
-        return json(result);
+        return json(result, prettyPrint);
     }
 
 }
