@@ -885,11 +885,13 @@ public final class RuleContext extends TargetContext
   public <C extends Info>
       ImmutableListMultimap<BuildConfiguration, C> getPrerequisitesByConfiguration(
           String attributeName, Mode mode, final NativeProvider<C> provider) {
+    List<? extends TransitiveInfoCollection> transitiveInfoCollections =
+        getPrerequisites(attributeName, mode);
+
     ImmutableListMultimap.Builder<BuildConfiguration, C> result =
         ImmutableListMultimap.builder();
-    for (ConfiguredTargetAndData prerequisite :
-        getPrerequisiteConfiguredTargetAndTargets(attributeName, mode)) {
-      C prerequisiteProvider = prerequisite.getConfiguredTarget().get(provider);
+    for (TransitiveInfoCollection prerequisite : transitiveInfoCollections) {
+      C prerequisiteProvider = prerequisite.get(provider);
       if (prerequisiteProvider != null) {
         result.put(prerequisite.getConfiguration(), prerequisiteProvider);
       }
@@ -904,11 +906,13 @@ public final class RuleContext extends TargetContext
    */
   public ImmutableListMultimap<BuildConfiguration, TransitiveInfoCollection>
       getPrerequisitesByConfiguration(String attributeName, Mode mode) {
+    List<? extends TransitiveInfoCollection> transitiveInfoCollections =
+        getPrerequisites(attributeName, mode);
+
     ImmutableListMultimap.Builder<BuildConfiguration, TransitiveInfoCollection> result =
         ImmutableListMultimap.builder();
-    for (ConfiguredTargetAndData prerequisite :
-        getPrerequisiteConfiguredTargetAndTargets(attributeName, mode)) {
-      result.put(prerequisite.getConfiguration(), prerequisite.getConfiguredTarget());
+    for (TransitiveInfoCollection prerequisite : transitiveInfoCollections) {
+      result.put(prerequisite.getConfiguration(), prerequisite);
     }
     return result.build();
   }

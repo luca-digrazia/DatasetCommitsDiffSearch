@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
@@ -91,12 +90,9 @@ public final class ConfiguredTargetFactory {
   // in order to be accessible from the .view.skyframe package.
 
   private final ConfiguredRuleClassProvider ruleClassProvider;
-  private final BuildOptions defaultBuildOptions;
 
-  public ConfiguredTargetFactory(
-      ConfiguredRuleClassProvider ruleClassProvider, BuildOptions defaultBuildOptions) {
+  public ConfiguredTargetFactory(ConfiguredRuleClassProvider ruleClassProvider) {
     this.ruleClassProvider = ruleClassProvider;
-    this.defaultBuildOptions = defaultBuildOptions;
   }
 
   /**
@@ -178,8 +174,7 @@ public final class ConfiguredTargetFactory {
     ArtifactOwner owner =
         ConfiguredTargetKey.of(
             rule.getLabel(),
-            getArtifactOwnerConfiguration(
-                analysisEnvironment.getSkyframeEnv(), configuration, defaultBuildOptions));
+            getArtifactOwnerConfiguration(analysisEnvironment.getSkyframeEnv(), configuration));
     if (analysisEnvironment.getSkyframeEnv().valuesMissing()) {
       return null;
     }
@@ -195,12 +190,11 @@ public final class ConfiguredTargetFactory {
   }
 
   /**
-   * Returns the configuration's artifact owner (which may be null). Also returns null if the owning
-   * configuration isn't yet available from Skyframe.
+   * Returns the configuration's artifact owner (which may be null). Also returns null if the
+   * owning configuration isn't yet available from Skyframe.
    */
-  public static BuildConfiguration getArtifactOwnerConfiguration(
-      SkyFunction.Environment env, BuildConfiguration fromConfig, BuildOptions defaultBuildOptions)
-      throws InterruptedException {
+  public static BuildConfiguration getArtifactOwnerConfiguration(SkyFunction.Environment env,
+      BuildConfiguration fromConfig) throws InterruptedException {
     if (fromConfig == null) {
       return null;
     }
@@ -209,14 +203,10 @@ public final class ConfiguredTargetFactory {
       return fromConfig;
     }
     try {
-      BuildConfigurationValue ownerConfig =
-          (BuildConfigurationValue)
-              env.getValueOrThrow(
-                  BuildConfigurationValue.key(
-                      fromConfig.fragmentClasses(),
-                      BuildOptions.diffForReconstruction(
-                          defaultBuildOptions, ownerTransition.apply(fromConfig.getOptions()))),
-                  InvalidConfigurationException.class);
+      BuildConfigurationValue ownerConfig = (BuildConfigurationValue) env.getValueOrThrow(
+          BuildConfigurationValue.key(
+              fromConfig.fragmentClasses(), ownerTransition.apply(fromConfig.getOptions())),
+          InvalidConfigurationException.class);
       return ownerConfig == null ? null : ownerConfig.getConfiguration();
     } catch (InvalidConfigurationException e) {
       // We don't expect to have to handle an invalid configuration because in practice the owning
@@ -339,7 +329,7 @@ public final class ConfiguredTargetFactory {
             .setVisibility(convertVisibility(prerequisiteMap, env.getEventHandler(), rule, null))
             .setPrerequisites(prerequisiteMap)
             .setConfigConditions(configConditions)
-            .setUniversalFragments(ruleClassProvider.getUniversalFragments())
+            .setUniversalFragment(ruleClassProvider.getUniversalFragment())
             .setToolchainContext(toolchainContext)
             .build();
     if (ruleContext.hasErrors()) {
@@ -461,7 +451,7 @@ public final class ConfiguredTargetFactory {
             .setPrerequisites(prerequisiteMap)
             .setAspectAttributes(aspectAttributes)
             .setConfigConditions(configConditions)
-            .setUniversalFragments(ruleClassProvider.getUniversalFragments())
+            .setUniversalFragment(ruleClassProvider.getUniversalFragment())
             .setToolchainContext(toolchainContext)
             .build();
     if (ruleContext.hasErrors()) {
