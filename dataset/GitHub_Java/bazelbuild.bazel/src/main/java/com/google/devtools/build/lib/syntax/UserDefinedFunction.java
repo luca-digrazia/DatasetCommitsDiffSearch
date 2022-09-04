@@ -36,7 +36,8 @@ public class UserDefinedFunction extends BaseFunction {
       Location loc,
       FunctionSignature.WithValues<Object, SkylarkType> signature,
       ImmutableList<Statement> statements,
-      Environment.Frame definitionGlobals) {
+      Environment.Frame definitionGlobals)
+      throws EvalException {
     super(name, signature, loc);
     this.statements = statements;
     this.definitionGlobals = definitionGlobals;
