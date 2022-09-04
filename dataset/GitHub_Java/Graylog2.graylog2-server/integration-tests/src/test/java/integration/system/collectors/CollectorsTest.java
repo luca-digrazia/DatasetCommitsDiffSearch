@@ -20,7 +20,6 @@ import integration.BaseRestTest;
 import integration.RequiresAuthentication;
 import integration.RequiresVersion;
 import org.joda.time.DateTime;
-import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.List;
@@ -67,8 +66,8 @@ public class CollectorsTest extends BaseRestTest {
                     .assertThat().body("collectors", notNullValue());
     }
 
-    @Ignore("TODO: reenable after #1273 has been fixed.")
-    @Test
+    // TODO: reenable after #1273 has been fixed.
+    //@Test
     @RequiresAuthentication
     public void testGetCollector() throws Exception {
         given().when()
