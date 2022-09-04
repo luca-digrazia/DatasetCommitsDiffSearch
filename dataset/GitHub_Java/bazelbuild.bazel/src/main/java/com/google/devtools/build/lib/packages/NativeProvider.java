@@ -89,14 +89,13 @@ public abstract class NativeProvider<V extends Info> extends Provider {
      * providers, such as the {@code native} object, and the struct fields of {@code ctx} like
      * {@code ctx.attr}.
      * */
-    public SkylarkInfo create(
-        Map<String, Object> values, String errorMessageFormatForUnknownField) {
+    public Info create(Map<String, Object> values, String errorMessageFormatForUnknownField) {
       return SkylarkInfo.createSchemalessWithCustomMessage(
           this, values, errorMessageFormatForUnknownField);
     }
 
     /** Creates an empty struct with the given location. */
-    public SkylarkInfo createEmpty(Location loc) {
+    public Info createEmpty(Location loc) {
       return SkylarkInfo.createSchemaless(this, ImmutableMap.of(), loc);
     }
   }
