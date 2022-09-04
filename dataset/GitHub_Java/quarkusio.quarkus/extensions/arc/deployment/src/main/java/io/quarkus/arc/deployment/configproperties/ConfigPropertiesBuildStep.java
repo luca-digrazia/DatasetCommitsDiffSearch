@@ -1,65 +1,121 @@
 package io.quarkus.arc.deployment.configproperties;
 
-import static io.quarkus.runtime.util.StringUtil.camelHumpsIterator;
-import static io.quarkus.runtime.util.StringUtil.join;
-import static io.quarkus.runtime.util.StringUtil.lowerCase;
-import static io.quarkus.runtime.util.StringUtil.withoutSuffix;
+import static io.quarkus.arc.deployment.configproperties.InterfaceConfigPropertiesUtil.addProducerMethodForInterfaceConfigProperties;
+import static io.quarkus.arc.deployment.configproperties.InterfaceConfigPropertiesUtil.generateImplementationForInterfaceConfigProperties;
 
 import java.lang.reflect.Modifier;
-import java.util.Collection;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import javax.inject.Singleton;
 
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 
 import io.quarkus.arc.config.ConfigProperties;
+import io.quarkus.arc.deployment.ArcConfig;
 import io.quarkus.arc.deployment.ConfigPropertyBuildItem;
 import io.quarkus.arc.deployment.GeneratedBeanBuildItem;
+import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
+import io.quarkus.arc.deployment.configproperties.InterfaceConfigPropertiesUtil.GeneratedClass;
+import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
+import io.quarkus.deployment.builditem.nativeimage.ReflectiveMethodBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
 
 public class ConfigPropertiesBuildStep {
 
     @BuildStep
+    void produceConfigPropertiesMetadata(CombinedIndexBuildItem combinedIndex, ArcConfig arcConfig,
+            BuildProducer<ConfigPropertiesMetadataBuildItem> configPropertiesMetadataProducer) {
+
+        IndexView index = combinedIndex.getIndex();
+
+        Map<DotName, ConfigProperties.NamingStrategy> namingStrategies = new HashMap<>();
+        Map<DotName, Boolean> failOnMismatchingMembers = new HashMap<>();
+
+        // handle @ConfigProperties
+        for (AnnotationInstance instance : index.getAnnotations(DotNames.CONFIG_PROPERTIES)) {
+            ClassInfo classInfo = instance.target().asClass();
+
+            ConfigProperties.NamingStrategy namingStrategy = getNamingStrategy(arcConfig, instance.value("namingStrategy"));
+            namingStrategies.put(classInfo.name(), namingStrategy);
+
+            boolean failOnMismatchingMember = isFailOnMissingMember(instance);
+            failOnMismatchingMembers.put(classInfo.name(), failOnMismatchingMember);
+
+            configPropertiesMetadataProducer
+                    .produce(new ConfigPropertiesMetadataBuildItem(classInfo, getPrefix(instance), namingStrategy,
+                            failOnMismatchingMember, false));
+        }
+
+        // handle @ConfigPrefix
+        for (AnnotationInstance instance : index.getAnnotations(DotNames.CONFIG_PREFIX)) {
+            ClassInfo classInfo;
+            if (instance.target().kind() == AnnotationTarget.Kind.FIELD) {
+                classInfo = index.getClassByName(instance.target().asField().type().name());
+            } else if (instance.target().kind() == AnnotationTarget.Kind.METHOD_PARAMETER) {
+                short position = instance.target().asMethodParameter().position();
+                classInfo = index
+                        .getClassByName(instance.target().asMethodParameter().method().parameters().get(position).name());
+            } else {
+                break;
+            }
+
+            // if the class was annotated with @ConfigProperties, use the strategy that was defined there, otherwise fallback to the default
+            ConfigProperties.NamingStrategy namingStrategy = namingStrategies.getOrDefault(classInfo.name(),
+                    arcConfig.configPropertiesDefaultNamingStrategy);
+
+            configPropertiesMetadataProducer
+                    .produce(new ConfigPropertiesMetadataBuildItem(classInfo, instance.value().asString(),
+                            namingStrategy, failOnMismatchingMembers.getOrDefault(classInfo.name(),
+                                    ConfigProperties.DEFAULT_FAIL_ON_MISMATCHING_MEMBER),
+                            true));
+        }
+    }
+
+    private boolean isFailOnMissingMember(AnnotationInstance instance) {
+        AnnotationValue failOnMissingMemberValue = instance.value("failOnMismatchingMember");
+        return failOnMissingMemberValue != null ? failOnMissingMemberValue.asBoolean()
+                : ConfigProperties.DEFAULT_FAIL_ON_MISMATCHING_MEMBER;
+    }
+
+    private ConfigProperties.NamingStrategy getNamingStrategy(ArcConfig arcConfig, AnnotationValue namingStrategyValue) {
+        return namingStrategyValue == null ? arcConfig.configPropertiesDefaultNamingStrategy
+                : ConfigProperties.NamingStrategy.valueOf(namingStrategyValue.asEnum());
+    }
+
+    private String getPrefix(AnnotationInstance annotationInstance) {
+        AnnotationValue value = annotationInstance.value("prefix");
+        return value == null ? null : value.asString();
+    }
+
+    @BuildStep
     void setup(CombinedIndexBuildItem combinedIndex,
-            ApplicationIndexBuildItem applicationIndex,
+            List<ConfigPropertiesMetadataBuildItem> configPropertiesMetadataList,
             BuildProducer<GeneratedClassBuildItem> generatedClasses,
             BuildProducer<GeneratedBeanBuildItem> generatedBeans,
             BuildProducer<RunTimeConfigurationDefaultBuildItem> defaultConfigValues,
-            BuildProducer<ConfigPropertyBuildItem> configProperties,
-            DeploymentClassLoaderBuildItem deploymentClassLoader) {
-        IndexView index = combinedIndex.getIndex();
-        Collection<AnnotationInstance> instances = index.getAnnotations(DotNames.CONFIG_PROPERTIES);
-        if (instances.isEmpty()) {
+            BuildProducer<ReflectiveMethodBuildItem> reflectiveMethods,
+            BuildProducer<ConfigPropertyBuildItem> configProperties) {
+        if (configPropertiesMetadataList.isEmpty()) {
             return;
         }
 
-        ClassOutput beansClassOutput = new ClassOutput() {
-            @Override
-            public void write(String name, byte[] data) {
-                generatedBeans.produce(new GeneratedBeanBuildItem(name, data));
-            }
-        };
-
-        ClassOutput nonBeansClassOutput = new ClassOutput() {
-            @Override
-            public void write(String name, byte[] data) {
-                generatedClasses.produce(new GeneratedClassBuildItem(true, name, data));
-            }
-        };
+        ClassOutput beansClassOutput = new GeneratedBeanGizmoAdaptor(generatedBeans);
+        ClassOutput nonBeansClassOutput = new GeneratedClassGizmoAdaptor(generatedClasses, true);
 
         /*
          * We generate CDI producer bean containing one method for each of the @ConfigProperties
@@ -71,11 +127,10 @@ public class ConfigPropertiesBuildStep {
                 .build();
         producerClassCreator.addAnnotation(Singleton.class);
 
-        Set<DotName> configClassesThatNeedValidation = new HashSet<>(instances.size());
-        for (AnnotationInstance configPropertiesInstance : instances) {
-            ClassInfo classInfo = configPropertiesInstance.target().asClass();
+        Set<DotName> configClassesThatNeedValidation = new HashSet<>(configPropertiesMetadataList.size());
+        for (ConfigPropertiesMetadataBuildItem configPropertiesMetadata : configPropertiesMetadataList) {
+            ClassInfo classInfo = configPropertiesMetadata.getClassInfo();
 
-            String prefixStr = determinePrefix(configPropertiesInstance);
             if (Modifier.isInterface(classInfo.flags())) {
                 /*
                  * In this case we need to generate an implementation of the interface that for each interface method
@@ -83,20 +138,27 @@ public class ConfigPropertiesBuildStep {
                  * The generated producer bean simply needs to return an instance of the generated class
                  */
 
-                String generatedClassName = InterfaceConfigPropertiesUtil.generateImplementationForInterfaceConfigProperties(
-                        classInfo, nonBeansClassOutput, index, prefixStr,
-                        defaultConfigValues, configProperties);
-                InterfaceConfigPropertiesUtil.addProducerMethodForInterfaceConfigProperties(producerClassCreator,
-                        classInfo.name(), generatedClassName);
-
+                Map<DotName, GeneratedClass> interfaceToGeneratedClass = new HashMap<>();
+                generateImplementationForInterfaceConfigProperties(
+                        classInfo, nonBeansClassOutput, combinedIndex.getIndex(), configPropertiesMetadata.getPrefix(),
+                        configPropertiesMetadata.getNamingStrategy(), defaultConfigValues, configProperties,
+                        interfaceToGeneratedClass);
+                for (Map.Entry<DotName, GeneratedClass> entry : interfaceToGeneratedClass.entrySet()) {
+                    addProducerMethodForInterfaceConfigProperties(entry.getKey(),
+                            configPropertiesMetadata.getPrefix(), configPropertiesMetadata.isNeedsQualifier(),
+                            producerClassCreator,
+                            entry.getValue());
+                }
             } else {
                 /*
                  * In this case the producer method contains all the logic to instantiate the config class
                  * and call setters for value obtained from MP Config
                  */
                 boolean needsValidation = ClassConfigPropertiesUtil.addProducerMethodForClassConfigProperties(
-                        deploymentClassLoader.getClassLoader(), classInfo, producerClassCreator, prefixStr,
-                        applicationIndex.getIndex(), configProperties);
+                        Thread.currentThread().getContextClassLoader(), classInfo, producerClassCreator,
+                        configPropertiesMetadata.getPrefix(), configPropertiesMetadata.getNamingStrategy(),
+                        configPropertiesMetadata.isFailOnMismatchingMember(), configPropertiesMetadata.isNeedsQualifier(),
+                        combinedIndex.getIndex(), reflectiveMethods, configProperties);
                 if (needsValidation) {
                     configClassesThatNeedValidation.add(classInfo.name());
                 }
@@ -110,35 +172,4 @@ public class ConfigPropertiesBuildStep {
                     configClassesThatNeedValidation);
         }
     }
-
-    /**
-     * Use the annotation value
-     */
-    private String determinePrefix(AnnotationInstance configPropertiesInstance) {
-        String fromAnnotation = getPrefixFromAnnotation(configPropertiesInstance);
-        if (fromAnnotation != null) {
-            return fromAnnotation;
-        }
-        return getPrefixFromClassName(configPropertiesInstance.target().asClass().name());
-    }
-
-    private String getPrefixFromAnnotation(AnnotationInstance configPropertiesInstance) {
-        AnnotationValue annotationValue = configPropertiesInstance.value("prefix");
-        if (annotationValue == null) {
-            return null;
-        }
-        String value = annotationValue.asString();
-        if (ConfigProperties.UNSET_PREFIX.equals(value) || value.isEmpty()) {
-            return null;
-        }
-        return value;
-    }
-
-    private String getPrefixFromClassName(DotName className) {
-        String simpleName = className.isInner() ? className.local() : className.withoutPackagePrefix();
-        return join("-",
-                withoutSuffix(lowerCase(camelHumpsIterator(simpleName)), "config", "configuration",
-                        "properties", "props"));
-    }
-
 }
