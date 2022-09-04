@@ -25,10 +25,9 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.bazel.rules.java.BazelJavaRuleClasses.JavaRule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
+import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSourceInfoProvider;
 import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
@@ -116,8 +115,8 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
         .add(
             attr("exports", LABEL_LIST)
                 .allowedRuleClasses(BazelJavaRuleClasses.ALLOWED_RULES_IN_DEPS)
-                .allowedFileTypes(/*May not have files in exports!*/ )
-                .mandatoryProvidersList(BazelJavaRuleClasses.MANDATORY_JAVA_PROVIDER_ONLY))
+                .allowedFileTypes(/*May not have files in exports!*/ ))
+
         /* <!-- #BLAZE_RULE(java_library).ATTRIBUTE(neverlink) -->
         Whether this library should only be used for compilation and not at runtime.
         Useful if the library will be provided by the runtime environment during execution. Examples
@@ -153,7 +152,7 @@ public final class BazelJavaLibraryRule implements RuleDefinition {
                 .allowedRuleClasses("java_plugin")
                 .allowedFileTypes())
         .advertiseProvider(JavaSourceInfoProvider.class)
-        .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
+        .advertiseProvider(JavaCompilationArgsProvider.class)
         .build();
   }
 
