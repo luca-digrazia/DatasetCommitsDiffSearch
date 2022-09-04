@@ -1,84 +1,76 @@
 /**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.results;
 
-import org.elasticsearch.common.unit.TimeValue;
-import org.elasticsearch.search.facet.statistical.StatisticalFacet;
+import com.google.auto.value.AutoValue;
 
-/**
- * @author Lennart Koopmann <lennart@torch.sh>
- */
-public class FieldStatsResult extends IndexQueryResult {
+import javax.annotation.Nullable;
+import java.util.Collections;
+import java.util.List;
 
-    private final long count;
-    private final double sum;
-    private final double sumOfSquares;
-    private final double mean;
-    private final double min;
-    private final double max;
-    private final double variance;
-    private final double stdDeviation;
+@AutoValue
+public abstract class FieldStatsResult {
+    public abstract long count();
 
-    public FieldStatsResult(StatisticalFacet f, String originalQuery, TimeValue took) {
-        super(originalQuery, took);
+    public abstract double sum();
 
-        this.count = f.getCount();
-        this.sum = f.getTotal();
-        this.sumOfSquares = f.getSumOfSquares();
-        this.mean = f.getMean();
-        this.min = f.getMin();
-        this.max = f.getMax();
-        this.variance = f.getVariance();
-        this.stdDeviation = f.getStdDeviation();
+    public abstract double sumOfSquares();
+
+    public abstract double mean();
+
+    public abstract double min();
+
+    public abstract double max();
+
+    public abstract double variance();
+
+    public abstract double stdDeviation();
+
+    public abstract long cardinality();
+
+    public abstract List<ResultMessage> searchHits();
+
+    @Nullable
+    public abstract String originalQuery();
+
+    @Nullable
+    public abstract String builtQuery();
+
+    public abstract long tookMs();
+
+    public static FieldStatsResult create(long count,
+                                          double sum,
+                                          double sumOfSquares,
+                                          double mean,
+                                          double min,
+                                          double max,
+                                          double variance,
+                                          double stdDeviation,
+                                          long cardinality,
+                                          List<ResultMessage> hits,
+                                          String originalQuery,
+                                          String builtQuery,
+                                          long tookMs) {
+        return new AutoValue_FieldStatsResult(count, sum, sumOfSquares, mean, min, max, variance, stdDeviation, cardinality,
+                hits, originalQuery, builtQuery, tookMs);
     }
 
-    public long getCount() {
-        return count;
+    public static FieldStatsResult empty(String query, String builtQuery) {
+        return create(Long.MIN_VALUE, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN, Double.NaN,
+                Long.MIN_VALUE, Collections.emptyList(), query, builtQuery, 0);
     }
-
-    public double getSum() {
-        return sum;
-    }
-
-    public double getSumOfSquares() {
-        return sumOfSquares;
-    }
-
-    public double getMean() {
-        return mean;
-    }
-
-    public double getMin() {
-        return min;
-    }
-
-    public double getMax() {
-        return max;
-    }
-
-    public double getVariance() {
-        return variance;
-    }
-
-    public double getStdDeviation() {
-        return stdDeviation;
-    }
-
 }

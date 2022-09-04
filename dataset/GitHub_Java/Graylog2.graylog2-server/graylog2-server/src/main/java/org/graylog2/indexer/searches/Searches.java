@@ -104,10 +104,6 @@ public class Searches {
     }
 
     public ScrollResult scroll(String query, TimeRange range, int limit, int offset, List<String> fields, String filter) {
-        return scroll(query, range, limit, offset, fields, filter, -1);
-    }
-
-    public ScrollResult scroll(String query, TimeRange range, int limit, int offset, List<String> fields, String filter, int batchSize) {
         final Set<String> affectedIndices = determineAffectedIndices(range, filter);
         final Set<String> indexWildcards = indexSetRegistry.getForIndices(affectedIndices).stream()
                 .map(IndexSet::getIndexWildcard)
@@ -115,19 +111,7 @@ public class Searches {
 
         final Sorting sorting = new Sorting("_doc", Sorting.Direction.ASC);
 
-        ScrollCommand.Builder scrollCommandBuilder = ScrollCommand.builder()
-                .query(query)
-                .range(range)
-                .limit(limit)
-                .offset(offset)
-                .fields(fields)
-                .filter(filter)
-                .sorting(sorting)
-                .indices(indexWildcards);
-
-        scrollCommandBuilder = batchSize != -1 ? scrollCommandBuilder.batchSize(batchSize) : scrollCommandBuilder;
-
-        final ScrollResult result = searchesAdapter.scroll(scrollCommandBuilder.build());
+        final ScrollResult result = searchesAdapter.scroll(indexWildcards, sorting, filter, query, range, limit, offset, fields);
 
         recordEsMetrics(result.tookMs(), range);
 
