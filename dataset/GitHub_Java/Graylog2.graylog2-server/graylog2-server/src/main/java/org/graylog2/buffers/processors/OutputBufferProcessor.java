@@ -1,5 +1,5 @@
 /*
- * Copyright 2012-2014 TORCH GmbH
+ * Copyright 2013-2014 TORCH GmbH
  *
  * This file is part of Graylog2.
  *
@@ -12,6 +12,7 @@
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
+ *
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
@@ -30,7 +31,7 @@ import com.google.inject.assistedinject.AssistedInject;
 import com.lmax.disruptor.EventHandler;
 import org.bson.types.ObjectId;
 import org.graylog2.Configuration;
-import org.graylog2.buffers.OutputBufferWatermark;
+import org.graylog2.Core;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.outputs.OutputRouter;
 import org.graylog2.outputs.OutputStreamConfigurationImpl;
@@ -39,7 +40,6 @@ import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.OutputStreamConfiguration;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.stats.ThroughputStats;
 import org.graylog2.streams.StreamImpl;
 import org.slf4j.Logger;
@@ -56,7 +56,8 @@ import static com.codahale.metrics.MetricRegistry.name;
  */
 public class OutputBufferProcessor implements EventHandler<MessageEvent> {
     public interface Factory {
-        public OutputBufferProcessor create(@Assisted("ordinal") final long ordinal,
+        public OutputBufferProcessor create(Core server,
+                                            @Assisted("ordinal") final long ordinal,
                                             @Assisted("numberOfConsumers") final long numberOfCOnsumers);
     }
 
@@ -64,19 +65,18 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
 
     private final ExecutorService executor;
     
-    //private Core server;
+    private Core server;
 
     private final Configuration configuration;
+    private final MetricRegistry metricRegistry;
     private final OutputRegistry outputRegistry;
     private final ThroughputStats throughputStats;
-    private final ServerStatus serverStatus;
 
     private List<Message> buffer = Lists.newArrayList();
 
     private final Meter incomingMessages;
     private final Histogram batchSize;
 
-    private final OutputBufferWatermark outputBufferWatermark;
     private final long ordinal;
     private final long numberOfConsumers;
 
@@ -85,18 +85,18 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
                                  MetricRegistry metricRegistry,
                                  OutputRegistry outputRegistry,
                                  ThroughputStats throughputStats,
-                                 ServerStatus serverStatus,
-                                 OutputBufferWatermark outputBufferWatermark,
+                                 @Assisted Core server,
                                  @Assisted("ordinal") final long ordinal,
                                  @Assisted("numberOfConsumers") final long numberOfConsumers) {
         this.configuration = configuration;
+        this.metricRegistry = metricRegistry;
         this.outputRegistry = outputRegistry;
         this.throughputStats = throughputStats;
-        this.serverStatus = serverStatus;
-        this.outputBufferWatermark = outputBufferWatermark;
+        this.server = server;
         this.ordinal = ordinal;
         this.numberOfConsumers = numberOfConsumers;
-
+        //this.server = server;
+        
         executor = new ThreadPoolExecutor(
             configuration.getOutputBufferProcessorThreadsCorePoolSize(),
             configuration.getOutputBufferProcessorThreadsMaxPoolSize(),
@@ -117,7 +117,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
             return;
         }
 
-        outputBufferWatermark.decrementAndGet();
+        server.outputBufferWatermark().decrementAndGet();
         incomingMessages.mark();
 
         Message msg = event.getMessage();
@@ -145,7 +145,8 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
                             try {
                                 output.write(
                                         OutputRouter.getMessagesForOutput(myBuffer, typeClass),
-                                        buildStreamConfigs(myBuffer, typeClass)
+                                        buildStreamConfigs(myBuffer, typeClass),
+                                        server
                                 );
                             } catch (Exception e) {
                                 LOG.error("Error in output [" + output.getName() +"].", e);
@@ -168,7 +169,7 @@ public class OutputBufferProcessor implements EventHandler<MessageEvent> {
 
             int messagesWritten = buffer.size();
 
-            if (serverStatus.hasCapability(ServerStatus.Capability.STATSMODE)) {
+            if (server.isStatsMode()) {
                 throughputStats.getBenchmarkCounter().add(messagesWritten);
             }
 

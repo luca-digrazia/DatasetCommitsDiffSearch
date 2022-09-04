@@ -28,7 +28,6 @@ import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
 import org.graylog2.shared.filters.FilterRegistry;
 import org.graylog2.shared.periodical.ThroughputCounterManagerThread;
 import org.graylog2.shared.stats.ThroughputStats;
-import org.graylog2.shared.filters.FilterRegistry;
 
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
@@ -42,6 +41,7 @@ public class GenericBindings extends AbstractModule {
         bind(ThroughputStats.class).toInstance(new ThroughputStats());
 
         install(new FactoryModuleBuilder().build(ProcessBuffer.Factory.class));
+        install(new FactoryModuleBuilder().build(ProcessBufferProcessor.Factory.class));
         install(new FactoryModuleBuilder().build(ThroughputCounterManagerThread.Factory.class));
     }
 }

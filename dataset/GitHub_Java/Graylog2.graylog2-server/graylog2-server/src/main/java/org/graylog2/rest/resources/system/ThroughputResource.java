@@ -44,12 +44,8 @@ import java.util.Map;
 @Path("/system/throughput")
 public class ThroughputResource extends RestResource {
 
-    private ThroughputStats throughputStats;
-
     @Inject
-    public ThroughputResource(ThroughputStats throughputStats) {
-        this.throughputStats = throughputStats;
-    }
+    private ThroughputStats throughputStats;
 
     @GET @Timed
     @RequiresPermissions(RestPermissions.THROUGHPUT_READ)
