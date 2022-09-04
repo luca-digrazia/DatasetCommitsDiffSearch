@@ -251,7 +251,7 @@ public abstract class StarlarkSemantics {
           .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
           .incompatibleNoTransitiveLoads(true)
-          .incompatibleObjcFrameworkCleanup(true)
+          .incompatibleObjcFrameworkCleanup(false)
           .incompatibleRemapMainRepo(false)
           .incompatibleRemoveNativeMavenJar(false)
           .incompatibleRestrictNamedParams(false)
