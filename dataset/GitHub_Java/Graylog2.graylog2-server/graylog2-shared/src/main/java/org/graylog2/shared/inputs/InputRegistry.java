@@ -29,28 +29,32 @@ import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Inject;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
-public class InputRegistry {
+public abstract class InputRegistry {
     private static final Logger LOG = LoggerFactory.getLogger(InputRegistry.class);
     protected final Set<IOState<MessageInput>> inputStates = new HashSet<>();
     protected final ExecutorService executor;
-    private final IOState.Factory<MessageInput> inputStateFactory;
+    private IOState.Factory<MessageInput> inputStateFactory;
+    private final MessageInputFactory messageInputFactory;
     private final InputBuffer inputBuffer;
-    private final PersistedInputs persistedInputs;
 
-    @Inject
+    protected abstract void finishedTermination(IOState<MessageInput> state);
+
+    protected abstract List<MessageInput> getAllPersisted();
+
+    public abstract void cleanInput(MessageInput input);
+
     public InputRegistry(IOState.Factory<MessageInput> inputStateFactory,
+                         MessageInputFactory messageInputFactory,
                          InputBuffer inputBuffer,
-                         MetricRegistry metricRegistry,
-                         PersistedInputs persistedInputs) {
+                         MetricRegistry metricRegistry) {
         this.inputStateFactory = inputStateFactory;
+        this.messageInputFactory = messageInputFactory;
         this.inputBuffer = inputBuffer;
-        this.persistedInputs = persistedInputs;
         this.executor = executorService(metricRegistry);
     }
 
@@ -63,6 +67,10 @@ public class InputRegistry {
         return new InstrumentedThreadFactory(
                 new ThreadFactoryBuilder().setNameFormat("inputs-%d").build(),
                 metricRegistry);
+    }
+
+    public MessageInput create(String inputClass, Configuration configuration) throws NoSuchInputTypeException {
+        return messageInputFactory.create(inputClass, configuration);
     }
 
     public IOState<MessageInput> launch(final MessageInput input, String id) {
@@ -181,6 +189,10 @@ public class InputRegistry {
         return false;
     }
 
+    public Map<String, InputDescription> getAvailableInputs() {
+        return messageInputFactory.getAvailableInputs();
+    }
+
     public int runningCount() {
         return getRunningInputs().size();
     }
@@ -194,7 +206,7 @@ public class InputRegistry {
     }
 
     public void launchAllPersisted() {
-        for (MessageInput input : persistedInputs) {
+        for (MessageInput input : getAllPersisted()) {
             input.initialize();
             launchPersisted(input);
         }
@@ -205,7 +217,7 @@ public class InputRegistry {
 
         if (inputState != null) {
             inputState.setState(IOState.Type.TERMINATED);
-            removeFromRunning(inputState);
+            finishedTermination(inputState);
         }
 
         return inputState;
@@ -245,7 +257,7 @@ public class InputRegistry {
     }
 
     public MessageInput getPersisted(String inputId) {
-        for (MessageInput input : persistedInputs) {
+        for (MessageInput input : getAllPersisted()) {
             if (input.getId().equals(inputId))
                 return input;
         }

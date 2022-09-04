@@ -1,6 +1,4 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,37 +14,38 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.bindings.providers;
 
+import com.codahale.metrics.MetricRegistry;
 import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.ServerInputRegistry;
 import org.graylog2.notifications.NotificationService;
+import org.graylog2.plugin.IOState;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.buffers.ProcessBuffer;
+import org.graylog2.plugin.buffers.InputBuffer;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
-import org.graylog2.system.activities.ActivityWriter;
+import org.graylog2.shared.system.activities.ActivityWriter;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 public class ServerInputRegistryProvider implements Provider<InputRegistry> {
     private static ServerInputRegistry serverInputRegistry = null;
 
     @Inject
-    public ServerInputRegistryProvider(MessageInputFactory messageInputFactory,
-                                       ProcessBuffer processBuffer,
+    public ServerInputRegistryProvider(IOState.Factory<MessageInput> inputStateFactory,
+                                       MessageInputFactory messageInputFactory,
+                                       InputBuffer inputBuffer,
                                        ServerStatus serverStatus,
-                                       ActivityWriter activityWriter,
                                        InputService inputService,
-                                       NotificationService notificationService) {
-        if (serverInputRegistry == null)
-            serverInputRegistry = new ServerInputRegistry(messageInputFactory, processBuffer,
-                    serverStatus, activityWriter, inputService, notificationService);
+                                       NotificationService notificationService,
+                                       MetricRegistry metricRegistry) {
+        if (serverInputRegistry == null) {
+            serverInputRegistry = new ServerInputRegistry(inputStateFactory, messageInputFactory, inputBuffer,
+                    serverStatus, inputService, notificationService, metricRegistry);
+        }
     }
 
     @Override

@@ -1,54 +1,68 @@
-/*
- * The MIT License
- * Copyright (c) 2012 TORCH GmbH
+/**
+ * This file is part of Graylog2.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * Graylog2 is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * Graylog2 is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.bootstrap;
 
 import com.codahale.metrics.JmxReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.log4j.InstrumentedAppender;
 import com.github.joschi.jadconfig.JadConfig;
+import com.github.joschi.jadconfig.ParameterException;
+import com.github.joschi.jadconfig.Repository;
+import com.github.joschi.jadconfig.RepositoryException;
+import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.guice.NamedConfigParametersModule;
 import com.github.joschi.jadconfig.jodatime.JodaTimeConverterFactory;
+import com.github.joschi.jadconfig.repositories.EnvironmentRepository;
+import com.github.joschi.jadconfig.repositories.PropertiesRepository;
+import com.github.joschi.jadconfig.repositories.SystemPropertiesRepository;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.AbstractModule;
+import com.google.inject.Binder;
+import com.google.inject.CreationException;
 import com.google.inject.Injector;
 import com.google.inject.Module;
 import com.google.inject.ProvisionException;
+import com.google.inject.name.Names;
+import com.google.inject.spi.Message;
+import io.airlift.airline.Option;
 import org.apache.log4j.Level;
+import org.graylog2.UI;
 import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.Plugin;
+import org.graylog2.plugin.PluginConfigBean;
+import org.graylog2.plugin.PluginLoaderConfig;
 import org.graylog2.plugin.PluginModule;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.Version;
 import org.graylog2.plugin.inject.Graylog2Module;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.radio.cluster.Ping;
+import org.graylog2.plugin.system.NodeIdPersistenceException;
 import org.graylog2.shared.bindings.GenericBindings;
+import org.graylog2.shared.bindings.GuiceInjectorHolder;
+import org.graylog2.shared.bindings.GuiceInstantiationService;
 import org.graylog2.shared.bindings.InstantiationService;
+import org.graylog2.shared.bindings.PluginBindings;
 import org.graylog2.shared.initializers.ServiceManagerListener;
+import org.graylog2.shared.journal.KafkaJournalModule;
+import org.graylog2.shared.journal.NoopJournalModule;
 import org.graylog2.shared.plugins.PluginLoader;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
@@ -65,16 +79,19 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
+import static com.google.common.base.Strings.nullToEmpty;
+
 public abstract class Bootstrap implements Runnable {
     private static final Logger LOG = LoggerFactory.getLogger(Bootstrap.class);
+
     protected static final String ENVIRONMENT_PREFIX = "GRAYLOG2_";
     protected static final String PROPERTIES_PREFIX = "graylog2.";
     protected static final Version version = Version.CURRENT_CLASSPATH;
@@ -89,21 +106,60 @@ public abstract class Bootstrap implements Runnable {
         this.configuration = configuration;
     }
 
-    protected abstract Injector setupInjector(NamedConfigParametersModule configModule, List<PluginModule> pluginModules);
-    protected abstract NamedConfigParametersModule readConfiguration(final JadConfig jadConfig, final String configFile);
+    @Option(name = "--dump-config", description = "Show the effective Graylog2 configuration and exit")
+    protected boolean dumpConfig = false;
+
+    @Option(name = "--dump-default-config", description = "Show the default configuration and exit")
+    protected boolean dumpDefaultConfig = false;
+
+    @Option(name = {"-d", "--debug"}, description = "Run Graylog2 in debug mode")
+    private boolean debug = false;
+
+    @Option(name = {"-f", "--configfile"}, description = "Configuration file for Graylog2")
+    private String configFile = "/etc/graylog2.conf";
+
+    @Option(name = {"-p", "--pidfile"}, description = "File containing the PID of Graylog2")
+    private String pidFile = TMPDIR + FILE_SEPARATOR + "graylog2.pid";
+
+    @Option(name = {"-np", "--no-pid-file"}, description = "Do not write a PID file (overrides -p/--pidfile)")
+    private boolean noPidFile = false;
+
     protected abstract void startNodeRegistration(Injector injector);
 
-    protected abstract String getConfigFile();
-    protected abstract String getPidFile();
-    protected abstract boolean isNoPidFile();
-    protected abstract boolean isDebug();
+    protected abstract List<Module> getCommandBindings();
+
+    protected abstract List<Object> getCommandConfigurationBeans();
+
+    protected abstract Class<? extends Runnable> shutdownHook();
+
+    protected abstract boolean validateConfiguration();
+
+    public boolean isDumpConfig() {
+        return dumpConfig;
+    }
+
+    public boolean isDumpDefaultConfig() {
+        return dumpDefaultConfig;
+    }
+
+    public boolean isDebug() {
+        return debug;
+    }
+
+    public String getConfigFile() {
+        return configFile;
+    }
+
+    public String getPidFile() {
+        return pidFile;
+    }
+
+    public boolean isNoPidFile() {
+        return noPidFile;
+    }
 
     @Override
     public void run() {
-        final JadConfig jadConfig = new JadConfig();
-        jadConfig.addConverterFactory(new JodaTimeConverterFactory());
-        final NamedConfigParametersModule configModule = readConfiguration(jadConfig, getConfigFile());
-
         // Are we in debug mode?
         Level logLevel = Level.INFO;
         if (isDebug()) {
@@ -111,19 +167,48 @@ public abstract class Bootstrap implements Runnable {
             logLevel = Level.DEBUG;
         }
         org.apache.log4j.Logger.getRootLogger().setLevel(logLevel);
-        org.apache.log4j.Logger.getLogger(Main.class.getPackage().getName()).setLevel(logLevel);
+        org.apache.log4j.Logger.getLogger("org.graylog2").setLevel(logLevel);
 
-        PluginLoader pluginLoader = new PluginLoader(new File(configuration.getPluginDir()));
-        List<PluginModule> pluginModules = Lists.newArrayList();
-        for (Plugin plugin : pluginLoader.loadPlugins())
+        String pluginPath = getPluginPath(getConfigFile());
+
+        final JadConfig jadConfig = new JadConfig();
+        jadConfig.addConverterFactory(new JodaTimeConverterFactory());
+
+        final Set<Plugin> plugins = loadPlugins(pluginPath);
+        final Set<PluginModule> pluginModules = new HashSet<>();
+
+        for (Plugin plugin : plugins) {
             pluginModules.addAll(plugin.modules());
+            for (PluginModule pluginModule : plugin.modules())
+                for (PluginConfigBean configBean : pluginModule.getConfigBeans())
+                    jadConfig.addConfigurationBean(configBean);
+        }
 
-        LOG.debug("Loaded modules: " + pluginModules);
+        PluginBindings pluginBindings = new PluginBindings(plugins);
 
-        final Injector injector = setupInjector(configModule, pluginModules);
+        if (isDumpDefaultConfig()) {
+            for (Object bean : getCommandConfigurationBeans())
+                jadConfig.addConfigurationBean(bean);
+            System.out.println(dumpConfiguration(jadConfig.dump()));
+            System.exit(0);
+        }
+
+        final NamedConfigParametersModule configModule = readConfiguration(jadConfig, getConfigFile());
+
+        if (isDumpConfig()) {
+            System.out.println(dumpConfiguration(jadConfig.dump()));
+            System.exit(0);
+        }
+
+        if (!validateConfiguration()) {
+            LOG.error("Validating configuration file failed - exiting.");
+            System.exit(1);
+        }
+
+        final Injector injector = setupInjector(configModule, pluginModules, pluginBindings);
 
         if (injector == null) {
-            LOG.error("Injector could not be created, exiting! (Please include the previous stacktraces in bug reports.)");
+            LOG.error("Injector could not be created, exiting! (Please include the previous error messages in bug reports.)");
             System.exit(1);
         }
 
@@ -160,6 +245,7 @@ public abstract class Bootstrap implements Runnable {
             serviceManager = injector.getInstance(ServiceManager.class);
         } catch (ProvisionException e) {
             LOG.error("Guice error", e);
+            annotateProvisionException(e);
             System.exit(-1);
             return;
         } catch (Exception e) {
@@ -168,16 +254,7 @@ public abstract class Bootstrap implements Runnable {
             return;
         }
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                String msg = "SIGNAL received. Shutting down.";
-                LOG.info(msg);
-                activityWriter.write(new Activity(msg, Main.class));
-
-                serviceManager.stopAsync().awaitStopped();
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(new Thread(injector.getInstance(shutdownHook())));
 
         // propagate default size to input plugins
         MessageInput.setDefaultRecvBufferSize(configuration.getUdpRecvBufferSizes());
@@ -203,15 +280,48 @@ public abstract class Bootstrap implements Runnable {
 
         // Block forever.
         try {
-            while (true) {
-                Thread.sleep(1000);
-            }
+            Thread.currentThread().join();
         } catch (InterruptedException e) {
             return;
         }
     }
 
-    protected List<Module> getBindingsModules(InstantiationService instantiationService, Module... specificModules) {
+    private String getPluginPath(String configFile) {
+        PluginLoaderConfig pluginLoaderConfig = new PluginLoaderConfig();
+        JadConfig jadConfig = new JadConfig();
+        jadConfig.addConfigurationBean(pluginLoaderConfig);
+        jadConfig.setRepositories(getConfigRepositories(configFile));
+
+        try {
+            jadConfig.process();
+        } catch (RepositoryException e) {
+            LOG.error("Couldn't load configuration: {}", e.getMessage());
+            System.exit(1);
+        } catch (ParameterException | ValidationException e) {
+            LOG.error("Invalid configuration", e);
+            System.exit(1);
+        }
+
+        return pluginLoaderConfig.getPluginDir();
+    }
+
+    protected Set<Plugin> loadPlugins(String pluginPath) {
+        final File pluginDir = new File(pluginPath);
+        final Set<Plugin> plugins = new HashSet<>();
+
+        final PluginLoader pluginLoader = new PluginLoader(pluginDir);
+        for (Plugin plugin : pluginLoader.loadPlugins()) {
+            if (version.sameOrHigher(plugin.metadata().getRequiredVersion()))
+                plugins.add(plugin);
+            else
+                LOG.error("Plugin \"" + plugin.metadata().getName() + "\" requires version " + plugin.metadata().getRequiredVersion() + " - not loading!");
+        }
+
+        LOG.debug("Loaded plugins: " + plugins);
+        return plugins;
+    }
+
+    protected List<Module> getSharedBindingsModules(InstantiationService instantiationService) {
         List<Module> result = Lists.newArrayList();
         result.add(new GenericBindings(instantiationService));
         Reflections reflections = new Reflections("org.graylog2.shared.bindings");
@@ -232,9 +342,43 @@ public abstract class Bootstrap implements Runnable {
                 LOG.info("No constructor found for guice module {}", type);
             }
         }
-
-        result.addAll(Arrays.asList(specificModules));
         return result;
+    }
+
+    protected Injector setupInjector(NamedConfigParametersModule configModule, Set<PluginModule> pluginModules, Module... otherModules) {
+        try {
+            final GuiceInstantiationService instantiationService = new GuiceInstantiationService();
+
+            final ImmutableList.Builder<Module> modules = ImmutableList.builder();
+            modules.add(configModule);
+            modules.addAll(getSharedBindingsModules(instantiationService));
+            modules.addAll(getCommandBindings());
+            modules.addAll(Arrays.asList(otherModules));
+            if (configuration.isMessageJournalEnabled()) {
+                modules.add(new KafkaJournalModule());
+            } else {
+                modules.add(new NoopJournalModule());
+            }
+            modules.add(new Module() {
+                @Override
+                public void configure(Binder binder) {
+                    binder.bind(String.class).annotatedWith(Names.named("BootstrapCommand")).toInstance(commandName);
+                }
+            });
+            LOG.debug("Adding plugin modules: " + pluginModules);
+            modules.addAll(pluginModules);
+
+            final Injector injector = GuiceInjectorHolder.createInjector(modules.build());
+            instantiationService.setInjector(injector);
+
+            return injector;
+        } catch (CreationException e) {
+            annotateInjectorCreationException(e);
+            return null;
+        } catch (Exception e) {
+            LOG.error("Injector creation failed!", e);
+            return null;
+        }
     }
 
     protected void savePidFile(final String pidFile) {
@@ -251,6 +395,74 @@ public abstract class Bootstrap implements Runnable {
         } catch (Exception e) {
             LOG.error("Could not write PID file: " + e.getMessage(), e);
             System.exit(1);
+        }
+    }
+
+    protected Collection<Repository> getConfigRepositories(String configFile) {
+        return Arrays.asList(
+                new EnvironmentRepository(ENVIRONMENT_PREFIX),
+                new SystemPropertiesRepository(PROPERTIES_PREFIX),
+                new PropertiesRepository(configFile)
+        );
+    }
+
+    protected NamedConfigParametersModule readConfiguration(final JadConfig jadConfig, final String configFile) {
+        final List<Object> beans = getCommandConfigurationBeans();
+        for (Object bean : beans)
+            jadConfig.addConfigurationBean(bean);
+        jadConfig.setRepositories(getConfigRepositories(configFile));
+
+        LOG.debug("Loading configuration from config file: {}", configFile);
+        try {
+            jadConfig.process();
+        } catch (RepositoryException e) {
+            LOG.error("Couldn't load configuration: {}", e.getMessage());
+            System.exit(1);
+        } catch (ParameterException | ValidationException e) {
+            LOG.error("Invalid configuration", e);
+            System.exit(1);
+        }
+
+        if (configuration.getRestTransportUri() == null) {
+            configuration.setRestTransportUri(configuration.getDefaultRestTransportUri());
+            LOG.debug("No rest_transport_uri set. Using default [{}].", configuration.getRestTransportUri());
+        }
+
+        return new NamedConfigParametersModule(beans);
+    }
+
+    private String dumpConfiguration(final Map<String, String> configMap) {
+        final StringBuilder sb = new StringBuilder();
+        sb.append("# Configuration of graylog2-").append(commandName).append(" ").append(version).append(System.lineSeparator());
+        sb.append("# Generated on ").append(Tools.iso8601()).append(System.lineSeparator());
+
+        for (Map.Entry<String, String> entry : configMap.entrySet()) {
+            sb.append(entry.getKey()).append('=').append(nullToEmpty(entry.getValue())).append(System.lineSeparator());
+        }
+
+        return sb.toString();
+    }
+
+    protected void annotateProvisionException(ProvisionException e) {
+        annotateInjectorExceptions(e.getErrorMessages());
+        throw e;
+    }
+
+    protected void annotateInjectorCreationException(CreationException e) {
+        annotateInjectorExceptions(e.getErrorMessages());
+        throw e;
+    }
+
+    protected void annotateInjectorExceptions(Collection<Message> messages) {
+        for (Message message : messages) {
+            if (message.getCause() instanceof NodeIdPersistenceException) {
+                LOG.error(UI.wallString("Unable to read or persist your NodeId file. This means your node id file (" + configuration.getNodeIdFile() + ") is not readable or writable by the current user. The following exception might give more information: " + message));
+                System.exit(-1);
+            } else {
+                // other guice error, still print the raw messages
+                // TODO this could potentially print duplicate messages depending on what a subclass does...
+                LOG.error("Guice error: {}", message.getMessage());
+            }
         }
     }
 }

@@ -40,7 +40,7 @@ public class InputStateListener {
     @Subscribe public void inputStateChanged(IOState<MessageInput> state) {
         MessageInput input = state.getStoppable();
         try {
-            if (!input.isGlobal())
+            if (!input.getGlobal())
                 inputService.unregisterInCluster(input);
         } catch (Exception e) {
             LOG.error("Could not unregister input [{}], id <{}> on server cluster: {}", input.getName(), input.getId(), e);
@@ -49,6 +49,6 @@ public class InputStateListener {
 
         LOG.info("Unregistered input [{}], id <{}> on server cluster.", input.getName(), input.getId());
 
-        inputRegistry.remove(state);
+        inputRegistry.removeFromRunning(state);
     }
 }

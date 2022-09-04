@@ -30,18 +30,15 @@ import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.util.ThroughputCounter;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.shared.bindings.providers.EventBusProvider;
-import org.graylog2.shared.bindings.providers.MessagePackProvider;
-import org.graylog2.shared.bindings.providers.MetricRegistryProvider;
-import org.graylog2.shared.bindings.providers.NodeIdProvider;
-import org.graylog2.shared.bindings.providers.ServiceManagerProvider;
 import org.graylog2.shared.buffers.InputBufferImpl;
 import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.buffers.processors.DecodingProcessor;
-import org.graylog2.shared.inputs.InputRegistry;
+import org.graylog2.shared.bindings.providers.EventBusProvider;
+import org.graylog2.shared.bindings.providers.MetricRegistryProvider;
+import org.graylog2.shared.bindings.providers.NodeIdProvider;
+import org.graylog2.shared.bindings.providers.ServiceManagerProvider;
 import org.graylog2.shared.stats.ThroughputStats;
 import org.jboss.netty.util.HashedWheelTimer;
-import org.msgpack.MessagePack;
 
 import java.util.concurrent.Semaphore;
 
@@ -77,9 +74,5 @@ public class GenericBindings extends AbstractModule {
         bind(Semaphore.class).annotatedWith(Names.named("JournalSignal")).toInstance(new Semaphore(0));
 
         install(new FactoryModuleBuilder().build(new TypeLiteral<IOState.Factory<MessageInput>>(){}));
-
-        bind(InputRegistry.class).asEagerSingleton();
-
-        bind(MessagePack.class).toProvider(MessagePackProvider.class).in(Scopes.SINGLETON);
     }
 }

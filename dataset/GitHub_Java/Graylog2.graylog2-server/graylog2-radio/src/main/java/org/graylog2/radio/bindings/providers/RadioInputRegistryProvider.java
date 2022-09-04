@@ -1,6 +1,4 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
- *
+/**
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -16,38 +14,42 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.radio.bindings.providers;
 
+import com.codahale.metrics.MetricRegistry;
 import com.ning.http.client.AsyncHttpClient;
+import org.graylog2.plugin.IOState;
+import org.graylog2.plugin.buffers.InputBuffer;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.radio.Configuration;
+import org.graylog2.radio.cluster.InputService;
 import org.graylog2.radio.inputs.RadioInputRegistry;
-import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
 
-/**
- * @author Dennis Oelkers <dennis@torch.sh>
- */
 public class RadioInputRegistryProvider implements Provider<InputRegistry> {
     private static RadioInputRegistry radioInputRegistry = null;
 
     @Inject
-    public RadioInputRegistryProvider(MessageInputFactory messageInputFactory,
-                                      ProcessBuffer processBuffer,
+    public RadioInputRegistryProvider(IOState.Factory<MessageInput> inputStateFactory,
+                                      MessageInputFactory messageInputFactory,
+                                      InputBuffer inputBuffer,
                                       AsyncHttpClient httpClient,
                                       Configuration configuration,
-                                      ServerStatus serverStatus) {
-        if (radioInputRegistry == null)
-            radioInputRegistry = new RadioInputRegistry(messageInputFactory,
-                    processBuffer,
+                                      InputService inputService,
+                                      MetricRegistry metricRegistry) {
+        if (radioInputRegistry == null) {
+            radioInputRegistry = new RadioInputRegistry(inputStateFactory,
+                    messageInputFactory,
+                    inputBuffer,
                     httpClient,
                     configuration.getGraylog2ServerUri(),
-                    serverStatus);
+                    inputService,
+                    metricRegistry);
+        }
     }
 
     @Override

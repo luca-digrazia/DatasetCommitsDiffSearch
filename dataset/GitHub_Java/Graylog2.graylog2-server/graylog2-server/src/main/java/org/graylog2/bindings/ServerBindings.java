@@ -31,18 +31,8 @@ import org.graylog2.alerts.AlertSender;
 import org.graylog2.alerts.FormattedEmailAlertSender;
 import org.graylog2.alerts.types.FieldValueAlertCondition;
 import org.graylog2.alerts.types.MessageCountAlertCondition;
-import org.graylog2.bindings.providers.BundleExporterProvider;
-import org.graylog2.bindings.providers.BundleImporterProvider;
-import org.graylog2.bindings.providers.DefaultSecurityManagerProvider;
-import org.graylog2.bindings.providers.EsNodeProvider;
-import org.graylog2.bindings.providers.LdapConnectorProvider;
-import org.graylog2.bindings.providers.LdapUserAuthenticatorProvider;
-import org.graylog2.bindings.providers.MongoConnectionProvider;
-import org.graylog2.bindings.providers.RotationStrategyProvider;
-import org.graylog2.bindings.providers.RulesEngineProvider;
-import org.graylog2.bindings.providers.ServerObjectMapperProvider;
-import org.graylog2.bindings.providers.SystemJobFactoryProvider;
-import org.graylog2.bindings.providers.SystemJobManagerProvider;
+import org.graylog2.bindings.providers.*;
+import org.graylog2.buffers.processors.OutputBufferProcessor;
 import org.graylog2.buffers.processors.ServerProcessBufferProcessor;
 import org.graylog2.bundles.BundleService;
 import org.graylog2.database.MongoConnection;
@@ -53,7 +43,6 @@ import org.graylog2.indexer.healing.FixDeflectorByMoveJob;
 import org.graylog2.indexer.indices.jobs.OptimizeIndexJob;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
 import org.graylog2.indexer.ranges.RebuildIndexRangesJob;
-import org.graylog2.inputs.PersistedInputsImpl;
 import org.graylog2.inputs.converters.InputStateListener;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.BaseConfiguration;
@@ -70,11 +59,7 @@ import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsImpl;
 import org.graylog2.security.realm.LdapUserAuthenticator;
 import org.graylog2.shared.bindings.providers.AsyncHttpClientProvider;
-import org.graylog2.shared.buffers.processors.ProcessBufferProcessor;
-import org.graylog2.shared.inputs.PersistedInputs;
-import org.graylog2.shared.journal.JournalReaderModule;
-import org.graylog2.shared.journal.KafkaJournalModule;
-import org.graylog2.shared.journal.NoopJournalModule;
+import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.streams.StreamRouter;
@@ -83,6 +68,7 @@ import org.graylog2.system.activities.SystemMessageActivityWriter;
 import org.graylog2.system.jobs.SystemJobFactory;
 import org.graylog2.system.jobs.SystemJobManager;
 import org.graylog2.system.shutdown.GracefulShutdown;
+import org.joda.time.Duration;
 
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
@@ -109,11 +95,13 @@ public class ServerBindings extends AbstractModule {
     }
 
     private void bindProviders() {
-        bind(ObjectMapper.class).toProvider(ServerObjectMapperProvider.class).asEagerSingleton();
+        bind(ObjectMapper.class).toProvider(ServerObjectMapperProvider.class);
         bind(RotationStrategy.class).toProvider(RotationStrategyProvider.class);
     }
 
     private void bindFactoryModules() {
+        install(new FactoryModuleBuilder().build(OutputBufferProcessor.Factory.class));
+        install(new FactoryModuleBuilder().build(ServerProcessBufferProcessor.Factory.class));
         install(new FactoryModuleBuilder().build(RebuildIndexRangesJob.Factory.class));
         install(new FactoryModuleBuilder().build(OptimizeIndexJob.Factory.class));
         install(new FactoryModuleBuilder().build(CreateNewSingleIndexRangeJob.Factory.class));
@@ -137,14 +125,9 @@ public class ServerBindings extends AbstractModule {
             capabilityBinder.addBinding().toInstance(ServerStatus.Capability.MASTER);
         bind(ServerStatus.class).in(Scopes.SINGLETON);
 
-        if (configuration.isMessageJournalEnabled()) {
-            install(new KafkaJournalModule());
-            install(new JournalReaderModule());
-        } else {
-            install(new NoopJournalModule());
-        }
         bind(Node.class).toProvider(EsNodeProvider.class).in(Scopes.SINGLETON);
         bind(SystemJobManager.class).toProvider(SystemJobManagerProvider.class);
+        bind(InputRegistry.class).toProvider(ServerInputRegistryProvider.class).asEagerSingleton();
         bind(RulesEngine.class).toProvider(RulesEngineProvider.class);
         bind(LdapConnector.class).toProvider(LdapConnectorProvider.class);
         bind(LdapUserAuthenticator.class).toProvider(LdapUserAuthenticatorProvider.class);
@@ -155,6 +138,11 @@ public class ServerBindings extends AbstractModule {
         bind(BundleService.class).in(Scopes.SINGLETON);
         bind(BundleImporterProvider.class).in(Scopes.SINGLETON);
         bind(BundleExporterProvider.class).in(Scopes.SINGLETON);
+
+        bind(String.class).annotatedWith(Names.named("journalDirectory")).toInstance(configuration.getMessageJournalDir());
+        bind(Integer.class).annotatedWith(Names.named("journalSegmentSize")).toInstance(configuration.getMessageJournalSegmentSize());
+        bind(Long.class).annotatedWith(Names.named("journalMaxRetentionSize")).toInstance(configuration.getMessageJournalMaxSize());
+        bind(Duration.class).annotatedWith(Names.named("journalMaxRetentionAge")).toInstance(configuration.getMessageJournalMaxAge());
 
         bind(String[].class).annotatedWith(Names.named("RestControllerPackages")).toInstance(new String[]{
                 "org.graylog2.rest.resources",
@@ -169,9 +157,6 @@ public class ServerBindings extends AbstractModule {
         install(new FactoryModuleBuilder().implement(StreamRouterEngine.class, StreamRouterEngine.class).build(StreamRouterEngine.Factory.class));
         bind(FilterService.class).to(FilterServiceImpl.class).in(Scopes.SINGLETON);
         bind(ActivityWriter.class).to(SystemMessageActivityWriter.class);
-        bind(PersistedInputs.class).to(PersistedInputsImpl.class);
-
-        bind(ProcessBufferProcessor.class).to(ServerProcessBufferProcessor.class);
     }
 
     private void bindDynamicFeatures() {
