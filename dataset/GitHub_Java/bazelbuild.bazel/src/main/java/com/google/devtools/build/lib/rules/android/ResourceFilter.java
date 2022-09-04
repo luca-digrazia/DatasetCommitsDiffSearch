@@ -220,7 +220,7 @@ public class ResourceFilter {
     // Clean up deprecated representations of resource qualifiers that FolderConfiguration can't
     // handle.
     for (DeprecatedQualifierHandler handler : deprecatedQualifierHandlers) {
-      filter = handler.fixAttributeIfNeeded(ruleErrorConsumer, filter);
+      filter = handler.replaceIfNeeded(ruleErrorConsumer, filter);
     }
 
     return FolderConfiguration.getConfigForQualifierString(filter);
@@ -231,8 +231,7 @@ public class ResourceFilter {
     private final String replacement;
     private final String description;
 
-    private boolean warnedForAttribute = false;
-    private boolean warnedForResources = false;
+    private boolean warned = false;
 
     private DeprecatedQualifierHandler(String pattern, String replacement, String description) {
       this.pattern = Pattern.compile(pattern);
@@ -240,7 +239,7 @@ public class ResourceFilter {
       this.description = description;
     }
 
-    private String fixAttributeIfNeeded(RuleErrorConsumer ruleErrorConsumer, String qualifier) {
+    private String replaceIfNeeded(RuleErrorConsumer ruleErrorConsumer, String qualifier) {
       Matcher matcher = pattern.matcher(qualifier);
 
       if (!matcher.matches()) {
@@ -249,40 +248,15 @@ public class ResourceFilter {
 
       String fixed = matcher.replaceFirst(replacement);
       // We don't want to spam users. Only warn about this kind of issue once per target.
-      // TODO(asteinb): Will this cause problems when settings are propagated via dynamic
+      // TODO(asteinb): Will this cause problems when settings are propogated via dynamic
       // configuration?
-      if (!warnedForAttribute) {
+      if (!warned) {
         ruleErrorConsumer.attributeWarning(
             RESOURCE_CONFIGURATION_FILTERS_NAME,
             String.format(
                 "When referring to %s, use of qualifier '%s' is deprecated. Use '%s' instead.",
                 description, matcher.group(), fixed));
-        warnedForAttribute = true;
-      }
-      return fixed;
-    }
-
-    private String fixResourceIfNeeded(
-        RuleErrorConsumer ruleErrorConsumer, String qualifier, String resourceFolder) {
-      Matcher matcher = pattern.matcher(qualifier);
-
-      if (!matcher.matches()) {
-        return qualifier;
-      }
-
-      String fixed = matcher.replaceFirst(replacement);
-
-      // We don't want to spam users. Only warn about this kind of issue once per target.
-      // TODO(asteinb): Will this cause problems when settings are propagated via dynamic
-      // configuration?
-      if (!warnedForResources) {
-        warnedForResources = true;
-
-        ruleErrorConsumer.ruleWarning(
-            String.format(
-                "For resource folder %s, when referring to %s, use of qualifier '%s' is deprecated."
-                    + " Use '%s' instead.",
-                resourceFolder, description, matcher.group(), fixed));
+        warned = true;
       }
 
       return fixed;
@@ -448,7 +422,7 @@ public class ResourceFilter {
    * Tracks the best artifact for a desired density for each combination of filename and non-density
    * qualifiers.
    */
-  private class BestArtifactsForDensity {
+  private static class BestArtifactsForDensity {
     private final RuleErrorConsumer ruleErrorConsumer;
     private final Density desiredDensity;
     private final Map<String, Artifact> nameAndConfigurationToBestArtifact = new HashMap<>();
@@ -545,22 +519,9 @@ public class ResourceFilter {
     }
   }
 
-  private FolderConfiguration getConfigForArtifact(
+  private static FolderConfiguration getConfigForArtifact(
       RuleErrorConsumer ruleErrorConsumer, Artifact artifact) {
     String containingFolder = getContainingFolder(artifact);
-
-    if (containingFolder.contains("-")) {
-      String[] parts = containingFolder.split("-", 2);
-      String prefix = parts[0];
-      String qualifiers = parts[1];
-
-      for (DeprecatedQualifierHandler handler : deprecatedQualifierHandlers) {
-        qualifiers = handler.fixResourceIfNeeded(ruleErrorConsumer, qualifiers, containingFolder);
-      }
-
-      containingFolder = String.format("%s-%s", prefix, qualifiers);
-    }
-
     FolderConfiguration config = FolderConfiguration.getConfigForFolder(containingFolder);
 
     if (config == null) {
