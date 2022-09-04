@@ -173,7 +173,7 @@ public class VertxHttpRecorder {
         if (supplier == null) {
             VertxConfiguration vertxConfiguration = new VertxConfiguration();
             ConfigInstantiator.handleObject(vertxConfiguration);
-            vertx = VertxCoreRecorder.recoverFailedStart(vertxConfiguration).get();
+            vertx = VertxCoreRecorder.initialize(vertxConfiguration, null);
         } else {
             vertx = supplier.get();
         }
@@ -187,14 +187,7 @@ public class VertxHttpRecorder {
             if (hotReplacementHandler != null) {
                 router.route().order(Integer.MIN_VALUE).blockingHandler(hotReplacementHandler);
             }
-            Handler<HttpServerRequest> root = router;
-            LiveReloadConfig liveReloadConfig = new LiveReloadConfig();
-            ConfigInstantiator.handleObject(liveReloadConfig);
-            if (liveReloadConfig.password.isPresent()
-                    && hotReplacementContext.getDevModeType() == DevModeType.REMOTE_SERVER_SIDE) {
-                root = remoteSyncHandler = new RemoteSyncHandler(liveReloadConfig.password.get(), root, hotReplacementContext);
-            }
-            rootHandler = root;
+            rootHandler = router;
 
             //we can't really do
             doServerStart(vertx, buildConfig, config, LaunchMode.DEVELOPMENT, new Supplier<Integer>() {
