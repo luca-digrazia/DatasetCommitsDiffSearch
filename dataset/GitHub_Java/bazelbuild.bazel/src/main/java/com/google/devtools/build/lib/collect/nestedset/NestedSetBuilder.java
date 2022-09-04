@@ -148,7 +148,7 @@ public final class NestedSetBuilder<E> {
         return candidate;
       }
     }
-    return new NestedSet<>(order, items, transitiveSetsCast);
+    return new NestedSet<E>(order, items, transitiveSetsCast);
   }
 
   private static final ConcurrentMap<ImmutableList<?>, NestedSet<?>> immutableListCache =
@@ -234,7 +234,9 @@ public final class NestedSetBuilder<E> {
       return stableOrder();
     }
     NestedSetBuilder<E> result = new NestedSetBuilder<>(firstSet.getOrder());
-    sets.forEach(result::addTransitive);
+    for (NestedSet<E> set : sets) {
+      result.addTransitive(set);
+    }
     return result;
   }
 }
