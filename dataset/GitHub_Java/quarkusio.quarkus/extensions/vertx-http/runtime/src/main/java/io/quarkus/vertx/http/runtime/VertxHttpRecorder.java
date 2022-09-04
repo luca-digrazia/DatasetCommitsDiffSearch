@@ -38,7 +38,6 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.bootstrap.runner.Timing;
-import io.quarkus.dev.spi.DevModeType;
 import io.quarkus.dev.spi.HotReplacementContext;
 import io.quarkus.netty.runtime.virtual.VirtualAddress;
 import io.quarkus.netty.runtime.virtual.VirtualChannel;
@@ -106,9 +105,6 @@ public class VertxHttpRecorder {
 
     public static final String MAX_REQUEST_SIZE_KEY = "io.quarkus.max-request-size";
 
-    // We do not use Integer.MAX on purpose to allow advanced users to register a route AFTER the default route
-    public static final int DEFAULT_ROUTE_ORDER = 10_000;
-
     private static final Logger LOGGER = Logger.getLogger(VertxHttpRecorder.class.getName());
 
     private static volatile Handler<RoutingContext> hotReplacementHandler;
@@ -164,15 +160,9 @@ public class VertxHttpRecorder {
             // the server start to fail
             hotReplacementHandler = prevHotReplacementHandler;
         }
-        Supplier<Vertx> supplier = VertxCoreRecorder.getVertx();
-        Vertx vertx;
-        if (supplier == null) {
-            VertxConfiguration vertxConfiguration = new VertxConfiguration();
-            ConfigInstantiator.handleObject(vertxConfiguration);
-            vertx = VertxCoreRecorder.initialize(vertxConfiguration, null);
-        } else {
-            vertx = supplier.get();
-        }
+        VertxConfiguration vertxConfiguration = new VertxConfiguration();
+        ConfigInstantiator.handleObject(vertxConfiguration);
+        Vertx vertx = VertxCoreRecorder.initialize(vertxConfiguration, null);
 
         try {
             HttpBuildTimeConfig buildConfig = new HttpBuildTimeConfig();
@@ -256,7 +246,7 @@ public class VertxHttpRecorder {
         }
 
         if (defaultRouteHandler != null) {
-            defaultRouteHandler.accept(router.route().order(DEFAULT_ROUTE_ORDER));
+            defaultRouteHandler.accept(router.route().order(10_000));
         }
 
         container.instance(RouterProducer.class).initialize(router);
@@ -401,8 +391,7 @@ public class VertxHttpRecorder {
                 }
             });
         }
-        if (launchMode == LaunchMode.DEVELOPMENT && liveReloadConfig.password.isPresent()
-                && hotReplacementContext.getDevModeType() == DevModeType.REMOTE_SERVER_SIDE) {
+        if (launchMode == LaunchMode.DEVELOPMENT && liveReloadConfig.password.isPresent()) {
             root = remoteSyncHandler = new RemoteSyncHandler(liveReloadConfig.password.get(), root, hotReplacementContext);
         }
         rootHandler = root;
@@ -429,6 +418,7 @@ public class VertxHttpRecorder {
         HttpServerOptions httpServerOptions = createHttpServerOptions(httpConfiguration, launchMode, websocketSubProtocols);
         HttpServerOptions domainSocketOptions = createDomainSocketOptions(httpConfiguration, websocketSubProtocols);
         HttpServerOptions sslConfig = createSslOptions(httpBuildTimeConfig, httpConfiguration, launchMode);
+        ForwardingProxyOptions forwardingProxyOptions = ForwardingProxyOptions.from(httpConfiguration);
 
         if (httpConfiguration.insecureRequests != HttpConfiguration.InsecureRequests.ENABLED && sslConfig == null) {
             throw new IllegalStateException("Cannot set quarkus.http.redirect-insecure-requests without enabling SSL.");
