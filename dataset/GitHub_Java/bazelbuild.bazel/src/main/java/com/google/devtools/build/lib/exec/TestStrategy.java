@@ -61,6 +61,7 @@ import javax.annotation.Nullable;
 
 /** A strategy for executing a {@link TestRunnerAction}. */
 public abstract class TestStrategy implements TestActionContext {
+  public static final String TEST_SETUP_BASENAME = "test-setup.sh";
 
   /**
    * Ensures that all directories used to run test are in the correct state and their content will
@@ -155,11 +156,14 @@ public abstract class TestStrategy implements TestActionContext {
    * Generates a command line to run for the test action, taking into account coverage and {@code
    * --run_under} settings.
    *
+   * @param coverageScript a script interjected between setup script and rest of command line to
+   *     collect coverage data. If this is an empty string, it is ignored.
    * @param testAction The test action.
    * @return the command line as string list.
    * @throws ExecException 
    */
-  public static ImmutableList<String> getArgs(TestRunnerAction testAction) throws ExecException {
+  public static ImmutableList<String> getArgs(String coverageScript, TestRunnerAction testAction)
+      throws ExecException {
     List<String> args = Lists.newArrayList();
     // TODO(ulfjack): This is incorrect for remote execution, where we need to consider the target
     // configuration, not the machine Bazel happens to run on. Change this to something like:
@@ -170,11 +174,11 @@ public abstract class TestStrategy implements TestActionContext {
       args.add("$0 $*");
     }
 
-    Artifact testSetup = testAction.getTestSetupScript();
+    Artifact testSetup = testAction.getRuntimeArtifact(TEST_SETUP_BASENAME);
     args.add(testSetup.getExecPath().getCallablePathString());
 
     if (testAction.isCoverageMode()) {
-      args.add(testAction.getCollectCoverageScript().getExecPathString());
+      args.add(coverageScript);
     }
 
     TestTargetExecutionSettings execSettings = testAction.getExecutionSettings();

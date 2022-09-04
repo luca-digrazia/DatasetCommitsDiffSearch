@@ -29,6 +29,7 @@ import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.RunfilesSupplierImpl;
+import com.google.devtools.build.lib.analysis.config.BinTools;
 import com.google.devtools.build.lib.analysis.test.TestActionContext;
 import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.analysis.test.TestRunnerAction;
@@ -50,15 +51,17 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 
 /** Runs TestRunnerAction actions. */
-// TODO(bazel-team): add tests for this strategy.
 @ExecutionStrategy(
   contextType = TestActionContext.class,
   name = {"standalone"}
 )
 public class StandaloneTestStrategy extends TestStrategy {
+  // TODO(bazel-team) - add tests for this strategy.
+  public static final String COLLECT_COVERAGE =
+      "external/bazel_tools/tools/test/collect_coverage.sh";
+
   private static final ImmutableMap<String, String> ENV_VARS =
       ImmutableMap.<String, String>builder()
           .put("TZ", "UTC")
@@ -101,12 +104,13 @@ public class StandaloneTestStrategy extends TestStrategy {
 
     ResolvedPaths resolvedPaths = action.resolve(execRoot);
 
-    Map<String, String> executionInfo =
-        new TreeMap<>(action.getTestProperties().getExecutionInfo());
+    ImmutableMap.Builder<String, String> executionInfo = ImmutableMap.builder();
     if (!action.shouldCacheResult()) {
       executionInfo.put(ExecutionRequirements.NO_CACHE, "");
     }
-    executionInfo.put(ExecutionRequirements.TIMEOUT, "" + getTimeout(action).getSeconds());
+    // This key is only understood by StandaloneSpawnStrategy.
+    executionInfo.put("timeout", "" + getTimeout(action).getSeconds());
+    executionInfo.putAll(action.getTestProperties().getExecutionInfo());
 
     ResourceSet localResourceUsage =
         action
@@ -117,9 +121,9 @@ public class StandaloneTestStrategy extends TestStrategy {
     Spawn spawn =
         new SimpleSpawn(
             action,
-            getArgs(action),
+            getArgs(COLLECT_COVERAGE, action),
             ImmutableMap.copyOf(env),
-            ImmutableMap.copyOf(executionInfo),
+            executionInfo.build(),
             new RunfilesSupplierImpl(
                 runfilesDir.relativeTo(execRoot), action.getExecutionSettings().getRunfiles()),
             /*inputs=*/ ImmutableList.copyOf(action.getInputs()),
@@ -164,18 +168,13 @@ public class StandaloneTestStrategy extends TestStrategy {
       }
       processLastTestAttempt(attempt, dataBuilder, standaloneTestResult.testResultData());
       ImmutableList.Builder<Pair<String, Path>> testOutputsBuilder = new ImmutableList.Builder<>();
-      if (actionExecutionContext.getInputPath(action.getTestLog()).exists()) {
+      if (action.getTestLog().getPath().exists()) {
         testOutputsBuilder.add(
-            Pair.of(
-                TestFileNameConstants.TEST_LOG,
-                actionExecutionContext.getInputPath(action.getTestLog())));
+            Pair.of(TestFileNameConstants.TEST_LOG, action.getTestLog().getPath()));
       }
-      if (action.getCoverageData() != null
-          && actionExecutionContext.getInputPath(action.getCoverageData()).exists()) {
+      if (action.getCoverageData() != null && action.getCoverageData().getPath().exists()) {
         testOutputsBuilder.add(
-            Pair.of(
-                TestFileNameConstants.TEST_COVERAGE,
-                actionExecutionContext.getInputPath(action.getCoverageData())));
+            Pair.of(TestFileNameConstants.TEST_COVERAGE, action.getCoverageData().getPath()));
       }
       testOutputsBuilder.addAll(TestResult.testOutputsFromPaths(resolvedPaths));
       actionExecutionContext
@@ -212,21 +211,18 @@ public class StandaloneTestStrategy extends TestStrategy {
     // Rename outputs
     String namePrefix =
         FileSystemUtils.removeExtension(action.getTestLog().getExecPath().getBaseName());
-    Path testRoot = actionExecutionContext.getInputPath(action.getTestLog()).getParentDirectory();
+    Path testRoot = action.getTestLog().getPath().getParentDirectory();
     Path attemptsDir = testRoot.getChild(namePrefix + "_attempts");
     attemptsDir.createDirectory();
     String attemptPrefix = "attempt_" + attempt;
     Path testLog = attemptsDir.getChild(attemptPrefix + ".log");
-    if (actionExecutionContext.getInputPath(action.getTestLog()).exists()) {
-      actionExecutionContext.getInputPath(action.getTestLog()).renameTo(testLog);
+    if (action.getTestLog().getPath().exists()) {
+      action.getTestLog().getPath().renameTo(testLog);
       testOutputsBuilder.add(Pair.of(TestFileNameConstants.TEST_LOG, testLog));
     }
-    if (action.getCoverageData() != null
-        && actionExecutionContext.getInputPath(action.getCoverageData()).exists()) {
+    if (action.getCoverageData() != null && action.getCoverageData().getPath().exists()) {
       testOutputsBuilder.add(
-          Pair.of(
-              TestFileNameConstants.TEST_COVERAGE,
-              actionExecutionContext.getInputPath(action.getCoverageData())));
+          Pair.of(TestFileNameConstants.TEST_COVERAGE, action.getCoverageData().getPath()));
     }
 
     // Get the normal test output paths, and then update them to use "attempt_N" names, and
@@ -308,9 +304,8 @@ public class StandaloneTestStrategy extends TestStrategy {
     prepareFileSystem(action, tmpDir, coverageDir, workingDirectory);
 
     try (FileOutErr fileOutErr =
-        new FileOutErr(
-            actionExecutionContext.getInputPath(action.getTestLog()),
-            action.resolve(execRoot).getTestStderr())) {
+            new FileOutErr(
+                action.getTestLog().getPath(), action.resolve(execRoot).getTestStderr())) {
       StandaloneTestResult standaloneTestResult =
           executeTest(action, spawn, actionExecutionContext.withFileOutErr(fileOutErr));
       appendStderr(fileOutErr.getOutputPath(), fileOutErr.getErrorPath());
@@ -343,7 +338,7 @@ public class StandaloneTestStrategy extends TestStrategy {
       TestRunnerAction action, Spawn spawn, ActionExecutionContext actionExecutionContext)
       throws ExecException, InterruptedException, IOException {
     Closeable streamed = null;
-    Path testLogPath = actionExecutionContext.getInputPath(action.getTestLog());
+    Path testLogPath = action.getTestLog().getPath();
     TestResultData.Builder builder = TestResultData.newBuilder();
 
     long startTime = actionExecutionContext.getClock().currentTimeMillis();
