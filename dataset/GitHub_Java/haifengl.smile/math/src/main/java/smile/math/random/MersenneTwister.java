@@ -73,16 +73,9 @@ public class MersenneTwister implements RandomNumberGenerator {
         setSeed(seed);
     }
 
-    /**
-     * Constructor.
-     */
-    public MersenneTwister(long seed) {
-        setSeed(seed);
-    }
-
     @Override
     public void setSeed(long seed) {
-        setSeed((int) (seed % UniversalGenerator.BIG_PRIME));
+        setSeed((int)(seed % UniversalGenerator.BIG_PRIME));
     }
 
     public void setSeed(int seed) {
