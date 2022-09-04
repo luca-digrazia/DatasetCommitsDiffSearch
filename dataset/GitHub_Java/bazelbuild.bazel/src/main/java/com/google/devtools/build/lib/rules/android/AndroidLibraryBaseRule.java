@@ -26,6 +26,8 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
 import com.google.devtools.build.lib.packages.TriState;
+import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidAaptBaseRule;
+import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidBaseRule;
 import com.google.devtools.build.lib.rules.android.AndroidRuleClasses.AndroidResourceSupportRule;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
@@ -202,7 +204,11 @@ public final class AndroidLibraryBaseRule implements RuleDefinition {
     return RuleDefinition.Metadata.builder()
         .name("$android_library_base")
         .type(RuleClassType.ABSTRACT)
-        .ancestors(AndroidResourceSupportRule.class, ProguardLibraryRule.class)
+        .ancestors(
+            AndroidBaseRule.class,
+            AndroidAaptBaseRule.class,
+            AndroidResourceSupportRule.class,
+            ProguardLibraryRule.class)
         .build();
   }
 }
