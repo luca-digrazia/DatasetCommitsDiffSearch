@@ -777,7 +777,7 @@ public class OptionsParserTest {
 
     ParsedOptionDescription effectiveInstance = optionValue.getCanonicalInstances().get(0);
     assertThat(effectiveInstance.getExpandedFrom().getOptionDefinition())
-        .isSameInstanceAs(expansionDescription.getOptionDefinition());
+        .isSameAs(expansionDescription.getOptionDefinition());
     assertThat(effectiveInstance.getImplicitDependent()).isNull();
 
     assertThat(parser.getWarnings()).isEmpty();

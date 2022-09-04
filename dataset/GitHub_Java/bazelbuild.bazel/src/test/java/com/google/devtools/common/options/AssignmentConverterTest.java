@@ -15,7 +15,7 @@
 package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.Maps;
 import java.util.Map;
@@ -48,7 +48,6 @@ public abstract class AssignmentConverterTest {
     assertThat(convert("A=1")).isEqualTo(Maps.immutableEntry("A", "1"));
     assertThat(convert("A=ABC")).isEqualTo(Maps.immutableEntry("A", "ABC"));
     assertThat(convert("A=")).isEqualTo(Maps.immutableEntry("A", ""));
-    assertThat(convert("A=B,C=D")).isEqualTo(Maps.immutableEntry("A", "B,C=D"));
   }
 
   @Test

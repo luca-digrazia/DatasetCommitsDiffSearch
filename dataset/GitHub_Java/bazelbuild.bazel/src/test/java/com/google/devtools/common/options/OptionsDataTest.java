@@ -488,6 +488,19 @@ public class OptionsDataTest {
         .inOrder();
   }
 
+  private static class ReferenceEqualityCorrespondence extends Correspondence<Object, Object> {
+
+    @Override
+    public boolean compare(Object obj1, Object obj2) {
+      return obj1 == obj2;
+    }
+
+    @Override
+    public String toString() {
+      return "is the same object as";
+    }
+  }
+
   @Test
   public void optionsDefinitionsAreSharedBetweenOptionsBases() throws Exception {
     Class<FieldNamesDifferOptions> class1 = FieldNamesDifferOptions.class;
@@ -510,8 +523,7 @@ public class OptionsDataTest {
     data.getAllOptionDefinitions()
         .forEach(entry -> optionDefinitionsFromData.add(entry.getValue()));
 
-    Correspondence<Object, Object> referenceEquality =
-        Correspondence.from((obj1, obj2) -> obj1 == obj2, "is the same object as");
+    ReferenceEqualityCorrespondence referenceEquality = new ReferenceEqualityCorrespondence();
     assertThat(optionDefinitionsFromData)
         .comparingElementsUsing(referenceEquality)
         .containsAllIn(optionDefinitions);
