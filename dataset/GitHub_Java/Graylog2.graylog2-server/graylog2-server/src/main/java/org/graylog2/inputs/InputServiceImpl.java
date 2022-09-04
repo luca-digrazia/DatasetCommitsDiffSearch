@@ -25,7 +25,6 @@ import com.google.common.collect.Maps;
 import com.google.common.eventbus.EventBus;
 import com.mongodb.BasicDBList;
 import com.mongodb.BasicDBObject;
-import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
@@ -67,7 +66,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     private final ConverterFactory converterFactory;
     private final MessageInputFactory messageInputFactory;
     private final EventBus clusterEventBus;
-    private final DBCollection dbCollection;
 
     @Inject
     public InputServiceImpl(MongoConnection mongoConnection,
@@ -80,7 +78,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         this.converterFactory = converterFactory;
         this.messageInputFactory = messageInputFactory;
         this.clusterEventBus = clusterEventBus;
-        this.dbCollection = collection(InputImpl.class);
     }
 
     @Override
@@ -215,9 +212,14 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
     @Override
     public void addStaticField(Input input, final String key, final String value) throws ValidationException {
-        final EmbeddedPersistable obj = () -> ImmutableMap.of(
-                InputImpl.FIELD_STATIC_FIELD_KEY, key,
-                InputImpl.FIELD_STATIC_FIELD_VALUE, value);
+        final EmbeddedPersistable obj = new EmbeddedPersistable() {
+            @Override
+            public Map<String, Object> getPersistedFields() {
+                return ImmutableMap.<String, Object>of(
+                        InputImpl.FIELD_STATIC_FIELD_KEY, key,
+                        InputImpl.FIELD_STATIC_FIELD_VALUE, value);
+            }
+        };
 
         embed(input, InputImpl.EMBEDDED_STATIC_FIELDS, obj);
         publishChange(InputUpdated.create(input.getId()));
@@ -300,7 +302,7 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
         if (!extractor.isPresent()) {
             LOG.error("Extractor <{}> not found.", extractorId);
-            throw new NotFoundException("Couldn't find extractor " + extractorId);
+            throw new javax.ws.rs.NotFoundException("Couldn't find extractor " + extractorId);
         }
 
         return extractor.get();
@@ -381,15 +383,15 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
     @Override
     public Map<String, Long> totalCountByType() {
-        final Map<String, Long> inputCountByType = new HashMap<>();
-        try (DBCursor inputTypes = dbCollection.find(null, new BasicDBObject(MessageInput.FIELD_TYPE, 1))) {
-            for (DBObject inputType : inputTypes) {
-                final String type = (String) inputType.get(MessageInput.FIELD_TYPE);
-                if (type != null) {
-                    final Long oldValue = inputCountByType.get(type);
-                    final Long newValue = (oldValue == null) ? 1 : oldValue + 1;
-                    inputCountByType.put(type, newValue);
-                }
+        final DBCursor inputTypes = collection(InputImpl.class).find(null, new BasicDBObject(MessageInput.FIELD_TYPE, 1));
+
+        final Map<String, Long> inputCountByType = new HashMap<>(inputTypes.count());
+        for (DBObject inputType : inputTypes) {
+            final String type = (String) inputType.get(MessageInput.FIELD_TYPE);
+            if (type != null) {
+                final Long oldValue = inputCountByType.get(type);
+                final Long newValue = (oldValue == null) ? 1 : oldValue + 1;
+                inputCountByType.put(type, newValue);
             }
         }
 
@@ -419,12 +421,12 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
     @Override
     public long totalExtractorCount() {
         final DBObject query = new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, new BasicDBObject("$exists", true));
+        final DBCursor inputs = collection(InputImpl.class).find(query, new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, 1));
+
         long extractorsCount = 0;
-        try (DBCursor inputs = dbCollection.find(query, new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, 1))) {
-            for (DBObject input : inputs) {
-                final BasicDBList extractors = (BasicDBList) input.get(InputImpl.EMBEDDED_EXTRACTORS);
-                extractorsCount += extractors.size();
-            }
+        for (DBObject input : inputs) {
+            final BasicDBList extractors = (BasicDBList) input.get(InputImpl.EMBEDDED_EXTRACTORS);
+            extractorsCount += extractors.size();
         }
 
         return extractorsCount;
@@ -432,23 +434,24 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
 
     @Override
     public Map<Extractor.Type, Long> totalExtractorCountByType() {
+        final Map<Extractor.Type, Long> extractorsCountByType = new HashMap<>();
         final DBObject query = new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, new BasicDBObject("$exists", true));
-        try (DBCursor inputs = dbCollection.find(query, new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, 1))) {
-            final Map<Extractor.Type, Long> extractorsCountByType = new HashMap<>();
-            for (DBObject input : inputs) {
-                final BasicDBList extractors = (BasicDBList) input.get(InputImpl.EMBEDDED_EXTRACTORS);
-                for (Object dbObject : extractors) {
-                    final DBObject extractor = (DBObject) dbObject;
-                    final Extractor.Type type = Extractor.Type.fuzzyValueOf(((String) extractor.get(Extractor.FIELD_TYPE)));
-                    if (type != null) {
-                        final Long oldValue = extractorsCountByType.get(type);
-                        final Long newValue = (oldValue == null) ? 1 : oldValue + 1;
-                        extractorsCountByType.put(type, newValue);
-                    }
+        final DBCursor inputs = collection(InputImpl.class).find(query, new BasicDBObject(InputImpl.EMBEDDED_EXTRACTORS, 1));
+
+        for (DBObject input : inputs) {
+            final BasicDBList extractors = (BasicDBList) input.get(InputImpl.EMBEDDED_EXTRACTORS);
+            for (Object fuckYouMongoDb : extractors) {
+                final DBObject extractor = (DBObject) fuckYouMongoDb;
+                final Extractor.Type type = Extractor.Type.fuzzyValueOf(((String) extractor.get(Extractor.FIELD_TYPE)));
+                if (type != null) {
+                    final Long oldValue = extractorsCountByType.get(type);
+                    final Long newValue = (oldValue == null) ? 1 : oldValue + 1;
+                    extractorsCountByType.put(type, newValue);
                 }
             }
-            return extractorsCountByType;
         }
+
+        return extractorsCountByType;
     }
 
     private void publishChange(Object event) {
