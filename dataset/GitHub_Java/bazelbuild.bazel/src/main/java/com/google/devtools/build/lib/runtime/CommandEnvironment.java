@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.config.DefaultsPackage;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.OutputService;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Target;
@@ -145,24 +146,6 @@ public final class CommandEnvironment {
     this.workingDirectory = directories.getWorkspace();
 
     workspace.getSkyframeExecutor().setEventBus(eventBus);
-  }
-
-  /**
-   * Same as CommandEnvironment(BlazeRuntime, BlazeWorkspace, EventBus, Thread) but with an
-   * explicit commandName and options.
-   *
-   * ONLY for testing.
-   */
-  @VisibleForTesting
-  CommandEnvironment(
-      BlazeRuntime runtime, BlazeWorkspace workspace, EventBus eventBus, Thread commandThread,
-      String commandNameForTesting, OptionsProvider optionsForTesting) {
-    this(runtime, workspace, eventBus, commandThread);
-    // Both commandName and options are normally set by beforeCommand(); however this method is not
-    // called in tests (i.e. tests use BlazeRuntimeWrapper). These fields should only be set for
-    // testing.
-    this.commandName = commandNameForTesting;
-    this.options = optionsForTesting;
   }
 
   public BlazeRuntime getRuntime() {
@@ -589,7 +572,8 @@ public final class CommandEnvironment {
     // Let skyframe figure out if it needs to store graph edges for this build.
     skyframeExecutor.decideKeepIncrementalState(
         runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class).batch,
-        optionsParser.getOptions(BuildView.Options.class));
+        optionsParser.getOptions(BuildView.Options.class),
+        optionsParser.getOptions(ExecutionOptions.class));
 
     // Start the performance and memory profilers.
     runtime.beforeCommand(this, options, execStartTimeNanos);

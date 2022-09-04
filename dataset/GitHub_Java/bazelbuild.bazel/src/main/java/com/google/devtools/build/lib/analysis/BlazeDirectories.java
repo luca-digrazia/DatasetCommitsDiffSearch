@@ -64,12 +64,13 @@ public final class BlazeDirectories {
   public BlazeDirectories(
       ServerDirectories serverDirectories,
       Path workspace,
+      boolean deepExecRoot,
       String productName) {
     this.serverDirectories = serverDirectories;
     this.workspace = workspace;
     this.productName = productName;
     Path outputBase = serverDirectories.getOutputBase();
-    Path execRootBase = outputBase.getChild("execroot");
+    Path execRootBase = deepExecRoot ? outputBase.getChild("execroot") : outputBase;
     boolean useDefaultExecRootName = this.workspace == null || this.workspace.isRootDirectory();
     if (useDefaultExecRootName) {
       // TODO(bazel-team): if workspace is null execRoot should be null, but at the moment there is
@@ -81,6 +82,16 @@ public final class BlazeDirectories {
     String relativeOutputPath = getRelativeOutputPath(productName);
     this.outputPath = execRoot.getRelative(getRelativeOutputPath());
     this.localOutputPath = outputBase.getRelative(relativeOutputPath);
+  }
+
+  @VisibleForTesting
+  public BlazeDirectories(ServerDirectories serverDirectories, Path workspace, String productName) {
+    this(serverDirectories, workspace, false, productName);
+  }
+
+  @VisibleForTesting
+  public BlazeDirectories(Path installBase, Path outputBase, Path workspace, String productName) {
+    this(new ServerDirectories(installBase, outputBase), workspace, false, productName);
   }
 
   /**
