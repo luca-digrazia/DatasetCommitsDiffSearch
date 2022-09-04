@@ -10,6 +10,7 @@ import java.io.InterruptedIOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
@@ -209,7 +210,8 @@ public class JarClassPathElement implements ClassPathElement {
     public ProtectionDomain getProtectionDomain(ClassLoader classLoader) {
         final URL url;
         try {
-            url = jarPath.toURI().toURL();
+            URI uri = new URI("file", null, jarPath.getPath(), null);
+            url = uri.toURL();
         } catch (URISyntaxException | MalformedURLException e) {
             throw new RuntimeException("Unable to create protection domain for " + jarPath, e);
         }
