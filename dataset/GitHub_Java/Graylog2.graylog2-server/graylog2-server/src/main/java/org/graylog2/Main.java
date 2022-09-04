@@ -36,11 +36,14 @@ import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
-import com.google.inject.ProvisionException;
-import com.google.inject.spi.Message;
-import com.mongodb.MongoException;
 import org.apache.log4j.Level;
-import org.graylog2.bindings.*;
+import org.graylog2.bindings.AlarmCallbackBindings;
+import org.graylog2.bindings.InitializerBindings;
+import org.graylog2.bindings.MessageFilterBindings;
+import org.graylog2.bindings.MessageOutputBindings;
+import org.graylog2.bindings.PersistenceServicesBindings;
+import org.graylog2.bindings.ServerBindings;
+import org.graylog2.bindings.ServerMessageInputBindings;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
@@ -192,38 +195,19 @@ public final class Main extends NodeRunner {
         final ServerStatus serverStatus = injector.getInstance(ServerStatus.class);
         serverStatus.setLifecycle(Lifecycle.STARTING);
 
-        ActivityWriter activityWriter = null;
-        ServiceManager serviceManager = null;
-        try {
-            activityWriter = injector.getInstance(ActivityWriter.class);
-            serviceManager = injector.getInstance(ServiceManager.class);
-        } catch (ProvisionException e) {
-            for (Message message : e.getErrorMessages()) {
-                if (message.getCause() instanceof MongoException) {
-                    LOG.error(UI.wallString("Unable to connect to MongoDB. Is it running and the configuration correct?", null));
-                    System.exit(-1);
-                }
-            }
+        final ActivityWriter activityWriter = injector.getInstance(ActivityWriter.class);
+        final ServiceManager serviceManager = injector.getInstance(ServiceManager.class);
 
-            LOG.error("Guice error", e);
-            System.exit(-1);
-        } catch (Exception e) {
-            LOG.error("Unexpected exception", e);
-            System.exit(-1);
-        }
-
-        final ActivityWriter finalActivityWriter = activityWriter;
-        final ServiceManager finalServiceManager = serviceManager;
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
             public void run() {
                 String msg = "SIGNAL received. Shutting down.";
                 LOG.info(msg);
-                finalActivityWriter.write(new Activity(msg, Main.class));
+                activityWriter.write(new Activity(msg, Main.class));
 
                 GracefulShutdown shutdown = injector.getInstance(GracefulShutdown.class);
                 shutdown.runWithoutExit();
-                finalServiceManager.stopAsync().awaitStopped();
+                serviceManager.stopAsync().awaitStopped();
             }
         });
 
