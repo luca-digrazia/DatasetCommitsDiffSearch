@@ -353,7 +353,12 @@ public class IndicesAdapterES6 implements IndicesAdapter {
     }
 
     private HealthStatus mapHealthStatus(Health.Status status) {
-        return HealthStatus.fromString(status.toString());
+        switch (status) {
+            case RED: return HealthStatus.Red;
+            case YELLOW: return HealthStatus.Yellow;
+            case GREEN: return HealthStatus.Green;
+            default: throw new IllegalStateException("Unexpected cluster status: " + status);
+        }
     }
 
     private Health.Status waitForStatus(String index, @SuppressWarnings("SameParameterValue") Health.Status clusterHealthStatus) {
