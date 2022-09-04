@@ -45,7 +45,11 @@ public class ExpandingConfigSource extends AbstractDelegatingConfigSource {
     }
 
     String expand(final String value) {
-        return expandValue(cache, value);
+        if (value == null)
+            return null;
+        final Expression compiled = cache.exprCache.computeIfAbsent(value,
+                str -> Expression.compile(str, Expression.Flag.LENIENT_SYNTAX));
+        return compiled.evaluate(ConfigExpander.INSTANCE);
     }
 
     public void flush() {
@@ -66,14 +70,6 @@ public class ExpandingConfigSource extends AbstractDelegatingConfigSource {
                 NO_EXPAND.set(Boolean.TRUE);
             }
         }
-    }
-
-    public static String expandValue(Cache cache, String value) {
-        if (value == null)
-            return null;
-        final Expression compiled = cache.exprCache.computeIfAbsent(value,
-                str -> Expression.compile(str, Expression.Flag.LENIENT_SYNTAX));
-        return compiled.evaluate(ConfigExpander.INSTANCE);
     }
 
     /**
