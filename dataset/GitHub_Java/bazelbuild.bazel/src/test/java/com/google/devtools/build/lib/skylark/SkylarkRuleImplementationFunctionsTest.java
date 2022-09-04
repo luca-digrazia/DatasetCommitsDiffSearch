@@ -439,7 +439,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolInInputsLegacy() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=false");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -454,7 +453,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolAttribute() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -470,7 +468,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testCreateSpawnActionWithToolAttributeIgnoresToolsInInputs() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
     setupToolInInputsTest(
         "output = ctx.actions.declare_file('bar.out')",
         "ctx.actions.run_shell(",
@@ -482,26 +479,6 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     RuleConfiguredTarget target = (RuleConfiguredTarget) getConfiguredTarget("//bar:my_rule");
     SpawnAction action = (SpawnAction) Iterables.getOnlyElement(target.getActions());
     assertThat(action.getTools()).isNotEmpty();
-  }
-
-  @Test
-  public void testCreateSpawnActionWithToolInInputsFailAtAnalysisTime() throws Exception {
-    setSkylarkSemanticsOptions("--incompatible_no_support_tools_in_action_inputs=true");
-    setupToolInInputsTest(
-        "output = ctx.actions.declare_file('bar.out')",
-        "ctx.actions.run_shell(",
-        "  inputs = ctx.attr.exe.files,",
-        "  outputs = [output],",
-        "  command = 'boo bar baz',",
-        ")");
-    try {
-      getConfiguredTarget("//bar:my_rule");
-    } catch (Throwable t) {
-      // Expected
-    }
-    assertThat(eventCollector).hasSize(1);
-    assertThat(eventCollector.iterator().next().getMessage())
-        .containsMatch("Found tool\\(s\\) '.*' in inputs");
   }
 
   @Test
@@ -1289,8 +1266,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
       getConfiguredTarget("//test:my_rule");
       fail();
     } catch (AssertionError expected) {
-      assertThat(expected).hasMessageThat()
-          .contains("unexpected keyword 'foo' in call to DefaultInfo");
+      assertThat(expected).hasMessageThat().contains("Invalid field for default provider: foo");
     }
   }
 
