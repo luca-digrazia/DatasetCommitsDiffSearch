@@ -2,17 +2,13 @@ package io.quarkus.hibernate.search.elasticsearch.runtime;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-import java.util.OptionalInt;
 
+import org.hibernate.search.backend.elasticsearch.index.IndexLifecycleStrategyName;
 import org.hibernate.search.backend.elasticsearch.index.IndexStatus;
-import org.hibernate.search.mapper.orm.automaticindexing.session.AutomaticIndexingSynchronizationStrategyNames;
-import org.hibernate.search.mapper.orm.schema.management.SchemaManagementStrategyName;
+import org.hibernate.search.mapper.orm.automaticindexing.AutomaticIndexingSynchronizationStrategyName;
 import org.hibernate.search.mapper.orm.search.loading.EntityLoadingCacheLookupStrategy;
-import org.hibernate.search.util.common.SearchException;
-import org.hibernate.search.util.common.impl.StringHelper;
 
 import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigDocSection;
@@ -37,13 +33,6 @@ public class HibernateSearchElasticsearchRuntimeConfig {
     @ConfigItem(name = "elasticsearch")
     @ConfigDocSection
     public ElasticsearchAdditionalBackendsRuntimeConfig additionalBackends;
-
-    /**
-     * Configuration for automatic creation and validation of the Elasticsearch schema:
-     * indexes, their mapping, their settings.
-     */
-    @ConfigItem
-    SchemaManagementConfig schemaManagement;
 
     /**
      * Configuration for how entities are loaded by a search query.
@@ -73,15 +62,8 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         /**
          * The list of hosts of the Elasticsearch servers.
          */
-        @ConfigItem(defaultValue = "localhost:9200")
+        @ConfigItem(defaultValue = "http://localhost:9200")
         List<String> hosts;
-
-        /**
-         * The protocol to use when contacting Elasticsearch servers.
-         * Set to "https" to enable SSL/TLS.
-         */
-        @ConfigItem(defaultValue = "http")
-        ElasticsearchClientProtocol protocol;
 
         /**
          * The username used for authentication.
@@ -120,12 +102,6 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         DiscoveryConfig discovery;
 
         /**
-         * Configuration for the thread pool assigned to the backend.
-         */
-        @ConfigItem
-        ThreadPoolConfig threadPool;
-
-        /**
          * The default configuration for the Elasticsearch indexes.
          */
         @ConfigItem
@@ -139,53 +115,13 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         Map<String, ElasticsearchIndexConfig> indexes;
     }
 
-    public enum ElasticsearchClientProtocol {
-        /**
-         * Use clear-text HTTP, with SSL/TLS disabled.
-         */
-        HTTP("http"),
-        /**
-         * Use HTTPS, with SSL/TLS enabled.
-         */
-        HTTPS("https");
-
-        public static ElasticsearchClientProtocol of(String value) {
-            return StringHelper.parseDiscreteValues(
-                    values(),
-                    ElasticsearchClientProtocol::getHibernateSearchString,
-                    (invalidValue, validValues) -> new SearchException(
-                            String.format(
-                                    Locale.ROOT,
-                                    "Invalid protocol: '%1$s'. Valid protocols are: %2$s.",
-                                    invalidValue,
-                                    validValues)),
-                    value);
-        }
-
-        private final String hibernateSearchString;
-
-        ElasticsearchClientProtocol(String hibernateSearchString) {
-            this.hibernateSearchString = hibernateSearchString;
-        }
-
-        public String getHibernateSearchString() {
-            return hibernateSearchString;
-        }
-    }
-
     @ConfigGroup
     public static class ElasticsearchIndexConfig {
         /**
-         * Configuration for the schema management of the indexes.
+         * Configuration for the lifecyle of the indexes.
          */
         @ConfigItem
-        ElasticsearchIndexSchemaManagementConfig schemaManagement;
-
-        /**
-         * Configuration for the indexing process that creates, updates and deletes documents.
-         */
-        @ConfigItem
-        ElasticsearchIndexIndexingConfig indexing;
+        LifecycleConfig lifecycle;
     }
 
     @ConfigGroup
@@ -203,6 +139,11 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         @ConfigItem(defaultValue = "10S")
         Duration refreshInterval;
 
+        /**
+         * The scheme that should be used for the new nodes discovered.
+         */
+        @ConfigItem(defaultValue = "http")
+        String defaultScheme;
     }
 
     @ConfigGroup
@@ -230,167 +171,13 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         /**
          * The synchronization strategy to use when indexing automatically.
          * <p>
-         * Defines how complete indexing should be before resuming the application thread
-         * after a database transaction is committed.
+         * Defines the status for which you wait before considering the operation completed by Hibernate Search.
          * <p>
-         * Available values:
-         * <table>
-         * <thead>
-         * <tr>
-         * <th rowspan="2">
-         * <p>
-         * Strategy
-         * </p>
-         * </th>
-         * <th colspan="3">
-         * <p>
-         * Guarantees when the application thread resumes
-         * </p>
-         * </th>
-         * <th rowspan="2">
-         * <p>
-         * Throughput
-         * </p>
-         * </th>
-         * </tr>
-         * <tr>
-         * <th>
-         * <p>
-         * Changes applied
-         * </p>
-         * </th>
-         * <th>
-         * <p>
-         * Changes safe from crash/power loss
-         * </p>
-         * </th>
-         * <th>
-         * <p>
-         * Changes visible on search
-         * </p>
-         * </th>
-         * </tr>
-         * </thead>
-         * <tbody>
-         * <tr>
-         * <td>
-         * <p>
-         * <code>{@value AutomaticIndexingSynchronizationStrategyNames#ASYNC}</code>
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * No guarantee
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * No guarantee
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * No guarantee
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Best
-         * </p>
-         * </td>
-         * </tr>
-         * <tr>
-         * <td>
-         * <p>
-         * <code>{@value AutomaticIndexingSynchronizationStrategyNames#WRITE_SYNC}</code> (<strong>default</strong>)
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Guaranteed
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Guaranteed
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * No guarantee
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Medium
-         * </p>
-         * </td>
-         * </tr>
-         * <tr>
-         * <td>
-         * <p>
-         * <code>{@value AutomaticIndexingSynchronizationStrategyNames#READ_SYNC}</code>
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Guaranteed
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * No guarantee
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Guaranteed
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Medium to worst
-         * </p>
-         * </td>
-         * </tr>
-         * <tr>
-         * <td>
-         * <p>
-         * <code>{@value AutomaticIndexingSynchronizationStrategyNames#SYNC}</code>
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Guaranteed
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Guaranteed
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Guaranteed
-         * </p>
-         * </td>
-         * <td>
-         * <p>
-         * Worst
-         * </p>
-         * </td>
-         * </tr>
-         * </tbody>
-         * </table>
-         * <p>
-         * See
-         * <a href=
-         * "https://docs.jboss.org/hibernate/search/6.0/reference/en-US/html_single/#mapper-orm-indexing-automatic-synchronization">this
-         * section of the reference documentation</a>
-         * for more information.
+         * Use {@code queued} or {@code committed} in production environments.
+         * {@code searchable} is useful in integration tests.
          */
-        @ConfigItem(defaultValue = AutomaticIndexingSynchronizationStrategyNames.WRITE_SYNC)
-        String strategy;
+        @ConfigItem(defaultValue = "committed")
+        AutomaticIndexingSynchronizationStrategyName strategy;
     }
 
     @ConfigGroup
@@ -419,45 +206,18 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         EntityLoadingCacheLookupStrategy strategy;
     }
 
+    // We can't set actual default values in this section,
+    // otherwise "quarkus.hibernate-search.elasticsearch.index-defaults" will be ignored.
     @ConfigGroup
-    public static class SchemaManagementConfig {
+    public static class LifecycleConfig {
 
         /**
          * The strategy used for index lifecycle.
          */
         // We can't set an actual default value here: see comment on this class.
-        @ConfigItem(defaultValue = "create-or-validate")
-        SchemaManagementStrategyName strategy;
+        @ConfigItem(defaultValueDocumentation = "create")
+        Optional<IndexLifecycleStrategyName> strategy;
 
-    }
-
-    @ConfigGroup
-    public static class ThreadPoolConfig {
-        /**
-         * The size of the thread pool assigned to the backend.
-         * <p>
-         * Note that number is <em>per backend</em>, not per index.
-         * Adding more indexes will not add more threads.
-         * <p>
-         * As all operations happening in this thread-pool are non-blocking,
-         * raising its size above the number of processor cores available to the JVM will not bring noticeable performance
-         * benefit.
-         * The only reason to alter this setting would be to reduce the number of threads;
-         * for example, in an application with a single index with a single indexing queue,
-         * running on a machine with 64 processor cores,
-         * you might want to bring down the number of threads.
-         * <p>
-         * Defaults to the number of processor cores available to the JVM on startup.
-         */
-        // We can't set an actual default value here: see comment on this class.
-        @ConfigItem
-        OptionalInt size;
-    }
-
-    // We can't set actual default values in this section,
-    // otherwise "quarkus.hibernate-search.elasticsearch.index-defaults" will be ignored.
-    @ConfigGroup
-    public static class ElasticsearchIndexSchemaManagementConfig {
         /**
          * The minimal cluster status required.
          */
@@ -471,31 +231,5 @@ public class HibernateSearchElasticsearchRuntimeConfig {
         // We can't set an actual default value here: see comment on this class.
         @ConfigItem(defaultValueDocumentation = "10S")
         Optional<Duration> requiredStatusWaitTimeout;
-    }
-
-    // We can't set actual default values in this section,
-    // otherwise "quarkus.hibernate-search.elasticsearch.index-defaults" will be ignored.
-    @ConfigGroup
-    public static class ElasticsearchIndexIndexingConfig {
-        /**
-         * The number of indexing queues assigned to each index.
-         */
-        // We can't set an actual default value here: see comment on this class.
-        @ConfigItem(defaultValueDocumentation = "10")
-        OptionalInt queueCount;
-
-        /**
-         * The size of indexing queues.
-         */
-        // We can't set an actual default value here: see comment on this class.
-        @ConfigItem(defaultValueDocumentation = "1000")
-        OptionalInt queueSize;
-
-        /**
-         * The maximum size of bulk requests created when processing indexing queues.
-         */
-        // We can't set an actual default value here: see comment on this class.
-        @ConfigItem(defaultValueDocumentation = "100")
-        OptionalInt maxBulkSize;
     }
 }
