@@ -15,28 +15,22 @@
  */
 package io.quarkus.gradle.tasks;
 
-import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
 import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.URI;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.jar.Attributes;
 import java.util.jar.Manifest;
 import java.util.zip.ZipEntry;
@@ -60,7 +54,6 @@ import io.quarkus.deployment.ApplicationInfoUtil;
 import io.quarkus.dev.DevModeContext;
 import io.quarkus.dev.DevModeMain;
 import io.quarkus.gradle.QuarkusPluginExtension;
-import io.quarkus.utilities.JavaBinFinder;
 
 /**
  * @author <a href="mailto:stalep@gmail.com">Ståle Pedersen</a>
@@ -167,7 +160,7 @@ public class QuarkusDev extends QuarkusTask {
         DevModeContext context = new DevModeContext();
         try {
             List<String> args = new ArrayList<>();
-            args.add(JavaBinFinder.findBin());
+            args.add(findJavaTool());
             if (getDebug() == null) {
                 // debug mode not specified
                 // make sure 5005 is not used, we don't want to just fail if something else is using it
@@ -280,15 +273,16 @@ public class QuarkusDev extends QuarkusTask {
             args.add(wiringClassesDirectory.getAbsolutePath());
             args.add(new File(getBuildDir(), "transformer-cache").getAbsolutePath());
             ProcessBuilder pb = new ProcessBuilder(args.toArray(new String[0]));
-            pb.redirectErrorStream(true);
+            pb.redirectError(ProcessBuilder.Redirect.INHERIT);
+            pb.redirectOutput(ProcessBuilder.Redirect.INHERIT);
             pb.redirectInput(ProcessBuilder.Redirect.INHERIT);
             pb.directory(extension.outputDirectory());
             System.out.println("Starting process: ");
             pb.command().forEach(System.out::println);
             System.out.println("Args: ");
             args.forEach(System.out::println);
-
             Process p = pb.start();
+
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
                 @Override
                 public void run() {
@@ -296,9 +290,6 @@ public class QuarkusDev extends QuarkusTask {
                 }
             }, "Development Mode Shutdown Hook"));
             try {
-                ExecutorService es = Executors.newSingleThreadExecutor();
-                es.submit(() -> copyOutputToConsole(p.getInputStream()));
-
                 p.waitFor();
             } catch (Exception e) {
                 p.destroy();
@@ -310,16 +301,43 @@ public class QuarkusDev extends QuarkusTask {
         }
     }
 
-    private void copyOutputToConsole(InputStream is) {
-        try (InputStreamReader isr = new InputStreamReader(is, StandardCharsets.UTF_8);
-                BufferedReader br = new BufferedReader(isr)) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                System.out.println(line);
+    /**
+     * Search for the java command in the order:
+     * 1. maven-toolchains plugin configuration
+     * 2. java.home location
+     * 3. java[.exe] on the system path
+     *
+     * @return the java command to use
+     */
+    protected String findJavaTool() {
+        // use the same JVM as the one used to run Maven (the "java.home" one)
+        String java = System.getProperty("java.home") + File.separator + "bin" + File.separator + "java";
+        File javaCheck = new File(java);
+        if (!javaCheck.canExecute()) {
+
+            java = null;
+            // Try executable extensions if windows
+            if (OS.determineOS() == OS.WINDOWS && System.getenv().containsKey("PATHEXT")) {
+                String extpath = System.getenv("PATHEXT");
+                String[] exts = extpath.split(";");
+                for (String ext : exts) {
+                    File winExe = new File(javaCheck.getAbsolutePath() + ext);
+                    if (winExe.canExecute()) {
+                        java = winExe.getAbsolutePath();
+                        break;
+                    }
+                }
             }
-        } catch (Exception e) {
-            throw new GradleException("Failed to copy output to console", e);
+            // Fallback to java on the path
+            if (java == null) {
+                if (OS.determineOS() == OS.WINDOWS) {
+                    java = "java.exe";
+                } else {
+                    java = "java";
+                }
+            }
         }
+        return java;
     }
 
     private void addGradlePluginDeps(StringBuilder classPathManifest, DevModeContext context) {
@@ -356,4 +374,46 @@ public class QuarkusDev extends QuarkusTask {
         }
     }
 
+    /**
+     * Enum to classify the os.name system property
+     */
+    static enum OS {
+        WINDOWS,
+        LINUX,
+        MAC,
+        OTHER;
+
+        private String version;
+
+        public String getVersion() {
+            return version;
+        }
+
+        public void setVersion(String version) {
+            this.version = version;
+        }
+
+        static OS determineOS() {
+            OS os = OS.OTHER;
+            String osName = System.getProperty("os.name");
+            osName = osName.toLowerCase();
+            if (osName.contains("windows")) {
+                os = OS.WINDOWS;
+            } else if (osName.contains("linux")
+                    || osName.contains("freebsd")
+                    || osName.contains("unix")
+                    || osName.contains("sunos")
+                    || osName.contains("solaris")
+                    || osName.contains("aix")) {
+                os = OS.LINUX;
+            } else if (osName.contains("mac os")) {
+                os = OS.MAC;
+            } else {
+                os = OS.OTHER;
+            }
+
+            os.setVersion(System.getProperty("os.version"));
+            return os;
+        }
+    }
 }

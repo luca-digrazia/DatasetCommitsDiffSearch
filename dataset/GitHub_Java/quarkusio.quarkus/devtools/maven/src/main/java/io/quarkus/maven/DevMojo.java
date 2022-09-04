@@ -33,6 +33,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.jar.Attributes;
@@ -41,6 +43,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 
 import org.apache.maven.execution.MavenSession;
+import org.apache.maven.model.Dependency;
+import org.apache.maven.model.Resource;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
@@ -50,11 +54,13 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.apache.maven.toolchain.Toolchain;
 import org.apache.maven.toolchain.ToolchainManager;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 
+import io.quarkus.bootstrap.model.AppArtifactKey;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
@@ -65,13 +71,10 @@ import io.quarkus.dev.DevModeContext;
 import io.quarkus.dev.DevModeMain;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.utilities.MojoUtils;
-import io.quarkus.utilities.JavaBinFinder;
 
 /**
- * The dev mojo, that runs a quarkus app in a forked process. A background compilation process is launched and any changes are
- * automatically reflected in your running application.
+ * The dev mojo, that runs a quarkus app in a forked process
  * <p>
- * You can use this dev mode in a remote container environment with {@code remote-dev}.
  */
 @Mojo(name = "dev", defaultPhase = LifecyclePhase.PREPARE_PACKAGE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class DevMojo extends AbstractMojo {
@@ -180,7 +183,7 @@ public class DevMojo extends AbstractMojo {
 
         try {
             List<String> args = new ArrayList<>();
-            String javaTool = JavaBinFinder.findBin();
+            String javaTool = findJavaTool();
             getLog().debug("Using javaTool: " + javaTool);
             args.add(javaTool);
             if (debug == null) {
@@ -233,10 +236,52 @@ public class DevMojo extends AbstractMojo {
             final AppModel appModel;
             try {
                 final LocalProject localProject = LocalProject.loadWorkspace(outputDirectory.toPath());
-                for (LocalProject project : localProject.getSelfWithLocalDeps()) {
+                //we need to establish a partial ordering of the projects (i.e. 'reactor build order')
+
+                List<AppArtifactKey> orderedProjects = new ArrayList<>();
+                HashSet<AppArtifactKey> toplace = new HashSet<>();
+                for (Map.Entry<AppArtifactKey, LocalProject> i : localProject.getWorkspace().getProjects().entrySet()) {
+                    toplace.add(i.getKey());
+                }
+                //TODO: there is probably a better algorithm than this to establish the partial ordering
+                //basically we just iterate and add anything to the list that has not dependencies in 'toplace'
+                //this has worst case performance of O(n^2), if there is a linear relationship between
+                //the modules and the original order is reversed. As N is generally fairly small we can live with this for now
+                for (;;) {
+                    boolean changed = false;
+                    Iterator<AppArtifactKey> it = toplace.iterator();
+                    while (it.hasNext()) {
+                        AppArtifactKey current = it.next();
+                        LocalProject project = localProject.getWorkspace().getProjects().get(current);
+                        boolean canPlace = true;
+                        for (Dependency dep : project.getRawModel().getDependencies()) {
+                            AppArtifactKey key = new AppArtifactKey(dep.getGroupId(), dep.getArtifactId(), dep.getClassifier(),
+                                    dep.getType());
+                            if (toplace.contains(key)) {
+                                canPlace = false;
+                                break;
+                            }
+                        }
+                        if (canPlace) {
+                            changed = true;
+                            orderedProjects.add(current);
+                            it.remove();
+                        }
+                    }
+                    if (toplace.isEmpty()) {
+                        break;
+                    }
+                    if (!changed) {
+                        throw new MojoFailureException("Failed to establish partial ordering between projects "
+                                + localProject.getWorkspace().getProjects().keySet());
+                    }
+
+                }
+                for (AppArtifactKey i : orderedProjects) {
                     String sourcePath = null;
                     String classesPath = null;
                     String resourcePath = null;
+                    LocalProject project = localProject.getWorkspace().getProjects().get(i);
                     Path javaSourcesDir = project.getSourcesSourcesDir();
                     if (Files.isDirectory(javaSourcesDir)) {
                         sourcePath = javaSourcesDir.toAbsolutePath().toString();
@@ -249,19 +294,17 @@ public class DevMojo extends AbstractMojo {
                     if (Files.isDirectory(resourcesSourcesDir)) {
                         resourcePath = resourcesSourcesDir.toAbsolutePath().toString();
                     }
-                    DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(project.getArtifactId(), sourcePath,
+                    DevModeContext.ModuleInfo moduleInfo = new DevModeContext.ModuleInfo(i.getArtifactId(), sourcePath,
                             classesPath, resourcePath);
                     devModeContext.getModules().add(moduleInfo);
                 }
 
-                /*
-                 * TODO: support multiple resources dirs for config hot deployment
-                 * String resources = null;
-                 * for (Resource i : project.getBuild().getResources()) {
-                 * resources = i.getDirectory();
-                 * break;
-                 * }
-                 */
+                String resources = null;
+                for (Resource i : project.getBuild().getResources()) {
+                    //todo: support multiple resources dirs for config hot deployment
+                    resources = i.getDirectory();
+                    break;
+                }
 
                 appModel = new BootstrapAppModelResolver(MavenArtifactResolver.builder()
                         .setRepositorySystem(repoSystem)
@@ -269,7 +312,6 @@ public class DevMojo extends AbstractMojo {
                         .setRemoteRepositories(repos)
                         .setWorkspace(localProject.getWorkspace())
                         .build())
-                                .setDevMode(true)
                                 .resolveModel(localProject.getAppArtifact());
             } catch (Exception e) {
                 throw new MojoExecutionException("Failed to resolve Quarkus application model", e);
@@ -358,7 +400,7 @@ public class DevMojo extends AbstractMojo {
             try {
                 int ret = p.waitFor();
                 if (ret != 0) {
-                    throw new MojoFailureException("JVM exited with error code: " + ret);
+                    throw new MojoFailureException("JVM exited with error code: " + String.valueOf(ret));
                 }
             } catch (Exception e) {
                 p.destroy();
@@ -368,6 +410,66 @@ public class DevMojo extends AbstractMojo {
         } catch (Exception e) {
             throw new MojoFailureException("Failed to run", e);
         }
+    }
+
+    private static void addProperty(List<String> args, String name, Object value) {
+        args.add("-D" + name + "=" + value);
+    }
+
+    /**
+     * Search for the java command in the order:
+     * 1. maven-toolchains plugin configuration
+     * 2. java.home location
+     * 3. java[.exe] on the system path
+     *
+     * @return the java command to use
+     */
+    protected String findJavaTool() {
+        String java = null;
+
+        // See if a toolchain is configured
+        if (getToolchainManager() != null) {
+            Toolchain toolchain = getToolchainManager().getToolchainFromBuildContext("jdk", getSession());
+            if (toolchain != null) {
+                java = toolchain.findTool("java");
+                getLog().debug("JVM from toolchain: " + java);
+            }
+        }
+        if (java == null) {
+            // use the same JVM as the one used to run Maven (the "java.home" one)
+            java = System.getProperty("java.home") + File.separator + "bin" + File.separator + "java";
+            File javaCheck = new File(java);
+            getLog().debug("Checking: " + javaCheck.getAbsolutePath());
+            if (!javaCheck.canExecute()) {
+                getLog().debug(javaCheck.getAbsolutePath() + " is not executable");
+
+                java = null;
+                // Try executable extensions if windows
+                if (OS.determineOS() == OS.WINDOWS && System.getenv().containsKey("PATHEXT")) {
+                    String extpath = System.getenv("PATHEXT");
+                    String[] exts = extpath.split(";");
+                    for (String ext : exts) {
+                        File winExe = new File(javaCheck.getAbsolutePath() + ext);
+                        getLog().debug("Checking: " + winExe.getAbsolutePath());
+                        if (winExe.canExecute()) {
+                            java = winExe.getAbsolutePath();
+                            getLog().debug("Executable: " + winExe.getAbsolutePath());
+                            break;
+                        }
+                    }
+                }
+                // Fallback to java on the path
+                if (java == null) {
+                    if (OS.determineOS() == OS.WINDOWS) {
+                        java = "java.exe";
+                    } else {
+                        java = "java";
+                    }
+                }
+            }
+        }
+        getLog().debug("findJavaTool, selected JVM: " + java);
+        return java;
     }
 
     private void addToClassPaths(StringBuilder classPathManifest, DevModeContext classPath, File file) {
@@ -383,5 +485,48 @@ public class DevMojo extends AbstractMojo {
             classPathManifest.append("/");
         }
         classPathManifest.append(" ");
+    }
+
+    /**
+     * Enum to classify the os.name system property
+     */
+    static enum OS {
+        WINDOWS,
+        LINUX,
+        MAC,
+        OTHER;
+
+        private String version;
+
+        public String getVersion() {
+            return version;
+        }
+
+        public void setVersion(String version) {
+            this.version = version;
+        }
+
+        static OS determineOS() {
+            OS os = OS.OTHER;
+            String osName = System.getProperty("os.name");
+            osName = osName.toLowerCase();
+            if (osName.contains("windows")) {
+                os = OS.WINDOWS;
+            } else if (osName.contains("linux")
+                    || osName.contains("freebsd")
+                    || osName.contains("unix")
+                    || osName.contains("sunos")
+                    || osName.contains("solaris")
+                    || osName.contains("aix")) {
+                os = OS.LINUX;
+            } else if (osName.contains("mac os")) {
+                os = OS.MAC;
+            } else {
+                os = OS.OTHER;
+            }
+
+            os.setVersion(System.getProperty("os.version"));
+            return os;
+        }
     }
 }

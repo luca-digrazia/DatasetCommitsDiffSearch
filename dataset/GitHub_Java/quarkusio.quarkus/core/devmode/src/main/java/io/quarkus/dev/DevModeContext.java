@@ -33,13 +33,13 @@ public class DevModeContext implements Serializable {
 
     public static class ModuleInfo implements Serializable {
         private final String name;
-        private final List<String> sourcePaths;
+        private final String sourcePath;
         private final String classesPath;
         private final String resourcePath;
 
-        public ModuleInfo(String name, List<String> sourcePaths, String classesPath, String resourcePath) {
+        public ModuleInfo(String name, String sourcePath, String classesPath, String resourcePath) {
             this.name = name;
-            this.sourcePaths = sourcePaths;
+            this.sourcePath = sourcePath;
             this.classesPath = classesPath;
             this.resourcePath = resourcePath;
         }
@@ -48,8 +48,8 @@ public class DevModeContext implements Serializable {
             return name;
         }
 
-        public List<String> getSourcePaths() {
-            return sourcePaths;
+        public String getSourcePath() {
+            return sourcePath;
         }
 
         public String getClassesPath() {
