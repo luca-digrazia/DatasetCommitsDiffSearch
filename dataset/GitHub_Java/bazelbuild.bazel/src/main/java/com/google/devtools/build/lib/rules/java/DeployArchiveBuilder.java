@@ -23,12 +23,12 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.IterablesChain;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -64,7 +64,6 @@ public class DeployArchiveBuilder {
   private ImmutableList<String> deployManifestLines = ImmutableList.of();
   @Nullable private Artifact launcher;
   @Nullable private Function<Artifact, Artifact> derivedJars = null;
-  private boolean checkDesugarDeps;
 
   /**
    * Type of compression to apply to output archive.
@@ -162,12 +161,6 @@ public class DeployArchiveBuilder {
 
   public DeployArchiveBuilder setDerivedJarFunction(Function<Artifact, Artifact> derivedJars) {
     this.derivedJars = derivedJars;
-    return this;
-  }
-
-  /** Whether singlejar should process META-INF/desugar_deps files and fail upon inconsistencies. */
-  public DeployArchiveBuilder setCheckDesugarDeps(boolean checkDesugarDeps) {
-    this.checkDesugarDeps = checkDesugarDeps;
     return this;
   }
 
@@ -297,9 +290,6 @@ public class DeployArchiveBuilder {
             includeBuildData,
             compression,
             launcher);
-    if (checkDesugarDeps) {
-      commandLine = CommandLine.concat(commandLine, ImmutableList.of("--check_desugar_deps"));
-    }
 
     List<String> jvmArgs = ImmutableList.of(SINGLEJAR_MAX_MEMORY);
     ResourceSet resourceSet =
