@@ -236,7 +236,6 @@ public abstract class AbstractTcpTransport extends NettyTransport {
             handlers.put("tls", getSslHandlerCallable(input));
         }
         handlers.putAll(super.getChildChannelHandlers(input));
-        handlers.put("exception-logger", () -> new ExceptionLoggingChannelHandler(input, LOG));
 
         return handlers;
     }

@@ -20,15 +20,15 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
+import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
+import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
+import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import com.mongodb.BasicDBObjectBuilder;
 import com.mongodb.DBObject;
-import org.apache.shiro.authz.permission.WildcardPermission;
 import org.bson.types.ObjectId;
-import org.graylog.security.GrantPermissionResolver;
-import org.graylog.testing.mongodb.MongoDBFixtures;
-import org.graylog.testing.mongodb.MongoDBInstance;
 import org.graylog2.Configuration;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.database.MongoConnectionRule;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.security.PasswordAlgorithm;
 import org.graylog2.security.AccessTokenService;
@@ -41,6 +41,7 @@ import org.graylog2.shared.users.Role;
 import org.graylog2.shared.users.UserService;
 import org.joda.time.DateTimeZone;
 import org.junit.Before;
+import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
 import org.mockito.Mock;
@@ -51,17 +52,19 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 public class UserServiceImplTest {
+    @ClassRule
+    public static final InMemoryMongoDb MONGO = newInMemoryMongoDbRule().build();
     @Rule
-    public final MongoDBInstance mongodb = MongoDBInstance.createForClass();
-
+    public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
     @Rule
     public final MockitoRule mockitoRule = MockitoJUnit.rule();
-
+    
     private MongoConnection mongoConnection;
     private Configuration configuration;
     private UserImpl.Factory userFactory;
@@ -75,23 +78,21 @@ public class UserServiceImplTest {
     private InMemoryRolePermissionResolver permissionsResolver;
     @Mock
     private EventBus serverEventBus;
-    @Mock
-    private GrantPermissionResolver grantPermissionResolver;
 
     @Before
     public void setUp() throws Exception {
-        this.mongoConnection = mongodb.mongoConnection();
+        this.mongoConnection = mongoRule.getMongoConnection();
         this.configuration = new Configuration();
         this.userFactory = new UserImplFactory(configuration);
         this.permissions = new Permissions(ImmutableSet.of(new RestPermissions()));
         this.userService = new UserServiceImpl(mongoConnection, configuration, roleService, accessTokenService,
-                                               userFactory, permissionsResolver, serverEventBus, grantPermissionResolver);
+                                               userFactory, permissionsResolver, serverEventBus);
 
         when(roleService.getAdminRoleObjectId()).thenReturn("deadbeef");
     }
 
     @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testLoad() throws Exception {
         final User user = userService.load("user1");
         assertThat(user).isNotNull();
@@ -100,13 +101,13 @@ public class UserServiceImplTest {
     }
 
     @Test(expected = RuntimeException.class)
-    @MongoDBFixtures("UserServiceImplTest.json")
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testLoadDuplicateUser() throws Exception {
         userService.load("user-duplicate");
     }
 
     @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testDelete() throws Exception {
         assertThat(userService.delete("user1")).isEqualTo(1);
         assertThat(userService.delete("user-duplicate")).isEqualTo(2);
@@ -114,12 +115,13 @@ public class UserServiceImplTest {
     }
 
     @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testLoadAll() throws Exception {
         assertThat(userService.loadAll()).hasSize(4);
     }
 
     @Test
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void testSave() throws Exception {
         final User user = userService.create();
         user.setName("TEST");
@@ -148,7 +150,7 @@ public class UserServiceImplTest {
     }
 
     @Test
-    @MongoDBFixtures("UserServiceImplTest.json")
+    @UsingDataSet(loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testCount() throws Exception {
         assertThat(userService.count()).isEqualTo(4L);
     }
@@ -213,7 +215,7 @@ public class UserServiceImplTest {
         final InMemoryRolePermissionResolver permissionResolver = mock(InMemoryRolePermissionResolver.class);
         final UserService userService = new UserServiceImpl(mongoConnection, configuration, roleService,
                                                             accessTokenService,userFactory, permissionResolver,
-                                                            serverEventBus, grantPermissionResolver);
+                                                            serverEventBus);
 
         final UserImplFactory factory = new UserImplFactory(new Configuration());
         final UserImpl user = factory.create(new HashMap<>());
@@ -224,9 +226,8 @@ public class UserServiceImplTest {
         user.setPermissions(Collections.singletonList("hello:world"));
 
         when(permissionResolver.resolveStringPermission(role.getId())).thenReturn(Collections.singleton("foo:bar"));
-        when(grantPermissionResolver.resolvePermissionsForUser("user")).thenReturn(ImmutableSet.of(new WildcardPermission("perm:from:grant")));
 
         assertThat(userService.getPermissionsForUser(user)).containsOnly("users:passwordchange:user", "users:edit:user",
-                "foo:bar", "hello:world", "perm:from:grant", "users:tokenlist:user", "users:tokencreate:user", "users:tokenremove:user");
+                "foo:bar", "hello:world", "users:tokenlist:user", "users:tokencreate:user", "users:tokenremove:user");
     }
 }

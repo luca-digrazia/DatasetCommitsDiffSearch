@@ -1,26 +1,32 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.codecs;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import com.google.common.collect.ImmutableMap;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.syslog4j.server.impl.event.structured.StructuredSyslogServerEvent;
-import org.testng.annotations.BeforeTest;
-import org.testng.annotations.Test;
+import org.junit.Before;
+import org.junit.Rule;
+import org.junit.Test;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -28,8 +34,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 
-import static org.testng.Assert.assertEquals;
-import static org.testng.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 public class StructuredSyslogTest {
     // http://tools.ietf.org/rfc/rfc5424.txt
@@ -40,6 +48,9 @@ public class StructuredSyslogTest {
     private static final String ValidNonStructuredMessage = "<86>Dec 24 17:05:01 nb-lkoopmann CRON[10049]: pam_unix(cron:session): session closed for user root";
     private static final String MessageLookingLikeStructured = "<133>NOMA101FW01A: NetScreen device_id=NOMA101FW01A [Root]system-notification-00257(traffic): start_time=\"2011-12-23 17:33:43\" duration=0 reason=Creation";
 
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
     private final Configuration configuration = new Configuration(ImmutableMap.<String, Object>of(
             SyslogCodec.CK_FORCE_RDNS, false,
             SyslogCodec.CK_ALLOW_OVERRIDE_DATE, false,
@@ -47,10 +58,15 @@ public class StructuredSyslogTest {
             SyslogCodec.CK_STORE_FULL_MESSAGE, true
     ));
     private SyslogCodec syslogCodec;
+    @Mock
+    private MetricRegistry metricRegistry;
+    @Mock
+    private Timer mockedTimer;
 
-    @BeforeTest
+    @Before
     public void setUp() {
-        syslogCodec = new SyslogCodec(configuration);
+        when(metricRegistry.timer(any(String.class))).thenReturn(mockedTimer);
+        syslogCodec = new SyslogCodec(configuration, metricRegistry);
     }
 
     private StructuredSyslogServerEvent newEvent(String message) {
@@ -65,7 +81,7 @@ public class StructuredSyslogTest {
         expected.put("iut", "3");
 
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidStructuredMessage), false);
-        assertEquals(result, expected);
+        assertEquals(expected, result);
     }
 
     @Test
@@ -77,38 +93,38 @@ public class StructuredSyslogTest {
         expected.put("sequenceId", "1");
 
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidStructuredMultiMessage), false);
-        assertEquals(result, expected);
+        assertEquals(expected, result);
     }
 
     @Test
     public void testExtractFieldsWithoutExpansion() {
         // Order is not guaranteed in the current syslog4j implementation!
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidStructuredMultiMessageSameKey), false);
-        assertTrue(Pattern.compile("3|10").matcher((String) result.get("iut")).matches(), "iut value is not 3 or 10!");
+        assertTrue("iut value is not 3 or 10!", Pattern.compile("3|10").matcher((String) result.get("iut")).matches());
     }
 
     @Test
     public void testExtractFieldsWithExpansion() {
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidStructuredMultiMessageSameKey), true);
-        assertEquals(result.get("exampleSDID@32473_iut"), "3");
-        assertEquals(result.get("meta_iut"), "10");
+        assertEquals("3", result.get("exampleSDID@32473_iut"));
+        assertEquals("10", result.get("meta_iut"));
     }
 
     @Test
     public void testExtractNoFields() {
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidStructuredNoStructValues), false);
-        assertEquals(result, Collections.emptyMap());
+        assertEquals(Collections.<String, Object>emptyMap(), result);
     }
 
     @Test
     public void testExtractFieldsOfNonStructuredMessage() {
         Map<String, Object> result = syslogCodec.extractFields(newEvent(ValidNonStructuredMessage), false);
-        assertEquals(result.size(), 0);
+        assertEquals(0, result.size());
     }
 
     @Test
     public void testExtractFieldsOfAMessageThatOnlyLooksStructured() {
         Map<String, Object> result = syslogCodec.extractFields(newEvent(MessageLookingLikeStructured), false);
-        assertEquals(result.size(), 0);
+        assertEquals(0, result.size());
     }
 }

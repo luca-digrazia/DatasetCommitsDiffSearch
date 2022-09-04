@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.bootstrap;
 
@@ -38,10 +38,8 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.inject.Binder;
 import com.google.inject.CreationException;
-import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
-import com.google.inject.Stage;
 import com.google.inject.name.Names;
 import com.google.inject.spi.Message;
 import io.netty.util.internal.logging.InternalLoggerFactory;
@@ -49,12 +47,12 @@ import io.netty.util.internal.logging.Slf4JLoggerFactory;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.core.LoggerContext;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.graylog2.plugin.BaseConfiguration;
-import org.graylog2.plugin.DocsHelper;
 import org.graylog2.plugin.Plugin;
+import org.graylog2.plugin.PluginConfigBean;
 import org.graylog2.plugin.PluginLoaderConfig;
 import org.graylog2.plugin.PluginMetaData;
+import org.graylog2.plugin.PluginModule;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.Version;
@@ -65,15 +63,13 @@ import org.graylog2.shared.bindings.PluginBindings;
 import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.shared.plugins.PluginLoader;
 import org.graylog2.shared.utilities.ExceptionUtils;
-import org.graylog2.storage.UnsupportedElasticsearchException;
-import org.graylog2.storage.versionprobe.ElasticsearchProbeException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
 import java.lang.management.ManagementFactory;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Path;
-import java.security.Security;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -88,10 +84,6 @@ public abstract class CmdLineTool implements CliCommand {
     static {
         // Set up JDK Logging adapter, https://logging.apache.org/log4j/2.x/log4j-jul/index.html
         System.setProperty("java.util.logging.manager", "org.apache.logging.log4j.jul.LogManager");
-
-        // This needs to run before the first SSLContext is instantiated,
-        // because it sets up the default SSLAlgorithmConstraints
-        applySecuritySettings();
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(CmdLineTool.class);
@@ -119,7 +111,6 @@ public abstract class CmdLineTool implements CliCommand {
     protected String commandName = "command";
 
     protected Injector injector;
-    protected Injector coreConfigInjector;
 
     protected CmdLineTool(BaseConfiguration configuration) {
         this(null, configuration);
@@ -174,44 +165,17 @@ public abstract class CmdLineTool implements CliCommand {
      */
     protected void beforeStart() {}
 
-    private static void applySecuritySettings() {
-        // Disable insecure TLS parameters and algorithms by default.
-        // Prevent attacks like LOGJAM, LUCKY13, et al.
-        setSystemPropertyIfEmpty("jdk.tls.ephemeralDHKeySize", "2048");
-        setSystemPropertyIfEmpty("jdk.tls.rejectClientInitiatedRenegotiation", "true");
-
-        // Weirdly this is not a System property
-        Security.setProperty("jdk.tls.disabledAlgorithms", "CBC,3DES");
-
-        // Explicitly register Bouncy Castle as security provider.
-        // This allows us to use more key formats than with JCE
-        Security.addProvider(new BouncyCastleProvider());
-    }
-
-    private static void setSystemPropertyIfEmpty(String key, String value) {
-        if (System.getProperty(key) == null) {
-            System.setProperty(key, value);
-        }
-    }
-
     @Override
     public void run() {
         final Level logLevel = setupLogger();
+
+        final PluginBindings pluginBindings = installPluginConfigAndBindings(getPluginPath(configFile), chainingClassLoader);
 
         if (isDumpDefaultConfig()) {
             dumpDefaultConfigAndExit();
         }
 
-        installConfigRepositories();
-        installCommandConfig();
-        processConfiguration(jadConfig);
-
-        coreConfigInjector = setupCoreConfigInjector();
-
-        final Set<Plugin> plugins = loadPlugins(getPluginPath(configFile), chainingClassLoader);
-
-        installPluginConfig(plugins);
-        processConfiguration(jadConfig);
+        final NamedConfigParametersModule configModule = readConfiguration(configFile);
 
         if (isDumpConfig()) {
             dumpCurrentConfigAndExit();
@@ -227,13 +191,10 @@ public abstract class CmdLineTool implements CliCommand {
         final List<String> arguments = ManagementFactory.getRuntimeMXBean().getInputArguments();
         LOG.info("Running with JVM arguments: {}", Joiner.on(' ').join(arguments));
 
-        injector = setupInjector(new NamedConfigParametersModule(jadConfig.getConfigurationBeans()),
-                new PluginBindings(plugins),
-                binder -> binder.bind(ChainingClassLoader.class).toInstance(chainingClassLoader));
+        injector = setupInjector(configModule, pluginBindings, binder -> binder.bind(ChainingClassLoader.class).toInstance(chainingClassLoader));
 
         if (injector == null) {
-            LOG.error("Injector could not be created, exiting! (Please include the previous error messages in bug " +
-                    "reports.)");
+            LOG.error("Injector could not be created, exiting! (Please include the previous error messages in bug reports.)");
             System.exit(1);
         }
 
@@ -247,17 +208,6 @@ public abstract class CmdLineTool implements CliCommand {
         reporter.start();
 
         startCommand();
-    }
-
-    private void installCommandConfig() {
-        getCommandConfigurationBeans().forEach(jadConfig::addConfigurationBean);
-    }
-
-    private void installPluginConfig(Set<Plugin> plugins) {
-        plugins.stream()
-                .flatMap(plugin -> plugin.modules().stream())
-                .flatMap(pm -> pm.getConfigBeans().stream())
-                .forEach(jadConfig::addConfigurationBean);
     }
 
     protected abstract void startCommand();
@@ -311,10 +261,23 @@ public abstract class CmdLineTool implements CliCommand {
     }
 
     private void dumpDefaultConfigAndExit() {
-        installCommandConfig();
-        coreConfigInjector = setupCoreConfigInjector();
-        installPluginConfig(loadPlugins(getPluginPath(configFile), chainingClassLoader));
+        for (Object bean : getCommandConfigurationBeans())
+            jadConfig.addConfigurationBean(bean);
         dumpCurrentConfigAndExit();
+    }
+
+    private PluginBindings installPluginConfigAndBindings(Path pluginPath, ChainingClassLoader classLoader) {
+        final Set<Plugin> plugins = loadPlugins(pluginPath, classLoader);
+        final PluginBindings pluginBindings = new PluginBindings(plugins);
+        for (final Plugin plugin : plugins) {
+            for (final PluginModule pluginModule : plugin.modules()) {
+                for (final PluginConfigBean configBean : pluginModule.getConfigBeans()) {
+                    jadConfig.addConfigurationBean(configBean);
+                }
+            }
+
+        }
+        return pluginBindings;
     }
 
     private Path getPluginPath(String configFile) {
@@ -327,8 +290,7 @@ public abstract class CmdLineTool implements CliCommand {
     protected Set<Plugin> loadPlugins(Path pluginPath, ChainingClassLoader chainingClassLoader) {
         final Set<Plugin> plugins = new HashSet<>();
 
-        final PluginLoader pluginLoader = new PluginLoader(pluginPath.toFile(), chainingClassLoader,
-                coreConfigInjector);
+        final PluginLoader pluginLoader = new PluginLoader(pluginPath.toFile(), chainingClassLoader);
         for (Plugin plugin : pluginLoader.loadPlugins()) {
             final PluginMetaData metadata = plugin.metadata();
             if (capabilities().containsAll(metadata.getRequiredCapabilities())) {
@@ -371,11 +333,20 @@ public abstract class CmdLineTool implements CliCommand {
         return sb.toString();
     }
 
-    private void installConfigRepositories() {
+    protected NamedConfigParametersModule readConfiguration(final String configFile) {
+        final List<Object> beans = getCommandConfigurationBeans();
+        for (Object bean : beans) {
+            jadConfig.addConfigurationBean(bean);
+        }
         jadConfig.setRepositories(getConfigRepositories(configFile));
+
+        LOG.debug("Loading configuration from config file: {}", configFile);
+        processConfiguration(jadConfig);
+
+        return new NamedConfigParametersModule(jadConfig.getConfigurationBeans());
     }
 
-    protected void processConfiguration(JadConfig jadConfig) {
+    private void processConfiguration(JadConfig jadConfig) {
         try {
             jadConfig.process();
         } catch (RepositoryException e) {
@@ -415,32 +386,6 @@ public abstract class CmdLineTool implements CliCommand {
         }
     }
 
-    /**
-     * Set up a separate injector, containing only the core configuration bindings. It can be used to look up
-     * configuration values in modules at binding time.
-     */
-    protected Injector setupCoreConfigInjector() {
-        final NamedConfigParametersModule configModule =
-                new NamedConfigParametersModule(jadConfig.getConfigurationBeans());
-
-        Injector coreConfigInjector = null;
-        try {
-            coreConfigInjector = Guice.createInjector(Stage.PRODUCTION, ImmutableList.of(configModule,
-                    (Module) Binder::requireExplicitBindings));
-        } catch (CreationException e) {
-            annotateInjectorCreationException(e);
-        } catch (Exception e) {
-            LOG.error("Injector creation failed!", e);
-        }
-
-        if (coreConfigInjector == null) {
-            LOG.error("Injector for core configuration could not be created, exiting! (Please include the previous " +
-                    "error messages in bug reports.)");
-            System.exit(1);
-        }
-        return coreConfigInjector;
-    }
-
     protected void annotateInjectorCreationException(CreationException e) {
         annotateInjectorExceptions(e.getErrorMessages());
         throw e;
@@ -457,13 +402,6 @@ public abstract class CmdLineTool implements CliCommand {
             } else if (rootCause instanceof AccessDeniedException) {
                 LOG.error(UI.wallString("Unable to access file " + rootCause.getMessage()));
                 System.exit(-2);
-            } else if (rootCause instanceof UnsupportedElasticsearchException) {
-                final Version elasticsearchVersion = ((UnsupportedElasticsearchException) rootCause).getElasticsearchMajorVersion();
-                LOG.error(UI.wallString("Unsupported Elasticsearch version: " + elasticsearchVersion, DocsHelper.PAGE_ES_VERSIONS.toString()));
-                System.exit(-3);
-            } else if (rootCause instanceof ElasticsearchProbeException) {
-                LOG.error(UI.wallString(rootCause.getMessage(), DocsHelper.PAGE_ES_CONFIGURATION.toString()));
-                System.exit(-4);
             } else {
                 // other guice error, still print the raw messages
                 // TODO this could potentially print duplicate messages depending on what a subclass does...

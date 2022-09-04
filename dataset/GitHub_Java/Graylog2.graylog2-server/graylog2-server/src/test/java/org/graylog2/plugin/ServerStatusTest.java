@@ -25,9 +25,9 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -46,10 +46,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ServerStatusTest {
     @Rule
     public final TemporaryFolder temporaryFolder = new TemporaryFolder();
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
+
     @Mock private BaseConfiguration config;
     @Mock private EventBus eventBus;
 
@@ -67,12 +69,12 @@ public class ServerStatusTest {
 
     @Test
     public void testGetNodeId() throws Exception {
-        assertEquals(status.getNodeId().toString(), new String(Files.readAllBytes(tempFile.toPath()), StandardCharsets.UTF_8));
+        assertEquals(new String(Files.readAllBytes(tempFile.toPath()), StandardCharsets.UTF_8), status.getNodeId().toString());
     }
 
     @Test
     public void testGetLifecycle() throws Exception {
-        assertEquals(status.getLifecycle(), Lifecycle.UNINITIALIZED);
+        assertEquals(Lifecycle.UNINITIALIZED, status.getLifecycle());
     }
 
     @Test
@@ -164,18 +166,18 @@ public class ServerStatusTest {
     @Test
     @SuppressForbidden("Deliberate invocation")
     public void testGetTimezone() throws Exception {
-        assertEquals(status.getTimezone(), DateTimeZone.getDefault());
+        assertEquals(DateTimeZone.getDefault(), status.getTimezone());
     }
 
     @Test
     public void testAddCapability() throws Exception {
-        assertEquals(status.addCapability(ServerStatus.Capability.SERVER), status);
+        assertEquals(status, status.addCapability(ServerStatus.Capability.SERVER));
         assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.SERVER));
     }
 
     @Test
     public void testAddCapabilities() throws Exception {
-        assertEquals(status.addCapabilities(ServerStatus.Capability.LOCALMODE), status);
+        assertEquals(status, status.addCapabilities(ServerStatus.Capability.LOCALMODE));
         assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.LOCALMODE));
     }
 
@@ -183,7 +185,7 @@ public class ServerStatusTest {
     public void testPauseMessageProcessing() throws Exception {
         status.pauseMessageProcessing();
 
-        assertEquals(status.getLifecycle(), Lifecycle.PAUSED);
+        assertEquals(Lifecycle.PAUSED, status.getLifecycle());
         assertTrue(status.processingPauseLocked());
     }
 
@@ -191,7 +193,7 @@ public class ServerStatusTest {
     public void testPauseMessageProcessingWithLock() throws Exception {
         status.pauseMessageProcessing(true);
 
-        assertEquals(status.getLifecycle(), Lifecycle.PAUSED);
+        assertEquals(Lifecycle.PAUSED, status.getLifecycle());
         assertTrue(status.processingPauseLocked());
     }
 
@@ -199,7 +201,7 @@ public class ServerStatusTest {
     public void testPauseMessageProcessingWithoutLock() throws Exception {
         status.pauseMessageProcessing(false);
 
-        assertEquals(status.getLifecycle(), Lifecycle.PAUSED);
+        assertEquals(Lifecycle.PAUSED, status.getLifecycle());
         assertFalse(status.processingPauseLocked());
     }
 
@@ -216,7 +218,7 @@ public class ServerStatusTest {
         status.pauseMessageProcessing(false);
         status.resumeMessageProcessing();
 
-        assertEquals(status.getLifecycle(), Lifecycle.RUNNING);
+        assertEquals(Lifecycle.RUNNING, status.getLifecycle());
     }
 
     @Test(expected = ProcessingPauseLockedException.class)

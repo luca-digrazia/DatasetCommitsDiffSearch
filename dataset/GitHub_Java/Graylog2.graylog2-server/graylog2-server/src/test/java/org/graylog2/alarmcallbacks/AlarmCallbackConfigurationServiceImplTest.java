@@ -18,36 +18,29 @@ package org.graylog2.alarmcallbacks;
 
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
-import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import org.bson.types.ObjectId;
-import org.graylog2.database.MongoConnectionRule;
+import org.graylog2.database.MongoDBServiceTest;
 import org.graylog2.plugin.streams.Stream;
+import org.graylog2.rest.models.alarmcallbacks.requests.CreateAlarmCallbackRequest;
 import org.graylog2.streams.StreamImpl;
 import org.junit.Before;
-import org.junit.ClassRule;
-import org.junit.Rule;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.List;
 
-import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class AlarmCallbackConfigurationServiceImplTest {
-    @ClassRule
-    public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
-
-    @Rule
-    public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
-
+public class AlarmCallbackConfigurationServiceImplTest extends MongoDBServiceTest {
     private AlarmCallbackConfigurationService alarmCallbackConfigurationService;
 
     @Before
     public void setUpService() throws Exception {
-        this.alarmCallbackConfigurationService = new AlarmCallbackConfigurationServiceImpl(mongoRule.getMongoConnection());
+        this.alarmCallbackConfigurationService = new AlarmCallbackConfigurationServiceImpl(mongoRule.getMongoConnection(), mapperProvider);
     }
 
     @Test
@@ -60,10 +53,22 @@ public class AlarmCallbackConfigurationServiceImplTest {
     }
 
     @Test
+    @UsingDataSet(locations = "alarmCallbackConfigurationsSingleDocumentStringDate.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testGetForStreamIdSingleDocumentStringDate() throws Exception {
+        testGetForStreamIdSingleDocument();
+    }
+
+    @Test
     @UsingDataSet(locations = {"alarmCallbackConfigurationsSingleDocument.json", "alarmCallbackConfigurationsSingleDocument2.json"}, loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
     public void testGetForStreamIdMultipleDocuments() throws Exception {
         assertEquals("There should be multiple documents in the collection", 2, alarmCallbackConfigurationService.count());
         testGetForStreamIdSingleDocument();
+    }
+
+    @Test
+    @UsingDataSet(locations = {"alarmCallbackConfigurationsSingleDocumentStringDate.json", "alarmCallbackConfigurationsSingleDocumentStringDate2.json"}, loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testGetForStreamIdMultipleDocumentsStringDate() throws Exception {
+        testGetForStreamIdMultipleDocuments();
     }
 
     @Test
@@ -74,9 +79,17 @@ public class AlarmCallbackConfigurationServiceImplTest {
         when(stream.getId()).thenReturn(streamId);
 
         final List<AlarmCallbackConfiguration> configs = alarmCallbackConfigurationService.getForStream(stream);
+        final AlarmCallbackConfiguration alarmCallback = configs.get(0);
 
         assertNotNull("Returned list should not be null", configs);
         assertEquals("Returned list should contain a single document", 1, configs.size());
+        assertNotNull("Returned Alarm Callback should not be null", alarmCallback);
+    }
+
+    @Test
+    @UsingDataSet(locations = "alarmCallbackConfigurationsSingleDocumentStringDate.json", loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testGetForStreamSingleDocumentStringDate() throws Exception {
+        testGetForStreamSingleDocument();
     }
 
     @Test
@@ -87,8 +100,29 @@ public class AlarmCallbackConfigurationServiceImplTest {
     }
 
     @Test
+    @UsingDataSet(locations = {"alarmCallbackConfigurationsSingleDocumentStringDate.json", "alarmCallbackConfigurationsSingleDocumentStringDate2.json"}, loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testGetForStreamMultipleDocumentsStringDate() throws Exception {
+        testGetForStreamMultipleDocuments();
+    }
+
+    @Test
+    @UsingDataSet(locations = {"alarmCallbackConfigurationsSingleDocumentStringDate.json", "alarmCallbackConfigurationsSingleDocument2.json"}, loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testGetForStreamMultipleDocumentsMixedDates() throws Exception {
+        testGetForStreamMultipleDocuments();
+    }
+
+    @Test
     @UsingDataSet(locations = {"alarmCallbackConfigurationsSingleDocument.json", "alarmCallbackConfigurationsSingleDocument2.json"}, loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
-    public void testLoadExisitingDocument() throws Exception {
+    public void testLoadExistingDocument() throws Exception {
+        final AlarmCallbackConfiguration config = alarmCallbackConfigurationService.load("54e3deadbeefdeadbeefaffe");
+
+        assertNotNull("Returned AlarmCallback configuration should not be null", config);
+        assertEquals("AlarmCallbackConfiguration should be of dummy type", "dummy.type", config.getType());
+    }
+
+    @Test
+    @UsingDataSet(locations = {"alarmCallbackConfigurationsSingleDocumentStringDate.json", "alarmCallbackConfigurationsSingleDocument2.json"}, loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testLoadExistingDocumentStringDate() throws Exception {
         final AlarmCallbackConfiguration config = alarmCallbackConfigurationService.load("54e3deadbeefdeadbeefaffe");
 
         assertNotNull("Returned AlarmCallback configuration should not be null", config);
@@ -112,9 +146,7 @@ public class AlarmCallbackConfigurationServiceImplTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void testCreate() throws Exception {
-        final CreateAlarmCallbackRequest request = new CreateAlarmCallbackRequest();
-        request.type = "";
-        request.configuration = Collections.emptyMap();
+        final CreateAlarmCallbackRequest request = CreateAlarmCallbackRequest.create("", "", Collections.emptyMap());
 
         final String streamId = "54e3deadbeefdeadbeefaffe";
         final String userId = "someuser";
@@ -122,7 +154,19 @@ public class AlarmCallbackConfigurationServiceImplTest {
         final AlarmCallbackConfiguration alarmCallbackConfiguration = this.alarmCallbackConfigurationService.create(streamId, request, userId);
 
         assertNotNull(alarmCallbackConfiguration);
-        assertEquals(alarmCallbackConfiguration.getStreamId(), streamId);
+        assertEquals(streamId, alarmCallbackConfiguration.getStreamId());
         assertEquals("Create should not save the object", 0, alarmCallbackConfigurationService.count());
+    }
+
+    @Test
+    @UsingDataSet(locations = {"alarmCallbackConfigurationsSingleDocument.json", "alarmCallbackConfigurationsSingleDocument2.json"}, loadStrategy = LoadStrategyEnum.CLEAN_INSERT)
+    public void testDeleteAlarmCallback() throws Exception {
+        assertEquals("There should be multiple documents in the collection", 2, alarmCallbackConfigurationService.count());
+        final AlarmCallbackConfiguration alarmCallback = mock(AlarmCallbackConfiguration.class);
+        when (alarmCallback.getId()).thenReturn("54e3deadbeefdeadbeefaffe");
+
+        alarmCallbackConfigurationService.destroy(alarmCallback);
+
+        assertEquals("After deletion, there should be only one document left in the collection", 1, alarmCallbackConfigurationService.count());
     }
 }

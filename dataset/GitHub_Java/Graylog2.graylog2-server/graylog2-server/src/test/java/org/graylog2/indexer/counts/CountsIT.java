@@ -17,8 +17,10 @@
 package org.graylog2.indexer.counts;
 
 import com.google.common.collect.ImmutableMap;
-import org.graylog.testing.elasticsearch.BulkIndexRequest;
-import org.graylog.testing.elasticsearch.ElasticsearchBaseTest;
+import io.searchbox.core.Bulk;
+import io.searchbox.core.BulkResult;
+import io.searchbox.core.Index;
+import org.graylog2.ElasticsearchBase;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.IndexSetRegistry;
@@ -27,6 +29,7 @@ import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategy;
 import org.graylog2.indexer.retention.strategies.DeletionRetentionStrategyConfig;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategy;
 import org.graylog2.indexer.rotation.strategies.MessageCountRotationStrategyConfig;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -44,7 +47,7 @@ import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public abstract class CountsIT extends ElasticsearchBaseTest {
+public class CountsIT extends ElasticsearchBase {
     private static final String INDEX_NAME_1 = "index_set_1_counts_test_0";
     private static final String INDEX_NAME_2 = "index_set_2_counts_test_0";
     @Rule
@@ -58,15 +61,13 @@ public abstract class CountsIT extends ElasticsearchBaseTest {
     private IndexSet indexSet2;
     private Counts counts;
 
-    protected abstract CountsAdapter countsAdapter();
-
     @Before
     public void setUp() throws Exception {
-        client().createIndex(INDEX_NAME_1, 1, 0);
-        client().createIndex(INDEX_NAME_2, 1, 0);
-        client().waitForGreenStatus(INDEX_NAME_1, INDEX_NAME_2);
+        createIndex(INDEX_NAME_1, 1, 0);
+        createIndex(INDEX_NAME_2, 1, 0);
+        waitForGreenStatus(INDEX_NAME_1, INDEX_NAME_2);
 
-        counts = new Counts(indexSetRegistry, countsAdapter());
+        counts = new Counts(client(), indexSetRegistry);
 
         final IndexSetConfig indexSetConfig1 = IndexSetConfig.builder()
                 .id("id-1")
@@ -109,8 +110,13 @@ public abstract class CountsIT extends ElasticsearchBaseTest {
         when(indexSet2.getManagedIndices()).thenReturn(new String[]{INDEX_NAME_2});
     }
 
+    @After
+    public void tearDown() throws Exception {
+        deleteIndex(INDEX_NAME_1, INDEX_NAME_2);
+    }
+
     @Test
-    public void totalReturnsZeroWithEmptyIndex() {
+    public void totalReturnsZeroWithEmptyIndex() throws Exception {
         assertThat(counts.total()).isEqualTo(0L);
         assertThat(counts.total(indexSet1)).isEqualTo(0L);
         assertThat(counts.total(indexSet2)).isEqualTo(0L);
@@ -118,15 +124,21 @@ public abstract class CountsIT extends ElasticsearchBaseTest {
 
     @Test
     public void totalReturnsZeroWithNoIndices() throws Exception {
-        final BulkIndexRequest bulkIndexRequest = new BulkIndexRequest();
+        final Bulk.Builder bulkBuilder = new Bulk.Builder().refresh(true);
         for (int i = 0; i < 10; i++) {
             final Map<String, Object> source = ImmutableMap.of(
                     "foo", "bar",
                     "counter", i);
-            bulkIndexRequest.addRequest(INDEX_NAME_1, source);
+            final Index indexRequest = new Index.Builder(source)
+                    .index(INDEX_NAME_1)
+                    .type("test")
+                    .refresh(true)
+                    .build();
+            bulkBuilder.addAction(indexRequest);
         }
-
-        client().bulkIndex(bulkIndexRequest);
+        final BulkResult bulkResult = client().execute(bulkBuilder.build());
+        assertSucceeded(bulkResult);
+        assertThat(bulkResult.getFailedItems()).isEmpty();
 
         // Simulate no indices for the second index set.
         when(indexSet2.getManagedIndices()).thenReturn(new String[0]);
@@ -141,15 +153,20 @@ public abstract class CountsIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void totalReturnsNumberOfMessages() {
-        final BulkIndexRequest bulkIndexRequest = new BulkIndexRequest();
+    public void totalReturnsNumberOfMessages() throws Exception {
+        final Bulk.Builder bulkBuilder = new Bulk.Builder().refresh(true);
 
         final int count1 = 10;
         for (int i = 0; i < count1; i++) {
             final Map<String, Object> source = ImmutableMap.of(
                     "foo", "bar",
                     "counter", i);
-            bulkIndexRequest.addRequest(INDEX_NAME_1, source);
+            final Index indexRequest = new Index.Builder(source)
+                    .index(INDEX_NAME_1)
+                    .type("test")
+                    .refresh(true)
+                    .build();
+            bulkBuilder.addAction(indexRequest);
         }
 
         final int count2 = 5;
@@ -157,10 +174,17 @@ public abstract class CountsIT extends ElasticsearchBaseTest {
             final Map<String, Object> source = ImmutableMap.of(
                     "foo", "bar",
                     "counter", i);
-            bulkIndexRequest.addRequest(INDEX_NAME_2, source);
+            final Index indexRequest = new Index.Builder(source)
+                    .index(INDEX_NAME_2)
+                    .type("test")
+                    .refresh(true)
+                    .build();
+            bulkBuilder.addAction(indexRequest);
         }
 
-        client().bulkIndex(bulkIndexRequest);
+        final BulkResult bulkResult = client().execute(bulkBuilder.build());
+        assertSucceeded(bulkResult);
+        assertThat(bulkResult.getFailedItems()).isEmpty();
 
         assertThat(counts.total()).isEqualTo(count1 + count2);
         assertThat(counts.total(indexSet1)).isEqualTo(count1);
@@ -168,7 +192,7 @@ public abstract class CountsIT extends ElasticsearchBaseTest {
     }
 
     @Test
-    public void totalThrowsElasticsearchExceptionIfIndexDoesNotExist() {
+    public void totalThrowsElasticsearchExceptionIfIndexDoesNotExist() throws Exception {
         final IndexSet indexSet = mock(IndexSet.class);
         when(indexSet.getManagedIndices()).thenReturn(new String[]{"does_not_exist"});
 
@@ -178,31 +202,35 @@ public abstract class CountsIT extends ElasticsearchBaseTest {
         } catch (IndexNotFoundException e) {
             final String expectedErrorDetail = "Index not found for query: does_not_exist. Try recalculating your index ranges.";
             assertThat(e)
-                    .hasMessageStartingWith("Fetching message count failed for indices [does_not_exist]")
-                    .hasMessageEndingWith(expectedErrorDetail)
-                    .hasNoSuppressedExceptions();
+                .hasMessageStartingWith("Fetching message count failed for indices [does_not_exist]")
+                .hasMessageEndingWith(expectedErrorDetail)
+                .hasNoSuppressedExceptions();
             assertThat(e.getErrorDetails()).containsExactly(expectedErrorDetail);
         }
     }
 
     @Test
-    public void totalSucceedsWithListOfIndicesLargerThan4Kilobytes() {
+    public void totalSucceedsWithListOfIndicesLargerThan4Kilobytes() throws Exception {
         final int numberOfIndices = 100;
         final String[] indexNames = new String[numberOfIndices];
         final String indexPrefix = "very_long_list_of_indices_0123456789_counts_it_";
         final IndexSet indexSet = mock(IndexSet.class);
 
-        for (int i = 0; i < numberOfIndices; i++) {
-            final String indexName = indexPrefix + i;
-            client().createIndex(indexName);
-            indexNames[i] = indexName;
+        try {
+            for (int i = 0; i < numberOfIndices; i++) {
+                final String indexName = indexPrefix + i;
+                createIndex(indexName);
+                indexNames[i] = indexName;
+            }
+
+            when(indexSet.getManagedIndices()).thenReturn(indexNames);
+
+            final String indicesString = String.join(",", indexNames);
+            assertThat(indicesString.length()).isGreaterThanOrEqualTo(4096);
+
+            assertThat(counts.total(indexSet)).isEqualTo(0L);
+        } finally {
+            deleteIndex(indexNames);
         }
-
-        when(indexSet.getManagedIndices()).thenReturn(indexNames);
-
-        final String indicesString = String.join(",", indexNames);
-        assertThat(indicesString.length()).isGreaterThanOrEqualTo(4096);
-
-        assertThat(counts.total(indexSet)).isEqualTo(0L);
     }
 }

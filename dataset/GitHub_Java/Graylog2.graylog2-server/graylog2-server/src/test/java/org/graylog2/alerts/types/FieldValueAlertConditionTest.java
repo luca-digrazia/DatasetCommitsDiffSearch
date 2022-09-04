@@ -161,23 +161,23 @@ public class FieldValueAlertConditionTest extends AlertConditionTest {
         final Double value = (Double) retValue;
         final FieldStatsResult fieldStatsResult = mock(FieldStatsResult.class);
 
-        when(fieldStatsResult.count()).thenReturn(1L);
+        when(fieldStatsResult.getCount()).thenReturn(1L);
 
         switch (type) {
             case MIN:
-                when(fieldStatsResult.min()).thenReturn(value);
+                when(fieldStatsResult.getMin()).thenReturn(value);
                 break;
             case MAX:
-                when(fieldStatsResult.max()).thenReturn(value);
+                when(fieldStatsResult.getMax()).thenReturn(value);
                 break;
             case MEAN:
-                when(fieldStatsResult.mean()).thenReturn(value);
+                when(fieldStatsResult.getMean()).thenReturn(value);
                 break;
             case STDDEV:
-                when(fieldStatsResult.stdDeviation()).thenReturn(value);
+                when(fieldStatsResult.getStdDeviation()).thenReturn(value);
                 break;
             case SUM:
-                when(fieldStatsResult.sum()).thenReturn(value);
+                when(fieldStatsResult.getSum()).thenReturn(value);
                 break;
         }
         return fieldStatsResult;

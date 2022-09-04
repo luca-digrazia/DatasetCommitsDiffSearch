@@ -19,6 +19,7 @@ package org.graylog2.migrations;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.events.ClusterEventBus;
 import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.indexset.DefaultIndexSetConfig;
 import org.graylog2.indexer.indexset.DefaultIndexSetCreated;
 import org.graylog2.indexer.indexset.IndexSetConfig;
 import org.graylog2.indexer.indexset.IndexSetService;
@@ -45,6 +46,8 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.verifyZeroInteractions;
 import static org.mockito.Mockito.when;
 
 public class V20161116172100_DefaultIndexSetMigrationTest {
@@ -78,6 +81,7 @@ public class V20161116172100_DefaultIndexSetMigrationTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void upgradeCreatesDefaultIndexSet() throws Exception {
         final StubRotationStrategyConfig rotationStrategyConfig = new StubRotationStrategyConfig();
         final StubRetentionStrategyConfig retentionStrategyConfig = new StubRetentionStrategyConfig();
@@ -90,6 +94,10 @@ public class V20161116172100_DefaultIndexSetMigrationTest {
                 .rotationStrategy(rotationStrategyConfig)
                 .retentionStrategy(retentionStrategyConfig)
                 .creationDate(ZonedDateTime.of(2016, 10, 12, 0, 0, 0, 0, ZoneOffset.UTC))
+                .indexAnalyzer("standard")
+                .indexTemplateName("prefix-template")
+                .indexOptimizationMaxNumSegments(1)
+                .indexOptimizationDisabled(false)
                 .build();
         when(clusterConfigService.get(IndexManagementConfig.class)).thenReturn(IndexManagementConfig.create("test", "test"));
         when(clusterConfigService.get(StubRotationStrategyConfig.class)).thenReturn(rotationStrategyConfig);
@@ -101,6 +109,7 @@ public class V20161116172100_DefaultIndexSetMigrationTest {
         migration.upgrade();
 
         verify(indexSetService).save(indexSetConfigCaptor.capture());
+        verify(clusterConfigService).write(DefaultIndexSetConfig.create("id"));
         verify(clusterConfigService).write(DefaultIndexSetCreated.create());
         verify(clusterEventBus).post(IndexSetCreatedEvent.create(savedIndexSetConfig));
 
@@ -113,6 +122,10 @@ public class V20161116172100_DefaultIndexSetMigrationTest {
         assertThat(capturedIndexSetConfig.replicas()).isEqualTo(elasticsearchConfiguration.getReplicas());
         assertThat(capturedIndexSetConfig.rotationStrategy()).isInstanceOf(StubRotationStrategyConfig.class);
         assertThat(capturedIndexSetConfig.retentionStrategy()).isInstanceOf(StubRetentionStrategyConfig.class);
+        assertThat(capturedIndexSetConfig.indexAnalyzer()).isEqualTo(elasticsearchConfiguration.getAnalyzer());
+        assertThat(capturedIndexSetConfig.indexTemplateName()).isEqualTo(elasticsearchConfiguration.getTemplateName());
+        assertThat(capturedIndexSetConfig.indexOptimizationMaxNumSegments()).isEqualTo(elasticsearchConfiguration.getIndexOptimizationMaxNumSegments());
+        assertThat(capturedIndexSetConfig.indexOptimizationDisabled()).isEqualTo(elasticsearchConfiguration.isDisableIndexOptimization());
     }
 
     @Test
@@ -147,10 +160,14 @@ public class V20161116172100_DefaultIndexSetMigrationTest {
     }
 
     @Test
-    public void startOnThisNodeReturnsFalseIfMigrationWasSuccessfulBefore() throws Exception {
-        when(clusterConfigService.get(DefaultIndexSetCreated.class))
-                .thenReturn(DefaultIndexSetCreated.create());
-        //assertThat(migration.startOnThisNode()).isFalse();
+    public void migrationDoesNotRunAgainIfMigrationWasSuccessfulBefore() throws Exception {
+        when(clusterConfigService.get(DefaultIndexSetCreated.class)).thenReturn(DefaultIndexSetCreated.create());
+        migration.upgrade();
+
+        verify(clusterConfigService).get(DefaultIndexSetCreated.class);
+        verifyNoMoreInteractions(clusterConfigService);
+        verifyZeroInteractions(clusterEventBus);
+        verifyZeroInteractions(indexSetService);
     }
 
     private static class StubRotationStrategy implements RotationStrategy {

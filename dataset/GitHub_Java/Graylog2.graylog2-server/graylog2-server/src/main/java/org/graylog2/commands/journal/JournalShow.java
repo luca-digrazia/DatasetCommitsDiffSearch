@@ -16,11 +16,12 @@
  */
 package org.graylog2.commands.journal;
 
-import io.airlift.airline.Command;
-import io.airlift.airline.Option;
+import com.github.rvesse.airline.annotations.Command;
+import com.github.rvesse.airline.annotations.Option;
 import kafka.log.LogSegment;
 import org.graylog2.shared.journal.KafkaJournal;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
 
 @SuppressWarnings("LocalCanBeFinal")
 @Command(name = "show", description = "Shows information about the persisted message journal")
@@ -38,12 +39,12 @@ public class JournalShow extends AbstractJournalCommand {
         long sizeInBytes = journal.size();
         int numSegments = journal.numberOfSegments();
         long committedReadOffset = journal.getCommittedReadOffset();
-        final StringBuffer sb = new StringBuffer();
+        final StringBuilder sb = new StringBuilder();
 
         final long startOffset = journal.getLogStartOffset();
         final long lastOffset = journal.getLogEndOffset() - 1;
 
-        sb.append("Graylog message journal in directory: ").append(kafkaJournalConfiguration.getMessageJournalDir().getAbsolutePath()).append(
+        sb.append("Graylog message journal in directory: ").append(kafkaJournalConfiguration.getMessageJournalDir().toAbsolutePath()).append(
                 "\n");
         sb.append("\t").append("Total size in bytes: ").append(sizeInBytes).append("\n");
         sb.append("\t").append("Number of segments: ").append(numSegments).append("\n");
@@ -67,15 +68,15 @@ public class JournalShow extends AbstractJournalCommand {
         System.out.flush();
     }
 
-    private void appendSegmentDetails(KafkaJournal journal, StringBuffer sb) {
+    private void appendSegmentDetails(KafkaJournal journal, StringBuilder sb) {
         final Iterable<LogSegment> segments = journal.getSegments();
         int i = 1;
         for (LogSegment segment : segments) {
             sb.append("\t\t").append("Segment ").append(i++).append("\n");
             sb.append("\t\t\t").append("Base offset: ").append(segment.baseOffset()).append("\n");
             sb.append("\t\t\t").append("Size in bytes: ").append(segment.size()).append("\n");
-            sb.append("\t\t\t").append("Created at: ").append(new DateTime(segment.created())).append("\n");
-            sb.append("\t\t\t").append("Last modified: ").append(new DateTime(segment.lastModified())).append("\n");
+            sb.append("\t\t\t").append("Created at: ").append(new DateTime(segment.created(), DateTimeZone.UTC)).append("\n");
+            sb.append("\t\t\t").append("Last modified: ").append(new DateTime(segment.lastModified(), DateTimeZone.UTC)).append("\n");
         }
     }
 

@@ -16,13 +16,7 @@
  */
 package org.graylog2.events;
 
-import com.codahale.metrics.json.MetricsModule;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.fasterxml.jackson.datatype.guava.GuavaModule;
-import com.fasterxml.jackson.datatype.joda.JodaModule;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.eventbus.DeadEvent;
 import com.google.common.eventbus.EventBus;
@@ -31,16 +25,16 @@ import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
 import com.lordofthejars.nosqlunit.core.LoadStrategyEnum;
 import com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb;
 import com.mongodb.BasicDBObjectBuilder;
+import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
 import com.mongodb.WriteConcern;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.database.MongoConnectionRule;
-import org.graylog2.database.ObjectIdSerializer;
 import org.graylog2.plugin.system.NodeId;
-import org.graylog2.shared.jackson.SizeSerializer;
-import org.graylog2.shared.rest.RangeJsonSerializer;
+import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
+import org.graylog2.shared.plugins.ChainingClassLoader;
 import org.graylog2.system.debug.DebugEvent;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeUtils;
@@ -50,25 +44,24 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Rule;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
-import org.mockito.runners.MockitoJUnitRunner;
+import org.mockito.junit.MockitoJUnit;
+import org.mockito.junit.MockitoRule;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static com.lordofthejars.nosqlunit.mongodb.InMemoryMongoDb.InMemoryMongoRuleBuilder.newInMemoryMongoDbRule;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Matchers.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ClusterEventPeriodicalTest {
     @ClassRule
     public static final InMemoryMongoDb IN_MEMORY_MONGO_DB = newInMemoryMongoDbRule().build();
@@ -76,23 +69,17 @@ public class ClusterEventPeriodicalTest {
 
     @Rule
     public MongoConnectionRule mongoRule = MongoConnectionRule.build("test");
+    @Rule
+    public final MockitoRule mockitoRule = MockitoJUnit.rule();
 
-    private final ObjectMapper objectMapper = new ObjectMapper()
-            .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
-            .setPropertyNamingStrategy(new PropertyNamingStrategy.LowerCaseWithUnderscoresStrategy())
-            .registerModule(new JodaModule())
-            .registerModule(new GuavaModule())
-            .registerModule(new MetricsModule(TimeUnit.SECONDS, TimeUnit.SECONDS, false))
-            .registerModule(new SimpleModule()
-                    .addSerializer(new ObjectIdSerializer())
-                    .addSerializer(new RangeJsonSerializer())
-                    .addSerializer(new SizeSerializer()));
+    private final ObjectMapper objectMapper = new ObjectMapperProvider().get();
+
     @Mock
     private NodeId nodeId;
     @Spy
     private EventBus serverEventBus;
     @Spy
-    private EventBus clusterEventBus;
+    private ClusterEventBus clusterEventBus;
     private MongoConnection mongoConnection;
     private ClusterEventPeriodical clusterEventPeriodical;
 
@@ -109,7 +96,7 @@ public class ClusterEventPeriodicalTest {
                 provider,
                 mongoRule.getMongoConnection(),
                 nodeId,
-                objectMapper,
+                new ChainingClassLoader(getClass().getClassLoader()),
                 serverEventBus,
                 clusterEventBus
         );
@@ -118,11 +105,12 @@ public class ClusterEventPeriodicalTest {
     @After
     public void tearDown() {
         DateTimeUtils.setCurrentMillisSystem();
+        mongoConnection.getMongoDatabase().drop();
     }
 
     @Test
     public void clusterEventServiceRegistersItselfWithClusterEventBus() throws Exception {
-        verify(clusterEventBus, times(1)).register(clusterEventPeriodical);
+        verify(clusterEventBus, times(1)).registerClusterEventSubscriber(clusterEventPeriodical);
     }
 
     @Test
@@ -135,6 +123,7 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", SimpleEvent.class.getCanonicalName())
                 .add("payload", ImmutableMap.of("HAHA", "test"))
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         collection.save(event);
 
@@ -165,14 +154,15 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", SimpleEvent.class.getCanonicalName())
                 .add("payload", ImmutableMap.of("payload", "test"))
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         assertThat(collection.save(event).getN()).isEqualTo(1);
         assertThat(collection.count()).isEqualTo(1L);
-        assertThat(handler.invocations).isEqualTo(0);
+        assertThat(handler.invocations).hasValue(0);
 
         clusterEventPeriodical.run();
 
-        assertThat(handler.invocations).isEqualTo(1);
+        assertThat(handler.invocations).hasValue(1);
         assertThat(collection.count()).isEqualTo(1L);
 
         @SuppressWarnings("unchecked")
@@ -194,6 +184,7 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", DebugEvent.class.getCanonicalName())
                 .add("payload", objectMapper.convertValue(event, Map.class))
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         collection.save(dbObject);
 
@@ -221,6 +212,7 @@ public class ClusterEventPeriodicalTest {
                 .add("event_class", SimpleEvent.class.getCanonicalName())
                 .add("payload", ImmutableMap.of("payload", "test"))
                 .get();
+        @SuppressWarnings("deprecation")
         final DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         collection.save(event);
 
@@ -241,6 +233,7 @@ public class ClusterEventPeriodicalTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void testPublishClusterEvent() throws Exception {
+        @SuppressWarnings("deprecation")
         DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         SimpleEvent event = new SimpleEvent("test");
 
@@ -264,6 +257,7 @@ public class ClusterEventPeriodicalTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void publishClusterEventHandlesAutoValueCorrectly() throws Exception {
+        @SuppressWarnings("deprecation")
         DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         DebugEvent event = DebugEvent.create("Node ID", "Test");
 
@@ -283,6 +277,7 @@ public class ClusterEventPeriodicalTest {
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void publishClusterEventSkipsDeadEvent() throws Exception {
+        @SuppressWarnings("deprecation")
         DBCollection collection = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         DeadEvent event = new DeadEvent(clusterEventBus, new SimpleEvent("test"));
 
@@ -296,34 +291,38 @@ public class ClusterEventPeriodicalTest {
 
     @Test
     public void prepareCollectionCreatesIndexesOnExistingCollection() throws Exception {
-        DBCollection original = mongoConnection.getDatabase().createCollection(ClusterEventPeriodical.COLLECTION_NAME, null);
+        @SuppressWarnings("deprecation")
+        DBCollection original = mongoConnection.getDatabase().getCollection(ClusterEventPeriodical.COLLECTION_NAME);
         original.dropIndexes();
         assertThat(original.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
         assertThat(original.getIndexInfo()).hasSize(1);
 
         DBCollection collection = ClusterEventPeriodical.prepareCollection(mongoConnection);
         assertThat(collection.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
-        assertThat(collection.getIndexInfo()).hasSize(4);
-        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.MAJORITY);
+        assertThat(collection.getIndexInfo()).hasSize(2);
+        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.JOURNALED);
     }
 
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void prepareCollectionCreatesCollectionIfItDoesNotExist() throws Exception {
-        assertThat(mongoConnection.getDatabase().collectionExists(ClusterEventPeriodical.COLLECTION_NAME)).isFalse();
+        @SuppressWarnings("deprecation")
+        final DB database = mongoConnection.getDatabase();
+        assertThat(database.collectionExists(ClusterEventPeriodical.COLLECTION_NAME)).isFalse();
         DBCollection collection = ClusterEventPeriodical.prepareCollection(mongoConnection);
 
         assertThat(collection.getName()).isEqualTo(ClusterEventPeriodical.COLLECTION_NAME);
-        assertThat(collection.getIndexInfo()).hasSize(4);
-        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.MAJORITY);
+        assertThat(collection.getIndexInfo()).hasSize(2);
+        assertThat(collection.getWriteConcern()).isEqualTo(WriteConcern.JOURNALED);
     }
 
     public static class SimpleEventHandler {
-        public volatile int invocations = 0;
+        final AtomicInteger invocations = new AtomicInteger();
 
         @Subscribe
+        @SuppressWarnings("unused")
         public void handleSimpleEvent(SimpleEvent event) {
-            invocations++;
+            invocations.incrementAndGet();
         }
     }
 }

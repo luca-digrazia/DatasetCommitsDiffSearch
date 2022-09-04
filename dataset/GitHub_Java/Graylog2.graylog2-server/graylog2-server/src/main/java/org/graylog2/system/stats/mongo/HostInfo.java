@@ -1,24 +1,25 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.system.stats.mongo;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
+import org.graylog.autovalue.WithBeanGetter;
 import org.joda.time.DateTime;
 
 import javax.annotation.Nullable;
@@ -28,6 +29,7 @@ import javax.annotation.Nullable;
  */
 @JsonAutoDetect
 @AutoValue
+@WithBeanGetter
 public abstract class HostInfo {
     @JsonProperty
     public abstract System system();
@@ -46,6 +48,8 @@ public abstract class HostInfo {
 
     @JsonAutoDetect
     @AutoValue
+    @WithBeanGetter
+    @SuppressWarnings("JavaLangClash")
     public abstract static class System {
         @JsonProperty
         public abstract DateTime currentTime();
@@ -81,6 +85,7 @@ public abstract class HostInfo {
 
     @JsonAutoDetect
     @AutoValue
+    @WithBeanGetter
     public abstract static class Os {
         @JsonProperty
         public abstract String type();
@@ -100,8 +105,10 @@ public abstract class HostInfo {
 
     @JsonAutoDetect
     @AutoValue
+    @WithBeanGetter
     public abstract static class Extra {
         @JsonProperty
+        @Nullable
         public abstract String versionString();
 
         @JsonProperty
@@ -113,9 +120,11 @@ public abstract class HostInfo {
         public abstract String kernelVersion();
 
         @JsonProperty
+        @Nullable
         public abstract String cpuFrequencyMHz();
 
         @JsonProperty
+        @Nullable
         public abstract String cpuFeatures();
 
         @JsonProperty
@@ -123,23 +132,25 @@ public abstract class HostInfo {
         public abstract String scheduler();
 
         @JsonProperty
-        public abstract long pageSize();
+        public abstract Long pageSize();
 
         @JsonProperty
-        public abstract long numPages();
+        @Nullable
+        public abstract Long numPages();
 
         @JsonProperty
-        public abstract long maxOpenFiles();
+        @Nullable
+        public abstract Long maxOpenFiles();
 
-        public static Extra create(String versionString,
+        public static Extra create(@Nullable String versionString,
                                    @Nullable String libcVersion,
                                    @Nullable String kernelVersion,
-                                   String cpuFrequencyMHz,
-                                   String cpuFeatures,
+                                   @Nullable String cpuFrequencyMHz,
+                                   @Nullable String cpuFeatures,
                                    @Nullable String scheduler,
                                    long pageSize,
-                                   long numPages,
-                                   long maxOpenFiles) {
+                                   @Nullable Long numPages,
+                                   @Nullable Long maxOpenFiles) {
             return new AutoValue_HostInfo_Extra(versionString, libcVersion, kernelVersion, cpuFrequencyMHz, cpuFeatures,
                     scheduler, pageSize, numPages, maxOpenFiles);
         }

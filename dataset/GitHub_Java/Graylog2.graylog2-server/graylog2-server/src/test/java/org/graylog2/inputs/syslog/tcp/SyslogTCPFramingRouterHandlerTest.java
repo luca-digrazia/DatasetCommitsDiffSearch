@@ -16,95 +16,102 @@
  */
 package org.graylog2.inputs.syslog.tcp;
 
-import org.jboss.netty.buffer.ChannelBuffer;
-import org.jboss.netty.buffer.ChannelBuffers;
-import org.jboss.netty.channel.ChannelHandlerContext;
-import org.jboss.netty.channel.ChannelPipeline;
-import org.jboss.netty.channel.ChannelUpstreamHandler;
-import org.jboss.netty.channel.MessageEvent;
-import org.jboss.netty.handler.codec.frame.DelimiterBasedFrameDecoder;
-import org.jboss.netty.handler.codec.frame.Delimiters;
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+import io.netty.channel.embedded.EmbeddedChannel;
+import io.netty.handler.codec.Delimiters;
+import io.netty.handler.codec.TooLongFrameException;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.Mock;
-import org.mockito.runners.MockitoJUnitRunner;
 
 import java.nio.charset.StandardCharsets;
 
-import static org.junit.Assert.assertEquals;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
-@RunWith(MockitoJUnitRunner.class)
 public class SyslogTCPFramingRouterHandlerTest {
-    private ChannelUpstreamHandler handler;
-
-    @Mock
-    private ChannelHandlerContext context;
-    @Mock
-    private MessageEvent event;
-    @Mock
-    private ChannelPipeline pipeline;
+    private EmbeddedChannel channel;
 
     @Before
-    public void setUp() throws Exception {
-        handler = new SyslogTCPFramingRouterHandler(2048, Delimiters.lineDelimiter());
+    public void setUp() {
+        channel = new EmbeddedChannel(new SyslogTCPFramingRouterHandler(32, Delimiters.lineDelimiter()));
+    }
 
-        when(context.getPipeline()).thenReturn(pipeline);
-        when(context.getName()).thenReturn("current");
+    @After
+    public void tearDown() {
+        assertThat(channel.finish()).isFalse();
     }
 
     @Test
-    public void testMessageReceivedOctetFrame() throws Exception {
-        final ChannelBuffer buf = ChannelBuffers.copiedBuffer("123 <45>", StandardCharsets.UTF_8);
-
-        when(event.getMessage()).thenReturn(buf);
-
-        handler.handleUpstream(context, event);
-        handler.handleUpstream(context, event);
-        handler.handleUpstream(context, event);
-
-        // Only add the decoder once!
-        verify(pipeline, times(1)).addAfter(eq("current"), eq("framer-octet"), any(SyslogOctetCountFrameDecoder.class));
-        verify(context, times(3)).sendUpstream(event);
-
-        // Make sure the buffer does not get mutated.
-        assertEquals(buf.toString(StandardCharsets.UTF_8), "123 <45>");
+    public void testMessageReceivedOctetFrame() {
+        final ByteBuf buf = Unpooled.copiedBuffer("12 <45>Test 123", StandardCharsets.US_ASCII);
+        final ByteBuf expectedBuffer = Unpooled.copiedBuffer("<45>Test 123", StandardCharsets.UTF_8);
+        assertThat(channel.writeInbound(buf)).isTrue();
+        assertThat((ByteBuf) channel.readInbound()).isEqualTo(expectedBuffer);
+        assertThat((ByteBuf) channel.readInbound()).isNull();
     }
 
     @Test
-    public void testMessageReceivedDelimiterFrame() throws Exception {
-        final ChannelBuffer buf = ChannelBuffers.copiedBuffer("<45>", StandardCharsets.UTF_8);
-
-        when(event.getMessage()).thenReturn(buf);
-
-        handler.handleUpstream(context, event);
-        handler.handleUpstream(context, event);
-        handler.handleUpstream(context, event);
-
-        // Only add the decoder once!
-        verify(pipeline, times(1)).addAfter(eq("current"), eq("framer-delimiter"), any(DelimiterBasedFrameDecoder.class));
-        verify(context, times(3)).sendUpstream(event);
-
-        // Make sure the buffer does not get mutated.
-        assertEquals(buf.toString(StandardCharsets.UTF_8), "<45>");
+    public void testMessageReceivedOctetFrameMultipart() {
+        final ByteBuf buf1 = Unpooled.copiedBuffer("12 <45>", StandardCharsets.US_ASCII);
+        final ByteBuf buf2 = Unpooled.copiedBuffer("Test 123", StandardCharsets.US_ASCII);
+        final ByteBuf expectedBuffer = Unpooled.copiedBuffer("<45>Test 123", StandardCharsets.UTF_8);
+        assertThat(channel.writeInbound(buf1)).isFalse();
+        assertThat(channel.writeInbound(buf2)).isTrue();
+        assertThat((ByteBuf) channel.readInbound()).isEqualTo(expectedBuffer);
+        assertThat((ByteBuf) channel.readInbound()).isNull();
     }
 
     @Test
-    public void testMessageReceivedWithEmptyBuffer() throws Exception {
-        final ChannelBuffer buf = ChannelBuffers.copiedBuffer("", StandardCharsets.UTF_8);
+    public void testMessageReceivedOctetFrameIncomplete() {
+        final ByteBuf buf = Unpooled.copiedBuffer("12 <45>", StandardCharsets.US_ASCII);
+        assertThat(channel.writeInbound(buf)).isFalse();
+        assertThat((ByteBuf) channel.readInbound()).isNull();
+    }
 
-        when(event.getMessage()).thenReturn(buf);
+    @Test
+    public void testMessageReceivedDelimiterFrame() {
+        final ByteBuf buf = Unpooled.copiedBuffer("<45>\n", StandardCharsets.US_ASCII);
+        final ByteBuf expectedBuffer = Unpooled.copiedBuffer("<45>", StandardCharsets.US_ASCII);
+        assertThat(channel.writeInbound(buf)).isTrue();
+        assertThat((ByteBuf) channel.readInbound()).isEqualTo(expectedBuffer);
+        assertThat((ByteBuf) channel.readInbound()).isNull();
+    }
 
-        handler.handleUpstream(context, event);
+    @Test
+    public void testMessageReceivedDelimiterFrameMultipart() {
+        final ByteBuf buf1 = Unpooled.copiedBuffer("<45>", StandardCharsets.US_ASCII);
+        final ByteBuf buf2 = Unpooled.copiedBuffer("Test 123\n", StandardCharsets.US_ASCII);
+        final ByteBuf expectedBuffer = Unpooled.copiedBuffer("<45>Test 123", StandardCharsets.US_ASCII);
+        assertThat(channel.writeInbound(buf1)).isFalse();
+        assertThat(channel.writeInbound(buf2)).isTrue();
+        assertThat((ByteBuf) channel.readInbound()).isEqualTo(expectedBuffer);
+        assertThat((ByteBuf) channel.readInbound()).isNull();
+    }
 
-        verify(pipeline, never()).addAfter(eq("current"), eq("framer-octet"), any(SyslogOctetCountFrameDecoder.class));
-        verify(pipeline, never()).addAfter(eq("current"), eq("framer-delimiter"), any(DelimiterBasedFrameDecoder.class));
-        verify(context, never()).sendUpstream(event);
+    @Test
+    public void testMessageReceivedDelimiterFrameIncomplete() {
+        final ByteBuf buf = Unpooled.copiedBuffer("<45>", StandardCharsets.US_ASCII);
+        assertThat(channel.writeInbound(buf)).isFalse();
+        assertThat((ByteBuf) channel.readInbound()).isNull();
+    }
+
+    @Test
+    public void testMessageReceivedDelimiterFrameLongerThanMaxFrameLength() {
+        final ByteBuf buf = Unpooled.copiedBuffer("<45>012345678901234567890123456789\n", StandardCharsets.US_ASCII);
+        assertThat(buf.readableBytes()).isGreaterThan(32);
+
+        assertThatExceptionOfType(TooLongFrameException.class)
+                .isThrownBy(() -> channel.writeInbound(buf))
+                .withMessage("frame length (34) exceeds the allowed maximum (32)");
+    }
+
+    @Test
+    public void testMessageReceivedWithEmptyBuffer() {
+        final ByteBuf emptyBuffer = Unpooled.EMPTY_BUFFER;
+        assertThat(channel.writeInbound(emptyBuffer)).isTrue();
+        assertThat((ByteBuf) channel.readInbound()).isEqualTo(emptyBuffer);
+        assertThat((ByteBuf) channel.readInbound()).isNull();
     }
 }
