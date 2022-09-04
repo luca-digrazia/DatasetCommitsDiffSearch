@@ -44,7 +44,6 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.io.File;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -112,7 +111,7 @@ public class GelfOutput implements MessageOutput {
 
         final GelfTransports transport;
         final boolean tlsEnabled;
-        switch (protocol.toUpperCase(Locale.ENGLISH)) {
+        switch (protocol.toUpperCase()) {
             case "UDP":
                 transport = GelfTransports.UDP;
                 tlsEnabled = false;
