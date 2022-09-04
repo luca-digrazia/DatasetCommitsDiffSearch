@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
+import com.google.devtools.build.lib.analysis.config.ConfigurationEnvironment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -99,7 +100,7 @@ public class ShellConfiguration extends BuildConfiguration.Fragment {
 
     @Nullable
     @Override
-    public Fragment create(BuildOptions buildOptions) {
+    public Fragment create(ConfigurationEnvironment env, BuildOptions buildOptions) {
         return new ShellConfiguration(shellExecutableProvider.getShellExecutable(buildOptions));
     }
 

@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.bazel.rules.BazelRuleClassProvider.StrictAc
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.config.ConfigRules;
 import com.google.devtools.build.lib.rules.core.CoreRules;
+import com.google.devtools.build.lib.rules.cpp.transitions.LipoDataTransitionRuleSet;
 import com.google.devtools.build.lib.rules.repository.CoreWorkspaceRules;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -73,6 +74,7 @@ public class BazelRuleClassProviderTest {
     ConfiguredRuleClassProvider.Builder builder = new ConfiguredRuleClassProvider.Builder();
     builder.setToolsRepository(BazelRuleClassProvider.TOOLS_REPOSITORY);
     Set<RuleSet> result = new HashSet<>();
+    result.add(LipoDataTransitionRuleSet.INSTANCE);
     result.add(BazelRuleClassProvider.BAZEL_SETUP);
     collectTransitiveClosure(result, top);
     for (RuleSet module : result) {
@@ -176,8 +178,8 @@ public class BazelRuleClassProviderTest {
         "--action_env=FOO=bar");
 
     ActionEnvironment env = BazelRuleClassProvider.SHELL_ACTION_ENV.getActionEnvironment(options);
-    assertThat(env.getFixedEnv().toMap()).containsEntry("PATH", "/bin:/usr/bin");
-    assertThat(env.getFixedEnv().toMap()).containsEntry("FOO", "bar");
+    assertThat(env.getFixedEnv()).containsEntry("PATH", "/bin:/usr/bin");
+    assertThat(env.getFixedEnv()).containsEntry("FOO", "bar");
   }
 
   @Test

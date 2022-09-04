@@ -41,9 +41,8 @@ import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.buildeventstream.AnnounceBuildEventTransportsEvent;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
-import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
+import com.google.devtools.build.lib.buildeventstream.BuildEventConverters;
 import com.google.devtools.build.lib.buildeventstream.BuildEventId;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId.NamedSetOfFilesId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
@@ -63,7 +62,6 @@ import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
-import com.google.devtools.common.options.Options;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -87,7 +85,6 @@ public class BuildEventStreamerTest extends FoundationTestCase {
       new ActionExecutedEvent(
           new ActionsTestUtil.NullAction(),
           /* exception= */ null,
-          ActionsTestUtil.DUMMY_ARTIFACT.getPath(),
           /* stdout= */ null,
           /* stderr= */ null,
           ErrorTiming.NO_ERROR);
@@ -106,7 +103,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
       events.add(event);
       eventsAsProtos.add(
           event.asStreamProto(
-              new BuildEventContext() {
+              new BuildEventConverters() {
                 @Override
                 public ArtifactGroupNamer artifactGroupNamer() {
                   return namer;
@@ -120,11 +117,6 @@ public class BuildEventStreamerTest extends FoundationTestCase {
                       return path.toString();
                     }
                   };
-                }
-
-                @Override
-                public BuildEventProtocolOptions getOptions() {
-                  return Options.getDefaults(BuildEventProtocolOptions.class);
                 }
               }));
     }
@@ -174,7 +166,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     }
 
     @Override
-    public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+    public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
       return GenericBuildEvent.protoChaining(this).build();
     }
 
@@ -218,7 +210,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     }
 
     @Override
-    public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+    public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
       BuildEventStreamProtos.NamedSetOfFiles.Builder builder =
           BuildEventStreamProtos.NamedSetOfFiles.newBuilder();
       for (NestedSet<Artifact> artifactset : artifacts) {
@@ -263,7 +255,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     }
 
     @Override
-    public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventContext converters) {
+    public BuildEventStreamProtos.BuildEvent asStreamProto(BuildEventConverters converters) {
       return GenericBuildEvent.protoChaining(this).build();
     }
   }
@@ -654,7 +646,6 @@ public class BuildEventStreamerTest extends FoundationTestCase {
             new BlazeDirectories(
                 new ServerDirectories(outputBase, outputBase, outputBase),
                 rootDirectory,
-                /* defaultSystemJavabase= */ null,
                 "productName"),
             /* fragmentsMap= */ ImmutableMap
                 .<Class<? extends BuildConfiguration.Fragment>, BuildConfiguration.Fragment>of(),
@@ -913,7 +904,6 @@ public class BuildEventStreamerTest extends FoundationTestCase {
         new ActionExecutedEvent(
             new ActionsTestUtil.NullAction(),
             new ActionExecutionException("Exception", /* action= */ null, /* catastrophe= */ false),
-            ActionsTestUtil.DUMMY_ARTIFACT.getPath(),
             /* stdout= */ null,
             /* stderr= */ null,
             ErrorTiming.BEFORE_EXECUTION);
@@ -943,7 +933,6 @@ public class BuildEventStreamerTest extends FoundationTestCase {
         new ActionExecutedEvent(
             new ActionsTestUtil.NullAction(),
             new ActionExecutionException("Exception", /* action= */ null, /* catastrophe= */ false),
-            ActionsTestUtil.DUMMY_ARTIFACT.getPath(),
             /* stdout= */ null,
             /* stderr= */ null,
             ErrorTiming.BEFORE_EXECUTION);

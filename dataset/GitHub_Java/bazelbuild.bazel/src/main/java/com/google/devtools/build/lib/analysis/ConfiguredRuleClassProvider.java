@@ -18,7 +18,6 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType.ABSTRACT;
 import static com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType.TEST;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
@@ -53,7 +52,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.packages.RuleTransitionFactory;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
@@ -75,7 +73,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import javax.annotation.Nullable;
 
 /**
  * Knows about every rule Blaze supports and the associated configuration options.
@@ -234,7 +231,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     private PatchTransition lipoDataTransition;
     private List<Class<? extends BuildConfiguration.Fragment>> universalFragments =
         new ArrayList<>();
-    @Nullable private RuleTransitionFactory trimmingTransitionFactory;
     private PrerequisiteValidator prerequisiteValidator;
     private ImmutableMap.Builder<String, Object> skylarkAccessibleTopLevels =
         ImmutableMap.builder();
@@ -399,32 +395,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       return this;
     }
 
-    /**
-     * Sets the transition factory that produces a trimming transition to be run over all targets
-     * after other transitions.
-     *
-     * <p>This is a temporary measure for supporting manual trimming of feature flags, and support
-     * for this transition factory will likely be removed at some point in the future (whenever
-     * automatic trimming is sufficiently workable).
-     */
-    public Builder setTrimmingTransitionFactory(RuleTransitionFactory factory) {
-      Preconditions.checkState(
-          trimmingTransitionFactory == null, "Trimming transition factory already set");
-      trimmingTransitionFactory = Preconditions.checkNotNull(factory);
-      return this;
-    }
-
-    /**
-     * Overrides the transition factory run over all targets.
-     *
-     * @see #setTrimmingTransitionFactory(RuleTransitionFactory)
-     */
-    @VisibleForTesting(/* for testing trimming transition factories without relying on prod use */)
-    public Builder overrideTrimmingTransitionFactoryForTesting(RuleTransitionFactory factory) {
-      trimmingTransitionFactory = null;
-      return this.setTrimmingTransitionFactory(factory);
-    }
-
     @Override
     public PatchTransition getLipoDataTransition() {
       Preconditions.checkState(lipoDataTransition != null);
@@ -506,7 +476,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
           ImmutableList.copyOf(configurationFragmentFactories),
           lipoDataTransition,
           ImmutableList.copyOf(universalFragments),
-          trimmingTransitionFactory,
           prerequisiteValidator,
           skylarkAccessibleTopLevels.build(),
           skylarkModules.build(),
@@ -606,9 +575,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
 
   private final PatchTransition lipoDataTransition;
 
-  /** The transition factory used to produce the transition that will trim targets. */
-  @Nullable private final RuleTransitionFactory trimmingTransitionFactory;
-
   /**
    * Configuration fragments that should be available to all rules even when they don't
    * explicitly require it.
@@ -643,7 +609,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
       ImmutableList<ConfigurationFragmentFactory> configurationFragments,
       PatchTransition lipoDataTransition,
       ImmutableList<Class<? extends BuildConfiguration.Fragment>> universalFragments,
-      @Nullable RuleTransitionFactory trimmingTransitionFactory,
       PrerequisiteValidator prerequisiteValidator,
       ImmutableMap<String, Object> skylarkAccessibleJavaClasses,
       ImmutableList<Class<?>> skylarkModules,
@@ -663,7 +628,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
     this.configurationFragmentFactories = configurationFragments;
     this.lipoDataTransition = lipoDataTransition;
     this.universalFragments = universalFragments;
-    this.trimmingTransitionFactory = trimmingTransitionFactory;
     this.prerequisiteValidator = prerequisiteValidator;
     this.globals = createGlobals(skylarkAccessibleJavaClasses, skylarkModules);
     this.reservedActionMnemonics = reservedActionMnemonics;
@@ -730,18 +694,6 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
    */
   public PatchTransition getLipoDataTransition() {
     return lipoDataTransition;
-  }
-
-  /**
-   * Returns the transition factory used to produce the transition to trim targets.
-   *
-   * <p>This is a temporary measure for supporting manual trimming of feature flags, and support
-   * for this transition factory will likely be removed at some point in the future (whenever
-   * automatic trimming is sufficiently workable
-   */
-  @Nullable
-  public RuleTransitionFactory getTrimmingTransitionFactory() {
-    return trimmingTransitionFactory;
   }
 
   /**
