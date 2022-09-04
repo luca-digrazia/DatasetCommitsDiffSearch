@@ -48,7 +48,6 @@ public class VersionTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testGreaterMinor() throws Exception {
         Version v = Version.from(0, 20, 0);
 
