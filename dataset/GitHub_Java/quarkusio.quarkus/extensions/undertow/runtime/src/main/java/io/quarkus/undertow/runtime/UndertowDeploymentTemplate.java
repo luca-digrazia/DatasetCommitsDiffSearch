@@ -469,9 +469,8 @@ public class UndertowDeploymentTemplate {
                             @Override
                             public T call(HttpServerExchange exchange, C context) throws Exception {
                                 // Not sure what to do here
-                                if (exchange == null) {
+                                if (exchange == null)
                                     return action.call(exchange, context);
-                                }
                                 ManagedContext requestContext = beanContainer.requestContext();
                                 if (requestContext.isActive()) {
                                     return action.call(exchange, context);
@@ -489,7 +488,7 @@ public class UndertowDeploymentTemplate {
                                             exchange.putAttachment(REQUEST_CONTEXT, requestContext.getAll());
                                             requestContext.deactivate();
                                             if (existingRequestContext == null) {
-                                                req.getAsyncContextInternal().addListener(new AsyncListener() {
+                                                src.getServletRequest().getAsyncContext().addListener(new AsyncListener() {
                                                     @Override
                                                     public void onComplete(AsyncEvent event) throws IOException {
                                                         for (io.quarkus.arc.InstanceHandle<?> i : exchange

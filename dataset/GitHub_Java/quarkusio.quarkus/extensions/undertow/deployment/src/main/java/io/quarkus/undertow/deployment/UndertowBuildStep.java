@@ -103,9 +103,9 @@ import io.quarkus.undertow.runtime.HttpSessionContext;
 import io.quarkus.undertow.runtime.ServletProducer;
 import io.quarkus.undertow.runtime.ServletSecurityInfoProxy;
 import io.quarkus.undertow.runtime.ServletSecurityInfoSubstitution;
-import io.quarkus.undertow.runtime.UndertowDeploymentRecorder;
+import io.quarkus.undertow.runtime.UndertowDeploymentTemplate;
 import io.quarkus.undertow.runtime.UndertowHandlersConfServletExtension;
-import io.quarkus.undertow.runtime.filters.CORSRecorder;
+import io.quarkus.undertow.runtime.filters.CORSTemplate;
 import io.undertow.Undertow;
 import io.undertow.servlet.api.DeploymentInfo;
 import io.undertow.servlet.api.FilterInfo;
@@ -132,17 +132,17 @@ public class UndertowBuildStep {
 
     @BuildStep
     @Record(RUNTIME_INIT)
-    public ServiceStartBuildItem boot(UndertowDeploymentRecorder recorder,
+    public ServiceStartBuildItem boot(UndertowDeploymentTemplate template,
             ServletDeploymentManagerBuildItem servletDeploymentManagerBuildItem,
             List<HttpHandlerWrapperBuildItem> wrappers,
             ShutdownContextBuildItem shutdown,
             Consumer<UndertowBuildItem> undertowProducer,
             LaunchModeBuildItem launchMode,
             ExecutorBuildItem executorBuildItem,
-            CORSRecorder corsRecorder,
+            CORSTemplate corsTemplate,
             HttpConfig config) throws Exception {
-        corsRecorder.setHttpConfig(config);
-        RuntimeValue<Undertow> ut = recorder.startUndertow(shutdown, executorBuildItem.getExecutorProxy(),
+        corsTemplate.setHttpConfig(config);
+        RuntimeValue<Undertow> ut = template.startUndertow(shutdown, executorBuildItem.getExecutorProxy(),
                 servletDeploymentManagerBuildItem.getDeploymentManager(),
                 config, wrappers.stream().map(HttpHandlerWrapperBuildItem::getValue).collect(Collectors.toList()),
                 launchMode.getLaunchMode());
@@ -152,10 +152,10 @@ public class UndertowBuildStep {
 
     @BuildStep()
     @Record(STATIC_INIT)
-    public void buildCorsFilter(CORSRecorder corsRecorder, HttpBuildConfig buildConfig,
+    public void buildCorsFilter(CORSTemplate corsTemplate, HttpBuildConfig buildConfig,
             BuildProducer<ServletExtensionBuildItem> extensionProducer) {
         if (buildConfig.corsEnabled) {
-            extensionProducer.produce(new ServletExtensionBuildItem(corsRecorder.buildCORSExtension()));
+            extensionProducer.produce(new ServletExtensionBuildItem(corsTemplate.buildCORSExtension()));
         }
     }
 
@@ -261,7 +261,7 @@ public class UndertowBuildStep {
             List<ServletInitParamBuildItem> initParams,
             List<ServletContextAttributeBuildItem> contextParams,
             List<ServletContainerInitializerBuildItem> servletContainerInitializerBuildItems,
-            UndertowDeploymentRecorder recorder, RecorderContext context,
+            UndertowDeploymentTemplate template, RecorderContext context,
             List<ServletExtensionBuildItem> extensions,
             BeanContainerBuildItem bc,
             WebMetadataBuildItem webMetadataBuildItem,
@@ -277,7 +277,7 @@ public class UndertowBuildStep {
         reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, DefaultServlet.class.getName(),
                 "io.undertow.server.protocol.http.HttpRequestParser$$generated"));
 
-        RuntimeValue<DeploymentInfo> deployment = recorder.createDeployment("test", knownPaths.knownFiles,
+        RuntimeValue<DeploymentInfo> deployment = template.createDeployment("test", knownPaths.knownFiles,
                 knownPaths.knownDirectories,
                 launchMode.getLaunchMode(), shutdownContext);
 
@@ -292,7 +292,7 @@ public class UndertowBuildStep {
                 for (Map.Entry<String, String> i : params.entrySet()) {
                     params.put(i.getKey(), i.getValue());
                 }
-                RuntimeValue<ServletInfo> sref = recorder.registerServlet(deployment, servlet.getServletName(),
+                RuntimeValue<ServletInfo> sref = template.registerServlet(deployment, servlet.getServletName(),
                         context.classProxy(servlet.getServletClass()),
                         servlet.isAsyncSupported(),
                         servlet.getLoadOnStartupInt(),
@@ -301,11 +301,11 @@ public class UndertowBuildStep {
                         null);
                 if (servlet.getInitParam() != null) {
                     for (ParamValueMetaData init : servlet.getInitParam()) {
-                        recorder.addServletInitParam(sref, init.getParamName(), init.getParamValue());
+                        template.addServletInitParam(sref, init.getParamName(), init.getParamValue());
                     }
                 }
                 if (servlet.getMultipartConfig() != null) {
-                    recorder.setMultipartConfig(sref, servlet.getMultipartConfig().getLocation(),
+                    template.setMultipartConfig(sref, servlet.getMultipartConfig().getLocation(),
                             servlet.getMultipartConfig().getMaxFileSize(), servlet.getMultipartConfig().getMaxRequestSize(),
                             servlet.getMultipartConfig().getFileSizeThreshold());
                 }
@@ -333,11 +333,11 @@ public class UndertowBuildStep {
                                                     .setMethod(method.getMethod()));
                                 }
                             }
-                            recorder.setSecurityInfo(sref, securityInfo);
+                            template.setSecurityInfo(sref, securityInfo);
                         }
                         if (servlet.getSecurityRoleRefs() != null) {
                             for (final SecurityRoleRefMetaData ref : servlet.getSecurityRoleRefs()) {
-                                recorder.addSecurityRoleRef(sref, ref.getRoleName(), ref.getRoleLink());
+                                template.addSecurityRoleRef(sref, ref.getRoleName(), ref.getRoleLink());
                             }
                         }
                     }
@@ -348,7 +348,7 @@ public class UndertowBuildStep {
         if (webMetaData.getServletMappings() != null) {
             for (ServletMappingMetaData mapping : webMetaData.getServletMappings()) {
                 for (String m : mapping.getUrlPatterns()) {
-                    recorder.addServletMapping(deployment, mapping.getServletName(), m);
+                    template.addServletMapping(deployment, mapping.getServletName(), m);
                 }
             }
         }
@@ -360,7 +360,7 @@ public class UndertowBuildStep {
                 for (Map.Entry<String, String> i : params.entrySet()) {
                     params.put(i.getKey(), i.getValue());
                 }
-                RuntimeValue<FilterInfo> sref = recorder.registerFilter(deployment,
+                RuntimeValue<FilterInfo> sref = template.registerFilter(deployment,
                         filter.getFilterName(),
                         context.classProxy(filter.getFilterClass()),
                         filter.isAsyncSupported(),
@@ -368,7 +368,7 @@ public class UndertowBuildStep {
                         params, null);
                 if (filter.getInitParam() != null) {
                     for (ParamValueMetaData init : filter.getInitParam()) {
-                        recorder.addFilterInitParam(sref, init.getParamName(), init.getParamValue());
+                        template.addFilterInitParam(sref, init.getParamName(), init.getParamValue());
                     }
                 }
             }
@@ -377,11 +377,11 @@ public class UndertowBuildStep {
             for (FilterMappingMetaData mapping : webMetaData.getFilterMappings()) {
                 for (String m : mapping.getUrlPatterns()) {
                     if (mapping.getDispatchers() == null || mapping.getDispatchers().isEmpty()) {
-                        recorder.addFilterURLMapping(deployment, mapping.getFilterName(), m, REQUEST);
+                        template.addFilterURLMapping(deployment, mapping.getFilterName(), m, REQUEST);
                     } else {
 
                         for (DispatcherType dispatcher : mapping.getDispatchers()) {
-                            recorder.addFilterURLMapping(deployment, mapping.getFilterName(), m,
+                            template.addFilterURLMapping(deployment, mapping.getFilterName(), m,
                                     javax.servlet.DispatcherType.valueOf(dispatcher.name()));
                         }
                     }
@@ -393,7 +393,7 @@ public class UndertowBuildStep {
         if (webMetaData.getListeners() != null) {
             for (ListenerMetaData listener : webMetaData.getListeners()) {
                 reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, listener.getListenerClass()));
-                recorder.registerListener(deployment, context.classProxy(listener.getListenerClass()), bc.getValue());
+                template.registerListener(deployment, context.classProxy(listener.getListenerClass()), bc.getValue());
             }
         }
 
@@ -402,40 +402,40 @@ public class UndertowBuildStep {
             if (servlet.getLoadOnStartup() == 0) {
                 reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, servlet.getServletClass()));
             }
-            recorder.registerServlet(deployment, servlet.getName(), context.classProxy(servletClass),
+            template.registerServlet(deployment, servlet.getName(), context.classProxy(servletClass),
                     servlet.isAsyncSupported(), servlet.getLoadOnStartup(), bc.getValue(), servlet.getInitParams(),
                     servlet.getInstanceFactory());
 
             for (String m : servlet.getMappings()) {
-                recorder.addServletMapping(deployment, servlet.getName(), m);
+                template.addServletMapping(deployment, servlet.getName(), m);
             }
         }
 
         for (FilterBuildItem filter : filters) {
             String filterClass = filter.getFilterClass();
             reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, filterClass));
-            recorder.registerFilter(deployment, filter.getName(), context.classProxy(filterClass), filter.isAsyncSupported(),
+            template.registerFilter(deployment, filter.getName(), context.classProxy(filterClass), filter.isAsyncSupported(),
                     bc.getValue(), filter.getInitParams(), filter.getInstanceFactory());
             for (FilterBuildItem.FilterMappingInfo m : filter.getMappings()) {
                 if (m.getMappingType() == FilterBuildItem.FilterMappingInfo.MappingType.URL) {
-                    recorder.addFilterURLMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
+                    template.addFilterURLMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
                 } else {
-                    recorder.addFilterServletNameMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
+                    template.addFilterServletNameMapping(deployment, filter.getName(), m.getMapping(), m.getDispatcher());
                 }
             }
         }
         for (ServletInitParamBuildItem i : initParams) {
-            recorder.addServletInitParameter(deployment, i.getKey(), i.getValue());
+            template.addServletInitParameter(deployment, i.getKey(), i.getValue());
         }
         for (ServletContextAttributeBuildItem i : contextParams) {
-            recorder.addServletContextAttribute(deployment, i.getKey(), i.getValue());
+            template.addServletContextAttribute(deployment, i.getKey(), i.getValue());
         }
         for (ServletExtensionBuildItem i : extensions) {
-            recorder.addServletExtension(deployment, i.getValue());
+            template.addServletExtension(deployment, i.getValue());
         }
         for (ListenerBuildItem i : listeners) {
             reflectiveClasses.accept(new ReflectiveClassBuildItem(false, false, i.getListenerClass()));
-            recorder.registerListener(deployment, context.classProxy(i.getListenerClass()), bc.getValue());
+            template.registerListener(deployment, context.classProxy(i.getListenerClass()), bc.getValue());
         }
 
         for (ServletContainerInitializerBuildItem sci : servletContainerInitializerBuildItems) {
@@ -444,21 +444,21 @@ public class UndertowBuildStep {
                 handlesTypes.add(context.classProxy(handledType));
             }
 
-            recorder.addServletContainerInitializer(deployment,
+            template.addServletContainerInitializer(deployment,
                     (Class<? extends ServletContainerInitializer>) context.classProxy(sci.sciClass), handlesTypes);
         }
 
         return new ServletDeploymentManagerBuildItem(
-                recorder.bootServletContainer(deployment, bc.getValue(), launchMode.getLaunchMode(), shutdownContext));
+                template.bootServletContainer(deployment, bc.getValue(), launchMode.getLaunchMode(), shutdownContext));
 
     }
 
     @BuildStep
     @Record(STATIC_INIT)
     RuntimeBeanBuildItem servletContextBean(
-            UndertowDeploymentRecorder recorder) {
+            UndertowDeploymentTemplate template) {
         return RuntimeBeanBuildItem.builder(ServletContext.class).setScope(ApplicationScoped.class)
-                .setSupplier((Supplier) recorder.servletContextSupplier())
+                .setSupplier((Supplier) template.servletContextSupplier())
                 .build();
     }
 
