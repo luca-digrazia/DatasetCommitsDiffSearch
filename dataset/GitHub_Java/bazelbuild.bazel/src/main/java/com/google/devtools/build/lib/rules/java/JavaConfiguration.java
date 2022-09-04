@@ -150,6 +150,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   private final Label javaLauncherLabel;
   private final boolean useIjars;
   private final boolean useHeaderCompilation;
+  private final boolean headerCompilationDisableJavacFallback;
   private final boolean generateJavaDeps;
   private final boolean strictDepsJavaProtos;
   private final boolean protoGeneratedStrictDeps;
@@ -174,7 +175,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   private final boolean explicitJavaTestDeps;
   private final boolean experimentalTestRunner;
   private final boolean jplPropagateCcLinkParamsStore;
-  private final boolean addTestSupportToCompileTimeDeps;
   private final ImmutableList<Label> pluginList;
 
   // TODO(dmarting): remove once we have a proper solution for #2539
@@ -188,6 +188,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     this.javaLauncherLabel = javaOptions.javaLauncher;
     this.useIjars = javaOptions.useIjars;
     this.useHeaderCompilation = javaOptions.headerCompilation;
+    this.headerCompilationDisableJavacFallback = javaOptions.headerCompilationDisableJavacFallback;
     this.generateJavaDeps =
         javaOptions.javaDeps || javaOptions.javaClasspath != JavaClasspathMode.OFF;
     this.javaClasspath = javaOptions.javaClasspath;
@@ -212,7 +213,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     this.explicitJavaTestDeps = javaOptions.explicitJavaTestDeps;
     this.experimentalTestRunner = javaOptions.experimentalTestRunner;
     this.jplPropagateCcLinkParamsStore = javaOptions.jplPropagateCcLinkParamsStore;
-    this.addTestSupportToCompileTimeDeps = javaOptions.addTestSupportToCompileTimeDeps;
 
     ImmutableList.Builder<Label> translationsBuilder = ImmutableList.builder();
     for (String s : javaOptions.translationTargets) {
@@ -244,6 +244,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
       Label javaLauncherLabel,
       boolean useIjars,
       boolean useHeaderCompilation,
+      boolean headerCompilationDisableJavacFallback,
       boolean generateJavaDeps,
       boolean strictDepsJavaProtos,
       boolean protoGeneratedStrictDeps,
@@ -268,13 +269,13 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
       boolean explicitJavaTestDeps,
       boolean experimentalTestRunner,
       boolean jplPropagateCcLinkParamsStore,
-      boolean addTestSupportToCompileTimeDeps,
       ImmutableList<Label> pluginList,
       boolean useLegacyBazelJavaTest) {
     this.commandLineJavacFlags = commandLineJavacFlags;
     this.javaLauncherLabel = javaLauncherLabel;
     this.useIjars = useIjars;
     this.useHeaderCompilation = useHeaderCompilation;
+    this.headerCompilationDisableJavacFallback = headerCompilationDisableJavacFallback;
     this.generateJavaDeps = generateJavaDeps;
     this.strictDepsJavaProtos = strictDepsJavaProtos;
     this.protoGeneratedStrictDeps = protoGeneratedStrictDeps;
@@ -299,7 +300,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     this.explicitJavaTestDeps = explicitJavaTestDeps;
     this.experimentalTestRunner = experimentalTestRunner;
     this.jplPropagateCcLinkParamsStore = jplPropagateCcLinkParamsStore;
-    this.addTestSupportToCompileTimeDeps = addTestSupportToCompileTimeDeps;
     this.pluginList = pluginList;
     this.useLegacyBazelJavaTest = useLegacyBazelJavaTest;
   }
@@ -334,6 +334,14 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   /** Returns true iff Java header compilation is enabled. */
   public boolean useHeaderCompilation() {
     return useHeaderCompilation;
+  }
+
+  /**
+   * If --java_header_compilation is set, report diagnostics from turbine instead of falling back to
+   * javac. Diagnostics will be produced more quickly, but may be less helpful.
+   */
+  public boolean headerCompilationDisableJavacFallback() {
+    return headerCompilationDisableJavacFallback;
   }
 
   /**
@@ -514,10 +522,6 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
 
   public boolean jplPropagateCcLinkParamsStore() {
     return jplPropagateCcLinkParamsStore;
-  }
-
-  public boolean addTestSupportToCompileTimeDeps() {
-    return addTestSupportToCompileTimeDeps;
   }
 
   public List<Label> getPlugins() {

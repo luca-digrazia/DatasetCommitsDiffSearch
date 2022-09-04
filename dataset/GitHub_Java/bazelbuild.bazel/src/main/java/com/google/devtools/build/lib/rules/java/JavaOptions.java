@@ -538,16 +538,6 @@ public class JavaOptions extends FragmentOptions {
   public boolean allowRuntimeDepsOnNeverLink;
 
   @Option(
-      name = "experimental_add_test_support_to_compile_time_deps",
-      defaultValue = "true",
-      documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-      effectTags = {OptionEffectTag.UNKNOWN},
-      help =
-          "Flag to help transition away from adding test support libraries to the compile-time"
-              + " deps of Java test rules.")
-  public boolean addTestSupportToCompileTimeDeps;
-
-  @Option(
     name = "jplPropagateCcLinkParamsStore",
     defaultValue = "false",
     documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -588,6 +578,7 @@ public class JavaOptions extends FragmentOptions {
     // incremental build performance is important.
     host.useIjars = useIjars;
     host.headerCompilation = headerCompilation;
+    host.headerCompilationDisableJavacFallback = headerCompilationDisableJavacFallback;
 
     host.javaDeps = javaDeps;
     host.javaClasspath = javaClasspath;
@@ -600,7 +591,6 @@ public class JavaOptions extends FragmentOptions {
     // java_test targets can be used as a host tool, Ex: as a validating tool on a genrule.
     host.enforceOneVersionOnJavaTests = enforceOneVersionOnJavaTests;
     host.allowRuntimeDepsOnNeverLink = allowRuntimeDepsOnNeverLink;
-    host.addTestSupportToCompileTimeDeps = addTestSupportToCompileTimeDeps;
 
     host.jplPropagateCcLinkParamsStore = jplPropagateCcLinkParamsStore;
 
