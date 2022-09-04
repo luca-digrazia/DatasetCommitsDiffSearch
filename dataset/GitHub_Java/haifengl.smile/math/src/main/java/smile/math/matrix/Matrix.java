@@ -427,11 +427,7 @@ public class Matrix extends DMatrix {
         return (((n * elementSize + 511) / 512) * 512 + 64) / elementSize;
     }
 
-    /**
-     * Customized object serialization.
-     * @param out the output stream.
-     * @throws IOException when fails to write to the stream.
-     */
+    /** Customized object serialization. */
     private void writeObject(ObjectOutputStream out) throws IOException {
         // write default properties
         out.defaultWriteObject();
@@ -452,12 +448,7 @@ public class Matrix extends DMatrix {
         }
     }
 
-    /**
-     * Customized object serialization.
-     * @param in the input stream.
-     * @throws IOException when fails to read the stream.
-     * @throws ClassNotFoundException when fails to load the class.
-     */
+    /** Customized object serialization. */
     private void readObject(ObjectInputStream in) throws IOException, ClassNotFoundException {
         //read default properties
         in.defaultReadObject();
@@ -483,12 +474,12 @@ public class Matrix extends DMatrix {
     }
 
     @Override
-    public int nrow() {
+    public int nrows() {
         return m;
     }
 
     @Override
-    public int ncol() {
+    public int ncols() {
         return n;
     }
 
@@ -2587,7 +2578,7 @@ public class Matrix extends DMatrix {
          *           factorization.
          */
         public Cholesky(Matrix lu) {
-            if (lu.nrow() != lu.ncol()) {
+            if (lu.nrows() != lu.ncols()) {
                 throw new UnsupportedOperationException("Cholesky constructor on a non-square matrix");
             }
             this.lu = lu;
@@ -2777,14 +2768,14 @@ public class Matrix extends DMatrix {
          */
         public void solve(Matrix B) {
             if (B.m != qr.m) {
-                throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", qr.nrow(), qr.nrow(), B.nrow(), B.ncol()));
+                throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", qr.nrows(), qr.nrows(), B.nrows(), B.ncols()));
             }
 
             int m = qr.m;
             int n = qr.n;
             int k = Math.min(m, n);
 
-            int info = LAPACK.engine.ormqr(qr.layout(), LEFT, TRANSPOSE, B.nrow(), B.ncol(), k, qr.A, qr.ld, DoubleBuffer.wrap(tau), B.A, B.ld);
+            int info = LAPACK.engine.ormqr(qr.layout(), LEFT, TRANSPOSE, B.nrows(), B.ncols(), k, qr.A, qr.ld, DoubleBuffer.wrap(tau), B.A, B.ld);
             if (info != 0) {
                 logger.error("LAPACK ORMQR error code: {}", info);
                 throw new IllegalArgumentException("LAPACK ORMQR error code: " + info);

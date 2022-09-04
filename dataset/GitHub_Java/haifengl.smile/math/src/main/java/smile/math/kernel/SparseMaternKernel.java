@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
@@ -24,7 +24,7 @@ import smile.util.SparseArray;
  * The class of Matérn kernels is a generalization of the Gaussian/RBF.
  * It has an additional parameter nu which controls the smoothness of
  * the kernel function. The smaller nu, the less smooth the approximated
- * function is. As nu -> inf, the kernel becomes equivalent to the
+ * function is. As {@code nu -> inf}, the kernel becomes equivalent to the
  * Gaussian/RBF kernel. When nu = 1/2, the kernel becomes identical to the
  * Laplacian kernel. The Matern kernel become especially simple
  * when nu is half-integer. Important intermediate values are 3/2
@@ -63,13 +63,18 @@ public class SparseMaternKernel extends Matern implements MercerKernel<SparseArr
     }
 
     @Override
+    public double[] kg(SparseArray x, SparseArray y) {
+        return kg(MathEx.distance(x, y));
+    }
+
+    @Override
     public SparseMaternKernel of(double[] params) {
         return new SparseMaternKernel(params[0], nu, lo, hi);
     }
 
     @Override
     public double[] hyperparameters() {
-        return new double[] { sigma, nu };
+        return new double[] { sigma };
     }
 
     @Override

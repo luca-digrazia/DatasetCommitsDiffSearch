@@ -19,6 +19,7 @@ package smile.math.matrix;
 
 import java.io.Serializable;
 import java.nio.FloatBuffer;
+import java.nio.IntBuffer;
 import smile.math.MathEx;
 import smile.math.blas.*;
 import static smile.math.blas.Layout.*;
@@ -163,12 +164,12 @@ public class FloatBandMatrix extends SMatrix {
     }
 
     @Override
-    public int nrow() {
+    public int nrows() {
         return m;
     }
 
     @Override
-    public int ncol() {
+    public int ncols() {
         return n;
     }
 
@@ -285,12 +286,14 @@ public class FloatBandMatrix extends SMatrix {
     }
 
     @Override
-    public void set(int i, int j, float x) {
+    public FloatBandMatrix set(int i, int j, float x) {
         if (Math.max(0, j-ku) <= i && i <= Math.min(m-1, j+kl)) {
             AB[j * ld + ku + i - j] = x;
         } else {
             throw new UnsupportedOperationException(String.format("Set element at (%d, %d)", i, j));
         }
+
+        return this;
     }
 
     @Override
@@ -478,9 +481,9 @@ public class FloatBandMatrix extends SMatrix {
          * @return the solution vector.
          */
         public float[] solve(float[] b) {
-            FloatMatrix x = FloatMatrix.column(b);
-            solve(x);
-            return x.A;
+            float[] x = b.clone();
+            solve(new FloatMatrix(x));
+            return x;
         }
 
         /**
@@ -506,7 +509,7 @@ public class FloatBandMatrix extends SMatrix {
                 throw new RuntimeException("The matrix is singular.");
             }
 
-            int ret = LAPACK.engine.gbtrs(lu.layout(), NO_TRANSPOSE, lu.n, lu.kl/2, lu.ku, B.n, lu.AB, lu.ld, ipiv, B.A, B.ld);
+            int ret = LAPACK.engine.gbtrs(lu.layout(), NO_TRANSPOSE, lu.n, lu.kl/2, lu.ku, B.n, FloatBuffer.wrap(lu.AB), lu.ld, IntBuffer.wrap(ipiv), B.A, B.ld);
             if (ret != 0) {
                 logger.error("LAPACK GETRS error code: {}", ret);
                 throw new ArithmeticException("LAPACK GETRS error code: " + ret);
@@ -550,7 +553,7 @@ public class FloatBandMatrix extends SMatrix {
          *           factorization.
          */
         public Cholesky(FloatBandMatrix lu) {
-            if (lu.nrow() != lu.ncol()) {
+            if (lu.nrows() != lu.ncols()) {
                 throw new UnsupportedOperationException("Cholesky constructor on a non-square matrix");
             }
             this.lu = lu;
@@ -599,9 +602,9 @@ public class FloatBandMatrix extends SMatrix {
          * @return the solution vector.
          */
         public float[] solve(float[] b) {
-            FloatMatrix x = FloatMatrix.column(b);
-            solve(x);
-            return x.A;
+            float[] x = b.clone();
+            solve(new FloatMatrix(x));
+            return x;
         }
 
         /**
@@ -614,7 +617,7 @@ public class FloatBandMatrix extends SMatrix {
                 throw new IllegalArgumentException(String.format("Row dimensions do not agree: A is %d x %d, but B is %d x %d", lu.m, lu.n, B.m, B.n));
             }
 
-            int info = LAPACK.engine.pbtrs(lu.layout(), lu.uplo, lu.n, lu.uplo == LOWER ? lu.kl : lu.ku, B.n, lu.AB, lu.ld, B.A, B.ld);
+            int info = LAPACK.engine.pbtrs(lu.layout(), lu.uplo, lu.n, lu.uplo == LOWER ? lu.kl : lu.ku, B.n, FloatBuffer.wrap(lu.AB), lu.ld, B.A, B.ld);
             if (info != 0) {
                 logger.error("LAPACK POTRS error code: {}", info);
                 throw new ArithmeticException("LAPACK POTRS error code: " + info);

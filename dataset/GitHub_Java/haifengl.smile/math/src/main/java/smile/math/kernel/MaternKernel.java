@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,94 +13,76 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
 import smile.math.MathEx;
 
 /**
- * The class of Matérn kernels is a generalization of the RBF.
+ * The class of Matérn kernels is a generalization of the Gaussian/RBF.
  * It has an additional parameter nu which controls the smoothness of
  * the kernel function. The smaller nu, the less smooth the approximated
- * function is. As nu -> inf, the kernel becomes equivalent to the RBF
- * kernel. When nu = 1/2, the Matérn kernel becomes identical to the
- * absolute exponential kernel. The Matern kernel become especially simple
+ * function is. As {@code nu -> inf}, the kernel becomes equivalent to the
+ * Gaussian/RBF kernel. When nu = 1/2, the kernel becomes identical to the
+ * Laplacian kernel. The Matern kernel become especially simple
  * when nu is half-integer. Important intermediate values are 3/2
  * (once differentiable functions) and 5/2 (twice differentiable functions).
-
+ *
+ * @see GaussianKernel
+ * @see LaplacianKernel
+ *
  * @author Haifeng Li
  */
-public class MaternKernel implements MercerKernel<double[]>, IsotropicKernel {
-    private static final long serialVersionUID = 2L;
-    private static final double SQRT3 = Math.sqrt(3);
-    private static final double SQRT5 = Math.sqrt(5);
-
+public class MaternKernel extends Matern implements MercerKernel<double[]> {
     /**
-     * The length scale of the kernel.
+     * Constructor.
+     * @param sigma The length scale of kernel.
+     * @param nu The smoothness of the kernel function. Only 0.5, 1.5, 2.5 and Inf are accepted.
      */
-    private double length;
-    /**
-     * The smoothness of the kernel.
-     */
-    private double nu;
+    public MaternKernel(double sigma, double nu) {
+        this(sigma, nu, 1E-05, 1E5);
+    }
 
     /**
      * Constructor.
-     * @param length The length scale of the kernel function.
+     * @param sigma The length scale of kernel.
      * @param nu The smoothness of the kernel function. Only 0.5, 1.5, 2.5 and Inf are accepted.
+     *           The smoothness parameter is fixed during hyperparameter for tuning.
+     * @param lo The lower bound of length scale for hyperparameter tuning.
+     * @param hi The upper bound of length scale for hyperparameter tuning.
      */
-    public MaternKernel(double length, int nu) {
-        if (length <= 0) {
-            throw new IllegalArgumentException("The length scale is not positive: " + length);
-        }
-
-        if (nu != 1.5 && nu != 2.5 && nu != 0.5 && !Double.isInfinite(nu)) {
-            throw new IllegalArgumentException("nu must be 0.5, 1.5, 2.5 or Info: " + nu);
-        }
-
-        this.length = length;
-        this.nu = nu;
-    }
-
-    @Override
-    public String toString() {
-        return String.format("Matern Kernel (length = %.4f, nu = %.1f)", length, nu);
-    }
-
-    @Override
-    public double k(double dist) {
-        double d = dist / length;
-
-        if (nu == 1.5) {
-            d *= SQRT3;
-            return (1.0 + d) * Math.exp(-d);
-        }
-
-        if (nu == 2.5) {
-            d *= SQRT5;
-            return (1.0 + d) * Math.exp(-d);
-        }
-
-        if (nu == 1.5) {
-            d *= SQRT3;
-            return (1.0 + d + d * d / 3.0) * Math.exp(-d);
-        }
-
-        if (nu == 0.5) {
-            return Math.exp(-d);
-        }
-
-        if (Double.isInfinite(nu)) {
-            return Math.exp(-0.5 * d * d);
-        }
-
-        throw new IllegalStateException("Unsupported nu = " + nu);
+    public MaternKernel(double sigma, double nu, double lo, double hi) {
+        super(sigma, nu, lo, hi);
     }
 
     @Override
     public double k(double[] x, double[] y) {
-        double d = MathEx.distance(x, y);
-        return k(d);
+        return k(MathEx.distance(x, y));
+    }
+
+    @Override
+    public double[] kg(double[] x, double[] y) {
+        return kg(MathEx.distance(x, y));
+    }
+
+    @Override
+    public MaternKernel of(double[] params) {
+        return new MaternKernel(params[0], nu, lo, hi);
+    }
+
+    @Override
+    public double[] hyperparameters() {
+        return new double[] { sigma };
+    }
+
+    @Override
+    public double[] lo() {
+        return new double[] { lo };
+    }
+
+    @Override
+    public double[] hi() {
+        return new double[] { hi };
     }
 }

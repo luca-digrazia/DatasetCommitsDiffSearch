@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
@@ -21,7 +21,7 @@ package smile.math.kernel;
  * The class of Matérn kernels is a generalization of the Gaussian/RBF.
  * It has an additional parameter nu which controls the smoothness of
  * the kernel function. The smaller nu, the less smooth the approximated
- * function is. As nu -> inf, the kernel becomes equivalent to the
+ * function is. As {@code nu -> inf}, the kernel becomes equivalent to the
  * Gaussian/RBF kernel. When nu = 1/2, the kernel becomes identical to the
  * Laplacian kernel. The Matern kernel become especially simple
  * when nu is half-integer. Important intermediate values are 3/2
@@ -37,21 +37,24 @@ public class Matern implements IsotropicKernel {
     private static final double SQRT3 = Math.sqrt(3);
     private static final double SQRT5 = Math.sqrt(5);
 
-    /**
-     * The length scale of the kernel.
-     */
-    private final double sigma;
-    /**
-     * The smoothness of the kernel.
-     */
-    private final double nu;
+    /** The length scale of the kernel. */
+    final double sigma;
+    /** The smoothness of the kernel. */
+    final double nu;
+    /** The lower bound of length scale for hyperparameter tuning. */
+    final double lo;
+    /** The upper bound of length scale for hyperparameter tuning. */
+    final double hi;
 
     /**
      * Constructor.
      * @param sigma The length scale of kernel.
      * @param nu The smoothness of the kernel function. Only 0.5, 1.5, 2.5 and Inf are accepted.
+     *           The smoothness parameter is fixed during hyperparameter for tuning.
+     * @param lo The lower bound of length scale for hyperparameter tuning.
+     * @param hi The upper bound of length scale for hyperparameter tuning.
      */
-    public Matern(double sigma, int nu) {
+    public Matern(double sigma, double nu, double lo, double hi) {
         if (sigma <= 0) {
             throw new IllegalArgumentException("The length scale is not positive: " + sigma);
         }
@@ -62,21 +65,29 @@ public class Matern implements IsotropicKernel {
 
         this.sigma = sigma;
         this.nu = nu;
+        this.lo = lo;
+        this.hi = hi;
     }
 
-    /** Returns the length scale of kernel. */
+    /**
+     * Returns the length scale of kernel.
+     * @return the length scale of kernel.
+     */
     public double scale() {
         return sigma;
     }
 
-    /** Returns the smoothness of kernel. */
+    /**
+     * Returns the smoothness of kernel.
+     * @return the smoothness of kernel.
+     */
     public double smoothness() {
         return nu;
     }
 
     @Override
     public String toString() {
-        return String.format("Matern(%.4f, %.1f)", sigma, nu);
+        return String.format("MaternKernel(%.4f, %.1f)", sigma, nu);
     }
 
     @Override
@@ -107,5 +118,31 @@ public class Matern implements IsotropicKernel {
         }
 
         throw new IllegalStateException("Unsupported nu = " + nu);
+    }
+
+    @Override
+    public double[] kg(double dist) {
+        double d = dist / sigma;
+        double k, g;
+
+        if (nu == 1.5) {
+            d *= SQRT3;
+            k = (1.0 + d) * Math.exp(-d);
+            g = (2.0 + d) * Math.exp(-d) * d / sigma;
+        } else if (nu == 2.5) {
+            d *= SQRT5;
+            k = (1.0 + d) * Math.exp(-d);
+            g = (2.0 + d) * Math.exp(-d) * d / sigma;
+        } else if (nu == 0.5) {
+            k = Math.exp(-d);
+            g = k * d / sigma;
+        } else if (Double.isInfinite(nu)) {
+            k = Math.exp(-0.5 * d * d);
+            g = k * d * d / sigma;
+        } else {
+            throw new IllegalStateException("Unsupported nu = " + nu);
+        }
+
+        return new double[] { k, g };
     }
 }
