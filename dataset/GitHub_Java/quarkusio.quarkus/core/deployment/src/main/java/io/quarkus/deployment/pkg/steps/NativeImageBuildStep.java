@@ -46,6 +46,7 @@ import io.quarkus.deployment.pkg.builditem.NativeImageSourceJarBuildItem;
 import io.quarkus.deployment.pkg.builditem.OutputTargetBuildItem;
 import io.quarkus.deployment.pkg.builditem.ProcessInheritIODisabled;
 import io.quarkus.deployment.util.FileUtil;
+import io.quarkus.deployment.util.GlobUtil;
 import io.quarkus.deployment.util.ProcessUtil;
 
 public class NativeImageBuildStep {
@@ -87,7 +88,7 @@ public class NativeImageBuildStep {
             PackageConfig packageConfig,
             CurateOutcomeBuildItem curateOutcomeBuildItem,
             List<NativeImageSystemPropertyBuildItem> nativeImageProperties,
-            Optional<ProcessInheritIODisabled> processInheritIODisabled) {
+            final Optional<ProcessInheritIODisabled> processInheritIODisabled) {
         if (nativeConfig.debug.enabled) {
             copyJarSourcesToLib(outputTargetBuildItem, curateOutcomeBuildItem);
             copySourcesToSourceCache(outputTargetBuildItem);
@@ -105,12 +106,52 @@ public class NativeImageBuildStep {
         String noPIE = "";
 
         boolean isContainerBuild = nativeConfig.containerRuntime.isPresent() || nativeConfig.containerBuild;
-        if (!isContainerBuild && SystemUtils.IS_OS_LINUX) {
-            noPIE = detectNoPIE();
+        if (isContainerBuild) {
+            nativeImage = setupContainerBuild(nativeConfig, processInheritIODisabled, outputDir);
+
+        } else {
+            if (SystemUtils.IS_OS_LINUX) {
+                noPIE = detectNoPIE();
+            }
+
+            Optional<String> graal = nativeConfig.graalvmHome;
+            File java = nativeConfig.javaHome;
+            if (graal.isPresent()) {
+                env.put(GRAALVM_HOME, graal.get());
+            }
+            if (java == null) {
+                // try system property first - it will be the JAVA_HOME used by the current JVM
+                String home = System.getProperty(JAVA_HOME_SYS);
+                if (home == null) {
+                    // No luck, somewhat a odd JVM not enforcing this property
+                    // try with the JAVA_HOME environment variable
+                    home = env.get(JAVA_HOME_ENV);
+                }
+
+                if (home != null) {
+                    java = new File(home);
+                }
+            }
+            nativeImage = getNativeImageExecutable(graal, java, env, nativeConfig, processInheritIODisabled, outputDir);
         }
 
-        nativeImage = getNativeImage(nativeConfig, processInheritIODisabled, outputDir, env);
-        final GraalVM.Version graalVMVersion = GraalVM.Version.ofBinary(nativeImage);
+        final GraalVM.Version graalVMVersion;
+
+        try {
+            List<String> versionCommand = new ArrayList<>(nativeImage);
+            versionCommand.add("--version");
+
+            Process versionProcess = new ProcessBuilder(versionCommand.toArray(new String[0]))
+                    .redirectErrorStream(true)
+                    .start();
+            versionProcess.waitFor();
+            try (BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(versionProcess.getInputStream(), StandardCharsets.UTF_8))) {
+                graalVMVersion = GraalVM.Version.of(reader.lines());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to get GraalVM version", e);
+        }
 
         if (graalVMVersion.isDetected()) {
             checkGraalVMVersion(graalVMVersion);
@@ -125,7 +166,7 @@ public class NativeImageBuildStep {
                 cleanup.add("--server-shutdown");
                 final ProcessBuilder pb = new ProcessBuilder(cleanup.toArray(new String[0]));
                 pb.directory(outputDir.toFile());
-                final Process process = ProcessUtil.launchProcess(pb, processInheritIODisabled.isPresent());
+                final Process process = ProcessUtil.launchProcess(pb, processInheritIODisabled);
                 process.waitFor();
             }
             boolean enableSslNative = false;
@@ -163,6 +204,10 @@ public class NativeImageBuildStep {
             }
 
             handleAdditionalProperties(nativeConfig, command, isContainerBuild, outputDir);
+            nativeConfig.resources.includes.ifPresent(l -> l.stream()
+                    .map(GlobUtil::toRegexPattern)
+                    .map(re -> "-H:IncludeResources=" + re.trim())
+                    .forEach(command::add));
             command.add("--initialize-at-build-time=");
             command.add(
                     "-H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime"); //the default collection policy results in full GC's 50% of the time
@@ -260,7 +305,7 @@ public class NativeImageBuildStep {
             log.info(String.join(" ", command).replace("$", "\\$"));
             CountDownLatch errorReportLatch = new CountDownLatch(1);
             final ProcessBuilder processBuilder = new ProcessBuilder(command).directory(outputDir.toFile());
-            final Process process = ProcessUtil.launchProcessStreamStdOut(processBuilder, processInheritIODisabled.isPresent());
+            final Process process = ProcessUtil.launchProcessStreamStdOut(processBuilder, processInheritIODisabled);
             ExecutorService executor = Executors.newSingleThreadExecutor();
             executor.submit(new ErrorReplacingProcessReader(process.getErrorStream(), outputDir.resolve("reports").toFile(),
                     errorReportLatch));
@@ -278,15 +323,6 @@ public class NativeImageBuildStep {
             Path finalPath = outputTargetBuildItem.getOutputDirectory().resolve(executableName);
             IoUtils.copy(generatedImage, finalPath);
             Files.delete(generatedImage);
-            if (nativeConfig.debug.enabled) {
-                if (graalVMVersion.isMandrel() || graalVMVersion.isNewerThan(GraalVM.Version.VERSION_20_1)) {
-                    final String sources = "sources";
-                    final Path generatedSources = outputDir.resolve(sources);
-                    final Path finalSources = outputTargetBuildItem.getOutputDirectory().resolve(sources);
-                    IoUtils.copy(generatedSources, finalSources);
-                    IoUtils.recursiveDelete(generatedSources);
-                }
-            }
             System.setProperty("native.image.path", finalPath.toAbsolutePath().toString());
 
             if (objcopyExists(env)) {
@@ -305,35 +341,6 @@ public class NativeImageBuildStep {
                 removeJarSourcesFromLib(outputTargetBuildItem);
                 IoUtils.recursiveDelete(outputDir.resolve(Paths.get(APP_SOURCES)));
             }
-        }
-    }
-
-    private static List<String> getNativeImage(NativeConfig nativeConfig,
-            Optional<ProcessInheritIODisabled> processInheritIODisabled,
-            Path outputDir, Map<String, String> env) {
-        boolean isContainerBuild = nativeConfig.containerRuntime.isPresent() || nativeConfig.containerBuild;
-        if (isContainerBuild) {
-            return setupContainerBuild(nativeConfig, processInheritIODisabled, outputDir);
-        } else {
-            Optional<String> graal = nativeConfig.graalvmHome;
-            File java = nativeConfig.javaHome;
-            if (graal.isPresent()) {
-                env.put(GRAALVM_HOME, graal.get());
-            }
-            if (java == null) {
-                // try system property first - it will be the JAVA_HOME used by the current JVM
-                String home = System.getProperty(JAVA_HOME_SYS);
-                if (home == null) {
-                    // No luck, somewhat a odd JVM not enforcing this property
-                    // try with the JAVA_HOME environment variable
-                    home = env.get(JAVA_HOME_ENV);
-                }
-
-                if (home != null) {
-                    java = new File(home);
-                }
-            }
-            return getNativeImageExecutable(graal, java, env, nativeConfig, processInheritIODisabled, outputDir);
         }
     }
 
@@ -378,7 +385,7 @@ public class NativeImageBuildStep {
             try {
                 final ProcessBuilder pb = new ProcessBuilder(
                         Arrays.asList(containerRuntime, "pull", nativeConfig.builderImage));
-                pullProcess = ProcessUtil.launchProcess(pb, processInheritIODisabled.isPresent());
+                pullProcess = ProcessUtil.launchProcess(pb, processInheritIODisabled);
                 pullProcess.waitFor();
             } catch (IOException | InterruptedException e) {
                 throw new RuntimeException("Failed to pull builder image " + nativeConfig.builderImage, e);
@@ -666,9 +673,7 @@ public class NativeImageBuildStep {
         final List<String> command = new ArrayList<>(args.length + 1);
         command.add("objcopy");
         command.addAll(Arrays.asList(args));
-        if (log.isDebugEnabled()) {
-            log.debugf("Execute %s", String.join(" ", command));
-        }
+        log.infof("Execute %s", command);
         Process process = null;
         try {
             process = new ProcessBuilder(command).start();
@@ -684,17 +689,8 @@ public class NativeImageBuildStep {
 
     //https://github.com/quarkusio/quarkus/issues/11573
     //https://github.com/oracle/graal/issues/1610
-    List<RuntimeReinitializedClassBuildItem> graalVmWorkaround(NativeConfig nativeConfig,
-            NativeImageSourceJarBuildItem nativeImageSourceJarBuildItem,
-            Optional<ProcessInheritIODisabled> processInheritIODisabled) {
-        Path outputDir = nativeImageSourceJarBuildItem.getPath().getParent();
-        HashMap<String, String> env = new HashMap<>(System.getenv());
-        List<String> nativeImage = getNativeImage(nativeConfig, processInheritIODisabled, outputDir, env);
-        GraalVM.Version version = GraalVM.Version.ofBinary(nativeImage);
-        if (version.isNewerThan(GraalVM.Version.VERSION_20_2)) {
-            // https://github.com/oracle/graal/issues/2841
-            return Collections.emptyList();
-        }
+    @BuildStep
+    List<RuntimeReinitializedClassBuildItem> graalVmWorkaround() {
         return Arrays.asList(new RuntimeReinitializedClassBuildItem(ThreadLocalRandom.class.getName()),
                 new RuntimeReinitializedClassBuildItem("java.lang.Math$RandomNumberGeneratorHolder"));
     }
@@ -788,26 +784,6 @@ public class NativeImageBuildStep {
                 }
 
                 return UNVERSIONED;
-            }
-
-            private static Version ofBinary(List<String> nativeImage) {
-                final Version graalVMVersion;
-                try {
-                    List<String> versionCommand = new ArrayList<>(nativeImage);
-                    versionCommand.add("--version");
-
-                    Process versionProcess = new ProcessBuilder(versionCommand.toArray(new String[0]))
-                            .redirectErrorStream(true)
-                            .start();
-                    versionProcess.waitFor();
-                    try (BufferedReader reader = new BufferedReader(
-                            new InputStreamReader(versionProcess.getInputStream(), StandardCharsets.UTF_8))) {
-                        graalVMVersion = of(reader.lines());
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Failed to get GraalVM version", e);
-                }
-                return graalVMVersion;
             }
 
             private static boolean isSnapshot(String s) {
