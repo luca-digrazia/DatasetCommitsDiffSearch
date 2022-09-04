@@ -1,7 +1,6 @@
 package io.quarkus.registry.union;
 
 import io.quarkus.registry.catalog.ExtensionCatalog;
-import io.quarkus.registry.catalog.json.JsonExtensionCatalog;
 import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -379,13 +378,7 @@ public class ElementCatalogBuilder<M> {
 
     public static void setElementCatalog(ExtensionCatalog extCatalog, ElementCatalog<?> elemCatalog) {
         if (!elemCatalog.isEmpty()) {
-            // TODO it's a hack to attach the "element" catalog to the extension catalog
-            Map<String, Object> metadata = extCatalog.getMetadata();
-            if (metadata.isEmpty()) {
-                metadata = new HashMap<>(1);
-                ((JsonExtensionCatalog) extCatalog).setMetadata(metadata);
-            }
-            metadata.put("element-catalog", elemCatalog);
+            extCatalog.getMetadata().put("element-catalog", elemCatalog);
         }
     }
 
