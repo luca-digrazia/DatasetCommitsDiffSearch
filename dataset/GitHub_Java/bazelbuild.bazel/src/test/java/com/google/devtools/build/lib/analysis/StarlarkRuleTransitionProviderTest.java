@@ -14,7 +14,6 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -25,21 +24,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/**
- * Tests for StarlarkRuleTransitionProvider.
- *
- * <p>Note: Some tests in this class use the assertThrows pattern and some use the remove
- * failFastHandler and assertEvent pattern for reporting errors. The tests that employ the
- * assertThrows pattern throws errors from the Starlark-defined implementation function of the
- * transition. Errors that are thrown here are stored in their own EventHandler and replayed all at
- * once. Unlike the failFastHandler, there's no (easy) way in the test to remove the EventHandler
- * that is attached to all {@code StarlarkDefinedConfigTransition}s so we must catch the {@code
- * AssertionError} throws by the failFastHandler.
- *
- * <p>TODO(bazel-team): find a way to disable the starlark transition event handler for testing.
- *
- * <p>In production, the errors appear the same as other errors in this test.
- */
+/** Tests for StarlarkRuleTransitionProvider. */
 @RunWith(JUnit4.class)
 public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
 
@@ -159,9 +144,10 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         "my_rule = rule(implementation = _impl, cfg = my_transition)");
     scratch.file("test/BUILD", "load('//test:rules.bzl', 'my_rule')", "my_rule(name = 'test')");
 
-    AssertionError error = assertThrows(AssertionError.class, () -> getConfiguredTarget("//test"));
-    assertThat(error.getMessage())
-        .contains("Rule transition only allowed to return a single transitioned configuration.");
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test");
+    assertContainsEvent(
+        "Rule transition only allowed to return a single transitioned configuration.");
   }
 
   @Test
@@ -200,12 +186,12 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         "  values = {'test_arg': 'true'},",
         ")");
 
-    AssertionError error = assertThrows(AssertionError.class, () -> getConfiguredTarget("//test"));
-    assertThat(error.getMessage())
-        .contains(
-            "No attribute 'my_configurable_attr'. "
-                + "Either this attribute does not exist for this rule or is set by a select. "
-                + "Starlark rule transitions currently cannot read attributes behind selects.");
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test");
+    assertContainsEvent(
+        "No attribute 'my_configurable_attr'. "
+            + "Either this attribute does not exist for this rule or is set by a select. "
+            + "Starlark rule transitions currently cannot read attributes behind selects.");
   }
 
   @Test
@@ -389,11 +375,11 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         ")");
     writeRulesBuildSettingsAndBUILDforBuildSettingTransitionTests();
 
-    AssertionError error = assertThrows(AssertionError.class, () -> getConfiguredTarget("//test"));
-    assertThat(error.getMessage())
-        .contains(
-            "transition inputs [//test:cute-animal-fact] do not correspond to valid settings");
-  }
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test");
+    assertContainsEvent(
+        "transition inputs [//test:cute-animal-fact] do not correspond to valid settings");
+    }
 
   @Test
   public void testOneParamTransitionFunctionApiFails() throws Exception {
@@ -412,9 +398,9 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
         "my_rule = rule(implementation = _impl, cfg = my_transition)");
     scratch.file("test/BUILD", "load('//test:rules.bzl', 'my_rule')", "my_rule(name = 'test')");
 
-    AssertionError error = assertThrows(AssertionError.class, () -> getConfiguredTarget("//test"));
-    assertThat(error.getMessage())
-        .contains("too many (2) positional arguments in call to _impl(settings)");
+    reporter.removeHandler(failFastHandler);
+    getConfiguredTarget("//test");
+    assertContainsEvent("too many (2) positional arguments in call to _impl(settings)");
   }
 
   @Test
@@ -438,3 +424,4 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
     assertContainsEvent("Cannot transition on --experimental_* or --incompatible_* options");
   }
 }
+

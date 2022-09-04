@@ -48,7 +48,7 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
   private void writeBasicTestFiles() throws Exception {
     setSkylarkSemanticsOptions("--experimental_starlark_config_transitions=true");
     writeWhitelistFile();
-    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
+
     scratch.file(
         "test/skylark/my_rule.bzl",
         "def transition_func(settings, attr):",
@@ -241,7 +241,6 @@ public class StarlarkAttrTransitionProviderTest extends BuildViewTestCase {
     //   "k8": ConfiguredTarget,
     //   "armeabi-v7a": ConfiguredTarget,
     // }
-    getAnalysisMock().ccSupport().setupCcToolchainConfigForCpu(mockToolsConfig, "armeabi-v7a");
     writeReadSettingsTestFiles();
 
     useConfiguration("--fat_apk_cpu=k8,armeabi-v7a");

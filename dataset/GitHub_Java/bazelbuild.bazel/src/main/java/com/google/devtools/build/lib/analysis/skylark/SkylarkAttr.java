@@ -95,7 +95,6 @@ public final class SkylarkAttr implements SkylarkAttrApi {
 
   private static ImmutableAttributeFactory createAttributeFactory(
       Type<?> type,
-      String doc,
       SkylarkDict<String, Object> arguments,
       FuncallExpression ast,
       Environment env,
@@ -103,31 +102,29 @@ public final class SkylarkAttr implements SkylarkAttrApi {
       throws EvalException {
     // We use an empty name now so that we can set it later.
     // This trick makes sense only in the context of Skylark (builtin rules should not use it).
-    return createAttributeFactory(type, doc, arguments, ast, env, context, "");
+    return createAttributeFactory(type, arguments, ast, env, context, "");
   }
 
   private static ImmutableAttributeFactory createAttributeFactory(
       Type<?> type,
-      String doc,
       SkylarkDict<String, Object> arguments,
       FuncallExpression ast,
       Environment env,
       StarlarkContext context,
       String name)
       throws EvalException {
-    return createAttribute(type, doc, arguments, ast, env, context, name).buildPartial();
+    return createAttribute(type, arguments, ast, env, context, name).buildPartial();
   }
 
   private static Attribute.Builder<?> createAttribute(
       Type<?> type,
-      String doc,
       SkylarkDict<String, Object> arguments,
       FuncallExpression ast,
       Environment env,
       StarlarkContext context,
       String name)
       throws EvalException {
-    Attribute.Builder<?> builder = Attribute.attr(name, type).setDoc(doc);
+    Attribute.Builder<?> builder = Attribute.attr(name, type);
 
     Object defaultValue = arguments.get(DEFAULT_ARG);
     if (!EvalUtils.isNullOrNone(defaultValue)) {
@@ -403,7 +400,7 @@ public final class SkylarkAttr implements SkylarkAttrApi {
       StarlarkContext context)
       throws EvalException {
     try {
-      return new Descriptor(name, createAttributeFactory(type, null, kwargs, ast, env, context));
+      return new Descriptor(name, createAttributeFactory(type, kwargs, ast, env, context));
     } catch (ConversionException e) {
       throw new EvalException(ast.getLocation(), e.getMessage());
     }
@@ -440,7 +437,7 @@ public final class SkylarkAttr implements SkylarkAttrApi {
       // This trick makes sense only in the context of Skylark (builtin rules should not use it).
       return new Descriptor(
           name,
-          createAttribute(type, null, kwargs, ast, env, context, "")
+          createAttribute(type, kwargs, ast, env, context, "")
               .nonconfigurable(whyNotConfigurableReason)
               .buildPartial());
     } catch (ConversionException e) {
@@ -518,7 +515,6 @@ public final class SkylarkAttr implements SkylarkAttrApi {
       ImmutableAttributeFactory attribute =
           createAttributeFactory(
               BuildType.LABEL,
-              doc,
               EvalUtils.<String, Object>optionMap(
                   env,
                   DEFAULT_ARG,
@@ -654,8 +650,7 @@ public final class SkylarkAttr implements SkylarkAttrApi {
             aspects);
     try {
       ImmutableAttributeFactory attribute =
-          createAttributeFactory(
-              BuildType.LABEL_LIST, doc, kwargs, ast, env, context, "label_list");
+          createAttributeFactory(BuildType.LABEL_LIST, kwargs, ast, env, context, "label_list");
       return new Descriptor("label_list", attribute);
     } catch (EvalException e) {
       throw new EvalException(ast.getLocation(), e.getMessage(), e);
@@ -708,7 +703,6 @@ public final class SkylarkAttr implements SkylarkAttrApi {
       ImmutableAttributeFactory attribute =
           createAttributeFactory(
               BuildType.LABEL_KEYED_STRING_DICT,
-              doc,
               kwargs,
               ast,
               env,
