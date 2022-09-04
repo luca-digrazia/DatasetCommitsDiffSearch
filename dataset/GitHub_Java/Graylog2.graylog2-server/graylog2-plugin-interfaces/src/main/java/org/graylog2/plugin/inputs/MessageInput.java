@@ -102,7 +102,6 @@ public abstract class MessageInput implements Stoppable {
     protected final Configuration configuration;
     protected InputBuffer inputBuffer;
     private String nodeId;
-    private MetricSet transportMetrics;
 
     public MessageInput(MetricRegistry metricRegistry,
                         Configuration configuration,
@@ -140,7 +139,7 @@ public abstract class MessageInput implements Stoppable {
     }
 
     public void initialize() {
-        this.transportMetrics = transport.getMetricSet();
+        final MetricSet transportMetrics = transport.getMetricSet();
 
         if (transportMetrics != null) {
             metricRegistry.register(getUniqueReadableId(), transportMetrics);
@@ -167,14 +166,6 @@ public abstract class MessageInput implements Stoppable {
 
     public void stop() {
         transport.stop();
-    }
-
-    public void terminate() {
-        for (String metricName : localRegistry.getMetrics().keySet())
-            metricRegistry.remove(getUniqueReadableId() + "." + metricName);
-
-        for (String metricName : this.transportMetrics.getMetrics().keySet())
-            metricRegistry.remove(getUniqueReadableId() + "." + metricName);
     }
 
     public ConfigurationRequest getRequestedConfiguration() {
