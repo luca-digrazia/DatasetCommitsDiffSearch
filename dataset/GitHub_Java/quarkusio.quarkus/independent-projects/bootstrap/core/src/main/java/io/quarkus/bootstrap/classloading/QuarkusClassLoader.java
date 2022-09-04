@@ -752,9 +752,4 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         }
     }
 
-    @Override
-    public String getName() {
-        return name;
-    }
-
 }
