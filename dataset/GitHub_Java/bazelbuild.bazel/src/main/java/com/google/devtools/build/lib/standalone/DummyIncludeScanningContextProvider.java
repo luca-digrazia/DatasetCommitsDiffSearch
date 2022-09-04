@@ -48,11 +48,9 @@ public class DummyIncludeScanningContextProvider extends ActionContextProvider {
         ActionExecutionContext actionExecutionContext,
         Action resourceOwner,
         Artifact primaryInput,
-        Artifact primaryOutput,
-        Artifact grepIncludes)
+        Artifact primaryOutput)
         throws IOException {
-      FileSystemUtils.writeContent(
-          actionExecutionContext.getInputPath(primaryOutput), new byte[] {});
+      FileSystemUtils.writeContent(primaryOutput.getPath(), new byte[]{});
     }
 
     @Override
