@@ -810,10 +810,10 @@ public class DefaultSerdeConfigTest {
         doTest(expectations, JacksonDto.class, JacksonDtoDeserializer.class, JacksonDtoInVertxJsonObjectOut.class);
     }
 
-    static class JacksonDto {
+    private static class JacksonDto {
     }
 
-    static class JacksonDtoDeserializer extends ObjectMapperDeserializer<JacksonDto> {
+    private static class JacksonDtoDeserializer extends ObjectMapperDeserializer<JacksonDto> {
         public JacksonDtoDeserializer() {
             super(JacksonDto.class);
         }
@@ -1150,10 +1150,10 @@ public class DefaultSerdeConfigTest {
         doTest(expectations, JsonbDto.class, JsonbDtoSerializer.class, KafkaBytesInJsonbDtoOut.class);
     }
 
-    static class JsonbDto {
+    private static class JsonbDto {
     }
 
-    static class JsonbDtoSerializer extends JsonbSerializer<JsonbDto> {
+    private static class JsonbDtoSerializer extends JsonbSerializer<JsonbDto> {
         @Override
         public byte[] serialize(String topic, Headers headers, JsonbDto data) {
             return null;
