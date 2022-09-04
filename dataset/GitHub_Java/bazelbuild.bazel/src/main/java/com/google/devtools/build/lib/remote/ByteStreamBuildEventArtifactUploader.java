@@ -24,12 +24,10 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.collect.ImmutableIterable;
-import com.google.devtools.build.lib.remote.common.MissingDigestsFinder;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.vfs.Path;
 import io.grpc.Context;
@@ -74,9 +72,7 @@ class ByteStreamBuildEventArtifactUploader implements BuildEventArtifactUploader
     // Limit the maximum threads number to 1000 (chosen arbitrarily)
     this.uploadExecutor =
         MoreExecutors.listeningDecorator(
-            Executors.newFixedThreadPool(
-                Math.min(maxUploadThreads, 1000),
-                new ThreadFactoryBuilder().setNameFormat("bes-artifact-uploader-%d").build()));
+            Executors.newFixedThreadPool(Math.min(maxUploadThreads, 1000)));
     this.missingDigestsFinder = missingDigestsFinder;
   }
 
@@ -253,7 +249,6 @@ class ByteStreamBuildEventArtifactUploader implements BuildEventArtifactUploader
       return;
     }
     uploader.release();
-    uploadExecutor.shutdown();
   }
 
   private static class PathConverterImpl implements PathConverter {

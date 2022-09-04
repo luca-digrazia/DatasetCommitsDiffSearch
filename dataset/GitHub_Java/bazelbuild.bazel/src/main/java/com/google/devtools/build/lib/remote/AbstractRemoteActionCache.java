@@ -354,13 +354,13 @@ public abstract class AbstractRemoteActionCache implements MissingDigestsFinder,
       } catch (IOException e) {
         if (downloadException == null) {
           downloadException = e;
-        } else if (e != downloadException) {
+        } else {
           downloadException.addSuppressed(e);
         }
       } catch (InterruptedException e) {
         if (interruptedException == null) {
           interruptedException = e;
-        } else if (e != interruptedException) {
+        } else {
           interruptedException.addSuppressed(e);
         }
       }

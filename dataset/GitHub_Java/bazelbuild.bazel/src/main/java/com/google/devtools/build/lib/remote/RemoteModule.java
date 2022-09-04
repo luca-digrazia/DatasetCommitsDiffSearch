@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.packages.TargetUtils;
-import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.logging.LoggingInterceptor;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.options.RemoteOutputsMode;
@@ -201,7 +200,6 @@ public final class RemoteModule extends BlazeModule {
             new ReferenceCountedChannel(
                 GoogleAuthUtils.newChannel(
                     remoteOptions.remoteExecutor,
-                    remoteOptions.remoteProxy,
                     authAndTlsOptions,
                     interceptors.toArray(new ClientInterceptor[0])));
       }
@@ -220,7 +218,6 @@ public final class RemoteModule extends BlazeModule {
               new ReferenceCountedChannel(
                   GoogleAuthUtils.newChannel(
                       remoteOptions.remoteCache,
-                      remoteOptions.remoteProxy,
                       authAndTlsOptions,
                       interceptors.toArray(new ClientInterceptor[0])));
         } else {  // Assume --remote_cache is equal to --remote_executor by default.

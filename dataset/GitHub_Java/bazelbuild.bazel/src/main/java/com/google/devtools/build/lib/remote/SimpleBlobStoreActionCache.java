@@ -34,6 +34,8 @@ import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.Utils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.protobuf.ByteString;
+import com.google.protobuf.InvalidProtocolBufferException;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import javax.annotation.Nullable;
@@ -87,12 +89,30 @@ public class SimpleBlobStoreActionCache extends AbstractRemoteActionCache {
   @Override
   public ActionResult getCachedActionResult(ActionKey actionKey)
       throws IOException, InterruptedException {
-    return Utils.getFromFuture(blobStore.downloadActionResult(actionKey));
+    try {
+      byte[] data = downloadActionResult(actionKey.getDigest());
+      return ActionResult.parseFrom(data);
+    } catch (InvalidProtocolBufferException | CacheNotFoundException e) {
+      return null;
+    }
+  }
+
+  private byte[] downloadActionResult(Digest digest) throws IOException, InterruptedException {
+    if (digest.getSizeBytes() == 0) {
+      return new byte[0];
+    }
+    // This unconditionally downloads the whole blob into memory!
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    boolean success = getFromFuture(blobStore.getActionResult(digest.getHash(), out));
+    if (!success) {
+      throw new CacheNotFoundException(digest, digestUtil);
+    }
+    return out.toByteArray();
   }
 
   public void setCachedActionResult(ActionKey actionKey, ActionResult result)
       throws IOException, InterruptedException {
-    blobStore.uploadActionResult(actionKey, result);
+    blobStore.putActionResult(actionKey, result);
   }
 
   @Override
@@ -107,18 +127,22 @@ public class SimpleBlobStoreActionCache extends AbstractRemoteActionCache {
     HashingOutputStream hashOut =
         options.remoteVerifyDownloads ? digestUtil.newHashingOutputStream(out) : null;
     Futures.addCallback(
-        blobStore.downloadBlob(digest, hashOut != null ? hashOut : out),
-        new FutureCallback<Void>() {
+        blobStore.get(digest.getHash(), hashOut != null ? hashOut : out),
+        new FutureCallback<Boolean>() {
           @Override
-          public void onSuccess(Void unused) {
-            try {
-              if (hashOut != null) {
-                verifyContents(digest.getHash(), DigestUtil.hashCodeToString(hashOut.hash()));
+          public void onSuccess(Boolean found) {
+            if (found) {
+              try {
+                if (hashOut != null) {
+                  verifyContents(digest.getHash(), DigestUtil.hashCodeToString(hashOut.hash()));
+                }
+                out.flush();
+                outerF.set(null);
+              } catch (IOException e) {
+                outerF.setException(e);
               }
-              out.flush();
-              outerF.set(null);
-            } catch (IOException e) {
-              outerF.setException(e);
+            } else {
+              outerF.setException(new CacheNotFoundException(digest, digestUtil));
             }
           }
 
