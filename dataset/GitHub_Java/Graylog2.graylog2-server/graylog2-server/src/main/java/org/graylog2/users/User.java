@@ -1,6 +1,4 @@
 /**
- * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
- *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -15,131 +13,64 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package org.graylog2.users;
 
-import com.google.common.collect.Maps;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBObject;
-import org.bson.types.ObjectId;
-import org.graylog2.Core;
-import org.graylog2.database.Persisted;
-import org.graylog2.database.validators.FilledStringValidator;
-import org.graylog2.database.validators.Validator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.graylog2.plugin.database.Persisted;
+import org.joda.time.DateTimeZone;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-
 /**
- * @author Lennart Koopmann <lennart@socketfeed.com>
+ * @author Dennis Oelkers <dennis@torch.sh>
  */
-public class User extends Persisted {
+public interface User extends Persisted {
+    boolean isReadOnly();
 
-    private static final Logger LOG = LoggerFactory.getLogger(User.class);
+    String getFullName();
 
-    private static final String COLLECTION = "users";
-    public static final String USERNAME = "username";
-    public static final String PASSWORD = "password";
-    public static final String FULL_NAME = "full_name";
+    String getName();
 
-    public User(Map<String, Object> fields, Core core) {
-        super(core, fields);
-    }
+    void setName(String username);
 
-    protected User(ObjectId id, Map<String, Object> fields, Core core) {
-        super(core, id, fields);
-    }
+    String getEmail();
 
-    public static User load(String username, Core core) {
-        DBObject query = new BasicDBObject();
-        query.put(USERNAME, username);
+    List<String> getPermissions();
 
-        List<DBObject> result = query(query, core, COLLECTION);
+    Map<String, Object> getPreferences();
 
-        if (result == null)     { return null; }
-        if (result.size() == 0) { return null; }
+    Map<String, String> getStartpage();
 
-        if (result.size() > 1) {
-            throw new RuntimeException("There was more than one matching user. This should never happen.");
-        }
-        final DBObject userObject = result.get(0);
+    long getSessionTimeoutMs();
 
-        final Object userId = userObject.get("_id");
-        return new User((ObjectId) userId, userObject.toMap(), core);
-    }
+    void setSessionTimeoutMs(long timeoutValue);
 
-    public static boolean exists(String username, String passwordHash, Core core) {
-        DBObject query = new BasicDBObject();
-        query.put(USERNAME, username);
-        query.put(PASSWORD, passwordHash);
+    void setPermissions(List<String> permissions);
 
-        List<DBObject> result = query(query, core, COLLECTION);
+    void setPreferences(Map<String, Object> preferences);
 
-        if (result == null)     { return false; }
-        if (result.size() == 0) { return false; }
+    void setEmail(String email);
 
-        if (result.size() > 1) {
-            throw new RuntimeException("There was more than one matching user. This should never happen.");
-        }
+    void setFullName(String fullname);
 
-        String dbUsername = (String) result.get(0).get(USERNAME);
-        String dbPasswordHash = (String) result.get(0).get(PASSWORD);
+    String getHashedPassword();
 
-        if (dbUsername != null && dbPasswordHash != null) {
-            return dbUsername.equals(username) && dbPasswordHash.equals(passwordHash);
-        }
+    void setPassword(String password, String passwordSecret);
 
-        return false;
-    }
+    boolean isUserPassword(String password, String passwordSecret);
 
-    // TODO remove this and use a proper salted digest, this is not secure at all
-    @Deprecated
-    public static String saltPass(String password, String salt) {
-        if (password == null || password.isEmpty()) {
-            throw new RuntimeException("No password given.");
-        }
+    DateTimeZone getTimeZone();
 
-        if (salt == null || salt.isEmpty()) {
-            throw new RuntimeException("No salt given.");
-        }
+    void setTimeZone(DateTimeZone timeZone);
 
-        return password + salt;
-    }
+    void setTimeZone(String timeZone);
 
-    @Override
-    public String getCollectionName() {
-        return COLLECTION;
-    }
+    boolean isExternalUser();
 
-    @Override
-    public ObjectId getId() {
-        return this.id;
-    }
+    void setExternal(boolean external);
 
-    protected Map<String, Validator> getValidations() {
-        return new HashMap<String, Validator>() {{
-            put(USERNAME, new FilledStringValidator());
-            put(PASSWORD, new FilledStringValidator());
-            put(FULL_NAME, new FilledStringValidator());
-        }};
-    }
+    void setStartpage(String type, String id);
 
-    @Override
-    protected Map<String, Validator> getEmbeddedValidations(String key) {
-        return Maps.newHashMap();
-    }
-
-    public String getFullName() {
-        return fields.get(FULL_NAME).toString();
-    }
-
-    public String getName() {
-        return fields.get(USERNAME).toString();
-    }
-
+    boolean isLocalAdmin();
 }
