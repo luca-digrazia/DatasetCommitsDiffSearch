@@ -15,8 +15,6 @@
  */
 package org.androidannotations.processing.rest;
 
-import java.lang.annotation.Annotation;
-
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -30,7 +28,7 @@ import org.androidannotations.processing.EBeanHolder;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JExpression;
 
 public class OptionsProcessor extends MethodProcessor {
 
@@ -39,8 +37,8 @@ public class OptionsProcessor extends MethodProcessor {
 	}
 
 	@Override
-	public Class<? extends Annotation> getTarget() {
-		return Options.class;
+	public String getTarget() {
+		return Options.class.getName();
 	}
 
 	@Override
@@ -65,7 +63,7 @@ public class OptionsProcessor extends MethodProcessor {
 	}
 
 	@Override
-	protected JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder) {
+	protected JExpression addResultCallMethod(JExpression restCall, MethodProcessorHolder methodHolder) {
 		restCall = JExpr.invoke(restCall, "getHeaders");
 		restCall = JExpr.invoke(restCall, "getAllow");
 		return restCall;
