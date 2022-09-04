@@ -1494,8 +1494,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     } else if (!fromConfig.useDynamicConfigurations()) {
       return fromConfig.getConfiguration(transition);
     } else {
-      PatchTransition patchTransition =
-          (PatchTransition) ruleClassProvider.getDynamicTransitionMapper().map(transition);
+      PatchTransition patchTransition = (transition instanceof PatchTransition)
+          ? (PatchTransition) transition
+          : (PatchTransition) fromConfig.getTransitions().getDynamicTransition(transition);
       return skyframeExecutor.getConfigurationForTesting(reporter, fromConfig.fragmentClasses(),
           patchTransition.apply(fromConfig.getOptions()));
     }
