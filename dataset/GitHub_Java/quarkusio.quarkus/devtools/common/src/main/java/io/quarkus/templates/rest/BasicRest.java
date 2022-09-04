@@ -3,10 +3,14 @@ package io.quarkus.templates.rest;
 import static java.lang.String.format;
 
 import java.io.BufferedReader;
-import java.io.ByteArrayInputStream;
+import java.io.BufferedWriter;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -14,7 +18,6 @@ import java.util.stream.Collectors;
 
 import org.apache.maven.model.Model;
 
-import io.quarkus.cli.commands.writer.Writer;
 import io.quarkus.maven.utilities.MojoUtils;
 import io.quarkus.templates.QuarkusTemplate;
 import io.quarkus.templates.SourceType;
@@ -25,9 +28,9 @@ public class BasicRest implements QuarkusTemplate {
 
     private Map<String, Object> context;
     private String path = "/hello";
-    private Writer writer;
-    private String srcMain;
-    private String testMain;
+    private File projectRoot;
+    private File srcMain;
+    private File testMain;
     private SourceType type;
 
     public BasicRest() {
@@ -39,8 +42,8 @@ public class BasicRest implements QuarkusTemplate {
     }
 
     @Override
-    public void generate(final Writer writer, Map<String, Object> parameters) throws IOException {
-        this.writer = writer;
+    public void generate(final File projectRoot, Map<String, Object> parameters) throws IOException {
+        this.projectRoot = projectRoot;
         this.context = parameters == null ? Collections.emptyMap() : parameters;
         this.type = (SourceType) context.get(SOURCE_TYPE);
 
@@ -53,19 +56,17 @@ public class BasicRest implements QuarkusTemplate {
         createDockerFiles();
         createDockerIgnore();
         createApplicationConfig();
-
-        createGitIgnore();
     }
 
-    private void setupContext() throws IOException {
+    private void setupContext() {
         if (context.get(CLASS_NAME) != null) {
             String packageName = (String) context.get(PACKAGE_NAME);
 
             if (packageName != null) {
-                String packageDir = srcMain + '/' + packageName.replace('.', '/');
-                String testPackageDir = testMain + '/' + packageName.replace('.', '/');
-                srcMain = writer.mkdirs(packageDir);
-                testMain = writer.mkdirs(testPackageDir);
+                File packageDir = new File(srcMain, packageName.replace('.', '/'));
+                File testPackageDir = new File(testMain, packageName.replace('.', '/'));
+                srcMain = mkdirs(packageDir);
+                testMain = mkdirs(testPackageDir);
             } else {
                 throw new NullPointerException("Need a non-null package name");
             }
@@ -74,12 +75,12 @@ public class BasicRest implements QuarkusTemplate {
 
     private void createClasses() throws IOException {
         Object className = context.get(CLASS_NAME);
-        // If className is null we disable the generation of the JAX-RS resource.
+        // If className is null we disable the generation of the Jax-RS resource.
         if (className != null) {
             String extension = type.getExtension();
-            String classFile = srcMain + '/' + className + extension;
-            String testClassFile = testMain + '/' + className + "Test" + extension;
-            String itTestClassFile = testMain + '/' + "Native" + className + "IT" + extension;
+            File classFile = new File(srcMain, className + extension);
+            File testClassFile = new File(testMain, className + "Test" + extension);
+            File itTestClassFile = new File(testMain, "Native" + className + "IT" + extension);
             String name = getName();
             generate(type.getSrcResourceTemplate(name), context, classFile, "resource code");
             generate(type.getTestResourceTemplate(name), context, testClassFile, "test code");
@@ -93,74 +94,79 @@ public class BasicRest implements QuarkusTemplate {
     }
 
     private boolean initProject() throws IOException {
-        boolean newProject = !writer.exists("pom.xml");
+        final File pomFile = new File(projectRoot, "pom.xml");
+        boolean newProject = !pomFile.exists();
         if (newProject) {
-            generate(type.getPomResourceTemplate(getName()), context, "pom.xml", "pom.xml");
+            generate(type.getPomResourceTemplate(getName()), context, pomFile, "pom.xml");
         } else {
-            final Model model = MojoUtils.readPom(new ByteArrayInputStream(writer.getContent("pom.xml")));
+            final Model model = MojoUtils.readPom(pomFile);
             context.put(PROJECT_GROUP_ID, model.getGroupId());
             context.put(PROJECT_ARTIFACT_ID, model.getArtifactId());
         }
 
         path = get(RESOURCE_PATH, path);
 
-        srcMain = writer.mkdirs(type.getSrcDir());
-        testMain = writer.mkdirs(type.getTestSrcDir());
+        srcMain = mkdirs(new File(projectRoot, type.getSrcDir()));
+        testMain = mkdirs(new File(projectRoot, type.getTestSrcDir()));
 
         return newProject;
     }
 
-    private void generate(final String templateName, final Map<String, Object> context, final String outputFilePath,
+    private void generate(final String templateName, final Map<String, Object> context, final File outputFile,
             final String resourceType)
             throws IOException {
-        if (!writer.exists(outputFilePath)) {
+        if (!outputFile.exists()) {
             String path = templateName.startsWith("/") ? templateName : "/" + templateName;
-            try (final BufferedReader stream = new BufferedReader(
-                    new InputStreamReader(getClass().getResourceAsStream(path), StandardCharsets.UTF_8))) {
+            try (BufferedWriter out = Files.newBufferedWriter(outputFile.toPath());
+                    final BufferedReader stream = new BufferedReader(
+                            new InputStreamReader(getClass().getResourceAsStream(path), StandardCharsets.UTF_8))) {
                 String template = stream.lines().collect(Collectors.joining("\n"));
                 for (Entry<String, Object> e : context.entrySet()) {
                     if (e.getValue() != null) { // Exclude null values (classname and path can be null)
                         template = template.replace(format("${%s}", e.getKey()), e.getValue().toString());
                     }
                 }
-                writer.write(outputFilePath, template);
+                out.write(template);
             }
         }
     }
 
     private void createIndexPage() throws IOException {
         // Generate index page
-        String resources = "src/main/resources/META-INF/resources";
-        String index = writer.mkdirs(resources) + "index.html";
-        if (!writer.exists(index)) {
+        File resources = new File(projectRoot, "src/main/resources/META-INF/resources");
+        File index = new File(mkdirs(resources), "index.html");
+        if (!index.exists()) {
             generate("templates/index.ftl", context, index, "welcome page");
         }
 
     }
 
     private void createDockerFiles() throws IOException {
-        String dockerRoot = "src/main/docker";
-        generate("templates/dockerfile-native.ftl", context, writer.mkdirs(dockerRoot) + "Dockerfile.native",
+        File dockerRoot = new File(projectRoot, "src/main/docker");
+        generate("templates/dockerfile-native.ftl", context, new File(mkdirs(dockerRoot), "Dockerfile.native"),
                 "native docker file");
-        generate("templates/dockerfile-jvm.ftl", context, writer.mkdirs(dockerRoot) + "Dockerfile.jvm", "jvm docker file");
+        generate("templates/dockerfile-jvm.ftl", context, new File(mkdirs(dockerRoot), "Dockerfile.jvm"), "jvm docker file");
     }
 
     private void createDockerIgnore() throws IOException {
-        String docker = writer.mkdirs("") + ".dockerignore";
+        File dockerRoot = new File(projectRoot, "");
+        File docker = new File(mkdirs(dockerRoot), ".dockerignore");
         generate("templates/dockerignore.ftl", context, docker, "docker ignore");
     }
 
-    private void createGitIgnore() throws IOException {
-        String gitignore = writer.mkdirs("") + ".gitignore";
-        generate("templates/gitignore.ftl", context, gitignore, "git ignore");
+    private void createApplicationConfig() throws IOException {
+        File meta = new File(projectRoot, "src/main/resources");
+        File file = new File(mkdirs(meta), "application.properties");
+        if (!file.exists()) {
+            Files.write(file.toPath(), Arrays.asList("# Configuration file", "# key = value"), StandardOpenOption.CREATE_NEW);
+            System.out.println("Configuration file created in src/main/resources/META-INF/" + file.getName());
+        }
     }
 
-    private void createApplicationConfig() throws IOException {
-        String meta = "src/main/resources";
-        String file = writer.mkdirs(meta) + "application.properties";
-        if (!writer.exists(file)) {
-            writer.write(file, "# Configuration file" + System.lineSeparator() + "# key = value");
-            System.out.println("Configuration file created in " + file);
+    private File mkdirs(File dir) {
+        if (!dir.exists()) {
+            dir.mkdirs();
         }
+        return dir;
     }
 }
