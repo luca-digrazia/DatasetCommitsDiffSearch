@@ -9,12 +9,10 @@ import org.jboss.builder.item.MultiBuildItem;
  */
 public final class FeatureBuildItem extends MultiBuildItem {
 
-    public static final String AGROAL = "agroal";
     public static final String CDI = "cdi";
     public static final String TRANSACTIONS = "transactions";
     public static final String WEBSOCKET = "websocket";
-    public static final String JAXRS = "jaxrs";
-    public static final String JAXRS_JSON = "jaxrs-json";
+    public static final String JAX_RS = "jax-rs";
     public static final String MP_HEALTH = "mp-health";
     public static final String MP_OPENAPI = "mp-openapi";
     public static final String MP_METRICS = "mp-metrics";
