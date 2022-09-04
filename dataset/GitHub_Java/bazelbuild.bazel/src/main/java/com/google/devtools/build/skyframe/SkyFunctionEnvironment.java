@@ -838,7 +838,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
 
   @Override
   public void injectVersionForNonHermeticFunction(Version version) {
-    Preconditions.checkState(hermeticity == FunctionHermeticity.NONHERMETIC, skyKey);
+    // TODO(jhorvitz): Make this check stricter (== NONHERMETIC) after callers are migrated.
+    Preconditions.checkState(hermeticity != FunctionHermeticity.HERMETIC, skyKey);
     injectedVersion = version;
   }
 
