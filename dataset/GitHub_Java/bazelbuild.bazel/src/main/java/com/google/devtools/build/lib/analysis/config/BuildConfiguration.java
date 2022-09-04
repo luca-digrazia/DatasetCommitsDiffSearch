@@ -105,7 +105,7 @@ import javax.annotation.Nullable;
     category = SkylarkModuleCategory.BUILTIN,
     doc = "Data required for the analysis of a target that comes from targets that "
         + "depend on it and not targets that it depends on.")
-public class BuildConfiguration implements BuildEvent {
+public final class BuildConfiguration implements BuildEvent {
   /**
    * An interface for language-specific configurations.
    *
@@ -1959,7 +1959,7 @@ public class BuildConfiguration implements BuildEvent {
   }
 
   /** Returns the cache key of the build options used to create this configuration. */
-  public String checksum() {
+  public final String checksum() {
     return checksum;
   }
 
