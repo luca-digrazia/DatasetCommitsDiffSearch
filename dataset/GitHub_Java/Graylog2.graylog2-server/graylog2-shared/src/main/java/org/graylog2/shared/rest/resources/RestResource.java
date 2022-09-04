@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.rest.resources;
 
@@ -22,25 +22,28 @@ import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.jaxrs.cfg.EndpointConfigBase;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterInjector;
 import com.fasterxml.jackson.jaxrs.cfg.ObjectWriterModifier;
-import com.github.joschi.jadconfig.util.Size;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.Function;
+import com.google.common.collect.FluentIterable;
+import com.google.common.collect.Iterables;
 import org.apache.shiro.subject.Subject;
-import org.graylog2.plugin.ServerStatus;
-import org.graylog2.shared.security.ShiroSecurityContext;
+import org.graylog2.plugin.BaseConfiguration;
 import org.graylog2.plugin.database.users.User;
+import org.graylog2.shared.security.ShiroSecurityContext;
 import org.graylog2.shared.users.UserService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Context;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.SecurityContext;
+import javax.ws.rs.core.UriBuilder;
+import javax.ws.rs.core.UriInfo;
 import java.security.Principal;
-import java.util.Map;
+import java.util.Arrays;
 
 public abstract class RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(RestResource.class);
@@ -52,10 +55,13 @@ public abstract class RestResource {
     protected UserService userService;
 
     @Inject
-    protected ServerStatus serverStatus;
+    private BaseConfiguration configuration;
 
     @Context
     SecurityContext securityContext;
+
+    @Context
+    UriInfo uriInfo;
 
     @QueryParam("pretty")
     public void setPrettyPrint(boolean prettyPrint) {
@@ -68,10 +74,6 @@ public abstract class RestResource {
                 }
             });
         }
-    }
-
-    protected int page(int page) {
-        return Math.max(0, page - 1);
     }
 
     protected Subject getSubject() {
@@ -110,44 +112,31 @@ public abstract class RestResource {
         }
     }
 
-    protected Map<String, Long> bytesToValueMap(long bytes) {
-        final Size size = Size.bytes(bytes);
-        return ImmutableMap.of(
-                "bytes", size.toBytes(),
-                "kilobytes", size.toKilobytes(),
-                "megabytes", size.toMegabytes());
+    protected boolean isAnyPermitted(String[] permissions, final String instanceId) {
+        final Iterable<String> instancePermissions = Iterables.transform(Arrays.asList(permissions),
+                                                               new Function<String, String>() {
+                                                                   @Nullable
+                                                                   @Override
+                                                                   public String apply(String permission) {
+                                                                       return permission + ":" + instanceId;
+                                                                   }
+                                                               });
+        return isAnyPermitted(FluentIterable.from(instancePermissions).toArray(String.class));
     }
 
-    protected String guessContentType(final String filename) {
-        // A really dumb but for us good enough approach. We only need this for a very few static files we control.
-
-        if (filename.endsWith(".png")) {
-            return "image/png";
+    protected boolean isAnyPermitted(String... permissions) {
+        final boolean[] permitted = getSubject().isPermitted(permissions);
+        for (boolean p : permitted) {
+            if (p) {
+                return true;
+            }
         }
-
-        if (filename.endsWith(".gif")) {
-            return "image/gif";
-        }
-
-        if (filename.endsWith(".css")) {
-            return "text/css";
-        }
-
-        if (filename.endsWith(".js")) {
-            return "application/javascript";
-        }
-
-        if (filename.endsWith(".html")) {
-            return MediaType.TEXT_HTML;
-        }
-
-        return MediaType.TEXT_PLAIN;
+        return false;
     }
 
-    protected void restrictToMaster() {
-        if (!serverStatus.hasCapability(ServerStatus.Capability.MASTER)) {
-            LOG.warn("Rejected request that is only allowed against master nodes. Returning HTTP 403.");
-            throw new ForbiddenException("Request is only allowed against master nodes.");
+    protected void checkAnyPermission(String permissions[], String instanceId) {
+        if (!isAnyPermitted(permissions, instanceId)) {
+            throw new ForbiddenException("Not authorized to access resource id " + instanceId);
         }
     }
 
@@ -160,5 +149,12 @@ public abstract class RestResource {
         }
 
         return user;
+    }
+
+    protected UriBuilder getUriBuilderToSelf() {
+        if (configuration.getRestTransportUri() != null) {
+            return UriBuilder.fromUri(configuration.getRestTransportUri());
+        } else
+            return uriInfo.getBaseUriBuilder();
     }
 }
