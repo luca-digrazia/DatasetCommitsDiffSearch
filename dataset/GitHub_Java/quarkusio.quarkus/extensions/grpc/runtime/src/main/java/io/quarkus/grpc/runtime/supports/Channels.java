@@ -6,25 +6,19 @@ import static io.grpc.netty.NettyChannelBuilder.DEFAULT_FLOW_CONTROL_WINDOW;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import javax.enterprise.context.spi.CreationalContext;
 import javax.net.ssl.SSLException;
-
-import org.jboss.logging.Logger;
 
 import io.grpc.Channel;
 import io.grpc.ClientInterceptor;
-import io.grpc.ManagedChannel;
 import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NegotiationType;
 import io.grpc.netty.NettyChannelBuilder;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import io.quarkus.arc.Arc;
-import io.quarkus.arc.BeanDestroyer;
 import io.quarkus.arc.InstanceHandle;
 import io.quarkus.grpc.runtime.GrpcClientInterceptorContainer;
 import io.quarkus.grpc.runtime.annotations.GrpcServiceLiteral;
@@ -32,8 +26,6 @@ import io.quarkus.grpc.runtime.config.GrpcClientConfiguration;
 
 @SuppressWarnings({ "OptionalIsPresent", "Convert2Lambda" })
 public class Channels {
-
-    private static final Logger LOGGER = Logger.getLogger(Channels.class.getName());
 
     private Channels() {
         // Avoid direct instantiation
@@ -77,8 +69,8 @@ public class Channels {
                 .keepAliveWithoutCalls(config.keepAliveWithoutCalls)
                 .maxHedgedAttempts(config.maxHedgedAttempts)
                 .maxRetryAttempts(config.maxRetryAttempts)
-                .maxInboundMetadataSize(config.maxInboundMessageSize.orElse(DEFAULT_MAX_HEADER_LIST_SIZE))
-                .maxInboundMetadataSize(config.maxInboundMessageSize.orElse(DEFAULT_MAX_MESSAGE_SIZE))
+                .maxInboundMetadataSize(config.maxInboundMetadataSize.orElse(DEFAULT_MAX_HEADER_LIST_SIZE))
+                .maxInboundMessageSize(config.maxInboundMessageSize.orElse(DEFAULT_MAX_MESSAGE_SIZE))
                 .negotiationType(NegotiationType.valueOf(config.negotiationType.toUpperCase()));
 
         if (config.retry) {
@@ -139,25 +131,6 @@ public class Channels {
         if (!instance.isAvailable()) {
             throw new IllegalStateException("Unable to retrieve the gRPC Channel " + name);
         }
-
         return instance.get();
-    }
-
-    public static class ChannelDestroyer implements BeanDestroyer<Channel> {
-
-        @Override
-        public void destroy(Channel instance, CreationalContext creationalContext, Map params) {
-            if (instance instanceof ManagedChannel) {
-                ManagedChannel channel = (ManagedChannel) instance;
-                LOGGER.info("Shutting down gRPC channel " + channel);
-                channel.shutdownNow();
-                try {
-                    channel.awaitTermination(10, TimeUnit.SECONDS);
-                } catch (InterruptedException e) {
-                    LOGGER.info("Unable to shutdown channel after 10 seconds");
-                    Thread.currentThread().interrupt();
-                }
-            }
-        }
     }
 }
