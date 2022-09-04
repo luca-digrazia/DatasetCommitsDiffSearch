@@ -53,9 +53,7 @@ public class RequestMapper<T> {
             return null;
         }
 
-        List<RequestPath<T>> value = initialMatch.getValue();
-        for (int index = 0; index < value.size(); index++) {
-            RequestPath<T> potentialMatch = value.get(index);
+        for (RequestPath<T> potentialMatch : initialMatch.getValue()) {
             String[] params = new String[maxParams];
             int paramCount = 0;
             boolean matched = true;
