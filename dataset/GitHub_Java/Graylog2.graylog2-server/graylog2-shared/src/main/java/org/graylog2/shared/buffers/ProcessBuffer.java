@@ -20,8 +20,8 @@ import com.codahale.metrics.InstrumentedExecutorService;
 import com.codahale.metrics.InstrumentedThreadFactory;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.Timer;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.inject.Provider;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import com.lmax.disruptor.WaitStrategy;
@@ -52,9 +52,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static com.codahale.metrics.MetricRegistry.name;
 
 public class ProcessBuffer extends Buffer {
-
-    private final Timer parseTime;
-
     public interface Factory {
         public ProcessBuffer create(InputCache inputCache, AtomicInteger processBufferWatermark);
     }
@@ -65,7 +62,7 @@ public class ProcessBuffer extends Buffer {
     public static String SOURCE_NODE_ATTR_NAME;
 
     private final BaseConfiguration configuration;
-    private final DecodingProcessor.Factory decodingProcessorFactory;
+    private final Provider<DecodingProcessor> decodingProcessorProvider;
     private final InputCache inputCache;
     private final AtomicInteger processBufferWatermark;
     private final ExecutorService executor;
@@ -80,12 +77,12 @@ public class ProcessBuffer extends Buffer {
     public ProcessBuffer(MetricRegistry metricRegistry,
                          ServerStatus serverStatus,
                          BaseConfiguration configuration,
-                         DecodingProcessor.Factory decodingProcessorFactory,
+                         Provider<DecodingProcessor> decodingProcessorProvider,
                          @Assisted InputCache inputCache,
                          @Assisted AtomicInteger processBufferWatermark) {
         this.serverStatus = serverStatus;
         this.configuration = configuration;
-        this.decodingProcessorFactory = decodingProcessorFactory;
+        this.decodingProcessorProvider = decodingProcessorProvider;
         this.inputCache = inputCache;
         this.processBufferWatermark = processBufferWatermark;
 
@@ -93,8 +90,6 @@ public class ProcessBuffer extends Buffer {
         this.incomingMessages = metricRegistry.meter(name(ProcessBuffer.class, "incomingMessages"));
         this.rejectedMessages = metricRegistry.meter(name(ProcessBuffer.class, "rejectedMessages"));
         this.cachedMessages = metricRegistry.meter(name(ProcessBuffer.class, "cachedMessages"));
-
-        this.parseTime = metricRegistry.timer(name(ProcessBuffer.class, "parseTime"));
 
         if (serverStatus.hasCapability(ServerStatus.Capability.RADIO)) {
             SOURCE_INPUT_ATTR_NAME = "gl2_source_radio_input";
@@ -132,7 +127,7 @@ public class ProcessBuffer extends Buffer {
                         + "and wait strategy <{}>.", ringBufferSize,
                 waitStrategy.getClass().getSimpleName());
 
-        disruptor.handleEventsWith(decodingProcessorFactory.create(parseTime)).then(processors);
+        disruptor.handleEventsWith(decodingProcessorProvider.get()).then(processors);
 
         ringBuffer = disruptor.start();
     }
