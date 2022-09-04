@@ -117,32 +117,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         return name;
     }
 
-    /**
-     * Returns true if the supplied class is a class that would be loaded parent-first
-     */
-    public boolean isParentFirst(String name) {
-        if (name.startsWith(JAVA)) {
-            return true;
-        }
-
-        //even if the thread is interrupted we still want to be able to load classes
-        //if the interrupt bit is set then we clear it and restore it at the end
-        boolean interrupted = Thread.interrupted();
-        try {
-            ClassLoaderState state = getState();
-            synchronized (getClassLoadingLock(name)) {
-                String resourceName = sanitizeName(name).replace(".", "/") + ".class";
-                return parentFirst(resourceName, state);
-            }
-
-        } finally {
-            if (interrupted) {
-                //restore interrupt state
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-
     private boolean parentFirst(String name, ClassLoaderState state) {
         return parentFirst || state.parentFirstResources.contains(name);
     }
@@ -249,7 +223,7 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
                             } else {
                                 List<ClassPathElement> list = elementMap.get(i);
                                 if (list == null) {
-                                    elementMap.put(i, list = new ArrayList<>(2)); //default initial capacity of 10 is way too large
+                                    elementMap.put(i, list = new ArrayList<>());
                                 }
                                 list.add(element);
                             }
@@ -511,16 +485,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
         return ret;
     }
 
-    public List<String> getLocalClassNames() {
-        List<String> ret = new ArrayList<>();
-        for (String name : getState().loadableResources.keySet()) {
-            if (name.endsWith(".class")) {
-                ret.add(name.substring(0, name.length() - 6).replace("/", "."));
-            }
-        }
-        return ret;
-    }
-
     @SuppressWarnings("unused")
     public Class<?> visibleDefineClass(String name, byte[] b, int off, int len) throws ClassFormatError {
         return super.defineClass(name, b, off, len);
@@ -558,16 +522,6 @@ public class QuarkusClassLoader extends ClassLoader implements Closeable {
             }
         }
         for (ClassPathElement element : elements) {
-            //note that this is a 'soft' close
-            //all resources are closed, however the CL can still be used
-            //but after close no resources will be held past the scope of an operation
-            try (ClassPathElement ignored = element) {
-                //the close() operation is implied by the try-with syntax
-            } catch (Exception e) {
-                log.error("Failed to close " + element, e);
-            }
-        }
-        for (ClassPathElement element : bannedElements) {
             //note that this is a 'soft' close
             //all resources are closed, however the CL can still be used
             //but after close no resources will be held past the scope of an operation
