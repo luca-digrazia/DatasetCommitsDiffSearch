@@ -1,9 +1,5 @@
 package io.quarkus.arc.impl;
 
-/**
- * @deprecated will be removed. Use Gizmo's ifReferencesEqual instead.
- */
-@Deprecated
 public final class Objects {
 
     private Objects() {

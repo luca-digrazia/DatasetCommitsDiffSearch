@@ -56,9 +56,7 @@ public class BeanDeployment {
 
     private final BuildContextImpl buildContext;
 
-    private final IndexView beanArchiveIndex;
-
-    private final IndexView applicationIndex;
+    private final IndexView index;
 
     private final Map<DotName, ClassInfo> qualifiers;
 
@@ -110,7 +108,7 @@ public class BeanDeployment {
 
     private final List<Predicate<ClassInfo>> excludeTypes;
 
-    BeanDeployment(BuildContextImpl buildContext, BeanProcessor.Builder builder) {
+    BeanDeployment(IndexView index, BuildContextImpl buildContext, BeanProcessor.Builder builder) {
         this.buildContext = buildContext;
         Set<BeanDefiningAnnotation> beanDefiningAnnotations = new HashSet<>();
         if (builder.additionalBeanDefiningAnnotations != null) {
@@ -118,8 +116,7 @@ public class BeanDeployment {
         }
         this.beanDefiningAnnotations = beanDefiningAnnotations;
         this.resourceAnnotations = new HashSet<>(builder.resourceAnnotations);
-        this.beanArchiveIndex = builder.beanArchiveIndex;
-        this.applicationIndex = builder.applicationIndex;
+        this.index = index;
         this.annotationStore = new AnnotationStore(initAndSort(builder.annotationTransformers, buildContext), buildContext);
         if (buildContext != null) {
             buildContext.putInternal(Key.ANNOTATION_STORE.asString(), annotationStore);
@@ -133,16 +130,16 @@ public class BeanDeployment {
 
         this.customContexts = new ConcurrentHashMap<>();
 
-        this.qualifiers = findQualifiers(this.beanArchiveIndex);
-        this.repeatingQualifierAnnotations = findContainerAnnotations(qualifiers, this.beanArchiveIndex);
+        this.qualifiers = findQualifiers(index);
+        this.repeatingQualifierAnnotations = findContainerAnnotations(qualifiers, index);
         buildContextPut(Key.QUALIFIERS.asString(), Collections.unmodifiableMap(qualifiers));
 
-        this.interceptorBindings = findInterceptorBindings(this.beanArchiveIndex);
+        this.interceptorBindings = findInterceptorBindings(index);
         this.nonBindingFields = new HashMap<>();
         for (InterceptorBindingRegistrar registrar : builder.additionalInterceptorBindingRegistrars) {
             for (Map.Entry<DotName, Set<String>> bindingEntry : registrar.registerAdditionalBindings().entrySet()) {
                 DotName dotName = bindingEntry.getKey();
-                ClassInfo classInfo = getClassByName(this.beanArchiveIndex, dotName);
+                ClassInfo classInfo = getClassByName(index, dotName);
                 if (classInfo != null) {
                     if (bindingEntry.getValue() != null) {
                         nonBindingFields.put(dotName, bindingEntry.getValue());
@@ -153,12 +150,11 @@ public class BeanDeployment {
         }
         buildContextPut(Key.INTERCEPTOR_BINDINGS.asString(), Collections.unmodifiableMap(interceptorBindings));
 
-        this.stereotypes = findStereotypes(this.beanArchiveIndex, interceptorBindings, beanDefiningAnnotations, customContexts,
+        this.stereotypes = findStereotypes(index, interceptorBindings, beanDefiningAnnotations, customContexts,
                 builder.additionalStereotypes, annotationStore);
         buildContextPut(Key.STEREOTYPES.asString(), Collections.unmodifiableMap(stereotypes));
 
-        this.transitiveInterceptorBindings = findTransitiveInterceptorBindigs(interceptorBindings.keySet(),
-                this.beanArchiveIndex,
+        this.transitiveInterceptorBindings = findTransitiveInterceptorBindigs(interceptorBindings.keySet(), index,
                 new HashMap<>(), interceptorBindings, annotationStore);
 
         this.injectionPoints = new CopyOnWriteArrayList<>();
@@ -360,28 +356,8 @@ public class BeanDeployment {
         return interceptors;
     }
 
-    /**
-     * This index was used to discover components (beans, interceptors, qualifiers, etc.) and during type-safe resolution.
-     * 
-     * @return the bean archive index
-     */
-    public IndexView getBeanArchiveIndex() {
-        return beanArchiveIndex;
-    }
-
-    /**
-     * This index is optional and is used to discover types during type-safe resolution.
-     * <p>
-     * Some types may not be part of the bean archive index but are still needed during type-safe resolution.
-     * 
-     * @return the application index or {@code null}
-     */
-    public IndexView getApplicationIndex() {
-        return applicationIndex;
-    }
-
-    boolean hasApplicationIndex() {
-        return applicationIndex != null;
+    public IndexView getIndex() {
+        return index;
     }
 
     BeanResolver getBeanResolver() {
@@ -655,7 +631,7 @@ public class BeanDeployment {
                 .map(Entry::getKey)
                 .collect(Collectors.toList());
 
-        for (ClassInfo beanClass : beanArchiveIndex.getKnownClasses()) {
+        for (ClassInfo beanClass : index.getKnownClasses()) {
 
             if (Modifier.isInterface(beanClass.flags()) || Modifier.isAbstract(beanClass.flags())
             // Replace with ClassInfo#isAnnotation() and ClassInfo#isEnum() when using Jandex 2.1.4+
@@ -793,7 +769,7 @@ public class BeanDeployment {
                 Type superType = aClass.superClassType();
                 aClass = superType != null && !superType.name().equals(DotNames.OBJECT)
                         && CLASS_TYPES.contains(superType.kind())
-                                ? getClassByName(beanArchiveIndex, superType.name())
+                                ? getClassByName(index, superType.name())
                                 : null;
             }
             for (FieldInfo field : beanClass.fields()) {
@@ -1037,7 +1013,7 @@ public class BeanDeployment {
 
     private List<InterceptorInfo> findInterceptors(List<InjectionPointInfo> injectionPoints) {
         Set<ClassInfo> interceptorClasses = new HashSet<>();
-        for (AnnotationInstance annotation : beanArchiveIndex.getAnnotations(DotNames.INTERCEPTOR)) {
+        for (AnnotationInstance annotation : index.getAnnotations(DotNames.INTERCEPTOR)) {
             if (Kind.CLASS.equals(annotation.target().kind())) {
                 interceptorClasses.add(annotation.target().asClass());
             }
