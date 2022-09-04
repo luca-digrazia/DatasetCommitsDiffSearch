@@ -205,6 +205,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     switch (configurationDistinguisher) {
       case UNKNOWN:
         return String.format("%s-out/ios_%s-fastbuild/", TestConstants.PRODUCT_NAME, arch);
+      case IOS_EXTENSION: // Intentional fall-through.
+      case IOS_APPLICATION:
       case APPLEBIN_IOS:
         return String.format(
             "%1$s-out/ios-%2$s-min%4$s-%3$s-ios_%2$s-fastbuild/",
@@ -247,13 +249,15 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   protected static String iosConfigurationCcDepsBin(
       String arch, ConfigurationDistinguisher configurationDistinguisher) {
     switch (configurationDistinguisher) {
+      case IOS_EXTENSION:
       case APPLEBIN_IOS:
         return String.format(
             "%s-out/%s-ios_%s-fastbuild/bin/",
             TestConstants.PRODUCT_NAME,
             configurationDistinguisher.toString().toLowerCase(Locale.US),
             arch);
-      case UNKNOWN:
+      case UNKNOWN: // Intentional fall-through.
+      case IOS_APPLICATION:
         return String.format("%s-out/ios_%s-fastbuild/bin/", TestConstants.PRODUCT_NAME, arch);
       default:
         throw new AssertionError();
@@ -268,6 +272,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
       ConfigurationDistinguisher configurationDistinguisher) {
     switch (configurationDistinguisher) {
       case UNKNOWN:
+      case IOS_EXTENSION:
+        return IosExtension.EXTENSION_MINIMUM_OS_VERSION;
+      case IOS_APPLICATION:
       case APPLEBIN_IOS:
         return DEFAULT_IOS_SDK_VERSION;
       case APPLEBIN_WATCHOS:
@@ -315,10 +322,11 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     return ScratchAttributeWriter.fromLabelString(this, "objc_library", labelString);
   }
 
-  /** Creates an {@code apple_binary} target writer for the label indicated by the given String. */
+  /**
+   * Creates an {@code objc_binary} target writer for the label indicated by the given String.
+   */
   protected ScratchAttributeWriter createBinaryTargetWriter(String labelString) {
-    return ScratchAttributeWriter.fromLabelString(this, "apple_binary", labelString)
-        .set("platform_type", "'ios'");
+    return ScratchAttributeWriter.fromLabelString(this, "objc_binary", labelString);
   }
 
   private static String compilationModeFlag(CompilationMode mode) {
@@ -1128,6 +1136,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   protected ConfiguredTarget addBinWithTransitiveDepOnFrameworkImport() throws Exception {
     ConfiguredTarget lib = addLibWithDepOnFrameworkImport();
     return createBinaryTargetWriter("//bin:bin")
+        .setAndCreateFiles("srcs", "a.m")
         .setList("deps", lib.getLabel().toString())
         .write();
 
@@ -1346,14 +1355,15 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "objc_library(",
         "    name = 'objc_lib',",
         "    srcs = ['a.m'],",
-        "    deps = ['//protos:objc_protos_a', '//protos:objc_protos_b'],",
-        "    defines = ['SHOULDNOTBEINPROTOS'],",
-        "    copts = ['-ISHOULDNOTBEINPROTOS']",
+        "    deps = ['//protos:objc_protos_a', '//protos:objc_protos_b']",
         ")");
 
     ruleType.scratchTarget(
         scratch,
-        "deps", "['//libs:objc_lib']");
+        "srcs", "['main.m']",
+        "deps", "['//libs:objc_lib']",
+        "defines", "['SHOULDNOTBEINPROTOS']",
+        "copts", "['-ISHOULDNOTBEINPROTOS']");
 
     BuildConfiguration childConfig =
         Iterables.getOnlyElement(
@@ -1368,7 +1378,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertBundledGenerationActionsAreDifferent(topTarget);
     assertOnlyRequiredInputsArePresentForBundledGeneration(topTarget);
     assertOnlyRequiredInputsArePresentForBundledCompilation(topTarget);
-    assertCoptsAndDefinesNotPropagatedToProtos(topTarget);
+    assertCoptsAndDefinesForBundlingTarget(topTarget);
     assertBundledGroupsGetCreatedAndLinked(topTarget);
     if (getObjcCrosstoolMode() == ObjcCrosstoolMode.ALL) {
       assertBundledCompilationUsesCrosstool(topTarget);
@@ -1524,14 +1534,23 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .doesNotContain(protoHeaderB);
   }
 
-  private void assertCoptsAndDefinesNotPropagatedToProtos(ConfiguredTarget topTarget)
-      throws Exception {
+  private void assertCoptsAndDefinesForBundlingTarget(ConfiguredTarget topTarget) throws Exception {
     Artifact protoObject =
         getBinArtifact("_objs/x/x/_generated_protos/x/protos/DataA.pbobjc.o", topTarget);
     CommandAction protoObjectAction = (CommandAction) getGeneratingAction(protoObject);
     assertThat(protoObjectAction).isNotNull();
     assertThat(protoObjectAction.getArguments())
         .containsNoneOf("-DSHOULDNOTBEINPROTOS", "-ISHOULDNOTBEINPROTOS");
+
+    Artifact binLib = getBinArtifact("libx.a", topTarget);
+    CommandAction binLibAction = (CommandAction) getGeneratingAction(binLib);
+    assertThat(binLibAction).isNotNull();
+
+    Artifact binSrcObject = getFirstArtifactEndingWith(binLibAction.getInputs(), "main.o");
+    CommandAction binSrcObjectAction = (CommandAction) getGeneratingAction(binSrcObject);
+    assertThat(binSrcObjectAction).isNotNull();
+    assertThat(binSrcObjectAction.getArguments())
+        .containsAllOf("-DSHOULDNOTBEINPROTOS", "-ISHOULDNOTBEINPROTOS");
   }
 
   private void assertBundledGroupsGetCreatedAndLinked(ConfiguredTarget topTarget) {
@@ -1593,6 +1612,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     ruleType.scratchTarget(
         scratch,
+        "srcs", "['main.m']",
         "deps", "['//libs:objc_lib']");
 
     ConfiguredTarget topTarget = getConfiguredTarget("//x:x");
@@ -1668,13 +1688,9 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   protected void checkBundleLoaderIsCorrectlyPassedToTheLinker(RuleType ruleType) throws Exception {
     scratch.file("bin/BUILD",
-        "objc_library(",
-        "    name = 'lib',",
-        "    srcs = ['a.m'],",
-        ")",
         "apple_binary(",
         "    name = 'bin',",
-        "    deps = [':lib'],",
+        "    srcs = ['a.m'],",
         "    platform_type = 'ios',",
         ")");
 
@@ -2744,7 +2760,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         .setList("deps", "//x:x")
         .setList("sdk_includes", "from_lib")
         .write();
-    createLibraryTargetWriter("//bin:main_lib")
+    createBinaryTargetWriter("//bin:bin")
         .setAndCreateFiles("srcs", "b.m")
         .setList("deps", "//lib:lib")
         .setList("sdk_includes", "from_bin")
@@ -2760,7 +2776,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertThat(compileAArgs).contains("-I" + sdkIncludeDir + "/bar/baz");
 
     String compileBArgs = Joiner.on("")
-        .join(compileAction("//bin:main_lib", "b.o").getArguments())
+        .join(compileAction("//bin:bin", "b.o").getArguments())
         .replace(" ", "");
     assertThat(compileBArgs).contains("-I" + sdkIncludeDir + "/from_bin");
     assertThat(compileBArgs).contains("-I" + sdkIncludeDir + "/from_lib");
@@ -3239,6 +3255,45 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
           .build());
     }
     assertThat(control.getBundleFileList()).containsAllIn(expectedBundleFiles);
+  }
+
+  protected void checkNestedBundleInformationPropagatedToDependers(RuleType ruleType)
+      throws Exception {
+    scratch.file("bndl/bndl-Info.plist");
+    scratch.file("bndl/bndl.png");
+    scratch.file("bndl/BUILD",
+        "objc_bundle_library(",
+        "    name = 'bndl',",
+        "    infoplist = 'bndl-Info.plist',",
+        "    resources = ['bndl.png'],",
+        ")");
+
+    ruleType.scratchTarget(scratch, "bundles", "['//bndl:bndl']");
+
+    scratch.file("bin/bin.m");
+    scratch.file("bin/BUILD",
+        "objc_binary(",
+        "    name = 'bin',",
+        "    srcs = ['bin.m'],",
+        "    deps = ['//x:x'],",
+        ")");
+
+    assertThat(bundleMergeAction("//bin:bin").getInputs())
+        .containsAllOf(
+            getSourceArtifact("bndl/bndl-Info.plist"), getSourceArtifact("bndl/bndl.png"));
+
+    BundleMergeProtos.Control binControl = bundleMergeControl("//bin:bin");
+    BundleMergeProtos.Control bundleControl =
+        Iterables.getOnlyElement(binControl.getNestedBundleList());
+
+    assertThat(bundleControl.getBundleInfoPlistFile()).isEqualTo("bndl/bndl-Info.plist");
+
+    assertThat(bundleControl.getBundleFileList())
+        .containsExactly(BundleMergeProtos.BundleFile.newBuilder()
+            .setBundlePath("bndl.png")
+            .setSourceFile("bndl/bndl.png")
+            .setExternalFileAttribute(BundleableFile.DEFAULT_EXTERNAL_FILE_ATTRIBUTE)
+            .build());
   }
 
   protected void checkConvertStringsAction(BinaryRuleTypePair ruleTypePair) throws Exception {
@@ -4192,6 +4247,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   protected void checkDylibDependencies(RuleType ruleType,
       ExtraLinkArgs extraLinkArgs) throws Exception {
     ruleType.scratchTarget(scratch,
+        "srcs", "['a.m']",
         "dylibs", "['//fx:framework_import']");
 
     scratch.file("fx/MyFramework.framework/MyFramework");
@@ -4236,7 +4292,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   protected void checkLipoBinaryAction(RuleType ruleType) throws Exception {
-    ruleType.scratchTarget(scratch);
+    ruleType.scratchTarget(scratch,
+        "srcs", "['a.m']");
 
     useConfiguration("--ios_multi_cpus=i386,x86_64");
 
@@ -4262,7 +4319,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   protected void checkMultiarchCcDep(RuleType ruleType) throws Exception {
     ruleType.scratchTarget(scratch,
-        "deps", "['//package:cclib']");
+        "srcs", "['a.m']", "deps", "['//package:cclib']");
     scratch.file("package/BUILD",
         "cc_library(name = 'cclib', srcs = ['dep.c'])");
 
@@ -4281,18 +4338,68 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         getFirstArtifactEndingWith(appLipoAction.getInputs(), x8664Prefix + "x/x_bin"));
 
     verifyObjlist(
-        i386BinAction, "x/x-linker.objlist", "package/libcclib.a");
+        i386BinAction, "x/x-linker.objlist",
+        "x/libx.a", "package/libcclib.a");
     verifyObjlist(
-        x8664BinAction, "x/x-linker.objlist", "package/libcclib.a");
+        x8664BinAction, "x/x-linker.objlist",
+        "x/libx.a", "package/libcclib.a");
 
     assertThat(Artifact.toExecPaths(i386BinAction.getInputs()))
         .containsAllOf(
+            i386Prefix + "x/libx.a",
             i386Prefix + "package/libcclib.a",
             i386Prefix + "x/x-linker.objlist");
     assertThat(Artifact.toExecPaths(x8664BinAction.getInputs()))
         .containsAllOf(
+            x8664Prefix + "x/libx.a",
             x8664Prefix + "package/libcclib.a",
             x8664Prefix + "x/x-linker.objlist");
+  }
+
+  protected void checkLinkActionsWithSrcs(RuleType ruleType,
+      ExtraLinkArgs extraLinkArgs) throws Exception {
+    createLibraryTargetWriter("//lib1:lib1")
+        .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
+        .setAndCreateFiles("hdrs", "hdr.h")
+        .write();
+    createLibraryTargetWriter("//lib2:lib2")
+        .setAndCreateFiles("srcs", "a.m", "b.m", "private.h")
+        .setAndCreateFiles("hdrs", "hdr.h")
+        .write();
+    ruleType.scratchTarget(scratch,
+        "srcs", "['a.m']",
+        "deps", "['//lib1:lib1', '//lib2:lib2']");
+    useConfiguration("--ios_multi_cpus=i386,x86_64");
+
+    Action lipobinAction = lipoBinAction("//x:x");
+
+    String i386Bin =
+        configurationBin("i386", ConfigurationDistinguisher.APPLEBIN_IOS)
+            + "x/x_bin";
+    String i386Filelist =
+        configurationBin("i386", ConfigurationDistinguisher.APPLEBIN_IOS)
+            + "x/x-linker.objlist";
+    String x8664Bin =
+        configurationBin("x86_64", ConfigurationDistinguisher.APPLEBIN_IOS)
+            + "x/x_bin";
+    String x8664Filelist =
+        configurationBin("x86_64", ConfigurationDistinguisher.APPLEBIN_IOS)
+            + "x/x-linker.objlist";
+
+    Artifact i386BinArtifact = getFirstArtifactEndingWith(lipobinAction.getInputs(), i386Bin);
+    Artifact i386FilelistArtifact =
+        getFirstArtifactEndingWith(getGeneratingAction(i386BinArtifact).getInputs(), i386Filelist);
+    Artifact x8664BinArtifact = getFirstArtifactEndingWith(lipobinAction.getInputs(), x8664Bin);
+    Artifact x8664FilelistArtifact =
+        getFirstArtifactEndingWith(getGeneratingAction(x8664BinArtifact).getInputs(),
+            x8664Filelist);
+
+    ImmutableList<String> archiveNames =
+        ImmutableList.of("x/libx.a", "lib1/liblib1.a", "lib2/liblib2.a");
+    verifyLinkAction(i386BinArtifact, i386FilelistArtifact, "i386", archiveNames,
+        ImmutableList.<PathFragment>of(), extraLinkArgs);
+    verifyLinkAction(x8664BinArtifact, x8664FilelistArtifact,
+        "x86_64", archiveNames,  ImmutableList.<PathFragment>of(), extraLinkArgs);
   }
 
   // Regression test for b/32310268.
@@ -4316,6 +4423,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         ")");
 
     ruleType.scratchTarget(scratch,
+        "srcs", "['main.m']",
         "deps", "['//bin:objclib']");
 
     // Frameworks should get placed together with no duplicates.
@@ -4347,6 +4455,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         ")");
 
     ruleType.scratchTarget(scratch,
+        "srcs", "['main.m']",
         "deps", "['//bin:cclib2', '//bin:cclib3']");
 
     // Frameworks from the CROSSTOOL "apply_implicit_frameworks" feature should be present.
@@ -4383,6 +4492,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         ")");
 
     ruleType.scratchTarget(scratch,
+        "srcs", "['main.m']",
         "deps", "['//bin:custom']");
 
     Artifact inputFile = getSourceArtifact("bin/input.txt");
@@ -4560,6 +4670,18 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     assertXcodeVersionEnv(action, "5.8");
   }
 
+  protected void checkNoSrcs(RuleType ruleType) throws Exception {
+    ruleType.scratchTarget(scratch,
+        "deps", "['//package:objcLib']");
+    scratch.file("package/BUILD",
+        "objc_library(name = 'objcLib', srcs = [ 'b.m' ])");
+    useConfiguration("--xcode_version=5.8");
+
+    CommandAction action = linkAction("//x:x");
+    assertThat(Artifact.toRootRelativePaths(action.getInputs())).containsAllOf(
+        "x/libx.a", "package/libobjcLib.a", "x/x-linker.objlist");
+  }
+
   public void checkLinkingRuleCanUseCrosstool(RuleType ruleType) throws Exception {
     useConfiguration(ObjcCrosstoolMode.ALL);
     ruleType.scratchTarget(scratch, "srcs", "['a.m']");
@@ -4573,7 +4695,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   public void checkLinkingRuleCanUseCrosstool_singleArch(RuleType ruleType) throws Exception {
     useConfiguration(ObjcCrosstoolMode.ALL);
-    ruleType.scratchTarget(scratch);
+    ruleType.scratchTarget(scratch, "srcs", "['a.m']");
 
     // If bin is indeed using the c++ backend, then its archive action should be a CppLinkAction.
     Action lipobinAction = lipoBinAction("//x:x");
@@ -4586,7 +4708,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   public void checkLinkingRuleCanUseCrosstool_multiArch(RuleType ruleType) throws Exception {
     useConfiguration(ObjcCrosstoolMode.ALL, "--ios_multi_cpus=i386,x86_64");
-    ruleType.scratchTarget(scratch);
+    ruleType.scratchTarget(scratch, "srcs", "['a.m']");
 
     // If bin is indeed using the c++ backend, then its archive action should be a CppLinkAction.
     Action lipobinAction = lipoBinAction("//x:x");
@@ -4649,7 +4771,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "objc_library(name = 'baseLibDep', srcs = [ 'basedep.m' ],",
         "    sdk_frameworks = ['BaseSDK'], resources = [':base.png'])",
         "framework_stub_rule(name = 'avoidLib', binary = ':avoidLibBinary')",
-        "apple_binary(name = 'avoidLibBinary', binary_type = 'dylib',",
+        "apple_binary(name = 'avoidLibBinary', binary_type = 'dylib', srcs = [ 'c.m' ],",
         "    platform_type = 'ios',",
         "    deps = [':avoidLibDep'])",
         "objc_library(name = 'avoidLibDep', srcs = [ 'd.m' ], deps = [':avoidLibDepTwo'])",
@@ -4661,6 +4783,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
     Action action = getGeneratingAction(binArtifact);
 
+    assertThat(getFirstArtifactEndingWith(action.getInputs(), "x/libx.a")).isNotNull();
     assertThat(getFirstArtifactEndingWith(action.getInputs(), "package/libobjcLib.a")).isNotNull();
     assertThat(getFirstArtifactEndingWith(action.getInputs(), "package/libbaseLib.a")).isNotNull();
     assertThat(getFirstArtifactEndingWith(action.getInputs(), "package/libbaseLibDep.a"))
@@ -4697,14 +4820,14 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
         "objc_library(name = 'Dylib1Lib', srcs = [ 'Dylib1Lib.m' ])",
         "objc_library(name = 'Dylib2Lib', srcs = [ 'Dylib2Lib.m' ])",
         "framework_stub_rule(name = 'dylib1', binary = ':dylib1Binary')",
-        "apple_binary(name = 'dylib1Binary', binary_type = 'dylib',",
+        "apple_binary(name = 'dylib1Binary', binary_type = 'dylib', srcs = [ 'Dylib1Bin.m' ],",
         "    platform_type = 'ios',",
         "    deps = [':Dylib1Lib'], dylibs = ['//package:dylib2'])",
         "framework_stub_rule(name = 'dylib2', binary = ':dylib2Binary')",
-        "apple_binary(name = 'dylib2Binary', binary_type = 'dylib',",
+        "apple_binary(name = 'dylib2Binary', binary_type = 'dylib', srcs = [ 'Dylib2Bin.m' ],",
         "    platform_type = 'ios',",
         "    deps = [':Dylib2Lib'])",
-        "apple_binary(name = 'alternate',",
+        "apple_binary(name = 'alternate', srcs = [ 'alternate.m' ],",
         "    platform_type = 'ios',",
         "    deps = ['//package:ObjcLib'])");
 
@@ -4747,7 +4870,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
     scratch.file("package/BUILD",
         "load('//frameworkstub:framework_stub.bzl', 'framework_stub_rule')",
         "framework_stub_rule(name = 'avoidLib', binary = ':avoidLibBinary')",
-        "apple_binary(name = 'avoidLibBinary', binary_type = 'dylib',",
+        "apple_binary(name = 'avoidLibBinary', binary_type = 'dylib', srcs = [ 'c.m' ],",
         "    platform_type = 'ios',",
         "    deps = [':avoidCclib'])",
         "cc_library(name = 'avoidCclib', srcs = ['cclib.c'], deps = [':avoidObjcLib'])",
@@ -4765,7 +4888,7 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
   }
 
   public void checkFilesToCompileOutputGroup(RuleType ruleType) throws Exception {
-    ruleType.scratchTarget(scratch);
+    ruleType.scratchTarget(scratch, "srcs", "['a.m']");
     ConfiguredTarget target = getConfiguredTarget("//x:x");
     assertThat(
             ActionsTestUtil.baseNamesOf(
@@ -4775,7 +4898,8 @@ public abstract class ObjcRuleTestCase extends BuildViewTestCase {
 
   protected void checkCustomModuleMap(RuleType ruleType) throws Exception {
     useConfiguration("--experimental_objc_enable_module_maps");
-    ruleType.scratchTarget(scratch, "deps", "['//z:testModuleMap']");
+    ruleType.scratchTarget(scratch, "srcs", "['a.m']", "deps", "['//z:testModuleMap']");
+    scratch.file("x/a.m");
     scratch.file("z/b.m");
     scratch.file("z/b.h");
     scratch.file("y/module.modulemap", "module my_module_b { export *\n header b.h }");
