@@ -1,26 +1,24 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.indices.jobs;
 
 import com.google.inject.assistedinject.Assisted;
 import org.graylog2.indexer.IndexSetRegistry;
 import org.graylog2.indexer.SetIndexReadOnlyJob;
-import org.graylog2.indexer.fieldtypes.IndexFieldTypePoller;
-import org.graylog2.indexer.fieldtypes.IndexFieldTypesService;
 import org.graylog2.indexer.indices.Indices;
 import org.graylog2.indexer.ranges.CreateNewSingleIndexRangeJob;
 import org.graylog2.system.jobs.SystemJob;
@@ -40,8 +38,6 @@ public class SetIndexReadOnlyAndCalculateRangeJob extends SystemJob {
     private final CreateNewSingleIndexRangeJob.Factory createNewSingleIndexRangeJobFactory;
     private final IndexSetRegistry indexSetRegistry;
     private final Indices indices;
-    private final IndexFieldTypesService indexFieldTypesService;
-    private final IndexFieldTypePoller indexFieldTypePoller;
     private final String indexName;
 
     @Inject
@@ -49,24 +45,16 @@ public class SetIndexReadOnlyAndCalculateRangeJob extends SystemJob {
                                                 CreateNewSingleIndexRangeJob.Factory createNewSingleIndexRangeJobFactory,
                                                 IndexSetRegistry indexSetRegistry,
                                                 Indices indices,
-                                                IndexFieldTypesService indexFieldTypesService,
-                                                IndexFieldTypePoller indexFieldTypePoller,
                                                 @Assisted String indexName) {
         this.setIndexReadOnlyJobFactory = setIndexReadOnlyJobFactory;
         this.createNewSingleIndexRangeJobFactory = createNewSingleIndexRangeJobFactory;
         this.indexSetRegistry = indexSetRegistry;
         this.indices = indices;
-        this.indexFieldTypesService = indexFieldTypesService;
-        this.indexFieldTypePoller = indexFieldTypePoller;
         this.indexName = indexName;
     }
 
     @Override
     public void execute() {
-        if (!indices.exists(indexName)) {
-            LOG.debug("Not running job for deleted index <{}>", indexName);
-            return;
-        }
         if (indices.isClosed(indexName)) {
             LOG.debug("Not running job for closed index <{}>", indexName);
             return;
@@ -76,12 +64,6 @@ public class SetIndexReadOnlyAndCalculateRangeJob extends SystemJob {
         final SystemJob createNewSingleIndexRangeJob = createNewSingleIndexRangeJobFactory.create(indexSetRegistry.getAll(), indexName);
         createNewSingleIndexRangeJob.execute();
 
-        // Update field type information again to make sure we got the latest state
-        indexSetRegistry.getForIndex(indexName)
-                .ifPresent(indexSet -> {
-                    indexFieldTypePoller.pollIndex(indexName, indexSet.getConfig().id())
-                            .ifPresent(indexFieldTypesService::upsert);
-                });
     }
 
     @Override
