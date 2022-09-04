@@ -17,18 +17,21 @@
 package org.graylog2.shared.rest;
 
 import org.glassfish.grizzly.http.server.Response;
-import org.graylog2.shared.security.ShiroSecurityContext;
+import org.graylog2.rest.RestTools;
+import org.graylog2.utilities.IpSubnet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Inject;
+import javax.inject.Named;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerResponseContext;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.core.Context;
 import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.SecurityContext;
 import java.io.IOException;
 import java.util.Date;
+import java.util.Set;
 
 import static java.util.Objects.requireNonNull;
 
@@ -36,9 +39,12 @@ public class RestAccessLogFilter implements ContainerResponseFilter {
     private static final Logger LOG = LoggerFactory.getLogger("org.graylog2.rest.accesslog");
 
     private final Response response;
+    private final Set<IpSubnet> trustedProxies;
 
-    public RestAccessLogFilter(@Context Response response) {
+    @Inject
+    public RestAccessLogFilter(@Context Response response, @Named("trusted_proxies") Set<IpSubnet> trustedProxies) {
         this.response = requireNonNull(response);
+        this.trustedProxies = requireNonNull(trustedProxies);
     }
 
     @Override
@@ -46,19 +52,19 @@ public class RestAccessLogFilter implements ContainerResponseFilter {
         if (LOG.isDebugEnabled()) {
             try {
                 final String rawQuery = requestContext.getUriInfo().getRequestUri().getRawQuery();
-                final SecurityContext securityContext = requestContext.getSecurityContext();
-                final String remoteUser = securityContext instanceof ShiroSecurityContext ?
-                        ((ShiroSecurityContext) securityContext).getUsername() : null;
                 final Date requestDate = requestContext.getDate();
+                final String userId = RestTools.getUserIdFromRequest(requestContext);
+                final String remoteAddress = RestTools.getRemoteAddrFromRequest(response.getRequest(), trustedProxies);
+                final String userAgent = requestContext.getHeaderString(HttpHeaders.USER_AGENT);
 
                 LOG.debug("{} {} [{}] \"{} {}{}\" {} {} {}",
-                        response.getRequest().getRemoteAddr(),
-                        (remoteUser == null ? "-" : remoteUser),
+                        remoteAddress,
+                        userId == null ? "-" : userId,
                         (requestDate == null ? "-" : requestDate),
                         requestContext.getMethod(),
                         requestContext.getUriInfo().getPath(),
                         (rawQuery == null ? "" : "?" + rawQuery),
-                        requestContext.getHeaderString(HttpHeaders.USER_AGENT),
+                        (userAgent == null ? "-" : userAgent),
                         responseContext.getStatus(),
                         responseContext.getLength());
             } catch (Exception e) {

@@ -18,17 +18,18 @@ package org.graylog2.shared.security;
 
 import org.apache.shiro.authz.AuthorizationException;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
-import org.apache.shiro.subject.Subject;
+import org.graylog2.rest.RestTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.annotation.Priority;
-import javax.ws.rs.NotAuthorizedException;
+import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.Priorities;
 import javax.ws.rs.container.ContainerRequestContext;
 import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.SecurityContext;
 import java.io.IOException;
+import java.util.Arrays;
 
 @Priority(Priorities.AUTHORIZATION)
 public class ShiroAuthorizationFilter implements ContainerRequestFilter {
@@ -44,17 +45,19 @@ public class ShiroAuthorizationFilter implements ContainerRequestFilter {
         final SecurityContext securityContext = requestContext.getSecurityContext();
         if (securityContext instanceof ShiroSecurityContext) {
             final ShiroSecurityContext context = (ShiroSecurityContext) securityContext;
-            final Subject subject = context.getSubject();
+            final String userId = RestTools.getUserIdFromRequest(requestContext);
             final ContextAwarePermissionAnnotationHandler annotationHandler = new ContextAwarePermissionAnnotationHandler(context);
+            final String[] requiredPermissions = annotation.value();
             try {
-                LOG.debug("Checking authorization for user {}, needs permissions {}", subject, annotation.value());
+                LOG.debug("Checking authorization for user [{}], needs permissions: {}", userId, requiredPermissions);
                 annotationHandler.assertAuthorized(annotation);
             } catch (AuthorizationException e) {
-                LOG.info("User " + subject + "not authorized.", e);
-                throw new NotAuthorizedException(e, "Basic realm=\"Graylog Server\"");
+                LOG.info("Not authorized. User <{}> is missing permissions {} to perform <{} {}>",
+                        userId, Arrays.toString(requiredPermissions), requestContext.getMethod(), requestContext.getUriInfo().getPath());
+                throw new ForbiddenException("Not authorized");
             }
         } else {
-            throw new NotAuthorizedException("Basic realm=\"Graylog Server\"");
+            throw new ForbiddenException();
         }
     }
 }
