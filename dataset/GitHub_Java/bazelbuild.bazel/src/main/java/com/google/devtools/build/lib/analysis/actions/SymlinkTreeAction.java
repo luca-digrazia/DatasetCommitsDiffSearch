@@ -13,18 +13,25 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.actions;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.AbstractAction;
+import com.google.devtools.build.lib.actions.ActionEnvironment;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.analysis.Runfiles;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.collect.nestedset.NestedSet;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.util.OS;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
 /**
@@ -32,59 +39,115 @@ import javax.annotation.Nullable;
  * Used to generate runfiles and fileset symlink farms.
  */
 @Immutable
+@AutoCodec
 public final class SymlinkTreeAction extends AbstractAction {
 
-  private static final String GUID = "63412bda-4026-4c8e-a3ad-7deb397728d4";
+  private static final String GUID = "7a16371c-cd4a-494d-b622-963cd89f5212";
 
-  private final Artifact inputManifest;
+  @Nullable private final Artifact inputManifest;
+  private final Runfiles runfiles;
   private final Artifact outputManifest;
-  private final boolean filesetTree;
-  private final ImmutableMap<String, String> shellEnviroment;
+  @Nullable private final String filesetRoot;
   private final boolean enableRunfiles;
+  private final boolean inprocessSymlinkCreation;
+  private final boolean skipRunfilesManifests;
 
   /**
    * Creates SymlinkTreeAction instance.
-   *  @param owner action owner
+   *
+   * @param owner action owner
+   * @param config the action owners build configuration
    * @param inputManifest the input runfiles manifest
-   * @param artifactMiddleman the middleman artifact representing all the files the symlinks
-   *                          point to (on Windows we need to know if the target of a "symlink" is
-   *                          a directory or a file so we need to build it before)
-   * @param outputManifest the generated symlink tree manifest
-   *                       (must have "MANIFEST" base name). Symlink tree root
-   *                       will be set to the artifact's parent directory.
-   * @param filesetTree true if this is fileset symlink tree,
-   * @param enableRunfiles true is the actual symlink tree needs to be created.
+   * @param runfiles the input runfiles
+   * @param outputManifest the generated symlink tree manifest (must have "MANIFEST" base name).
+   *     Symlink tree root will be set to the artifact's parent directory.
+   * @param filesetRoot non-null if this is a fileset symlink tree
    */
   public SymlinkTreeAction(
       ActionOwner owner,
+      BuildConfiguration config,
       Artifact inputManifest,
-      @Nullable Artifact artifactMiddleman,
+      @Nullable Runfiles runfiles,
       Artifact outputManifest,
-      boolean filesetTree,
-      ImmutableMap<String, String> shellEnvironment,
-      boolean enableRunfiles) {
-    super(owner, computeInputs(inputManifest, artifactMiddleman), ImmutableList.of(outputManifest));
-    Preconditions.checkArgument(outputManifest.getPath().getBaseName().equals("MANIFEST"));
-    this.inputManifest = inputManifest;
-    this.outputManifest = outputManifest;
-    this.filesetTree = filesetTree;
-    this.shellEnviroment = shellEnvironment;
-    this.enableRunfiles = enableRunfiles;
+      String filesetRoot) {
+    this(
+        owner,
+        inputManifest,
+        runfiles,
+        outputManifest,
+        filesetRoot,
+        config.getActionEnvironment(),
+        config.runfilesEnabled(),
+        config.inprocessSymlinkCreation(),
+        config.skipRunfilesManifests());
   }
 
-  private static ImmutableList<Artifact> computeInputs(
-      Artifact inputManifest, Artifact artifactMiddleman) {
-    ImmutableList.Builder<Artifact> result = ImmutableList.<Artifact>builder()
-        .add(inputManifest);
-    if (artifactMiddleman != null
-        && !artifactMiddleman.getPath().getFileSystem().supportsSymbolicLinksNatively()) {
-      result.add(artifactMiddleman);
+  /**
+   * Creates SymlinkTreeAction instance. Prefer the constructor that takes a {@link
+   * BuildConfiguration} instance; it is less likely to require changes in the future if we add more
+   * command-line flags that affect this action.
+   *
+   * @param owner action owner
+   * @param inputManifest the input runfiles manifest
+   * @param runfiles the input runfiles
+   * @param outputManifest the generated symlink tree manifest (must have "MANIFEST" base name).
+   *     Symlink tree root will be set to the artifact's parent directory.
+   * @param filesetRoot non-null if this is a fileset symlink tree,
+   */
+  @AutoCodec.Instantiator
+  public SymlinkTreeAction(
+      ActionOwner owner,
+      Artifact inputManifest,
+      @Nullable Runfiles runfiles,
+      Artifact outputManifest,
+      @Nullable String filesetRoot,
+      ActionEnvironment env,
+      boolean enableRunfiles,
+      boolean inprocessSymlinkCreation,
+      boolean skipRunfilesManifests) {
+    super(
+        owner,
+        computeInputs(enableRunfiles, skipRunfilesManifests, runfiles, inputManifest),
+        ImmutableSet.of(outputManifest),
+        env);
+    Preconditions.checkArgument(outputManifest.getPath().getBaseName().equals("MANIFEST"));
+    Preconditions.checkArgument(
+        (runfiles == null) == (filesetRoot != null),
+        "Runfiles must be null iff this is a fileset action");
+    this.runfiles = runfiles;
+    this.outputManifest = outputManifest;
+    this.filesetRoot = filesetRoot;
+    this.enableRunfiles = enableRunfiles;
+    this.inprocessSymlinkCreation = inprocessSymlinkCreation;
+    this.skipRunfilesManifests = skipRunfilesManifests && enableRunfiles && (filesetRoot == null);
+    this.inputManifest = this.skipRunfilesManifests ? null : inputManifest;
+  }
+
+  private static NestedSet<Artifact> computeInputs(
+      boolean enableRunfiles,
+      boolean skipRunfilesManifests,
+      Runfiles runfiles,
+      Artifact inputManifest) {
+    NestedSetBuilder<Artifact> inputs = NestedSetBuilder.<Artifact>stableOrder();
+    if (!skipRunfilesManifests || !enableRunfiles || runfiles == null) {
+      inputs.add(inputManifest);
     }
-    return result.build();
+    // All current strategies (in-process and build-runfiles-windows) for
+    // making symlink trees on Windows depend on the target files
+    // existing, so directory or file links can be made as appropriate.
+    if (enableRunfiles && runfiles != null && OS.getCurrent() == OS.WINDOWS) {
+      inputs.addTransitive(runfiles.getAllArtifacts());
+    }
+    return inputs.build();
   }
 
   public Artifact getInputManifest() {
     return inputManifest;
+  }
+
+  @Nullable
+  public Runfiles getRunfiles() {
+    return runfiles;
   }
 
   public Artifact getOutputManifest() {
@@ -92,7 +155,19 @@ public final class SymlinkTreeAction extends AbstractAction {
   }
 
   public boolean isFilesetTree() {
-    return filesetTree;
+    return filesetRoot != null;
+  }
+
+  public PathFragment getFilesetRoot() {
+    return PathFragment.create(filesetRoot);
+  }
+
+  public boolean isRunfilesEnabled() {
+    return enableRunfiles;
+  }
+
+  public boolean inprocessSymlinkCreation() {
+    return inprocessSymlinkCreation;
   }
 
   @Override
@@ -102,30 +177,46 @@ public final class SymlinkTreeAction extends AbstractAction {
 
   @Override
   protected String getRawProgressMessage() {
-    return (filesetTree ? "Creating Fileset tree " : "Creating runfiles tree ")
+    return (isFilesetTree() ? "Creating Fileset tree " : "Creating runfiles tree ")
         + outputManifest.getExecPath().getParentDirectory().getPathString();
   }
 
   @Override
-  protected String computeKey() {
-    Fingerprint f = new Fingerprint();
-    f.addString(GUID);
-    f.addInt(filesetTree ? 1 : 0);
-    return f.hexDigestAndReset();
+  protected void computeKey(
+      ActionKeyContext actionKeyContext,
+      @Nullable Artifact.ArtifactExpander artifactExpander,
+      Fingerprint fp) {
+    fp.addString(GUID);
+    fp.addNullableString(filesetRoot);
+    fp.addBoolean(enableRunfiles);
+    fp.addBoolean(inprocessSymlinkCreation);
+    fp.addBoolean(skipRunfilesManifests);
+    env.addTo(fp);
+    // We need to ensure that the fingerprints for two different instances of this action are
+    // different. Consider the hypothetical scenario where we add a second runfiles object to this
+    // class, which could also be null: the sequence
+    //    if (r1 != null) r1.fingerprint(fp);
+    //    if (r2 != null) r2.fingerprint(fp);
+    // would *not* be safe; we'd get a collision between an action that has only r1 set, and another
+    // that has only r2 set. Prefixing with a boolean indicating the presence of runfiles makes it
+    // safe to add more fields in the future.
+    fp.addBoolean(runfiles != null);
+    if (runfiles != null) {
+      runfiles.fingerprint(fp);
+    }
   }
 
   @Override
-  public ResourceSet estimateResourceConsumption(Executor executor) {
-    return ResourceSet.ZERO;
-  }
-
-  @Override
-  public void execute(
-      ActionExecutionContext actionExecutionContext)
-          throws ActionExecutionException, InterruptedException {
+  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException, InterruptedException {
     actionExecutionContext
-        .getExecutor()
         .getContext(SymlinkTreeActionContext.class)
-        .createSymlinks(this, actionExecutionContext, shellEnviroment, enableRunfiles);
+        .createSymlinks(this, actionExecutionContext);
+    return ActionResult.EMPTY;
+  }
+
+  @Override
+  public boolean mayInsensitivelyPropagateInputs() {
+    return true;
   }
 }
