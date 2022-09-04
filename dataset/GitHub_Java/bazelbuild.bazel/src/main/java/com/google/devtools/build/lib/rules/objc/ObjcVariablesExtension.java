@@ -21,9 +21,9 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
@@ -64,10 +64,6 @@ class ObjcVariablesExtension implements VariablesExtension {
   static final String DSYM_PATH_VARIABLE_NAME = "dsym_path";
   static final String DSYM_BUNDLE_ZIP_VARIABLE_NAME = "dsym_bundle_zip";
 
-  // ARC variables. Mutually exclusive.
-  static final String OBJC_ARC_VARIABLE_NAME = "objc_arc";
-  static final String NO_OBJC_ARC_VARIABLE_NAME = "no_objc_arc";
-
   private final RuleContext ruleContext;
   private final ObjcProvider objcProvider;
   private final CompilationArtifacts compilationArtifacts;
@@ -82,7 +78,6 @@ class ObjcVariablesExtension implements VariablesExtension {
   private final Artifact dsymBundleZip;
   private final Artifact linkmap;
   private final Artifact bitcodeSymbolMap;
-  private boolean arcEnabled = true;
 
   private ObjcVariablesExtension(
       RuleContext ruleContext,
@@ -98,8 +93,7 @@ class ObjcVariablesExtension implements VariablesExtension {
       ImmutableSet<VariableCategory> activeVariableCategories,
       Artifact dsymBundleZip,
       Artifact linkmap,
-      Artifact bitcodeSymbolMap,
-      boolean arcEnabled) {
+      Artifact bitcodeSymbolMap) {
     this.ruleContext = ruleContext;
     this.objcProvider = objcProvider;
     this.compilationArtifacts = compilationArtifacts;
@@ -114,7 +108,6 @@ class ObjcVariablesExtension implements VariablesExtension {
     this.dsymBundleZip = dsymBundleZip;
     this.linkmap = linkmap;
     this.bitcodeSymbolMap = bitcodeSymbolMap;
-    this.arcEnabled = arcEnabled;
   }
 
   /** Type of build variable that can optionally exported by this extension. */
@@ -124,7 +117,7 @@ class ObjcVariablesExtension implements VariablesExtension {
     EXECUTABLE_LINKING_VARIABLES,
     DSYM_VARIABLES,
     LINKMAP_VARIABLES,
-    BITCODE_VARIABLES
+    BITCODE_VARIABLES;
   }
 
   @Override
@@ -149,11 +142,6 @@ class ObjcVariablesExtension implements VariablesExtension {
     }
     if (activeVariableCategories.contains(VariableCategory.BITCODE_VARIABLES)) {
       addBitcodeVariables(builder);
-    }
-    if (arcEnabled) {
-      builder.addStringVariable(OBJC_ARC_VARIABLE_NAME, "");
-    } else {
-      builder.addStringVariable(NO_OBJC_ARC_VARIABLE_NAME, "");
     }
   }
 
@@ -267,8 +255,7 @@ class ObjcVariablesExtension implements VariablesExtension {
     private Artifact dsymBundleZip;
     private Artifact linkmap;
     private Artifact bitcodeSymbolMap;
-    private boolean arcEnabled = true;
-
+    
     private final ImmutableSet.Builder<VariableCategory> activeVariableCategoriesBuilder =
         ImmutableSet.builder();
 
@@ -356,12 +343,6 @@ class ObjcVariablesExtension implements VariablesExtension {
       return this;
     }
 
-    /** Sets whether ARC is enabled. */
-    public Builder setArcEnabled(boolean enabled) {
-      this.arcEnabled = enabled;
-      return this;
-    }
-
     public ObjcVariablesExtension build() {
       
       ImmutableSet<VariableCategory> activeVariableCategories =
@@ -407,8 +388,7 @@ class ObjcVariablesExtension implements VariablesExtension {
           activeVariableCategories,
           dsymBundleZip,
           linkmap,
-          bitcodeSymbolMap,
-          arcEnabled);
+          bitcodeSymbolMap);
     }
   }
 }
