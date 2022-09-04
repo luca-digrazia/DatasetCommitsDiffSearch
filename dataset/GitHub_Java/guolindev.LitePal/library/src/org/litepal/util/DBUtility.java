@@ -227,13 +227,11 @@ public class DBUtility {
 		List<String> tableNames = new ArrayList<String>();
 		Cursor cursor = null;
 		try {
-			cursor = db.rawQuery("select * from sqlite_master where type = ?", new String[] { "table" });
+			cursor = db.rawQuery("SELECT * FROM SQLITE_MASTER", null);
 			if (cursor.moveToFirst()) {
 				do {
 					String tableName = cursor.getString(cursor.getColumnIndexOrThrow("tbl_name"));
-					if (!tableNames.contains(tableName)) {
-						tableNames.add(tableName);
-					}
+					tableNames.add(tableName);
 				} while (cursor.moveToNext());
 			}
 		} catch (Exception e) {
@@ -264,7 +262,7 @@ public class DBUtility {
 		if (isTableExists(tableName, db)) {
 			TableModel tableModelDB = new TableModel();
 			tableModelDB.setTableName(tableName);
-			String checkingColumnSQL = "pragma table_info(" + tableName + ")";
+			String checkingColumnSQL = "PRAGMA TABLE_INFO(" + tableName + ")";
 			Cursor cursor = null;
 			try {
 				cursor = db.rawQuery(checkingColumnSQL, null);

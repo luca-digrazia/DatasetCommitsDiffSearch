@@ -17,7 +17,6 @@
 package org.litepal.crud;
 
 import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -63,14 +62,8 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            Current model to persist.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	void onSave(DataSupport baseObj) throws SecurityException, IllegalArgumentException,
-			NoSuchMethodException, IllegalAccessException, InvocationTargetException {
+	void onSave(DataSupport baseObj) {
 		String className = baseObj.getClassName();
 		List<Field> supportedFields = getSupportedFields(className);
 		Collection<AssociationsInfo> associationInfos = getAssociationInfo(className);
@@ -94,15 +87,8 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param collection
 	 *            Holds all models to persist.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	<T extends DataSupport> void onSaveAll(Collection<T> collection) throws SecurityException,
-			IllegalArgumentException, NoSuchMethodException, IllegalAccessException,
-			InvocationTargetException {
+	<T extends DataSupport> void onSaveAll(Collection<T> collection) {
 		if (collection != null && collection.size() > 0) {
 			DataSupport[] array = collection.toArray(new DataSupport[0]);
 			DataSupport firstObj = array[0];
@@ -137,15 +123,8 @@ class SaveHandler extends DataHandler {
 	 *            Current model to persist.
 	 * @param supportedFields
 	 *            List of all supported fields.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void doSaveAction(DataSupport baseObj, List<Field> supportedFields) {
 		ContentValues values = new ContentValues();
 		beforeSave(baseObj, supportedFields, values);
 		long id = saving(baseObj, values);
@@ -163,15 +142,8 @@ class SaveHandler extends DataHandler {
 	 *            List of all supported fields.
 	 * @param values
 	 *            To store data of current model for persisting.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	private void beforeSave(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void beforeSave(DataSupport baseObj, List<Field> supportedFields, ContentValues values) {
 		putFieldsValue(baseObj, supportedFields, values);
 		putForeignKeyValue(values, baseObj);
 	}
@@ -212,15 +184,8 @@ class SaveHandler extends DataHandler {
 	 * 
 	 * @param baseObj
 	 *            The class of base object.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void doUpdateAction(DataSupport baseObj, List<Field> supportedFields) {
 		ContentValues values = new ContentValues();
 		beforeUpdate(baseObj, supportedFields, values);
 		updating(baseObj, values);
@@ -239,15 +204,8 @@ class SaveHandler extends DataHandler {
 	 *            List of all supported fields.
 	 * @param values
 	 *            To store data of current model for updating.
-	 * @throws InvocationTargetException
-	 * @throws IllegalAccessException
-	 * @throws NoSuchMethodException
-	 * @throws IllegalArgumentException
-	 * @throws SecurityException
 	 */
-	private void beforeUpdate(DataSupport baseObj, List<Field> supportedFields, ContentValues values)
-			throws SecurityException, IllegalArgumentException, NoSuchMethodException,
-			IllegalAccessException, InvocationTargetException {
+	private void beforeUpdate(DataSupport baseObj, List<Field> supportedFields, ContentValues values) {
 		putFieldsValue(baseObj, supportedFields, values);
 		putForeignKeyValue(values, baseObj);
 		for (String fkName : baseObj.getListToClearSelfFK()) {

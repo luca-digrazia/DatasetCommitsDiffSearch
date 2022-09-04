@@ -285,13 +285,7 @@ public class DataSupport {
 	 */
 	public static synchronized <T> List<T> findAll(Class<T> modelClass, long... ids) {
 		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onFindAll(modelClass, false, ids);
-	}
-
-	public static synchronized <T> List<T> findAll(Class<T> modelClass, boolean isEager,
-			long... ids) {
-		QueryHandler queryHandler = new QueryHandler(Connector.getDatabase());
-		return queryHandler.onFindAll(modelClass, isEager, ids);
+		return queryHandler.onFindAll(modelClass, ids);
 	}
 
 	/**

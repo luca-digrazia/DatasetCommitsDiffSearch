@@ -63,7 +63,6 @@ public class LitePalContentHandler extends DefaultHandler {
 	@Override
 	public void startDocument() throws SAXException {
 		litePalAttr = LitePalAttr.getInstance();
-		litePalAttr.getClassNames().clear();
 	}
 
 	/**

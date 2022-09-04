@@ -19,23 +19,13 @@ package org.litepal.util;
 import android.util.Log;
 
 public final class LogUtil {
-	
-	public static final int DEBUG = 2;
-	
-	public static final int ERROR = 5;
-	
-	public static final int LEVEL = ERROR;
-	
+
 	public static void d(String tagName, String message) {
-		if (LEVEL >= DEBUG) {
-			Log.d(tagName, message);
-		}
+		Log.d(tagName, message);
 	}
 	
 	public static void e(String tagName, Exception e){
-		if (LEVEL >= ERROR) {
-			Log.e(tagName, e.getMessage(), e);
-		}
+		e.printStackTrace();
 	}
 
 }
