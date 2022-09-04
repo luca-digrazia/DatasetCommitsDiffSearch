@@ -359,12 +359,8 @@ public class SkylarkRuleClassFunctions {
   @SkylarkSignature(
     name = "rule",
     doc =
-        "Creates a new rule, which can be called from a BUILD file or a macro to create targets."
-            + "<p>Rules must be assigned to global variables in a .bzl file; the name of the "
-            + "global variable is the rule's name."
-            + "<p>Test rules are required to have a name ending in <code>_test</code>, while all "
-            + "other rules must not have this suffix. (This restriction applies only to rules, not "
-            + "to their targets.)",
+        "Creates a new rule. Store it in a global value, so that it can be loaded and called "
+            + "from BUILD files.",
     returnType = BaseFunction.class,
     parameters = {
       @Param(
@@ -383,11 +379,13 @@ public class SkylarkRuleClassFunctions {
         defaultValue = "False",
         doc =
             "Whether this rule is a test rule, that is, whether it may be the subject of a "
-                + "<code>blaze test</code> command. All test rules are automatically considered "
-                + "<a href='#rule.executable'>executable</a>; it is unnecessary (and discouraged) "
-                + "to explicitly set <code>executable = True</code> for a test rule. See the "
-                + "<a href='../rules.$DOC_EXT#executable-rules-and-test-rules'>Rules page</a> for "
-                + "more information."
+                + "<code>blaze test</code> or <code>blaze run</code> command. All test rules are "
+                + "automatically considered <a href='#rule.executable'>executable</a>; it is "
+                + "unnecessary (and discouraged) to explicitly set <code>executable = True</code> "
+                + "for a test rule."
+                + "<p>Test rules must have names ending in the suffix <code>\"_test\"</code>; "
+                + "non-test rules must not use this suffix. (Note that this applies only to the "
+                + "name of the rule, not its targets.)"
       ),
       @Param(
         name = "attrs",
@@ -412,31 +410,16 @@ public class SkylarkRuleClassFunctions {
         noneable = true,
         defaultValue = "None",
         doc =
-            "A schema for defining predeclared outputs. Unlike <a href='attr.html#output'><code>"
-                + "output</code></a> and <a href='attr.html#output_list'><code>output_list</code>"
-                + "</a>attributes, the user does not specify the labels for these files. See the "
-                + "<a href='../rules.$DOC_EXT#files'>Rules page</a> for more on predeclared "
-                + "outputs."
-                + "<p>The value of this argument is either a dictionary or a callback function "
-                + "that produces a dictionary. The callback works similar to computed dependency "
-                + "attributes: The function's parameter names are matched against the rule's "
-                + "attributes, so for example if you pass <code>outputs = _my_func</code> with the "
-                + "definition <code>def _my_func(srcs, deps): ...</code>, the function has access "
-                + "to the attributes <code>srcs</code> and <code>deps</code>. Whether the "
-                + "dictionary is specified directly or via a function, it is interpreted as "
-                + "follows."
-                + "<p>Each entry in the dictionary creates a predeclared output where the key is "
-                + "an identifier and the value is a string template that determines the output's "
-                + "label. In the rule's implementation function, the identifier becomes the field "
-                + "name used to access the output's <a href='File.html'><code>File</code></a> in "
-                + "<a href='ctx.html#outputs'><code>ctx.outputs</code></a>. The output's label has "
-                + "the same package as the rule, and the part after the package is produced by "
-                + "substituting each placeholder of the form <code>\"%{ATTR}\"</code> with the "
-                + "value of the attribute <code>ATTR</code>. In practice, the most common "
-                + "substitution placeholder is <code>\"%{name}\"</code>. For example, for a target "
-                + "named \"foo\", the outputs dict <code>{\"bin\": \"%{name}.exe\"}</code> "
-                + "predeclares an output named <code>foo.exe</code> that is accessable in the "
-                + "implementation function as <code>ctx.outputs.bin</code>."
+            "outputs of this rule. "
+                + "It is a dictionary mapping from string to a template name. "
+                + "For example: <code>{\"ext\": \"%{name}.ext\"}</code>. <br>"
+                + "The dictionary key becomes an attribute in <code>ctx.outputs</code>. "
+                + "Similar to computed dependency rule attributes, you can also specify the "
+                + "name of a function that returns the dictionary. This function can access "
+                + "all rule attributes that are listed as parameters in its function "
+                + "signature. For example, <code>outputs = _my_func</code> with "
+                + "<code>def _my_func(srcs, deps):</code> has access to the attributes "
+                + "'srcs' and 'deps' (if defined)."
       ),
       @Param(
         name = "executable",
@@ -444,9 +427,10 @@ public class SkylarkRuleClassFunctions {
         defaultValue = "False",
         doc =
             "Whether this rule is considered executable, that is, whether it may be the subject of "
-                + "a <code>blaze run</code> command. See the "
-                + "<a href='../rules.$DOC_EXT#executable-rules-and-test-rules'>Rules page</a> for "
-                + "more information."
+                + "a <code>blaze run</code> command. Executable rules automatically get a "
+                + "predeclared output that is addressable as <code>ctx.outputs.executable</code>. "
+                + "See the <a href='../rules.$DOC_EXT#output-files'>Rules page</a> for more "
+                + "information."
       ),
       @Param(
         name = "output_to_genfiles",

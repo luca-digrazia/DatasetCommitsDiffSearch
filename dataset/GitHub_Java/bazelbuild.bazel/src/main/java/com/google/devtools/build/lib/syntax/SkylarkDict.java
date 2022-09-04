@@ -62,8 +62,7 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
 
   private final LinkedHashMap<K, V> contents = new LinkedHashMap<>();
 
-  /** Final except for {@link #unsafeShallowFreeze}; must not be modified any other way. */
-  private Mutability mutability;
+  private final Mutability mutability;
 
   private SkylarkDict(@Nullable Mutability mutability) {
     this.mutability = mutability == null ? Mutability.IMMUTABLE : mutability;
@@ -152,12 +151,6 @@ public final class SkylarkDict<K, V> extends MutableMap<K, V>
   @Override
   public Mutability mutability() {
     return mutability;
-  }
-
-  @Override
-  public void unsafeShallowFreeze() {
-    Mutability.Freezable.checkUnsafeShallowFreezePrecondition(this);
-    this.mutability = Mutability.IMMUTABLE;
   }
 
   @Override
