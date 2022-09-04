@@ -181,17 +181,18 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
         final Set<String> translatedRoleIds = Sets.newHashSet(Sets.union(Sets.newHashSet(ldapSettings.getDefaultGroupId()),
                                                                          ldapSettings.getAdditionalDefaultGroupIds()));
         if (!userEntry.getGroups().isEmpty()) {
+            // ldap search returned groups, these always override the ones set on the user
             try {
                 final Map<String, Role> roleNameToRole = roleService.loadAllLowercaseNameMap();
                 for (String ldapGroupName : userEntry.getGroups()) {
                     final String roleName = ldapSettings.getGroupMapping().get(ldapGroupName);
                     if (roleName == null) {
-                        LOG.debug("User {}: No group mapping for ldap group <{}>", username, ldapGroupName);
+                        LOG.warn("User {}: No group mapping for ldap group <{}>", username, ldapGroupName);
                         continue;
                     }
                     final Role role = roleNameToRole.get(roleName.toLowerCase());
                     if (role != null) {
-                        LOG.debug("User {}: Mapping ldap group <{}> to role <{}>", username, ldapGroupName, role.getName());
+                        LOG.warn("User {}: Mapping ldap group <{}> to role <{}>", username, ldapGroupName, role.getName());
                         translatedRoleIds.add(role.getId());
                     } else {
                         LOG.warn("User {}: No role found for ldap group <{}>", username, ldapGroupName);
@@ -201,6 +202,13 @@ public class UserServiceImpl extends PersistedServiceImpl implements UserService
             } catch (NotFoundException e) {
                 LOG.error("Unable to load user roles", e);
             }
+        } else if (ldapSettings.getGroupMapping().isEmpty()
+                || ldapSettings.getGroupSearchBase().isEmpty()
+                || ldapSettings.getGroupSearchPattern().isEmpty()
+                || ldapSettings.getGroupIdAttribute().isEmpty()) {
+            // no group mapping or configuration set, we'll leave the previously set groups alone on sync
+            // when first creating the user these will be empty
+            translatedRoleIds.addAll(user.getRoleIds());
         }
         user.setRoleIds(translatedRoleIds);
 
