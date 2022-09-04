@@ -20,8 +20,6 @@
 
 package org.graylog2.inputs.gelf;
 
-import org.graylog2.gelf.GELFMessage;
-import org.graylog2.gelf.GELFMessageChunk;
 import org.graylog2.TestHelper;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -66,8 +64,8 @@ public class GELFMessageTest {
     @Test
     public void testGetGELFTypeDetectsUncompressedMessage() throws Exception {
         byte[] fakeData = new byte[20];
-        fakeData[0] = (byte) '{';
-        fakeData[1] = (byte) '\n';
+        fakeData[0] = (byte) 0x1f;
+        fakeData[1] = (byte) 0x3c;
 
         GELFMessage msg = new GELFMessage(fakeData);
         assertEquals(GELFMessage.Type.UNCOMPRESSED, msg.getGELFType());
@@ -88,8 +86,14 @@ public class GELFMessageTest {
     @Test
     public void testGetJSONFromUncompressedMessage() throws Exception {
         byte[] text = GELF_JSON.getBytes("UTF-8");
+        byte[] message = new byte[text.length+2];
+        message[0] = (byte) 0x1f;
+        message[1] = (byte) 0x3c;
 
-        GELFMessage msg = new GELFMessage(text);
+        // Copy text behind magic bytes identifying uncompressed message.
+        System.arraycopy(text, 0, message, 2, text.length);
+
+        GELFMessage msg = new GELFMessage(message);
         assertEquals(GELF_JSON, msg.getJSON());
     }
 

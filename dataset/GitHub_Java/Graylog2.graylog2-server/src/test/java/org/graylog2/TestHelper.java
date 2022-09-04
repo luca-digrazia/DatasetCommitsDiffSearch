@@ -27,9 +27,7 @@ import java.io.UnsupportedEncodingException;
 import java.math.BigInteger;
 import java.util.zip.Deflater;
 import java.util.zip.GZIPOutputStream;
-import org.graylog2.buffers.LogMessageEvent;
-import org.graylog2.gelf.GELFMessageChunk;
-import org.graylog2.plugin.logmessage.LogMessage;
+import org.graylog2.inputs.gelf.GELFMessageChunk;
 
 public class TestHelper {
 
@@ -86,14 +84,6 @@ public class TestHelper {
 
     public static String toHex(String arg) throws UnsupportedEncodingException {
         return String.format("%x", new BigInteger(arg.getBytes("UTF-8")));
-    }
-    
-    public static LogMessage simpleLogMessage() {
-        LogMessage m = new LogMessage();
-        m.setHost("foo");
-        m.setShortMessage("bar");
-        
-        return m;
     }
 
 }
