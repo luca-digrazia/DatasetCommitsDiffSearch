@@ -17,10 +17,11 @@
 
 package com.tencent.angel.ps.storage.vector.storage;
 
+import com.tencent.angel.common.ByteBufSerdeUtils;
 import com.tencent.angel.ml.math2.VFactory;
 import com.tencent.angel.ml.math2.vector.IntFloatVector;
 import com.tencent.angel.ml.matrix.RowType;
-import com.tencent.angel.ps.server.data.request.IndexType;
+import com.tencent.angel.ps.server.data.request.KeyType;
 import com.tencent.angel.ps.server.data.request.InitFunc;
 import com.tencent.angel.ps.server.data.request.UpdateOp;
 import com.tencent.angel.ps.storage.vector.func.FloatElemUpdateFunc;
@@ -57,10 +58,10 @@ public class IntFloatVectorStorage extends IntFloatStorage {
   }
 
   @Override
-  public void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func) {
-    if (indexType != IndexType.INT) {
+  public void indexGet(KeyType keyType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func) {
+    if (keyType != KeyType.INT) {
       throw new UnsupportedOperationException(
-          this.getClass().getName() + " only support int type index now");
+              this.getClass().getName() + " only support int type index now");
     }
 
     if (func != null) {
@@ -78,119 +79,122 @@ public class IntFloatVectorStorage extends IntFloatStorage {
   public void update(RowType updateType, ByteBuf buf, UpdateOp op) {
     switch (updateType) {
       case T_FLOAT_SPARSE:
-      case T_FLOAT_SPARSE_COMPONENT:
         updateUseIntFloatSparse(buf, op);
         break;
 
       case T_LONG_SPARSE:
-      case T_LONG_SPARSE_COMPONENT:
         updateUseIntLongSparse(buf, op);
         break;
 
       case T_INT_SPARSE:
-      case T_INT_SPARSE_COMPONENT:
         updateUseIntIntSparse(buf, op);
         break;
 
       case T_FLOAT_DENSE:
-      case T_FLOAT_DENSE_COMPONENT:
         updateUseIntFloatDense(buf, op);
         break;
 
       case T_LONG_DENSE:
-      case T_LONG_DENSE_COMPONENT:
         updateUseIntLongDense(buf, op);
         break;
 
       case T_INT_DENSE:
-      case T_INT_DENSE_COMPONENT:
         updateUseIntIntDense(buf, op);
         break;
 
       default: {
         throw new UnsupportedOperationException(
-            "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
+                "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
       }
     }
   }
 
   private void updateUseIntFloatDense(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
+    int size = ByteBufSerdeUtils.deserializeInt(buf);
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
-        getVector().set(i, getVector().get(i) + buf.readFloat());
+        int actualIndex = i + (int) indexOffset;
+        float oldValue = get(actualIndex);
+        set(actualIndex, oldValue + ByteBufSerdeUtils.deserializeFloat(buf));
       }
     } else {
       for (int i = 0; i < size; i++) {
-        getVector().set(i, buf.readFloat());
+        set(i + (int) indexOffset, ByteBufSerdeUtils.deserializeFloat(buf));
       }
     }
   }
 
   private void updateUseIntLongDense(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
+    int size = ByteBufSerdeUtils.deserializeInt(buf);
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
-        getVector().set(i, getVector().get(i) + buf.readLong());
+        int actualIndex = i + (int) indexOffset;
+        float oldValue = get(actualIndex);
+        set(actualIndex, oldValue + ByteBufSerdeUtils.deserializeLong(buf));
       }
     } else {
       for (int i = 0; i < size; i++) {
-        getVector().set(i, buf.readLong());
+        set(i + (int) indexOffset, ByteBufSerdeUtils.deserializeLong(buf));
       }
     }
   }
 
   private void updateUseIntIntDense(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
+    int size = ByteBufSerdeUtils.deserializeInt(buf);
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
-        getVector().set(i, getVector().get(i) + buf.readInt());
+        int actualIndex = i + (int) indexOffset;
+        float oldValue = get(actualIndex);
+        set(actualIndex, oldValue + ByteBufSerdeUtils.deserializeInt(buf));
       }
     } else {
       for (int i = 0; i < size; i++) {
-        getVector().set(i, buf.readInt());
+        set(i + (int) indexOffset, ByteBufSerdeUtils.deserializeInt(buf));
       }
     }
   }
 
   private void updateUseIntFloatSparse(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
+    int size = ByteBufSerdeUtils.deserializeInt(buf);
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
-        int index = buf.readInt();
-        getVector().set(index, getVector().get(index) + buf.readFloat());
+        int index = ByteBufSerdeUtils.deserializeInt(buf);
+        float oldValue = get(index);
+        set(index, oldValue + ByteBufSerdeUtils.deserializeFloat(buf));
       }
     } else {
       for (int i = 0; i < size; i++) {
-        getVector().set(buf.readInt(), buf.readFloat());
+        set(ByteBufSerdeUtils.deserializeInt(buf), ByteBufSerdeUtils.deserializeFloat(buf));
       }
     }
   }
 
   private void updateUseIntLongSparse(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
+    int size = ByteBufSerdeUtils.deserializeInt(buf);
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
-        int index = buf.readInt();
-        getVector().set(index, getVector().get(index) + buf.readLong());
+        int index = ByteBufSerdeUtils.deserializeInt(buf);
+        float oldValue = get(index);
+        set(index, oldValue + ByteBufSerdeUtils.deserializeLong(buf));
       }
     } else {
       for (int i = 0; i < size; i++) {
-        getVector().set(buf.readInt(), buf.readLong());
+        set(ByteBufSerdeUtils.deserializeInt(buf), ByteBufSerdeUtils.deserializeLong(buf));
       }
     }
   }
 
   private void updateUseIntIntSparse(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
+    int size = ByteBufSerdeUtils.deserializeInt(buf);
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
-        int index = buf.readInt();
-        getVector().set(index, getVector().get(index) + buf.readInt());
+        int index = ByteBufSerdeUtils.deserializeInt(buf);
+        float oldValue = get(index);
+        set(index, oldValue + ByteBufSerdeUtils.deserializeInt(buf));
       }
     } else {
       for (int i = 0; i < size; i++) {
-        getVector().set(buf.readInt(), buf.readInt());
+        set(ByteBufSerdeUtils.deserializeInt(buf), ByteBufSerdeUtils.deserializeInt(buf));
       }
     }
   }
@@ -198,12 +202,12 @@ public class IntFloatVectorStorage extends IntFloatStorage {
 
   @Override
   public float get(int index) {
-    return getVector().get(index - (int) indexOffset);
+    return vector.get(index - (int) indexOffset);
   }
 
   @Override
   public void set(int index, float value) {
-    getVector().set(index - (int) indexOffset, value);
+    vector.set(index - (int) indexOffset, value);
   }
 
   @Override
@@ -367,8 +371,8 @@ public class IntFloatVectorStorage extends IntFloatStorage {
   public IntFloatVectorStorage adaptiveClone() {
     if(isSparse()) {
       return new IntFloatVectorStorage(VFactory
-          .sortedFloatVector(vector.getDim(), vector.getStorage().getIndices(),
-              vector.getStorage().getValues()), indexOffset);
+              .sortedFloatVector(vector.getDim(), vector.getStorage().getIndices(),
+                      vector.getStorage().getValues()), indexOffset);
     } else {
       return this;
     }
@@ -390,5 +394,12 @@ public class IntFloatVectorStorage extends IntFloatStorage {
   @Override
   public int bufferLen() {
     return super.bufferLen() + VectorStorageUtils.bufferLen(vector);
+  }
+
+  @Override
+  public long dataSize() {
+    long dataLen = super.bufferLen();
+    if (vector != null && vector.getStorage() != null) dataLen += VectorStorageUtils.bufferLen(vector);
+    return dataLen;
   }
 }

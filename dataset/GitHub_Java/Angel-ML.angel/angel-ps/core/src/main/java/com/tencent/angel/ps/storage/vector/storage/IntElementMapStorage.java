@@ -36,14 +36,15 @@ public class IntElementMapStorage extends IntElementStorage {
    * Complex object id to object map
    */
   private Int2ObjectOpenHashMap<IElement> data;
+  private volatile int[] keys;
 
   public IntElementMapStorage(
-      Class<? extends IElement> objectClass, int len, long indexOffset) {
+          Class<? extends IElement> objectClass, int len, long indexOffset) {
     this(objectClass, new Int2ObjectOpenHashMap(len), indexOffset);
   }
 
   public IntElementMapStorage(
-      Class<? extends IElement> objectClass, Int2ObjectOpenHashMap<IElement> data, long indexOffset) {
+          Class<? extends IElement> objectClass, Int2ObjectOpenHashMap<IElement> data, long indexOffset) {
     super(objectClass, indexOffset);
     this.data = data;
   }
@@ -57,13 +58,28 @@ public class IntElementMapStorage extends IntElementStorage {
   }
 
   public void setData(
-      Int2ObjectOpenHashMap<IElement> data) {
+          Int2ObjectOpenHashMap<IElement> data) {
     this.data = data;
   }
 
   @Override
   public IElement get(int index) {
     return data.get(index - (int) indexOffset);
+  }
+
+  public int getKey(int index) {
+    if (keys == null) {
+      synchronized (IntElementMapStorage.class) {
+        if (keys == null) {
+          keys = data.keySet().toIntArray();
+        }
+      }
+    }
+    return keys[index];
+  }
+
+  public ObjectIterator<Int2ObjectMap.Entry<IElement>> iterator() {
+    return data.int2ObjectEntrySet().fastIterator();
   }
 
   @Override
@@ -102,7 +118,7 @@ public class IntElementMapStorage extends IntElementStorage {
   public IntElementMapStorage deepClone() {
     Int2ObjectOpenHashMap<IElement> clonedData = new Int2ObjectOpenHashMap(data.size());
     ObjectIterator<Int2ObjectMap.Entry<IElement>> iter = data
-        .int2ObjectEntrySet().fastIterator();
+            .int2ObjectEntrySet().fastIterator();
     while (iter.hasNext()) {
       Int2ObjectMap.Entry<IElement> entry = iter.next();
       clonedData.put(entry.getIntKey(), (IElement) entry.getValue().deepClone());
@@ -213,5 +229,19 @@ public class IntElementMapStorage extends IntElementStorage {
   @Override
   public int dataLen() {
     return bufferLen();
+  }
+
+  @Override
+  public long dataSize() {
+    long dataLen = super.bufferLen() + 4;
+
+    if (data != null) {
+      // Element data
+      for (Entry<Integer, IElement> entry : data.entrySet()) {
+        if (entry != null && entry.getValue() != null)
+          dataLen += (4 + entry.getValue().bufferLen());
+      }
+    }
+    return dataLen;
   }
 }

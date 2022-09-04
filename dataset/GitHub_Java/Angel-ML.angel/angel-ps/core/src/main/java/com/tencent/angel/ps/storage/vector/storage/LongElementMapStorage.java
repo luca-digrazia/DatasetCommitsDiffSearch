@@ -15,12 +15,10 @@
  *
  */
 
-
 package com.tencent.angel.ps.storage.vector.storage;
 
 import com.tencent.angel.ps.storage.vector.element.IElement;
 import io.netty.buffer.ByteBuf;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
@@ -32,14 +30,15 @@ import java.util.Map.Entry;
 public class LongElementMapStorage extends LongElementStorage {
 
   private Long2ObjectOpenHashMap<IElement> data;
+  private volatile long[] keys;
 
   public LongElementMapStorage(
-      Class<? extends IElement> objectClass, int len, long indexOffset) {
+          Class<? extends IElement> objectClass, int len, long indexOffset) {
     this(objectClass, new Long2ObjectOpenHashMap(len), indexOffset);
   }
 
   public LongElementMapStorage(
-      Class<? extends IElement> objectClass, Long2ObjectOpenHashMap<IElement> data, long indexOffset) {
+          Class<? extends IElement> objectClass, Long2ObjectOpenHashMap<IElement> data, long indexOffset) {
     super(objectClass, indexOffset);
     this.data = data;
   }
@@ -72,6 +71,17 @@ public class LongElementMapStorage extends LongElementStorage {
     return result;
   }
 
+  public long getKey(int index) {
+    if (keys == null) {
+      synchronized (LongElementMapStorage.class) {
+        if (keys == null) {
+          keys = data.keySet().toLongArray();
+        }
+      }
+    }
+    return keys[index];
+  }
+
   @Override
   public void set(long[] indices, IElement[] values) {
     assert indices.length == values.length;
@@ -94,7 +104,7 @@ public class LongElementMapStorage extends LongElementStorage {
   public LongElementMapStorage deepClone() {
     Long2ObjectOpenHashMap<IElement> clonedData = new Long2ObjectOpenHashMap(data.size());
     ObjectIterator<Long2ObjectMap.Entry<IElement>> iter = clonedData
-        .long2ObjectEntrySet().fastIterator();
+            .long2ObjectEntrySet().fastIterator();
     while(iter.hasNext()) {
       Long2ObjectMap.Entry<IElement> entry = iter.next();
       clonedData.put(entry.getLongKey(), (IElement) entry.getValue().deepClone());
@@ -206,5 +216,20 @@ public class LongElementMapStorage extends LongElementStorage {
   @Override
   public int dataLen() {
     return bufferLen();
+  }
+
+  @Override
+  public long dataSize() {
+    long dataLen = super.bufferLen() + 4;
+
+    if (data != null) {
+      // Element data
+      for (Entry<Long, IElement> entry : data.entrySet()) {
+        if (entry != null && entry.getValue() != null)
+          dataLen += (8 + entry.getValue().bufferLen());
+      }
+    }
+
+    return dataLen;
   }
 }

@@ -60,4 +60,10 @@ public interface IGeneralServerPartitionOp extends Serialize, StreamSerialize {
    * @return total element in partition
    */
   long getElemNum();
+
+  /**
+   * Get data Size
+   * @return
+   */
+  long dataSize();
 }
