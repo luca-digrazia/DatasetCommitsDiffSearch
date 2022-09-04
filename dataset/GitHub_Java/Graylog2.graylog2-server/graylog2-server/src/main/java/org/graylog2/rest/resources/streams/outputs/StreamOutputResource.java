@@ -16,7 +16,6 @@
  */
 package org.graylog2.rest.resources.streams.outputs;
 
-import autovalue.shaded.com.google.common.common.collect.Sets;
 import com.codahale.metrics.annotation.Timed;
 import com.wordnik.swagger.annotations.Api;
 import com.wordnik.swagger.annotations.ApiOperation;
@@ -26,18 +25,13 @@ import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.outputs.OutputRegistry;
-import org.graylog2.plugin.database.ValidationException;
-import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
+import org.graylog2.database.ValidationException;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
-import org.graylog2.rest.helpers.OutputFilter;
-import org.graylog2.rest.models.system.outputs.responses.OutputSummary;
-import org.graylog2.shared.rest.resources.RestResource;
+import org.graylog2.rest.resources.RestResource;
 import org.graylog2.security.RestPermissions;
 import org.graylog2.streams.OutputService;
 import org.graylog2.streams.StreamService;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,8 +47,6 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Set;
 
 @RequiresAuthentication
@@ -65,15 +57,11 @@ public class StreamOutputResource extends RestResource {
 
     private final OutputService outputService;
     private final StreamService streamService;
-    private final OutputRegistry outputRegistry;
-    private final OutputFilter outputFilter;
 
     @Inject
-    public StreamOutputResource(OutputService outputService, StreamService streamService, OutputRegistry outputRegistry, OutputFilter outputFilter) {
+    public StreamOutputResource(OutputService outputService, StreamService streamService) {
         this.outputService = outputService;
         this.streamService = streamService;
-        this.outputRegistry = outputRegistry;
-        this.outputFilter = outputFilter;
     }
 
     @GET
@@ -90,20 +78,9 @@ public class StreamOutputResource extends RestResource {
         checkPermission(RestPermissions.STREAM_OUTPUTS_READ);
 
         final Stream stream = streamService.load(streamid);
-        final Set<OutputSummary> outputs = new HashSet<>();
+        final Set<Output> outputs = stream.getOutputs();
 
-        for (Output output : stream.getOutputs())
-            outputs.add(OutputSummary.create(
-                    output.getId(),
-                    output.getTitle(),
-                    output.getType(),
-                    output.getCreatorUserId(),
-                    new DateTime(output.getCreatedAt()),
-                    new HashMap<>(output.getConfiguration()),
-                    output.getContentPack()
-            ));
-
-        return OutputListResponse.create(outputFilter.filterPasswordFields(outputs));
+        return OutputListResponse.create(outputs.size(), outputs);
     }
 
     @GET
@@ -115,21 +92,12 @@ public class StreamOutputResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "No such stream/output on this node.")
     })
-    public OutputSummary get(@ApiParam(name = "streamid", value = "The id of the stream whose outputs we want.", required = true) @PathParam("streamid") String streamid,
+    public Output get(@ApiParam(name = "streamid", value = "The id of the stream whose outputs we want.", required = true) @PathParam("streamid") String streamid,
                       @ApiParam(name = "outputId", value = "The id of the output we want.", required = true) @PathParam("outputId") String outputId) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_READ, streamid);
         checkPermission(RestPermissions.STREAM_OUTPUTS_READ, outputId);
 
-        final Output output =  outputService.load(outputId);
-
-        try {
-            return outputFilter.filterPasswordFields(
-                    OutputSummary.create(output.getId(), output.getTitle(), output.getType(), output.getCreatorUserId(), new DateTime(output.getCreatedAt()), output.getConfiguration(), output.getContentPack())
-            );
-        } catch (MessageOutputConfigurationException e) {
-            LOG.error("Unable to filter configuration fields for output {}: ", output.getId(), e);
-            return null;
-        }
+        return outputService.load(outputId);
     }
 
     @POST
@@ -171,6 +139,5 @@ public class StreamOutputResource extends RestResource {
         final Output output = outputService.load(outputId);
 
         streamService.removeOutput(stream, output);
-        outputRegistry.removeOutput(output);
     }
 }
