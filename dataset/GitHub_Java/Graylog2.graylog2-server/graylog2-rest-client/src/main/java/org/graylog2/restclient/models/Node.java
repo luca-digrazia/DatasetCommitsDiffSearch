@@ -90,10 +90,6 @@ public class Node extends ClusterEntity {
 
     private AtomicInteger failureCount = new AtomicInteger(0);
 
-    private BufferInfo bufferInfo;
-    private BufferClassesResponse bufferClasses;
-    private JournalInfo journalInfo;
-
     /* for initial set up in test */
     public Node(NodeSummaryResponse r) {
         this(null, null, null, r);
@@ -133,55 +129,34 @@ public class Node extends ClusterEntity {
         fromConfiguration = true;
     }
 
-    public synchronized BufferInfo getBufferInfo() {
-        if (this.bufferInfo == null) {
-            this.bufferInfo = loadBufferInfo();
-        }
-        return this.bufferInfo;
-    }
-    
-    public BufferInfo loadBufferInfo() {
+    public BufferInfo getBufferInfo() {
         try {
             return new BufferInfo(
-                    api.path(routes.BufferResource().utilization(), BuffersResponse.class)
+                    api.path(routes.BuffersResource().utilization(), BuffersResponse.class)
                             .node(this)
                             .execute());
         } catch (Exception e) {
             LOG.error("Unable to read buffer info from node " + this, e);
         }
-        return BufferInfo.buildEmpty();
+        return null;
     }
 
-    public synchronized BufferClassesResponse getBufferClasses() {
-        if (this.bufferClasses == null) {
-            this.bufferClasses = loadBufferClasses();
-        }
-        return this.bufferClasses;
-    }
-    
-    public BufferClassesResponse loadBufferClasses() {
+    public BufferClassesResponse getBufferClasses() {
         try {
-            return api.path(routes.BufferResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
+            return api.path(routes.BuffersResource().getBufferClasses(), BufferClassesResponse.class).node(this).execute();
         } catch (Exception e) {
             LOG.error("Unable to read buffer class names from node " + this, e);
         }
-        return BufferClassesResponse.buildEmpty();
+        return null;
     }
 
-    public synchronized JournalInfo getJournalInfo() {
-        if (this.journalInfo == null) {
-            this.journalInfo = loadJournalInfo();
-        }
-        return this.journalInfo;
-    }
-    
-    public JournalInfo loadJournalInfo() {
+    public JournalInfo getJournalInfo() {
         try {
             return api.path(routes.JournalResource().show(), JournalInfo.class).node(this).execute();
         } catch (Exception e) {
             LOG.error("Unable to read journal info from node " + this, e);
         }
-        return JournalInfo.buildEmpty();
+        return null;
     }
 
     public Map<String, InternalLoggerSubsystem> allLoggerSubsystems() {
@@ -465,13 +440,13 @@ public class Node extends ClusterEntity {
     }
 
     public void pause() throws IOException, APIException {
-        api.path(routes.SystemResource().pauseProcessing())
+        api.path(routes.SystemProcessingResource().pauseProcessing())
                 .node(this)
                 .execute();
     }
 
     public void resume() throws IOException, APIException {
-        api.path(routes.SystemResource().resumeProcessing())
+        api.path(routes.SystemProcessingResource().resumeProcessing())
                 .node(this)
                 .execute();
     }
@@ -548,7 +523,7 @@ public class Node extends ClusterEntity {
     }
 
     public void shutdown() throws APIException, IOException {
-        api.path(routes.SystemResource().shutdown())
+        api.path(routes.SystemShutdownResource().shutdown())
                 .node(this)
                 .expect(Http.Status.ACCEPTED)
                 .execute();
@@ -609,15 +584,11 @@ public class Node extends ClusterEntity {
     }
 
     public void requireSystemInfo() {
-        if (this.systemInfo == null) {
-            this.systemInfo = firstNonNull(loadSystemInformation(), SystemOverviewResponse.buildEmpty());
-        }
+        this.systemInfo = firstNonNull(loadSystemInformation(), SystemOverviewResponse.buildEmpty());
     }
 
     public void requireJVMInfo() {
-        if (this.jvmInfo == null) {
-            this.jvmInfo = firstNonNull(loadJVMInformation(), NodeJVMStats.buildEmpty());
-        }
+        this.jvmInfo = firstNonNull(loadJVMInformation(), NodeJVMStats.buildEmpty());
     }
 
     @Override
