@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.Striped;
 import com.google.devtools.build.lib.actions.Action;
@@ -112,6 +111,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.Lock;
 import java.util.function.Supplier;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -134,7 +135,7 @@ public final class SkyframeActionExecutor {
     SUPPRESS
   }
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(SkyframeActionExecutor.class.getName());
 
   // Used to prevent check-then-act races in #createOutputDirectories. See the comment there for
   // more detail.
@@ -296,16 +297,14 @@ public final class SkyframeActionExecutor {
   FileSystem createActionFileSystem(
       String relativeOutputPath,
       ActionInputMap inputArtifactData,
-      Iterable<Artifact> outputArtifacts,
-      boolean trackFailedRemoteReads) {
+      Iterable<Artifact> outputArtifacts) {
     return outputService.createActionFileSystem(
         executorEngine.getFileSystem(),
         executorEngine.getExecRoot().asFragment(),
         relativeOutputPath,
         sourceRootSupplier.get(),
         inputArtifactData,
-        outputArtifacts,
-        trackFailedRemoteReads);
+        outputArtifacts);
   }
 
   void updateActionFileSystemContext(
@@ -447,8 +446,7 @@ public final class SkyframeActionExecutor {
       ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
       @Nullable FileSystem actionFileSystem,
       @Nullable Object skyframeDepsResult,
-      ExtendedEventHandler skyframeCachingEventHandler,
-      boolean rewindingEnabled) {
+      ExtendedEventHandler skyframeCachingEventHandler) {
     ArtifactPathResolver artifactPathResolver =
         ArtifactPathResolver.createPathResolver(actionFileSystem, executorEngine.getExecRoot());
     FileOutErr fileOutErr;
@@ -470,7 +468,6 @@ public final class SkyframeActionExecutor {
         actionInputPrefetcher,
         actionKeyContext,
         metadataHandler,
-        rewindingEnabled,
         lostInputsCheck(actionFileSystem, action, outputService),
         fileOutErr,
         replayActionOutErr && progressEventBehavior.equals(ProgressEventBehavior.EMIT)
@@ -634,7 +631,6 @@ public final class SkyframeActionExecutor {
             actionInputPrefetcher,
             actionKeyContext,
             metadataHandler,
-            env.restartPermitted(),
             lostInputsCheck(actionFileSystem, action, outputService),
             actionLogBufferPathGenerator.generate(
                 ArtifactPathResolver.createPathResolver(
@@ -809,7 +805,6 @@ public final class SkyframeActionExecutor {
       this.postprocessing = postprocessing;
     }
 
-    @SuppressWarnings("LogAndThrow") // Thrown exception shown in user output, not info logs.
     @Override
     public ActionStepOrResult run(SkyFunction.Environment env) throws InterruptedException {
       // There are three ExtendedEventHandler instances available while this method is running.
@@ -861,8 +856,11 @@ public final class SkyframeActionExecutor {
               // keep previous outputs in place.
               action.prepare(actionExecutionContext.getExecRoot());
             } catch (IOException e) {
-              logger.atWarning().withCause(e).log(
-                  "failed to delete output files before executing action: '%s'", action);
+              logger.log(
+                  Level.WARNING,
+                  String.format(
+                      "failed to delete output files before executing action: '%s'", action),
+                  e);
               throw toActionExecutionException(
                   "failed to delete output files before executing action", e, action, null);
             }
@@ -983,7 +981,6 @@ public final class SkyframeActionExecutor {
       }
     }
 
-    @SuppressWarnings("LogAndThrow") // Thrown exception shown in user output, not info logs.
     private ActionExecutionValue actuallyCompleteAction(
         ExtendedEventHandler eventHandler, ActionResult actionResult)
         throws ActionExecutionException, InterruptedException {
@@ -1027,7 +1024,7 @@ public final class SkyframeActionExecutor {
               profiler.profile(ProfilerTask.INFO, "outputService.finalizeAction")) {
             outputService.finalizeAction(action, metadataHandler);
           } catch (EnvironmentalExecException | IOException e) {
-            logger.atWarning().withCause(e).log("unable to finalize action: '%s'", action);
+            logger.log(Level.WARNING, String.format("unable to finalize action: '%s'", action), e);
             throw toActionExecutionException("unable to finalize action", e, action, fileOutErr);
           }
         }
@@ -1359,9 +1356,13 @@ public final class SkyframeActionExecutor {
       Action action, Artifact output, Reporter reporter, boolean isSymlink, IOException exception) {
     boolean genrule = action.getMnemonic().equals("Genrule");
     String prefix = (genrule ? "declared output '" : "output '") + output.prettyPrint() + "' ";
-    logger.atWarning().log(
-        "Error creating %s%s%s: %s",
-        isSymlink ? "symlink " : "", prefix, genrule ? " by genrule" : "", exception.getMessage());
+    logger.warning(
+        String.format(
+            "Error creating %s%s%s: %s",
+            isSymlink ? "symlink " : "",
+            prefix,
+            genrule ? " by genrule" : "",
+            exception.getMessage()));
     if (isSymlink) {
       String msg = prefix + "is a dangling symbolic link";
       reporter.handle(Event.error(action.getOwner().getLocation(), msg));

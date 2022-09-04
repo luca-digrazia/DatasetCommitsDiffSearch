@@ -67,8 +67,8 @@ import com.google.devtools.build.lib.pkgcache.PackageManager.PackageManagerStati
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.AspectValue;
-import com.google.devtools.build.lib.skyframe.AspectValueKey;
-import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
+import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
+import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.CoverageReportValue;
@@ -300,7 +300,7 @@ public class BuildView {
       // Syntax: label%aspect
       int delimiterPosition = aspect.indexOf('%');
       if (delimiterPosition >= 0) {
-        // TODO(jfield): For consistency with Starlark loads, the aspect should be specified
+        // TODO(jfield): For consistency with Skylark loads, the aspect should be specified
         // as an absolute label.
         // We convert it for compatibility reasons (this will be removed in the future).
         String bzlFileLoadLikeString = aspect.substring(0, delimiterPosition);
@@ -343,7 +343,7 @@ public class BuildView {
           aspectConfigurations.put(
               Pair.of(targetSpec.getLabel(), aspect), targetSpec.getConfiguration());
           aspectKeys.add(
-              AspectValueKey.createSkylarkAspectKey(
+              AspectValue.createSkylarkAspectKey(
                   targetSpec.getLabel(),
                   // For invoking top-level aspects, use the top-level configuration for both the
                   // aspect and the base target while the top-level configuration is untrimmed.
@@ -368,11 +368,12 @@ public class BuildView {
             BuildConfiguration configuration = targetSpec.getConfiguration();
             aspectConfigurations.put(Pair.of(targetSpec.getLabel(), aspect), configuration);
             aspectKeys.add(
-                AspectValueKey.createAspectKey(
+                AspectValue.createAspectKey(
                     targetSpec.getLabel(),
                     configuration,
                     new AspectDescriptor(aspectFactoryClass, AspectParameters.EMPTY),
-                    configuration));
+                    configuration
+                ));
           }
         } else {
           throw new ViewCreationFailedException("Aspect '" + aspect + "' is unknown");
