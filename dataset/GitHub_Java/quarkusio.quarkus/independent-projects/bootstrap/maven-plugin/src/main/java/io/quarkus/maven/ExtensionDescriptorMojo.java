@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -20,21 +19,16 @@ import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
-import org.eclipse.aether.artifact.Artifact;
 import org.eclipse.aether.repository.RemoteRepository;
 
-import com.fasterxml.jackson.core.JsonParseException;
-import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategy;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import io.quarkus.bootstrap.BootstrapConstants;
-
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 
 /**
@@ -54,7 +48,6 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
     private static final String ARTIFACT_ID = "artifact-id";
 
     private static DefaultPrettyPrinter prettyPrinter = null;
-    
     /**
      * The entry point to Aether, i.e. the component doing all the work.
      *
@@ -91,10 +84,9 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
     @Parameter(required = true, defaultValue = "${project.groupId}:${project.artifactId}-deployment:${project.version}")
     private String deployment;
 
-    @Parameter(required = true, defaultValue = "${project.build.outputDirectory}/META-INF/quarkus-extension.yaml")
-    private File extensionFile;
+    @Parameter(required = true, defaultValue = "${project.build.outputDirectory}/META-INF/quarkus-extension.json")
+    private File extensionJson;
 
-    
     @Parameter(defaultValue = "${project}")
     protected MavenProject project;
 
@@ -120,31 +112,23 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
         }
 
         // extension.json
-        if (extensionFile == null) {
-            extensionFile = new File(outputDirectory,
-                    "META-INF" + File.separator + BootstrapConstants.QUARKUS_EXTENSION_FILE_NAME);
-        }
-
+        ObjectMapper mapper = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
         ObjectNode extObject;
-        if (!extensionFile.exists()) {
-            // if does not exist look for fallback .json
-            extensionFile = new File(extensionFile.getParent(), "quarkus-extension.json");
+        if (extensionJson == null) {
+            extensionJson = new File(outputDirectory,
+                    "META-INF" + File.separator + BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME);
         }
 
-        ObjectMapper mapper = null;
-        if (extensionFile.exists()) {
-            mapper = getMapper(extensionFile.toString().endsWith(".yaml"));
-
-            try {
-                extObject = processPlatformArtifact(extensionFile.toPath(), mapper);
+        if (extensionJson.exists()) {
+            try (BufferedReader reader = Files.newBufferedReader(extensionJson.toPath())) {
+                extObject = (ObjectNode) mapper.readTree(reader);
             } catch (IOException e) {
-                throw new MojoExecutionException("Failed to parse " + extensionFile, e);
+                throw new MojoExecutionException("Failed to parse " + extensionJson, e);
             }
         } else {
-            mapper = getMapper(true);
-            extObject = getMapper(true).createObjectNode();
+            extObject = mapper.createObjectNode();
         }
-        
+
         transformLegacyToNew(output, extObject, mapper);
 
         if (extObject.get("groupId") == null) {
@@ -194,11 +178,11 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
         }
 
         try (BufferedWriter bw = Files
-                .newBufferedWriter(output.resolve(BootstrapConstants.QUARKUS_EXTENSION_FILE_NAME))) {
-            bw.write(getMapper(true).writer(prettyPrinter).writeValueAsString(extObject));
+                .newBufferedWriter(output.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME))) {
+            bw.write(mapper.writer(prettyPrinter).writeValueAsString(extObject));
         } catch (IOException e) {
             throw new MojoExecutionException(
-                    "Failed to persist " + output.resolve(BootstrapConstants.QUARKUS_EXTENSION_FILE_NAME), e);
+                    "Failed to persist " + output.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME), e);
         }
     }
 
@@ -242,54 +226,7 @@ public class ExtensionDescriptorMojo extends AbstractMojo {
         }
 
         extObject.set("metadata", metadata);
-        
-        
-    //   updateSourceFiles(output, extObject, mapper);
 
-    }
-
-    /** parse yaml or json and then return jackson JSonNode for furhter processing 
-     * 
-     ***/
-    private ObjectNode processPlatformArtifact(Path descriptor, ObjectMapper mapper)
-            throws IOException {
-        try (InputStream is = Files.newInputStream(descriptor)) {
-                return mapper.readValue(is, ObjectNode.class);
-         } catch (IOException io) {
-            throw new IOException("Failed to parse " + descriptor, io);
-        }
-    }
-
-    private ObjectMapper getMapper(boolean yaml) {
-
-        if (yaml) {
-            YAMLFactory yf = new YAMLFactory();
-            return new ObjectMapper(yf)
-                   .setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);
-        } else {
-            return new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
-                    .enable(JsonParser.Feature.ALLOW_COMMENTS).enable(JsonParser.Feature.ALLOW_NUMERIC_LEADING_ZEROS).setPropertyNamingStrategy(PropertyNamingStrategy.KEBAB_CASE);                
-        }
-    }
-
-    private void updateSourceFiles(final Path output, ObjectNode extObject, ObjectMapper mapper) throws MojoExecutionException {
-        // TODO: remove before going to master
-        Path source = output
-                .resolve("../../../src/main/resources/META-INF/");
-        System.out.println("Try to save " + source);
-        if (source.toFile().exists()) {
-            try (BufferedWriter by = Files.newBufferedWriter(source.resolve(BootstrapConstants.QUARKUS_EXTENSION_FILE_NAME))) {
-
-                YAMLFactory yf = new YAMLFactory();
-                ObjectMapper ym = new ObjectMapper(yf).enable(SerializationFeature.INDENT_OUTPUT);
-                by.write(ym.writer(prettyPrinter).writeValueAsString(extObject));
-
-                //        source.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME).toFile().delete();
-            } catch (IOException e) {
-                throw new MojoExecutionException(
-                        "Failed to persist " + output.resolve(BootstrapConstants.EXTENSION_PROPS_JSON_FILE_NAME), e);
-            }
-        }
     }
 
 }
