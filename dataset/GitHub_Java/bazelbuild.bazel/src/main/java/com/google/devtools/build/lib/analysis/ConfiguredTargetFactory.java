@@ -180,7 +180,7 @@ public final class ConfiguredTargetFactory {
       ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts)
+      @Nullable ResolvedToolchainContext toolchainContext)
       throws InterruptedException, ActionConflictException {
     if (target instanceof Rule) {
       try {
@@ -193,7 +193,7 @@ public final class ConfiguredTargetFactory {
             configuredTargetKey,
             prerequisiteMap,
             configConditions,
-            toolchainContexts);
+            toolchainContext);
       } finally {
         CurrentRuleTracker.endConfiguredTarget();
       }
@@ -238,7 +238,7 @@ public final class ConfiguredTargetFactory {
           artifactFactory.getSourceArtifact(
               inputFile.getExecPath(
                   analysisEnvironment.getSkylarkSemantics().experimentalSiblingRepositoryLayout()),
-              inputFile.getPackage().getSourceRoot().get(),
+              inputFile.getPackage().getSourceRoot(),
               ConfiguredTargetKey.of(target.getLabel(), config));
       return new InputFileConfiguredTarget(targetContext, inputFile, artifact);
     } else if (target instanceof PackageGroup) {
@@ -407,7 +407,7 @@ public final class ConfiguredTargetFactory {
       ConfiguredTargetKey configuredTargetKey,
       OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
-      @Nullable ToolchainCollection<ResolvedToolchainContext> toolchainContexts)
+      @Nullable ResolvedToolchainContext toolchainContext)
       throws InterruptedException, ActionConflictException {
     ConfigurationFragmentPolicy configurationFragmentPolicy =
         rule.getRuleClassObject().getConfigurationFragmentPolicy();
@@ -426,7 +426,7 @@ public final class ConfiguredTargetFactory {
             .setPrerequisites(transformPrerequisiteMap(prerequisiteMap, rule))
             .setConfigConditions(configConditions)
             .setUniversalFragments(ruleClassProvider.getUniversalFragments())
-            .setToolchainContexts(toolchainContexts)
+            .setToolchainContext(toolchainContext)
             .setConstraintSemantics(ruleClassProvider.getConstraintSemantics())
             .setRequiredConfigFragments(
                 getRequiredConfigFragments(
