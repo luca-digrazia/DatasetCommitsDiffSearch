@@ -165,7 +165,6 @@ class PlaceholderIdFieldInitializerBuilder {
 
   private static String normalizeAttrName(String attrName) {
     // In addition to ".", attributes can have ":", e.g., for "android:textColor".
-    Preconditions.checkArgument(!attrName.contains("::"), "invalid name %s", attrName);
     return normalizeName(attrName).replace(':', '_');
   }
 
@@ -241,7 +240,7 @@ class PlaceholderIdFieldInitializerBuilder {
       styleableAttrs.put(normalizedStyleableName, normalizedAttrs);
     }
     for (Map.Entry<FullyQualifiedName, Boolean> attrEntry : attrs.entrySet()) {
-      String normalizedAttrName = normalizeAttrName(attrEntry.getKey().qualifiedName());
+      String normalizedAttrName = normalizeAttrName(attrEntry.getKey().name());
       normalizedAttrs.put(normalizedAttrName, attrEntry.getValue());
     }
   }
