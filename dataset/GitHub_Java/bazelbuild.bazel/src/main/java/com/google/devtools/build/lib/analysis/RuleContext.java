@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.collect.ImmutableBiMap;
@@ -74,7 +73,7 @@ import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.InputFile;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.OutputFile;
-import com.google.devtools.build.lib.packages.PackageSpecification.PackageGroupContents;
+import com.google.devtools.build.lib.packages.PackageSpecification;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.RequiredProviders;
 import com.google.devtools.build.lib.packages.Rule;
@@ -88,6 +87,7 @@ import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.syntax.Type.LabelClass;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -1303,8 +1303,8 @@ public final class RuleContext extends TargetContext
    */
   public static boolean isVisible(Rule rule, TransitiveInfoCollection prerequisite) {
     // Check visibility attribute
-    for (PackageGroupContents specification :
-        prerequisite.getProvider(VisibilityProvider.class).getVisibility()) {
+    for (PackageSpecification specification :
+      prerequisite.getProvider(VisibilityProvider.class).getVisibility()) {
       if (specification.containsPackage(rule.getLabel().getPackageIdentifier())) {
         return true;
       }
@@ -1339,7 +1339,7 @@ public final class RuleContext extends TargetContext
     private final ErrorReporter reporter;
     private OrderedSetMultimap<Attribute, ConfiguredTarget> prerequisiteMap;
     private ImmutableMap<Label, ConfigMatchingProvider> configConditions;
-    private NestedSet<PackageGroupContents> visibility;
+    private NestedSet<PackageSpecification> visibility;
     private ImmutableMap<String, Attribute> aspectAttributes;
     private ImmutableList<AspectDescriptor> aspectDescriptors;
     private ToolchainContext toolchainContext;
@@ -1387,7 +1387,7 @@ public final class RuleContext extends TargetContext
       rule.getRuleClassObject().checkAttributesNonEmpty(rule, reporter, attributes);
     }
 
-    Builder setVisibility(NestedSet<PackageGroupContents> visibility) {
+    Builder setVisibility(NestedSet<PackageSpecification> visibility) {
       this.visibility = visibility;
       return this;
     }

@@ -14,15 +14,16 @@
 
 package com.google.devtools.build.lib.analysis;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier.MapBackedMakeVariableSupplier;
+import com.google.devtools.build.lib.analysis.MakeVariableSupplier.PackageBackedMakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
+import com.google.devtools.build.lib.util.Preconditions;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -79,7 +80,7 @@ public class ConfigurationMakeVariableContext implements TemplateContext {
             .addAll(Preconditions.checkNotNull(extraMakeVariableSuppliers))
             .add(new MapBackedMakeVariableSupplier(ruleMakeVariables))
             .add(new MapBackedMakeVariableSupplier(configuration.getCommandLineBuildVariables()))
-            .add(new MapBackedMakeVariableSupplier(pkg.getMakeEnvironment()))
+            .add(new PackageBackedMakeVariableSupplier(pkg, configuration.getPlatformName()))
             .add(new MapBackedMakeVariableSupplier(configuration.getGlobalMakeEnvironment()))
             .build();
   }

@@ -72,21 +72,20 @@ public final class LocationExpander {
     ALLOW_DATA,
   }
 
-  private static final boolean EXACTLY_ONE = false;
-  private static final boolean ALLOW_MULTIPLE = true;
-
-  private static final boolean USE_ROOT_PATHS = false;
-  private static final boolean USE_EXEC_PATHS = true;
+  private static final String LOCATION = "$(location";
 
   private final RuleErrorConsumer ruleErrorConsumer;
-  private final ImmutableMap<String, Function<String, String>> functions;
+  private final Function<String, String> locationFunction;
+  private final Function<String, String> locationsFunction;
 
   @VisibleForTesting
   LocationExpander(
       RuleErrorConsumer ruleErrorConsumer,
-      Map<String, Function<String, String>> functions) {
+      Function<String, String> locationFunction,
+      Function<String, String> locationsFunction) {
     this.ruleErrorConsumer = ruleErrorConsumer;
-    this.functions = ImmutableMap.copyOf(functions);
+    this.locationFunction = locationFunction;
+    this.locationsFunction = locationsFunction;
   }
 
   private LocationExpander(
@@ -96,7 +95,8 @@ public final class LocationExpander {
       boolean execPaths) {
     this(
         ruleErrorConsumer,
-        allLocationFunctions(root, locationMap, execPaths));
+        new LocationFunction(root, locationMap, execPaths, false),
+        new LocationFunction(root, locationMap, execPaths, true));
   }
 
   /**
@@ -167,40 +167,44 @@ public final class LocationExpander {
     StringBuilder result = new StringBuilder(value.length());
 
     while (true) {
-      // (1) Find '$(<fname> '.
-      int start = value.indexOf("$(", restart);
-      if (start == -1) {
+      // (1) Find '$(location ' or '$(locations '.
+      Function<String, String> func = locationFunction;
+      int start = value.indexOf(LOCATION, restart);
+      int scannedLength = LOCATION.length();
+      if (start == -1 || start + scannedLength == attrLength) {
         result.append(value.substring(restart));
         break;
       }
-      int nextWhitespace = value.indexOf(' ', start);
-      if (nextWhitespace == -1) {
-        result.append(value, restart, start + 2);
-        restart = start + 2;
-        continue;
+      if (value.charAt(start + scannedLength) == 's') {
+        scannedLength++;
+        if (start + scannedLength == attrLength) {
+          result.append(value.substring(restart));
+          break;
+        }
+        func = locationsFunction;
       }
-      String fname = value.substring(start + 2, nextWhitespace);
-      if (!functions.containsKey(fname)) {
-        result.append(value, restart, start + 2);
-        restart = start + 2;
+      if (value.charAt(start + scannedLength) != ' ') {
+        result.append(value, restart, start + scannedLength);
+        restart = start + scannedLength;
         continue;
       }
 
       result.append(value, restart, start);
+      scannedLength++;
 
-      int end = value.indexOf(')', nextWhitespace);
+      int end = value.indexOf(')', start + scannedLength);
       if (end == -1) {
         reporter.report(
             String.format(
                 "unterminated $(%s) expression",
-                value.substring(start + 2, nextWhitespace)));
+                value.substring(start + 2, start + scannedLength - 1)));
         return value;
       }
 
       // (2) Call appropriate function to obtain string replacement.
-      String functionValue = value.substring(nextWhitespace + 1, end).trim();
+      String functionValue = value.substring(start + scannedLength, end).trim();
       try {
-        String replacement = functions.get(fname).apply(functionValue);
+        String replacement = func.apply(functionValue);
         result.append(replacement);
       } catch (IllegalStateException ise) {
         reporter.report(ise.getMessage());
@@ -316,18 +320,6 @@ public final class LocationExpander {
     private String functionName() {
       return multiple ? "$(locations)" : "$(location)";
     }
-  }
-
-  static ImmutableMap<String, Function<String, String>> allLocationFunctions(
-      Label root, Supplier<Map<Label, Collection<Artifact>>> locationMap, boolean execPaths) {
-    return new ImmutableMap.Builder<String, Function<String, String>>()
-        .put("location", new LocationFunction(root, locationMap, execPaths, EXACTLY_ONE))
-        .put("locations", new LocationFunction(root, locationMap, execPaths, ALLOW_MULTIPLE))
-        .put("rootpath", new LocationFunction(root, locationMap, USE_ROOT_PATHS, EXACTLY_ONE))
-        .put("rootpaths", new LocationFunction(root, locationMap, USE_ROOT_PATHS, ALLOW_MULTIPLE))
-        .put("execpath", new LocationFunction(root, locationMap, USE_EXEC_PATHS, EXACTLY_ONE))
-        .put("execpaths", new LocationFunction(root, locationMap, USE_EXEC_PATHS, ALLOW_MULTIPLE))
-        .build();
   }
 
   /**

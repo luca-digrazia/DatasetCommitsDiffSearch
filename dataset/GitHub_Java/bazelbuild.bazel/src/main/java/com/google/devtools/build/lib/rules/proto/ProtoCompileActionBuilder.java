@@ -390,10 +390,6 @@ public class ProtoCompileActionBuilder {
     return new ToolchainInvocation(
         "dontcare",
         ProtoLangToolchainProvider.create(
-            // Note: adding --include_imports here was requested multiple times, but it'll cause the
-            // output size to become quadratic, so don't.
-            // A rule that concatenates the artifacts from ctx.deps.proto.transitive_descriptor_sets
-            // provides similar results.
             "--descriptor_set_out=$(OUT)",
             null /* pluginExecutable */,
             null /* runtime */,

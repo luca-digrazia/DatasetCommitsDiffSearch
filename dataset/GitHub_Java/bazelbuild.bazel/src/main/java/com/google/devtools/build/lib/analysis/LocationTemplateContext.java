@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.LocationExpander.LocationFunction;
 import com.google.devtools.build.lib.analysis.LocationExpander.Options;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
@@ -48,7 +49,8 @@ import javax.annotation.Nullable;
  */
 final class LocationTemplateContext implements TemplateContext {
   private final TemplateContext delegate;
-  private final ImmutableMap<String, Function<String, String>> functions;
+  private final Function<String, String> locationFunction;
+  private final Function<String, String> locationsFunction;
 
   private LocationTemplateContext(
       TemplateContext delegate,
@@ -56,7 +58,8 @@ final class LocationTemplateContext implements TemplateContext {
       Supplier<Map<Label, Collection<Artifact>>> locationMap,
       boolean execPaths) {
     this.delegate = delegate;
-    this.functions = LocationExpander.allLocationFunctions(root, locationMap, execPaths);
+    this.locationFunction = new LocationFunction(root, locationMap, execPaths, false);
+    this.locationsFunction = new LocationFunction(root, locationMap, execPaths, true);
   }
 
   private LocationTemplateContext(
@@ -95,9 +98,10 @@ final class LocationTemplateContext implements TemplateContext {
   @Override
   public String lookupFunction(String name, String param) throws ExpansionException {
     try {
-      Function<String, String> f = functions.get(name);
-      if (f != null) {
-        return f.apply(param);
+      if ("location".equals(name)) {
+        return locationFunction.apply(param);
+      } else if ("locations".equals(name)) {
+        return locationsFunction.apply(param);
       }
     } catch (IllegalStateException e) {
       throw new ExpansionException(e.getMessage(), e);
