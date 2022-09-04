@@ -335,9 +335,7 @@ public class QuarkusTestExtension
                             getAdditionalTestResources(profileInstance, startupAction.getClassLoader()),
                             profileInstance != null && profileInstance.disableGlobalTestResources());
             testResourceManager.getClass().getMethod("init").invoke(testResourceManager);
-            Map<String, String> properties = (Map<String, String>) testResourceManager.getClass().getMethod("start")
-                    .invoke(testResourceManager);
-            startupAction.overrideConfig(properties);
+            testResourceManager.getClass().getMethod("start").invoke(testResourceManager);
             hasPerTestResources = (boolean) testResourceManager.getClass().getMethod("hasPerTestResources")
                     .invoke(testResourceManager);
 

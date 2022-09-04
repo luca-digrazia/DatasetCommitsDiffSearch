@@ -399,8 +399,7 @@ public class VertxHttpRecorder {
             } else {
                 receiver = new JBossLoggingAccessLogReceiver(accessLog.category);
             }
-            AccessLogHandler handler = new AccessLogHandler(receiver, accessLog.pattern, getClass().getClassLoader(),
-                    accessLog.excludePattern);
+            AccessLogHandler handler = new AccessLogHandler(receiver, accessLog.pattern, getClass().getClassLoader());
             httpRouteRouter.route().order(Integer.MIN_VALUE).handler(handler);
             quarkusWrapperNeeded = true;
         }
