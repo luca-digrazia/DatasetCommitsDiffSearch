@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,16 +15,7 @@
  */
 package org.androidannotations.handler.rest;
 
-import java.util.List;
-import java.util.Locale;
-import java.util.TreeMap;
-
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
-import javax.lang.model.element.VariableElement;
-import javax.lang.model.type.TypeKind;
-
+import com.sun.codemodel.*;
 import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.helper.CanonicalNameConstants;
@@ -33,21 +24,14 @@ import org.androidannotations.holder.RestHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 
-import com.sun.codemodel.JArray;
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCatchBlock;
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JConditional;
-import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JForEach;
-import com.sun.codemodel.JInvocation;
-import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JMod;
-import com.sun.codemodel.JOp;
-import com.sun.codemodel.JTryBlock;
-import com.sun.codemodel.JType;
-import com.sun.codemodel.JVar;
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.TypeKind;
+import java.util.List;
+import java.util.Locale;
+import java.util.TreeMap;
 
 public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder> {
 
@@ -224,32 +208,30 @@ public abstract class RestMethodHandler extends BaseAnnotationHandler<RestHolder
 	 * that it behaves as it did previous to this feature.
 	 */
 	private JBlock surroundWithRestTryCatch(RestHolder holder, JBlock block, boolean methodReturnVoid) {
-		if (holder.getRestErrorHandlerField() != null) {
-			JBlock newBlock = new JBlock(false, false);
+		JBlock newBlock = new JBlock(false, false);
 
-			JTryBlock tryBlock = newBlock._try();
-			codeModelHelper.copy(block, tryBlock.body());
+		JTryBlock tryBlock = newBlock._try();
+		codeModelHelper.copy(block, tryBlock.body());
 
-			JCatchBlock jCatch = tryBlock._catch(classes().NESTED_RUNTIME_EXCEPTION);
+		JCatchBlock jCatch = tryBlock._catch(classes().REST_CLIENT_EXCEPTION);
 
-			JBlock catchBlock = jCatch.body();
-			JConditional conditional = catchBlock._if(JOp.ne(holder.getRestErrorHandlerField(), JExpr._null()));
-			JVar exceptionParam = jCatch.param("e");
+		JBlock catchBlock = jCatch.body();
+		JConditional conditional = catchBlock._if(JOp.ne(holder.getRestErrorHandlerField(), JExpr._null()));
+		JVar exceptionParam = jCatch.param("e");
 
-			JBlock thenBlock = conditional._then();
+		JBlock thenBlock = conditional._then();
 
-			// call the handler method if it was set.
-			thenBlock.add(holder.getRestErrorHandlerField().invoke("onRestClientExceptionThrown").arg(exceptionParam));
+		// call the handler method if it was set.
+		thenBlock.add(holder.getRestErrorHandlerField().invoke("onRestClientExceptionThrown").arg(exceptionParam));
 
-			// return null if exception was caught and handled.
-			if (!methodReturnVoid) {
-				thenBlock._return(JExpr._null());
-			}
-
-			// re-throw the exception if handler wasn't set.
-			conditional._else()._throw(exceptionParam);
-			return newBlock;
+		// return null if exception was caught and handled.
+		if (!methodReturnVoid) {
+			thenBlock._return(JExpr._null());
 		}
-		return block;
+
+		// re-throw the exception if handler wasn't set.
+		conditional._else()._throw(exceptionParam);
+
+		return newBlock;
 	}
 }
