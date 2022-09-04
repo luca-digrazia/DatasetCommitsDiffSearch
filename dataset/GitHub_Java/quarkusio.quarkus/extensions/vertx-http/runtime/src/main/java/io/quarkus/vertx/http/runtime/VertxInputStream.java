@@ -21,16 +21,14 @@ import io.vertx.ext.web.RoutingContext;
 
 public class VertxInputStream extends InputStream {
 
-    public static final String CONTINUE = "100-continue";
     private final VertxBlockingInput exchange;
 
     private boolean closed;
     private boolean finished;
     private ByteBuf pooled;
     private final long limit;
-    private ContinueState continueState = ContinueState.NONE;
 
-    public VertxInputStream(RoutingContext request, long timeout) {
+    public VertxInputStream(RoutingContext request, long timeout) throws IOException {
         this.exchange = new VertxBlockingInput(request.request(), timeout);
         Long limitObj = request.get(VertxHttpRecorder.MAX_REQUEST_SIZE_KEY);
         if (limitObj == null) {
@@ -38,21 +36,6 @@ public class VertxInputStream extends InputStream {
         } else {
             limit = limitObj;
         }
-        String expect = request.request().getHeader(HttpHeaderNames.EXPECT);
-        if (expect != null && expect.equalsIgnoreCase(CONTINUE)) {
-            continueState = ContinueState.REQUIRED;
-        }
-    }
-
-    public VertxInputStream(RoutingContext request, long timeout, ByteBuf existing) {
-        this.exchange = new VertxBlockingInput(request.request(), timeout);
-        Long limitObj = request.get(VertxHttpRecorder.MAX_REQUEST_SIZE_KEY);
-        if (limitObj == null) {
-            limit = -1;
-        } else {
-            limit = limitObj;
-        }
-        this.pooled = existing;
     }
 
     @Override
@@ -74,10 +57,6 @@ public class VertxInputStream extends InputStream {
     public int read(final byte[] b, final int off, final int len) throws IOException {
         if (closed) {
             throw new IOException("Stream is closed");
-        }
-        if (continueState == ContinueState.REQUIRED) {
-            continueState = ContinueState.SENT;
-            exchange.request.response().writeContinue();
         }
         readIntoBuffer();
         if (limit > 0 && exchange.request.bytesRead() > limit) {
@@ -172,7 +151,7 @@ public class VertxInputStream extends InputStream {
         protected Throwable readException;
         private final long timeout;
 
-        public VertxBlockingInput(HttpServerRequest request, long timeout) {
+        public VertxBlockingInput(HttpServerRequest request, long timeout) throws IOException {
             this.request = request;
             this.timeout = timeout;
             final ConnectionBase connection = (ConnectionBase) request.connection();
@@ -298,9 +277,4 @@ public class VertxInputStream extends InputStream {
         }
     }
 
-    enum ContinueState {
-        NONE,
-        REQUIRED,
-        SENT;
-    }
 }
