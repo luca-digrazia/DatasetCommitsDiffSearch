@@ -1,6 +1,5 @@
 package io.quarkus.vertx.http.runtime.devmode;
 
-import io.quarkus.dev.ErrorPageGenerators;
 import io.quarkus.dev.spi.HotReplacementContext;
 import io.quarkus.dev.spi.HotReplacementSetup;
 import io.quarkus.vertx.http.runtime.VertxHttpRecorder;
@@ -61,7 +60,7 @@ public class VertxHttpHotReplacementSetup implements HotReplacementSetup {
                         try {
                             restart = hotReplacementContext.doScan(true);
                         } catch (Exception e) {
-                            event.fail(new IllegalStateException("Unable to perform live reload scanning", e));
+                            event.fail(new IllegalStateException("Unable to perform hot replacement scanning", e));
                             return;
                         }
                     }
@@ -101,7 +100,6 @@ public class VertxHttpHotReplacementSetup implements HotReplacementSetup {
 
     @Override
     public void close() {
-        ErrorPageGenerators.clear();
         VertxHttpRecorder.shutDownDevMode();
     }
 }
