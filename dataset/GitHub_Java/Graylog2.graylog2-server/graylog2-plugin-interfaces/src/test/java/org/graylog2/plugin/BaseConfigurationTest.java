@@ -28,39 +28,41 @@ import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.InMemoryRepository;
 import com.google.common.collect.Maps;
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.testng.Assert;
+import org.testng.annotations.AfterMethod;
+import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.Test;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.URI;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
+import static org.testng.AssertJUnit.assertEquals;
 
 public class BaseConfigurationTest {
     private class Configuration extends BaseConfiguration {
+        @Parameter(value = "rest_listen_uri", required = true)
+        private URI restListenUri = URI.create("http://127.0.0.1:12900/");
+
+        @Parameter(value = "node_id_file", required = false)
+        private String nodeIdFile = "/etc/graylog/server/node-id";
+
         @Override
         public String getNodeIdFile() {
-            return "/etc/graylog/server/node-id";
+            return nodeIdFile;
         }
 
         @Override
         public URI getRestListenUri() {
-            return Tools.getUriWithPort(URI.create("http://127.0.0.1:12900/"), BaseConfiguration.GRAYLOG2_DEFAULT_PORT);
-        }
-
-        @Override
-        public URI getWebListenUri() {
-            return Tools.getUriWithPort(URI.create("http://127.0.0.1:9000/"), BaseConfiguration.GRAYLOG2_DEFAULT_WEB_PORT);
+            return Tools.getUriWithPort(restListenUri, BaseConfiguration.GRAYLOG2_DEFAULT_PORT);
         }
     }
 
     private Map<String, String> validProperties;
     private File tempFile;
 
-    @Before
+    @BeforeMethod
     public void setUp() throws Exception {
         validProperties = Maps.newHashMap();
         tempFile = File.createTempFile("graylog", null);
@@ -79,7 +81,7 @@ public class BaseConfigurationTest {
         validProperties.put("root_password_sha2", "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"); // sha2 of admin
     }
 
-    @After
+    @AfterMethod
     public void tearDown() {
         if(tempFile != null) {
             tempFile.delete();

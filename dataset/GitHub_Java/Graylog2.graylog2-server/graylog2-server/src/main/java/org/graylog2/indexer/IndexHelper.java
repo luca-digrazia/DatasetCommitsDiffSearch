@@ -96,9 +96,8 @@ public class IndexHelper {
         }
 
         // Always include the most recent index in some cases.
-        final String targetIndex = deflector.getCurrentActualTargetIndex();
-        if (targetIndex != null && (indices.isEmpty() || range instanceof RelativeRange)) {
-            indices.add(targetIndex);
+        if (indices.isEmpty() || range instanceof RelativeRange) {
+            indices.add(deflector.getCurrentActualTargetIndex());
         }
 
         return indices;
@@ -107,17 +106,21 @@ public class IndexHelper {
     public static Set<IndexRange> determineAffectedIndicesWithRanges(IndexRangeService indexRangeService,
                                                                      Deflector deflector,
                                                                      TimeRange range) {
-        Set<IndexRange> indices = Sets.newTreeSet(IndexRange.COMPARATOR);
+        Set<IndexRange> indices = Sets.newTreeSet(new Comparator<IndexRange>() {
+            @Override
+            public int compare(IndexRange o1, IndexRange o2) {
+                return o2.getStart().compareTo(o1.getStart());
+            }
+        });
 
         for (IndexRange indexRange : indexRangeService.getFrom((int) (range.getFrom().getMillis() / 1000))) {
             indices.add(indexRange);
         }
 
         // Always include the most recent index in some cases.
-        final String targetIndex = deflector.getCurrentActualTargetIndex();
-        if (targetIndex != null && (indices.isEmpty() || range instanceof RelativeRange)) {
+        if (indices.isEmpty() || range instanceof RelativeRange) {
             try {
-                final IndexRange deflectorIndexRange = indexRangeService.get(targetIndex);
+                final IndexRange deflectorIndexRange = indexRangeService.get(deflector.getCurrentActualTargetIndex());
                 indices.add(deflectorIndexRange);
             } catch (NotFoundException e) {
                 LOG.warn("Couldn't find latest deflector target index", e);

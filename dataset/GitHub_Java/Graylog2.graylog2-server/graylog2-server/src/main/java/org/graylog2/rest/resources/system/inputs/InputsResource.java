@@ -61,6 +61,7 @@ import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import javax.ws.rs.core.UriBuilder;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -213,7 +214,7 @@ public class InputsResource extends RestResource {
             inputLauncher.launch(input);
         }
 
-        final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
+        final URI inputUri = UriBuilder.fromResource(InputsResource.class)
                 .path("{inputId}")
                 .build(id);
 
@@ -296,7 +297,7 @@ public class InputsResource extends RestResource {
             throw new BadRequestException("Couldn't find provided input type", e);
         }
 
-        final URI inputUri = getUriBuilderToSelf().path(InputsResource.class)
+        final URI inputUri = UriBuilder.fromResource(InputsResource.class)
                 .path("{inputId}")
                 .build(inputId);
 
