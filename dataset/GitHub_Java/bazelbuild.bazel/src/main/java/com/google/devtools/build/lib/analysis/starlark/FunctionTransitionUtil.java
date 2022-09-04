@@ -105,7 +105,8 @@ public class FunctionTransitionUtil {
       return splitBuildOptions.build();
 
     } catch (ValidationException ex) {
-      handler.handle(Event.error(starlarkTransition.getLocation(), ex.getMessage()));
+      handler.handle(
+          Event.error(starlarkTransition.getLocationForErrorReporting(), ex.getMessage()));
       return null;
     }
   }

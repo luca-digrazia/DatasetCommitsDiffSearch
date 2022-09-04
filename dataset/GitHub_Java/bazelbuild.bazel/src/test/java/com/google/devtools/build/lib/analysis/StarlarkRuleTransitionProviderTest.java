@@ -45,7 +45,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
   }
 
   private void writeAllowlistFile() throws Exception {
-    scratch.overwriteFile(
+    scratch.file(
         "tools/allowlists/function_transition_allowlist/BUILD",
         "package_group(",
         "    name = 'function_transition_allowlist',",
@@ -915,7 +915,7 @@ public class StarlarkRuleTransitionProviderTest extends BuildViewTestCase {
 
   @Test
   public void testCannotTransitionWithoutAllowlist() throws Exception {
-    scratch.overwriteFile(
+    scratch.file(
         "tools/allowlists/function_transition_allowlist/BUILD",
         "package_group(",
         "    name = 'function_transition_allowlist',",
