@@ -261,7 +261,9 @@ public interface CcModuleApi<
             noneable = true),
         @Param(
             name = "user_compile_flags",
-            doc = "List of additional compilation flags (copts).",
+            doc =
+                "List of additional compilation flags (copts). Passing depset is deprecated and "
+                    + "will be removed by --incompatible_disable_depset_in_cc_user_flags flag.",
             positional = false,
             named = true,
             defaultValue = "None",
@@ -269,6 +271,7 @@ public interface CcModuleApi<
             allowedTypes = {
               @ParamType(type = NoneType.class),
               @ParamType(type = SkylarkList.class),
+              @ParamType(type = SkylarkNestedSet.class)
             }),
         @Param(
             name = "include_directories",
@@ -384,14 +387,17 @@ public interface CcModuleApi<
             }),
         @Param(
             name = "user_link_flags",
-            doc = "List of additional link flags (linkopts).",
+            doc =
+                "List of additional link flags (linkopts). Passing depset is deprecated and "
+                    + "will be removed by --incompatible_disable_depset_in_cc_user_flags flag.",
             positional = false,
             named = true,
             defaultValue = "None",
             noneable = true,
             allowedTypes = {
               @ParamType(type = NoneType.class),
-              @ParamType(type = SkylarkList.class)
+              @ParamType(type = SkylarkList.class),
+              @ParamType(type = SkylarkNestedSet.class)
             }),
         @Param(
             name = "output_file",

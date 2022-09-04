@@ -615,6 +615,20 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testUserCompileFlags() throws Exception {
+    useConfiguration("--noincompatible_disable_depset_in_cc_user_flags");
+    assertThat(
+            commandLineForVariables(
+                CppActionNames.CPP_COMPILE,
+                "cc_common.create_compile_variables(",
+                "feature_configuration = feature_configuration,",
+                "cc_toolchain = toolchain,",
+                "user_compile_flags = depset(['-foo'])",
+                ")"))
+        .contains("-foo");
+  }
+
+  @Test
+  public void testUserCompileFlagsAsList() throws Exception {
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_COMPILE,
@@ -624,6 +638,22 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
                 "user_compile_flags = ['-foo']",
                 ")"))
         .contains("-foo");
+  }
+
+  @Test
+  public void testUserCompileFlagsAsDepsetWhenDisabled() throws Exception {
+    useConfiguration("--incompatible_disable_depset_in_cc_user_flags");
+    reporter.removeHandler(failFastHandler);
+    assertThat(
+            commandLineForVariables(
+                CppActionNames.CPP_COMPILE,
+                "cc_common.create_compile_variables(",
+                "feature_configuration = feature_configuration,",
+                "cc_toolchain = toolchain,",
+                "user_compile_flags = depset(['-foo'])",
+                ")"))
+        .isNull();
+    assertContainsEvent("Passing depset into user flags is deprecated");
   }
 
   @Test
@@ -698,6 +728,20 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
 
   @Test
   public void testUserLinkFlagsLinkVariables() throws Exception {
+    useConfiguration("--noincompatible_disable_depset_in_cc_user_flags");
+    assertThat(
+            commandLineForVariables(
+                CppActionNames.CPP_LINK_EXECUTABLE,
+                "cc_common.create_link_variables(",
+                "feature_configuration = feature_configuration,",
+                "cc_toolchain = toolchain,",
+                "user_link_flags = depset([ '-avocado' ]),",
+                ")"))
+        .contains("-avocado");
+  }
+
+  @Test
+  public void testUserLinkFlagsLinkVariablesAsList() throws Exception {
     assertThat(
             commandLineForVariables(
                 CppActionNames.CPP_LINK_EXECUTABLE,
@@ -707,6 +751,22 @@ public class SkylarkCcCommonTest extends BuildViewTestCase {
                 "user_link_flags = [ '-avocado' ],",
                 ")"))
         .contains("-avocado");
+  }
+
+  @Test
+  public void testUserLinkFlagsLinkVariablesAsDepsetWhenDisabled() throws Exception {
+    useConfiguration("--incompatible_disable_depset_in_cc_user_flags");
+    reporter.removeHandler(failFastHandler);
+    assertThat(
+            commandLineForVariables(
+                CppActionNames.CPP_LINK_EXECUTABLE,
+                "cc_common.create_link_variables(",
+                "feature_configuration = feature_configuration,",
+                "cc_toolchain = toolchain,",
+                "user_link_flags = depset([ '-avocado' ]),",
+                ")"))
+        .isNull();
+    assertContainsEvent("Passing depset into user flags is deprecated");
   }
 
   @Test

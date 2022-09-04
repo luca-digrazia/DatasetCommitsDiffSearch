@@ -215,7 +215,7 @@ public class CcModule
         /* dwoFile= */ null,
         /* ltoIndexingFile= */ null,
         /* includes= */ ImmutableList.of(),
-        userFlagsToIterable(userCompileFlags),
+        userFlagsToIterable(ccToolchainProvider.getCppConfiguration(), userCompileFlags),
         /* cppModuleMap= */ null,
         usePic,
         /* fakeOutputFile= */ null,
@@ -260,7 +260,7 @@ public class CcModule
         featureConfiguration,
         useTestOnlyFlags,
         /* isLtoIndexing= */ false,
-        userFlagsToIterable(userLinkFlags),
+        userFlagsToIterable(ccToolchainProvider.getCppConfiguration(), userLinkFlags),
         /* interfaceLibraryBuilder= */ null,
         /* interfaceLibraryOutput= */ null,
         /* ltoOutputRootPrefix= */ null,
@@ -311,14 +311,26 @@ public class CcModule
     }
   }
 
-  /** Converts an object that represents user flags as either SkylarkList or None into Iterable. */
-  protected Iterable<String> userFlagsToIterable(Object o) throws EvalException {
-    if (o instanceof SkylarkList) {
+  /**
+   * Converts an object that represents user flags and can be either SkylarkNestedSet , SkylarkList,
+   * or None into Iterable.
+   */
+  protected Iterable<String> userFlagsToIterable(CppConfiguration cppConfiguration, Object o)
+      throws EvalException {
+    if (o instanceof SkylarkNestedSet) {
+      if (cppConfiguration.disableDepsetInUserFlags()) {
+        throw new EvalException(
+            Location.BUILTIN,
+            "Passing depset into user flags is deprecated (see "
+                + "--incompatible_disable_depset_in_cc_user_flags), use list instead.");
+      }
+      return asStringNestedSet(o);
+    } else if (o instanceof SkylarkList) {
       return asStringImmutableList(o);
     } else if (o instanceof NoneType) {
       return ImmutableList.of();
     } else {
-      throw new EvalException(Location.BUILTIN, "Only list is allowed.");
+      throw new EvalException(Location.BUILTIN, "Only depset and list is allowed.");
     }
   }
 
