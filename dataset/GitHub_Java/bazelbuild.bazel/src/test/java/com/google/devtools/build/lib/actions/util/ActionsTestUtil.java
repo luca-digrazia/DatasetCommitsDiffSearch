@@ -40,7 +40,6 @@ import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactOwner;
 import com.google.devtools.build.lib.actions.ArtifactResolver;
@@ -598,7 +597,7 @@ public final class ActionsTestUtil {
   }
 
   public static SpawnActionTemplate createDummySpawnActionTemplate(
-      SpecialArtifact inputTreeArtifact, SpecialArtifact outputTreeArtifact) {
+      Artifact inputTreeArtifact, Artifact outputTreeArtifact) {
     return new SpawnActionTemplate.Builder(inputTreeArtifact, outputTreeArtifact)
         .setCommandLineTemplate(CustomCommandLine.builder().build())
         .setExecutable(PathFragment.create("bin/executable"))

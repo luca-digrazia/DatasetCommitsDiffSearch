@@ -340,14 +340,13 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
         "    host_javabase = ctx.attr._host_javabase",
         "  )",
         "  return struct(",
-        "    files = depset([output_jar] + compilation_provider.source_jars),",
+        "    files = depset([output_jar]),",
         "    providers = [compilation_provider]",
         "  )",
         "java_custom_library = rule(",
         "  implementation = _impl,",
         "  outputs = {",
-        "    'my_output': 'lib%{name}.jar',",
-        "    'my_src_output': 'lib%{name}-src.jar'",
+        "    'my_output': 'lib%{name}.jar'",
         "  },",
         "  attrs = {",
         "    'srcs': attr.label_list(allow_files=['.java']),",
@@ -366,8 +365,6 @@ public class JavaSkylarkApiTest extends BuildViewTestCase {
     assertThat(artifactFilesNames(sourceJars)).containsExactly("libcustom-src.jar");
     assertThat(artifactFilesNames(transitiveSourceJars))
         .containsExactly("libdep-src.jar", "libcustom-src.jar");
-
-   assertThat(getGeneratingAction(configuredTarget, "java/test/libcustom-src.jar")).isNotNull();
   }
 
   @Test
