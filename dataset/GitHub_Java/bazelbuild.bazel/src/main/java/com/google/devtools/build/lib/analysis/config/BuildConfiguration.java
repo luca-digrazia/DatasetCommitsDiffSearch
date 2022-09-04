@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.BuildConfigurationInterface;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.config.transitions.ComposingPatchTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
@@ -138,7 +139,10 @@ public class BuildConfiguration implements BuildConfigurationInterface {
    * declare {@link ImmutableList} signatures on their interfaces vs. {@link List}). This is because
    * fragment instances may be shared across configurations.
    */
+  @AutoCodec(strategy = AutoCodec.Strategy.POLYMORPHIC)
   public abstract static class Fragment {
+    public static final ObjectCodec<Fragment> CODEC = new BuildConfiguration_Fragment_AutoCodec();
+
     /**
      * Validates the options for this Fragment. Issues warnings for the
      * use of deprecated options, and warnings or errors for any option settings
@@ -196,6 +200,12 @@ public class BuildConfiguration implements BuildConfigurationInterface {
      */
     public Map<String, Object> lateBoundOptionDefaults() {
       return ImmutableMap.of();
+    }
+
+    /** Return set of features enabled by this configuration. */
+    public ImmutableSet<String> configurationEnabledFeatures(
+        RuleContext ruleContext, ImmutableSet<String> disabledFeatures) {
+      return ImmutableSet.of();
     }
 
     /**
@@ -694,6 +704,23 @@ public class BuildConfiguration implements BuildConfigurationInterface {
               + "'//tools/test:coverage_report_generator'."
     )
     public Label coverageReportGenerator;
+
+    @Option(
+      name = "experimental_use_llvm_covmap",
+      defaultValue = "false",
+      category = "experimental",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_PARAMETERS,
+      effectTags = {
+          OptionEffectTag.CHANGES_INPUTS,
+          OptionEffectTag.AFFECTS_OUTPUTS,
+          OptionEffectTag.LOADING_AND_ANALYSIS
+      },
+      metadataTags = { OptionMetadataTag.EXPERIMENTAL },
+      help =
+          "If specified, Bazel will generate llvm-cov coverage map information rather than "
+              + "gcov when collect_code_coverage is enabled."
+    )
+    public boolean useLLVMCoverageMapFormat;
 
     @Option(
       name = "build_runfile_manifests",
@@ -1882,6 +1909,10 @@ public class BuildConfiguration implements BuildConfigurationInterface {
     return options.experimentalJavaCoverage;
   }
 
+  public boolean isLLVMCoverageMapFormatEnabled() {
+    return options.useLLVMCoverageMapFormat;
+  }
+
   /** If false, AnalysisEnvironment doesn't register any actions created by the ConfiguredTarget. */
   public boolean isActionsEnabled() {
     return actionsEnabled;
@@ -2115,7 +2146,7 @@ public class BuildConfiguration implements BuildConfigurationInterface {
       BlazeDirectories.CODEC.serialize(context, obj.directories, codedOut);
       codedOut.writeInt32NoTag(obj.fragments.size());
       for (Fragment fragment : obj.fragments.values()) {
-        context.serialize(fragment, codedOut);
+        Fragment.CODEC.serialize(context, fragment, codedOut);
       }
       BuildOptions.CODEC.serialize(context, obj.buildOptions, codedOut);
       StringCodecs.asciiOptimized().serialize(context, obj.repositoryName, codedOut);
@@ -2129,7 +2160,7 @@ public class BuildConfiguration implements BuildConfigurationInterface {
       ImmutableSortedMap.Builder<Class<? extends Fragment>, Fragment> builder =
           new ImmutableSortedMap.Builder<>(lexicalFragmentSorter);
       for (int i = 0; i < length; ++i) {
-        Fragment fragment = context.deserialize(codedIn);
+        Fragment fragment = Fragment.CODEC.deserialize(context, codedIn);
         builder.put(fragment.getClass(), fragment);
       }
       BuildOptions options = BuildOptions.CODEC.deserialize(context, codedIn);
