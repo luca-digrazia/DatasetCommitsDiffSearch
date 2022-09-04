@@ -20,10 +20,12 @@ import com.codahale.metrics.Histogram;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.indexer.IndexSet;
+import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
@@ -33,9 +35,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -45,11 +47,11 @@ import static java.util.concurrent.TimeUnit.NANOSECONDS;
 // Singleton class
 public class BlockingBatchedESOutput extends ElasticSearchOutput {
     private static final Logger log = LoggerFactory.getLogger(BlockingBatchedESOutput.class);
+    private final Cluster cluster;
     private final int maxBufferSize;
     private final Timer processTime;
     private final Histogram batchSize;
     private final Meter bufferFlushes;
-    private final Meter bufferFlushFailures;
     private final Meter bufferFlushesRequested;
 
     private volatile List<Map.Entry<IndexSet, Message>> buffer;
@@ -61,28 +63,30 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     @AssistedInject
     public BlockingBatchedESOutput(MetricRegistry metricRegistry,
                                    Messages messages,
+                                   Cluster cluster,
                                    org.graylog2.Configuration serverConfiguration,
                                    Journal journal,
                                    @Assisted Stream stream,
                                    @Assisted Configuration configuration) {
-        this(metricRegistry, messages, serverConfiguration, journal);
+        this(metricRegistry, messages, cluster, serverConfiguration, journal);
     }
 
     @Inject
     public BlockingBatchedESOutput(MetricRegistry metricRegistry,
                                    Messages messages,
+                                   Cluster cluster,
                                    org.graylog2.Configuration serverConfiguration,
                                    Journal journal) {
         super(metricRegistry, messages, journal);
+        this.cluster = cluster;
         this.maxBufferSize = serverConfiguration.getOutputBatchSize();
         outputFlushInterval = serverConfiguration.getOutputFlushInterval();
         this.processTime = metricRegistry.timer(name(this.getClass(), "processTime"));
         this.batchSize = metricRegistry.histogram(name(this.getClass(), "batchSize"));
         this.bufferFlushes = metricRegistry.meter(name(this.getClass(), "bufferFlushes"));
-        this.bufferFlushFailures = metricRegistry.meter(name(this.getClass(), "bufferFlushFailures"));
         this.bufferFlushesRequested = metricRegistry.meter(name(this.getClass(), "bufferFlushesRequested"));
 
-        buffer = new ArrayList<>(maxBufferSize);
+        buffer = Lists.newArrayListWithCapacity(maxBufferSize);
 
     }
 
@@ -100,7 +104,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
 
             if (buffer.size() >= maxBufferSize) {
                 flushBatch = buffer;
-                buffer = new ArrayList<>(maxBufferSize);
+                buffer = Lists.newArrayListWithCapacity(maxBufferSize);
             }
         }
         // if the current thread found it had to flush any messages, it does so but blocks.
@@ -112,17 +116,21 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     }
 
     private void flush(List<Map.Entry<IndexSet, Message>> messages) {
+        if (!cluster.isConnected() || !cluster.isDeflectorHealthy()) {
+            try {
+                cluster.waitForConnectedAndDeflectorHealthy();
+            } catch (TimeoutException | InterruptedException e) {
+                log.warn("Error while waiting for healthy Elasticsearch cluster. Not flushing.", e);
+                return;
+            }
+        }
         // never try to flush an empty buffer
-        if (messages.isEmpty()) {
+        if (messages.size() == 0) {
             return;
         }
-
-        activeFlushThreads.incrementAndGet();
-        if (log.isDebugEnabled()) {
-            log.debug("Starting flushing {} messages, flush threads active {}",
-                    messages.size(),
-                    activeFlushThreads.get());
-        }
+        log.debug("Starting flushing {} messages, flush threads active {}",
+                 messages.size(),
+                 activeFlushThreads.incrementAndGet());
 
         try (Timer.Context ignored = processTime.time()) {
             lastFlushTime.set(System.nanoTime());
@@ -131,13 +139,18 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
             bufferFlushes.mark();
         } catch (Exception e) {
             log.error("Unable to flush message buffer", e);
-            bufferFlushFailures.mark();
         }
         activeFlushThreads.decrementAndGet();
         log.debug("Flushing {} messages completed", messages.size());
     }
 
     public void forceFlushIfTimedout() {
+        if (!cluster.isConnected() || !cluster.isDeflectorHealthy()) {
+            // do not actually try to flush, because that will block until the cluster comes back.
+            // simply check and return.
+            log.debug("Cluster unavailable, but not blocking for periodic flush attempt. This will try again.");
+            return;
+        }
         // if we shouldn't flush at all based on the last flush time, no need to synchronize on this.
         if (lastFlushTime.get() != 0 &&
                 outputFlushInterval > NANOSECONDS.toSeconds(System.nanoTime() - lastFlushTime.get())) {
@@ -147,7 +160,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
         final List<Map.Entry<IndexSet, Message>> flushBatch;
         synchronized (this) {
             flushBatch = buffer;
-            buffer = new ArrayList<>(maxBufferSize);
+            buffer = Lists.newArrayListWithCapacity(maxBufferSize);
         }
         if (flushBatch != null) {
             bufferFlushesRequested.mark();
@@ -156,6 +169,14 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     }
 
     public interface Factory extends ElasticSearchOutput.Factory {
+        @Override
+        BlockingBatchedESOutput create(Stream stream, Configuration configuration);
+
+        @Override
+        Config getConfig();
+
+        @Override
+        Descriptor getDescriptor();
     }
 
     public static class Config extends ElasticSearchOutput.Config {

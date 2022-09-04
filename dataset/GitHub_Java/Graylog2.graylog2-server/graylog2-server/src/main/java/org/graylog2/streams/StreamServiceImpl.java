@@ -27,9 +27,7 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.database.PersistedServiceImpl;
 import org.graylog2.indexer.IndexSet;
-import org.graylog2.indexer.MongoIndexSet;
-import org.graylog2.indexer.indexset.IndexSetConfig;
-import org.graylog2.indexer.indexset.IndexSetService;
+import org.graylog2.indexer.LegacyDeflectorIndexSet;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.Tools;
@@ -43,14 +41,12 @@ import org.graylog2.rest.resources.streams.requests.CreateStreamRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.annotation.Nullable;
 import javax.inject.Inject;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -59,8 +55,7 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
     private final StreamRuleService streamRuleService;
     private final AlertService alertService;
     private final OutputService outputService;
-    private final IndexSetService indexSetService;
-    private final MongoIndexSet.Factory indexSetFactory;
+    private final Set<IndexSet> indexSets;
     private final NotificationService notificationService;
 
     @Inject
@@ -68,26 +63,14 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
                              StreamRuleService streamRuleService,
                              AlertService alertService,
                              OutputService outputService,
-                             IndexSetService indexSetService,
-                             MongoIndexSet.Factory indexSetFactory,
+                             LegacyDeflectorIndexSet indexSet,
                              NotificationService notificationService) {
         super(mongoConnection);
         this.streamRuleService = streamRuleService;
         this.alertService = alertService;
         this.outputService = outputService;
-        this.indexSetService = indexSetService;
-        this.indexSetFactory = indexSetFactory;
+        this.indexSets = Collections.singleton(indexSet);
         this.notificationService = notificationService;
-    }
-
-    @Nullable
-    private IndexSet getIndexSet(DBObject dbObject) {
-        final String id = (String) dbObject.get(StreamImpl.FIELD_INDEX_SET_ID);
-        if (id == null) {
-            return null;
-        }
-        final Optional<IndexSetConfig> indexSetConfig = indexSetService.get(id);
-        return indexSetConfig.flatMap(c -> Optional.of(indexSetFactory.create(c))).orElse(null);
     }
 
     public Stream load(ObjectId id) throws NotFoundException {
@@ -103,7 +86,8 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
 
         @SuppressWarnings("unchecked")
         final Map<String, Object> fields = o.toMap();
-        return new StreamImpl((ObjectId) o.get("_id"), fields, streamRules, outputs, getIndexSet(o));
+        // TODO 2.2: Needs to load the index sets from the database!
+        return new StreamImpl((ObjectId) o.get("_id"), fields, streamRules, outputs, indexSets);
     }
 
     @Override
@@ -120,7 +104,6 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
         streamData.put(StreamImpl.FIELD_CREATED_AT, Tools.nowUTC());
         streamData.put(StreamImpl.FIELD_CONTENT_PACK, cr.contentPack());
         streamData.put(StreamImpl.FIELD_MATCHING_TYPE, cr.matchingType().toString());
-        streamData.put(StreamImpl.FIELD_REMOVE_MATCHES_FROM_DEFAULT_STREAM, cr.removeMatchesFromDefaultStream());
 
         return create(streamData);
     }
@@ -170,7 +153,8 @@ public class StreamServiceImpl extends PersistedServiceImpl implements StreamSer
             @SuppressWarnings("unchecked")
             final Map<String, Object> fields = o.toMap();
 
-            streams.add(new StreamImpl(objectId, fields, streamRules, outputs, getIndexSet(o)));
+            // TODO 2.2: Needs to load the index sets from the database!
+            streams.add(new StreamImpl(objectId, fields, streamRules, outputs, indexSets));
         }
 
         return streams.build();

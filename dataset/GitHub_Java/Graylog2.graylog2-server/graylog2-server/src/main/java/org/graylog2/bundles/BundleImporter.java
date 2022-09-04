@@ -466,7 +466,7 @@ public class BundleImporter {
                     streamData.build(),
                     Collections.emptyList(),
                     Collections.emptySet(),
-                    null);
+                    Collections.emptySet());
         } else {
             stream = streamService.create(streamData.build());
         }
