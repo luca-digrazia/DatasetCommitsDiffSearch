@@ -525,9 +525,6 @@ public class LegacyIncludeScanner implements IncludeScanner {
     /** The set of headers known to be part of a C++ module. Scanning can stop here. */
     private final Set<Artifact> modularHeaders;
 
-    /** The set of all processed inclusions, to avoid processing duplicate inclusions. */
-    private final Set<ArtifactWithInclusionContext> visitedInclusions = Sets.newConcurrentHashSet();
-
     public LegacyIncludeVisitor(
         ActionExecutionMetadata actionExecutionMetadata,
         ActionExecutionContext actionExecutionContext,
@@ -554,14 +551,20 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Set<Artifact> includes,
         ImmutableSet<Artifact> pathHints)
         throws InterruptedException, IOException, ExecException {
+      Set<ArtifactWithInclusionContext> visitedInclusions = Sets.newConcurrentHashSet();
+
       try {
         // Process cmd line includes, if specified.
         if (mainSource != null && !cmdlineIncludes.isEmpty()) {
-          processCmdlineIncludes(mainSource, cmdlineIncludes, includes);
+          processCmdlineIncludes(
+              mainSource,
+              cmdlineIncludes,
+              includes,
+              visitedInclusions);
           sync();
         }
 
-        processBulkAsync(sources, includes);
+        processBulkAsync(sources, includes, visitedInclusions);
         sync();
 
         // Process include hints
@@ -569,10 +572,10 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Hints hints = parser.getHints();
         if (hints != null) {
           // Follow "path" hints.
-          processBulkAsync(pathHints, includes);
+          processBulkAsync(pathHints, includes, visitedInclusions);
           // Follow "file" hints for the primary sources.
           for (Artifact source : sources) {
-            processFileLevelHintsAsync(hints, source, includes);
+            processFileLevelHintsAsync(hints, source, includes, visitedInclusions);
           }
           sync();
 
@@ -581,7 +584,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
           while (!frontier.isEmpty()) {
             Set<Artifact> adjacent = Sets.newConcurrentHashSet();
             for (Artifact include : frontier) {
-              processFileLevelHintsAsync(hints, include, adjacent);
+              processFileLevelHintsAsync(hints, include, adjacent, visitedInclusions);
             }
             sync();
             // Keep novel nodes as the next frontier.
@@ -625,9 +628,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param contextKind the kind how the containing file was included, or null for top-level
      *     inclusions
      * @param visited the set to receive the files that are transitively included by {@code source}
+     * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
+     *     inclusions.
      */
     private void process(
-        final Artifact source, int contextPathPos, Kind contextKind, Set<Artifact> visited)
+        final Artifact source,
+        int contextPathPos,
+        Kind contextKind,
+        Set<Artifact> visited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       checkForInterrupt("processing", source);
 
@@ -681,7 +690,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
         findAndProcess(
             helper.createInclusionWithContext(inclusion, contextPathPos, contextKind),
             source,
-            visited);
+            visited,
+            visitedInclusions);
       }
     }
 
@@ -693,16 +703,20 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * extraction of includes.
      */
     private void processAsyncIfNotExtracted(
-        final Artifact source, int contextPathPos, Kind contextKind, Set<Artifact> visited)
+        final Artifact source,
+        int contextPathPos,
+        Kind contextKind,
+        Set<Artifact> visited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       ListenableFuture<Collection<Inclusion>> cacheResult = fileParseCache.get(source);
       if (cacheResult != null) {
-        process(source, contextPathPos, contextKind, visited);
+        process(source, contextPathPos, contextKind, visited, visitedInclusions);
       } else {
         super.execute(
             () -> {
               try {
-                process(source, contextPathPos, contextKind, visited);
+                process(source, contextPathPos, contextKind, visited, visitedInclusions);
               } catch (IOException e) {
                 throw new IORuntimeException(e);
               } catch (ExecException e) {
@@ -716,7 +730,10 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
     /** Visits an inclusion starting from a source file. */
     private void findAndProcess(
-        InclusionWithContext inclusion, Artifact source, Set<Artifact> visited)
+        InclusionWithContext inclusion,
+        Artifact source,
+        Set<Artifact> visited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       // Try to find the included file relative to the file that contains the inclusion. Relative
       // inclusions are handled like the first entry on the quote include path
@@ -745,7 +762,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
         if (modularHeaders.contains(includeFile)) {
           return;
         }
-        processAsyncIfNotExtracted(includeFile, contextPathPos, contextKind, visited);
+        processAsyncIfNotExtracted(
+            includeFile, contextPathPos, contextKind, visited, visitedInclusions);
       }
     }
 
@@ -757,13 +775,18 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param includes the list of -include option strings to locate and process
      * @param visited the set of files that are transitively included by {@code includes} to
      *     populate
+     * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
+     *     inclusions.
      */
     private void processCmdlineIncludes(
-        Artifact source, List<String> includes, Set<Artifact> visited)
+        Artifact source,
+        List<String> includes,
+        Set<Artifact> visited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       for (String incl : includes) {
         InclusionWithContext inclusion = new InclusionWithContext(incl, Kind.QUOTE);
-        findAndProcess(inclusion, source, visited);
+        findAndProcess(inclusion, source, visited, visitedInclusions);
       }
     }
 
@@ -773,8 +796,13 @@ public class LegacyIncludeScanner implements IncludeScanner {
      *
      * @param sources the files to process and add to the set
      * @param visited the set to receive the files that are transitively included by {@code sources}
+     * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
+     *     inclusions.
      */
-    private void processBulkAsync(Collection<Artifact> sources, final Set<Artifact> visited)
+    private void processBulkAsync(
+        Collection<Artifact> sources,
+        final Set<Artifact> visited,
+        final Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       for (final Artifact source : sources) {
         // TODO(djasper): This looks suspicious. We should only stop based on visitedInclusions.
@@ -782,12 +810,16 @@ public class LegacyIncludeScanner implements IncludeScanner {
           continue;
         }
 
-        processAsyncIfNotExtracted(source, /*contextPathPos=*/ -1, /*contextKind=*/ null, visited);
+        processAsyncIfNotExtracted(
+            source, /*contextPathPos=*/ -1, /*contextKind=*/ null, visited, visitedInclusions);
       }
     }
 
     private void processFileLevelHintsAsync(
-        final Hints hints, final Artifact include, final Set<Artifact> alsoVisited) {
+        final Hints hints,
+        final Artifact include,
+        final Set<Artifact> alsoVisited,
+        final Set<ArtifactWithInclusionContext> visitedInclusions) {
       Collection<Artifact> sources = hints.getFileLevelHintedInclusionsLegacy(include);
       // Early-out if there's nothing to do to avoid enqueuing a closure
       if (sources.isEmpty()) {
@@ -796,7 +828,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
       super.execute(
           () -> {
             try {
-              processBulkAsync(sources, alsoVisited);
+              processBulkAsync(sources, alsoVisited, visitedInclusions);
             } catch (IOException e) {
               throw new IORuntimeException(e);
             } catch (ExecException e) {
@@ -820,9 +852,6 @@ public class LegacyIncludeScanner implements IncludeScanner {
     /** The set of headers known to be part of a C++ module. Scanning can stop here. */
     private final Set<Artifact> modularHeaders;
 
-    /** The set of all processed inclusions, to avoid processing duplicate inclusions. */
-    private final Set<ArtifactWithInclusionContext> visitedInclusions = Sets.newConcurrentHashSet();
-
     public AsyncIncludeVisitor(
         ActionExecutionMetadata actionExecutionMetadata,
         ActionExecutionContext actionExecutionContext,
@@ -844,15 +873,19 @@ public class LegacyIncludeScanner implements IncludeScanner {
         Set<Artifact> includes,
         ImmutableSet<Artifact> pathHints)
         throws InterruptedException, IOException, ExecException {
+      Set<ArtifactWithInclusionContext> visitedInclusions = Sets.newConcurrentHashSet();
+
       try {
         ListenableFuture<?> result = Futures.immediateFuture(null);
         // Process cmd line includes, if specified.
         if (mainSource != null && !cmdlineIncludes.isEmpty()) {
-          result = processCmdlineIncludesAsync(mainSource, cmdlineIncludes, includes);
+          result =
+              processCmdlineIncludesAsync(mainSource, cmdlineIncludes, includes, visitedInclusions);
         }
 
         result =
-            Futures.transformAsync(result, (v) -> processBulkAsync(sources, includes), includePool);
+            Futures.transformAsync(
+                result, (v) -> processBulkAsync(sources, includes, visitedInclusions), includePool);
 
         // Process include hints
         // TODO(ulfjack): Make this code go away. Use the new hinted inclusions instead.
@@ -861,18 +894,21 @@ public class LegacyIncludeScanner implements IncludeScanner {
           // Follow "path" hints.
           result =
               Futures.transformAsync(
-                  result, (v) -> processBulkAsync(pathHints, includes), includePool);
-
+                  result,
+                  (v) -> processBulkAsync(pathHints, includes, visitedInclusions),
+                  includePool);
           result =
               Futures.transformAsync(
                   result,
-                  (v) -> processAllFileLevelHintsAsync(hints, sources, includes),
+                  (v) -> processAllFileLevelHintsAsync(hints, sources, includes, visitedInclusions),
                   includePool);
 
           // Follow "file" hints for all included headers, transitively.
           result =
               Futures.transformAsync(
-                  result, (v) -> processOnePass(hints, includes, includes), includePool);
+                  result,
+                  (v) -> processOnePass(hints, includes, includes, visitedInclusions),
+                  includePool);
         }
         return result;
       } catch (IOException | InterruptedException | ExecException | MissingDepException e) {
@@ -882,10 +918,14 @@ public class LegacyIncludeScanner implements IncludeScanner {
     }
 
     private ListenableFuture<Collection<Artifact>> processOnePass(
-        Hints hints, Collection<Artifact> before, Set<Artifact> includes)
+        Hints hints,
+        Collection<Artifact> before,
+        Set<Artifact> includes,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws InterruptedException, IOException, ExecException {
       Set<Artifact> adjacent = Sets.newConcurrentHashSet();
-      ListenableFuture<?> future = processAllFileLevelHintsAsync(hints, before, adjacent);
+      ListenableFuture<?> future =
+          processAllFileLevelHintsAsync(hints, before, adjacent, visitedInclusions);
       return Futures.transformAsync(
           future,
           (v) -> {
@@ -898,7 +938,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
             if (adjacent.isEmpty()) {
               return Futures.immediateFuture(null);
             }
-            return processOnePass(hints, adjacent, includes);
+            return processOnePass(hints, adjacent, includes, visitedInclusions);
           },
           includePool);
     }
@@ -912,9 +952,15 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param contextKind the kind how the containing file was included, or null for top-level
      *     inclusions
      * @param visited the set to receive the files that are transitively included by {@code source}
+     * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
+     *     inclusions.
      */
     private ListenableFuture<?> process(
-        final Artifact source, int contextPathPos, Kind contextKind, Set<Artifact> visited)
+        final Artifact source,
+        int contextPathPos,
+        Kind contextKind,
+        Set<Artifact> visited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, InterruptedException {
       checkForInterrupt("processing", source);
 
@@ -966,7 +1012,8 @@ public class LegacyIncludeScanner implements IncludeScanner {
                   findAndProcess(
                       helper.createInclusionWithContext(inclusion, contextPathPos, contextKind),
                       source,
-                      visited));
+                      visited,
+                      visitedInclusions));
             }
             return Futures.allAsList(allFutures);
           },
@@ -975,7 +1022,10 @@ public class LegacyIncludeScanner implements IncludeScanner {
 
     /** Visits an inclusion starting from a source file. */
     private ListenableFuture<?> findAndProcess(
-        InclusionWithContext inclusion, Artifact source, Set<Artifact> visited)
+        InclusionWithContext inclusion,
+        Artifact source,
+        Set<Artifact> visited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, InterruptedException {
       // Try to find the included file relative to the file that contains the inclusion. Relative
       // inclusions are handled like the first entry on the quote include path
@@ -1004,7 +1054,7 @@ public class LegacyIncludeScanner implements IncludeScanner {
         if (modularHeaders.contains(includeFile)) {
           return Futures.immediateFuture(null);
         }
-        return process(includeFile, contextPathPos, contextKind, visited);
+        return process(includeFile, contextPathPos, contextKind, visited, visitedInclusions);
       }
       return Futures.immediateFuture(null);
     }
@@ -1017,14 +1067,19 @@ public class LegacyIncludeScanner implements IncludeScanner {
      * @param includes the list of -include option strings to locate and process
      * @param visited the set of files that are transitively included by {@code includes} to
      *     populate
+     * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
+     *     inclusions.
      */
     private ListenableFuture<?> processCmdlineIncludesAsync(
-        Artifact source, List<String> includes, Set<Artifact> visited)
+        Artifact source,
+        List<String> includes,
+        Set<Artifact> visited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, ExecException, InterruptedException {
       List<ListenableFuture<?>> allFutures = new ArrayList<>(includes.size());
       for (String incl : includes) {
         InclusionWithContext inclusion = new InclusionWithContext(incl, Kind.QUOTE);
-        allFutures.add(findAndProcess(inclusion, source, visited));
+        allFutures.add(findAndProcess(inclusion, source, visited, visitedInclusions));
       }
       return Futures.allAsList(allFutures);
     }
@@ -1035,14 +1090,14 @@ public class LegacyIncludeScanner implements IncludeScanner {
      *
      * @param sources the files to process and add to the set
      * @param visited the set to receive the files that are transitively included by {@code sources}
+     * @param visitedInclusions the set of all processed inclusions, to avoid processing duplicate
+     *     inclusions.
      */
     private ListenableFuture<?> processBulkAsync(
-        Collection<Artifact> sources, Set<Artifact> visited)
+        Collection<Artifact> sources,
+        final Set<Artifact> visited,
+        final Set<ArtifactWithInclusionContext> visitedInclusions)
         throws IOException, InterruptedException {
-      if (sources.isEmpty()) {
-        // Early-out if there's nothing to do.
-        return Futures.immediateFuture(null);
-      }
       List<ListenableFuture<?>> allFutures = new ArrayList<>(sources.size());
       for (final Artifact source : sources) {
         // TODO(djasper): This looks suspicious. We should only stop based on visitedInclusions.
@@ -1050,31 +1105,39 @@ public class LegacyIncludeScanner implements IncludeScanner {
           continue;
         }
 
-        allFutures.add(process(source, /*contextPathPos=*/ -1, /*contextKind=*/ null, visited));
+        allFutures.add(
+            process(
+                source, /*contextPathPos=*/ -1, /*contextKind=*/ null, visited, visitedInclusions));
       }
       return Futures.allAsList(allFutures);
     }
 
     private ListenableFuture<?> processAllFileLevelHintsAsync(
-        Hints hints, Collection<Artifact> sources, Set<Artifact> alsoVisited)
+        Hints hints,
+        Collection<Artifact> sources,
+        Set<Artifact> alsoVisited,
+        Set<ArtifactWithInclusionContext> visitedInclusions)
         throws InterruptedException, IOException, ExecException {
       List<ListenableFuture<?>> allFutures = new ArrayList<>();
       // Follow "file" hints for the primary sources.
       for (Artifact source : sources) {
-        allFutures.add(processFileLevelHintsAsync(hints, source, alsoVisited));
+        allFutures.add(processFileLevelHintsAsync(hints, source, alsoVisited, visitedInclusions));
       }
       return Futures.allAsList(allFutures);
     }
 
     private ListenableFuture<?> processFileLevelHintsAsync(
-        final Hints hints, final Artifact include, final Set<Artifact> alsoVisited)
+        final Hints hints,
+        final Artifact include,
+        final Set<Artifact> alsoVisited,
+        final Set<ArtifactWithInclusionContext> visitedInclusions)
         throws InterruptedException, IOException, ExecException {
       Collection<Artifact> sources = hints.getFileLevelHintedInclusionsLegacy(include);
       // Early-out if there's nothing to do to avoid enqueuing a closure
       if (sources.isEmpty()) {
         return Futures.immediateFuture(null);
       }
-      return processBulkAsync(sources, alsoVisited);
+      return processBulkAsync(sources, alsoVisited, visitedInclusions);
     }
   }
 
