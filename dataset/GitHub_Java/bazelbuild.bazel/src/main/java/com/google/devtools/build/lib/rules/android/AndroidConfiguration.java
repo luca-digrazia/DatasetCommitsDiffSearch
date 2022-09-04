@@ -459,7 +459,7 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     @Option(
       name = "experimental_android_use_singlejar_for_multidex",
       defaultValue = "true",
-      optionUsageRestrictions = OptionUsageRestrictions.HIDDEN,
+      optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
       deprecationWarning =
           "This flag is deprecated and is a no-op. It will be removed in a future release.",
       help = "This flag is deprecated and is a no-op. It will be removed in a future release."

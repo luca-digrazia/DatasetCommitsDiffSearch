@@ -1095,7 +1095,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
         proguardOutputJar,
         javaSemantics,
         getProguardOptimizationPasses(ruleContext),
-        proguardOutputMap);
+        proguardOutputMap,
+        ruleContext.getFragment(AndroidConfiguration.class).useSingleJarForProguardLibraryJars());
     return result;
   }
 
