@@ -37,6 +37,7 @@ import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
 import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
@@ -259,13 +260,14 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
    */
   protected void internalExecute(
       ActionExecutionContext actionExecutionContext) throws ExecException, InterruptedException {
-    getContext(actionExecutionContext)
+    getContext(actionExecutionContext.getExecutor())
         .exec(getSpawn(actionExecutionContext.getClientEnv()), actionExecutionContext);
   }
 
   @Override
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
     try {
       internalExecute(actionExecutionContext);
     } catch (ExecException e) {
@@ -281,8 +283,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
         failMessage = "error executing shell command: " + "'"
             + truncate(Iterables.get(argv.arguments(), 2), 200) + "'";
       }
-      throw e.toActionExecutionException(
-          failMessage, actionExecutionContext.getVerboseFailures(), this);
+      throw e.toActionExecutionException(failMessage, executor.getVerboseFailures(), this);
     }
   }
 
@@ -433,8 +434,8 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
     return executionInfo;
   }
 
-  protected SpawnActionContext getContext(ActionExecutionContext actionExecutionContext) {
-    return actionExecutionContext.getSpawnActionContext(getMnemonic());
+  protected SpawnActionContext getContext(Executor executor) {
+    return executor.getSpawnActionContext(getMnemonic());
   }
 
   /**

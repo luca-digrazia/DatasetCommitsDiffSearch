@@ -128,7 +128,8 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
     // explicitly via builder method #setExecutable and #setEnvironment.
     return actionBuilder.buildSpawnAction(
         getOwner(),
-        /*configEnv=*/ null,
+        /*defaultShellEnvironment=*/ null,
+        /*variableShellEnvironment=*/ null,
         /*defaultShellExecutable=*/ null,
         /*paramsFile=*/ null);
   }
@@ -205,7 +206,7 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
   @Override
   public Iterable<String> getClientEnvironmentVariables() {
     return spawnActionBuilder
-        .buildSpawnAction(getOwner(), null, null, null)
+        .buildSpawnAction(getOwner(), null, null, null, null)
         .getClientEnvironmentVariables();
   }
 
@@ -306,8 +307,6 @@ public final class SpawnActionTemplate implements ActionTemplate<SpawnAction> {
     }
 
     /** Sets the map of environment variables for expanded actions. */
-    @Deprecated // TODO(ulfjack): Add env variables to the common environment, rather than replacing
-    // it wholesale, which ignores --action_env (unless the client code explicitly handles it).
     public Builder setEnvironment(Map<String, String> environment) {
       spawnActionBuilder.setEnvironment(environment);
       return this;

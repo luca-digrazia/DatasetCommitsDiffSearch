@@ -14,8 +14,12 @@
 package com.google.devtools.build.lib.analysis.util;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.actions.util.ActionsTestUtil.getFirstArtifactEndingWith;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import com.google.common.base.Function;
@@ -548,7 +552,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected void assertConfigurationsEqual(BuildConfiguration config1, BuildConfiguration config2) {
     // BuildOptions and crosstool files determine a configuration's content. Within the context
     // of these tests only the former actually change.
-    assertThat(config2.cloneOptions()).isEqualTo(config1.cloneOptions());
+    assertEquals(config1.cloneOptions(), config2.cloneOptions());
   }
 
   /**
@@ -844,10 +848,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     reporter.removeHandler(failFastHandler); // expect errors
     ConfiguredTarget target = scratchConfiguredTarget(packageName, ruleName, lines);
     if (target != null) {
-      assertWithMessage(
-              "Rule '" + "//" + packageName + ":" + ruleName + "' did not contain an error")
-          .that(view.hasErrors(target))
-          .isTrue();
+      assertTrue("Rule '" + "//" + packageName + ":" + ruleName + "' did not contain an error",
+          view.hasErrors(target));
     }
     return assertContainsEvent(expectedErrorMessage);
   }
@@ -890,9 +892,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     eventCollector.clear();
     ConfiguredTarget target = scratchConfiguredTarget(packageName, ruleName,
         lines);
-    assertWithMessage("Rule '" + "//" + packageName + ":" + ruleName + "' did contain an error")
-        .that(view.hasErrors(target))
-        .isFalse();
+    assertFalse(
+        "Rule '" + "//" + packageName + ":" + ruleName + "' did contain an error",
+        view.hasErrors(target));
     return assertContainsEvent(expectedWarningMessage);
   }
 
@@ -919,23 +921,21 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       Target outTarget = getTarget(expectedOut);
       if (!(outTarget instanceof OutputFile)) {
         fail("Target " + outTarget + " is not an output");
-        assertThat(((OutputFile) outTarget).getGeneratingRule()).isSameAs(ruleTarget);
+        assertSame(ruleTarget, ((OutputFile) outTarget).getGeneratingRule());
         // This ensures that the output artifact is wired up in the action graph
         getConfiguredTarget(expectedOut);
       }
     }
 
     Collection<OutputFile> outs = ruleTarget.getOutputFiles();
-    assertWithMessage("Mismatched outputs: " + outs)
-        .that(outs.size())
-        .isEqualTo(expectedOuts.length);
+    assertEquals("Mismatched outputs: " + outs, expectedOuts.length, outs.size());
   }
 
   /**
    * Asserts that there exists a configured target file for the given label.
    */
   protected void assertConfiguredTargetExists(String label) throws Exception {
-    assertThat(getFileConfiguredTarget(label)).isNotNull();
+    assertNotNull(getFileConfiguredTarget(label));
   }
 
   /**
@@ -944,9 +944,10 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
    */
   protected void assertSameGeneratingAction(String labelA, String labelB)
       throws Exception {
-    assertWithMessage("Action for " + labelA + " did not match " + labelB)
-        .that(getGeneratingActionForLabel(labelB))
-        .isSameAs(getGeneratingActionForLabel(labelA));
+    assertSame(
+        "Action for " + labelA + " did not match " + labelB,
+        getGeneratingActionForLabel(labelA),
+        getGeneratingActionForLabel(labelB));
   }
 
   protected Artifact getSourceArtifact(PathFragment rootRelativePath, Root root) {
@@ -1247,14 +1248,14 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       String... expectedMessages) throws Exception{
     ConfiguredTarget target = getConfiguredTarget(targetName);
     if (expectedError) {
-      assertThat(view.hasErrors(target)).isTrue();
+      assertTrue(view.hasErrors(target));
       for (String expectedMessage : expectedMessages) {
         String message = "in srcs attribute of " + ruleType + " rule " + targetName + ": "
             + expectedMessage;
         assertContainsEvent(message);
       }
     } else {
-      assertThat(view.hasErrors(target)).isFalse();
+      assertFalse(view.hasErrors(target));
       for (String expectedMessage : expectedMessages) {
         String message = "in srcs attribute of " + ruleType + " rule " + target.getLabel() + ": "
             + expectedMessage;
@@ -1465,8 +1466,12 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return Iterables.getOnlyElement(masterConfig.getTargetConfigurations());
   }
 
-  protected BuildConfiguration getDataConfiguration() throws InterruptedException {
-    return getConfiguration(getTargetConfiguration(), ConfigurationTransition.DATA);
+  protected BuildConfiguration getDataConfiguration() {
+    BuildConfiguration targetConfig = getTargetConfiguration();
+    // TODO(bazel-team): do a proper data transition for dynamic configurations.
+    return targetConfig.useDynamicConfigurations()
+        ? targetConfig
+        : targetConfig.getConfiguration(ConfigurationTransition.DATA);
   }
 
   protected BuildConfiguration getHostConfiguration() {
@@ -1496,6 +1501,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   /**
    * Returns an attribute value retriever for the given rule for the target configuration.
+
    */
   protected AttributeMap attributes(RuleConfiguredTarget ct) {
     return ConfiguredAttributeMapper.of(ct);
@@ -1818,7 +1824,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     ConfiguredTarget target = getConfiguredTarget(targetLabel);
     List<Action> actions = getExtraActionActions(target);
 
-    assertThat(actions).isNotNull();
+    assertNotNull(actions);
     assertThat(actions).hasSize(2);
 
     ExtraAction extraAction = null;
@@ -1830,16 +1836,15 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
       }
     }
 
-    assertWithMessage(actions.toString()).that(extraAction).isNotNull();
+    assertNotNull(actions.toString(), extraAction);
 
     Action pseudoAction = extraAction.getShadowedAction();
 
     assertThat(pseudoAction).isInstanceOf(PseudoAction.class);
-    assertThat(pseudoAction.getPrimaryOutput().getExecPathString())
-        .isEqualTo(
-            String.format(
-                "%s%s.extra_action_dummy",
-                targetConfig.getGenfilesFragment(), convertLabelToPath(targetLabel)));
+    assertEquals(
+        String.format("%s%s.extra_action_dummy", targetConfig.getGenfilesFragment(),
+            convertLabelToPath(targetLabel)),
+        pseudoAction.getPrimaryOutput().getExecPathString());
 
     return (PseudoAction<?>) pseudoAction;
   }
