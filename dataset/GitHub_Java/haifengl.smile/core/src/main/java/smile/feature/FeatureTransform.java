@@ -84,7 +84,7 @@ public abstract class FeatureTransform implements Serializable {
      * @return the transformed feature vectors.
      */
     public double[][] transform(double[][] x) {
-        double[][] y = copy ? new double[x.length][] : x;
+        double[][] y = new double[x.length][];
         for (int i = 0; i < y.length; i++) {
             y[i] = transform(x[i]);
         }
