@@ -252,7 +252,6 @@ public class CrosstoolCompilationSupport extends CompilationSupport {
             .addActionInput(inputFileList)
             .setLinkType(linkType)
             .setLinkStaticness(LinkStaticness.FULLY_STATIC)
-            .addLinkopts(ImmutableList.copyOf(extraLinkArgs))
             .addVariablesExtension(extension)
             .setFeatureConfiguration(getFeatureConfiguration(ruleContext, buildConfiguration))
             .build();
