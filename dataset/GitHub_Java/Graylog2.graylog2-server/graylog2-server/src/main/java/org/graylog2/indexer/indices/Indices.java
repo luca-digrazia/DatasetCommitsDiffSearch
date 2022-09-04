@@ -218,5 +218,4 @@ public class Indices {
 
         c.admin().indices().updateSettings(new UpdateSettingsRequest(index).settings(sb.build())).actionGet();
     }
-
 }
