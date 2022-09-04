@@ -14,6 +14,8 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import java.util.List;
+import java.util.Map;
 import javax.annotation.Nullable;
 
 /**
@@ -53,27 +55,22 @@ public final class BuiltinCallable implements StarlarkCallable {
   }
 
   @Override
-  public Object fastcall(
-      StarlarkThread thread, @Nullable FuncallExpression call, Object[] positional, Object[] named)
+  public Object callImpl(
+      StarlarkThread thread, FuncallExpression call, List<Object> args, Map<String, Object> kwargs)
       throws EvalException, InterruptedException {
     MethodDescriptor desc =
         this.desc != null ? this.desc : getMethodDescriptor(thread.getSemantics());
     Object objValue = obj;
 
     if (obj instanceof String) {
-      // Prepend string receiver to argument list.
-      // TODO(adonovan): move this into convertStarlarkArgumentsToJavaMethodArguments.
-      Object[] arr = new Object[positional.length + 1];
-      arr[0] = obj;
-      System.arraycopy(positional, 0, arr, 1, positional.length);
-      positional = arr;
+      args.add(0, obj); // TODO(adonovan): this mutation looks dubious
       objValue = StringModule.INSTANCE;
     }
 
     Object[] javaArguments =
         CallUtils.convertStarlarkArgumentsToJavaMethodArguments(
-            thread, methodName, call, desc, objValue.getClass(), positional, named);
-    return desc.call(objValue, javaArguments, thread.mutability());
+            thread, call, desc, objValue.getClass(), args, kwargs);
+    return desc.call(objValue, javaArguments, call.getLocation(), thread.mutability());
   }
 
   private MethodDescriptor getMethodDescriptor(StarlarkSemantics semantics) {

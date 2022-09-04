@@ -215,8 +215,8 @@ public final class Starlark {
   }
 
   /**
-   * Calls the function-like value {@code fn} in the specified thread, passing it the given
-   * positional and named arguments, as if by the Starlark expression {@code fn(*args, **kwargs)}.
+   * Calls the function-like value {@code fn} in the specified thread, passing the given positional
+   * and named arguments, as if by the Starlark expression {@code fn(*args, **kwargs)}.
    */
   public static Object call(
       StarlarkThread thread,
@@ -225,28 +225,6 @@ public final class Starlark {
       List<Object> args,
       Map<String, Object> kwargs)
       throws EvalException, InterruptedException {
-    Object[] named = new Object[2 * kwargs.size()];
-    int i = 0;
-    for (Map.Entry<String, Object> e : kwargs.entrySet()) {
-      named[i++] = e.getKey();
-      named[i++] = e.getValue();
-    }
-    return fastcall(thread, fn, call, args.toArray(), named);
-  }
-
-  /**
-   * Calls the function-like value {@code fn} in the specified thread, passing it the given
-   * positional and named arguments in the "fastcall" array representation.
-   */
-  public static Object fastcall(
-      StarlarkThread thread,
-      Object fn,
-      @Nullable FuncallExpression call,
-      Object[] positional,
-      Object[] named)
-      throws EvalException, InterruptedException {
-    Location loc = call != null ? call.getLocation() : null;
-
     StarlarkCallable callable;
     if (fn instanceof StarlarkCallable) {
       callable = (StarlarkCallable) fn;
@@ -256,16 +234,17 @@ public final class Starlark {
           CallUtils.getSelfCallMethodDescriptor(thread.getSemantics(), fn.getClass());
       if (desc == null) {
         throw new EvalException(
-            loc, "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
+            call != null ? call.getLocation() : null,
+            "'" + EvalUtils.getDataTypeName(fn) + "' object is not callable");
       }
       callable = new BuiltinCallable(fn, desc.getName(), desc);
     }
 
-    thread.push(callable, loc);
+    Location loc = call != null ? call.getLocation() : null;
+    thread.push(callable, loc, call);
     try {
-      return callable.fastcall(thread, call, positional, named);
-    } catch (EvalException ex) {
-      throw ex.ensureLocation(loc);
+      // TODO(adonovan): unify exception handling here.
+      return callable.callImpl(thread, call, args, ImmutableMap.copyOf(kwargs));
     } finally {
       thread.pop();
     }
@@ -305,32 +284,6 @@ public final class Starlark {
       throw new IllegalArgumentException(cls.getName() + " is not annotated with @SkylarkModule");
     }
     env.put(annot.name(), v);
-  }
-
-  /**
-   * Checks the {@code positional} and {@code named} arguments supplied to an implementation of
-   * {@link StarlarkCallable#fastcall} to ensure they match the {@code signature}. It returns an
-   * array of effective parameter values corresponding to the parameters of the signature. Newly
-   * allocated values (e.g. a {@code **kwargs} dict) use the Mutability {@code mu}.
-   *
-   * <p>If the function has optional parameters, their default values must be supplied by {@code
-   * defaults}; see {@link BaseFunction#getDefaultValues} for details.
-   *
-   * <p>The caller is responsible for accessing the correct element and casting to an appropriate
-   * type.
-   *
-   * <p>On failure, it throws an EvalException incorporating {@code func.toString()}.
-   */
-  public static Object[] matchSignature(
-      FunctionSignature signature,
-      StarlarkCallable func, // only used in error messages
-      @Nullable Tuple<Object> defaults,
-      @Nullable Mutability mu,
-      Object[] positional,
-      Object[] named)
-      throws EvalException {
-    // TODO(adonovan): move implementation here.
-    return BaseFunction.matchSignature(signature, func, defaults, mu, positional, named);
   }
 
   // TODO(adonovan):

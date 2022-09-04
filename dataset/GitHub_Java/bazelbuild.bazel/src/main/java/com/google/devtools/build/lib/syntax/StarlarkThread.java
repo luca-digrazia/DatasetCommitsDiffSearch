@@ -97,7 +97,7 @@ import javax.annotation.Nullable;
 // As best I can tell, all the skyframe serialization
 // as it applies to LexicalFrames is redundant, as these are transient
 // and should not exist after loading.
-// We will remove the CallExpression parameter from StarlarkFunction.call.
+// We will remove the FuncallExpression parameter from StarlarkFunction.call.
 // Clients should use getCallerLocation instead.
 // The only place that still needs an AST is Bazel's generator_name.
 // Once the API is small and sound, we can start to represent all
@@ -286,21 +286,28 @@ public final class StarlarkThread implements Freezable {
     // This is a consequence of not representing toplevel statements as a function.
     // TODO(adonovan): fix that.
 
-    final Location callLoc; // location of the enclosing call (may be Location.BUILTIN)
+    final Location callerLoc; // location of the enclosing call (may be Location.BUILTIN)
+    @Nullable final FuncallExpression call; // syntax of the enclosing call
     final Frame savedLexicals; // the saved lexicals of the parent
     final Module savedModule; // the saved module of the parent (TODO(adonovan): eliminate)
     @Nullable SilentCloseable profileSpan; // current span of walltime profiler
 
-    CallFrame(StarlarkCallable fn, Location callLoc, Frame savedLexicals, Module savedModule) {
+    CallFrame(
+        StarlarkCallable fn,
+        Location callerLoc,
+        @Nullable FuncallExpression call,
+        Frame savedLexicals,
+        Module savedModule) {
       this.fn = fn;
-      this.callLoc = callLoc;
+      this.callerLoc = callerLoc;
+      this.call = call;
       this.savedLexicals = savedLexicals;
       this.savedModule = savedModule;
     }
 
     @Override
     public String toString() {
-      return fn.getName() + "@" + callLoc;
+      return fn.getName() + "@" + callerLoc;
     }
   }
 
@@ -506,15 +513,9 @@ public final class StarlarkThread implements Freezable {
    * @param fn the function whose scope to enter
    * @param loc the source location of the function call.
    */
-  void push(StarlarkCallable fn, Location loc) {
-    CallFrame fr = new CallFrame(fn, loc, this.lexicalFrame, this.globalFrame);
+  void push(StarlarkCallable fn, Location loc, @Nullable FuncallExpression call) {
+    CallFrame fr = new CallFrame(fn, loc, call, this.lexicalFrame, this.globalFrame);
     callstack.add(fr);
-
-    // Push the function onto the allocation tracker's stack.
-    // TODO(adonovan): optimize it out of existence.
-    if (Callstack.enabled) {
-      Callstack.push(fn);
-    }
 
     ProfilerTask taskKind;
     if (fn instanceof StarlarkFunction) {
@@ -552,10 +553,6 @@ public final class StarlarkThread implements Freezable {
     // end profile span
     if (top.profileSpan != null) {
       top.profileSpan.close();
-    }
-
-    if (Callstack.enabled) {
-      Callstack.pop();
     }
   }
 
@@ -601,14 +598,14 @@ public final class StarlarkThread implements Freezable {
     return false;
   }
 
-  /** Returns the call location and called function for the outermost call being evaluated. */
+  /** Returns the call expression and called function for the outermost call being evaluated. */
   // TODO(adonovan): replace this by an API for walking the call stack, then move to lib.packages.
-  public Pair<Location, StarlarkCallable> getOutermostCall() {
+  public Pair<FuncallExpression, StarlarkCallable> getOutermostCall() {
     if (callstack.isEmpty()) {
       return null;
     }
     CallFrame outermost = callstack.get(0);
-    return new Pair<>(outermost.callLoc, outermost.fn);
+    return new Pair<>(outermost.call, outermost.fn);
   }
 
   /**
@@ -747,7 +744,7 @@ public final class StarlarkThread implements Freezable {
 
   /** Modifies a binding in the current Frame. If it is the module Frame, also export it. */
   StarlarkThread updateAndExport(String varname, Object value) throws EvalException {
-    updateUnresolved(varname, value);
+    update(varname, value);
     if (callstack.isEmpty()) {
       globalFrame.exportedBindings.add(varname);
     }
@@ -771,19 +768,18 @@ public final class StarlarkThread implements Freezable {
     void assign(String name, Object value);
   }
 
-  // Updates a lexical (local) binding.
-  // Requires that the lexical frame is not an alias for the global frame,
-  // that is, that the thread is not idle and a function call is underway
-  void updateLexical(String varname, Object value) {
-    Preconditions.checkNotNull(value, "trying to assign null to '%s'", varname);
-    if (this.lexicalFrame == this.globalFrame) {
-      throw new IllegalStateException("updateLexical called on idle thread");
-    }
-    updateUnresolved(varname, value);
-  }
-
-  // Updates a binding in the current local frame, which may be the global frame.
-  void updateUnresolved(String varname, Object value) {
+  /**
+   * Modifies a binding in the current Frame of this StarlarkThread, as would an {@link
+   * AssignmentStatement}. Does not try to modify an inherited binding. This will shadow any
+   * inherited binding, which may be an error that you want to guard against before calling this
+   * function.
+   *
+   * @param varname the name of the variable to be bound
+   * @param value the value to bind to the variable
+   * @return this StarlarkThread, in fluid style
+   */
+  // TODO(adonovan): eliminate sole external call from EvaluationTestCase and make private.
+  public StarlarkThread update(String varname, Object value) {
     Preconditions.checkNotNull(value, "trying to assign null to '%s'", varname);
     try {
       lexicalFrame.put(varname, value);
@@ -796,6 +792,7 @@ public final class StarlarkThread implements Freezable {
       throw new AssertionError(
           Starlark.format("Can't update %s to %r in frozen environment", varname, value), e);
     }
+    return this;
   }
 
   // Used only for Eval.evalComprehension..
@@ -822,22 +819,23 @@ public final class StarlarkThread implements Freezable {
   /**
    * Returns the value of a variable defined in the Module scope (e.g. global variables, functions).
    */
-  Object moduleLookup(String varname) {
-    return globalFrame.lookup(varname);
+  public Object moduleLookup(String varname) {
+    return globalFrame.getDirectBindings(varname);
   }
 
   /** Returns the value of a variable defined in the Universe scope (builtins). */
-  Object universeLookup(String varname) {
+  public Object universeLookup(String varname) {
     // TODO(laurentlb): look only at globalFrame.universe.
     return globalFrame.get(varname);
   }
 
   /**
    * Returns the value from the environment whose name is "varname" if it exists, otherwise null.
+   *
+   * <p>TODO(laurentlb): Remove this method. Callers should know where the value is defined and use
+   * the corresponding method (e.g. localLookup or moduleLookup).
    */
-  // TODO(laurentlb): Remove this method. Callers should know where the value is defined and use the
-  // corresponding method (e.g. localLookup or moduleLookup).
-  Object lookupUnresolved(String varname) {
+  Object lookup(String varname) {
     // Lexical frame takes precedence, then globals.
     Object lexicalValue = lexicalFrame.get(varname);
     if (lexicalValue != null) {
@@ -896,7 +894,7 @@ public final class StarlarkThread implements Freezable {
               .setLocation(loc)
               .build());
       lex = fr.savedLexicals;
-      loc = fr.callLoc;
+      loc = fr.callerLoc;
     }
     // TODO(adonovan): simplify by fixing the callstack's off-by-one problem.
     // We won't need to pass in 'loc' nor add a fake <top level> frame, nor
@@ -1011,4 +1009,7 @@ public final class StarlarkThread implements Freezable {
   public String getTransitiveContentHashCode() {
     return transitiveHashCode;
   }
+
+  // legacy for copybara; to be inlined and deleted in Nov 2019.
+  public static final Module SKYLARK = Module.createForBuiltins(Starlark.UNIVERSE);
 }

@@ -165,7 +165,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     AttributeContainer withMacro = getContainerForTarget("macro_target");
     assertThat(withMacro.getAttr("generator_name")).isEqualTo("macro_target");
     assertThat(withMacro.getAttr("generator_function")).isEqualTo("macro");
-    assertThat(withMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:3:1");
+    assertThat(withMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:3");
 
     // Attributes are only set when the rule was created by a macro
     AttributeContainer noMacro = getContainerForTarget("no_macro_target");
@@ -176,7 +176,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     AttributeContainer nativeMacro = getContainerForTarget("native_macro_target_suffix");
     assertThat(nativeMacro.getAttr("generator_name")).isEqualTo("native_macro_target");
     assertThat(nativeMacro.getAttr("generator_function")).isEqualTo("native_macro");
-    assertThat(nativeMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:5:1");
+    assertThat(nativeMacro.getAttr("generator_location")).isEqualTo("test/skylark/BUILD:5");
 
     AttributeContainer ccTarget = getContainerForTarget("cc_target");
     assertThat(ccTarget.getAttr("generator_name")).isEqualTo("");
@@ -394,7 +394,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "str",
         "\t\tstr.index(1)"
             + System.lineSeparator()
-            + "in call to index(), parameter 'sub' got value of type 'int', want 'string'");
+            + "expected value of type 'string' for parameter 'sub', for call to method "
+            + "index(sub, start = 0, end = None) of 'string'");
   }
 
   @Test
@@ -3075,6 +3076,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testUnhashableInDictForbidden() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_disallow_dict_lookup_unhashable_keys=true");
+
     scratch.file("test/extension.bzl", "y = [] in {}");
 
     scratch.file("test/BUILD", "load('//test:extension.bzl', 'y')", "cc_library(name = 'r')");
@@ -3086,6 +3089,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testDictGetUnhashableForbidden() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_disallow_dict_lookup_unhashable_keys=true");
+
     scratch.file("test/extension.bzl", "y = {}.get({})");
 
     scratch.file("test/BUILD", "load('//test:extension.bzl', 'y')", "cc_library(name = 'r')");
@@ -3093,6 +3098,17 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:r");
     assertContainsEvent("unhashable type: 'dict'");
+  }
+
+  @Test
+  public void testUnhashableLookupDict() throws Exception {
+    setSkylarkSemanticsOptions("--incompatible_disallow_dict_lookup_unhashable_keys=false");
+
+    scratch.file("test/extension.bzl", "y = [[] in {}, {}.get({})]");
+
+    scratch.file("test/BUILD", "load('//test:extension.bzl', 'y')", "cc_library(name = 'r')");
+
+    getConfiguredTarget("//test:r");
   }
 
   @Test

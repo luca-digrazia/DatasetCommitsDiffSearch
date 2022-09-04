@@ -170,7 +170,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     }
 
     @SkylarkCallable(name = "interrupted_struct_field", documented = false, structField = true)
-    public Object structFieldInterruptedCallable() throws InterruptedException {
+    public BuiltinFunction structFieldInterruptedCallable() throws InterruptedException {
       throw new InterruptedException();
     }
 
@@ -2093,8 +2093,11 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
           }
 
           @Override
-          public Object fastcall(
-              StarlarkThread thread, FuncallExpression call, Object[] positional, Object[] named) {
+          public Object callImpl(
+              StarlarkThread thread,
+              FuncallExpression call,
+              List<Object> args,
+              Map<String, Object> kwargs) {
             return "fromValues";
           }
         };
