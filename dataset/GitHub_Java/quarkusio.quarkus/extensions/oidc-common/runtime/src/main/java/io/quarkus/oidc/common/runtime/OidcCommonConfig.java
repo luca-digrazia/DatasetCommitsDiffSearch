@@ -2,7 +2,6 @@ package io.quarkus.oidc.common.runtime;
 
 import java.time.Duration;
 import java.util.Optional;
-import java.util.OptionalInt;
 
 import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
@@ -43,38 +42,16 @@ public class OidcCommonConfig {
      * The number of times the connection request will be repeated is calculated by dividing the value of this property by 2.
      * For example, setting it to `20S` will allow for requesting the connection up to 10 times with a 2 seconds delay between
      * the retries.
-     * Note this property is only effective when the initial OIDC connection is created,
-     * for example, when requesting a well-known OIDC configuration.
-     * Use the 'connection-retry-count' property to support trying to re-establish an already available connection which may
-     * have been
-     * dropped.
+     * Note the `connection-timeout` property does not affect this amount of time.
      */
     @ConfigItem
     public Optional<Duration> connectionDelay = Optional.empty();
 
     /**
-     * The number of times an attempt to re-establish an already available connection will be repeated for.
-     * Note this property is different to the `connection-delay` property which is only effective during the initial OIDC
-     * connection creation.
-     * This property is used to try to recover the existing connection which may have been temporarily lost.
-     * For example, if a request to the OIDC token endpoint fails due to a connection exception then the request will be retried
-     * for
-     * a number of times configured by this property.
-     */
-    @ConfigItem(defaultValue = "3")
-    public int connectionRetryCount = 3;
-
-    /**
-     * The amount of time after which the current OIDC connection request will time out.
+     * The amount of time after which the connection request to the currently unavailable OIDC server will time out.
      */
     @ConfigItem(defaultValue = "10s")
     public Duration connectionTimeout = Duration.ofSeconds(10);
-
-    /**
-     * The maximum size of the connection pool used by the WebClient
-     */
-    @ConfigItem
-    public OptionalInt maxPoolSize = OptionalInt.empty();
 
     /**
      * Credentials which the OIDC adapter will use to authenticate to the OIDC server.
@@ -379,13 +356,5 @@ public class OidcCommonConfig {
 
     public void setConnectionTimeout(Duration connectionTimeout) {
         this.connectionTimeout = connectionTimeout;
-    }
-
-    public OptionalInt getMaxPoolSize() {
-        return maxPoolSize;
-    }
-
-    public void setMaxPoolSize(int maxPoolSize) {
-        this.maxPoolSize = OptionalInt.of(maxPoolSize);
     }
 }
