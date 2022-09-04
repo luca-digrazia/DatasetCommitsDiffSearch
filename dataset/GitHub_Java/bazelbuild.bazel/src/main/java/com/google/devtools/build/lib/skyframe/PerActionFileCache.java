@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,20 +14,11 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Interner;
-import com.google.common.collect.Interners;
-import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.ActionInput;
-import com.google.devtools.build.lib.actions.ActionInputFileCache;
+import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.protobuf.ByteString;
-
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
+import com.google.devtools.build.lib.actions.FileArtifactValue;
+import com.google.devtools.build.lib.actions.MetadataProvider;
 import javax.annotation.Nullable;
 
 /**
@@ -37,71 +28,34 @@ import javax.annotation.Nullable;
  * <p>Data for the action's inputs is injected into this cache on construction, using the graph as
  * the source of truth.
  */
-class PerActionFileCache implements ActionInputFileCache {
-  private final Map<Artifact, FileArtifactValue> inputArtifactData;
-  private final File execRoot;
-  // Populated lazily, on calls to #getDigest.
-  private final Map<ByteString, Artifact> reverseMap = new ConcurrentHashMap<>();
-
-  private static final Interner<ByteString> BYTE_INTERNER = Interners.newWeakInterner();
+class PerActionFileCache implements MetadataProvider {
+  private final ActionInputMap inputArtifactData;
+  private final boolean missingArtifactsAllowed;
 
   /**
    * @param inputArtifactData Map from artifact to metadata, used to return metadata upon request.
-   * @param execRoot Path to the execution root, used to convert Artifacts' relative paths into
-   * absolute ones in the execution root.
+   * @param missingArtifactsAllowed whether to tolerate missing artifacts: can happen during input
+   *     discovery.
    */
-  PerActionFileCache(Map<Artifact, FileArtifactValue> inputArtifactData,
-      File execRoot) {
+  PerActionFileCache(ActionInputMap inputArtifactData, boolean missingArtifactsAllowed) {
     this.inputArtifactData = Preconditions.checkNotNull(inputArtifactData);
-    this.execRoot = Preconditions.checkNotNull(execRoot);
+    this.missingArtifactsAllowed = missingArtifactsAllowed;
   }
 
   @Nullable
-  private FileArtifactValue getInputFileArtifactValue(ActionInput input) {
+  @Override
+  public FileArtifactValue getMetadata(ActionInput input) {
+    // TODO(shahan): is this bypass needed?
     if (!(input instanceof Artifact)) {
       return null;
     }
-    return Preconditions.checkNotNull(inputArtifactData.get(input), input);
+    FileArtifactValue result = inputArtifactData.getMetadata(input);
+    Preconditions.checkState(missingArtifactsAllowed || result != null, "null for %s", input);
+    return result;
   }
 
   @Override
-  public long getSizeInBytes(ActionInput input) throws IOException {
-    FileArtifactValue metadata = getInputFileArtifactValue(input);
-    if (metadata != null) {
-      return metadata.getSize();
-    }
-    return -1;
-  }
-
-  @Nullable
-  @Override
-  public File getFileFromDigest(ByteString digest) throws IOException {
-    Artifact artifact = reverseMap.get(digest);
-    if (artifact != null) {
-      String relPath = artifact.getExecPathString();
-      return new File(execRoot, relPath);
-    }
-    return null;
-  }
-
-  @Nullable
-  @Override
-  public ByteString getDigest(ActionInput input) throws IOException {
-    FileArtifactValue value = getInputFileArtifactValue(input);
-    if (value != null) {
-      byte[] bytes = value.getDigest();
-      if (bytes != null) {
-        ByteString digest = ByteString.copyFrom(BaseEncoding.base16().lowerCase().encode(bytes)
-            .getBytes(StandardCharsets.US_ASCII));
-        reverseMap.put(BYTE_INTERNER.intern(digest), (Artifact) input);
-        return digest;
-      }
-    }
-    return null;
-  }
-
-  @Override
-  public boolean contentsAvailableLocally(ByteString digest) {
-    return reverseMap.containsKey(digest);
+  public ActionInput getInput(String execPath) {
+    return inputArtifactData.getInput(execPath);
   }
 }

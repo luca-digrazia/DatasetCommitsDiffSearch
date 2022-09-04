@@ -377,6 +377,7 @@ public final class SkyframeActionExecutor {
   FileSystem createActionFileSystem(
       String relativeOutputPath,
       ActionInputMap inputArtifactData,
+      Iterable<Artifact> allowedInputs,
       Iterable<Artifact> outputArtifacts) {
     return outputService.createActionFileSystem(
         executorEngine.getFileSystem(),
@@ -384,6 +385,7 @@ public final class SkyframeActionExecutor {
         relativeOutputPath,
         sourceRootSupplier.get(),
         inputArtifactData,
+        allowedInputs,
         outputArtifacts);
   }
 
@@ -503,6 +505,16 @@ public final class SkyframeActionExecutor {
       Preconditions.checkState(artifact.isMiddlemanArtifact() || artifact.isTreeArtifact(),
           artifact);
       Collection<Artifact> result = expandedInputs.get(artifact);
+
+      // Note that the result can be empty but not null for TreeArtifacts. And it may be null for
+      // non-aggregating middlemen.
+      if (artifact.isTreeArtifact()) {
+        Preconditions.checkNotNull(
+            result,
+            "TreeArtifact %s cannot be expanded because it is not an input for the action",
+            artifact);
+      }
+
       if (result != null) {
         output.addAll(result);
       }
