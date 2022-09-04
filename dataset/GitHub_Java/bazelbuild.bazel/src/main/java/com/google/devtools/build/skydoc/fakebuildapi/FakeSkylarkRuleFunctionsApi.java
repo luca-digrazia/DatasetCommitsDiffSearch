@@ -47,6 +47,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 
 /**
  * Fake implementation of {@link SkylarkRuleFunctionsApi}.
@@ -57,8 +58,7 @@ import java.util.stream.Collectors;
 public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<FileApi> {
 
   private static final FakeDescriptor IMPLICIT_NAME_ATTRIBUTE_DESCRIPTOR =
-      new FakeDescriptor(
-          AttributeType.NAME, "A unique name for this target.", true, ImmutableList.of());
+      new FakeDescriptor(AttributeType.NAME, "A unique name for this target.", true);
   private final List<RuleInfoWrapper> ruleInfoList;
 
   private final List<ProviderInfoWrapper> providerInfoList;
@@ -243,6 +243,12 @@ public class FakeSkylarkRuleFunctionsApi implements SkylarkRuleFunctionsApi<File
 
     public RuleDefinitionIdentifier() {
       super("RuleDefinitionIdentifier" + idCounter++);
+    }
+
+    @Override
+    public boolean equals(@Nullable Object other) {
+      // Use exact object matching.
+      return this == other;
     }
   }
 
