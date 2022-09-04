@@ -4,7 +4,6 @@ import org.graylog2.plugin.Message;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.streams.Output;
 import org.graylog2.plugin.streams.Stream;
-import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 import org.testng.annotations.BeforeMethod;
@@ -14,6 +13,7 @@ import java.util.*;
 
 import static org.mockito.Matchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.MockitoAnnotations.Mock;
 import static org.testng.Assert.*;
 
 /**
