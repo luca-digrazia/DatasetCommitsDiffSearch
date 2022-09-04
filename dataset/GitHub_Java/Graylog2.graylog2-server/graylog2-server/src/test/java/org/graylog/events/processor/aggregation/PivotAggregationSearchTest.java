@@ -22,7 +22,6 @@ import org.graylog.events.processor.EventDefinition;
 import org.graylog.events.search.MoreSearch;
 import org.graylog.plugins.views.search.db.SearchJobService;
 import org.graylog.plugins.views.search.engine.QueryEngine;
-import org.graylog.plugins.views.search.rest.PermittedStreams;
 import org.graylog.plugins.views.search.searchtypes.pivot.PivotResult;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.RelativeRange;
@@ -48,8 +47,6 @@ public class PivotAggregationSearchTest {
     private EventDefinition eventDefinition;
     @Mock
     private MoreSearch moreSearch;
-    @Mock
-    private PermittedStreams permittedStreams;
 
     @Test
     public void testExtractValuesWithGroupBy() throws Exception {
@@ -79,8 +76,7 @@ public class PivotAggregationSearchTest {
                 searchJobService,
                 queryEngine,
                 EventsConfigurationTestProvider.create(),
-                moreSearch,
-                permittedStreams);
+                moreSearch);
 
         final PivotResult pivotResult = PivotResult.builder()
                 .id("test")
@@ -172,8 +168,7 @@ public class PivotAggregationSearchTest {
                 searchJobService,
                 queryEngine,
                 EventsConfigurationTestProvider.create(),
-                moreSearch,
-                permittedStreams);
+                moreSearch);
 
         final PivotResult pivotResult = PivotResult.builder()
                 .id("test")
@@ -242,8 +237,7 @@ public class PivotAggregationSearchTest {
                 searchJobService,
                 queryEngine,
                 EventsConfigurationTestProvider.create(),
-                moreSearch,
-                permittedStreams);
+                moreSearch);
 
         final PivotResult pivotResult = PivotResult.builder()
                 .id("test")
