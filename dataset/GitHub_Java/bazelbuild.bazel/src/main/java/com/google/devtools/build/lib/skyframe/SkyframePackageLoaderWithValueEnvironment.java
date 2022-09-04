@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,104 +13,66 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
-import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
+import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.analysis.config.PackageProviderForConfigurations;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor.SkyframePackageLoader;
-import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.Label.SyntaxException;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.MemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
-
 import java.io.IOException;
-import java.util.Set;
 
 /**
  * Repeats functionality of {@link SkyframePackageLoader} but uses
  * {@link SkyFunction.Environment#getValue} instead of {@link MemoizingEvaluator#evaluate}
  * for node evaluation
  */
-class SkyframePackageLoaderWithValueEnvironment implements
-    PackageProviderForConfigurations {
+class SkyframePackageLoaderWithValueEnvironment implements PackageProviderForConfigurations {
   private final SkyFunction.Environment env;
-  private final Set<Package> packages;
 
-  public SkyframePackageLoaderWithValueEnvironment(SkyFunction.Environment env,
-      Set<Package> packages) {
+  SkyframePackageLoaderWithValueEnvironment(SkyFunction.Environment env) {
     this.env = env;
-    this.packages = packages;
   }
 
-  private Package getPackage(PackageIdentifier pkgIdentifier) throws NoSuchPackageException{
+  @Override
+  public ExtendedEventHandler getEventHandler() {
+    return env.getListener();
+  }
+
+  private Package getPackage(final PackageIdentifier pkgIdentifier)
+      throws NoSuchPackageException, InterruptedException {
     SkyKey key = PackageValue.key(pkgIdentifier);
     PackageValue value = (PackageValue) env.getValueOrThrow(key, NoSuchPackageException.class);
     if (value != null) {
-      packages.add(value.getPackage());
       return value.getPackage();
     }
     return null;
   }
 
   @Override
-  public Package getLoadedPackage(final PackageIdentifier pkgIdentifier)
-      throws NoSuchPackageException {
-    try {
-      return getPackage(pkgIdentifier);
-    } catch (NoSuchPackageException e) {
-      if (e.getPackage() != null) {
-        return e.getPackage();
-      }
-      throw e;
-    }
-  }
-
-  @Override
-  public Target getLoadedTarget(Label label) throws NoSuchPackageException,
-      NoSuchTargetException {
-    Package pkg = getLoadedPackage(label.getPackageIdentifier());
+  public Target getTarget(Label label)
+      throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
+    Package pkg = getPackage(label.getPackageIdentifier());
     return pkg == null ? null : pkg.getTarget(label.getName());
   }
 
   @Override
-  public boolean isTargetCurrent(Target target) {
-    throw new UnsupportedOperationException();
-  }
-
-  @Override
-  public void addDependency(Package pkg, String fileName) throws SyntaxException, IOException {
+  public void addDependency(Package pkg, String fileName)
+      throws LabelSyntaxException, IOException, InterruptedException {
     RootedPath fileRootedPath = RootedPath.toRootedPath(pkg.getSourceRoot(),
-        pkg.getNameFragment().getRelative(fileName));
+        pkg.getPackageIdentifier().getSourceRoot().getRelative(fileName));
     FileValue result = (FileValue) env.getValue(FileValue.key(fileRootedPath));
     if (result != null && !result.exists()) {
       throw new IOException();
     }
-  }
-
-  @SuppressWarnings("unchecked")
-  @Override
-  public <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType)
-      throws InvalidConfigurationException {
-    ConfigurationFragmentValue fragmentNode = (ConfigurationFragmentValue) env.getValueOrThrow(
-        ConfigurationFragmentValue.key(buildOptions, fragmentType),
-        InvalidConfigurationException.class);
-    if (fragmentNode == null) {
-      return null;
-    }
-    return (T) fragmentNode.getFragment();
-  }
-
-  @Override
-  public BlazeDirectories getDirectories() {
-    return PrecomputedValue.BLAZE_DIRECTORIES.get(env);
   }
 
   @Override

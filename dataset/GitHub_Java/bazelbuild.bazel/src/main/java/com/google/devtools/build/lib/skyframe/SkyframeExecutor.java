@@ -1389,7 +1389,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       EvaluationContext evaluationContext =
           EvaluationContext.newBuilder()
               .setKeepGoing(options.getOptions(KeepGoingOption.class).keepGoing)
-              .setNumThreads(options.getOptions(BuildRequestOptions.class).jobs)
+              .setNumThreads(options.getOptions(BuildRequestOptions.class).getJobs())
               .setEventHander(reporter)
               .build();
       return buildDriver.evaluate(
@@ -1430,7 +1430,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       return evaluate(
           testKeys,
           /*keepGoing=*/ options.getOptions(KeepGoingOption.class).keepGoing,
-          /*numThreads=*/ options.getOptions(BuildRequestOptions.class).jobs,
+          /*numThreads=*/ options.getOptions(BuildRequestOptions.class).getJobs(),
           reporter);
     } finally {
       progressReceiver.executionProgressReceiver = null;
@@ -2368,11 +2368,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * and purged in version V+1.
    */
   public abstract void deleteOldNodes(long versionWindowForDirtyGc);
-
-  @Nullable
-  public PackageProgressReceiver getPackageProgressReceiver() {
-    return packageProgress;
-  }
 
   public TargetPatternPhaseValue loadTargetPatterns(
       ExtendedEventHandler eventHandler,

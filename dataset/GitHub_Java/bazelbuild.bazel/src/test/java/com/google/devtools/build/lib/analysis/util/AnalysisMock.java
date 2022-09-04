@@ -39,6 +39,7 @@ import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.common.options.InvocationPolicyEnforcer;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.util.List;
@@ -73,17 +74,22 @@ public abstract class AnalysisMock extends LoadingMock {
         .setExtraSkyFunctions(getSkyFunctions(directories));
   }
 
+  @Override
+  public InvocationPolicyEnforcer getInvocationPolicyEnforcer() {
+    return new InvocationPolicyEnforcer(TestConstants.TEST_INVOCATION_POLICY);
+  }
+
+  @Override
+  public String getDefaultsPackageContent() {
+    return createRuleClassProvider()
+        .getDefaultsPackageContent(getInvocationPolicyEnforcer().getInvocationPolicy());
+  }
+
   /**
    * This is called from test setup to create the mock directory layout needed to create the
    * configuration.
    */
-  public void setupMockClient(MockToolsConfig mockToolsConfig) throws IOException {
-    List<String> workspaceContents = getWorkspaceContents(mockToolsConfig);
-    setupMockClient(mockToolsConfig, workspaceContents);
-  }
-
-  public abstract void setupMockClient(
-      MockToolsConfig mockToolsConfig, List<String> getWorkspaceContents) throws IOException;
+  public abstract void setupMockClient(MockToolsConfig mockToolsConfig) throws IOException;
 
   /**
    * Returns the contents of WORKSPACE.
@@ -114,38 +120,23 @@ public abstract class AnalysisMock extends LoadingMock {
 
   public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(BlazeDirectories directories) {
     // Some tests require the local_repository rule so we need the appropriate SkyFunctions.
-    ImmutableMap.Builder<String, RepositoryFunction> repositoryHandlers =
-        new ImmutableMap.Builder<String, RepositoryFunction>()
-            .put(LocalRepositoryRule.NAME, new LocalRepositoryFunction())
-            .put(AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction())
-            .put(AndroidNdkRepositoryRule.NAME, new AndroidNdkRepositoryFunction());
-
-    addExtraRepositoryFunctions(repositoryHandlers);
+    RepositoryFunction localRepositoryFunction = new LocalRepositoryFunction();
+    ImmutableMap<String, RepositoryFunction> repositoryHandlers = ImmutableMap.of(
+        LocalRepositoryRule.NAME, localRepositoryFunction,
+        AndroidSdkRepositoryRule.NAME, new AndroidSdkRepositoryFunction(),
+        AndroidNdkRepositoryRule.NAME, new AndroidNdkRepositoryFunction());
 
     return ImmutableMap.of(
         SkyFunctions.REPOSITORY_DIRECTORY,
         new RepositoryDelegatorFunction(
-            repositoryHandlers.build(),
-            null,
-            new AtomicBoolean(true),
-            ImmutableMap::of,
-            directories),
+            repositoryHandlers, null, new AtomicBoolean(true), ImmutableMap::of, directories),
         SkyFunctions.REPOSITORY,
         new RepositoryLoaderFunction(),
         CcSkyframeSupportValue.SKYFUNCTION,
         new CcSkyframeSupportFunction(directories));
   }
 
-  // Allow subclasses to add extra repository functions.
-  public abstract void addExtraRepositoryFunctions(
-      ImmutableMap.Builder<String, RepositoryFunction> repositoryHandlers);
-
-  /**
-   * Stub class for tests to extend in order to update a small amount of {@link AnalysisMock}
-   * functionality.
-   */
   public static class Delegate extends AnalysisMock {
-
     private final AnalysisMock delegate;
 
     public Delegate(AnalysisMock delegate) {
@@ -153,9 +144,8 @@ public abstract class AnalysisMock extends LoadingMock {
     }
 
     @Override
-    public void setupMockClient(MockToolsConfig mockToolsConfig, List<String> workspaceContents)
-        throws IOException {
-      delegate.setupMockClient(mockToolsConfig, workspaceContents);
+    public void setupMockClient(MockToolsConfig mockToolsConfig) throws IOException {
+      delegate.setupMockClient(mockToolsConfig);
     }
 
     @Override
@@ -179,6 +169,11 @@ public abstract class AnalysisMock extends LoadingMock {
     }
 
     @Override
+    public InvocationPolicyEnforcer getInvocationPolicyEnforcer() {
+      return delegate.getInvocationPolicyEnforcer();
+    }
+
+    @Override
     public boolean isThisBazel() {
       return delegate.isThisBazel();
     }
@@ -197,12 +192,6 @@ public abstract class AnalysisMock extends LoadingMock {
     public ImmutableMap<SkyFunctionName, SkyFunction> getSkyFunctions(
         BlazeDirectories directories) {
       return delegate.getSkyFunctions(directories);
-    }
-
-    @Override
-    public void addExtraRepositoryFunctions(
-        ImmutableMap.Builder<String, RepositoryFunction> repositoryHandlers) {
-      delegate.addExtraRepositoryFunctions(repositoryHandlers);
     }
   }
 }

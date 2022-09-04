@@ -14,22 +14,15 @@
 
 package com.google.devtools.build.lib.analysis.config;
 
-import com.google.devtools.build.lib.analysis.BlazeDirectories;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.concurrent.Uninterruptibles;
-import com.google.devtools.build.lib.events.EventHandler;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
+import com.google.devtools.build.lib.pkgcache.LoadedPackageProvider;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
-import com.google.devtools.build.lib.pkgcache.TargetProvider;
 import com.google.devtools.build.lib.vfs.Path;
-
-import java.util.concurrent.Callable;
-
-import javax.annotation.Nullable;
 
 /**
  * An environment to support creating BuildConfiguration instances in a hermetic fashion; all
@@ -37,77 +30,65 @@ import javax.annotation.Nullable;
  * be recorded for correct caching.
  */
 public interface ConfigurationEnvironment {
-
   /**
    * Returns a target for the given label, loading it if necessary, and throwing an exception if it
    * does not exist.
    *
-   * @see TargetProvider#getTarget
+   * @deprecated Do not use this method. Configuration fragments should be fairly dumb key-value
+   * maps so that they are cheap and easy to create.
+   *
+   * <p>If you feel the need to use contents of BUILD files in your
+   * {@link ConfigurationFragmentFactory}, add an implicit dependency to your rules that use your
+   * configuration fragment that point to a rule of a new rule class, and do the computation during
+   * the analysis of said rule. The only uses of this method are those we haven't gotten around
+   * migrating yet.
    */
-  Target getTarget(Label label) throws NoSuchPackageException, NoSuchTargetException;
+  @Deprecated
+  Target getTarget(Label label)
+      throws NoSuchPackageException, NoSuchTargetException, InterruptedException;
 
-  /** Returns a path for the given file within the given package. */
-  Path getPath(Package pkg, String fileName);
-  
-  /** Returns fragment based on fragment class and build options. */
-  <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType) 
-      throws InvalidConfigurationException;
-
-  /** Returns global value of BlazeDirectories. */
-  @Nullable
-  BlazeDirectories getBlazeDirectories();
-
+  /**
+   * Returns a path for the given file within the given package.
+   *
+   * @deprecated Do not use this method. Configuration fragments should be fairly dumb key-value
+   * maps so that they are cheap and easy to create. If you feel the need to read contents of files
+   * in your {@link ConfigurationFragmentFactory}, you have the following options:
+   * <ul>
+   *   <li>
+   *     Add an implicit dependency to the rules that need this configuration fragment, put the
+   *     information you need in BUILD files and use it during the analysis of the implicit
+   *     dependency
+   *   </li>
+   *   <li>
+   *     Read the file during the execution phase (then it won't be able to affect analysis)
+   *   </li>
+   *   <li>
+   *     Contact the developers of Bazel and we'll figure something out.
+   *   </li>
+   * </ul>
+   */
+  @Deprecated
+  Path getPath(Package pkg, String fileName) throws InterruptedException;
   /**
    * An implementation backed by a {@link PackageProvider} instance.
    */
   public static final class TargetProviderEnvironment implements ConfigurationEnvironment {
-    private final PackageProvider packageProvider;
-    private final EventHandler eventHandler;
-    private final BlazeDirectories blazeDirectories;
+    private final LoadedPackageProvider packageProvider;
 
-    public TargetProviderEnvironment(PackageProvider packageProvider,
-        EventHandler eventHandler, BlazeDirectories blazeDirectories) {
-      this.packageProvider = packageProvider;
-      this.eventHandler = eventHandler;
-      this.blazeDirectories = blazeDirectories;
-    }
-
-    public TargetProviderEnvironment(PackageProvider packageProvider,
-        EventHandler eventHandler) {
-      this(packageProvider, eventHandler, null);
+    public TargetProviderEnvironment(
+        PackageProvider packageProvider, ExtendedEventHandler eventHandler) {
+      this.packageProvider = new LoadedPackageProvider(packageProvider, eventHandler);
     }
 
     @Override
     public Target getTarget(final Label label)
-        throws NoSuchPackageException, NoSuchTargetException {
-      try {
-        return Uninterruptibles.callUninterruptibly(new Callable<Target>() {
-          @Override
-          public Target call()
-              throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
-            return packageProvider.getTarget(eventHandler, label);
-          }
-        });
-      } catch (NoSuchPackageException | NoSuchTargetException e) {
-        throw e;
-      } catch (Exception e) {
-        throw new IllegalStateException(e);
-      }
+        throws NoSuchPackageException, NoSuchTargetException, InterruptedException {
+      return packageProvider.getLoadedTarget(label);
     }
 
     @Override
     public Path getPath(Package pkg, String fileName) {
       return pkg.getPackageDirectory().getRelative(fileName);
-    }
-
-    @Override
-    public <T extends Fragment> T getFragment(BuildOptions buildOptions, Class<T> fragmentType) {
-      throw new UnsupportedOperationException();
-    }
-
-    @Override
-    public BlazeDirectories getBlazeDirectories() {
-      return blazeDirectories;
     }
   }
 }

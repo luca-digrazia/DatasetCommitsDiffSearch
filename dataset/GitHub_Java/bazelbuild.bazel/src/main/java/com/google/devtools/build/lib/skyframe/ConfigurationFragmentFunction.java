@@ -47,8 +47,8 @@ public final class ConfigurationFragmentFunction implements SkyFunction {
   }
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env)
-      throws ConfigurationFragmentFunctionException, InterruptedException {
+  public SkyValue compute(SkyKey skyKey, Environment env) throws InterruptedException,
+      ConfigurationFragmentFunctionException {
     ConfigurationFragmentKey configurationFragmentKey = 
         (ConfigurationFragmentKey) skyKey.argument();
     BuildOptions buildOptions = configurationFragmentKey.getBuildOptions();
@@ -87,8 +87,10 @@ public final class ConfigurationFragmentFunction implements SkyFunction {
   public String extractTag(SkyKey skyKey) {
     return null;
   }
-
-  /** A {@link ConfigurationEnvironment} implementation that can create dependencies on files. */
+  
+  /**
+   * A {@link ConfigurationEnvironment} implementation that can create dependencies on files.
+   */
   private static final class ConfigurationBuilderEnvironment implements ConfigurationEnvironment {
     private final PackageProviderForConfigurations packageProvider;
 
@@ -112,6 +114,7 @@ public final class ConfigurationFragmentFunction implements SkyFunction {
       }
       return result;
     }
+
   }
 
   /**

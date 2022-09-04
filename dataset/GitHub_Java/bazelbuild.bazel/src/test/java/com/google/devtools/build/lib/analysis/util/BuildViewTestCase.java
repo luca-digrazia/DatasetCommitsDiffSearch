@@ -92,11 +92,10 @@ import com.google.devtools.build.lib.analysis.configuredtargets.FileConfiguredTa
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.analysis.extra.ExtraAction;
 import com.google.devtools.build.lib.analysis.test.BaselineCoverageAction;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -343,7 +342,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     return ResourceSet.createWithRamCpu(Double.MAX_VALUE, Double.MAX_VALUE);
   }
 
-  protected final BuildConfigurationCollection createConfigurations(
+  private BuildConfigurationCollection createConfigurations(
       ImmutableMap<String, Object> skylarkOptions, String... args) throws Exception {
     optionsParser =
         OptionsParser.newOptionsParser(
@@ -359,8 +358,8 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     optionsParser.parse(allArgs);
     optionsParser.parse(args);
 
-    // TODO(juliexxia): when the starlark options parsing work goes in, add type verification here.
-    optionsParser.setStarlarkOptions(skylarkOptions);
+    // TODO(juliexxia): when the skylark options parsing work goes in, add type verification here.
+    optionsParser.setSkylarkOptionsForTesting(skylarkOptions);
 
     InvocationPolicyEnforcer optionsPolicyEnforcer =
         getAnalysisMock().getInvocationPolicyEnforcer();
@@ -1029,7 +1028,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected Rule scratchRule(String packageName, String ruleName, String... lines)
       throws Exception {
     String buildFilePathString = packageName + "/BUILD";
-    if (packageName.equals(LabelConstants.EXTERNAL_PACKAGE_NAME.getPathString())) {
+    if (packageName.equals(Label.EXTERNAL_PACKAGE_NAME.getPathString())) {
       buildFilePathString = "WORKSPACE";
       scratch.overwriteFile(buildFilePathString, lines);
     } else {
@@ -2019,8 +2018,9 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
   protected Iterable<String> baselineCoverageArtifactBasenames(ConfiguredTarget target)
       throws Exception {
     ImmutableList.Builder<String> basenames = ImmutableList.builder();
-    for (Artifact baselineCoverage :
-        target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR).getBaselineCoverageArtifacts()) {
+    for (Artifact baselineCoverage : target
+        .getProvider(InstrumentedFilesProvider.class)
+        .getBaselineCoverageArtifacts()) {
       BaselineCoverageAction baselineAction =
           (BaselineCoverageAction) getGeneratingAction(baselineCoverage);
       ByteArrayOutputStream bytes = new ByteArrayOutputStream();
@@ -2217,4 +2217,3 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
   }
 }
-
