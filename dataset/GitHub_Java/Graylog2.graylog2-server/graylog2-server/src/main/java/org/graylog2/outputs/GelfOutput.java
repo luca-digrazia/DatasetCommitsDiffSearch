@@ -1,22 +1,6 @@
-/**
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
 package org.graylog2.outputs;
 
-import com.google.common.collect.Maps;
+import org.joda.time.DateTime;
 import org.graylog2.GelfMessage;
 import org.graylog2.GelfSender;
 import org.graylog2.GelfTCPSender;
@@ -24,13 +8,9 @@ import org.graylog2.GelfUDPSender;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.DropdownField;
-import org.graylog2.plugin.configuration.fields.NumberField;
-import org.graylog2.plugin.configuration.fields.TextField;
+import org.graylog2.plugin.configuration.fields.*;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.outputs.MessageOutputConfigurationException;
-import org.joda.time.DateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,7 +24,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class GelfOutput implements MessageOutput {
-    private static final Logger LOG = LoggerFactory.getLogger(GelfOutput.class);
+    private final Logger LOG = LoggerFactory.getLogger(this.getClass());
     private final AtomicBoolean isRunning = new AtomicBoolean(false);
     private Configuration configuration;
     private GelfSender gelfSender;
@@ -111,39 +91,23 @@ public class GelfOutput implements MessageOutput {
 
     }
 
-    protected GelfMessage toGELFMessage(final Message message) {
-        final DateTime timestamp;
-        if (message.getField("timestamp") != null || message.getField("timestamp") instanceof DateTime) {
-            timestamp = (DateTime) message.getField("timestamp");
-        } else {
-            timestamp = DateTime.now();
-        }
+    protected GelfMessage toGELFMessage(Message message) {
+        final DateTime curTimestamp;
+        if (message.getField("timestamp") != null || message.getField("timestamp") instanceof DateTime)
+            curTimestamp = (DateTime)message.getField("timestamp");
+        else
+            curTimestamp = DateTime.now();
 
-        final String level = (String) message.getField("level");
-        final String messageLevel = level == null? "1" : level;
-        final String fullMessage = (String) message.getField("full_message");
-        final String facility = (String) message.getField("facility");
+        final long timestamp = curTimestamp.getMillis()/1000;
+        GelfMessage gelfMessage = new GelfMessage((String)message.getField("short_message"),
+                (String)message.getField("message"),
+                timestamp,
+                (String)message.getField("level"));
 
-        final GelfMessage gelfMessage = new GelfMessage();
+        gelfMessage.setHost((String)message.getField("source"));
+        gelfMessage.setFacility(this.getClass().getCanonicalName());
 
-        gelfMessage.setShortMessage(message.getMessage());
-
-        if(fullMessage != null) {
-            gelfMessage.setFullMessage(fullMessage);
-        }
-
-        gelfMessage.setJavaTimestamp(timestamp.getMillis());
-        gelfMessage.setLevel(messageLevel);
-        gelfMessage.setHost(message.getSource());
-
-        if(facility != null) {
-            gelfMessage.setFacility(facility);
-        }
-
-        gelfMessage.setAdditonalFields(Maps.newHashMap(message.getFields()));
-
-        final String forwarder = GelfOutput.class.getCanonicalName();
-        gelfMessage.addField("_forwarder", forwarder);
+        gelfMessage.setAdditonalFields(message.getFields());
 
         return gelfMessage;
     }
