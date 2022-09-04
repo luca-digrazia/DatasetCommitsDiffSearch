@@ -5,9 +5,7 @@ import io.dropwizard.Configuration;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.util.JarLocation;
-import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.Namespace;
-import net.sourceforge.argparse4j.inf.Subparser;
 import org.junit.AfterClass;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -51,37 +49,6 @@ public class CliTest {
         public void printStackTrace(PrintWriter writer) {
             writer.println(BAD_APP_EXCEPTION_STACK_TRACE);
         }
-
-        @Override
-        public String getMessage() {
-            return "I'm a bad exception";
-        }
-    }
-
-    public static final class CustomCommand extends Command {
-        protected CustomCommand() {
-            super("custom", "I'm custom");
-        }
-
-        @Override
-        public void configure(Subparser subparser) {
-            subparser.addArgument("--debug")
-                .action(Arguments.storeTrue());
-        }
-
-        @Override
-        public void run(Bootstrap<?> bootstrap, Namespace namespace) throws Exception {
-            throw new RuntimeException("I did not expect this!");
-        }
-
-        @Override
-        public void onError(Cli cli, Namespace namespace, Throwable e) {
-            if (namespace.getBoolean("debug")) {
-                super.onError(cli, namespace, e);
-            } else {
-                cli.getStdOut().println(e.getMessage());
-            }
-        }
     }
 
     private final Bootstrap<Configuration> bootstrap = new Bootstrap<>(app);
@@ -107,7 +74,6 @@ public class CliTest {
         when(location.toString()).thenReturn("dw-thing.jar");
         when(location.getVersion()).thenReturn(Optional.of("1.0.0"));
         bootstrap.addCommand(command);
-        bootstrap.addCommand(new CustomCommand());
 
         doNothing().when(command).run(any(Bootstrap.class), any(Namespace.class), any(Configuration.class));
 
@@ -160,10 +126,10 @@ public class CliTest {
 
         assertThat(stdOut.toString())
                 .isEqualTo(String.format(
-                        "usage: java -jar dw-thing.jar [-h] [-v] {check,custom} ...%n" +
+                        "usage: java -jar dw-thing.jar [-h] [-v] {check} ...%n" +
                                 "%n" +
                                 "positional arguments:%n" +
-                                "  {check,custom}         available commands%n" +
+                                "  {check}                available commands%n" +
                                 "%n" +
                                 "optional arguments:%n" +
                                 "  -h, --help             show this help message and exit%n" +
@@ -181,10 +147,10 @@ public class CliTest {
 
         assertThat(stdOut.toString())
                 .isEqualTo(String.format(
-                        "usage: java -jar dw-thing.jar [-h] [-v] {check,custom} ...%n" +
+                        "usage: java -jar dw-thing.jar [-h] [-v] {check} ...%n" +
                                 "%n" +
                                 "positional arguments:%n" +
-                                "  {check,custom}         available commands%n" +
+                                "  {check}                available commands%n" +
                                 "%n" +
                                 "optional arguments:%n" +
                                 "  -h, --help             show this help message and exit%n" +
@@ -202,10 +168,10 @@ public class CliTest {
 
         assertThat(stdOut.toString())
                 .isEqualTo(String.format(
-                        "usage: java -jar dw-thing.jar [-h] [-v] {check,custom} ...%n" +
+                        "usage: java -jar dw-thing.jar [-h] [-v] {check} ...%n" +
                                 "%n" +
                                 "positional arguments:%n" +
-                                "  {check,custom}         available commands%n" +
+                                "  {check}                available commands%n" +
                                 "%n" +
                                 "optional arguments:%n" +
                                 "  -h, --help             show this help message and exit%n" +
@@ -277,10 +243,10 @@ public class CliTest {
         assertThat(stdErr.toString())
                 .isEqualTo(String.format(
                         "unrecognized arguments: '--yes'%n" +
-                                "usage: java -jar dw-thing.jar [-h] [-v] {check,custom} ...%n" +
+                                "usage: java -jar dw-thing.jar [-h] [-v] {check} ...%n" +
                                 "%n" +
                                 "positional arguments:%n" +
-                                "  {check,custom}         available commands%n" +
+                                "  {check}                available commands%n" +
                                 "%n" +
                                 "optional arguments:%n" +
                                 "  -h, --help             show this help message and exit%n" +
@@ -321,11 +287,11 @@ public class CliTest {
 
         assertThat(stdErr.toString())
                 .isEqualTo(String.format(
-                        "invalid choice: 'plop' (choose from 'check', 'custom')%n" +
-                                "usage: java -jar dw-thing.jar [-h] [-v] {check,custom} ...%n" +
+                        "invalid choice: 'plop' (choose from 'check')%n" +
+                                "usage: java -jar dw-thing.jar [-h] [-v] {check} ...%n" +
                                 "%n" +
                                 "positional arguments:%n" +
-                                "  {check,custom}         available commands%n" +
+                                "  {check}                available commands%n" +
                                 "%n" +
                                 "optional arguments:%n" +
                                 "  -h, --help             show this help message and exit%n" +
@@ -349,7 +315,7 @@ public class CliTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void unhandledExceptionsMessagesArePrintedForCheck() throws Exception {
+    public void unhandledExceptionsAreLoggedAppropriately() throws Exception {
         doThrow(new BadAppException()).when(command).run(any(Bootstrap.class), any(Namespace.class), any(Configuration.class));
 
         assertThat(cli.run("check"))
@@ -359,37 +325,6 @@ public class CliTest {
                 .isEmpty();
 
         assertThat(stdErr.toString())
-                .isEqualTo(String.format("I'm a bad exception%n"));
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void unhandledExceptionsCustomCommand() throws Exception {
-        doThrow(new BadAppException()).when(command).run(any(Bootstrap.class), any(Namespace.class), any(Configuration.class));
-
-        assertThat(cli.run("custom"))
-            .isFalse();
-
-        assertThat(stdOut.toString())
-            .isEqualTo(String.format("I did not expect this!%n"));
-
-        assertThat(stdErr.toString())
-            .isEmpty();
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void unhandledExceptionsCustomCommandDebug() throws Exception {
-        doThrow(new BadAppException()).when(command).run(any(Bootstrap.class), any(Namespace.class), any(Configuration.class));
-
-        assertThat(cli.run("custom", "--debug"))
-            .isFalse();
-
-        assertThat(stdOut.toString())
-            .isEmpty();
-
-        assertThat(stdErr.toString())
-            .startsWith(String.format("java.lang.RuntimeException: I did not expect this!%n" +
-                "\tat io.dropwizard.cli.CliTest$CustomCommand.run(CliTest.java"));
+                .isEqualTo(String.format("%s%n", BadAppException.BAD_APP_EXCEPTION_STACK_TRACE));
     }
 }
