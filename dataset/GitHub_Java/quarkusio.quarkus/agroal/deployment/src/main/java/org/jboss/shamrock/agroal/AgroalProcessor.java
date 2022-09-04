@@ -11,7 +11,6 @@ import org.jboss.shamrock.deployment.ResourceProcessor;
 import org.jboss.shamrock.deployment.RuntimePriority;
 import org.jboss.shamrock.deployment.buildconfig.BuildConfig;
 import org.jboss.shamrock.deployment.codegen.BytecodeRecorder;
-import org.jboss.shamrock.runtime.ConfiguredValue;
 
 class AgroalProcessor implements ResourceProcessor {
 
@@ -20,14 +19,6 @@ class AgroalProcessor implements ResourceProcessor {
 
     @Override
     public void process(ArchiveContext archiveContext, ProcessorContext processorContext) throws Exception {
-        processorContext.addReflectiveClass(false, false,
-                io.agroal.pool.ConnectionHandler[].class.getName(),
-                io.agroal.pool.ConnectionHandler.class.getName(),
-                java.sql.Statement[].class.getName(),
-                java.sql.Statement.class.getName(),
-                java.sql.ResultSet.class.getName(),
-                java.sql.ResultSet[].class.getName()
-                );
         BuildConfig config = archiveContext.getBuildConfig();
         BuildConfig.ConfigNode ds = config.getApplicationConfig().get("datasource");
         if (ds.isNull()) {
@@ -35,12 +26,10 @@ class AgroalProcessor implements ResourceProcessor {
         }
         String driver = ds.get("driver").asString();
         String url = ds.get("url").asString();
-        ConfiguredValue configuredDriver = new ConfiguredValue("datasource.driver", driver);
-        ConfiguredValue configuredURL = new ConfiguredValue("datasource.url", url);
-        if (configuredDriver.getValue() == null) {
+        if (driver == null) {
             throw new RuntimeException("Driver is required (property 'driver' under 'datasource')");
         }
-        if (configuredURL.getValue() == null) {
+        if (url == null) {
             throw new RuntimeException("JDBC URL is required (property 'url' under 'datasource')");
         }
         String userName = ds.get("username").asString();
@@ -50,7 +39,7 @@ class AgroalProcessor implements ResourceProcessor {
         beanDeployment.addAdditionalBean(DataSourceProducer.class);
         try (BytecodeRecorder bc = processorContext.addDeploymentTask(RuntimePriority.DATASOURCE_DEPLOYMENT)) {
             DataSourceTemplate template = bc.getRecordingProxy(DataSourceTemplate.class);
-            template.addDatasource(null, configuredURL.getValue(), bc.classProxy(configuredDriver.getValue()), userName, password);
+            template.addDatasource(null, url, bc.classProxy(driver), userName, password);
         }
     }
 
