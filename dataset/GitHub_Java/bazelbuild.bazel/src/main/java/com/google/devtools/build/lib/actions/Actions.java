@@ -263,8 +263,7 @@ public final class Actions {
   }
 
   /**
-   * Returns a comparator for use with {@link #findArtifactPrefixConflicts(ActionGraph, SortedMap,
-   * boolean)}.
+   * Returns a comparator for use with {@link #findArtifactPrefixConflicts(ActionGraph, SortedMap)}.
    */
   public static Comparator<PathFragment> comparatorForPrefixConflicts() {
     return PathFragmentPrefixComparator.INSTANCE;
@@ -307,16 +306,12 @@ public final class Actions {
    * @param actionGraph the {@link ActionGraph} to query for artifact conflicts
    * @param artifactPathMap a map mapping generated artifacts to their exec paths. The map must be
    *     sorted using the comparator from {@link #comparatorForPrefixConflicts()}.
-   * @param strictConflictChecks report path prefix conflicts, regardless of
-   *     shouldReportPathPrefixConflict().
    * @return A map between actions that generated the conflicting artifacts and their associated
    *     {@link ArtifactPrefixConflictException}.
    */
   public static Map<ActionAnalysisMetadata, ArtifactPrefixConflictException>
       findArtifactPrefixConflicts(
-          ActionGraph actionGraph,
-          SortedMap<PathFragment, Artifact> artifactPathMap,
-          boolean strictConflictChecks) {
+          ActionGraph actionGraph, SortedMap<PathFragment, Artifact> artifactPathMap) {
     // You must construct the sorted map using this comparator for the algorithm to work.
     // The algorithm requires subdirectories to immediately follow parent directories,
     // before any files in that directory.
@@ -368,7 +363,7 @@ public final class Actions {
               Preconditions.checkNotNull(actionGraph.getGeneratingAction(artifactI), artifactI);
           ActionAnalysisMetadata actionJ =
               Preconditions.checkNotNull(actionGraph.getGeneratingAction(artifactJ), artifactJ);
-          if (strictConflictChecks || actionI.shouldReportPathPrefixConflict(actionJ)) {
+          if (actionI.shouldReportPathPrefixConflict(actionJ)) {
             ArtifactPrefixConflictException exception = new ArtifactPrefixConflictException(pathI,
                 pathJ, actionI.getOwner().getLabel(), actionJ.getOwner().getLabel());
             badActions.put(actionI, exception);

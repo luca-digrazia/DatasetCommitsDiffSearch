@@ -16,8 +16,9 @@ package com.google.devtools.build.lib.skyframe;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment;
 import com.google.devtools.build.lib.analysis.config.ConfigurationFragmentFactory;
-import com.google.devtools.build.lib.analysis.config.Fragment;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -147,7 +148,7 @@ public class TransitiveTargetFunction
         // isLegalConfigurationFragment considers both natively declared fragments and Skylark
         // (named) fragments.
         if (configurationFragmentPolicy.isLegalConfigurationFragment(fragment)) {
-          addFragmentIfNew(builder, fragment.asSubclass(Fragment.class));
+          addFragmentIfNew(builder, fragment.asSubclass(BuildConfiguration.Fragment.class));
         }
       }
 
@@ -155,10 +156,11 @@ public class TransitiveTargetFunction
       for (Attribute attr : rule.getAttributes()) {
         if (attr.isLateBound()
             && attr.getLateBoundDefault().getFragmentClass() != null
-            && Fragment.class.isAssignableFrom(attr.getLateBoundDefault().getFragmentClass())) {
+            && BuildConfiguration.Fragment.class.isAssignableFrom(
+                attr.getLateBoundDefault().getFragmentClass())) {
           addFragmentIfNew(
               builder,
-              (Class<? extends Fragment>) // unchecked cast
+              (Class<? extends BuildConfiguration.Fragment>) // unchecked cast
                   attr.getLateBoundDefault().getFragmentClass());
         }
       }
@@ -168,7 +170,7 @@ public class TransitiveTargetFunction
       addFragmentsIfNew(builder, getFragmentsFromRequiredOptions(rule));
 
       // Fragments to unconditionally include:
-      for (Class<? extends Fragment> universalFragment :
+      for (Class<? extends BuildConfiguration.Fragment> universalFragment :
           ruleClassProvider.getUniversalFragments()) {
         addFragmentIfNew(builder, universalFragment);
       }
@@ -180,9 +182,10 @@ public class TransitiveTargetFunction
   private Set<Class<? extends Fragment>> getFragmentsFromRequiredOptions(Rule rule) {
     Set<String> requiredOptions =
       rule.getRuleClassObject().getOptionReferenceFunction().apply(rule);
-    ImmutableSet.Builder<Class<? extends Fragment>> optionsFragments = new ImmutableSet.Builder<>();
+    ImmutableSet.Builder<Class<? extends BuildConfiguration.Fragment>> optionsFragments =
+        new ImmutableSet.Builder<>();
     for (String requiredOption : requiredOptions) {
-      Class<? extends Fragment> fragment =
+      Class<? extends BuildConfiguration.Fragment> fragment =
           ruleClassProvider.getConfigurationFragmentForOption(requiredOption);
       // Null values come from CoreOptions, which is implicitly included.
       if (fragment != null) {

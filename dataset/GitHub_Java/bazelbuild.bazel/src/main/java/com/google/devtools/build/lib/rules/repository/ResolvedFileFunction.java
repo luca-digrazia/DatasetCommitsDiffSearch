@@ -19,16 +19,15 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.FileValue;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.packages.BazelLibrary;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.rules.repository.ResolvedFileValue.ResolvedFileKey;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -73,22 +72,21 @@ public class ResolvedFileFunction implements SkyFunction {
           Event.replayEventsOn(env.getListener(), file.errors());
           throw resolvedValueError("Failed to parse file resolved file " + key.getPath());
         }
-        Module resolvedModule;
+        StarlarkThread resolvedThread;
         try (Mutability mutability = Mutability.create("resolved file", key.getPath())) {
-          StarlarkThread thread =
+          resolvedThread =
               StarlarkThread.builder(mutability)
                   .setSemantics(starlarkSemantics)
-                  .setGlobals(Module.createForBuiltins(Starlark.UNIVERSE))
+                  .setGlobals(BazelLibrary.GLOBALS)
                   .build();
-          resolvedModule = thread.getGlobals();
           try {
-            EvalUtils.exec(file, thread);
+            EvalUtils.exec(file, resolvedThread);
           } catch (EvalException ex) {
             env.getListener().handle(Event.error(ex.getLocation(), ex.getMessage()));
             throw resolvedValueError("Failed to evaluate resolved file " + key.getPath());
           }
         }
-        Object resolved = resolvedModule.lookup("resolved");
+        Object resolved = resolvedThread.moduleLookup("resolved");
         if (resolved == null) {
           throw resolvedValueError(
               "Symbol 'resolved' not exported in resolved file " + key.getPath());

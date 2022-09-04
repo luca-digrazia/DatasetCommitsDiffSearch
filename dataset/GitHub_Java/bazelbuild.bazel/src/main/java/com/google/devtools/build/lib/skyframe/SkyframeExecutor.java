@@ -509,8 +509,8 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
         new BlacklistedPackagePrefixesFunction(
             hardcodedBlacklistedPackagePrefixes, additionalBlacklistedPackagePrefixesFile));
-    map.put(SkyFunctions.TESTS_IN_SUITE, new TestExpansionFunction());
-    map.put(SkyFunctions.TEST_SUITE_EXPANSION, new TestsForTargetPatternFunction());
+    map.put(SkyFunctions.TESTS_IN_SUITE, new TestsInSuiteFunction());
+    map.put(SkyFunctions.TEST_SUITE_EXPANSION, new TestSuiteExpansionFunction());
     map.put(SkyFunctions.TARGET_PATTERN_PHASE, new TargetPatternPhaseFunction());
     map.put(
         SkyFunctions.PREPARE_ANALYSIS_PHASE,
@@ -535,7 +535,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.PACKAGE_ERROR_MESSAGE, new PackageErrorMessageFunction());
     map.put(SkyFunctions.TARGET_PATTERN_ERROR, new TargetPatternErrorFunction());
     map.put(SkyFunctions.TRANSITIVE_TARGET, new TransitiveTargetFunction(ruleClassProvider));
-    map.put(Label.TRANSITIVE_TRAVERSAL, getTransitiveTraversalFunction());
+    map.put(Label.TRANSITIVE_TRAVERSAL, new TransitiveTraversalFunction());
     map.put(
         SkyFunctions.CONFIGURED_TARGET,
         new ConfiguredTargetFunction(
@@ -612,13 +612,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     map.put(SkyFunctions.RESOLVED_HASH_VALUES, new ResolvedHashesFunction());
     map.put(SkyFunctions.RESOLVED_FILE, new ResolvedFileFunction());
     map.put(SkyFunctions.PLATFORM_MAPPING, new PlatformMappingFunction());
-    map.put(SkyFunctions.ARTIFACT_NESTED_SET, ArtifactNestedSetFunction.createInstance());
+    map.put(SkyFunctions.ARTIFACT_NESTED_SET, ArtifactNestedSetFunction.getInstance());
     map.putAll(extraSkyFunctions);
     return ImmutableMap.copyOf(map);
-  }
-
-  protected SkyFunction getTransitiveTraversalFunction() {
-    return new TransitiveTraversalFunction();
   }
 
   protected boolean traverseTestSuites() {
@@ -2760,7 +2756,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         new TransitiveTargetCycleReporter(packageManager),
         new ActionArtifactCycleReporter(packageManager),
         new ConfiguredTargetCycleReporter(packageManager),
-        new TestExpansionCycleReporter(packageManager),
+        new TestSuiteCycleReporter(packageManager),
         new RegisteredToolchainsCycleReporter(),
         // TODO(ulfjack): The SkylarkModuleCycleReporter swallows previously reported cycles
         // unconditionally! Is that intentional?

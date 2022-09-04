@@ -38,7 +38,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AdvertisedProviderSet;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionWhitelist;
-import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.InfoInterface;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.Rule;
@@ -49,19 +49,19 @@ import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.packages.Type;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalExceptionWithStackTrace;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Mutability;
-import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
-import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -138,8 +138,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
 
       if (ruleContext.hasErrors()) {
         return null;
-      } else if (!(target instanceof Info)
-          && target != Starlark.NONE
+      } else if (!(target instanceof InfoInterface)
+          && target != Runtime.NONE
           && !(target instanceof Iterable)) {
         ruleContext.ruleError(
             String.format(
@@ -237,33 +237,34 @@ public final class SkylarkRuleConfiguredTargetUtil {
   private static void addOutputGroups(Object value, Location loc,
       RuleConfiguredTargetBuilder builder)
       throws EvalException {
-    Map<String, StarlarkValue> outputGroups =
-        SkylarkType.castMap(value, String.class, StarlarkValue.class, "output_groups");
+    Map<String, SkylarkValue> outputGroups =
+        SkylarkType.castMap(value, String.class, SkylarkValue.class, "output_groups");
 
     for (String outputGroup : outputGroups.keySet()) {
-      StarlarkValue objects = outputGroups.get(outputGroup);
+      SkylarkValue objects = outputGroups.get(outputGroup);
       NestedSet<Artifact> artifacts = convertToOutputGroupValue(loc, outputGroup, objects);
       builder.addOutputGroup(outputGroup, artifacts);
     }
   }
 
-  @SuppressWarnings("unchecked") // Casting Sequence to List<String> is checked by cast().
+  @SuppressWarnings("unchecked") // Casting SkylarkList to List<String> is checked by cast().
   private static void addInstrumentedFiles(
       StructImpl insStruct, RuleContext ruleContext, RuleConfiguredTargetBuilder builder)
       throws EvalException {
     Location insLoc = insStruct.getCreationLoc();
     List<String> extensions = null;
     if (insStruct.getFieldNames().contains("extensions")) {
-      extensions = cast("extensions", insStruct, Sequence.class, String.class, insLoc);
+      extensions = cast("extensions", insStruct, SkylarkList.class, String.class, insLoc);
     }
     List<String> dependencyAttributes = Collections.emptyList();
     if (insStruct.getFieldNames().contains("dependency_attributes")) {
       dependencyAttributes =
-          cast("dependency_attributes", insStruct, Sequence.class, String.class, insLoc);
+          cast("dependency_attributes", insStruct, SkylarkList.class, String.class, insLoc);
     }
     List<String> sourceAttributes = Collections.emptyList();
     if (insStruct.getFieldNames().contains("source_attributes")) {
-      sourceAttributes = cast("source_attributes", insStruct, Sequence.class, String.class, insLoc);
+      sourceAttributes =
+          cast("source_attributes", insStruct, SkylarkList.class, String.class, insLoc);
     }
     InstrumentedFilesInfo instrumentedFilesProvider =
         CoverageCommon.createInstrumentedFilesInfo(
@@ -281,9 +282,9 @@ public final class SkylarkRuleConfiguredTargetUtil {
         "Output group '%s' is of unexpected type. "
             + "Should be list or set of Files, but got '%s' instead.";
 
-    if (objects instanceof Sequence) {
+    if (objects instanceof SkylarkList) {
       NestedSetBuilder<Artifact> nestedSetBuilder = NestedSetBuilder.stableOrder();
-      for (Object o : (Sequence) objects) {
+      for (Object o : (SkylarkList) objects) {
         if (o instanceof Artifact) {
           nestedSetBuilder.add((Artifact) o);
         } else {
@@ -297,10 +298,10 @@ public final class SkylarkRuleConfiguredTargetUtil {
       }
       return nestedSetBuilder.build();
     } else {
-      Depset artifactsSet =
+      SkylarkNestedSet artifactsSet =
           SkylarkType.cast(
               objects,
-              Depset.class,
+              SkylarkNestedSet.class,
               Artifact.class,
               loc,
               typeErrorMessage,
@@ -308,7 +309,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
               EvalUtils.getDataTypeName(objects, true));
       try {
         return artifactsSet.getSet(Artifact.class);
-      } catch (Depset.TypeException exception) {
+      } catch (SkylarkNestedSet.TypeException exception) {
         throw new EvalException(
             loc,
             String.format(
@@ -325,11 +326,11 @@ public final class SkylarkRuleConfiguredTargetUtil {
       throws EvalException {
 
     StructImpl oldStyleProviders = StructProvider.STRUCT.createEmpty(loc);
-    Map<Provider.Key, Info> declaredProviders = new LinkedHashMap<>();
+    Map<Provider.Key, InfoInterface> declaredProviders = new LinkedHashMap<>();
 
-    if (target instanceof Info) {
+    if (target instanceof InfoInterface) {
       // Either an old-style struct or a single declared provider (not in a list)
-      Info info = (Info) target;
+      InfoInterface info = (InfoInterface) target;
       // Use the creation location of this struct as a better reference in error messages
       loc = info.getCreationLoc();
       if (getProviderKey(loc, info).equals(StructProvider.STRUCT.getKey())) {
@@ -350,10 +351,10 @@ public final class SkylarkRuleConfiguredTargetUtil {
         if (struct.hasField("providers")) {
           Iterable<?> iterable = cast("providers", struct, Iterable.class, loc);
           for (Object o : iterable) {
-            Info declaredProvider =
+            InfoInterface declaredProvider =
                 SkylarkType.cast(
                     o,
-                    Info.class,
+                    InfoInterface.class,
                     loc,
                     "The value of 'providers' should be a sequence of declared providers");
             Provider.Key providerKey = getProviderKey(loc, declaredProvider);
@@ -372,10 +373,10 @@ public final class SkylarkRuleConfiguredTargetUtil {
     } else if (target instanceof Iterable) {
       // Sequence of declared providers
       for (Object o : (Iterable) target) {
-        Info declaredProvider =
+        InfoInterface declaredProvider =
             SkylarkType.cast(
                 o,
-                Info.class,
+                InfoInterface.class,
                 loc,
                 "A return value of a rule implementation function should be "
                     + "a sequence of declared providers");
@@ -390,7 +391,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
 
     boolean defaultProviderProvidedExplicitly = false;
 
-    for (Info declaredProvider : declaredProviders.values()) {
+    for (InfoInterface declaredProvider : declaredProviders.values()) {
       if (getProviderKey(loc, declaredProvider).equals(DefaultInfo.PROVIDER.getKey())) {
         parseDefaultProviderFields((DefaultInfo) declaredProvider, context, builder);
         defaultProviderProvidedExplicitly = true;
@@ -436,8 +437,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
       throws EvalException {
     builder.addSkylarkTransitiveInfo(fieldName, value);
 
-    if (value instanceof Info) {
-      Info info = (Info) value;
+    if (value instanceof InfoInterface) {
+      InfoInterface info = (InfoInterface) value;
 
       // To facilitate migration off legacy provider syntax, implicitly set the modern provider key
       // and the canonical legacy provider key if applicable.
@@ -460,7 +461,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
       RuleConfiguredTargetBuilder builder,
       StructImpl oldStyleProviders,
       String fieldName,
-      Info info)
+      InfoInterface info)
       throws EvalException {
     // If the modern key is already set, do nothing.
     if (builder.containsProviderKey(info.getProvider().getKey())) {
@@ -495,7 +496,8 @@ public final class SkylarkRuleConfiguredTargetUtil {
    *     occur if the provider was declared in a non-global scope (for example a rule implementation
    *     function)
    */
-  private static Provider.Key getProviderKey(Location loc, Info infoObject) throws EvalException {
+  private static Provider.Key getProviderKey(Location loc, InfoInterface infoObject)
+      throws EvalException {
     if (!infoObject.getProvider().isExported()) {
       throw new EvalException(
           loc,
@@ -514,7 +516,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
   private static void parseDefaultProviderFields(
       StructImpl provider, SkylarkRuleContext context, RuleConfiguredTargetBuilder builder)
       throws EvalException {
-    Depset files = null;
+    SkylarkNestedSet files = null;
     Runfiles statelessRunfiles = null;
     Runfiles dataRunfiles = null;
     Runfiles defaultRunfiles = null;
@@ -538,7 +540,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
       // TODO(cparsons): Look into deprecating this option.
       for (String field : provider.getFieldNames()) {
         if (field.equals("files")) {
-          files = cast("files", provider, Depset.class, Artifact.class, loc);
+          files = cast("files", provider, SkylarkNestedSet.class, Artifact.class, loc);
         } else if (field.equals("runfiles")) {
           statelessRunfiles = cast("runfiles", provider, Runfiles.class, loc);
         } else if (field.equals("data_runfiles")) {
@@ -619,7 +621,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
       RuleContext ruleContext,
       Location loc,
       Artifact executable,
-      @Nullable Depset files,
+      @Nullable SkylarkNestedSet files,
       Runfiles statelessRunfiles,
       Runfiles dataRunfiles,
       Runfiles defaultRunfiles)
@@ -637,7 +639,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
       try {
         // If we specify files_to_build we don't have the executable in it by default.
         builder.setFilesToBuild(files.getSet(Artifact.class));
-      } catch (Depset.TypeException exception) {
+      } catch (SkylarkNestedSet.TypeException exception) {
         throw new EvalException(loc, "'files' field must be a depset of 'file'", exception);
       }
     }
@@ -675,7 +677,7 @@ public final class SkylarkRuleConfiguredTargetUtil {
     }
 
     if (ruleContext.getRule().getRuleClassObject().isSkylarkTestable()) {
-      Info actions =
+      InfoInterface actions =
           ActionsProvider.create(ruleContext.getAnalysisEnvironment().getRegisteredActions());
       builder.addSkylarkDeclaredProvider(actions);
     }

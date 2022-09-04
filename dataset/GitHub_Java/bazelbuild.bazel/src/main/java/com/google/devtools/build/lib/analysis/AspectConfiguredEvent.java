@@ -17,9 +17,8 @@ import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventContext;
-import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
+import com.google.devtools.build.lib.buildeventstream.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
-import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos.BuildEventId;
 import com.google.devtools.build.lib.buildeventstream.BuildEventWithConfiguration;
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.NullConfiguration;
@@ -54,7 +53,7 @@ public class AspectConfiguredEvent implements BuildEventWithConfiguration {
 
   @Override
   public BuildEventId getEventId() {
-    return BuildEventIdUtil.aspectConfigured(target, aspect);
+    return BuildEventId.aspectConfigured(target, aspect);
   }
 
   @Override
@@ -62,10 +61,10 @@ public class AspectConfiguredEvent implements BuildEventWithConfiguration {
     ImmutableList.Builder<BuildEventId> childrenBuilder = ImmutableList.builder();
     for (BuildConfiguration config : configurations) {
       if (config != null) {
-        childrenBuilder.add(BuildEventIdUtil.targetCompleted(target, config.getEventId()));
+        childrenBuilder.add(BuildEventId.targetCompleted(target, config.getEventId()));
       } else {
         childrenBuilder.add(
-            BuildEventIdUtil.targetCompleted(target, BuildEventIdUtil.nullConfigurationId()));
+            BuildEventId.targetCompleted(target, BuildEventId.nullConfigurationId()));
       }
     }
     return childrenBuilder.build();

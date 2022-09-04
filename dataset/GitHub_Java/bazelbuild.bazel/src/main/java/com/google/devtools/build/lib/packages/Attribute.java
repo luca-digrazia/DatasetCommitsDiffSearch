@@ -41,11 +41,10 @@ import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.packages.Type.LabelClass;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.util.StringUtil;
@@ -1288,8 +1287,8 @@ public final class Attribute implements Comparable<Attribute> {
    * must be true:
    *
    * <ol>
-   *   <li>The other attribute must be declared in the computed default's constructor
-   *   <li>The other attribute must be non-configurable ({@link Builder#nonconfigurable}
+   * <li>The other attribute must be declared in the computed default's constructor
+   * <li>The other attribute must be non-configurable ({@link Builder#nonconfigurable}
    * </ol>
    *
    * <p>The reason for enforced declarations is that, since attribute values might be configurable,
@@ -1301,7 +1300,7 @@ public final class Attribute implements Comparable<Attribute> {
    *
    * <p>Implementations of this interface must be immutable.
    */
-  public abstract static class ComputedDefault implements SkylarkValue {
+  public abstract static class ComputedDefault {
     private final ImmutableList<String> dependencies;
 
     /**
@@ -1494,7 +1493,7 @@ public final class Attribute implements Comparable<Attribute> {
               attrValues, "No such regular (non computed) attribute '%s'.");
       Object result = callback.call(eventHandler, attrs);
       try {
-        return type.cast((result == Starlark.NONE) ? type.getDefaultValue() : result);
+        return type.cast((result == Runtime.NONE) ? type.getDefaultValue() : result);
       } catch (ClassCastException ex) {
         throw new EvalException(
             location,
@@ -1611,7 +1610,7 @@ public final class Attribute implements Comparable<Attribute> {
    *     Label}, or a {@link List} of {@link Label} objects.
    */
   @Immutable
-  public abstract static class LateBoundDefault<FragmentT, ValueT> implements SkylarkValue {
+  public abstract static class LateBoundDefault<FragmentT, ValueT> {
     /**
      * Functional interface for computing the value of a late-bound attribute.
      *

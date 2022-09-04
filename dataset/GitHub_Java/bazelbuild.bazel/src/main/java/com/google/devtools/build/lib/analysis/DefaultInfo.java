@@ -19,16 +19,16 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skylarkbuildapi.DefaultInfoApi;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import javax.annotation.Nullable;
 
 /** DefaultInfo is provided by all targets implicitly and contains all standard fields. */
 @Immutable
 public final class DefaultInfo extends NativeInfo implements DefaultInfoApi {
 
-  private final Depset files;
+  private final SkylarkNestedSet files;
   private final Runfiles runfiles;
   private final Runfiles dataRunfiles;
   private final Runfiles defaultRunfiles;
@@ -46,21 +46,19 @@ public final class DefaultInfo extends NativeInfo implements DefaultInfoApi {
       FilesToRunProvider filesToRunProvider) {
     this(
         Location.BUILTIN,
-        Depset.of(Artifact.TYPE, fileProvider.getFilesToBuild()),
+        SkylarkNestedSet.of(Artifact.class, fileProvider.getFilesToBuild()),
         Runfiles.EMPTY,
         (runfilesProvider == null) ? Runfiles.EMPTY : runfilesProvider.getDataRunfiles(),
         (runfilesProvider == null) ? Runfiles.EMPTY : runfilesProvider.getDefaultRunfiles(),
         filesToRunProvider.getExecutable(),
-        filesToRunProvider);
+        filesToRunProvider
+    );
   }
 
   private DefaultInfo(
       Location loc,
-      Depset files,
-      Runfiles runfiles,
-      Runfiles dataRunfiles,
-      Runfiles defaultRunfiles,
-      Artifact executable,
+      SkylarkNestedSet files, Runfiles runfiles,
+      Runfiles dataRunfiles, Runfiles defaultRunfiles, Artifact executable,
       @Nullable FilesToRunProvider filesToRunProvider) {
     super(PROVIDER, loc);
     this.files = files;
@@ -79,7 +77,7 @@ public final class DefaultInfo extends NativeInfo implements DefaultInfoApi {
   }
 
   @Override
-  public Depset getFiles() {
+  public SkylarkNestedSet getFiles() {
     return files;
   }
 
@@ -146,17 +144,16 @@ public final class DefaultInfo extends NativeInfo implements DefaultInfoApi {
 
       return new DefaultInfo(
           loc,
-          castNoneToNull(Depset.class, files),
+          castNoneToNull(SkylarkNestedSet.class, files),
           statelessRunfiles,
           dataRunfiles,
           defaultRunfiles,
-          castNoneToNull(Artifact.class, executable),
-          null);
+          castNoneToNull(Artifact.class, executable), null);
     }
   }
 
   private static <T> T castNoneToNull(Class<T> clazz, Object value) {
-    if (value == Starlark.NONE) {
+    if (value == Runtime.NONE) {
       return null;
     } else {
       return clazz.cast(value);
