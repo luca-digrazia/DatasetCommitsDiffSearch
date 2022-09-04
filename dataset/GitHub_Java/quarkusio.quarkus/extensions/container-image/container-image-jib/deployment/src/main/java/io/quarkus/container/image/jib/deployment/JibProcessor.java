@@ -90,8 +90,7 @@ public class JibProcessor {
         JibContainerBuilder jibContainerBuilder;
         String packageType = packageConfig.type;
         if (packageType.equalsIgnoreCase(PackageConfig.LEGACY)
-                || packageType.equalsIgnoreCase(PackageConfig.JAR)
-                || packageType.equalsIgnoreCase(PackageConfig.UBER_JAR)) {
+                || packageType.equalsIgnoreCase(PackageConfig.JAR)) {
             jibContainerBuilder = createContainerBuilderFromLegacyJar(jibConfig,
                     sourceJar, outputTarget, mainClass, containerImageLabels);
         } else if (packageType.equalsIgnoreCase(PackageConfig.FAST_JAR)) {
