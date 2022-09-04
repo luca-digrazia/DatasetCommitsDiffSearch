@@ -22,7 +22,6 @@ import com.google.common.collect.Iterables;
 import com.google.turbine.deps.AbstractTransitiveTest;
 import com.google.turbine.options.TurbineOptions;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import org.junit.runner.RunWith;
@@ -31,21 +30,19 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class JavacTransitiveTest extends AbstractTransitiveTest {
 
-  private static final Path BOOTCLASSPATH =
-      Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar");
+  private static final ImmutableList<Path> BOOTCLASSPATH =
+      ImmutableList.of(Paths.get(System.getProperty("java.home")).resolve("lib/rt.jar"));
 
   @Override
   protected Path runTurbine(ImmutableList<Path> sources, ImmutableList<Path> classpath)
       throws IOException {
-    ImmutableList<Path> bootclasspath =
-        Files.exists(BOOTCLASSPATH) ? ImmutableList.of(BOOTCLASSPATH) : ImmutableList.of();
     Path out = temporaryFolder.newFolder().toPath().resolve("out.jar");
     boolean ok =
         JavacTurbine.compile(
                 TurbineOptions.builder()
                     .addSources(sources.stream().map(Path::toString).collect(toList()))
                     .addClassPathEntries(classpath.stream().map(Path::toString).collect(toList()))
-                    .addBootClassPathEntries(Iterables.transform(bootclasspath, Path::toString))
+                    .addBootClassPathEntries(Iterables.transform(BOOTCLASSPATH, Path::toString))
                     .setOutput(out.toString())
                     .build())
             .ok();
