@@ -16,11 +16,12 @@
  */
 package org.graylog2.restclient.models.api.requests;
 
+import com.google.common.collect.Lists;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.google.common.collect.Sets;
 import org.graylog2.restclient.models.User;
 import play.data.validation.Constraints;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -30,8 +31,8 @@ public class ChangeUserRequest extends ApiRequest {
     public String fullname;
     @Constraints.Required
     public String email;
-    public List<String> permissions = Collections.emptyList();
-    public Set<String> roles = Collections.emptySet();
+    public List<String> permissions = Lists.newArrayList();
+    public Set<String> roles = Sets.newHashSet();
 
     public String timezone;
 
