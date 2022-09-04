@@ -331,17 +331,7 @@ public class NativeImageBuildStep {
                     java = new File(home);
                 }
             }
-            List<String> nativeImageExecutable = getNativeImageExecutable(graal, java);
-            if (nativeImageExecutable != null) {
-                return nativeImageExecutable;
-            }
-            String executableName = getNativeImageExecutableName();
-            String errorMessage = "Cannot find the `" + executableName
-                    + "` in the GRAALVM_HOME, JAVA_HOME and System PATH. Install it using `gu install native-image`";
-            if (!SystemUtils.IS_OS_LINUX) {
-                throw new RuntimeException(errorMessage);
-            }
-            log.warn(errorMessage + " Attempting to fall back to container build.");
+            return getNativeImageExecutable(graal, java, nativeConfig, processInheritIODisabled, outputDir);
         }
         return setupContainerBuild(nativeConfig, processInheritIODisabled, outputDir);
     }
@@ -589,17 +579,18 @@ public class NativeImageBuildStep {
         }
     }
 
-    private static List<String> getNativeImageExecutable(Optional<String> graalVmHome, File javaHome) {
-        String executableName = getNativeImageExecutableName();
+    private static List<String> getNativeImageExecutable(Optional<String> graalVmHome, File javaHome,
+            NativeConfig nativeConfig, Optional<ProcessInheritIODisabled> processInheritIODisabled, Path outputDir) {
+        String imageName = SystemUtils.IS_OS_WINDOWS ? "native-image.cmd" : "native-image";
         if (graalVmHome.isPresent()) {
-            File file = Paths.get(graalVmHome.get(), "bin", executableName).toFile();
+            File file = Paths.get(graalVmHome.get(), "bin", imageName).toFile();
             if (file.exists()) {
                 return Collections.singletonList(file.getAbsolutePath());
             }
         }
 
         if (javaHome != null) {
-            File file = new File(javaHome, "bin/" + executableName);
+            File file = new File(javaHome, "bin/" + imageName);
             if (file.exists()) {
                 return Collections.singletonList(file.getAbsolutePath());
             }
@@ -612,7 +603,7 @@ public class NativeImageBuildStep {
             for (String pathDir : pathDirs) {
                 File dir = new File(pathDir);
                 if (dir.isDirectory()) {
-                    File file = new File(dir, executableName);
+                    File file = new File(dir, imageName);
                     if (file.exists()) {
                         return Collections.singletonList(file.getAbsolutePath());
                     }
@@ -620,11 +611,14 @@ public class NativeImageBuildStep {
             }
         }
 
-        return null;
-    }
-
-    private static String getNativeImageExecutableName() {
-        return SystemUtils.IS_OS_WINDOWS ? "native-image.cmd" : "native-image";
+        if (SystemUtils.IS_OS_LINUX) {
+            log.warn("Cannot find the `" + imageName + "` in the GRAALVM_HOME, JAVA_HOME and System " +
+                    "PATH. Install it using `gu install native-image`. Attempting to fall back to docker.");
+            return setupContainerBuild(nativeConfig, processInheritIODisabled, outputDir);
+        } else {
+            throw new RuntimeException("Cannot find the `" + imageName + "` in the GRAALVM_HOME, JAVA_HOME and System " +
+                    "PATH. Install it using `gu install native-image`");
+        }
     }
 
     private static String detectNoPIE() {
