@@ -299,6 +299,12 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
      */
     USES_CPP,
 
+    /**
+     * Indicates that Objective-C (or Objective-C++) is used in any source file. This affects how
+     * the linker is invoked.
+     */
+    USES_OBJC,
+
     /** Indicates that Swift dependencies are present. This affects bundling actions. */
     USES_SWIFT,
 
@@ -372,9 +378,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
           STATIC_FRAMEWORK_FILE,
           UMBRELLA_HEADER,
           WEAK_SDK_FRAMEWORK);
-
-  /** A white list of keys we support for strict-dependency / non-propagated items. */
-  static final ImmutableList<Key<?>> STRICT_DEPENDENCY_KEYS = ImmutableList.<Key<?>>of(INCLUDE);
 
   /**
    * Keys that should be kept as directItems. This is limited to a few keys that have larger
@@ -1084,31 +1087,17 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
       return this;
     }
 
-    private static <E> EvalException badDirectDependencyKeyError(Key<E> key) {
-      return new EvalException(
-          null,
-          String.format(
-              AppleSkylarkCommon.BAD_DIRECT_DEPENDENCY_KEY_ERROR, key.getSkylarkKeyName()));
-    }
-
     /**
      * Add all keys and values from the given provider, but propagate any normally-propagated items
      * only to direct dependers of this ObjcProvider.
      */
-    public Builder addAsDirectDeps(ObjcProvider provider) throws EvalException {
+    public Builder addAsDirectDeps(ObjcProvider provider) {
       for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.items.entrySet()) {
-        Key<?> key = typeEntry.getKey();
-        if (!ObjcProvider.STRICT_DEPENDENCY_KEYS.contains(key)) {
-          throw badDirectDependencyKeyError(key);
-        }
-        uncheckedAddTransitive(key, typeEntry.getValue(), this.strictDependencyItems);
+        uncheckedAddTransitive(
+            typeEntry.getKey(), typeEntry.getValue(), this.strictDependencyItems);
       }
       for (Map.Entry<Key<?>, NestedSet<?>> typeEntry : provider.strictDependencyItems.entrySet()) {
-        Key<?> key = typeEntry.getKey();
-        if (!ObjcProvider.STRICT_DEPENDENCY_KEYS.contains(key)) {
-          throw badDirectDependencyKeyError(key);
-        }
-        uncheckedAddTransitive(key, typeEntry.getValue(), this.nonPropagatedItems);
+        uncheckedAddTransitive(typeEntry.getKey(), typeEntry.getValue(), this.nonPropagatedItems);
       }
       return this;
     }
@@ -1146,7 +1135,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
      * Add elements in toAdd, and do not propagate to dependents of this provider.
      */
     public <E> Builder addAllNonPropagable(Key<E> key, Iterable<? extends E> toAdd) {
-      Preconditions.checkState(ObjcProvider.STRICT_DEPENDENCY_KEYS.contains(key));
       uncheckedAddAll(key, toAdd, this.nonPropagatedItems);
       return this;
     }
@@ -1155,7 +1143,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
      * Add element toAdd, and propagate it only to direct dependents of this provider.
      */
     public <E> Builder addForDirectDependents(Key<E> key, E toAdd) {
-      Preconditions.checkState(ObjcProvider.STRICT_DEPENDENCY_KEYS.contains(key));
       uncheckedAddAll(key, ImmutableList.of(toAdd), this.strictDependencyItems);
       return this;
     }
@@ -1164,7 +1151,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
      * Add elements in toAdd, and propagate them only to direct dependents of this provider.
      */
     public <E> Builder addAllForDirectDependents(Key<E> key, Iterable<? extends E> toAdd) {
-      Preconditions.checkState(ObjcProvider.STRICT_DEPENDENCY_KEYS.contains(key));
       uncheckedAddAll(key, toAdd, this.strictDependencyItems);
       return this;
     }

@@ -180,7 +180,7 @@ public class MultiArchBinarySupport {
               .build();
 
       compilationSupport
-          .registerCompileAndArchiveActions(compilationArtifacts, ObjcCompilationContext.EMPTY)
+          .registerCompileAndArchiveActions(compilationArtifacts, objcProvider)
           .registerLinkActions(
               objcProvider,
               j2ObjcMappingFileProvider,

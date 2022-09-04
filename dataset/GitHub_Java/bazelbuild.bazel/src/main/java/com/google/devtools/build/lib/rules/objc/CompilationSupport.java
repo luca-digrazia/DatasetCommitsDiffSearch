@@ -51,6 +51,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
+import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.CommandLine;
@@ -371,7 +372,7 @@ public class CompilationSupport {
     ImmutableSortedSet<Artifact> publicHdrs =
         Stream.concat(
                 attributes.hdrs().toList().stream(),
-                compilationArtifacts.getAdditionalHdrs().toList().stream())
+                Streams.stream(compilationArtifacts.getAdditionalHdrs()))
             .collect(toImmutableSortedSet(naturalOrder()));
     // This is a hack to inject generated headers into the action graph for include scanning.  This
     // is supposed to be done via the compilation prerequisite middleman artifact of dependent
@@ -1574,7 +1575,7 @@ public class CompilationSupport {
   }
 
   private CompilationSupport registerGenerateUmbrellaHeaderAction(
-      Artifact umbrellaHeader, NestedSet<Artifact> publicHeaders) {
+      Artifact umbrellaHeader, Iterable<Artifact> publicHeaders) {
     ruleContext.registerAction(
         new UmbrellaHeaderAction(
             ruleContext.getActionOwner(),
@@ -1606,11 +1607,8 @@ public class CompilationSupport {
     // TODO(b/32225593): Include private headers in the module map.
     // Both registerGenerateModuleMapAction and registerGenerateUmbrellaHeaderAction make a copy,
     // so flattening eagerly here using toList() is acceptable.
-    NestedSet<Artifact> publicHeaders =
-        NestedSetBuilder.<Artifact>stableOrder()
-            .addTransitive(attributes.hdrs())
-            .addTransitive(compilationArtifacts.getAdditionalHdrs())
-            .build();
+    Iterable<Artifact> publicHeaders = attributes.hdrs().toList();
+    publicHeaders = Iterables.concat(publicHeaders, compilationArtifacts.getAdditionalHdrs());
     CppModuleMap moduleMap = intermediateArtifacts.moduleMap();
     registerGenerateModuleMapAction(moduleMap, publicHeaders);
 

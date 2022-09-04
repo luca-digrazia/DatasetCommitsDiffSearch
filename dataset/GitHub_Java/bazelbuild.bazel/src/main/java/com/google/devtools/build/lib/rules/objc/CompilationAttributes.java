@@ -23,6 +23,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -208,7 +209,8 @@ final class CompilationAttributes {
       }
 
       if (ruleContext.attributes().has("textual_hdrs", BuildType.LABEL_LIST)) {
-        builder.addTextualHdrs(PrerequisiteArtifacts.nestedSet(ruleContext, "textual_hdrs"));
+        builder.addTextualHdrs(
+            PrerequisiteArtifacts.nestedSet(ruleContext, "textual_hdrs", Mode.TARGET));
       }
     }
 
@@ -278,7 +280,7 @@ final class CompilationAttributes {
         // missing, its private headers will be treated as public!
         if (ruleContext.attributes().has("deps", BuildType.LABEL_LIST)) {
           List<ObjcProvider> providers =
-              ruleContext.getPrerequisites("deps", ObjcProvider.STARLARK_CONSTRUCTOR);
+              ruleContext.getPrerequisites("deps", Mode.TARGET, ObjcProvider.SKYLARK_CONSTRUCTOR);
           for (ObjcProvider provider : providers) {
             moduleMaps.addTransitive(provider.get(TOP_LEVEL_MODULE_MAP));
           }

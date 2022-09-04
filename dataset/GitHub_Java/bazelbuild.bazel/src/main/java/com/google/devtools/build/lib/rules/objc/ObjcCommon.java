@@ -219,14 +219,6 @@ public final class ObjcCommon {
     }
 
     /** Adds includes to be passed into compile actions with {@code -I}. */
-    public Builder addIncludes(NestedSet<PathFragment> includes) {
-      // The includes are copied to a new list in the .build() method, so flattening here should be
-      // benign.
-      this.includes = Iterables.concat(this.includes, includes.toList());
-      return this;
-    }
-
-    /** Adds includes to be passed into compile actions with {@code -I}. */
     public Builder addIncludes(Iterable<PathFragment> includes) {
       this.includes = Iterables.concat(this.includes, includes);
       return this;

@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.rules.objc;
 
+import static com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon.BAD_SET_TYPE_ERROR;
 import static com.google.devtools.build.lib.rules.objc.AppleSkylarkCommon.NOT_SET_ERROR;
 
 import com.google.common.collect.ImmutableMap;
@@ -23,15 +24,18 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider.Key;
 import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.EvalUtils;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
-/** A utility class for converting ObjcProvider values between java and Starlark representation. */
+/**
+ * A utility class for converting ObjcProvider values between java and skylark representation.
+ */
 public class ObjcProviderSkylarkConverters {
 
   /**
-   * A map of possible NestedSet types to the converters that should define their treatment in
-   * translating between a java and Starlark ObjcProvider.
+   * A map of possible NestedSet types to the converters that should define their treatment
+   * in translating between a java and skylark ObjcProvider.
    */
   private static final ImmutableMap<Class<?>, Converter> CONVERTERS =
       ImmutableMap.<Class<?>, Converter>builder()
@@ -41,41 +45,45 @@ public class ObjcProviderSkylarkConverters {
           .put(SdkFramework.class, new SdkFrameworkToStringConverter())
           .build();
 
-  /** Returns a value for a Starlark attribute given a java ObjcProvider key and value. */
+  /**
+   * Returns a value for a skylark attribute given a java ObjcProvider key and value.
+   */
   public static Object convertToSkylark(Key<?> javaKey, NestedSet<?> javaValue) {
     return CONVERTERS.get(javaKey.getType()).valueForSkylark(javaKey, javaValue);
   }
 
-  /** Returns a value for a java ObjcProvider given a key and a corresponding Starlark value. */
+  /** Returns a value for a java ObjcProvider given a key and a corresponding skylark value. */
   public static NestedSet<?> convertToJava(Key<?> javaKey, Object skylarkValue)
       throws EvalException {
     return CONVERTERS.get(javaKey.getType()).valueForJava(javaKey, skylarkValue);
   }
 
-  /** Converts {@link PathFragment}s into a Starlark-compatible nested set of path strings. */
+  /** Converts {@link PathFragment}s into a skylark-compatible nested set of path strings. */
   public static Depset convertPathFragmentsToSkylark(NestedSet<PathFragment> pathFragments) {
     NestedSetBuilder<String> result = NestedSetBuilder.stableOrder();
     for (PathFragment path : pathFragments.toList()) {
       result.add(path.getSafePathString());
     }
-    return Depset.of(Depset.ElementType.STRING, result.build());
+    return Depset.of(SkylarkType.STRING, result.build());
   }
 
   /** A converter for ObjcProvider values. */
   private interface Converter {
-    /** Translates a java ObjcProvider value to a Starlark ObjcProvider value. */
+    /** Translates a java ObjcProvider value to a skylark ObjcProvider value. */
     Object valueForSkylark(Key<?> javaKey, NestedSet<?> javaValue);
 
-    /** Translates a Starlark ObjcProvider value to a java ObjcProvider value. */
+    /** Translates a skylark ObjcProvider value to a java ObjcProvider value. */
     NestedSet<?> valueForJava(Key<?> javaKey, Object skylarkValue) throws EvalException;
   }
 
-  /** A converter that uses the same value for java and Starlark. */
+  /**
+   * A converter that uses the same value for java and skylark.
+   */
   private static class DirectConverter implements Converter {
 
     @Override
     public Object valueForSkylark(Key<?> javaKey, NestedSet<?> javaValue) {
-      Depset.ElementType type = Depset.ElementType.of(javaKey.getType());
+      SkylarkType type = SkylarkType.of(javaKey.getType());
       return Depset.of(type, javaValue);
     }
 
@@ -85,7 +93,9 @@ public class ObjcProviderSkylarkConverters {
     }
   }
 
-  /** A converter that that translates between a java PathFragment and a Starlark string. */
+  /**
+   * A converter that that translates between a java PathFragment and a skylark string.
+   */
   private static class PathFragmentToStringConverter implements Converter {
 
     @SuppressWarnings("unchecked")
@@ -106,7 +116,9 @@ public class ObjcProviderSkylarkConverters {
     }
   }
 
-  /** A converter that that translates between a java {@link SdkFramework} and a Starlark string. */
+  /**
+   * A converter that that translates between a java {@link SdkFramework} and a skylark string.
+   */
   private static class SdkFrameworkToStringConverter implements Converter {
 
     @SuppressWarnings("unchecked")
@@ -116,7 +128,7 @@ public class ObjcProviderSkylarkConverters {
       for (SdkFramework framework : ((NestedSet<SdkFramework>) javaValue).toList()) {
         result.add(framework.getName());
       }
-      return Depset.of(Depset.ElementType.STRING, result.build());
+      return Depset.of(SkylarkType.STRING, result.build());
     }
 
     @Override
@@ -131,12 +143,26 @@ public class ObjcProviderSkylarkConverters {
     }
   }
 
-  /** Throws EvalException if x is not a depset of the given type. */
-  private static <T> NestedSet<T> nestedSetWithType(Object x, Class<T> elemType, String what)
-      throws EvalException {
-    if (x == null) {
-      throw Starlark.errorf(NOT_SET_ERROR, what, Starlark.type(x));
+  /** Throws an error if the given object is not a nested set of the given type. */
+  private static <T> NestedSet<T> nestedSetWithType(
+      Object toCheck, Class<T> expectedSetType, String keyName) throws EvalException {
+    if (toCheck instanceof Depset) {
+      Depset sns = (Depset) toCheck;
+      try {
+        return sns.getSet(expectedSetType);
+      } catch (Depset.TypeException exception) {
+        throw new EvalException(
+            null,
+            String.format(
+                BAD_SET_TYPE_ERROR,
+                keyName,
+                EvalUtils.getDataTypeNameFromClass(expectedSetType),
+                EvalUtils.getDataTypeName(toCheck, /*fullDetails=*/ true)),
+            exception);
+      }
+    } else {
+      throw new EvalException(
+          null, String.format(NOT_SET_ERROR, keyName, EvalUtils.getDataTypeName(toCheck)));
     }
-    return Depset.cast(x, elemType, what);
   }
 }
