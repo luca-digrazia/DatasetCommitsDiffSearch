@@ -26,7 +26,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
-import javax.annotation.Nullable;
 
 /**
  * Representation of a Fileset manifest.
@@ -61,11 +60,7 @@ public final class FilesetManifest {
       PathFragment fullLocation = targetPrefix.getRelative(outputSymlink.getName());
       PathFragment linkTarget = outputSymlink.reconstituteTargetPath(execRoot);
       String artifact = Strings.emptyToNull(linkTarget.getPathString());
-      if (!linkTarget.isAbsolute() && !linkTarget.isEmpty()) {
-        addRelativeSymlinkEntry(artifact, fullLocation, relSymlinkBehavior, relativeLinks);
-      } else if (!entries.containsKey(fullLocation)) { // Keep consistent behavior: no overwriting.
-        entries.put(fullLocation, artifact);
-      }
+      addSymlinkEntry(artifact, fullLocation, relSymlinkBehavior, entries, relativeLinks);
       if (outputSymlink.getMetadata() instanceof FileArtifactValue) {
         artifactValues.put(artifact, (FileArtifactValue) outputSymlink.getMetadata());
       }
@@ -73,23 +68,24 @@ public final class FilesetManifest {
     return constructFilesetManifest(entries, relativeLinks, artifactValues);
   }
 
-  /** Potentially adds the relative symlink to the map, depending on {@code relSymlinkBehavior}. */
-  private static void addRelativeSymlinkEntry(
-      @Nullable String artifact,
+  private static void addSymlinkEntry(
+      String artifact,
       PathFragment fullLocation,
       RelativeSymlinkBehavior relSymlinkBehavior,
+      LinkedHashMap<PathFragment, String> entries,
       Map<PathFragment, String> relativeLinks)
       throws IOException {
-    switch (relSymlinkBehavior) {
-      case ERROR:
-        throw new IOException("runfiles target is not absolute: " + artifact);
-      case RESOLVE:
-        if (!relativeLinks.containsKey(fullLocation)) { // Keep consistent behavior: no overwriting.
+    if (!entries.containsKey(fullLocation)) {
+      boolean isRelativeSymlink = artifact != null && !artifact.startsWith("/");
+      if (isRelativeSymlink && relSymlinkBehavior.equals(RelativeSymlinkBehavior.ERROR)) {
+        throw new IOException(String.format("runfiles target is not absolute: %s", artifact));
+      }
+      if (!isRelativeSymlink || relSymlinkBehavior.equals(RelativeSymlinkBehavior.RESOLVE)) {
+        entries.put(fullLocation, artifact);
+        if (artifact != null && !artifact.startsWith("/")) {
           relativeLinks.put(fullLocation, artifact);
         }
-        break;
-      case IGNORE:
-        break; // Do nothing.
+      }
     }
   }
 
@@ -107,26 +103,17 @@ public final class FilesetManifest {
       String actual = Preconditions.checkNotNull(value, e);
       Preconditions.checkState(!actual.startsWith("/"), e);
       PathFragment actualLocation = location;
-
       // Recursively resolve relative symlinks.
       LinkedHashSet<String> seen = new LinkedHashSet<>();
-      int traversals = 0;
+      int i = 0;
       do {
         actualLocation = actualLocation.getParentDirectory().getRelative(actual);
-        actual = relativeLinks.get(actualLocation);
-      } while (++traversals <= MAX_SYMLINK_TRAVERSALS && actual != null && seen.add(actual));
-
-      if (traversals >= MAX_SYMLINK_TRAVERSALS) {
-        logger.warning(
-            "Symlink "
-                + location
-                + " is part of a chain of length at least "
-                + traversals
-                + " which exceeds Blaze's maximum allowable symlink chain length");
-      } else if (actual != null) {
-        // TODO(b/113128395): throw here.
-        logger.warning("Symlink " + location + " forms a symlink cycle: " + seen);
-      } else if (!entries.containsKey(actualLocation)) {
+        actual = entries.get(actualLocation);
+      } while (actual != null
+          && !actual.startsWith("/")
+          && seen.add(actual)
+          && ++i < MAX_SYMLINK_TRAVERSALS);
+      if (actual == null) {
         // We've found a relative symlink that points out of the fileset. We should really always
         // throw here, but current behavior is that we tolerate such symlinks when they occur in
         // runfiles, which is the only time this code is hit.
@@ -137,9 +124,24 @@ public final class FilesetManifest {
                 + " (transitively) points to "
                 + actualLocation
                 + " that is not in this fileset (or was pruned because of a cycle)");
+        entries.remove(location);
+      } else if (i >= MAX_SYMLINK_TRAVERSALS) {
+        logger.warning(
+            "Symlink "
+                + location
+                + " is part of a chain of length at least "
+                + i
+                + " which exceeds Blaze's maximum allowable symlink chain length");
+        entries.remove(location);
+      } else if (!actual.startsWith("/")) {
+        // TODO(b/113128395): throw here.
+        logger.warning("Symlink " + location + " forms a symlink cycle: " + seen);
+        // Removing the entry here will lead to slightly vague log lines for the other entries in
+        // the cycle, since they will fail when they don't find this entry, as opposed to
+        // discovering their own cycles. But this log line should be informative enough.
+        entries.remove(location);
       } else {
-        // We have successfully resolved the symlink.
-        entries.put(location, entries.get(actualLocation));
+        entries.put(location, actual);
       }
     }
     return new FilesetManifest(entries, artifactValues);
