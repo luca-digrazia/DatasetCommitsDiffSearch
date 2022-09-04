@@ -1,4 +1,6 @@
 /**
+ * Copyright 2012-2015 TORCH GmbH, 2015 Graylog, Inc.
+ *
  * This file is part of Graylog.
  *
  * Graylog is free software: you can redistribute it and/or modify
@@ -13,15 +15,14 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
-
 package controllers.api;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import controllers.AuthenticatedController;
 import lib.security.RestPermissions;
-import org.graylog2.rest.models.dashboards.requests.AddWidgetRequest;
 import org.graylog2.restclient.lib.APIException;
 import org.graylog2.restclient.lib.ApiClient;
 import org.graylog2.restclient.lib.timeranges.InvalidRangeParametersException;
@@ -129,7 +130,7 @@ public class DashboardsApiController extends AuthenticatedController {
         try {
             Dashboard dashboard = dashboardService.get(dashboardId);
             UserSetWidgetPositionsRequest positions = Json.fromJson(request().body().asJson(), UserSetWidgetPositionsRequest.class);
-            dashboard.setWidgetPositions(positions);
+            dashboard.setWidgetPositions(positions.positions);
         } catch (APIException e) {
             String message = "Could not update positions. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
@@ -144,9 +145,6 @@ public class DashboardsApiController extends AuthenticatedController {
         try {
             Dashboard dashboard = dashboardService.get(dashboardId);
             DashboardWidget widget = dashboard.getWidget(widgetId);
-            if (widget == null) {
-                return notFound();
-            }
 
             Map<String, Object> result = Maps.newHashMap();
             result.put("type", widget.getType());
@@ -155,7 +153,7 @@ public class DashboardsApiController extends AuthenticatedController {
             result.put("description", widget.getDescription());
             result.put("cache_time", widget.getCacheTime());
             result.put("creator_user_id", widget.getCreatorUserId());
-            result.put("config", widget.getConfig());
+            result.putAll(widget.getConfig());
 
             return ok(Json.toJson(result));
         } catch (APIException e) {
@@ -170,13 +168,10 @@ public class DashboardsApiController extends AuthenticatedController {
         try {
             Dashboard dashboard = dashboardService.get(dashboardId);
             DashboardWidget widget = dashboard.getWidget(widgetId);
-            if (widget == null) {
-                return notFound();
-            }
             DashboardWidgetValueResponse widgetValue = widget.getValue(api());
 
             Object resultValue;
-            if (widget instanceof SearchResultChartWidget || widget instanceof FieldChartWidget) {
+            if (widget instanceof SearchResultChartWidget) {
                 resultValue = formatWidgetValueResults(resolution, widget, widgetValue);
             } else {
                 resultValue = widgetValue.result;
@@ -197,7 +192,7 @@ public class DashboardsApiController extends AuthenticatedController {
         }
     }
 
-    protected Map<String, Object> formatWidgetValueResults(final int maxDataPoints,
+    protected Map<String, Long> formatWidgetValueResults(final int maxDataPoints,
                                                                final DashboardWidget widget,
                                                                final DashboardWidgetValueResponse widgetValue) {
         final Map<String, Object> widgetConfig = widget.getConfig();
@@ -206,20 +201,18 @@ public class DashboardsApiController extends AuthenticatedController {
 
         return formatWidgetValueResults(maxDataPoints,
                 widgetValue.result,
-                (String)widgetConfig.get("valuetype"),
                 interval,
                 widgetValue.computationTimeRange,
                 allQuery);
     }
 
     // TODO: Extract common parts of this and the similar method on SearchApiController
-    protected Map<String, Object> formatWidgetValueResults(final int maxDataPoints,
+    protected Map<String, Long> formatWidgetValueResults(final int maxDataPoints,
                                                          final Object resultValue,
-                                                         final String functionType,
                                                          final String interval,
                                                          final Map<String, Object> timeRange,
                                                          final boolean allQuery) {
-        final Map<String, Object> points = Maps.newHashMap();
+        final Map<String, Long> points = Maps.newHashMap();
 
         if (resultValue instanceof Map) {
             final Map<?, ?> resultMap = (Map) resultValue;
@@ -246,10 +239,7 @@ public class DashboardsApiController extends AuthenticatedController {
                 if (index % factor == 0) {
                     String timestamp = Long.toString(currentTime.getMillis() / 1000);
                     Object value = resultMap.get(timestamp);
-                    if (functionType != null && value != null) {
-                        value = ((Map)value).get(functionType);
-                    }
-                    Object result = value == null ? 0 : value;
+                    Long result = value == null ? 0L : Long.parseLong(String.valueOf(value));
                     points.put(timestamp, result);
                 }
                 index++;
@@ -483,29 +473,6 @@ public class DashboardsApiController extends AuthenticatedController {
             return noContent();
         } catch (APIException e) {
             String message = "Could not get dashboard. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
-            return status(504, views.html.errors.error.render(message, e, request()));
-        } catch (IOException e) {
-            return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
-        }
-    }
-
-    @BodyParser.Of(BodyParser.Json.class)
-    public Result updateWidget(String dashboardId, String widgetId) {
-        if (!Permissions.isPermitted(RestPermissions.DASHBOARDS_EDIT, dashboardId)) {
-            return redirect(controllers.routes.StartpageController.redirect());
-        }
-
-        final AddWidgetRequest addWidgetRequest = Json.fromJson(request().body().asJson(), AddWidgetRequest.class);
-
-        try {
-            Dashboard dashboard = dashboardService.get(dashboardId);
-            DashboardWidget widget = dashboard.getWidget(widgetId);
-
-            widget.updateWidget(api(), addWidgetRequest);
-
-            return ok().as(Http.MimeTypes.JSON);
-        } catch (APIException e) {
-            String message = "Could not get widget. We expected HTTP 200, but got a HTTP " + e.getHttpCode() + ".";
             return status(504, views.html.errors.error.render(message, e, request()));
         } catch (IOException e) {
             return status(504, views.html.errors.error.render(ApiClient.ERROR_MSG_IO, e, request()));
