@@ -1,7 +1,5 @@
 package io.quarkus.smallrye.opentracing.runtime.graal;
 
-import java.util.function.BooleanSupplier;
-
 import org.jboss.resteasy.microprofile.config.ServletContextConfigSource;
 import org.jboss.resteasy.microprofile.config.ServletContextConfigSourceImpl;
 
@@ -19,19 +17,9 @@ import com.oracle.svm.core.annotate.TargetClass;
  * GraalVM failing because the class cannot be instantiated.
  *
  * See https://github.com/quarkusio/quarkus/issues/9086
- *
- * Furthermore, we only reference the class by its name as not avoid having GraalVM fail if the class is not on classpath
- * at all.
- *
- * See https://github.com/quarkusio/quarkus/issues/14876
  */
-@TargetClass(className = Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSource.SERVLET_CONTEXT_CONFIG_SOURCE_NAME, onlyWith = {
-        UndertowMissing.class,
-        Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSource.ServletContextConfigSourceIsLoaded.class
-})
+@TargetClass(value = ServletContextConfigSource.class, onlyWith = UndertowMissing.class)
 final class Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSource {
-
-    static final String SERVLET_CONTEXT_CONFIG_SOURCE_NAME = "org.jboss.resteasy.microprofile.config.ServletContextConfigSource";
 
     @Alias
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.FromAlias)
@@ -40,16 +28,4 @@ final class Target_org_jboss_resteasy_microprofile_config_ServletContextConfigSo
     @Alias
     @RecomputeFieldValue(kind = RecomputeFieldValue.Kind.Reset)
     private static Class<?> clazz;
-
-    static class ServletContextConfigSourceIsLoaded implements BooleanSupplier {
-        @Override
-        public boolean getAsBoolean() {
-            try {
-                Class.forName(SERVLET_CONTEXT_CONFIG_SOURCE_NAME);
-                return true;
-            } catch (ClassNotFoundException e) {
-                return false;
-            }
-        }
-    }
 }
