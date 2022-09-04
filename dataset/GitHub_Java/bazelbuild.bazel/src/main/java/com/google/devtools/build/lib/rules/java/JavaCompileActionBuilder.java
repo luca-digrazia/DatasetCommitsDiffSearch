@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathM
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
+import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Collections;
 import java.util.stream.Stream;
 import javax.annotation.Nullable;
@@ -133,6 +134,8 @@ public final class JavaCompileActionBuilder {
 
   private final RuleContext ruleContext;
   private final JavaToolchainProvider toolchain;
+  private PathFragment javaExecutable;
+  private NestedSet<Artifact> javabaseInputs = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
   private ImmutableSet<Artifact> additionalOutputs = ImmutableSet.of();
   private Artifact coverageArtifact;
   private ImmutableSet<Artifact> sourceFiles = ImmutableSet.of();
@@ -190,6 +193,8 @@ public final class JavaCompileActionBuilder {
       compileTimeDependencyArtifacts = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
 
+    Preconditions.checkState(javaExecutable != null, ruleContext.getActionOwner());
+
     CustomCommandLine.Builder executableLine = CustomCommandLine.builder();
     NestedSetBuilder<Artifact> toolsBuilder = NestedSetBuilder.compileOrder();
 
@@ -205,7 +210,7 @@ public final class JavaCompileActionBuilder {
     } else {
       toolsBuilder.add(javaBuilderJar);
       executableLine
-          .addPath(toolchain.getJavaRuntime().javaBinaryExecPathFragment())
+          .addPath(javaExecutable)
           .addAll(javacJvmOpts)
           .add("-jar")
           .addPath(javaBuilderJar.getExecPath());
@@ -223,7 +228,7 @@ public final class JavaCompileActionBuilder {
         .addTransitive(extraData)
         .addAll(sourceJars)
         .addAll(sourceFiles)
-        .addTransitive(toolchain.getJavaRuntime().javaBaseInputsMiddleman())
+        .addTransitive(javabaseInputs)
         .addTransitive(bootClassPath.bootclasspath())
         .addAll(sourcePathEntries)
         .addAll(additionalInputs);
@@ -355,6 +360,16 @@ public final class JavaCompileActionBuilder {
       result.add("-*TestCase");
     }
     return result.build();
+  }
+
+  public JavaCompileActionBuilder setJavaExecutable(PathFragment javaExecutable) {
+    this.javaExecutable = javaExecutable;
+    return this;
+  }
+
+  public JavaCompileActionBuilder setJavaBaseInputs(NestedSet<Artifact> javabaseInputs) {
+    this.javabaseInputs = javabaseInputs;
+    return this;
   }
 
   public JavaCompileActionBuilder setAdditionalOutputs(ImmutableSet<Artifact> outputs) {
