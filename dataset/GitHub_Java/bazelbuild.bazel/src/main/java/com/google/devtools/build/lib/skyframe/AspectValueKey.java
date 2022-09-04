@@ -17,7 +17,7 @@ import com.google.common.base.MoreObjects;
 import com.google.common.base.Objects;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.actions.ActionLookupKey;
+import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
@@ -29,13 +29,18 @@ import com.google.devtools.build.skyframe.SkyFunctionName;
 import javax.annotation.Nullable;
 
 /** A base class for keys that have AspectValue as a Sky value. */
-public abstract class AspectValueKey implements ActionLookupKey {
+public abstract class AspectValueKey extends ActionLookupKey {
 
   private static final Interner<AspectKey> aspectKeyInterner = BlazeInterners.newWeakInterner();
   private static final Interner<StarlarkAspectLoadingKey> starlarkAspectKeyInterner =
       BlazeInterners.newWeakInterner();
 
   public abstract String getDescription();
+
+  @Override
+  public abstract Label getLabel();
+
+  // Methods to create aspect keys.
 
   public static AspectKey createAspectKey(
       Label label,
@@ -179,7 +184,7 @@ public abstract class AspectValueKey implements ActionLookupKey {
     }
 
     /** Returns the key for the base configured target for this aspect. */
-    public ConfiguredTargetKey getBaseConfiguredTargetKey() {
+    ConfiguredTargetKey getBaseConfiguredTargetKey() {
       return baseConfiguredTargetKey;
     }
 
@@ -309,6 +314,10 @@ public abstract class AspectValueKey implements ActionLookupKey {
 
     Label getStarlarkFileLabel() {
       return starlarkFileLabel;
+    }
+
+    protected boolean isAspectConfigurationHost() {
+      return false;
     }
 
     @Override

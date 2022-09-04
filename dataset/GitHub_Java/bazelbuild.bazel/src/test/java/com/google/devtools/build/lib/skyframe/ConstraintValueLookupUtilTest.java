@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.platform.ToolchainTestCase;
 import com.google.devtools.build.lib.skyframe.ConstraintValueLookupUtil.InvalidConstraintValueException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
@@ -71,12 +70,12 @@ public class ConstraintValueLookupUtilTest extends ToolchainTestCase {
   public void testConstraintValueLookup() throws Exception {
     ConfiguredTargetKey linuxKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//constraints:linux"))
+            .setLabel(makeLabel("//constraints:linux"))
             .setConfigurationKey(targetConfigKey)
             .build();
     ConfiguredTargetKey macKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//constraints:mac"))
+            .setLabel(makeLabel("//constraints:mac"))
             .setConfigurationKey(targetConfigKey)
             .build();
     GetConstraintValueInfoKey key =
@@ -99,7 +98,7 @@ public class ConstraintValueLookupUtilTest extends ToolchainTestCase {
 
     ConfiguredTargetKey targetKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//invalid:not_a_constraint"))
+            .setLabel(makeLabel("//invalid:not_a_constraint"))
             .setConfigurationKey(targetConfigKey)
             .build();
     GetConstraintValueInfoKey key = GetConstraintValueInfoKey.create(ImmutableList.of(targetKey));
@@ -122,7 +121,7 @@ public class ConstraintValueLookupUtilTest extends ToolchainTestCase {
   public void testConstraintValueLookup_targetDoesNotExist() throws Exception {
     ConfiguredTargetKey targetKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//fake:missing"))
+            .setLabel(makeLabel("//fake:missing"))
             .setConfigurationKey(targetConfigKey)
             .build();
     GetConstraintValueInfoKey key = GetConstraintValueInfoKey.create(ImmutableList.of(targetKey));

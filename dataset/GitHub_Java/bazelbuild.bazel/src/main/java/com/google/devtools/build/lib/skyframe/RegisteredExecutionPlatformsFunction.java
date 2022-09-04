@@ -14,13 +14,14 @@
 
 package com.google.devtools.build.lib.skyframe;
 
+import static com.google.common.base.Predicates.equalTo;
+import static com.google.common.base.Predicates.not;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
 import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
@@ -31,13 +32,8 @@ import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.FilteringPolicy;
-import com.google.devtools.build.lib.server.FailureDetails.Analysis;
-import com.google.devtools.build.lib.server.FailureDetails.Analysis.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Toolchain;
 import com.google.devtools.build.lib.skyframe.PlatformLookupUtil.InvalidPlatformException;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -96,7 +92,8 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
 
     // Load the configured target for each, and get the declared execution platforms providers.
     ImmutableList<ConfiguredTargetKey> registeredExecutionPlatformKeys =
-        configureRegisteredExecutionPlatforms(env, configuration, platformLabels);
+        configureRegisteredExecutionPlatforms(
+            env, configuration, configuration.trimConfigurationsRetroactively(), platformLabels);
     if (env.valuesMissing()) {
       return null;
     }
@@ -123,9 +120,13 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
     return externalPackage.getRegisteredExecutionPlatforms();
   }
 
-  private static ImmutableList<ConfiguredTargetKey> configureRegisteredExecutionPlatforms(
-      Environment env, BuildConfiguration configuration, List<Label> labels)
+  private ImmutableList<ConfiguredTargetKey> configureRegisteredExecutionPlatforms(
+      Environment env,
+      BuildConfiguration configuration,
+      boolean sanityCheckConfiguration,
+      List<Label> labels)
       throws InterruptedException, RegisteredExecutionPlatformsFunctionException {
+
     ImmutableList<ConfiguredTargetKey> keys =
         labels.stream()
             .map(
@@ -151,6 +152,22 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
         }
         ConfiguredTarget target =
             ((ConfiguredTargetValue) valueOrException.get()).getConfiguredTarget();
+        // This check is necessary because trimming for other rules assumes that platform resolution
+        // uses the platform fragment and _only_ the platform fragment. Without this check, it's
+        // possible another fragment could slip in without us realizing, and thus break this
+        // assumption.
+        if (sanityCheckConfiguration
+            && target.getConfigurationKey().getFragments().stream()
+                .anyMatch(not(equalTo(PlatformConfiguration.class)))) {
+          // Only the PlatformConfiguration fragment may be present on a platform rule in
+          // retroactive trimming mode.
+          throw new RegisteredExecutionPlatformsFunctionException(
+              new InvalidPlatformException(
+                  target.getLabel(),
+                  "has fragments other than PlatformConfiguration, "
+                      + "which is forbidden in retroactive trimming mode"),
+              Transience.PERSISTENT);
+        }
         PlatformInfo platformInfo = PlatformProviderUtils.platform(target);
         if (platformInfo == null) {
           throw new RegisteredExecutionPlatformsFunctionException(
@@ -179,32 +196,19 @@ public class RegisteredExecutionPlatformsFunction implements SkyFunction {
    * Used to indicate that the given {@link Label} represents a {@link ConfiguredTarget} which is
    * not a valid {@link PlatformInfo} provider.
    */
-  static final class InvalidExecutionPlatformLabelException extends ToolchainException
+  static final class InvalidExecutionPlatformLabelException extends Exception
       implements SaneAnalysisException {
 
-    InvalidExecutionPlatformLabelException(TargetPatternUtil.InvalidTargetPatternException e) {
+    public InvalidExecutionPlatformLabelException(
+        TargetPatternUtil.InvalidTargetPatternException e) {
       this(e.getInvalidPattern(), e.getTpe());
     }
 
-    InvalidExecutionPlatformLabelException(String invalidPattern, TargetParsingException e) {
+    public InvalidExecutionPlatformLabelException(String invalidPattern, TargetParsingException e) {
       super(
           String.format(
               "invalid registered execution platform '%s': %s", invalidPattern, e.getMessage()),
           e);
-    }
-
-    @Override
-    protected Toolchain.Code getDetailedCode() {
-      return Toolchain.Code.INVALID_PLATFORM_VALUE;
-    }
-
-    @Override
-    public DetailedExitCode getDetailedExitCode() {
-      return DetailedExitCode.of(
-          FailureDetail.newBuilder()
-              .setMessage(getMessage())
-              .setAnalysis(Analysis.newBuilder().setCode(Code.INVALID_EXECUTION_PLATFORM))
-              .build());
     }
   }
 

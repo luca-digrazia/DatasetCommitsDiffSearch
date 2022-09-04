@@ -14,14 +14,21 @@
 
 package com.google.devtools.build.lib.skyframe;
 
+import static com.google.common.collect.ImmutableList.toImmutableList;
+import static java.util.stream.Collectors.joining;
+
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
+import com.google.devtools.build.lib.analysis.PlatformConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.platform.DeclaredToolchainInfo;
+import com.google.devtools.build.lib.analysis.platform.PlatformProviderUtils;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.rules.ExternalPackageUtil;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
-import com.google.devtools.build.skyframe.LegacySkyKey;
+import com.google.devtools.build.lib.cmdline.LabelConstants;
+import com.google.devtools.build.lib.cmdline.TargetParsingException;
+import com.google.devtools.build.lib.packages.Package;
+import com.google.devtools.build.lib.pkgcache.FilteringPolicies;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
@@ -42,17 +49,45 @@ public class RegisteredToolchainsFunction implements SkyFunction {
   public SkyValue compute(SkyKey skyKey, Environment env)
       throws SkyFunctionException, InterruptedException {
 
-    BuildConfiguration configuration = (BuildConfiguration) skyKey.argument();
-
-    // Get the registered toolchains.
-    List<Label> registeredToolchainLabels = ExternalPackageUtil.getRegisteredToolchainLabels(env);
-    if (registeredToolchainLabels == null) {
+    BuildConfigurationValue buildConfigurationValue =
+        (BuildConfigurationValue)
+            env.getValue(((RegisteredToolchainsValue.Key) skyKey).getConfigurationKey());
+    if (env.valuesMissing()) {
       return null;
+    }
+    BuildConfiguration configuration = buildConfigurationValue.getConfiguration();
+
+    ImmutableList.Builder<String> targetPatternBuilder = new ImmutableList.Builder<>();
+
+    // Get the toolchains from the configuration.
+    PlatformConfiguration platformConfiguration =
+        configuration.getFragment(PlatformConfiguration.class);
+    targetPatternBuilder.addAll(platformConfiguration.getExtraToolchains());
+
+    // Get the registered toolchains from the WORKSPACE.
+    targetPatternBuilder.addAll(getWorkspaceToolchains(env));
+    if (env.valuesMissing()) {
+      return null;
+    }
+    ImmutableList<String> targetPatterns = targetPatternBuilder.build();
+
+    // Expand target patterns.
+    ImmutableList<Label> toolchainLabels;
+    try {
+      toolchainLabels =
+          TargetPatternUtil.expandTargetPatterns(
+              env, targetPatterns, FilteringPolicies.ruleType("toolchain", true));
+      if (env.valuesMissing()) {
+        return null;
+      }
+    } catch (TargetPatternUtil.InvalidTargetPatternException e) {
+      throw new RegisteredToolchainsFunctionException(
+          new InvalidToolchainLabelException(e), Transience.PERSISTENT);
     }
 
     // Load the configured target for each, and get the declared toolchain providers.
     ImmutableList<DeclaredToolchainInfo> registeredToolchains =
-        configureRegisteredToolchains(env, configuration, registeredToolchainLabels);
+        configureRegisteredToolchains(env, configuration, toolchainLabels);
     if (env.valuesMissing()) {
       return null;
     }
@@ -60,40 +95,100 @@ public class RegisteredToolchainsFunction implements SkyFunction {
     return RegisteredToolchainsValue.create(registeredToolchains);
   }
 
+  private Iterable<? extends String> getWorkspaceToolchains(Environment env)
+      throws InterruptedException {
+    List<String> patterns = getRegisteredToolchains(env);
+    if (patterns == null) {
+      return ImmutableList.of();
+    }
+    return patterns;
+  }
+
+  /**
+   * Loads the external package and then returns the registered toolchains.
+   *
+   * @param env the environment to use for lookups
+   */
+  @Nullable
+  @VisibleForTesting
+  public static List<String> getRegisteredToolchains(Environment env) throws InterruptedException {
+    PackageValue externalPackageValue =
+        (PackageValue) env.getValue(PackageValue.key(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER));
+    if (externalPackageValue == null) {
+      return null;
+    }
+
+    Package externalPackage = externalPackageValue.getPackage();
+    return externalPackage.getRegisteredToolchains();
+  }
+
   private ImmutableList<DeclaredToolchainInfo> configureRegisteredToolchains(
-      Environment env, BuildConfiguration configuration, List<Label> labels)
+      Environment env,
+      BuildConfiguration configuration,
+      List<Label> labels)
       throws InterruptedException, RegisteredToolchainsFunctionException {
     ImmutableList<SkyKey> keys =
-        labels
-            .stream()
+        labels.stream()
             .map(
                 label ->
-                    LegacySkyKey.create(
-                        SkyFunctions.CONFIGURED_TARGET,
-                        new ConfiguredTargetKey(label, configuration)))
-            .collect(ImmutableList.toImmutableList());
+                    ConfiguredTargetKey.builder()
+                        .setLabel(label)
+                        .setConfiguration(configuration)
+                        .build())
+            .collect(toImmutableList());
 
     Map<SkyKey, ValueOrException<ConfiguredValueCreationException>> values =
         env.getValuesOrThrow(keys, ConfiguredValueCreationException.class);
-    if (env.valuesMissing()) {
-      return null;
-    }
     ImmutableList.Builder<DeclaredToolchainInfo> toolchains = new ImmutableList.Builder<>();
+    boolean valuesMissing = false;
     for (SkyKey key : keys) {
       ConfiguredTargetKey configuredTargetKey = (ConfiguredTargetKey) key.argument();
       Label toolchainLabel = configuredTargetKey.getLabel();
       try {
+        ValueOrException<ConfiguredValueCreationException> valueOrException = values.get(key);
+        if (valueOrException.get() == null) {
+          valuesMissing = true;
+          continue;
+        }
+
         ConfiguredTarget target =
-            ((ConfiguredTargetValue) values.get(key).get()).getConfiguredTarget();
-        DeclaredToolchainInfo toolchainInfo = target.getProvider(DeclaredToolchainInfo.class);
+            ((ConfiguredTargetValue) valueOrException.get()).getConfiguredTarget();
+        if (configuration.trimConfigurationsRetroactively()
+            && !target.getConfigurationKey().getFragments().isEmpty()) {
+          // No fragment may be present on a toolchain rule in retroactive trimming mode.
+          // This is because trimming expects that platform and toolchain resolution uses only
+          // the platform configuration. In theory, this means toolchains could use platforms, but
+          // the current expectation is that toolchains should not use anything at all, so better
+          // to go with the stricter expectation for now.
+          String extraFragmentDescription =
+              target.getConfigurationKey().getFragments().stream()
+                  .map(cl -> cl.getSimpleName())
+                  .collect(joining(","));
+
+          throw new RegisteredToolchainsFunctionException(
+              new InvalidToolchainLabelException(
+                  toolchainLabel,
+                  "this toolchain uses configuration, which is forbidden in retroactive trimming "
+                      + "mode: "
+                      + "extra fragments are ["
+                      + extraFragmentDescription
+                      + "]"),
+              Transience.PERSISTENT);
+        }
+        DeclaredToolchainInfo toolchainInfo = PlatformProviderUtils.declaredToolchainInfo(target);
         if (toolchainInfo == null) {
           throw new RegisteredToolchainsFunctionException(
-              new InvalidTargetException(toolchainLabel), Transience.PERSISTENT);
+              new InvalidToolchainLabelException(toolchainLabel), Transience.PERSISTENT);
         }
         toolchains.add(toolchainInfo);
       } catch (ConfiguredValueCreationException e) {
-        throw new RegisteredToolchainsFunctionException(e, Transience.PERSISTENT);
+        throw new RegisteredToolchainsFunctionException(
+            new InvalidToolchainLabelException(toolchainLabel, e), Transience.PERSISTENT);
       }
+    }
+
+    if (valuesMissing) {
+      return null;
     }
     return toolchains.build();
   }
@@ -108,17 +203,33 @@ public class RegisteredToolchainsFunction implements SkyFunction {
    * Used to indicate that the given {@link Label} represents a {@link ConfiguredTarget} which is
    * not a valid {@link DeclaredToolchainInfo} provider.
    */
-  public static final class InvalidTargetException extends Exception {
+  public static final class InvalidToolchainLabelException extends ToolchainException {
 
-    private final Label invalidLabel;
-
-    public InvalidTargetException(Label invalidLabel) {
-      super(String.format("target '%s' does not provide a toolchain", invalidLabel));
-      this.invalidLabel = invalidLabel;
+    public InvalidToolchainLabelException(Label invalidLabel) {
+      super(
+          formatMessage(
+              invalidLabel.getCanonicalForm(),
+              "target does not provide the DeclaredToolchainInfo provider"));
     }
 
-    public Label getInvalidLabel() {
-      return invalidLabel;
+    public InvalidToolchainLabelException(Label invalidLabel, String reason) {
+      super(formatMessage(invalidLabel.getCanonicalForm(), reason));
+    }
+
+    public InvalidToolchainLabelException(TargetPatternUtil.InvalidTargetPatternException e) {
+      this(e.getInvalidPattern(), e.getTpe());
+    }
+
+    public InvalidToolchainLabelException(String invalidPattern, TargetParsingException e) {
+      super(formatMessage(invalidPattern, e.getMessage()), e);
+    }
+
+    public InvalidToolchainLabelException(Label invalidLabel, ConfiguredValueCreationException e) {
+      super(formatMessage(invalidLabel.getCanonicalForm(), e.getMessage()), e);
+    }
+
+    private static String formatMessage(String invalidPattern, String reason) {
+      return String.format("invalid registered toolchain '%s': %s", invalidPattern, reason);
     }
   }
 
@@ -129,13 +240,8 @@ public class RegisteredToolchainsFunction implements SkyFunction {
   public static class RegisteredToolchainsFunctionException extends SkyFunctionException {
 
     public RegisteredToolchainsFunctionException(
-        InvalidTargetException cause, Transience transience) {
+        InvalidToolchainLabelException cause, Transience transience) {
       super(cause, transience);
-    }
-
-    public RegisteredToolchainsFunctionException(
-        ConfiguredValueCreationException cause, Transience persistent) {
-      super(cause, persistent);
     }
   }
 }

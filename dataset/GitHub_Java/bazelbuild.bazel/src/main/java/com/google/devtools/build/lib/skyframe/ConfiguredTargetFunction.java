@@ -753,7 +753,11 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     // Get the configured targets as ConfigMatchingProvider interfaces.
     for (Dependency entry : configConditionDeps) {
-      SkyKey baseKey = entry.getConfiguredTargetKey();
+      SkyKey baseKey =
+          ConfiguredTargetKey.builder()
+              .setLabel(entry.getLabel())
+              .setConfiguration(entry.getConfiguration())
+              .build();
       ConfiguredTarget value = configValues.get(baseKey).getConfiguredTarget();
       // The code above guarantees that value is non-null here and since the rule is a
       // config_setting, provider must also be non-null.

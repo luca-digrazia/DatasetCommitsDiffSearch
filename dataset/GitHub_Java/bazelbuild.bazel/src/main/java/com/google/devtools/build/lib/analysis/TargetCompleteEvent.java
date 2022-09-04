@@ -15,8 +15,6 @@
 package com.google.devtools.build.lib.analysis;
 
 import static com.google.devtools.build.lib.buildeventstream.TestFileNameConstants.BASELINE_COVERAGE;
-import static java.nio.charset.StandardCharsets.ISO_8859_1;
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -50,6 +48,7 @@ import com.google.devtools.build.lib.causes.Cause;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
@@ -61,7 +60,6 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.DetailedExitCode.DetailedExitCodeComparator;
-import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyValue;
@@ -184,7 +182,7 @@ public final class TargetCompleteEvent
       AttributeMap attributes =
           ConfiguredAttributeMapper.of(
               (Rule) targetAndData.getTarget(),
-              targetAndData.getConfiguredTarget().getConfigConditions());
+              ((RuleConfiguredTarget) targetAndData.getConfiguredTarget()).getConfigConditions());
       // Every build rule (implicitly) has a "tags" attribute. However other rule configured targets
       // are repository rules (which don't have a tags attribute); morevoer, thanks to the virtual
       // "external" package, they are user visible as targets and can create a completed event as
@@ -218,11 +216,11 @@ public final class TargetCompleteEvent
    */
   public static TargetCompleteEvent createFailed(
       ConfiguredTargetAndData ct,
-      CompletionContext completionContext,
       NestedSet<Cause> rootCauses,
       NestedSet<ArtifactsInOutputGroup> outputs) {
     Preconditions.checkArgument(!rootCauses.isEmpty());
-    return new TargetCompleteEvent(ct, rootCauses, completionContext, outputs, false);
+    return new TargetCompleteEvent(
+        ct, rootCauses, CompletionContext.FAILED_COMPLETION_CTX, outputs, false);
   }
 
   /** Returns the label of the target associated with the event. */
@@ -267,7 +265,7 @@ public final class TargetCompleteEvent
   }
 
   @Override
-  public ImmutableList<BuildEventId> getChildrenEvents() {
+  public Collection<BuildEventId> getChildrenEvents() {
     ImmutableList.Builder<BuildEventId> childrenBuilder = ImmutableList.builder();
     for (Cause cause : getRootCauses().toList()) {
       childrenBuilder.add(cause.getIdProto());
@@ -336,22 +334,14 @@ public final class TargetCompleteEvent
 
   public static BuildEventStreamProtos.File.Builder newFileFromArtifact(
       String name, Artifact artifact, PathFragment relPath) {
-    if (name == null) {
-      name = artifact.getRootRelativePath().getRelative(relPath).getPathString();
-      if (OS.getCurrent() != OS.WINDOWS) {
-        // TODO(b/36360490): Unix file names are currently always Latin-1 strings, even if they
-        // contain UTF-8 bytes. Protobuf specifies string fields to contain UTF-8 and passing a
-        // "Latin-1 with UTF-8 bytes" string will lead to double-encoding the bytes with the high
-        // bit set. Until we address the pervasive use of "Latin-1 with UTF-8 bytes" throughout
-        // Bazel (eg. by standardizing on UTF-8 on Unix systems) we will need to silently swap out
-        // the encoding at the protobuf library boundary. Windows does not suffer from this issue
-        // due to the corresponding OS APIs supporting UTF-16.
-        name = new String(name.getBytes(ISO_8859_1), UTF_8);
-      }
-    }
-    return File.newBuilder()
-        .setName(name)
-        .addAllPathPrefix(artifact.getRoot().getExecPath().segments());
+    File.Builder builder =
+        File.newBuilder()
+            .setName(
+                name == null
+                    ? artifact.getRootRelativePath().getRelative(relPath).getPathString()
+                    : name);
+    builder.addAllPathPrefix(artifact.getRoot().getComponents());
+    return builder;
   }
 
   public static BuildEventStreamProtos.File.Builder newFileFromArtifact(Artifact artifact) {
@@ -359,7 +349,7 @@ public final class TargetCompleteEvent
   }
 
   @Override
-  public ImmutableList<LocalFile> referencedLocalFiles() {
+  public Collection<LocalFile> referencedLocalFiles() {
     ImmutableList.Builder<LocalFile> builder = ImmutableList.builder();
     for (ArtifactsInOutputGroup group : outputs.toList()) {
       if (group.areImportant()) {
@@ -421,14 +411,15 @@ public final class TargetCompleteEvent
         builder.addDirectoryOutput(newFileFromArtifact(artifact).build());
       }
     }
-    // TODO(aehlig): remove direct reporting of artifacts as soon as clients no longer need it.
+    // TODO(aehlig): remove direct reporting of artifacts as soon as clients no longer
+    // need it.
     if (converters.getOptions().legacyImportantOutputs) {
       addImportantOutputs(completionContext, builder, converters, filteredImportantArtifacts);
       if (baselineCoverageArtifacts != null) {
         addImportantOutputs(
             completionContext,
             builder,
-            artifact -> BASELINE_COVERAGE,
+            (artifact -> BASELINE_COVERAGE),
             converters,
             baselineCoverageArtifacts.toList());
       }
@@ -439,7 +430,7 @@ public final class TargetCompleteEvent
   }
 
   @Override
-  public ImmutableList<BuildEventId> postedAfter() {
+  public Collection<BuildEventId> postedAfter() {
     return postedAfter;
   }
 
@@ -474,14 +465,18 @@ public final class TargetCompleteEvent
       }
       OutputGroup.Builder groupBuilder = OutputGroup.newBuilder();
       groupBuilder.setName(artifactsInOutputGroup.getOutputGroup());
-      groupBuilder.addFileSets(namer.apply(artifactsInOutputGroup.getArtifacts().toNode()));
+      groupBuilder.addFileSets(
+          namer.apply(
+              (new NestedSetView<Artifact>(artifactsInOutputGroup.getArtifacts())).identifier()));
       groups.add(groupBuilder.build());
     }
     if (baselineCoverageArtifacts != null) {
       groups.add(
           OutputGroup.newBuilder()
               .setName(BASELINE_COVERAGE)
-              .addFileSets(namer.apply(baselineCoverageArtifacts.toNode()))
+              .addFileSets(
+                  namer.apply(
+                      (new NestedSetView<Artifact>(baselineCoverageArtifacts).identifier())))
               .build());
     }
     return groups.build();

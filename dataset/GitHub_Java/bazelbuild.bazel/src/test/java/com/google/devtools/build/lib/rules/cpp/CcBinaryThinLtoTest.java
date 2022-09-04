@@ -189,7 +189,7 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
         (ConfiguredTargetValue)
             getSkyframeExecutor()
                 .getEvaluatorForTesting()
-                .getExistingEntryAtCurrentlyEvaluatingVersion(
+                .getExistingEntryAtLatestVersion(
                     ConfiguredTargetKey.builder()
                         .setLabel(pkg.getLabel())
                         .setConfiguration(getConfiguration(pkg))
@@ -204,7 +204,7 @@ public class CcBinaryThinLtoTest extends BuildViewTestCase {
     assertThat(linkstampCompileActions).hasSize(1);
     ActionAnalysisMetadata linkstampCompileAction = linkstampCompileActions.get(0);
     assertThat(indexAction.getInputs().toList())
-        .containsNoneIn(linkstampCompileAction.getOutputs());
+        .doesNotContain(linkstampCompileAction.getOutputs());
 
     assertThat(indexAction.getArguments())
         .containsAtLeast(

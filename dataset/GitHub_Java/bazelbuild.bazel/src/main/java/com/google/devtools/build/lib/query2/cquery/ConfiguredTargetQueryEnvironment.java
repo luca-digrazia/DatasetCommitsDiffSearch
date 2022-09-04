@@ -251,7 +251,6 @@ public class ConfiguredTargetQueryEnvironment
             eventHandler, cqueryOptions, out, skyframeExecutor, accessor));
   }
 
-  @Override
   public String getOutputFormat() {
     return cqueryOptions.outputFormat;
   }
@@ -286,7 +285,7 @@ public class ConfiguredTargetQueryEnvironment
           Futures.catchingAsync(
               patternToEval.evalAdaptedForAsync(
                   resolver,
-                  getIgnoredPackagePrefixesPathFragments(),
+                  getBlacklistedPackagePrefixesPathFragments(),
                   /* excludedSubdirectories= */ ImmutableSet.of(),
                   (Callback<Target>)
                       partialResult -> {

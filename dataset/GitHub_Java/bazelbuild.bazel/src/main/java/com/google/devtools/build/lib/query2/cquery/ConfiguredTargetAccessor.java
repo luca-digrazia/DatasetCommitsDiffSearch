@@ -223,7 +223,7 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
     ImmutableMap<String, ExecGroup> execGroups = rule.getRuleClassObject().getExecGroups();
 
     ToolchainCollection.Builder<UnloadedToolchainContext> toolchainContexts =
-        ToolchainCollection.builder();
+        new ToolchainCollection.Builder<>();
     try {
       for (Map.Entry<String, ExecGroup> group : execGroups.entrySet()) {
         ExecGroup execGroup = group.getValue();
@@ -232,8 +232,8 @@ public class ConfiguredTargetAccessor implements TargetAccessor<ConfiguredTarget
                 walkableGraph.getValue(
                     ToolchainContextKey.key()
                         .configurationKey(BuildConfigurationValue.key(config))
-                        .requiredToolchainTypeLabels(execGroup.requiredToolchains())
-                        .execConstraintLabels(execGroup.execCompatibleWith())
+                        .requiredToolchainTypeLabels(execGroup.getRequiredToolchains())
+                        .execConstraintLabels(execGroup.getExecutionPlatformConstraints())
                         .build());
         if (context == null) {
           return null;

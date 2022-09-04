@@ -23,7 +23,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.rules.platform.ToolchainTestCase;
 import com.google.devtools.build.lib.skyframe.PlatformLookupUtil.InvalidPlatformException;
 import com.google.devtools.build.lib.skyframe.util.SkyframeExecutorTestUtils;
@@ -71,12 +70,12 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
   public void testPlatformLookup() throws Exception {
     ConfiguredTargetKey linuxKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//platforms:linux"))
+            .setLabel(makeLabel("//platforms:linux"))
             .setConfigurationKey(targetConfigKey)
             .build();
     ConfiguredTargetKey macKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//platforms:mac"))
+            .setLabel(makeLabel("//platforms:mac"))
             .setConfigurationKey(targetConfigKey)
             .build();
     GetPlatformInfoKey key = GetPlatformInfoKey.create(ImmutableList.of(linuxKey, macKey));
@@ -98,7 +97,7 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
 
     ConfiguredTargetKey targetKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//invalid:not_a_platform"))
+            .setLabel(makeLabel("//invalid:not_a_platform"))
             .setConfigurationKey(targetConfigKey)
             .build();
     GetPlatformInfoKey key = GetPlatformInfoKey.create(ImmutableList.of(targetKey));
@@ -121,7 +120,7 @@ public class PlatformLookupUtilTest extends ToolchainTestCase {
   public void testPlatformLookup_targetDoesNotExist() throws Exception {
     ConfiguredTargetKey targetKey =
         ConfiguredTargetKey.builder()
-            .setLabel(Label.parseAbsoluteUnchecked("//fake:missing"))
+            .setLabel(makeLabel("//fake:missing"))
             .setConfigurationKey(targetConfigKey)
             .build();
     GetPlatformInfoKey key = GetPlatformInfoKey.create(ImmutableList.of(targetKey));

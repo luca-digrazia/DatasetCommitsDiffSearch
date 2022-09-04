@@ -861,7 +861,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
     clearTrimmingCache();
     skyframeBuildView.clearInvalidatedConfiguredTargets();
     skyframeBuildView.clearLegacyData();
-    ArtifactNestedSetFunction.getInstance().resetArtifactNestedSetFunctionMaps();
+    ArtifactNestedSetFunction.getInstance().resetArtifactSkyKeyToValueOrException();
   }
 
   /** Activates retroactive trimming (idempotently, so has no effect if already active). */
@@ -2713,6 +2713,23 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory, Configur
       dropConfiguredTargetsNow(eventHandler);
       lastAnalysisDiscarded = false;
     }
+  }
+
+  /**
+   * Updates ArtifactNestedSetFunction options if the flags' values changed.
+   *
+   * @return whether an update was made.
+   */
+  protected static boolean nestedSetAsSkyKeyOptionsChanged(OptionsProvider options) {
+    BuildRequestOptions buildRequestOptions = options.getOptions(BuildRequestOptions.class);
+    if (buildRequestOptions == null) {
+      return false;
+    }
+
+    return ArtifactNestedSetFunction.sizeThresholdUpdated(
+            buildRequestOptions.nestedSetAsSkyKeyThreshold)
+        || ArtifactNestedSetFunction.evalKeysAsOneGroupUpdated(
+            buildRequestOptions.nsosEvalKeysAsOneGroup);
   }
 
   protected void syncPackageLoading(
