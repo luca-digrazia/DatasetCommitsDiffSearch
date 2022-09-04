@@ -17,7 +17,6 @@
 package org.graylog2.inputs.transports;
 
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.MetricSet;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.collect.Maps;
@@ -165,8 +164,8 @@ public class LocalMetricsTransport extends ThrottleableTransport {
 
 
     @Override
-    public MetricSet getMetricSet() {
-        return null;
+    public void setupMetrics(MessageInput2 input) {
+
     }
 
     public interface Factory extends TransportFactory<LocalMetricsTransport> {

@@ -21,7 +21,6 @@ import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.inputs.codecs.GelfCodec;
 import org.graylog2.inputs.transports.LocalMetricsTransport;
-import org.graylog2.plugin.LocalMetricRegistry;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.inputs.MessageInput2;
 import org.graylog2.plugin.inputs.codecs.Codec;
@@ -33,16 +32,16 @@ public class LocalMetricsInput2 extends MessageInput2 {
     public LocalMetricsInput2(@Assisted Configuration configuration,
                               MetricRegistry metricRegistry,
                               LocalMetricsTransport.Factory transport,
-                              GelfCodec.Factory codec, LocalMetricRegistry localRegistry) {
-        super(metricRegistry, transport.create(configuration), codec.create(configuration), localRegistry);
+                              GelfCodec.Factory codec) {
+        super(metricRegistry, transport.create(configuration), codec.create(configuration));
     }
 
     @AssistedInject
     public LocalMetricsInput2(@Assisted Configuration configuration,
                               MetricRegistry metricRegistry,
                               @Assisted Transport transport,
-                              @Assisted Codec codec, LocalMetricRegistry localRegistry) {
-        super(metricRegistry, transport, codec, localRegistry);
+                              @Assisted Codec codec) {
+        super(metricRegistry, transport, codec);
     }
 
     @Override
