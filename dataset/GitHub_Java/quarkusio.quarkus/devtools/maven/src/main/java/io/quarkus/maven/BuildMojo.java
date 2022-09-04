@@ -18,12 +18,14 @@ import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 
-import io.quarkus.bootstrap.app.AugmentAction;
-import io.quarkus.bootstrap.app.AugmentResult;
-import io.quarkus.bootstrap.app.CuratedApplication;
-import io.quarkus.bootstrap.app.QuarkusBootstrap;
 import io.quarkus.bootstrap.model.AppArtifact;
+import io.quarkus.bootstrap.resolver.AppModelResolverException;
+import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
+import io.quarkus.creator.AppCreatorException;
+import io.quarkus.creator.CuratedApplicationCreator;
+import io.quarkus.creator.phase.augment.AugmentOutcome;
+import io.quarkus.creator.phase.augment.AugmentTask;
 
 /**
  * Build the application.
@@ -117,8 +119,7 @@ public class BuildMojo extends AbstractMojo {
     @Parameter(property = "ignoredEntries")
     private String[] ignoredEntries;
 
-    /** Skip the execution of this mojo */
-    @Parameter(defaultValue = "false", property = "quarkus.build.skip")
+    @Parameter(defaultValue = "false")
     private boolean skip = false;
 
     public BuildMojo() {
@@ -137,48 +138,48 @@ public class BuildMojo extends AbstractMojo {
             return;
         }
 
-        boolean clear = false;
+        final Artifact projectArtifact = project.getArtifact();
+        final AppArtifact appArtifact = new AppArtifact(projectArtifact.getGroupId(), projectArtifact.getArtifactId(),
+                projectArtifact.getClassifier(), projectArtifact.getArtifactHandler().getExtension(),
+                projectArtifact.getVersion());
+        final BootstrapAppModelResolver modelResolver;
         try {
-
-            final Properties projectProperties = project.getProperties();
-            final Properties realProperties = new Properties();
-            for (String name : projectProperties.stringPropertyNames()) {
-                if (name.startsWith("quarkus.")) {
-                    realProperties.setProperty(name, projectProperties.getProperty(name));
-                }
+            modelResolver = new BootstrapAppModelResolver(
+                    MavenArtifactResolver.builder()
+                            .setRepositorySystem(repoSystem)
+                            .setRepositorySystemSession(repoSession)
+                            .setRemoteRepositories(repos)
+                            .build());
+        } catch (AppModelResolverException e) {
+            throw new MojoExecutionException("Failed to resolve application model " + appArtifact + " dependencies", e);
+        }
+        final Properties projectProperties = project.getProperties();
+        final Properties realProperties = new Properties();
+        for (String name : projectProperties.stringPropertyNames()) {
+            if (name.startsWith("quarkus.")) {
+                realProperties.setProperty(name, projectProperties.getProperty(name));
             }
-            if (uberJar && System.getProperty(QUARKUS_PACKAGE_UBER_JAR) == null) {
-                System.setProperty(QUARKUS_PACKAGE_UBER_JAR, "true");
-                clear = true;
-            }
-            realProperties.putIfAbsent("quarkus.application.name", project.getArtifactId());
-            realProperties.putIfAbsent("quarkus.application.version", project.getVersion());
+        }
+        boolean clear = false;
+        if (uberJar && System.getProperty(QUARKUS_PACKAGE_UBER_JAR) == null) {
+            System.setProperty(QUARKUS_PACKAGE_UBER_JAR, "true");
+            clear = true;
+        }
+        realProperties.putIfAbsent("quarkus.application.name", project.getArtifactId());
+        realProperties.putIfAbsent("quarkus.application.version", project.getVersion());
+        try (CuratedApplicationCreator appCreationContext = CuratedApplicationCreator.builder()
+                .setModelResolver(modelResolver)
+                .setWorkDir(buildDir.toPath())
+                .setBaseName(finalName)
+                .setAppArtifact(appArtifact)
+                .build()) {
 
-            MavenArtifactResolver resolver = MavenArtifactResolver.builder()
-                    .setRepositorySystem(repoSystem)
-                    .setRepositorySystemSession(repoSession)
-                    .setRemoteRepositories(repos)
-                    .build();
-
-            final Artifact projectArtifact = project.getArtifact();
-            final AppArtifact appArtifact = new AppArtifact(projectArtifact.getGroupId(), projectArtifact.getArtifactId(),
-                    projectArtifact.getClassifier(), projectArtifact.getArtifactHandler().getExtension(),
-                    projectArtifact.getVersion());
-
-            CuratedApplication curatedApplication = QuarkusBootstrap.builder(outputDirectory.toPath())
-                    .setAppArtifact(appArtifact)
-                    .setProjectRoot(project.getBasedir().toPath())
-                    .setMavenArtifactResolver(resolver)
-                    .setBaseClassLoader(BuildMojo.class.getClassLoader())
-                    .setBuildSystemProperties(realProperties)
-                    .setLocalProjectDiscovery(false)
-                    .setBaseName(finalName)
-                    .setTargetDirectory(buildDir.toPath())
-                    .build().bootstrap();
-
-            AugmentAction action = curatedApplication.createAugmentor();
-            AugmentResult result = action.createProductionApplication();
-
+            // resolve the outcome we need here
+            AugmentOutcome result = appCreationContext.runTask(
+                    AugmentTask.builder()
+                            .setAppClassesDir(outputDirectory.toPath())
+                            .setConfigDir(outputDirectory.toPath())
+                            .setBuildSystemProperties(realProperties).build());
             Artifact original = project.getArtifact();
             if (result.getJar() != null) {
                 if (result.getJar().isUberJar() && result.getJar().getOriginalArtifact() != null) {
@@ -189,13 +190,12 @@ public class BuildMojo extends AbstractMojo {
                 }
             }
 
-        } catch (Exception e) {
-            throw new MojoExecutionException("Failed to build quarkus application", e);
+        } catch (AppCreatorException e) {
+            throw new MojoExecutionException("Failed to build a runnable JAR", e);
         } finally {
             if (clear) {
                 System.clearProperty(QUARKUS_PACKAGE_UBER_JAR);
             }
         }
     }
-
 }
