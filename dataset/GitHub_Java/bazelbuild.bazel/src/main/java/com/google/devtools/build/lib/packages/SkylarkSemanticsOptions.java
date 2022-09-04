@@ -63,6 +63,15 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   // <== Add new options here in alphabetic order ==>
 
   @Option(
+      name = "experimental_analysis_testing_improvements",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS, OptionEffectTag.LOADING_AND_ANALYSIS},
+      metadataTags = {OptionMetadataTag.EXPERIMENTAL},
+      help = "If true, enables pieces of experimental Starlark API for analysis-phase testing.")
+  public boolean experimentalAnalysisTestingImprovements;
+
+  @Option(
       name = "experimental_build_setting_api",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -298,15 +307,16 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleGenerateJavaCommonSourceJar;
 
   @Option(
-      name = "incompatible_disallow_slash_operator",
-      defaultValue = "true",
+    name = "incompatible_disallow_slash_operator",
+    defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
-      metadataTags = {
-        OptionMetadataTag.INCOMPATIBLE_CHANGE,
-        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
-      },
-      help = "If set to true, the `/` operator is disabled. Use `//` for integer division.")
+    metadataTags = {
+      OptionMetadataTag.INCOMPATIBLE_CHANGE,
+      OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+    },
+    help = "If set to true, the `/` operator is disabled. Use `//` for integer division."
+  )
   public boolean incompatibleDisallowSlashOperator;
 
   /** Controls legacy arguments to ctx.actions.Args#add. */
@@ -422,6 +432,20 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleNoTransitiveLoads;
 
   @Option(
+      name = "incompatible_package_name_is_a_function",
+      defaultValue = "false",
+      documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
+      effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
+      metadataTags = {
+        OptionMetadataTag.INCOMPATIBLE_CHANGE,
+        OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
+      },
+      help =
+          "If set to true, the values PACKAGE_NAME and REPOSITORY_NAME are not available. "
+              + "Use the package_name() or repository_name() functions instead.")
+  public boolean incompatiblePackageNameIsAFunction;
+
+  @Option(
       name = "incompatible_range_type",
       defaultValue = "true",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
@@ -463,7 +487,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public boolean incompatibleRemoveNativeHttpArchive;
 
   @Option(
-      name = "incompatible_remove_native_maven_jar",
+      name = "incompatible_static_name_resolution",
       defaultValue = "false",
       documentationCategory = OptionDocumentationCategory.SKYLARK_SEMANTICS,
       effectTags = {OptionEffectTag.BUILD_FILE_SEMANTICS},
@@ -472,9 +496,10 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         OptionMetadataTag.TRIGGERED_BY_ALL_INCOMPATIBLE_CHANGES
       },
       help =
-          "If set to true, the native maven_jar rule is disabled; only the Starlark version "
-              + "will be available")
-  public boolean incompatibleRemoveNativeMavenJar;
+          "If set to true, the interpreter follows the semantics related to name resolution, "
+              + "scoping, and shadowing, as defined in "
+              + "https://github.com/bazelbuild/proposals/blob/master/docs/2018-06-18-name-resolution.md")
+  public boolean incompatibleStaticNameResolution;
 
   @Option(
       name = "incompatible_strict_argument_ordering",
@@ -518,6 +543,7 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
   public SkylarkSemantics toSkylarkSemantics() {
     return SkylarkSemantics.builder()
         // <== Add new options here in alphabetic order ==>
+        .experimentalAnalysisTestingImprovements(experimentalAnalysisTestingImprovements)
         .experimentalBuildSettingApi(experimentalBuildSettingApi)
         .experimentalCcSkylarkApiEnabledPackages(experimentalCcSkylarkApiEnabledPackages)
         .experimentalEnableAndroidMigrationApis(experimentalEnableAndroidMigrationApis)
@@ -547,10 +573,11 @@ public class SkylarkSemanticsOptions extends OptionsBase implements Serializable
         .incompatibleNoSupportToolsInActionInputs(incompatibleNoSupportToolsInActionInputs)
         .incompatibleNoTargetOutputGroup(incompatibleNoTargetOutputGroup)
         .incompatibleNoTransitiveLoads(incompatibleNoTransitiveLoads)
+        .incompatiblePackageNameIsAFunction(incompatiblePackageNameIsAFunction)
         .incompatibleRangeType(incompatibleRangeType)
         .incompatibleRemoveNativeGitRepository(incompatibleRemoveNativeGitRepository)
         .incompatibleRemoveNativeHttpArchive(incompatibleRemoveNativeHttpArchive)
-        .incompatibleRemoveNativeMavenJar(incompatibleRemoveNativeMavenJar)
+        .incompatibleStaticNameResolution(incompatibleStaticNameResolution)
         .incompatibleStricArgumentOrdering(incompatibleStricArgumentOrdering)
         .incompatibleStringIsNotIterable(incompatibleStringIsNotIterable)
         .internalSkylarkFlagTestCanary(internalSkylarkFlagTestCanary)

@@ -84,7 +84,7 @@ public abstract class Argument extends ASTNode {
   /** positional argument: Expression */
   public static final class Positional extends Passed {
 
-    Positional(Expression value) {
+    public Positional(Expression value) {
       super(value);
     }
 
@@ -104,7 +104,7 @@ public abstract class Argument extends ASTNode {
 
     final Identifier identifier;
 
-    Keyword(Identifier identifier, Expression value) {
+    public Keyword(Identifier identifier, Expression value) {
       super(value);
       this.identifier = identifier;
     }
@@ -135,7 +135,7 @@ public abstract class Argument extends ASTNode {
   /** positional rest (starred) argument: *Expression */
   public static final class Star extends Passed {
 
-    Star(Expression value) {
+    public Star(Expression value) {
       super(value);
     }
 
@@ -154,7 +154,7 @@ public abstract class Argument extends ASTNode {
   /** keyword rest (star_starred) parameter: **Expression */
   public static final class StarStar extends Passed {
 
-    StarStar(Expression value) {
+    public StarStar(Expression value) {
       super(value);
     }
 
@@ -182,6 +182,42 @@ public abstract class Argument extends ASTNode {
 
     Location getLocation() {
       return location;
+    }
+  }
+
+  /**
+   * Validate that the list of Argument's, whether gathered by the Parser or from annotations,
+   * satisfies the requirements of the Python calling conventions: all Positional's first, at most
+   * one Star, at most one StarStar, at the end only.
+   *
+   * <p>TODO(laurentlb): remove this function and use only validateFuncallArguments.
+   */
+  public static void legacyValidateFuncallArguments(List<Passed> arguments)
+      throws ArgumentException {
+    boolean hasNamed = false;
+    boolean hasStar = false;
+    boolean hasKwArg = false;
+    for (Passed arg : arguments) {
+      if (hasKwArg) {
+        throw new ArgumentException(arg.getLocation(), "argument after **kwargs");
+      }
+      if (arg.isPositional()) {
+        if (hasNamed) {
+          throw new ArgumentException(arg.getLocation(), "non-keyword arg after keyword arg");
+        } else if (arg.isStar()) {
+          throw new ArgumentException(
+              arg.getLocation(), "only named arguments may follow *expression");
+        }
+      } else if (arg.isKeyword()) {
+        hasNamed = true;
+      } else if (arg.isStar()) {
+        if (hasStar) {
+          throw new ArgumentException(arg.getLocation(), "more than one *stararg");
+        }
+        hasStar = true;
+      } else {
+        hasKwArg = true;
+      }
     }
   }
 

@@ -39,13 +39,14 @@ public abstract class SkylarkSemantics {
    * be the exact name of the flag transformed to upper case (for error representation).
    */
   public enum FlagIdentifier {
+    EXPERIMENTAL_ANALYSIS_TESTING_IMPROVEMENTS(
+        SkylarkSemantics::experimentalAnalysisTestingImprovements),
     EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS(
         SkylarkSemantics::experimentalEnableAndroidMigrationApis),
     EXPERIMENTAL_BUILD_SETTING_API(SkylarkSemantics::experimentalBuildSettingApi),
     EXPERIMENTAL_PLATFORM_API(SkylarkSemantics::experimentalPlatformsApi),
     INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES(
         SkylarkSemantics::incompatibleDisableObjcProviderResources),
-    INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT(SkylarkSemantics::incompatibleNoOutputAttrDefault),
     INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP(
         SkylarkSemantics::incompatibleNoTargetOutputGroup),
     INCOMPATIBLE_NO_ATTR_LICENSE(SkylarkSemantics::incompatibleNoAttrLicense),
@@ -97,11 +98,6 @@ public abstract class SkylarkSemantics {
     }
   }
 
-  /** Returns the value of the given flag. */
-  public boolean flagValue(FlagIdentifier flagIdentifier) {
-    return flagIdentifier.semanticsFunction.apply(this);
-  }
-
   /**
    * The AutoValue-generated concrete class implementing this one.
    *
@@ -112,6 +108,8 @@ public abstract class SkylarkSemantics {
       AutoValue_SkylarkSemantics.class;
 
   // <== Add new options here in alphabetic order ==>
+  public abstract boolean experimentalAnalysisTestingImprovements();
+
   public abstract boolean experimentalBuildSettingApi();
 
   public abstract List<String> experimentalCcSkylarkApiEnabledPackages();
@@ -168,13 +166,15 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean incompatibleNoTransitiveLoads();
 
+  public abstract boolean incompatiblePackageNameIsAFunction();
+
   public abstract boolean incompatibleRangeType();
 
   public abstract boolean incompatibleRemoveNativeGitRepository();
 
   public abstract boolean incompatibleRemoveNativeHttpArchive();
 
-  public abstract boolean incompatibleRemoveNativeMavenJar();
+  public abstract boolean incompatibleStaticNameResolution();
 
   public abstract boolean incompatibleStricArgumentOrdering();
 
@@ -197,6 +197,7 @@ public abstract class SkylarkSemantics {
   public static final SkylarkSemantics DEFAULT_SEMANTICS =
       builder()
           // <== Add new options here in alphabetic order ==>
+          .experimentalAnalysisTestingImprovements(false)
           .experimentalBuildSettingApi(false)
           .experimentalCcSkylarkApiEnabledPackages(ImmutableList.of())
           .experimentalEnableAndroidMigrationApis(false)
@@ -216,7 +217,7 @@ public abstract class SkylarkSemantics {
           .incompatibleDisallowLegacyJavaInfo(false)
           .incompatibleDisallowLoadLabelsToCrossPackageBoundaries(false)
           .incompatibleDisallowOldStyleArgsAdd(false)
-          .incompatibleDisallowSlashOperator(true)
+          .incompatibleDisallowSlashOperator(false)
           .incompatibleExpandDirectories(false)
           .incompatibleGenerateJavaCommonSourceJar(false)
           .incompatibleNewActionsApi(false)
@@ -225,10 +226,11 @@ public abstract class SkylarkSemantics {
           .incompatibleNoSupportToolsInActionInputs(false)
           .incompatibleNoTargetOutputGroup(false)
           .incompatibleNoTransitiveLoads(false)
+          .incompatiblePackageNameIsAFunction(false)
           .incompatibleRangeType(true)
           .incompatibleRemoveNativeGitRepository(true)
           .incompatibleRemoveNativeHttpArchive(true)
-          .incompatibleRemoveNativeMavenJar(false)
+          .incompatibleStaticNameResolution(false)
           .incompatibleStricArgumentOrdering(false)
           .incompatibleStringIsNotIterable(false)
           .internalSkylarkFlagTestCanary(false)
@@ -239,6 +241,8 @@ public abstract class SkylarkSemantics {
   public abstract static class Builder {
 
     // <== Add new options here in alphabetic order ==>
+    public abstract Builder experimentalAnalysisTestingImprovements(boolean value);
+
     public abstract Builder experimentalBuildSettingApi(boolean value);
 
     public abstract Builder experimentalCcSkylarkApiEnabledPackages(List<String> value);
@@ -295,13 +299,15 @@ public abstract class SkylarkSemantics {
 
     public abstract Builder incompatibleNoTransitiveLoads(boolean value);
 
+    public abstract Builder incompatiblePackageNameIsAFunction(boolean value);
+
     public abstract Builder incompatibleRangeType(boolean value);
 
     public abstract Builder incompatibleRemoveNativeGitRepository(boolean value);
 
     public abstract Builder incompatibleRemoveNativeHttpArchive(boolean value);
 
-    public abstract Builder incompatibleRemoveNativeMavenJar(boolean value);
+    public abstract Builder incompatibleStaticNameResolution(boolean value);
 
     public abstract Builder incompatibleStricArgumentOrdering(boolean value);
 
