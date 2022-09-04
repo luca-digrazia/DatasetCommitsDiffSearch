@@ -65,19 +65,23 @@ class DependencyAndroidData extends SerializedAndroidData {
         parts[1].length() == 0 ? ImmutableList.<Path>of() : splitPaths(parts[1], fileSystem);
     CompiledResources compiledSymbols = null;
     Path symbolsBin = null;
-    Path manifest = exists(fileSystem.getPath(parts[2]));
 
     if (parts.length == 6) { // contains symbols bin and compiled symbols
-      compiledSymbols = CompiledResources.from(exists(fileSystem.getPath(parts[4])), manifest);
+      compiledSymbols = CompiledResources.from(exists(fileSystem.getPath(parts[4])));
       symbolsBin = exists(fileSystem.getPath(parts[5]));
     } else if (parts.length == 5) {
       // This is either symbols bin or compiled symbols depending on "useCompiledResourcesForMerge"
-      compiledSymbols = CompiledResources.from(exists(fileSystem.getPath(parts[4])), manifest);
+      compiledSymbols = CompiledResources.from(exists(fileSystem.getPath(parts[4])));
       symbolsBin = exists(fileSystem.getPath(parts[4]));
     }
 
     return new DependencyAndroidData(
-        splitPaths(parts[0], fileSystem), assetDirs, manifest, rTxt, symbolsBin, compiledSymbols);
+        splitPaths(parts[0], fileSystem),
+        assetDirs,
+        exists(fileSystem.getPath(parts[2])),
+        rTxt,
+        symbolsBin,
+        compiledSymbols);
   }
 
   private final Path manifest;
