@@ -4,6 +4,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.base.Optional;
+import com.google.common.collect.Maps;
 import com.google.common.primitives.Ints;
 import io.dropwizard.util.Duration;
 import io.dropwizard.validation.MinDuration;
@@ -14,7 +15,6 @@ import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
 import javax.validation.constraints.NotNull;
 import java.sql.Connection;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -321,7 +321,7 @@ public class DataSourceFactory implements PooledDataSourceFactory {
     private String url = null;
 
     @NotNull
-    private Map<String, String> properties = new LinkedHashMap<>();
+    private Map<String, String> properties = Maps.newLinkedHashMap();
 
     private String defaultCatalog;
 
