@@ -10,6 +10,7 @@ import java.net.URL;
 import org.junit.jupiter.api.Test;
 
 import io.quarkus.test.common.http.TestHTTPResource;
+import io.quarkus.test.junit.DisabledOnNativeImage;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.builder.RequestSpecBuilder;
 import io.restassured.specification.RequestSpecification;
@@ -36,6 +37,7 @@ public class VertxProducerResourceTest {
         get("/my-path").then().body(containsString("OK"));
     }
 
+    @DisabledOnNativeImage
     @Test
     public void testRouteRegistrationMTLS() {
         RequestSpecification spec = new RequestSpecBuilder()
