@@ -50,7 +50,6 @@ import com.google.devtools.build.lib.syntax.Environment.Extension;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
-import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.Preconditions;
@@ -434,7 +433,6 @@ public class PackageFunction implements SkyFunction {
       switch (packageLookupValue.getErrorReason()) {
         case NO_BUILD_FILE:
         case DELETED_PACKAGE:
-        case REPOSITORY_NOT_FOUND:
           throw new PackageFunctionException(new BuildFileNotFoundException(packageId,
               packageLookupValue.getErrorMsg()), Transience.PERSISTENT);
         case INVALID_PACKAGE_NAME:
@@ -454,7 +452,13 @@ public class PackageFunction implements SkyFunction {
     if (workspaceNameValue == null) {
       return null;
     }
-    String workspaceName = workspaceNameValue.getName();
+    String workspaceName = workspaceNameValue.maybeGetName();
+    if (workspaceName == null) {
+      throw new PackageFunctionException(
+          new BuildFileContainsErrorsException(Label.EXTERNAL_PACKAGE_IDENTIFIER),
+          Transience.PERSISTENT);
+    }
+
     RootedPath buildFileRootedPath = packageLookupValue.getRootedPath(packageId);
     FileValue buildFileValue = null;
     Path buildFilePath = buildFileRootedPath.asPath();
@@ -474,11 +478,6 @@ public class PackageFunction implements SkyFunction {
 
     RuleVisibility defaultVisibility = PrecomputedValue.DEFAULT_VISIBILITY.get(env);
     if (defaultVisibility == null) {
-      return null;
-    }
-
-    SkylarkSemanticsOptions skylarkSemantics = PrecomputedValue.SKYLARK_SEMANTICS.get(env);
-    if (skylarkSemantics == null) {
       return null;
     }
 
@@ -508,7 +507,6 @@ public class PackageFunction implements SkyFunction {
             buildFilePath,
             buildFileValue,
             defaultVisibility,
-            skylarkSemantics,
             preludeStatements,
             packageLookupValue.getRoot(),
             env);
@@ -1114,7 +1112,6 @@ public class PackageFunction implements SkyFunction {
       Path buildFilePath,
       @Nullable FileValue buildFileValue,
       RuleVisibility defaultVisibility,
-      SkylarkSemanticsOptions skylarkSemantics,
       List<Statement> preludeStatements,
       Path packageRoot,
       Environment env)
@@ -1155,9 +1152,8 @@ public class PackageFunction implements SkyFunction {
             } catch (IOException e) {
               // Note that we did this work, so we should conservatively report this error as
               // transient.
-              throw new PackageFunctionException(
-                  new BuildFileContainsErrorsException(packageId, e.getMessage(), e),
-                  Transience.TRANSIENT);
+              throw new PackageFunctionException(new BuildFileContainsErrorsException(
+                  packageId, e.getMessage()), Transience.TRANSIENT);
             }
           } else {
             input = ParserInputSource.create(replacementContents, buildFilePath.asFragment());
@@ -1209,15 +1205,8 @@ public class PackageFunction implements SkyFunction {
         SkyframeHybridGlobber skyframeGlobber = new SkyframeHybridGlobber(packageId, packageRoot,
             env, legacyGlobber);
         Package.Builder pkgBuilder = packageFactory.createPackageFromPreprocessingAst(
-            workspaceName,
-            packageId,
-            buildFilePath,
-            astAfterPreprocessing,
-            importResult.importMap,
-            importResult.fileDependencies,
-            defaultVisibility,
-            skylarkSemantics,
-            skyframeGlobber);
+            workspaceName, packageId, buildFilePath, astAfterPreprocessing, importResult.importMap,
+            importResult.fileDependencies, defaultVisibility, skyframeGlobber);
         Set<SkyKey> globDepsRequested = ImmutableSet.<SkyKey>builder()
             .addAll(globDepsRequestedDuringPreprocessing)
             .addAll(skyframeGlobber.getGlobDepsRequested())
@@ -1292,7 +1281,7 @@ public class PackageFunction implements SkyFunction {
     }
   }
 
-  public static boolean isDefaultsPackage(PackageIdentifier packageIdentifier) {
+  static boolean isDefaultsPackage(PackageIdentifier packageIdentifier) {
     return packageIdentifier.getRepository().isMain()
         && packageIdentifier.getPackageFragment().equals(DEFAULTS_PACKAGE_NAME);
   }
