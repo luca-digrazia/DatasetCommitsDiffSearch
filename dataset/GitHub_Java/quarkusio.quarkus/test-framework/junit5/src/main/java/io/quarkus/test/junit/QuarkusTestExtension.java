@@ -23,6 +23,8 @@ import java.io.Closeable;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Constructor;
+import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
@@ -67,7 +69,6 @@ import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.PropertyTestUtil;
 import io.quarkus.test.common.RestAssuredURLManager;
 import io.quarkus.test.common.TestInjectionManager;
-import io.quarkus.test.common.TestInstantiator;
 import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.test.common.TestScopeManager;
 import io.quarkus.test.common.http.TestHTTPResourceManager;
@@ -78,8 +79,6 @@ public class QuarkusTestExtension
     private URLClassLoader appCl;
     private ClassLoader originalCl;
     private static boolean failedBoot;
-
-    private final RestAssuredURLManager restAssuredURLManager = new RestAssuredURLManager(false);
 
     private ExtensionState doJavaStart(ExtensionContext context, TestResourceManager testResourceManager) {
 
@@ -259,13 +258,13 @@ public class QuarkusTestExtension
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
-        restAssuredURLManager.clearURL();
+        RestAssuredURLManager.clearURL();
         TestScopeManager.setup();
     }
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
-        restAssuredURLManager.setURL();
+        RestAssuredURLManager.setURL();
         TestScopeManager.tearDown();
     }
 
@@ -304,11 +303,7 @@ public class QuarkusTestExtension
                 store.put(ExtensionState.class.getName(), state);
 
             } catch (RuntimeException e) {
-                try {
-                    testResourceManager.stop();
-                } catch (Exception ex) {
-                    e.addSuppressed(ex);
-                }
+                testResourceManager.stop();
                 failedBoot = true;
                 throw e;
             }
@@ -319,10 +314,16 @@ public class QuarkusTestExtension
             }
         }
 
-        Object instance = TestInstantiator.instantiateTest(factoryContext.getTestClass());
-        TestHTTPResourceManager.inject(instance);
-        TestInjectionManager.inject(instance);
-        return instance;
+        try {
+            Constructor<?> ctor = factoryContext.getTestClass().getDeclaredConstructor();
+            ctor.setAccessible(true);
+            Object instance = ctor.newInstance();
+            TestHTTPResourceManager.inject(instance);
+            TestInjectionManager.inject(instance);
+            return instance;
+        } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
+            throw new TestInstantiationException("Failed to create test instance", e);
+        }
     }
 
     private static ClassLoader setCCL(ClassLoader cl) {

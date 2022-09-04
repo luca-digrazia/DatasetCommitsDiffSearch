@@ -1,3 +1,19 @@
+/*
+ * Copyright 2019 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.bootstrap;
 
 import java.io.BufferedReader;
@@ -8,21 +24,17 @@ import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 import org.jboss.logging.Logger;
 
-import io.quarkus.bootstrap.model.AppArtifact;
 import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.bootstrap.model.AppModel;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.resolver.BootstrapAppModelResolver;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
-import io.quarkus.bootstrap.resolver.maven.workspace.ModelUtils;
 
 /**
  *
@@ -168,26 +180,13 @@ public class BootstrapClassLoaderFactory {
                 mvnBuilder.setOffline(offline);
             }
             final LocalProject localProject;
-            final AppArtifact appArtifact;
-            if (Files.isDirectory(appClasses)) {
-                if (localProjectsDiscovery) {
-                    localProject = LocalProject.loadWorkspace(appClasses);
-                    mvnBuilder.setWorkspace(localProject.getWorkspace());
-                } else {
-                    localProject = LocalProject.load(appClasses);
-                }
-                appArtifact = localProject.getAppArtifact();
+            if (localProjectsDiscovery) {
+                localProject = LocalProject.loadWorkspace(appClasses);
+                mvnBuilder.setWorkspace(localProject.getWorkspace());
             } else {
-                localProject = localProjectsDiscovery ? LocalProject.loadWorkspace(Paths.get("").normalize().toAbsolutePath(), false) : null;
-                if(localProject != null) {
-                    mvnBuilder.setWorkspace(localProject.getWorkspace());
-                }
-                appArtifact = ModelUtils.resolveAppArtifact(appClasses);
+                localProject = LocalProject.load(appClasses);
             }
-            final BootstrapAppModelResolver appModelResolver = new BootstrapAppModelResolver(mvnBuilder.build());
-            final AppModel appModel = appModelResolver.resolveManagedModel(appArtifact, Collections.emptyList(),
-                    appModelResolver
-                            .readManagedDependencies(localProject == null ? appArtifact : localProject.getAppArtifact()));
+            final AppModel appModel = new BootstrapAppModelResolver(mvnBuilder.build()).resolveModel(localProject.getAppArtifact());
             if (hierarchical) {
                 final URLClassLoader cl = initAppCp(appModel.getUserDependencies());
                 try {
@@ -202,7 +201,7 @@ public class BootstrapClassLoaderFactory {
                 }
             }
             return initAppCp(appModel.getAllDependencies());
-        } catch (AppModelResolverException | IOException e) {
+        } catch (AppModelResolverException e) {
             throw new BootstrapException("Failed to init application classloader", e);
         }
     }
@@ -221,47 +220,6 @@ public class BootstrapClassLoaderFactory {
         if (appClasses == null) {
             throw new IllegalArgumentException("Application classes path has not been set");
         }
-
-        if(!Files.isDirectory(appClasses)) {
-            final MavenArtifactResolver.Builder mvnBuilder = MavenArtifactResolver.builder();
-            if (offline != null) {
-                mvnBuilder.setOffline(offline);
-            }
-            final LocalProject localProject = localProjectsDiscovery ? LocalProject.loadWorkspace(Paths.get("").normalize().toAbsolutePath(), false) : null;
-            if(localProject != null) {
-                mvnBuilder.setWorkspace(localProject.getWorkspace());
-            }
-            final MavenArtifactResolver mvn;
-            try {
-                mvn = mvnBuilder.build();
-            } catch (AppModelResolverException e) {
-                throw new BootstrapException("Failed to initialize bootstrap Maven artifact resolver", e);
-            }
-
-            final List<AppDependency> deploymentDeps;
-            try {
-                final BootstrapAppModelResolver appModelResolver = new BootstrapAppModelResolver(mvn);
-                final AppArtifact appArtifact = ModelUtils.resolveAppArtifact(appClasses);
-                deploymentDeps = appModelResolver.resolveManagedModel(appArtifact, Collections.emptyList(),
-                        appModelResolver
-                                .readManagedDependencies(localProject == null ? appArtifact : localProject.getAppArtifact()))
-                        .getDeploymentDependencies();
-            } catch (Exception e) {
-                throw new BootstrapException("Failed to resolve deployment dependencies for " + appClasses, e);
-            }
-
-            final URL[] urls;
-            if(appCp.isEmpty()) {
-                urls = toURLs(deploymentDeps);
-            } else {
-                urls = new URL[deploymentDeps.size() + appCp.size()];
-                addDeps(urls,
-                        addPaths(urls, 0, appCp),
-                        deploymentDeps);
-            }
-            return new URLClassLoader(urls, parent);
-        }
-
         final URLClassLoader ucl;
         Path cachedCpPath = null;
         final LocalProject localProject = localProjectsDiscovery || enableClasspathCache
