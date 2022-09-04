@@ -43,11 +43,8 @@ import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.MessageSummary;
-import org.graylog2.plugin.database.Persisted;
 import org.graylog2.plugin.indexer.searches.timeranges.AbsoluteRange;
 import org.graylog2.plugin.indexer.searches.timeranges.TimeRange;
-import org.graylog2.streams.StreamImpl;
-import org.graylog2.streams.StreamService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -77,7 +74,6 @@ public class AggregationEventProcessor implements EventProcessor {
     private final EventProcessorDependencyCheck dependencyCheck;
     private final DBEventProcessorStateService stateService;
     private final MoreSearch moreSearch;
-    private final StreamService streamService;
     private final Messages messages;
 
     @Inject
@@ -86,7 +82,6 @@ public class AggregationEventProcessor implements EventProcessor {
                                      EventProcessorDependencyCheck dependencyCheck,
                                      DBEventProcessorStateService stateService,
                                      MoreSearch moreSearch,
-                                     StreamService streamService,
                                      Messages messages) {
         this.eventDefinition = eventDefinition;
         this.config = (AggregationEventProcessorConfig) eventDefinition.config();
@@ -94,7 +89,6 @@ public class AggregationEventProcessor implements EventProcessor {
         this.dependencyCheck = dependencyCheck;
         this.stateService = stateService;
         this.moreSearch = moreSearch;
-        this.streamService = streamService;
         this.messages = messages;
     }
 
@@ -237,28 +231,9 @@ public class AggregationEventProcessor implements EventProcessor {
         final ImmutableList.Builder<EventWithContext> eventsWithContext = ImmutableList.builder();
 
         final Set<String> searchStreams = getStreams(parameters);
-        final Set<String> sourceStreams;
-
-        if (searchStreams.isEmpty() && result.sourceStreams().isEmpty()) {
-            // This can happen if the user didn't select any stream in the event definition and an event should be
-            // created based on the absence of a search result. (e.g. count() < 1)
-            // When the source streams field of an event is empty, every user can see it. That's why we need to add
-            // streams to the field. We decided to use all currently existing streams (minus the default event streams)
-            // to make sure only users that have access to all message streams can see the event.
-            sourceStreams = streamService.loadAll().stream()
-                    .map(Persisted::getId)
-                    .filter(streamId -> !StreamImpl.DEFAULT_EVENT_STREAM_IDS.contains(streamId))
-                    .collect(Collectors.toSet());
-        } else if (searchStreams.isEmpty()) {
-            // If the search streams is empty, we search in all streams and so we include all source streams from the result.
-            sourceStreams = result.sourceStreams();
-        } else if (result.sourceStreams().isEmpty()) {
-            // With an empty result we just include all streams from the event definition.
-            sourceStreams = searchStreams;
-        } else {
-            // We don't want source streams in the event which are unrelated to the event definition.
-            sourceStreams = Sets.intersection(searchStreams, result.sourceStreams());
-        }
+        // We don't want source streams in the event which are unrelated to the event definition.
+        // If the search streams is empty though, we search in all streams and so we include all source streams.
+        final Set<String> sourceStreams = searchStreams.isEmpty() ? result.sourceStreams() : Sets.intersection(searchStreams, result.sourceStreams());
 
         for (final AggregationKeyResult keyResult : result.keyResults()) {
             if (!satisfiesConditions(keyResult)) {
