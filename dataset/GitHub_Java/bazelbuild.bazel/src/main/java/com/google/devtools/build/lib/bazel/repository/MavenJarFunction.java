@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,176 +14,178 @@
 
 package com.google.devtools.build.lib.bazel.repository;
 
-import com.google.common.base.Ascii;
-import com.google.common.collect.Lists;
+import com.google.common.base.Optional;
+import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
-import com.google.devtools.build.lib.bazel.repository.DecompressorFactory.DecompressorException;
-import com.google.devtools.build.lib.bazel.repository.DecompressorFactory.JarDecompressor;
+import com.google.devtools.build.lib.bazel.repository.MavenDownloader.JarPaths;
 import com.google.devtools.build.lib.bazel.rules.workspace.MavenJarRule;
-import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
-import com.google.devtools.build.lib.packages.PackageIdentifier.RepositoryName;
+import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.Type;
-import com.google.devtools.build.lib.skyframe.FileValue;
-import com.google.devtools.build.lib.skyframe.RepositoryValue;
+import com.google.devtools.build.lib.rules.repository.RepositoryDirectoryValue;
+import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
+import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.util.Fingerprint;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
+import com.google.devtools.build.skyframe.SkyFunction.Environment;
 import com.google.devtools.build.skyframe.SkyFunctionException.Transience;
-import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.SkyValue;
-
-import org.apache.maven.repository.internal.MavenRepositorySystemUtils;
-import org.eclipse.aether.AbstractRepositoryListener;
-import org.eclipse.aether.DefaultRepositorySystemSession;
-import org.eclipse.aether.RepositorySystem;
-import org.eclipse.aether.RepositorySystemSession;
-import org.eclipse.aether.artifact.Artifact;
-import org.eclipse.aether.artifact.DefaultArtifact;
-import org.eclipse.aether.connector.basic.BasicRepositoryConnectorFactory;
-import org.eclipse.aether.impl.DefaultServiceLocator;
-import org.eclipse.aether.repository.LocalRepository;
-import org.eclipse.aether.repository.RemoteRepository;
-import org.eclipse.aether.resolution.ArtifactRequest;
-import org.eclipse.aether.resolution.ArtifactResolutionException;
-import org.eclipse.aether.resolution.ArtifactResult;
-import org.eclipse.aether.spi.connector.RepositoryConnectorFactory;
-import org.eclipse.aether.spi.connector.transport.TransporterFactory;
-import org.eclipse.aether.transfer.AbstractTransferListener;
-import org.eclipse.aether.transport.file.FileTransporterFactory;
-import org.eclipse.aether.transport.http.HttpTransporterFactory;
-
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.Map;
 
-/**
- * Implementation of maven_jar.
- */
-public class MavenJarFunction extends HttpJarFunction {
+/** Implementation of maven_jar. */
+public class MavenJarFunction extends RepositoryFunction {
+
+  protected final MavenDownloader downloader;
+
+  public MavenJarFunction(MavenDownloader mavenDownloader) {
+    super();
+    this.downloader = mavenDownloader;
+  }
+
+  private static final String DEFAULT_SERVER = "default";
 
   @Override
-  public SkyValue compute(SkyKey skyKey, Environment env) throws RepositoryFunctionException {
-    RepositoryName repositoryName = (RepositoryName) skyKey.argument();
-    Rule rule = RepositoryFunction.getRule(repositoryName, MavenJarRule.NAME, env);
-    if (rule == null) {
+  public boolean isLocal(Rule rule) {
+    return false;
+  }
+
+  @Override
+  protected byte[] getRuleSpecificMarkerData(Rule rule, Environment env)
+      throws RepositoryFunctionException, InterruptedException {
+    MavenServerValue serverValue = getServer(rule, env);
+    if (env.valuesMissing()) {
       return null;
     }
 
-    AggregatingAttributeMapper mapper = AggregatingAttributeMapper.of(rule);
-    FileValue outputDirectoryValue = createOutputDirectory(env, rule.getName());
-    if (outputDirectoryValue == null) {
-      return null;
-    }
-    Path outputDirectory = outputDirectoryValue.realRootedPath().asPath();
-    MavenDownloader downloader = new MavenDownloader(
-        mapper.get("group_id", Type.STRING),
-        mapper.get("artifact_id", Type.STRING),
-        mapper.get("version", Type.STRING),
-        outputDirectory);
+    return new Fingerprint()
+        .addString(serverValue.getUrl())
+        .addBytes(serverValue.getSettingsFingerprint())
+        .digestAndReset();
+  }
 
-    List<String> repositories = mapper.get("repositories", Type.STRING_LIST);
-    if (repositories != null && !repositories.isEmpty()) {
-      downloader.setRepositories(repositories);
+  private static MavenServerValue getServer(Rule rule, Environment env)
+      throws RepositoryFunctionException, InterruptedException {
+    WorkspaceAttributeMapper mapper = WorkspaceAttributeMapper.of(rule);
+    boolean hasRepository = mapper.isAttributeValueExplicitlySpecified("repository");
+    boolean hasServer = mapper.isAttributeValueExplicitlySpecified("server");
+
+    if (hasRepository && hasServer) {
+      throw new RepositoryFunctionException(new EvalException(
+          rule.getLocation(), rule + " specifies both "
+          + "'repository' and 'server', which are mutually exclusive options"),
+          Transience.PERSISTENT);
     }
 
-    Path repositoryJar = null;
     try {
-      repositoryJar = downloader.download();
+      if (hasRepository) {
+        return MavenServerValue.createFromUrl(mapper.get("repository", Type.STRING));
+      } else {
+        String serverName = DEFAULT_SERVER;
+        if (hasServer) {
+          serverName = mapper.get("server", Type.STRING);
+        }
+        return (MavenServerValue) env.getValue(MavenServerValue.key(serverName));
+      }
+    } catch (EvalException e) {
+      throw new RepositoryFunctionException(e, Transience.PERSISTENT);
+    }
+
+  }
+
+  @Override
+  public RepositoryDirectoryValue.Builder fetch(
+      Rule rule,
+      Path outputDirectory,
+      BlazeDirectories directories,
+      Environment env,
+      Map<String, String> markerData,
+      SkyKey key)
+      throws RepositoryFunctionException, InterruptedException {
+
+    // Deprecation in favor of the Starlark rule
+    StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
+    if (starlarkSemantics == null) {
+      return null;
+    }
+    if (starlarkSemantics.incompatibleRemoveNativeMavenJar()) {
+      throw new RepositoryFunctionException(
+          new EvalException(
+              null,
+              "The native maven_jar rule is deprecated."
+                  + " See https://docs.bazel.build/versions/master/skylark/"
+                  + "backward-compatibility.html#remove-native-maven-jar for migration information."
+                  + "\nUse --incompatible_remove_native_maven_jar=false to temporarily continue"
+                  + " using the native rule."),
+          Transience.PERSISTENT);
+    }
+
+    MavenServerValue serverValue = getServer(rule, env);
+    if (env.valuesMissing()) {
+      return null;
+    }
+
+    Path outputDir = getExternalRepositoryDirectory(directories).getRelative(rule.getName());
+    return createOutputTree(rule, outputDir, serverValue, env.getListener());
+  }
+
+  private void createDirectory(Path path) throws RepositoryFunctionException {
+    try {
+      FileSystemUtils.createDirectoryAndParents(path);
     } catch (IOException e) {
+      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
+    }
+  }
+
+  private RepositoryDirectoryValue.Builder createOutputTree(
+      Rule rule,
+      Path outputDirectory,
+      MavenServerValue serverValue,
+      ExtendedEventHandler eventHandler)
+      throws RepositoryFunctionException, InterruptedException {
+    MavenDownloader mavenDownloader = downloader;
+
+    createDirectory(outputDirectory);
+    String name = rule.getName();
+    final JarPaths repositoryJars;
+    try {
+      repositoryJars =
+          mavenDownloader.download(
+              name, WorkspaceAttributeMapper.of(rule), outputDirectory, serverValue, eventHandler);
+    } catch (IOException e) {
+      throw new RepositoryFunctionException(e, Transience.TRANSIENT);
+    } catch (EvalException e) {
       throw new RepositoryFunctionException(e, Transience.TRANSIENT);
     }
 
     // Add a WORKSPACE file & BUILD file to the Maven jar.
-    JarDecompressor decompressor = new JarDecompressor(rule, repositoryJar);
-    Path repositoryDirectory = null;
-    try {
-      repositoryDirectory = decompressor.decompress();
-    } catch (DecompressorException e) {
-      throw new RepositoryFunctionException(new IOException(e.getMessage()), Transience.TRANSIENT);
-    }
-    FileValue repositoryFileValue = getRepositoryDirectory(repositoryDirectory, env);
-    if (repositoryFileValue == null) {
-      return null;
-    }
-    return new RepositoryValue(repositoryDirectory, repositoryFileValue);
+    DecompressorDescriptor jar = getDescriptorBuilder(name, repositoryJars.jar, outputDirectory);
+    DecompressorDescriptor srcjar =
+        repositoryJars.srcjar.isPresent()
+            ? getDescriptorBuilder(name, repositoryJars.srcjar.get(), outputDirectory)
+            : null;
+    JarDecompressor decompressor = (JarDecompressor) jar.getDecompressor();
+    Path result = decompressor.decompressWithSrcjar(jar, Optional.fromNullable(srcjar));
+    return RepositoryDirectoryValue.builder().setPath(result);
   }
 
-  @Override
-  public SkyFunctionName getSkyFunctionName() {
-    return SkyFunctionName.computed(Ascii.toUpperCase(MavenJarRule.NAME));
+  private DecompressorDescriptor getDescriptorBuilder(String name, Path jar, Path outputDirectory)
+      throws RepositoryFunctionException {
+    return DecompressorDescriptor.builder()
+        .setDecompressor(JarDecompressor.INSTANCE)
+        .setTargetKind(MavenJarRule.NAME)
+        .setTargetName(name)
+        .setArchivePath(jar)
+        .setRepositoryPath(outputDirectory)
+        .build();
   }
 
   @Override
   public Class<? extends RuleDefinition> getRuleDefinition() {
     return MavenJarRule.class;
   }
-
-  private static class MavenDownloader {
-    private static final String MAVEN_CENTRAL_URL = "http://central.maven.org/maven2/";
-
-    private final String groupId;
-    private final String artifactId;
-    private final String version;
-    private final Path outputDirectory;
-    private List<RemoteRepository> repositories;
-
-    MavenDownloader(String groupId, String artifactId, String version, Path outputDirectory) {
-      this.groupId = groupId;
-      this.artifactId = artifactId;
-      this.version = version;
-      this.outputDirectory = outputDirectory;
-
-      this.repositories = new ArrayList<>(Arrays.asList(
-          new RemoteRepository.Builder("central", "default", MAVEN_CENTRAL_URL)
-          .build()));
-    }
-
-    /**
-     * Customizes the set of Maven repositories to check.  Takes a list of repository addresses.
-     */
-    public void setRepositories(List<String> repositoryUrls) {
-      repositories = Lists.newArrayList();
-      for (String repositoryUrl : repositoryUrls) {
-        repositories.add(new RemoteRepository.Builder(
-            "user-defined repository " + repositories.size(), "default", repositoryUrl).build());
-      }
-    }
-
-    public Path download() throws IOException {
-      RepositorySystem system = newRepositorySystem();
-      RepositorySystemSession session = newRepositorySystemSession(system);
-
-      ArtifactRequest artifactRequest = new ArtifactRequest();
-      Artifact artifact = new DefaultArtifact(groupId + ":" + artifactId + ":" + version);
-      artifactRequest.setArtifact(artifact);
-      artifactRequest.setRepositories(repositories);
-
-      try {
-        ArtifactResult artifactResult = system.resolveArtifact(session, artifactRequest);
-        artifact = artifactResult.getArtifact();
-      } catch (ArtifactResolutionException e) {
-        throw new IOException("Failed to fetch Maven dependency: " + e.getMessage());
-      }
-      return outputDirectory.getRelative(artifact.getFile().getAbsolutePath());
-    }
-
-    private RepositorySystemSession newRepositorySystemSession(RepositorySystem system) {
-      DefaultRepositorySystemSession session = MavenRepositorySystemUtils.newSession();
-      LocalRepository localRepo = new LocalRepository(outputDirectory.getPathString());
-      session.setLocalRepositoryManager(system.newLocalRepositoryManager(session, localRepo));
-      session.setTransferListener(new AbstractTransferListener() {});
-      session.setRepositoryListener(new AbstractRepositoryListener() {});
-      return session;
-    }
-
-    private RepositorySystem newRepositorySystem() {
-      DefaultServiceLocator locator = MavenRepositorySystemUtils.newServiceLocator();
-      locator.addService(RepositoryConnectorFactory.class, BasicRepositoryConnectorFactory.class);
-      locator.addService(TransporterFactory.class, FileTransporterFactory.class);
-      locator.addService(TransporterFactory.class, HttpTransporterFactory.class);
-      return locator.getService(RepositorySystem.class);
-    }
-  }
-
 }
