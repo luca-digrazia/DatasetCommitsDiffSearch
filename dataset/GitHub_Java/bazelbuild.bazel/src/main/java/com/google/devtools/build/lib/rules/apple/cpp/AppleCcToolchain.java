@@ -77,7 +77,7 @@ public class AppleCcToolchain extends CcToolchain {
     String cpu = buildOptions.get(Options.class).cpu;
 
     Map<String, String> appleEnv = getEnvironmentBuildVariables(xcodeConfig, cpu);
-    CcToolchainVariables.Builder variables = CcToolchainVariables.builder();
+    CcToolchainVariables.Builder variables = new CcToolchainVariables.Builder();
     variables
         .addStringVariable(
             XCODE_VERSION_KEY, xcodeConfig.getXcodeVersion().toStringWithMinimumComponents(2))

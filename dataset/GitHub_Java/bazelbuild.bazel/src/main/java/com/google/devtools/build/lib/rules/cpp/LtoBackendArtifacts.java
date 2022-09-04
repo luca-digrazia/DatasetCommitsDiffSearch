@@ -224,7 +224,7 @@ public final class LtoBackendArtifacts {
 
     builder.setExecutable(compiler);
     CcToolchainVariables.Builder buildVariablesBuilder =
-        CcToolchainVariables.builder(
+        new CcToolchainVariables.Builder(
             ccToolchain.getBuildVariables(
                 ruleContext.getConfiguration().getOptions(),
                 ruleContext.getFragment(CppConfiguration.class)));

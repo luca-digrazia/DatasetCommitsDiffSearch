@@ -875,7 +875,7 @@ public final class CcCompilationHelper {
    */
   private CcCompilationContext initializeCcCompilationContext() {
     CcCompilationContext.Builder ccCompilationContextBuilder =
-        CcCompilationContext.builder(actionConstructionContext, configuration, label);
+        new CcCompilationContext.Builder(actionConstructionContext, configuration, label);
 
     // Setup the include path; local include directories come before those inherited from deps or
     // from the toolchain; in case of aliasing (same include file found on different entries),
@@ -1214,7 +1214,7 @@ public final class CcCompilationHelper {
    * specified on the current object. This method should only be called once.
    */
   private CcCompilationOutputs createCcCompileActions() throws RuleErrorException {
-    CcCompilationOutputs.Builder result = CcCompilationOutputs.builder();
+    CcCompilationOutputs.Builder result = new CcCompilationOutputs.Builder();
     Preconditions.checkNotNull(ccCompilationContext);
 
     if (shouldProvideHeaderModules()) {

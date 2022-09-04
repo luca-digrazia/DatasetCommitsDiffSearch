@@ -25,11 +25,9 @@ import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.Location;
 import java.io.Serializable;
 import java.util.HashMap;
-import net.starlark.java.syntax.Location;
 
 /**
  * Implementation for the cc_toolchain rule.
@@ -44,27 +42,9 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   /** Default attribute name for the c++ toolchain type */
   public static final String CC_TOOLCHAIN_TYPE_ATTRIBUTE_NAME = "$cc_toolchain_type";
 
-  public static final String ALLOWED_LAYERING_CHECK_FEATURES_ALLOWLIST =
-      "disabling_parse_headers_and_layering_check_allowed";
-  public static final String ALLOWED_LAYERING_CHECK_FEATURES_TARGET =
-      "@bazel_tools//tools/build_defs/cc/whitelists/parse_headers_and_layering_check:"
-          + ALLOWED_LAYERING_CHECK_FEATURES_ALLOWLIST;
-  public static final Label ALLOWED_LAYERING_CHECK_FEATURES_LABEL =
-      Label.parseAbsoluteUnchecked(ALLOWED_LAYERING_CHECK_FEATURES_TARGET);
-
-  public static final String LOOSE_HEADER_CHECK_ALLOWLIST =
-      "loose_header_check_allowed_in_toolchain";
-  public static final String LOOSE_HEADER_CHECK_TARGET =
-      "@bazel_tools//tools/build_defs/cc/whitelists/starlark_hdrs_check:" + LOOSE_HEADER_CHECK_ALLOWLIST;
-  public static final Label LOOSE_HEADER_CHECK_LABEL =
-      Label.parseAbsoluteUnchecked(LOOSE_HEADER_CHECK_TARGET);
-
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    if (!isAppleToolchain()) {
-      CcCommon.checkRuleLoadedThroughMacro(ruleContext);
-    }
     validateToolchain(ruleContext);
     CcToolchainAttributesProvider attributes =
         new CcToolchainAttributesProvider(
@@ -82,16 +62,15 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
     if (!CppHelper.useToolchainResolution(ruleContext)) {
       // This is not a platforms-backed build, let's provide CcToolchainAttributesProvider
       // and have cc_toolchain_suite select one of its toolchains and create CcToolchainProvider
-      // from its attributes. We also need to provide a do-nothing ToolchainInfo.
-      return ruleConfiguredTargetBuilder
-          .addNativeDeclaredProvider(new ToolchainInfo(ImmutableMap.of("cc", "dummy cc toolchain")))
-          .build();
+      // from its attributes.
+      return ruleConfiguredTargetBuilder.build();
     }
 
     // This is a platforms-backed build, we will not analyze cc_toolchain_suite at all, and we are
     // sure current cc_toolchain is the one selected. We can create CcToolchainProvider here.
     CcToolchainProvider ccToolchainProvider =
-        CcToolchainProviderHelper.getCcToolchainProvider(ruleContext, attributes);
+        CcToolchainProviderHelper.getCcToolchainProvider(
+            ruleContext, attributes, /* crosstoolFromCcToolchainSuiteProtoAttribute= */ null);
 
     if (ccToolchainProvider == null) {
       // Skyframe restart

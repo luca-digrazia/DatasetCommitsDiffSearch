@@ -833,7 +833,7 @@ public class CppLinkActionBuilder {
 
     // Add build variables necessary to template link args into the crosstool.
     CcToolchainVariables.Builder buildVariablesBuilder =
-        CcToolchainVariables.builder(
+        new CcToolchainVariables.Builder(
             toolchain.getBuildVariables(
                 ruleContext.getConfiguration().getOptions(), cppConfiguration));
     Preconditions.checkState(!isLtoIndexing || allowLtoIndexing);
