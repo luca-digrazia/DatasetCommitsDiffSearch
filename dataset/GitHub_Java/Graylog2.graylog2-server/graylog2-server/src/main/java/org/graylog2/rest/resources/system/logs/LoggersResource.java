@@ -24,53 +24,33 @@ import com.wordnik.swagger.annotations.ApiOperation;
 import com.wordnik.swagger.annotations.ApiParam;
 import com.wordnik.swagger.annotations.ApiResponse;
 import com.wordnik.swagger.annotations.ApiResponses;
-import org.apache.logging.log4j.Level;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Marker;
-import org.apache.logging.log4j.core.Appender;
-import org.apache.logging.log4j.core.LogEvent;
-import org.apache.logging.log4j.core.LoggerContext;
-import org.apache.logging.log4j.core.config.Configuration;
-import org.apache.logging.log4j.core.config.LoggerConfig;
-import org.apache.logging.log4j.core.impl.ThrowableProxy;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
-import org.graylog2.log4j.MemoryAppender;
-import org.graylog2.rest.models.system.loggers.responses.InternalLogMessage;
-import org.graylog2.rest.models.system.loggers.responses.LogMessagesSummary;
 import org.graylog2.rest.models.system.loggers.responses.LoggersSummary;
 import org.graylog2.rest.models.system.loggers.responses.SingleLoggerSummary;
 import org.graylog2.rest.models.system.loggers.responses.SingleSubsystemSummary;
 import org.graylog2.rest.models.system.loggers.responses.SubsystemSummary;
 import org.graylog2.shared.rest.resources.RestResource;
 import org.graylog2.shared.security.RestPermissions;
-import org.hibernate.validator.constraints.NotEmpty;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.LoggerFactory;
 
-import javax.validation.constraints.Min;
-import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
-import javax.ws.rs.InternalServerErrorException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Locale;
+import java.util.Enumeration;
 import java.util.Map;
 
 @RequiresAuthentication
 @Api(value = "System/Loggers", description = "Internal Graylog loggers")
 @Path("/system/loggers")
 public class LoggersResource extends RestResource {
+
     private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(LoggersResource.class);
-    private static final String MEMORY_APPENDER_NAME = "graylog-internal-logs";
 
     private static final Map<String, Subsystem> SUBSYSTEMS = ImmutableMap.<String, Subsystem>of(
             "graylog2", new Subsystem("Graylog2", "org.graylog2", "All messages from graylog2-owned systems."),
@@ -83,24 +63,19 @@ public class LoggersResource extends RestResource {
     @ApiOperation(value = "List all loggers and their current levels")
     @Produces(MediaType.APPLICATION_JSON)
     public LoggersSummary loggers() {
-        final Collection<LoggerConfig> loggerConfigs = getLoggerConfigs();
-        final Map<String, SingleLoggerSummary> loggers = Maps.newHashMapWithExpectedSize(loggerConfigs.size());
-        for (LoggerConfig config : loggerConfigs) {
-            if (!isPermitted(RestPermissions.LOGGERS_READ, config.getName())) {
+        final Map<String, SingleLoggerSummary> loggerList = Maps.newHashMap();
+
+        final Enumeration loggers = Logger.getRootLogger().getLoggerRepository().getCurrentLoggers();
+        while (loggers.hasMoreElements()) {
+            Logger logger = (Logger) loggers.nextElement();
+            if (!isPermitted(RestPermissions.LOGGERS_READ, logger.getName())) {
                 continue;
             }
 
-            final Level level = config.getLevel();
-            loggers.put(config.getName(), SingleLoggerSummary.create(level.toString().toLowerCase(Locale.ENGLISH), level.intLevel()));
+            loggerList.put(logger.getName(), SingleLoggerSummary.create(logger.getEffectiveLevel().toString().toLowerCase(), logger.getEffectiveLevel().getSyslogEquivalent()));
         }
 
-        return LoggersSummary.create(loggers);
-    }
-
-    private Collection<LoggerConfig> getLoggerConfigs() {
-        final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
-        final Configuration configuration = loggerContext.getConfiguration();
-        return configuration.getLoggers().values();
+        return LoggersSummary.create(loggerList);
     }
 
     @GET
@@ -108,7 +83,7 @@ public class LoggersResource extends RestResource {
     @Path("/subsystems")
     @ApiOperation(value = "List all logger subsystems and their current levels")
     @Produces(MediaType.APPLICATION_JSON)
-    public SubsystemSummary subsystems() {
+    public SubsystemSummary subsytems() {
         final Map<String, SingleSubsystemSummary> subsystems = Maps.newHashMap();
         for (Map.Entry<String, Subsystem> subsystem : SUBSYSTEMS.entrySet()) {
             if (!isPermitted(RestPermissions.LOGGERS_READSUBSYSTEM, subsystem.getKey())) {
@@ -116,38 +91,21 @@ public class LoggersResource extends RestResource {
             }
 
             try {
-                final String category = subsystem.getValue().getCategory();
-                final Level level = getLoggerLevel(category);
+                final Level effectiveLevel = Logger.getLogger(subsystem.getValue().getCategory()).getEffectiveLevel();
 
-                subsystems.put(subsystem.getKey(),
-                        SingleSubsystemSummary.create(
-                                subsystem.getValue().getTitle(),
-                                subsystem.getValue().getCategory(),
-                                subsystem.getValue().getDescription(),
-                                level.toString().toLowerCase(Locale.ENGLISH),
-                                level.intLevel()));
+                subsystems.put(subsystem.getKey(), SingleSubsystemSummary.create(
+                        subsystem.getValue().getTitle(),
+                        subsystem.getValue().getCategory(),
+                        subsystem.getValue().getDescription(),
+                        effectiveLevel.toString().toLowerCase(),
+                        effectiveLevel.getSyslogEquivalent()
+                ));
             } catch (Exception e) {
-                LOG.error("Error while listing logger subsystem.", e);
+                LOG.warn("Error while listing logger subsystem.", e);
             }
         }
 
         return SubsystemSummary.create(subsystems);
-    }
-
-    private Level getLoggerLevel(final String loggerName) {
-        final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
-        final Configuration configuration = loggerContext.getConfiguration();
-        final LoggerConfig loggerConfig = configuration.getLoggerConfig(loggerName);
-
-        return loggerConfig.getLevel();
-    }
-
-    private void setLoggerLevel(final String loggerName, final Level level) {
-        final LoggerContext context = (LoggerContext) LogManager.getContext(false);
-        final Configuration config = context.getConfiguration();
-
-        config.getLoggerConfig(loggerName).setLevel(level);
-        context.updateLoggers(config);
     }
 
     @PUT
@@ -159,16 +117,21 @@ public class LoggersResource extends RestResource {
     })
     @Path("/subsystems/{subsystem}/level/{level}")
     public void setSubsystemLoggerLevel(
-            @ApiParam(name = "subsystem", required = true) @PathParam("subsystem") @NotEmpty String subsystemTitle,
-            @ApiParam(name = "level", required = true) @PathParam("level") @NotEmpty String level) {
+            @ApiParam(name = "subsystem", required = true) @PathParam("subsystem") String subsystemTitle,
+            @ApiParam(name = "level", required = true) @PathParam("level") String level) {
         if (!SUBSYSTEMS.containsKey(subsystemTitle)) {
             LOG.warn("No such subsystem: [{}]. Returning 404.", subsystemTitle);
             throw new NotFoundException();
         }
         checkPermission(RestPermissions.LOGGERS_EDITSUBSYSTEM, subsystemTitle);
+        Subsystem subsystem = SUBSYSTEMS.get(subsystemTitle);
 
-        final Subsystem subsystem = SUBSYSTEMS.get(subsystemTitle);
-        setLoggerLevel(subsystem.getCategory(), Level.toLevel(level.toUpperCase(Locale.ENGLISH)));
+        // This is never null. Worst case is a logger that does not exist.
+        Logger logger = Logger.getLogger(subsystem.getCategory());
+
+        // Setting the level falls back to DEBUG if provided level is invalid.
+        Level newLevel = Level.toLevel(level.toUpperCase());
+        logger.setLevel(newLevel);
     }
 
     @PUT
@@ -177,74 +140,19 @@ public class LoggersResource extends RestResource {
             notes = "Provided level is falling back to DEBUG if it does not exist")
     @Path("/{loggerName}/level/{level}")
     public void setSingleLoggerLevel(
-            @ApiParam(name = "loggerName", required = true) @PathParam("loggerName") @NotEmpty String loggerName,
-            @ApiParam(name = "level", required = true) @NotEmpty @PathParam("level") String level) {
+            @ApiParam(name = "loggerName", required = true) @PathParam("loggerName") String loggerName,
+            @ApiParam(name = "level", required = true) @PathParam("level") String level) {
         checkPermission(RestPermissions.LOGGERS_EDIT, loggerName);
-        setLoggerLevel(loggerName, Level.toLevel(level.toUpperCase(Locale.ENGLISH)));
-    }
+        // This is never null. Worst case is a logger that does not exist.
+        Logger logger = Logger.getLogger(loggerName);
 
-    @GET
-    @Timed
-    @ApiOperation(value = "Get recent internal log messages")
-    @ApiResponses(value = {
-            @ApiResponse(code = 404, message = "Memory appender is disabled."),
-            @ApiResponse(code = 500, message = "Memory appender is broken.")
-    })
-    @Path("/messages/recent")
-    @Produces(MediaType.APPLICATION_JSON)
-    public LogMessagesSummary messages(@ApiParam(name = "limit", value = "How many log messages should be returned", defaultValue = "500", allowableValues = "range[0, infinity]")
-                                       @QueryParam("limit") @DefaultValue("500") @Min(0L) int limit,
-                                       @ApiParam(name = "level", value = "Which log level (or higher) should the messages have", defaultValue = "ALL", allowableValues = "[OFF, FATAL, ERROR, WARN, INFO, DEBUG, TRACE, ALL]")
-                                       @QueryParam("level") @DefaultValue("ALL") @NotEmpty String level) {
-        final Appender appender = getAppender(MEMORY_APPENDER_NAME);
-        if (appender == null) {
-            throw new NotFoundException("Memory appender is disabled. Please refer to the example log4j.xml file.");
-        }
-
-        if (!(appender instanceof MemoryAppender)) {
-            throw new InternalServerErrorException("Memory appender is not an instance of MemoryAppender. Please refer to the example log4j.xml file.");
-        }
-
-        final Level logLevel = Level.toLevel(level, Level.ALL);
-        final MemoryAppender memoryAppender = (MemoryAppender) appender;
-        final List<InternalLogMessage> messages = new ArrayList<>(limit);
-        for (LogEvent event : memoryAppender.getLogMessages(limit)) {
-            final Level eventLevel = event.getLevel();
-            if (!eventLevel.isMoreSpecificThan(logLevel)) {
-                continue;
-            }
-
-            final ThrowableProxy thrownProxy = event.getThrownProxy();
-            final String throwable;
-            if (thrownProxy == null) {
-                throwable = null;
-            } else {
-                throwable = thrownProxy.getExtendedStackTraceAsString();
-            }
-
-            final Marker marker = event.getMarker();
-            messages.add(InternalLogMessage.create(
-                    event.getMessage().getFormattedMessage(),
-                    event.getLoggerName(),
-                    eventLevel.toString(),
-                    marker == null ? null : marker.toString(),
-                    new DateTime(event.getTimeMillis(), DateTimeZone.UTC),
-                    throwable,
-                    event.getThreadName(),
-                    event.getContextMap()
-            ));
-        }
-
-        return LogMessagesSummary.create(messages);
-    }
-
-    private Appender getAppender(final String appenderName) {
-        final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
-        final Configuration configuration = loggerContext.getConfiguration();
-        return configuration.getAppender(appenderName);
+        // Setting the level falls back to DEBUG if provided level is invalid.
+        Level newLevel = Level.toLevel(level.toUpperCase());
+        logger.setLevel(newLevel);
     }
 
     private static class Subsystem {
+
         private final String title;
         private final String category;
         private final String description;
