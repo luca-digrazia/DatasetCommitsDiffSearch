@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,13 +15,12 @@
  */
 package com.googlecode.androidannotations.helper;
 
-import java.lang.annotation.Annotation;
 import java.util.List;
 import java.util.Set;
 
 import javax.lang.model.element.Element;
 
-import com.googlecode.androidannotations.annotations.ResId;
+import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.googlecode.androidannotations.validation.IsValid;
@@ -35,74 +34,79 @@ public class IdValidatorHelper extends ValidatorHelper {
 		this.idAnnotationHelper = idAnnotationHelper;
 	}
 
-	public enum FallbackStrategy {
-		USE_ELEMENT_NAME, ALLOW_NO_RES_ID, NEED_RES_ID
+	public void idExists(Element element, Res res, IsValid valid) {
+		idExists(element, res, true, valid);
 	}
 
-	public void resIdsExist(Element element, Res res, FallbackStrategy fallbackStrategy, IsValid valid) {
+	public void idExists(Element element, Res res, boolean defaultUseName, IsValid valid) {
+		idExists(element, res, defaultUseName, true, valid);
+	}
 
-		Class<? extends Annotation> target = idAnnotationHelper.getTarget();
-		int[] resIds = idAnnotationHelper.extractAnnotationResIdValueParameter(element, target);
+	public void idExists(Element element, Res res, boolean defaultUseName, boolean allowDefault, IsValid valid) {
 
-		if (idAnnotationHelper.defaultResIdValue(resIds)) {
-			String[] resNames = idAnnotationHelper.extractAnnotationResNameParameter(element, target);
+		Integer idValue = annotationHelper.extractAnnotationValue(element);
 
-			if (idAnnotationHelper.defaultResName(resNames)) {
-				if (fallbackStrategy == FallbackStrategy.USE_ELEMENT_NAME) {
-					/*
-					 * fallback, using element name
-					 */
-					String elementName = idAnnotationHelper.extractElementName(element, target);
+		idExists(element, res, defaultUseName, allowDefault, valid, idValue);
+	}
 
-					if (!idAnnotationHelper.containsField(elementName, res)) {
-						valid.invalidate();
-						annotationHelper.printAnnotationError(element, "Resource name not found in R." + res.rName() + ": " + elementName);
-					}
-				} else if (fallbackStrategy == FallbackStrategy.NEED_RES_ID) {
-					valid.invalidate();
-					annotationHelper.printAnnotationError(element, "%s needs an annotation value");
-				}
-			} else {
-				for (String resName : resNames) {
-					if (!idAnnotationHelper.containsField(resName, res)) {
-						valid.invalidate();
-						annotationHelper.printAnnotationError(element, "Resource name not found in R." + res.rName() + ": " + resName);
-					}
-				}
-			}
+	public void idsExists(Element element, Res res, IsValid valid) {
+
+		int[] idsValues = annotationHelper.extractAnnotationValue(element);
+
+		if (idsValues == null) {
+			valid.invalidate();
+			annotationHelper.printAnnotationWarning(element, "The value of the %s annotation could not be determined at compile time, for unknown reasons. Please report this issue.");
+		} else if (idsValues[0] == Id.DEFAULT_VALUE) {
+			idExists(element, res, true, true, valid, idsValues[0]);
 		} else {
-			for (int resId : resIds) {
-				if (!idAnnotationHelper.containsIdValue(resId, res)) {
-					valid.invalidate();
-					annotationHelper.printAnnotationError(element, "Resource id value not found in R." + res.rName() + ": " + resId);
-				}
+			for (int idValue : idsValues) {
+				idExists(element, res, false, true, valid, idValue);
 			}
 		}
 	}
 
-	public void annotationParameterIsOptionalValidResId(Element element, Res res, String parameterName, IsValid valid) {
-		Integer resId = annotationHelper.extractAnnotationParameter(element, parameterName);
-		if (!resId.equals(ResId.DEFAULT_VALUE) && !idAnnotationHelper.containsIdValue(resId, res)) {
-			valid.invalidate();
-			annotationHelper.printAnnotationError(element, "Id value not found in R." + res.rName() + ": " + resId);
+	private void idExists(Element element, Res res, boolean defaultUseName, boolean allowDefault, IsValid valid, Integer idValue) {
+		if (allowDefault && idValue.equals(Id.DEFAULT_VALUE)) {
+			if (defaultUseName) {
+				String elementName = element.getSimpleName().toString();
+				int lastIndex = elementName.lastIndexOf(annotationHelper.actionName());
+				if (lastIndex != -1) {
+					elementName = elementName.substring(0, lastIndex);
+				}
+				if (!idAnnotationHelper.containsField(elementName, res)) {
+					valid.invalidate();
+					String message;
+					String snakeCaseName = CaseHelper.camelCaseToSnakeCase(elementName);
+					String rQualifiedPrefix = String.format("R.%s.", res.rName());
+					if (snakeCaseName.equals(elementName)) {
+						message = "Id not found: " + rQualifiedPrefix + elementName;
+					} else {
+						message = "Id not found: " + rQualifiedPrefix + elementName + " or " + rQualifiedPrefix + snakeCaseName;
+					}
+					annotationHelper.printAnnotationError(element, message);
+				}
+			}
+		} else {
+			if (!idAnnotationHelper.containsIdValue(idValue, res)) {
+				valid.invalidate();
+				annotationHelper.printAnnotationError(element, "Id value not found in R." + res.rName() + ": " + idValue);
+			}
 		}
 	}
 
 	public void uniqueId(Element element, AnnotationElements validatedElements, IsValid valid) {
 
 		if (valid.isValid()) {
+			Element layoutElement = element.getEnclosingElement();
+			List<String> annotationQualifiedIds = idAnnotationHelper.extractAnnotationQualifiedIds(element);
 
-			List<String> annotationQualifiedIds = idAnnotationHelper.extractAnnotationResources(element, Res.ID, true);
-
-			Element elementEnclosingElement = element.getEnclosingElement();
-			Set<? extends Element> annotatedElements = validatedElements.getRootAnnotatedElements(annotationHelper.getTarget().getName());
+			Set<? extends Element> annotatedElements = validatedElements.getAnnotatedElements(annotationHelper.getTarget());
 
 			for (Element uniqueCheckElement : annotatedElements) {
-				Element uniqueCheckEnclosingElement = uniqueCheckElement.getEnclosingElement();
+				Element enclosingElement = uniqueCheckElement.getEnclosingElement();
 
-				if (elementEnclosingElement.equals(uniqueCheckEnclosingElement)) {
-
-					List<String> checkQualifiedIds = idAnnotationHelper.extractAnnotationResources(uniqueCheckElement, Res.ID, true);
+				if (layoutElement.equals(enclosingElement)) {
+					List<String> checkQualifiedIds = idAnnotationHelper.extractAnnotationQualifiedIds(uniqueCheckElement);
 
 					for (String checkQualifiedId : checkQualifiedIds) {
 						for (String annotationQualifiedId : annotationQualifiedIds) {

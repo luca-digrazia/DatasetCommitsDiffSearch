@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 Pierre-Yves Ricau (py.ricau at gmail.com)
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -26,6 +26,7 @@ import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.helper.IdValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 import com.googlecode.androidannotations.rclass.IRClass;
+import com.googlecode.androidannotations.rclass.IRClass.Res;
 
 /**
  * @author Benjamin Fellous
@@ -35,7 +36,7 @@ public class ItemClickValidator implements ElementValidator {
 
 	private IdAnnotationHelper annotationHelper;
 	private IdValidatorHelper validatorHelper;
-	
+
 	public ItemClickValidator(ProcessingEnvironment processingEnv, IRClass rClass) {
 		annotationHelper = new IdAnnotationHelper(processingEnv, getTarget(), rClass);
 		validatorHelper = new IdValidatorHelper(annotationHelper);
@@ -50,11 +51,18 @@ public class ItemClickValidator implements ElementValidator {
 	public boolean validate(Element element, AnnotationElements validatedElements) {
 
 		IsValid valid = new IsValid();
-		
-		validatorHelper.idListenerMethod(element, validatedElements, valid);
 
+		validatorHelper.enclosingElementHasEnhancedViewSupportAnnotation(element, validatedElements, valid);
+
+		validatorHelper.idsExists(element, Res.ID, valid);
+
+		validatorHelper.isNotPrivate(element, valid);
+
+		validatorHelper.doesntThrowException((ExecutableElement) element, valid);
+
+		validatorHelper.uniqueId(element, validatedElements, valid);
 		ExecutableElement executableElement = (ExecutableElement) element;
-		validatorHelper.voidReturnType(executableElement, valid);
+		validatorHelper.returnTypeIsVoid(executableElement, valid);
 
 		validatorHelper.zeroOrOneParameter(executableElement, valid);
 
