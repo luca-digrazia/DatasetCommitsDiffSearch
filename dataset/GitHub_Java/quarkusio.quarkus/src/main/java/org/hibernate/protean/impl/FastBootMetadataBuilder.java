@@ -14,8 +14,6 @@ import org.hibernate.boot.CacheRegionDefinition;
 import org.hibernate.boot.MetadataBuilder;
 import org.hibernate.boot.MetadataSources;
 import org.hibernate.boot.archive.scan.internal.StandardScanOptions;
-import org.hibernate.boot.internal.MetadataImpl;
-import org.hibernate.boot.model.IdentifierGeneratorDefinition;
 import org.hibernate.boot.model.process.spi.ManagedResources;
 import org.hibernate.boot.model.process.spi.MetadataBuildingProcess;
 import org.hibernate.boot.registry.BootstrapServiceRegistry;
@@ -215,49 +213,18 @@ class FastBootMetadataBuilder {
 	}
 
 	public RecordedState build() {
-		MetadataImpl fullMeta = (MetadataImpl) MetadataBuildingProcess.complete(
+		MetadataImplementor fullMeta = MetadataBuildingProcess.complete(
 				managedResources,
 				metamodelBuilder.getBootstrapContext(),
-				metamodelBuilder.getMetadataBuildingOptions() //INTERCEPT & DESTROY :)
+				metamodelBuilder.getMetadataBuildingOptions()
 
 		);
 		Dialect dialect = extractDialect();
 		JtaPlatform jtaPlatform = extractJtaPlatform();
-		destroyServiceRegistry( fullMeta );
-		MetadataImplementor storeableMetadata = trimBootstrapMetadata( fullMeta );
-		return new RecordedState( dialect, jtaPlatform, storeableMetadata, configurationValues );
-	}
-
-	private void destroyServiceRegistry(MetadataImplementor fullMeta) {
 		final AbstractServiceRegistryImpl serviceRegistry = (AbstractServiceRegistryImpl) metamodelBuilder.getBootstrapContext().getServiceRegistry();
 		serviceRegistry.close();
 		serviceRegistry.resetParent( null );
-	}
-
-	private MetadataImplementor trimBootstrapMetadata(MetadataImpl fullMeta) {
-		MetadataImpl replacement = new MetadataImpl(
-				fullMeta.getUUID(),
-				fullMeta.getMetadataBuildingOptions(), //TODO Replace this
-				fullMeta.getIdentifierGeneratorFactory(),
-				fullMeta.getEntityBindingMap(),
-				fullMeta.getMappedSuperclassMap(),
-				fullMeta.getCollectionBindingMap(),
-				fullMeta.getTypeDefinitionMap(),
-				fullMeta.getFilterDefinitions(),
-				fullMeta.getFetchProfileMap(),
-				fullMeta.getImports(), // ok
-				fullMeta.getIdGeneratorDefinitionMap(),
-				fullMeta.getNamedQueryMap(),
-				fullMeta.getNamedNativeQueryMap(), // TODO // might contain references to org.hibernate.loader.custom.ConstructorResultColumnProcessor, org.hibernate.type.TypeStandardSQLFunction
-				fullMeta.getNamedProcedureCallMap(),
-				fullMeta.getSqlResultSetMappingMap(), //TODO might contain NativeSQLQueryReturn (as namedNativeQueryMap above)
-				fullMeta.getNamedEntityGraphs(), //TODO //reference to *annotation* instance ! FIXME or ignore feature?
-				fullMeta.getSqlFunctionMap(), //ok
-				fullMeta.getDatabase(), //Cleaned up: used to include references to MetadataBuildingOptions, etc..
-				fullMeta.getBootstrapContext() //FIXME WHOA!
-		);
-
-		return replacement;
+		return new RecordedState( dialect, jtaPlatform, fullMeta, configurationValues );
 	}
 
 	private JtaPlatform extractJtaPlatform() {
