@@ -14,14 +14,12 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.common.base.Stopwatch;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Streams;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Actions.GeneratingActions;
 import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
@@ -35,6 +33,7 @@ import com.google.devtools.build.lib.analysis.DependencyResolver;
 import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
 import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAspectOrderException;
 import com.google.devtools.build.lib.analysis.EmptyConfiguredTarget;
+import com.google.devtools.build.lib.analysis.PlatformSemantics;
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.ToolchainResolver;
@@ -63,6 +62,7 @@ import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
+import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
@@ -92,7 +92,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -106,10 +105,10 @@ import javax.annotation.Nullable;
  * @see com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory
  */
 public final class ConfiguredTargetFunction implements SkyFunction {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
-
-  private static final ImmutableMap<Label, ConfigMatchingProvider> NO_CONFIG_CONDITIONS =
-      ImmutableMap.of();
+  // This construction is a bit funky, but guarantees that the Object reference here is globally
+  // unique.
+  static final ImmutableMap<Label, ConfigMatchingProvider> NO_CONFIG_CONDITIONS =
+      ImmutableMap.<Label, ConfigMatchingProvider>of();
 
   /**
    * Exception class that signals an error during the evaluation of a dependency.
@@ -173,16 +172,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     this.nonceVersion = nonceVersion;
   }
 
-  private void acquireWithLogging(SkyKey key) throws InterruptedException {
-    Stopwatch stopwatch = Stopwatch.createStarted();
-    cpuBoundSemaphore.acquire();
-    long elapsedTime = stopwatch.elapsed().toMillis();
-    if (elapsedTime > 5) {
-      logger.atInfo().atMostEvery(10, TimeUnit.SECONDS).log(
-          "Spent %s milliseconds waiting for lock acquisition for %s", elapsedTime, key);
-    }
-  }
-
   @Override
   public SkyValue compute(SkyKey key, Environment env) throws ConfiguredTargetFunctionException,
       InterruptedException {
@@ -191,7 +180,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
           new StateInformingSkyFunctionEnvironment(
               env,
               /*preFetch=*/ cpuBoundSemaphore::release,
-              /*postFetch=*/ () -> acquireWithLogging(key));
+              /*postFetch=*/ cpuBoundSemaphore::acquire);
     }
     SkyframeBuildView view = buildViewProvider.getSkyframeBuildView();
     NestedSetBuilder<Package> transitivePackagesForPackageRootResolution =
@@ -215,9 +204,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       return null;
     }
     PackageValue packageValue = (PackageValue) packageAndMaybeConfigurationValues.get(packageKey);
-    if (label.equals(labelWithUndonePackageToDiagnoseBug)) {
-      logger.atInfo().log("Retrieved values %s for %s", packageAndMaybeConfigurationValues, key);
-    }
     if (configurationKeyMaybe != null) {
       configuration =
           ((BuildConfigurationValue) packageAndMaybeConfigurationValues.get(configurationKeyMaybe))
@@ -273,11 +259,11 @@ public final class ConfiguredTargetFunction implements SkyFunction {
 
     UnloadedToolchainContext unloadedToolchainContext = null;
 
-    // TODO(janakr): this call may tie up this thread indefinitely, reducing the parallelism of
-    //  Skyframe. This is a strict improvement over the prior state of the code, in which we ran
-    //  with #processors threads, but ideally we would call #tryAcquire here, and if we failed,
-    //  would exit this SkyFunction and restart it when permits were available.
-    acquireWithLogging(key);
+    // TODO(janakr): this acquire() call may tie up this thread indefinitely, reducing the
+    // parallelism of Skyframe. This is a strict improvement over the prior state of the code, in
+    // which we ran with #processors threads, but ideally we would call #tryAcquire here, and if we
+    // failed, would exit this SkyFunction and restart it when permits were available.
+    cpuBoundSemaphore.acquire();
     try {
       // Get the configuration targets that trigger this rule's configurable attributes.
       ImmutableMap<Label, ConfigMatchingProvider> configConditions =
@@ -459,7 +445,7 @@ public final class ConfiguredTargetFunction implements SkyFunction {
     if (rule.getRuleClassObject().executionPlatformConstraintsAllowed()
         == ExecutionPlatformConstraintsAllowed.PER_TARGET) {
       execConstraintLabels.addAll(
-          mapper.get(RuleClass.EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST));
+          mapper.get(PlatformSemantics.EXEC_COMPATIBLE_WITH_ATTR, BuildType.LABEL_LIST));
     }
 
     return execConstraintLabels.build();
@@ -717,7 +703,6 @@ public final class ConfiguredTargetFunction implements SkyFunction {
               } else {
                 pkgValue = (PackageValue) packageResult.get();
                 if (pkgValue == null) {
-                  logger.atInfo().log("Missing package: %s for (%s %s)", packageKey, dep, key);
                   // In a race, the getValuesOrThrow call above may have retrieved the package
                   // before it was done but the configured target after it was done. However, the
                   // configured target being done implies that the package is now done, so we can
@@ -940,10 +925,14 @@ public final class ConfiguredTargetFunction implements SkyFunction {
   }
 
   /**
-   * Used to declare all the exception types that can be wrapped in the exception thrown by {@link
-   * ConfiguredTargetFunction#compute}.
+   * Used to declare all the exception types that can be wrapped in the exception thrown by
+   * {@link ConfiguredTargetFunction#compute}.
    */
-  static final class ConfiguredTargetFunctionException extends SkyFunctionException {
+  public static final class ConfiguredTargetFunctionException extends SkyFunctionException {
+    public ConfiguredTargetFunctionException(NoSuchThingException e) {
+      super(e, Transience.PERSISTENT);
+    }
+
     private ConfiguredTargetFunctionException(ConfiguredValueCreationException e) {
       super(e, Transience.PERSISTENT);
     }
@@ -952,7 +941,4 @@ public final class ConfiguredTargetFunction implements SkyFunction {
       super(e, Transience.PERSISTENT);
     }
   }
-
-  // TODO(b/128541100): remove when bug is fixed.
-  public static Label labelWithUndonePackageToDiagnoseBug = null;
 }
