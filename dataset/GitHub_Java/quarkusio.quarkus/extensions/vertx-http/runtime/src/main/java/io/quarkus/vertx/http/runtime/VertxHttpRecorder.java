@@ -11,13 +11,11 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 import java.util.function.Supplier;
 
 import javax.enterprise.event.Event;
 
 import org.jboss.logging.Logger;
-import org.wildfly.common.cpu.ProcessorInfo;
 
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.ChannelInitializer;
@@ -94,19 +92,16 @@ public class VertxHttpRecorder {
             }
 
             //we can't really do
-            doServerStart(VertxCoreRecorder.getWebVertx(), config, LaunchMode.DEVELOPMENT, new Supplier<Integer>() {
-                @Override
-                public Integer get() {
-                    return ProcessorInfo.availableProcessors() * 2; //this is dev mode, so the number of IO threads not always being 100% correct does not really matter in this case
-                }
-            });
+            doServerStart(VertxCoreRecorder.getWebVertx(), config, LaunchMode.DEVELOPMENT);
 
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
 
-    public RuntimeValue<Router> initializeRouter(RuntimeValue<Vertx> vertxRuntimeValue) throws IOException {
+    public RuntimeValue<Router> initializeRouter(RuntimeValue<Vertx> vertxRuntimeValue, ShutdownContext shutdown,
+            HttpConfiguration httpConfiguration, LaunchMode launchMode,
+            boolean startVirtual, boolean startSocket) throws IOException {
 
         Vertx vertx = vertxRuntimeValue.getValue();
 
@@ -120,37 +115,24 @@ public class VertxHttpRecorder {
         Event<Object> event = Arc.container().beanManager().getEvent();
         event.select(Router.class).fire(router);
 
-        return new RuntimeValue<>(router);
-    }
-
-    public void startServer(RuntimeValue<Vertx> vertxRuntimeValue, ShutdownContext shutdown,
-            HttpConfiguration httpConfiguration, LaunchMode launchMode,
-            boolean startVirtual, boolean startSocket, Supplier<Integer> ioThreads) throws IOException {
-
-        Vertx vertx = vertxRuntimeValue.getValue();
         if (startVirtual) {
             initializeVirtual(vertx);
         }
         if (startSocket) {
             // Start the server
             if (closeTask == null) {
-                doServerStart(vertx, httpConfiguration, launchMode, ioThreads);
+                doServerStart(vertx, httpConfiguration, launchMode);
                 if (launchMode != LaunchMode.DEVELOPMENT) {
                     shutdown.addShutdownTask(closeTask);
                 }
             }
         }
+
+        return new RuntimeValue<>(router);
     }
 
     public void finalizeRouter(BeanContainer container, Handler<HttpServerRequest> defaultRouteHandler,
-            List<Handler<RoutingContext>> filters, LaunchMode launchMode, ShutdownContext shutdown,
-            RuntimeValue<Router> runtimeValue) {
-        // install the default route at the end
-        Router router = runtimeValue.getValue();
-
-        //allow the router to be modified programmatically
-        Event<Object> event = Arc.container().beanManager().getEvent();
-        event.select(Router.class).fire(router);
+            List<Handler<RoutingContext>> filters, LaunchMode launchMode, ShutdownContext shutdown) {
 
         for (Handler<RoutingContext> filter : filters) {
             if (filter != null) {
@@ -183,20 +165,13 @@ public class VertxHttpRecorder {
         container.instance(RouterProducer.class).initialize(router);
     }
 
-    private static void doServerStart(Vertx vertx, HttpConfiguration httpConfiguration, LaunchMode launchMode,
-            Supplier<Integer> eventLoops)
+    private static void doServerStart(Vertx vertx, HttpConfiguration httpConfiguration, LaunchMode launchMode)
             throws IOException {
         // Http server configuration
         HttpServerOptions httpServerOptions = createHttpServerOptions(httpConfiguration, launchMode);
         HttpServerOptions sslConfig = createSslOptions(httpConfiguration, launchMode);
 
-        int eventLoopCount = eventLoops.get();
-        int ioThreads;
-        if (httpConfiguration.ioThreads.isPresent()) {
-            ioThreads = Math.min(httpConfiguration.ioThreads.getAsInt(), eventLoopCount);
-        } else {
-            ioThreads = eventLoopCount;
-        }
+        int ioThreads = httpConfiguration.ioThreads.orElse(Runtime.getRuntime().availableProcessors() * 2);
         CompletableFuture<String> futureResult = new CompletableFuture<>();
         vertx.deployVerticle(new Supplier<Verticle>() {
             @Override
@@ -204,7 +179,8 @@ public class VertxHttpRecorder {
                 return new WebDeploymentVerticle(httpConfiguration.determinePort(launchMode),
                         httpConfiguration.determineSslPort(launchMode), httpConfiguration.host, httpServerOptions,
                         sslConfig,
-                        router);
+                        router,
+                        launchMode);
             }
         }, new DeploymentOptions().setInstances(ioThreads), new Handler<AsyncResult<String>>() {
             @Override
@@ -383,26 +359,6 @@ public class VertxHttpRecorder {
         }
     }
 
-    public void addRoute(RuntimeValue<Router> router, Function<Router, Route> route, Handler<RoutingContext> handler,
-            HandlerType blocking, List<Handler<RoutingContext>> filters) {
-
-        Route vr = route.apply(router.getValue());
-
-        // we add the filters to each route
-        for (Handler<RoutingContext> i : filters) {
-            if (i != null) {
-                vr.handler(i);
-            }
-        }
-        if (blocking == HandlerType.BLOCKING) {
-            vr.blockingHandler(handler);
-        } else if (blocking == HandlerType.FAILURE) {
-            vr.failureHandler(handler);
-        } else {
-            vr.handler(handler);
-        }
-    }
-
     private static class WebDeploymentVerticle extends AbstractVerticle {
 
         private final int port;
@@ -413,15 +369,17 @@ public class VertxHttpRecorder {
         private final HttpServerOptions httpOptions;
         private final HttpServerOptions httpsOptions;
         private final Router router;
+        private final LaunchMode launchMode;
 
         public WebDeploymentVerticle(int port, int httpsPort, String host, HttpServerOptions httpOptions,
-                HttpServerOptions httpsOptions, Router router) {
+                HttpServerOptions httpsOptions, Router router, LaunchMode launchMode) {
             this.port = port;
             this.httpsPort = httpsPort;
             this.host = host;
             this.httpOptions = httpOptions;
             this.httpsOptions = httpsOptions;
             this.router = router;
+            this.launchMode = launchMode;
         }
 
         @Override
@@ -434,7 +392,14 @@ public class VertxHttpRecorder {
                     startFuture.fail(event.cause());
                 } else {
                     // Port may be random, so set the actual port
-                    httpOptions.setPort(event.result().actualPort());
+                    int actualPort = event.result().actualPort();
+                    if (actualPort != port) {
+                        // Override quarkus.http.(test-)?port
+                        System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.http.test-port" : "quarkus.http.port",
+                                String.valueOf(actualPort));
+                        // Set in HttpOptions to output the port in the Timing class
+                        httpOptions.setPort(actualPort);
+                    }
                     if (remainingCount.decrementAndGet() == 0) {
                         startFuture.complete(null);
                     }
@@ -447,7 +412,14 @@ public class VertxHttpRecorder {
                     if (event.cause() != null) {
                         startFuture.fail(event.cause());
                     } else {
-                        httpsOptions.setPort(event.result().actualPort());
+                        int actualPort = event.result().actualPort();
+                        if (actualPort != httpsPort) {
+                            // Override quarkus.https.(test-)?port
+                            System.setProperty(launchMode == LaunchMode.TEST ? "quarkus.https.test-port" : "quarkus.https.port",
+                                    String.valueOf(actualPort));
+                            // Set in HttpOptions to output the port in the Timing class
+                            httpsOptions.setPort(actualPort);
+                        }
                         if (remainingCount.decrementAndGet() == 0) {
                             startFuture.complete();
                         }

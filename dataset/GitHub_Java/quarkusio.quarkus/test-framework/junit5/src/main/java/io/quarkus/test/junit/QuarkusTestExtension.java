@@ -6,7 +6,6 @@ import static io.quarkus.test.common.PathTestHelper.getTestClassesLocation;
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.reflect.Modifier;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -293,20 +292,16 @@ public class QuarkusTestExtension
 
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
-        if (!failedBoot) {
-            boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
-            restAssuredURLManager.clearURL();
-            TestScopeManager.tearDown(substrateTest);
-        }
+        boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
+        restAssuredURLManager.clearURL();
+        TestScopeManager.tearDown(substrateTest);
     }
 
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
-        if (!failedBoot) {
-            boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
-            restAssuredURLManager.setURL();
-            TestScopeManager.setup(substrateTest);
-        }
+        boolean substrateTest = context.getRequiredTestClass().isAnnotationPresent(SubstrateTest.class);
+        restAssuredURLManager.setURL();
+        TestScopeManager.setup(substrateTest);
     }
 
     @Override
@@ -347,7 +342,7 @@ public class QuarkusTestExtension
                 }
                 store.put(ExtensionState.class.getName(), state);
 
-            } catch (Throwable e) {
+            } catch (RuntimeException e) {
                 try {
                     testResourceManager.stop();
                 } catch (Exception ex) {
@@ -363,12 +358,7 @@ public class QuarkusTestExtension
             }
         }
 
-        // non-static inner classes are not supported
-        Class<?> testClass = factoryContext.getTestClass();
-        if (testClass.getEnclosingClass() != null && !Modifier.isStatic(testClass.getModifiers())) {
-            throw new IllegalStateException("Test class " + testClass + " cannot be a non-static inner class.");
-        }
-        Object instance = TestInstantiator.instantiateTest(testClass);
+        Object instance = TestInstantiator.instantiateTest(factoryContext.getTestClass());
         TestHTTPResourceManager.inject(instance);
         TestInjectionManager.inject(instance);
         state.testResourceManager.inject(instance);
