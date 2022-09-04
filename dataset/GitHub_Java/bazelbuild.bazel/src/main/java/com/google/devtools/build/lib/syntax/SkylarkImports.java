@@ -52,14 +52,18 @@ public class SkylarkImports {
       // to the repo of the containing file.
       return containingFileLabel.resolveRepositoryRelative(importLabel);
     }
+
   }
 
   @VisibleForSerialization
   @AutoCodec
   static final class RelativeLabelImport extends SkylarkImport {
+    private final String importTarget;
+
     @VisibleForSerialization
-    RelativeLabelImport(String importString) {
+    RelativeLabelImport(String importString, String importTarget) {
       super(importString);
+      this.importTarget = importTarget;
     }
 
     @Override
@@ -69,13 +73,14 @@ public class SkylarkImports {
       try {
         // This is for imports relative to the current repository, so repositoryMapping can be
         // empty
-        return containingFileLabel.getRelativeWithRemapping(getImportString(), ImmutableMap.of());
+        return containingFileLabel.getRelativeWithRemapping(importTarget, ImmutableMap.of());
       } catch (LabelSyntaxException e) {
         // shouldn't happen because the parent label is assumed validated and the target string is
         // validated on construction
         throw new IllegalStateException(e);
       }
     }
+
   }
 
   /**
@@ -131,10 +136,6 @@ public class SkylarkImports {
   public static SkylarkImport create(
       String importString, ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
       throws SkylarkImportSyntaxException {
-    if (!importString.endsWith(".bzl")) {
-      throw new SkylarkImportSyntaxException(MUST_HAVE_BZL_EXT_MSG);
-    }
-
     if (importString.startsWith("//") || importString.startsWith("@")) {
       // Absolute label.
       Label importLabel;
@@ -142,6 +143,10 @@ public class SkylarkImports {
         importLabel = Label.parseAbsolute(importString, false, repositoryMapping);
       } catch (LabelSyntaxException e) {
         throw new SkylarkImportSyntaxException(INVALID_LABEL_PREFIX + e.getMessage());
+      }
+      String targetName = importLabel.getName();
+      if (!targetName.endsWith(".bzl")) {
+        throw new SkylarkImportSyntaxException(MUST_HAVE_BZL_EXT_MSG);
       }
       PackageIdentifier packageId = importLabel.getPackageIdentifier();
       if (packageId.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
@@ -151,12 +156,15 @@ public class SkylarkImports {
     } else if (importString.startsWith(":")) {
       // Relative label. We require that relative labels use an explicit ':' prefix.
       String importTarget = importString.substring(1);
+      if (!importTarget.endsWith(".bzl")) {
+        throw new SkylarkImportSyntaxException(MUST_HAVE_BZL_EXT_MSG);
+      }
       String maybeErrMsg = LabelValidator.validateTargetName(importTarget);
       if (maybeErrMsg != null) {
         // Null indicates successful target validation.
         throw new SkylarkImportSyntaxException(INVALID_TARGET_PREFIX + maybeErrMsg);
       }
-      return new RelativeLabelImport(importString);
+      return new RelativeLabelImport(importString, importTarget);
     }
 
     throw new SkylarkImportSyntaxException(INVALID_PATH_SYNTAX);
