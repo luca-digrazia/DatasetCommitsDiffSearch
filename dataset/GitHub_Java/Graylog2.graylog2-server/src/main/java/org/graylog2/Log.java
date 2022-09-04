@@ -47,8 +47,6 @@ public class Log {
      * EMERGENCY
      */
     public static final int SEVERITY_EMERG = 4;
-
-    private Log() { }
     
     /**
      * Log a message with severity INFO
