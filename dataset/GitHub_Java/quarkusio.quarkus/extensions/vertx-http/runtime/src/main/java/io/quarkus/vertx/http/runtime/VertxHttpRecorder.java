@@ -297,29 +297,14 @@ public class VertxHttpRecorder {
         Handler<HttpServerRequest> root;
         if (rootPath.equals("/")) {
             if (hotReplacementHandler != null) {
-                //recorders are always executed in the current CL
-                ClassLoader currentCl = Thread.currentThread().getContextClassLoader();
-                router.route().order(Integer.MIN_VALUE).handler(new Handler<RoutingContext>() {
-                    @Override
-                    public void handle(RoutingContext event) {
-                        Thread.currentThread().setContextClassLoader(currentCl);
-                        hotReplacementHandler.handle(event);
-                    }
-                });
+                router.route().order(Integer.MIN_VALUE).handler(hotReplacementHandler);
             }
             root = router;
         } else {
             Router mainRouter = Router.router(vertx.get());
             mainRouter.mountSubRouter(rootPath, router);
             if (hotReplacementHandler != null) {
-                ClassLoader currentCl = Thread.currentThread().getContextClassLoader();
-                mainRouter.route().order(Integer.MIN_VALUE).handler(new Handler<RoutingContext>() {
-                    @Override
-                    public void handle(RoutingContext event) {
-                        Thread.currentThread().setContextClassLoader(currentCl);
-                        hotReplacementHandler.handle(event);
-                    }
-                });
+                mainRouter.route().order(Integer.MIN_VALUE).handler(hotReplacementHandler);
             }
             root = mainRouter;
         }
@@ -451,6 +436,7 @@ public class VertxHttpRecorder {
         try {
 
             String deploymentId = futureResult.get();
+            VertxCoreRecorder.setWebDeploymentId(deploymentId);
             closeTask = new Runnable() {
                 @Override
                 public synchronized void run() {
