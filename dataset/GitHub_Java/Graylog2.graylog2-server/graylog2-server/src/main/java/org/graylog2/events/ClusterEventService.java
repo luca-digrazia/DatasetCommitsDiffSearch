@@ -16,9 +16,9 @@
  */
 package org.graylog2.events;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.eventbus.DeadEvent;
 import com.google.common.eventbus.EventBus;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.AbstractExecutionThreadService;
@@ -30,6 +30,8 @@ import com.mongodb.Bytes;
 import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBObject;
+import com.mongodb.MongoException;
+import com.mongodb.WriteConcern;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
 import org.graylog2.database.MongoConnection;
 import org.graylog2.plugin.system.NodeId;
@@ -44,7 +46,6 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Singleton;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -91,14 +92,23 @@ public class ClusterEventService extends AbstractExecutionThreadService {
     static DBCollection prepareCollection(final MongoConnection mongoConnection) {
         final DB db = mongoConnection.getDatabase();
 
-        final DBCollection coll;
+        DBCollection coll;
         if (!db.collectionExists(COLLECTION_NAME)) {
             final DBObject options = BasicDBObjectBuilder.start()
                     .add("capped", true)
                     .add("size", 32768)
                     .get();
 
-            coll = db.createCollection(COLLECTION_NAME, options);
+            try {
+                coll = db.createCollection(COLLECTION_NAME, options);
+            } catch (MongoException e) {
+                // Error code 48 == "collection already exists"
+                if(e.getCode() == 48) {
+                    coll = db.getCollection(COLLECTION_NAME);
+                } else {
+                    throw e;
+                }
+            }
         } else {
             coll = db.getCollection(COLLECTION_NAME);
         }
@@ -111,6 +121,8 @@ public class ClusterEventService extends AbstractExecutionThreadService {
         coll.createIndex(DBSort.asc("producer"));
         coll.createIndex(DBSort.asc("consumers"));
         coll.addOption(Bytes.QUERYOPTION_TAILABLE | Bytes.QUERYOPTION_AWAITDATA);
+
+        coll.setWriteConcern(WriteConcern.MAJORITY);
 
         return coll;
     }
@@ -133,10 +145,11 @@ public class ClusterEventService extends AbstractExecutionThreadService {
     }
 
     private void updateConsumers(final String eventId, final NodeId nodeId) {
+
         final WriteResult<ClusterEvent, String> writeResult = dbCollection.updateById(eventId, DBUpdate.addToSet("consumers", nodeId.toString()));
     }
 
-    private Object extractPayload(Map<String, Object> payload, String eventClass) {
+    private Object extractPayload(Object payload, String eventClass) {
         try {
             final Class<?> clazz = Class.forName(eventClass);
             return objectMapper.convertValue(payload, clazz);
@@ -181,11 +194,19 @@ public class ClusterEventService extends AbstractExecutionThreadService {
 
     @Subscribe
     public void publishClusterEvent(Object event) {
+        if(event instanceof DeadEvent) {
+            LOG.debug("Skipping DeadEvent on cluster event bus");
+            return;
+        }
+
         final String className = event.getClass().getCanonicalName();
-        final Map<String, Object> payload = objectMapper.convertValue(event, new TypeReference<Map<String, Object>>() {
-        });
-        final ClusterEvent clusterEvent = ClusterEvent.create(nodeId.toString(), className, payload);
-        final String id = dbCollection.save(clusterEvent).getSavedId();
-        LOG.debug("Published cluster event with ID <{}> and type <{}>", id, className);
+        final ClusterEvent clusterEvent = ClusterEvent.create(nodeId.toString(), className, event);
+
+        try {
+            final String id = dbCollection.save(clusterEvent).getSavedId();
+            LOG.debug("Published cluster event with ID <{}> and type <{}>", id, className);
+        } catch (MongoException e) {
+            LOG.error("Couldn't publish cluster event of type <" + className + ">", e);
+        }
     }
 }
