@@ -283,9 +283,6 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "shutdown_timeout", validator = PositiveIntegerValidator.class)
     private int shutdownTimeout = 30000;
 
-    @Parameter(value = "ldap_connection_timeout", validator = PositiveIntegerValidator.class)
-    private int ldapConnectionTimeout = 2000;
-
     public boolean isMaster() {
         return isMaster;
     }
@@ -632,10 +629,6 @@ public class Configuration extends BaseConfiguration {
 
     public int getShutdownTimeout() {
         return shutdownTimeout;
-    }
-
-    public int getLdapConnectionTimeout() {
-        return ldapConnectionTimeout;
     }
 }
 
