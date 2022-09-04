@@ -15,9 +15,7 @@
  */
 package com.googlecode.androidannotations.processing;
 
-import static com.googlecode.androidannotations.helper.GreenDroidConstants.GREENDROID_ACTIVITIES_LIST_CLASS;
 import static com.sun.codemodel.JExpr._new;
-import static com.sun.codemodel.JExpr._super;
 import static com.sun.codemodel.JExpr._this;
 import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PRIVATE;
@@ -36,12 +34,14 @@ import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.ElementFilter;
 
 import com.googlecode.androidannotations.annotations.EActivity;
 import com.googlecode.androidannotations.annotations.Id;
 import com.googlecode.androidannotations.api.SdkVersionHelper;
 import com.googlecode.androidannotations.helper.AnnotationHelper;
+import com.googlecode.androidannotations.helper.GreenDroidConstants;
 import com.googlecode.androidannotations.helper.ModelConstants;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.IRClass.Res;
@@ -59,27 +59,13 @@ import com.sun.codemodel.JMod;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 
-public class EActivityProcessor implements ElementProcessor {
+public class EActivityProcessor extends AnnotationHelper implements ElementProcessor {
 
 	private final IRClass rClass;
-	private List<TypeElement> greendroidActivityElements;
-
-	private final AnnotationHelper annotationHelper;
-
-	private final ProcessingEnvironment processingEnv;
 
 	public EActivityProcessor(ProcessingEnvironment processingEnv, IRClass rClass) {
-		this.processingEnv = processingEnv;
-		annotationHelper = new AnnotationHelper(processingEnv);
+		super(processingEnv);
 		this.rClass = rClass;
-
-		greendroidActivityElements = new ArrayList<TypeElement>();
-		for (String greendroidActivityName : GREENDROID_ACTIVITIES_LIST_CLASS) {
-			TypeElement typeElement = annotationHelper.typeElementFromQualifiedName(greendroidActivityName);
-			if (typeElement != null) {
-				greendroidActivityElements.add(typeElement);
-			}
-		}
 	}
 
 	@Override
@@ -99,7 +85,8 @@ public class EActivityProcessor implements ElementProcessor {
 
 		String subActivityQualifiedName = annotatedActivityQualifiedName + ModelConstants.GENERATION_SUFFIX;
 
-		boolean usesGreenDroid = usesGreenDroid(typeElement);
+		// GreenDroid support
+		boolean isGreenDroidSupport = hasGreenDroidSupport(typeElement);
 
 		int modifiers;
 		boolean isAbstract = element.getModifiers().contains(Modifier.ABSTRACT);
@@ -127,7 +114,7 @@ public class EActivityProcessor implements ElementProcessor {
 		JMethod onCreate = holder.eBean.method(onCreateVisibility, codeModel.VOID, "onCreate");
 		onCreate.annotate(Override.class);
 
-		JClass bundleClass = holder.classes().BUNDLE;
+		JClass bundleClass = holder.refClass("android.os.Bundle");
 
 		// beforeSetContentView
 		holder.init = holder.eBean.method(PRIVATE, codeModel.VOID, "init_");
@@ -147,7 +134,7 @@ public class EActivityProcessor implements ElementProcessor {
 
 		onCreateBody.invoke(holder.init).arg(onCreateSavedInstanceState);
 
-		onCreateBody.invoke(_super(), onCreate).arg(onCreateSavedInstanceState);
+		onCreateBody.invoke(JExpr._super(), onCreate).arg(onCreateSavedInstanceState);
 
 		EActivity layoutAnnotation = element.getAnnotation(EActivity.class);
 		int layoutIdValue = layoutAnnotation.value();
@@ -162,7 +149,7 @@ public class EActivityProcessor implements ElementProcessor {
 
 		if (contentViewId != null) {
 			// GreenDroid support
-			if (usesGreenDroid) {
+			if (isGreenDroidSupport) {
 				onCreateBody.invoke("setActionBarContentView").arg(contentViewId);
 			} else {
 				onCreateBody.invoke("setContentView").arg(contentViewId);
@@ -170,25 +157,26 @@ public class EActivityProcessor implements ElementProcessor {
 		}
 
 		// Overriding setContentView (with layout id param)
-		JClass layoutParamsClass = holder.classes().VIEW_GROUP_LAYOUT_PARAMS;
+		JClass viewClass = holder.refClass("android.view.View");
+		JClass layoutParamsClass = holder.refClass("android.view.ViewGroup.LayoutParams");
 
-		String setContentViewMethodName;
-		if (usesGreenDroid) {
-			setContentViewMethodName = "setActionBarContentView";
+		// GreenDroid support
+		if (isGreenDroidSupport) {
+			setActionBarContentView(codeModel, holder, new JType[] { codeModel.INT }, new String[] { "layoutResID" });
+			setActionBarContentView(codeModel, holder, new JType[] { viewClass, layoutParamsClass }, new String[] { "view", "params" });
+			setActionBarContentView(codeModel, holder, new JType[] { viewClass }, new String[] { "view" });
 		} else {
-			setContentViewMethodName = "setContentView";
+			setContentViewMethod(codeModel, holder, new JType[] { codeModel.INT }, new String[] { "layoutResID" });
+			setContentViewMethod(codeModel, holder, new JType[] { viewClass, layoutParamsClass }, new String[] { "view", "params" });
+			setContentViewMethod(codeModel, holder, new JType[] { viewClass }, new String[] { "view" });
 		}
-
-		setContentViewMethod(setContentViewMethodName, codeModel, holder, new JType[] { codeModel.INT }, new String[] { "layoutResID" });
-		setContentViewMethod(setContentViewMethodName, codeModel, holder, new JType[] { holder.classes().VIEW, layoutParamsClass }, new String[] { "view", "params" });
-		setContentViewMethod(setContentViewMethodName, codeModel, holder, new JType[] { holder.classes().VIEW }, new String[] { "view" });
 
 		// Handling onBackPressed
 		if (hasOnBackPressedMethod(typeElement)) {
 			JMethod onKeyDownMethod = holder.eBean.method(PUBLIC, codeModel.BOOLEAN, "onKeyDown");
 			onKeyDownMethod.annotate(Override.class);
 			JVar keyCodeParam = onKeyDownMethod.param(codeModel.INT, "keyCode");
-			JClass keyEventClass = holder.classes().KEY_EVENT;
+			JClass keyEventClass = holder.refClass("android.view.KeyEvent");
 			JVar eventParam = onKeyDownMethod.param(keyEventClass, "event");
 
 			JClass versionHelperClass = codeModel.ref(SdkVersionHelper.class);
@@ -212,8 +200,8 @@ public class EActivityProcessor implements ElementProcessor {
 		}
 
 		if (!isAbstract) {
-			JClass contextClass = holder.classes().CONTEXT;
-			JClass intentClass = holder.classes().INTENT;
+			JClass contextClass = holder.refClass("android.content.Context");
+			JClass intentClass = holder.refClass("android.content.Intent");
 
 			{
 				holder.intentBuilderClass = holder.eBean._class(PUBLIC | STATIC, "IntentBuilder_");
@@ -263,8 +251,25 @@ public class EActivityProcessor implements ElementProcessor {
 
 	}
 
-	private void setContentViewMethod(String setContentViewMethodName, JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
-		JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.VOID, setContentViewMethodName);
+	private void setContentViewMethod(JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
+		JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.VOID, "setContentView");
+		method.annotate(Override.class);
+
+		ArrayList<JVar> params = new ArrayList<JVar>();
+		for (int i = 0; i < paramTypes.length; i++) {
+			JVar param = method.param(paramTypes[i], paramNames[i]);
+			params.add(param);
+		}
+		JBlock body = method.body();
+		JInvocation superCall = body.invoke(JExpr._super(), method);
+		for (JVar arg : params) {
+			superCall.arg(arg);
+		}
+		body.invoke(holder.afterSetContentView);
+	}
+
+	private void setActionBarContentView(JCodeModel codeModel, EBeanHolder holder, JType[] paramTypes, String[] paramNames) {
+		JMethod method = holder.eBean.method(JMod.PUBLIC, codeModel.VOID, "setActionBarContentView");
 		method.annotate(Override.class);
 
 		ArrayList<JVar> params = new ArrayList<JVar>();
@@ -281,7 +286,7 @@ public class EActivityProcessor implements ElementProcessor {
 	}
 
 	private int inheritedOnCreateVisibility(TypeElement activityElement) {
-		List<? extends Element> allMembers = annotationHelper.getElementUtils().getAllMembers(activityElement);
+		List<? extends Element> allMembers = getElementUtils().getAllMembers(activityElement);
 
 		List<ExecutableElement> activityInheritedMethods = ElementFilter.methodsIn(allMembers);
 
@@ -312,7 +317,7 @@ public class EActivityProcessor implements ElementProcessor {
 
 	private boolean hasOnBackPressedMethod(TypeElement activityElement) {
 
-		List<? extends Element> allMembers = annotationHelper.getElementUtils().getAllMembers(activityElement);
+		List<? extends Element> allMembers = getElementUtils().getAllMembers(activityElement);
 
 		List<ExecutableElement> activityInheritedMethods = ElementFilter.methodsIn(allMembers);
 
@@ -333,12 +338,63 @@ public class EActivityProcessor implements ElementProcessor {
 		;
 	}
 
-	private boolean usesGreenDroid(TypeElement typeElement) {
-		for (TypeElement greendroidActivityElement : greendroidActivityElements) {
-			if (processingEnv.getTypeUtils().isSubtype(typeElement.asType(), greendroidActivityElement.asType())) {
+	/**
+	 * TODO: Search all super classes
+	 */
+	private boolean hasGreenDroidSupport(TypeElement typeElement) {
+		return containsHeritageFromGreenDroidActivities(typeElement) //
+				|| hasSetActionBarContentViewMethod(typeElement);
+	}
+
+	private boolean containsHeritageFromGreenDroidActivities(TypeElement typeElement) {
+		TypeMirror typeMirror = typeElement.getSuperclass();
+		String className = typeMirror.getClass().toString();
+		return hasHeritageFromGreenDroidActivities(className);
+	}
+
+	private boolean hasHeritageFromGreenDroidActivities(String className) {
+		return (GreenDroidConstants.GREENDROID_ACTIVITIES_LIST_CLASS.contains(className));
+	}
+
+	private boolean hasSetActionBarContentViewMethod(TypeElement activityElement) {
+
+		List<? extends Element> allMembers = getElementUtils().getAllMembers(activityElement);
+
+		List<ExecutableElement> activityInheritedMethods = ElementFilter.methodsIn(allMembers);
+
+		for (ExecutableElement activityInheritedMethod : activityInheritedMethods) {
+			if (isSetActionBarContentViewMethod(activityInheritedMethod)) {
 				return true;
 			}
 		}
 		return false;
+	}
+
+	private boolean isSetActionBarContentViewMethod(ExecutableElement method) {
+
+		List<? extends VariableElement> parameters = method.getParameters();
+
+		boolean isMethod = false;
+
+		// public void setActionBarContentView(int layoutResID)
+		isMethod = isMethod || (method.getSimpleName().toString().equals("setActionBarContentView") //
+				&& parameters.size() == 1 //
+		&& parameters.get(0).asType().toString().equals("int")) //
+		;
+
+		// public void setActionBarContentView(View view, LayoutParams params)
+		isMethod = isMethod || (method.getSimpleName().toString().equals("setActionBarContentView") //
+				&& parameters.size() == 2 //
+				&& parameters.get(0).asType().toString().equals("android.view.View") //
+		&& parameters.get(0).asType().toString().equals("android.view.ViewGroup.LayoutParams")) //
+		;
+
+		// public void setActionBarContentView(View view)
+		isMethod = isMethod || (method.getSimpleName().toString().equals("setActionBarContentView") //
+				&& parameters.size() == 1 //
+		&& parameters.get(0).asType().toString().equals("android.view.View")) //
+		;
+
+		return isMethod;
 	}
 }
