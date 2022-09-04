@@ -15,7 +15,7 @@
 package com.google.devtools.common.options;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -241,7 +241,7 @@ public class OptionDefinitionTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  public void emptyStringForMultipleOptionShouldBeConverted() throws Exception {
+  public void emptyStringForMultipleOptionShouldResultInEmptyList() throws Exception {
     // arrange
     OptionDefinition optionDef =
         OptionDefinition.extractOptionDefinition(
@@ -251,12 +251,12 @@ public class OptionDefinitionTest {
     List<String> result = (List<String>) optionDef.getDefaultValue();
 
     // assert
-    assertThat(result).containsExactly("");
+    assertThat(result).isEmpty();
   }
 
   @Test
   @SuppressWarnings("unchecked")
-  public void nonEmptyStringForMultipleOptionShouldBeConverted() throws Exception {
+  public void nonEmptyStringForMultipleOptionShouldResultInEmptyList() throws Exception {
     // arrange
     OptionDefinition optionDef =
         OptionDefinition.extractOptionDefinition(
@@ -266,6 +266,7 @@ public class OptionDefinitionTest {
     List<String> result = (List<String>) optionDef.getDefaultValue();
 
     // assert
-    assertThat(result).containsExactly("text");
+    // TODO(b/138573276): this is a legacy behavior - assert the value is actually converted
+    assertThat(result).isEmpty();
   }
 }
