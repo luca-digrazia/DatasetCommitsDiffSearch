@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.lib.util.GroupedList.GroupedListHelper;
 import com.google.devtools.build.skyframe.KeyToConsolidate.Op;
 import com.google.devtools.build.skyframe.KeyToConsolidate.OpToStoreBare;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -270,9 +271,17 @@ public class InMemoryNodeEntry implements NodeEntry {
   // although this method itself is synchronized, there are unsynchronized consumers of the version
   // and the value.
   @Override
-  public synchronized Set<SkyKey> setValue(SkyValue value, Version version)
+  public synchronized Set<SkyKey> setValue(
+      SkyValue value, Version version, DepFingerprintList depFingerprintList)
       throws InterruptedException {
     Preconditions.checkState(isReady(), "%s %s", this, value);
+    if (depFingerprintList != null) {
+      logError(
+          new IllegalStateException(
+              String.format(
+                  "Expect no depFingerprintList here: %s %s %s %s",
+                  this, depFingerprintList, value, version)));
+    }
     assertVersionCompatibleWhenSettingValue(version, value);
     this.lastEvaluatedVersion = version;
 
@@ -476,7 +485,8 @@ public class InMemoryNodeEntry implements NodeEntry {
     Preconditions.checkState(dirtyBuildingState.isEvaluating(), "%s %s", this, childForDebugging);
     dirtyBuildingState.signalDep();
     dirtyBuildingState.signalDepPostProcess(
-        childCausesReevaluation(lastEvaluatedVersion, childVersion), getNumTemporaryDirectDeps());
+        childCausesReevaluation(lastEvaluatedVersion, childVersion, childForDebugging),
+        getNumTemporaryDirectDeps());
     return isReady();
   }
 
@@ -603,6 +613,34 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   @Override
+  public boolean canPruneDepsByFingerprint() {
+    return false;
+  }
+
+  @Nullable
+  @Override
+  public Iterable<SkyKey> getLastDirectDepsGroupWhenPruningDepsByFingerprint()
+      throws InterruptedException {
+    throw new UnsupportedOperationException(this.toString());
+  }
+
+  @Override
+  public boolean unmarkNeedsRebuildingIfGroupUnchangedUsingFingerprint(
+      BigInteger groupFingerprint) {
+    throw new UnsupportedOperationException(this.toString());
+  }
+
+  /**
+   * If this entry {@link #canPruneDepsByFingerprint} and has that data, returns a list of dep group
+   * fingerprints. Otherwise returns null.
+   */
+  @Nullable
+  public DepFingerprintList getDepFingerprintList() {
+    Preconditions.checkState(isDone(), this);
+    return null;
+  }
+
+  @Override
   public synchronized void markRebuilding() {
     Preconditions.checkNotNull(dirtyBuildingState, this);
     dirtyBuildingState.markRebuilding(isEligibleForChangePruningOnUnchangedValue());
@@ -661,8 +699,10 @@ public class InMemoryNodeEntry implements NodeEntry {
   }
 
   /** True if the child should cause re-evaluation of this node. */
-  private static boolean childCausesReevaluation(
-      Version lastEvaluatedVersion, Version childVersion) {
+  protected boolean childCausesReevaluation(
+      Version lastEvaluatedVersion,
+      Version childVersion,
+      @Nullable SkyKey unusedChildForDebugging) {
     // childVersion > lastEvaluatedVersion
     return !childVersion.atMost(lastEvaluatedVersion);
   }
