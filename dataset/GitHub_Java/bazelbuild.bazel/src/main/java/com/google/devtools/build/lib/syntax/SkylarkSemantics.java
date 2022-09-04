@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.auto.value.AutoValue;
-import com.google.common.base.Ascii;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import java.util.List;
@@ -41,8 +40,6 @@ public abstract class SkylarkSemantics {
   public enum FlagIdentifier {
     EXPERIMENTAL_ANALYSIS_TESTING_IMPROVEMENTS(
         SkylarkSemantics::experimentalAnalysisTestingImprovements),
-    EXPERIMENTAL_ENABLE_ANDROID_MIGRATION_APIS(
-        SkylarkSemantics::experimentalEnableAndroidMigrationApis),
     EXPERIMENTAL_PLATFORM_API(SkylarkSemantics::experimentalPlatformsApi),
     INCOMPATIBLE_DISABLE_OBJC_PROVIDER_RESOURCES(
         SkylarkSemantics::incompatibleDisableObjcProviderResources),
@@ -64,7 +61,7 @@ public abstract class SkylarkSemantics {
      * would return 'experimental_foo'.
      */
     public String getFlagName() {
-      return Ascii.toLowerCase(this.name());
+      return this.name().toLowerCase();
     }
   }
 
@@ -174,6 +171,8 @@ public abstract class SkylarkSemantics {
 
   public abstract boolean internalSkylarkFlagTestCanary();
 
+  public abstract boolean incompatibleNeverUseEmbeddedJDKForJavabase();
+
   /** Returns a {@link Builder} initialized with the values of this instance. */
   public abstract Builder toBuilder();
 
@@ -218,11 +217,12 @@ public abstract class SkylarkSemantics {
           .incompatibleNoTransitiveLoads(false)
           .incompatiblePackageNameIsAFunction(false)
           .incompatibleRangeType(false)
-          .incompatibleRemoveNativeGitRepository(true)
-          .incompatibleRemoveNativeHttpArchive(true)
+          .incompatibleRemoveNativeGitRepository(false)
+          .incompatibleRemoveNativeHttpArchive(false)
           .incompatibleStaticNameResolution(false)
           .incompatibleStringIsNotIterable(false)
           .internalSkylarkFlagTestCanary(false)
+          .incompatibleNeverUseEmbeddedJDKForJavabase(true)
           .build();
 
   /** Builder for {@link SkylarkSemantics}. All fields are mandatory. */
@@ -297,6 +297,8 @@ public abstract class SkylarkSemantics {
     public abstract Builder incompatibleStringIsNotIterable(boolean value);
 
     public abstract Builder internalSkylarkFlagTestCanary(boolean value);
+
+    public abstract Builder incompatibleNeverUseEmbeddedJDKForJavabase(boolean value);
 
     public abstract SkylarkSemantics build();
   }

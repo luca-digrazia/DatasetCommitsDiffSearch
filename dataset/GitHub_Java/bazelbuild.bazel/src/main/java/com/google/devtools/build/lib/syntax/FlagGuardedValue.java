@@ -15,7 +15,8 @@
 package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 
 /**
  * Wrapper on a value that controls its accessibility in Starlark based on the value of a
@@ -64,44 +65,51 @@ public class FlagGuardedValue {
   }
 
   /**
-   * Returns an error describing an attempt to access this guard's protected object when it should
-   * be inaccessible in the given semantics.
+   * Returns an {@link EvalException} with error appropriate to throw when one attempts to
+   * access this guard's protected object when it should be inaccessible in the given semantics.
    *
-   * @throws IllegalArgumentException if {@link #isObjectAccessibleUsingSemantics} is true given the
-   *     semantics
+   * @throws IllegalArgumentException if {@link #isObjectAccessibleUsingSemantics} is true
+   *     given the semantics
    */
-  String getErrorFromAttemptingAccess(StarlarkSemantics semantics, String name) {
+  public EvalException getEvalExceptionFromAttemptingAccess(
+      Location location, SkylarkSemantics semantics, String symbolDescription) {
     Preconditions.checkArgument(!isObjectAccessibleUsingSemantics(semantics),
         "getEvalExceptionFromAttemptingAccess should only be called if the underlying "
             + "object is inaccessible given the semantics");
-    return flagType == FlagType.EXPERIMENTAL
-        ? name
-            + " is experimental and thus unavailable with the current flags. It may be enabled by"
-            + " setting --"
-            + flagIdentifier.getFlagName()
-        : name
-            + " is deprecated and will be removed soon. It may be temporarily re-enabled by"
-            + " setting --"
-            + flagIdentifier.getFlagName()
-            + "=false";
+    if (flagType == FlagType.EXPERIMENTAL) {
+      return new EvalException(
+            location,
+            symbolDescription
+                + " is experimental and thus unavailable with the current flags. It may be "
+                + "enabled by setting --" + flagIdentifier.getFlagName());
+    } else {
+      return new EvalException(
+        location,
+        symbolDescription
+            + " is deprecated and will be removed soon. It may be temporarily re-enabled by "
+            + "setting --" + flagIdentifier.getFlagName() + "=false");
+
+    }
   }
 
   /**
-   * Returns this guard's underlying object. This should be called when appropriate validation has
-   * occurred to ensure that the object is accessible with the given semantics.
+   * Returns this guard's underlying object. This should be called when appropriate validation
+   * has occurred to ensure that the object is accessible with the given semantics.
    *
-   * @throws IllegalArgumentException if {@link #isObjectAccessibleUsingSemantics} is false given
-   *     the semantics
+   * @throws IllegalArgumentException if {@link #isObjectAccessibleUsingSemantics} is false
+   *     given the semantics
    */
-  public Object getObject(StarlarkSemantics semantics) {
+  public Object getObject(SkylarkSemantics semantics) {
     Preconditions.checkArgument(isObjectAccessibleUsingSemantics(semantics),
         "getObject should only be called if the underlying object is accessible given the "
             + "semantics");
     return obj;
   }
 
-  /** Returns true if this guard's underlying object is accessible under the given semantics. */
-  public boolean isObjectAccessibleUsingSemantics(StarlarkSemantics semantics) {
+  /**
+   * Returns true if this guard's underlying object is accessible under the given semantics.
+   */
+  public boolean isObjectAccessibleUsingSemantics(SkylarkSemantics semantics) {
     if (flagType == FlagType.EXPERIMENTAL) {
       return semantics.isFeatureEnabledBasedOnTogglingFlags(flagIdentifier, FlagIdentifier.NONE);
     } else {

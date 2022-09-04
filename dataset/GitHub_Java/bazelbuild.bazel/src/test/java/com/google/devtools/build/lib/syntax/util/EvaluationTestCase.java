@@ -19,8 +19,6 @@ import static org.junit.Assert.fail;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.truth.Ordered;
-import com.google.devtools.build.lib.analysis.skylark.BazelStarlarkContext;
-import com.google.devtools.build.lib.analysis.skylark.SymbolGenerator;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventCollector;
 import com.google.devtools.build.lib.events.EventKind;
@@ -38,7 +36,6 @@ import com.google.devtools.build.lib.syntax.ParserInputSource;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
 import com.google.devtools.build.lib.syntax.SkylarkUtils.Phase;
 import com.google.devtools.build.lib.syntax.Statement;
-import com.google.devtools.build.lib.syntax.ValidationEnvironment;
 import com.google.devtools.build.lib.testutil.TestConstants;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.LinkedList;
@@ -66,18 +63,13 @@ public class EvaluationTestCase {
    * No PythonPreprocessing, mostly empty mutable Environment.
    */
   public Environment newBuildEnvironment() {
-    BazelStarlarkContext context =
-        new BazelStarlarkContext(
-            TestConstants.TOOLS_REPOSITORY,
-            /* repoMapping= */ ImmutableMap.of(),
-            new SymbolGenerator<>(new Object()));
     Environment env =
         Environment.builder(mutability)
             .useDefaultSemantics()
             .setGlobals(BazelLibrary.GLOBALS)
             .setEventHandler(getEventHandler())
-            .setStarlarkContext(context)
             .build();
+    SkylarkUtils.setToolsRepository(env, TestConstants.TOOLS_REPOSITORY);
     SkylarkUtils.setPhase(env, Phase.LOADING);
     return env;
   }
@@ -200,9 +192,7 @@ public class EvaluationTestCase {
     if (testMode == TestMode.SKYLARK) {
       return BuildFileAST.eval(env, input);
     }
-    BuildFileAST ast = BuildFileAST.parseString(env.getEventHandler(), input);
-    ValidationEnvironment.checkBuildSyntax(ast.getStatements(), env.getEventHandler());
-    return ast.eval(env);
+    return BuildFileAST.parseBuildString(env.getEventHandler(), input).eval(env);
   }
 
   public void checkEvalError(String msg, String... input) throws Exception {
