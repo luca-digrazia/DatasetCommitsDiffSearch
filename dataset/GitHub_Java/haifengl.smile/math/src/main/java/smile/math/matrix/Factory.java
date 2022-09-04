@@ -1,24 +1,23 @@
 /*******************************************************************************
- * Copyright (c) 2010 Haifeng Li
+ * Copyright (c) 2010-2019 Haifeng Li
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * Smile is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
- *     http://www.apache.org/licenses/LICENSE-2.0
+ * Smile is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Lesser General Public License for more details.
  *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  *******************************************************************************/
 
 package smile.math.matrix;
 
 import java.lang.reflect.Constructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * An abstract interface of dense matrix.
@@ -26,23 +25,35 @@ import org.slf4j.LoggerFactory;
  * @author Haifeng Li
  */
 class Factory {
-    private static final Logger logger = LoggerFactory.getLogger(Factory.class);
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Factory.class);
 
     private static Class<?> nlmatrix;
     private static Constructor<?> nlmatrixArray;
+    private static Constructor<?> nlmatrixArray2D;
     private static Constructor<?> nlmatrixZeros;
     private static Constructor<?> nlmatrixOnes;
 
-    private static Class<?> netlibLU;
+    private static Class<?> ndmatrix;
+    private static Constructor<?> ndmatrixArray;
+    private static Constructor<?> ndmatrixArray2D;
+    private static Constructor<?> ndmatrixZeros;
+    private static Constructor<?> ndmatrixOnes;
 
     static {
         try {
             nlmatrix = Class.forName("smile.netlib.NLMatrix");
+            logger.info("smile-netlib module is available.");
 
             try {
-                nlmatrixArray = nlmatrix.getConstructor(double[][].class);
+                nlmatrixArray2D = nlmatrix.getConstructor(double[][].class);
             } catch (NoSuchMethodException e) {
                 logger.error("NLMatrix(double[][]) does not exist");
+            }
+
+            try {
+                nlmatrixArray = nlmatrix.getConstructor(double[].class);
+            } catch (NoSuchMethodException e) {
+                logger.error("NLMatrix(double[]) does not exist");
             }
 
             try {
@@ -56,11 +67,39 @@ class Factory {
             } catch (NoSuchMethodException e) {
                 logger.error("NLMatrix(int, int, double) does not exist");
             }
-
-            netlibLU = Class.forName("smile.netlib.LUDecomposition");
-
         } catch (ClassNotFoundException e) {
-            logger.info("Netlib module does not exist on the classpath. Pure Java matrix library will be employed.");
+
+        }
+
+        try {
+            ndmatrix = Class.forName("smile.nd4j.NDMatrix");
+            logger.info("smile-nd4j module is available.");
+
+            try {
+                ndmatrixArray2D = ndmatrix.getConstructor(double[][].class);
+            } catch (NoSuchMethodException e) {
+                logger.error("NDMatrix(double[][]) does not exist");
+            }
+
+            try {
+                ndmatrixArray = ndmatrix.getConstructor(double[].class);
+            } catch (NoSuchMethodException e) {
+                logger.error("NDMatrix(double[]) does not exist");
+            }
+
+            try {
+                ndmatrixZeros = ndmatrix.getConstructor(Integer.TYPE, Integer.TYPE);
+            } catch (NoSuchMethodException e) {
+                logger.error("NDMatrix(int, int) does not exist");
+            }
+
+            try {
+                ndmatrixOnes = ndmatrix.getConstructor(Integer.TYPE, Integer.TYPE, Double.TYPE);
+            } catch (NoSuchMethodException e) {
+                logger.error("NDMatrix(int, int, double) does not exist");
+            }
+        } catch (ClassNotFoundException e) {
+
         }
     }
 
@@ -68,26 +107,42 @@ class Factory {
     public static DenseMatrix matrix(double[][] A) {
         if (nlmatrixZeros != null) {
             try {
-                return (DenseMatrix) nlmatrixArray.newInstance((Object) A);
+                return (DenseMatrix) nlmatrixArray2D.newInstance((Object) A);
             } catch (Exception e) {
                 logger.error("Failed to call NLMatrix(double[][]): {}", e);
             }
         }
 
-        return new ColumnMajorMatrix(A);
+        if (ndmatrixZeros != null) {
+            try {
+                return (DenseMatrix) ndmatrixArray2D.newInstance((Object) A);
+            } catch (Exception e) {
+                logger.error("Failed to call NDMatrix(double[][]): {}", e);
+            }
+        }
+
+        return new JMatrix(A);
     }
 
     /** Creates a column vector/matrix initialized by A. */
     public static DenseMatrix matrix(double[] A) {
         if (nlmatrixZeros != null) {
             try {
-                return (DenseMatrix) nlmatrixArray.newInstance((Object) A);
+                return (DenseMatrix) nlmatrixArray.newInstance(A);
             } catch (Exception e) {
                 logger.error("Failed to call NLMatrix(double[]): {}", e);
             }
         }
 
-        return new ColumnMajorMatrix(A);
+        if (ndmatrixZeros != null) {
+            try {
+                return (DenseMatrix) ndmatrixArray.newInstance(A);
+            } catch (Exception e) {
+                logger.error("Failed to call NDMatrix(double[]): {}", e);
+            }
+        }
+
+        return new JMatrix(A);
     }
 
     /** Creates a matrix of all zeros. */
@@ -100,7 +155,15 @@ class Factory {
             }
         }
 
-        return new ColumnMajorMatrix(nrows, ncols);
+        if (ndmatrixZeros != null) {
+            try {
+                return (DenseMatrix) ndmatrixZeros.newInstance(nrows, ncols);
+            } catch (Exception e) {
+                logger.error("Failed to call NDMatrix(int, int): {}", e);
+            }
+        }
+
+        return new JMatrix(nrows, ncols);
     }
 
     /** Creates a matrix filled with given value. */
@@ -113,6 +176,14 @@ class Factory {
             }
         }
 
-        return new ColumnMajorMatrix(nrows, ncols, value);
+        if (ndmatrixOnes != null) {
+            try {
+                return (DenseMatrix) ndmatrixOnes.newInstance(nrows, ncols, value);
+            } catch (Exception e) {
+                logger.error("Failed to call NDMatrix(int, int, double): {}", e);
+            }
+        }
+
+        return new JMatrix(nrows, ncols, value);
     }
 }
