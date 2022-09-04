@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.analysis.NoBuildEvent;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.OutputDirectoryLinksUtils;
 import com.google.devtools.build.lib.events.Event;
-import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.runtime.BlazeCommand;
 import com.google.devtools.build.lib.runtime.BlazeCommandResult;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
@@ -36,6 +35,7 @@ import com.google.devtools.build.lib.server.FailureDetails.CleanCommand.Code;
 import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.CommandBuilder;
+import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
@@ -50,7 +50,6 @@ import com.google.devtools.common.options.OptionsParsingResult;
 import java.io.FileDescriptor;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.util.UUID;
 import java.util.logging.LogManager;
 
 /** Implements 'blaze clean'. */
@@ -137,14 +136,38 @@ public final class CleanCommand implements BlazeCommand {
     if (!residue.isEmpty()) {
       String message = "Unrecognized arguments: " + Joiner.on(' ').join(residue);
       env.getReporter().handle(Event.error(message));
-      return BlazeCommandResult.failureDetail(
-          createFailureDetail(message, Code.ARGUMENTS_NOT_RECOGNIZED));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
 
-    env.getEventBus().post(new NoBuildEvent());
     Options cleanOptions = options.getOptions(Options.class);
-    boolean async = canUseAsync(cleanOptions.async, cleanOptions.expunge, os, env.getReporter());
+    boolean async = cleanOptions.async;
+    env.getEventBus().post(new NoBuildEvent());
+
+    // TODO(dmarting): Deactivate expunge_async on non-Linux platform until we completely fix it
+    // for non-Linux platforms (https://github.com/bazelbuild/bazel/issues/1906).
+    // MacOS and FreeBSD support setsid(2) but don't have /usr/bin/setsid, so if we wanted to
+    // support --expunge_async on these platforms, we'd have to write a wrapper that calls setsid(2)
+    // and exec(2).
+    boolean asyncSupport = os == OS.LINUX;
+    if (async && !asyncSupport) {
+      String fallbackName = cleanOptions.expunge ? "--expunge" : "synchronous clean";
+      env.getReporter()
+          .handle(
+              Event.info(
+                  null /*location*/,
+                  "--async cannot be used on non-Linux platforms, falling back to "
+                      + fallbackName));
+      async = false;
+    }
+
+    String cleanBanner =
+        (async || !asyncSupport)
+            ? "Starting clean."
+            : "Starting clean (this may take a while). "
+                + "Consider using --async if the clean takes more than several minutes.";
+
     env.getEventBus().post(new CleanStartingEvent(options));
+    env.getReporter().handle(Event.info(null /*location*/, cleanBanner));
 
     try {
       String symlinkPrefix =
@@ -164,37 +187,9 @@ public final class CleanCommand implements BlazeCommand {
     }
   }
 
-  @VisibleForTesting
-  public static boolean canUseAsync(boolean async, boolean expunge, OS os, Reporter reporter) {
-    // TODO(dmarting): Deactivate expunge_async on non-Linux platform until we completely fix it
-    // for non-Linux platforms (https://github.com/bazelbuild/bazel/issues/1906).
-    // MacOS and FreeBSD support setsid(2) but don't have /usr/bin/setsid, so if we wanted to
-    // support --expunge_async on these platforms, we'd have to write a wrapper that calls setsid(2)
-    // and exec(2).
-    boolean asyncSupport = os == OS.LINUX;
-    if (async && !asyncSupport) {
-      String fallbackName = expunge ? "--expunge" : "synchronous clean";
-      reporter.handle(
-          Event.info(
-              null /*location*/,
-              "--async cannot be used on non-Linux platforms, falling back to " + fallbackName));
-      async = false;
-    }
-
-    String cleanBanner =
-        (async || !asyncSupport)
-            ? "Starting clean."
-            : "Starting clean (this may take a while). "
-                + "Consider using --async if the clean takes more than several minutes.";
-    reporter.handle(Event.info(/* location= */ null, cleanBanner));
-
-    return async;
-  }
-
   private static void asyncClean(CommandEnvironment env, Path path, String pathItemName)
-      throws IOException, CommandException, InterruptedException {
-    String tempBaseName =
-        path.getBaseName() + "_tmp_" + ProcessUtils.getpid() + "_" + UUID.randomUUID();
+      throws IOException, CommandException {
+    String tempBaseName = path.getBaseName() + "_tmp_" + ProcessUtils.getpid();
 
     // Keeping tempOutputBase in the same directory ensures it remains in the
     // same file system, and therefore the mv will be atomic and fast.
@@ -327,14 +322,10 @@ public final class CleanCommand implements BlazeCommand {
     }
 
     private FailureDetail getFailureDetail() {
-      return createFailureDetail(getMessage(), detailedCode);
+      return FailureDetail.newBuilder()
+          .setMessage(getMessage())
+          .setCleanCommand(FailureDetails.CleanCommand.newBuilder().setCode(detailedCode))
+          .build();
     }
-  }
-
-  private static FailureDetail createFailureDetail(String message, Code detailedCode) {
-    return FailureDetail.newBuilder()
-        .setMessage(message)
-        .setCleanCommand(FailureDetails.CleanCommand.newBuilder().setCode(detailedCode))
-        .build();
   }
 }
