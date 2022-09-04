@@ -55,9 +55,6 @@ public class FastCamelRuntime implements CamelRuntime {
     @Override
     public void start(Runtime runtimeConfig) throws Exception {
         this.runtimeConfig = runtimeConfig;
-        if (buildTimeConfig.deferInitPhase) {
-            doInit();
-        }
         doStart();
     }
 

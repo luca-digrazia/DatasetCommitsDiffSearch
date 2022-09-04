@@ -184,9 +184,6 @@ class CamelProcessor {
         addReflectiveClass(false, GenericFile.class.getName());
         addReflectiveClass(true, GenericFileProcessStrategyFactory.class.getName());
 
-        CamelSupport.resources(applicationArchivesBuildItem, "META-INF/maven/org.apache.camel/camel-core")
-                .forEach(this::addResource);
-
         addCamelServices();
     }
 
