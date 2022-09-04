@@ -64,12 +64,12 @@ public class RobustStandardizer extends Standardizer {
         double[] median = new double[p];
         double[] iqr = new double[p];
 
+        int n = data.size();
         for (int i = 0; i < p; i++) {
             if (schema.field(i).isNumeric()) {
                 IQAgent agent = new IQAgent();
-                double[] x = data.column(i).toDoubleArray();
-                for (double xi : x) {
-                    agent.add(xi);
+                for (int j = 0; j < n; j++) {
+                    agent.add(data.getDouble(j, i));
                 }
                 median[i] = agent.quantile(0.5);
                 iqr[i] = agent.quantile(0.75) - agent.quantile(0.25);

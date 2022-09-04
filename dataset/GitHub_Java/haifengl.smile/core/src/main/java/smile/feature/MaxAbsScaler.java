@@ -69,7 +69,6 @@ public class MaxAbsScaler implements FeatureTransform {
         if (schema.length() != scale.length) {
             throw new IllegalArgumentException("Schema and scaling factor size don't match");
         }
-        this.schema = schema;
     }
 
     @Override
@@ -91,14 +90,9 @@ public class MaxAbsScaler implements FeatureTransform {
         int p = schema.length();
         double[] scale = new double[p];
 
-        int n = data.size();
-        for (int j = 0; j < p; j++) {
-            if (schema.field(j).isNumeric()) {
-                double max = 0.0;
-                for (int i = 0; i < n; i++) {
-                    max = Math.max(max, Math.abs(data.getDouble(i, j)));
-                }
-                scale[j] = max;
+        for (int i = 0; i < p; i++) {
+            if (schema.field(i).isNumeric()) {
+                scale[i] = data.doubleVector(i).stream().map(Math::abs).max().getAsDouble();
             }
         }
 

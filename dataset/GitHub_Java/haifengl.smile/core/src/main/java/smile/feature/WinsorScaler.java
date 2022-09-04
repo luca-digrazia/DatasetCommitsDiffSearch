@@ -99,9 +99,8 @@ public class WinsorScaler extends Scaler {
         for (int i = 0; i < p; i++) {
             if (schema.field(i).isNumeric()) {
                 IQAgent agent = new IQAgent();
-                double[] x = data.column(i).toDoubleArray();
-                for (double xi : x) {
-                    agent.add(xi);
+                for (int j = 0; j < n; j++) {
+                    agent.add(data.getDouble(j, i));
                 }
                 lo[i] = agent.quantile(lower);
                 hi[i] = agent.quantile(upper);
