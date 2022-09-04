@@ -88,6 +88,7 @@ public class ThrottlingAppenderTest {
         // But just as sanity check we ensure that approximately a second has elapsed
         final OffsetDateTime end = OffsetDateTime.now();
         assertThat(ChronoUnit.MILLIS.between(start, end)).isBetween(900L, 1500L);
+        Thread.sleep(100); // To let async logs to finish
 
         final String logs = new String(redirectedStream.toByteArray(), UTF_8);
         return Arrays.asList(logs.split("\\r?\\n"));
@@ -97,14 +98,14 @@ public class ThrottlingAppenderTest {
     public void appenderWithZeroMessageRate() {
         assertThatThrownBy(() -> factory.build(loadResource("yaml/appender_with_zero_message_rate.yml")))
             .isInstanceOf(ConfigurationValidationException.class)
-            .hasMessageContaining("messageRate must be greater than (or equal to, if in 'inclusive' mode) 0 SECONDS");
+            .hasMessageContaining("messageRate must be greater than 0 SECONDS");
     }
 
     @Test
     public void appenderWithInvalidMessageRate() {
         assertThatThrownBy(() -> factory.build(loadResource("yaml/appender_with_invalid_message_rate.yml")))
             .isInstanceOf(ConfigurationValidationException.class)
-            .hasMessageContaining("messageRate must be less than (or equal to, if in 'inclusive' mode) 1 MINUTES");
+            .hasMessageContaining("messageRate must be less than or equal to 1 MINUTES");
     }
 
     @Test
@@ -114,7 +115,7 @@ public class ThrottlingAppenderTest {
         assertThat(throttledLines(Duration.milliseconds(100)))
             .doesNotHaveDuplicates()
             .haveAtLeast(9, containsApplicationLog)
-            .haveAtMost(12, containsApplicationLog);
+            .haveAtMost(13, containsApplicationLog);
     }
 
     @Test
