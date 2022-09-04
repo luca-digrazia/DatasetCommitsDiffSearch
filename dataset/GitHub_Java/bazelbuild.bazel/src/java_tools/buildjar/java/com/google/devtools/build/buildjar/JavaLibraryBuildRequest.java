@@ -142,6 +142,7 @@ public final class JavaLibraryBuildRequest {
     if (optionsParser.getManifestProtoPath() != null) {
       processingBuilder.setManifestProtoPath(Paths.get(optionsParser.getManifestProtoPath()));
     }
+    processingBuilder.addAllSourceRoots(optionsParser.getSourceRoots());
     this.processingModule = processingBuilder.build();
 
     ImmutableList.Builder<BlazeJavaCompilerPlugin> pluginsBuilder =
