@@ -39,7 +39,7 @@ public class InMemoryFileInfo extends FileInfo {
    */
   protected byte[] content;
 
-  InMemoryFileInfo(Clock clock) {
+  public InMemoryFileInfo(Clock clock) {
     super(clock);
     content = new byte[0]; // New files start out empty.
   }

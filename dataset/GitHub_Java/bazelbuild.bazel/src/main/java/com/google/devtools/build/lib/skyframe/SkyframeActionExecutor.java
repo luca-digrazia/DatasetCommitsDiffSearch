@@ -49,10 +49,9 @@ import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.ActionResultReceivedEvent;
 import com.google.devtools.build.lib.actions.ActionScanningCompletedEvent;
 import com.google.devtools.build.lib.actions.ActionStartedEvent;
-import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.AlreadyReportedActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
+import com.google.devtools.build.lib.actions.Artifact.ArtifactExpanderImpl;
 import com.google.devtools.build.lib.actions.Artifact.OwnerlessArtifactWrapper;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
@@ -111,6 +110,7 @@ import com.google.devtools.common.options.OptionsProvider;
 import java.io.Closeable;
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -128,6 +128,15 @@ import javax.annotation.Nullable;
  * all output artifacts were created, error reporting, etc.
  */
 public final class SkyframeActionExecutor {
+  static boolean actionDependsOnBuildId(Action action) {
+    // Volatile build actions may need to execute even if none of their known inputs have changed.
+    // Depending on the build id ensures that these actions have a chance to execute.
+    // SkyframeAwareActions do not need to depend on the build id because their volatility is due to
+    // their dependence on Skyframe nodes that are not captured in the action cache. Any changes to
+    // those nodes will cause this action to be rerun, so a build id dependency is unnecessary.
+    return (action.isVolatile() && !(action instanceof SkyframeAwareAction))
+        || action instanceof NotifyOnActionCacheHit;
+  }
 
   private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
@@ -393,7 +402,7 @@ public final class SkyframeActionExecutor {
       ActionMetadataHandler metadataHandler,
       long actionStartTime,
       ActionLookupData actionLookupData,
-      ArtifactExpander artifactExpander,
+      Map<Artifact, Collection<Artifact>> expandedInputs,
       ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
       ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
       @Nullable FileSystem actionFileSystem,
@@ -415,7 +424,8 @@ public final class SkyframeActionExecutor {
             env,
             action,
             metadataHandler,
-            artifactExpander,
+            expandedInputs,
+            expandedFilesets,
             topLevelFilesets,
             actionFileSystem,
             skyframeDepsResult);
@@ -483,7 +493,8 @@ public final class SkyframeActionExecutor {
       Environment env,
       Action action,
       MetadataHandler metadataHandler,
-      ArtifactExpander artifactExpander,
+      Map<Artifact, Collection<Artifact>> expandedInputs,
+      ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
       ImmutableMap<Artifact, ImmutableList<FilesetOutputSymlink>> topLevelFilesets,
       @Nullable FileSystem actionFileSystem,
       @Nullable Object skyframeDepsResult) {
@@ -492,7 +503,7 @@ public final class SkyframeActionExecutor {
         ArtifactPathResolver.createPathResolver(actionFileSystem, executorEngine.getExecRoot());
     FileOutErr fileOutErr;
     if (replayActionOutErr) {
-      String actionKey = action.getKey(actionKeyContext, artifactExpander);
+      String actionKey = action.getKey(actionKeyContext, /*artifactExpander=*/ null);
       fileOutErr = actionLogBufferPathGenerator.persistent(actionKey, artifactPathResolver);
       try {
         fileOutErr.getErrorPath().delete();
@@ -517,7 +528,7 @@ public final class SkyframeActionExecutor {
             : selectEventHandler(emitProgressEvents),
         clientEnv,
         topLevelFilesets,
-        artifactExpander,
+        new ArtifactExpanderImpl(expandedInputs, expandedFilesets),
         actionFileSystem,
         skyframeDepsResult,
         nestedSetExpander);
@@ -549,7 +560,6 @@ public final class SkyframeActionExecutor {
       ExtendedEventHandler eventHandler,
       Action action,
       MetadataHandler metadataHandler,
-      ArtifactExpander artifactExpander,
       long actionStartTime,
       List<Artifact> resolvedCacheArtifacts,
       Map<String, String> clientEnv,
@@ -571,7 +581,6 @@ public final class SkyframeActionExecutor {
                   ? reporter
                   : null,
               metadataHandler,
-              artifactExpander,
               remoteDefaultProperties);
     } catch (UserExecException e) {
       throw e.toActionExecutionException(action);
@@ -587,7 +596,7 @@ public final class SkyframeActionExecutor {
       if (replayActionOutErr) {
         // TODO(ulfjack): This assumes that the stdout/stderr files are unmodified. It would be
         //  better to integrate them with the action cache and rerun the action when they change.
-        String actionKey = action.getKey(actionKeyContext, artifactExpander);
+        String actionKey = action.getKey(actionKeyContext, /*artifactExpander=*/ null);
         FileOutErr fileOutErr = actionLogBufferPathGenerator.persistent(actionKey, pathResolver);
         // Set the mightHaveOutput bit in FileOutErr. Otherwise hasRecordedOutput() doesn't check if
         // the file exists and just returns false.
@@ -631,11 +640,7 @@ public final class SkyframeActionExecutor {
   }
 
   void updateActionCache(
-      Action action,
-      MetadataHandler metadataHandler,
-      ArtifactExpander artifactExpander,
-      Token token,
-      Map<String, String> clientEnv)
+      Action action, MetadataHandler metadataHandler, Token token, Map<String, String> clientEnv)
       throws ActionExecutionException {
     if (!actionCacheChecker.enabled()) {
       return;
@@ -653,7 +658,7 @@ public final class SkyframeActionExecutor {
 
     try {
       actionCacheChecker.updateActionCache(
-          action, token, metadataHandler, artifactExpander, clientEnv, remoteDefaultProperties);
+          action, token, metadataHandler, clientEnv, remoteDefaultProperties);
     } catch (IOException e) {
       // Skyframe has already done all the filesystem access needed for outputs and swallows
       // IOExceptions for inputs. So an IOException is impossible here.
@@ -925,9 +930,7 @@ public final class SkyframeActionExecutor {
               // This call generally deletes any files at locations that are declared outputs of the
               // action, although some actions perform additional work, while others intentionally
               // keep previous outputs in place.
-              action.prepare(
-                  actionExecutionContext.getExecRoot(),
-                  outputService != null ? outputService.bulkDeleter() : null);
+              action.prepare(actionExecutionContext.getExecRoot());
             } catch (IOException e) {
               logger.atWarning().withCause(e).log(
                   "failed to delete output files before executing action: '%s'", action);
@@ -1178,7 +1181,7 @@ public final class SkyframeActionExecutor {
           (action instanceof IncludeScannable)
               ? ((IncludeScannable) action).getDiscoveredModules()
               : null,
-          Actions.dependsOnBuildId(action));
+          actionDependsOnBuildId(action));
     }
 
     /** A closure to continue an asynchronously running action. */
@@ -1434,7 +1437,7 @@ public final class SkyframeActionExecutor {
     boolean reported = reportErrorIfNotAbortingMode(e, outErrBuffer);
 
     ActionExecutionException toThrow = e;
-    if (reported) {
+    if (reported){
       // If we already printed the error for the exception we mark it as already reported
       // so that we do not print it again in upper levels.
       // Note that we need to report it here since we want immediate feedback of the errors
