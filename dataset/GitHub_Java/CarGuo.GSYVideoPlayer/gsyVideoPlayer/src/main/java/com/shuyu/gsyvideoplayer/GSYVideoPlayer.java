@@ -16,6 +16,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.Window;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.SeekBar;
@@ -26,8 +27,8 @@ import com.danikula.videocache.HttpProxyCacheServer;
 import com.shuyu.gsyvideoplayer.listener.GSYMediaPlayerListener;
 import com.shuyu.gsyvideoplayer.listener.VideoAllCallBack;
 import com.shuyu.gsyvideoplayer.utils.CommonUtil;
-import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 
+import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Timer;
@@ -35,23 +36,26 @@ import java.util.TimerTask;
 
 import tv.danmaku.ijk.media.player.IMediaPlayer;
 
+import static com.shuyu.gsyvideoplayer.utils.CommonUtil.hideSupportActionBar;
+import static com.shuyu.gsyvideoplayer.utils.CommonUtil.showSupportActionBar;
 
 /**
  * Created by shuyu on 2016/11/11.
  */
 
-public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.OnClickListener, View.OnTouchListener, SeekBar.OnSeekBarChangeListener, TextureView.SurfaceTextureListener {
+public abstract class GSYVideoPlayer extends FrameLayout implements View.OnClickListener, View.OnTouchListener, SeekBar.OnSeekBarChangeListener, GSYMediaPlayerListener, TextureView.SurfaceTextureListener {
 
     public static final String TAG = "GSYVideoPlayer";
 
+    public static final int FULLSCREEN_ID = 83797;
 
-    public static final int CURRENT_STATE_NORMAL = 0; //正常
-    public static final int CURRENT_STATE_PREPAREING = 1; //准备中
-    public static final int CURRENT_STATE_PLAYING = 2; //播放中
-    public static final int CURRENT_STATE_PLAYING_BUFFERING_START = 3; //开始缓冲
-    public static final int CURRENT_STATE_PAUSE = 5; //暂停
-    public static final int CURRENT_STATE_AUTO_COMPLETE = 6; //自动播放结束
-    public static final int CURRENT_STATE_ERROR = 7; //错误状态
+    protected static final int CURRENT_STATE_NORMAL = 0; //正常
+    protected static final int CURRENT_STATE_PREPAREING = 1; //准备中
+    protected static final int CURRENT_STATE_PLAYING = 2; //播放中
+    protected static final int CURRENT_STATE_PLAYING_BUFFERING_START = 3; //开始缓冲
+    protected static final int CURRENT_STATE_PAUSE = 5; //暂停
+    protected static final int CURRENT_STATE_AUTO_COMPLETE = 6; //自动播放结束
+    protected static final int CURRENT_STATE_ERROR = 7; //错误状态
 
     public static final int FULL_SCREEN_NORMAL_DELAY = 2000;
 
@@ -63,19 +67,26 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     public static boolean WIFI_TIP_DIALOG_SHOWED = false;
 
+    protected static long CLICK_QUIT_FULLSCREEN_TIME = 0;
+
 
     protected static Timer UPDATE_PROGRESS_TIMER;
 
 
-    protected View mStartButton;
+    private Context mContext;
+
+    protected ImageView mStartButton;
     protected SeekBar mProgressBar;
     protected ImageView mFullscreenButton;
     protected TextView mCurrentTimeTextView, mTotalTimeTextView;
+    protected ViewGroup mTextureViewContainer;
     protected ViewGroup mTopContainer, mBottomContainer;
     protected GSYTextureView mTextureView;
     protected Surface mSurface;
     protected ImageView mBackButton;
 
+    protected String mUrl;
+    protected Object[] mObjects;
     protected Map<String, String> mMapHeadData = new HashMap<>();
     protected ProgressTimerTask mProgressTimerTask;
     protected AudioManager mAudioManager; //音频焦点的监听
@@ -92,6 +103,8 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     protected float mDownY; //触摸的Y
 
     protected float mBrightnessData = -1; //亮度
+
+    protected int mCurrentState = -1; //当前的播放状态
 
     protected int mDownPosition; //手指放下的位置
 
@@ -115,6 +128,8 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
     protected boolean mTouchingProgressBar = false;
 
+    protected boolean mIfCurrentIsFullscreen = false;
+
     protected boolean mIsTouchWiget = false;
 
     protected boolean mChangeVolume = false;//是否改变音量
@@ -126,6 +141,12 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     protected boolean mFirstTouch = false;//是否首次触摸
 
     protected boolean mLooping = false;//// TODO: 2016/11/13 循环
+
+    protected boolean mCache = false;//是否播边边缓冲
+
+    protected boolean mActionBar = false;//是否需要在利用window实现全屏幕的时候隐藏actionbar
+
+    protected boolean mStatusBar = false;//是否需要在利用window实现全屏幕的时候隐藏statusbar
 
 
     /**
@@ -151,7 +172,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     protected void init(Context context) {
         this.mContext = context;
         View.inflate(context, getLayoutId(), this);
-        mStartButton = findViewById(R.id.start);
+        mStartButton = (ImageView) findViewById(R.id.start);
         mBackButton = (ImageView) findViewById(R.id.back);
         mFullscreenButton = (ImageView) findViewById(R.id.fullscreen);
         mProgressBar = (SeekBar) findViewById(R.id.progress);
@@ -425,18 +446,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     }
 
     /**
-     * 小窗口
-     **/
-    @Override
-    protected void setSmallVideoTextureView(View.OnTouchListener onTouchListener) {
-        mTextureView.setOnTouchListener(onTouchListener);
-        mProgressBar.setOnTouchListener(null);
-        mFullscreenButton.setOnTouchListener(null);
-        mTextureView.setOnClickListener(null);
-    }
-
-
-    /**
      * 设置界面选择
      */
     public void setRotationView(int rotate) {
@@ -621,10 +630,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     }
 
     protected void dismissBrightnessDialog() {
-
-    }
-
-    protected void onClickUiToggle() {
 
     }
 
@@ -865,6 +870,89 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
 
 
     /**
+     * 利用window层播放全屏效果
+     *
+     * @param context
+     * @param actionBar 是否有actionBar，有的话需要隐藏
+     * @param statusBar 是否有状态bar，有的话需要隐藏
+     */
+    public void startWindowFullscreen(final Context context, final boolean actionBar, final boolean statusBar) {
+        this.mActionBar = actionBar;
+        this.mStatusBar = statusBar;
+        hideSupportActionBar(context, actionBar, statusBar);
+
+        ViewGroup vp = (ViewGroup) (CommonUtil.scanForActivity(getContext())).findViewById(Window.ID_ANDROID_CONTENT);
+        View old = vp.findViewById(FULLSCREEN_ID);
+        if (old != null) {
+            vp.removeView(old);
+        }
+
+        if (mTextureViewContainer.getChildCount() > 0) {
+            mTextureViewContainer.removeAllViews();
+        }
+        try {
+            Constructor<GSYVideoPlayer> constructor = (Constructor<GSYVideoPlayer>) GSYVideoPlayer.this.getClass().getConstructor(Context.class);
+            GSYVideoPlayer gsyVideoPlayer = constructor.newInstance(getContext());
+            gsyVideoPlayer.setId(FULLSCREEN_ID);
+            WindowManager wm = (WindowManager) getContext().getSystemService(Context.WINDOW_SERVICE);
+            int w = wm.getDefaultDisplay().getWidth();
+            int h = wm.getDefaultDisplay().getHeight();
+            FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(h, w);
+            lp.setMargins((w - h) / 2, -(w - h) / 2, 0, 0);
+            vp.addView(gsyVideoPlayer, lp);
+            gsyVideoPlayer.setUp(mUrl, mCache, mObjects);
+            gsyVideoPlayer.setStateAndUi(mCurrentState);
+            gsyVideoPlayer.addTextureView();
+            gsyVideoPlayer.setRotation(90);
+            gsyVideoPlayer.getFullscreenButton().setImageResource(R.drawable.video_shrink);
+            gsyVideoPlayer.getFullscreenButton().setOnClickListener(new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    clearFullscreenLayout();
+                }
+            });
+            gsyVideoPlayer.getBackButton().setVisibility(VISIBLE);
+            gsyVideoPlayer.getBackButton().setOnClickListener(new OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    clearFullscreenLayout();
+                }
+            });
+            GSYVideoManager.instance().setLastListener(this);
+            GSYVideoManager.instance().setListener(gsyVideoPlayer);
+        } catch (InstantiationException e) {
+            e.printStackTrace();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+
+    /**
+     * 退出window层播放全屏效果
+     */
+    public void clearFullscreenLayout() {
+
+        showSupportActionBar(mContext, mActionBar, mStatusBar);
+        ViewGroup vp = (ViewGroup) (CommonUtil.scanForActivity(getContext())).findViewById(Window.ID_ANDROID_CONTENT);
+        View oldF = vp.findViewById(FULLSCREEN_ID);
+        GSYVideoPlayer gsyVideoPlayer = null;
+        if (oldF != null) {
+            gsyVideoPlayer = (GSYVideoPlayer) oldF;
+            vp.removeView(oldF);
+        }
+        mCurrentState = GSYVideoManager.instance().getLastState();
+        if (gsyVideoPlayer != null) {
+            mCurrentState = gsyVideoPlayer.getCurrentState();
+        }
+        GSYVideoManager.instance().setListener(GSYVideoManager.instance().lastListener());
+        GSYVideoManager.instance().setLastListener(null);
+        setStateAndUi(mCurrentState);
+        addTextureView();
+        CLICK_QUIT_FULLSCREEN_TIME = System.currentTimeMillis();
+    }
+
+    /**
      * 滑动改变亮度
      *
      * @param percent
@@ -893,9 +981,6 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         return mIsTouchWiget;
     }
 
-    /**
-     * 是否可以滑动界面改变进度，声音等
-     */
     public void setIsTouchWiget(boolean isTouchWiget) {
         this.mIsTouchWiget = isTouchWiget;
     }
@@ -903,7 +988,7 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
     /**
      * 获取播放按键
      */
-    public View getStartButton() {
+    public ImageView getStartButton() {
         return mStartButton;
     }
 
@@ -949,11 +1034,8 @@ public abstract class GSYVideoPlayer extends GSYBaseVideoPlayer implements View.
         return mPlayPosition;
     }
 
-    /**
-     * 设置播放位置防止错位
-     */
-    public void setPlayPosition(int playPosition) {
-        this.mPlayPosition = playPosition;
+    public void setPlayPosition(int playPostion) {
+        this.mPlayPosition = playPostion;
     }
 
     /**

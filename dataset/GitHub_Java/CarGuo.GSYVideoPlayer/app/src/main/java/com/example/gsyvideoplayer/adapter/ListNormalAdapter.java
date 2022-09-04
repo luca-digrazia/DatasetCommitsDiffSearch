@@ -8,20 +8,13 @@ import android.widget.BaseAdapter;
 import android.widget.ImageView;
 
 import com.example.gsyvideoplayer.R;
-import com.example.gsyvideoplayer.listener.SampleListener;
 import com.example.gsyvideoplayer.model.VideoModel;
 import com.shuyu.gsyvideoplayer.GSYVideoManager;
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
-import com.shuyu.gsyvideoplayer.listener.StandardVideoAllCallBack;
-import com.shuyu.gsyvideoplayer.utils.Debuger;
-import com.shuyu.gsyvideoplayer.utils.FileUtils;
 import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
-
-import static com.shuyu.gsyvideoplayer.GSYVideoPlayer.CURRENT_STATE_NORMAL;
 
 /**
  * Created by shuyu on 2016/11/12.
@@ -82,41 +75,7 @@ public class ListNormalAdapter extends BaseAdapter {
 
         final String url = "http://baobab.wdjcdn.com/14564977406580.mp4";
 
-        //默认缓存路径
-        holder.gsyVideoPlayer.setUp(url, true , null, "这是title");
-
-        /************************下方为其他路径************************************/
-        //如果一个列表的缓存路劲都一一致
-        //holder.gsyVideoPlayer.setUp(url, true, new File(FileUtils.getTestPath(), ""));
-
-        /************************下方为其他路径************************************/
-        //如果一个列表里的缓存路劲不一致
-        //int playPosition = GSYVideoManager.instance().getPlayPosition();
-        //避免全屏返回的时候不可用了
-        /*if (playPosition < 0 || playPosition != position ||
-                !GSYVideoManager.instance().getPlayTag().equals(ListNormalAdapter.TAG)) {
-            holder.gsyVideoPlayer.initUIState();
-        }*/
-        //如果设置了点击封面可以播放，如果缓存列表路径不一致，还需要设置封面点击
-        /*holder.gsyVideoPlayer.setThumbPlay(true);
-
-        holder.gsyVideoPlayer.getStartButton().setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //需要切换缓存路径的
-                holder.gsyVideoPlayer.setUp(url, true, new File(FileUtils.getTestPath(), ""));
-                holder.gsyVideoPlayer.startPlayLogic();
-            }
-        });
-
-        holder.gsyVideoPlayer.getThumbImageViewLayout().setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //需要切换缓存路径的
-                holder.gsyVideoPlayer.setUp(url, true, new File(FileUtils.getTestPath(), ""));
-                holder.gsyVideoPlayer.startPlayLogic();
-            }
-        });*/
+        holder.gsyVideoPlayer.setUp(url, true, "");
 
         //增加title
         holder.gsyVideoPlayer.getTitleTextView().setVisibility(View.GONE);
@@ -131,14 +90,9 @@ public class ListNormalAdapter extends BaseAdapter {
                 resolveFullBtn(holder.gsyVideoPlayer);
             }
         });
-        holder.gsyVideoPlayer.setRotateViewAuto(true);
-        holder.gsyVideoPlayer.setLockLand(true);
+
         holder.gsyVideoPlayer.setPlayTag(TAG);
-        holder.gsyVideoPlayer.setShowFullAnimation(true);
-        //循环
-        //holder.gsyVideoPlayer.setLooping(true);
         holder.gsyVideoPlayer.setPlayPosition(position);
-        holder.gsyVideoPlayer.setStandardVideoAllCallBack(sampleListener);
 
         return convertView;
     }
@@ -155,32 +109,5 @@ public class ListNormalAdapter extends BaseAdapter {
     class ViewHolder {
         StandardGSYVideoPlayer gsyVideoPlayer;
     }
-
-    //小窗口关闭被点击的时候回调处理回复页面
-    SampleListener sampleListener = new SampleListener() {
-        @Override
-        public void onPrepared(String url, Object... objects) {
-            super.onPrepared(url, objects);
-            Debuger.printfLog("onPrepared");
-        }
-
-        @Override
-        public void onQuitSmallWidget(String url, Object... objects) {
-            super.onQuitSmallWidget(url, objects);
-            Debuger.printfLog("onQuitSmallWidget");
-        }
-
-        @Override
-        public void onClickBlankFullscreen(String url, Object... objects) {
-            super.onClickBlankFullscreen(url, objects);
-            Debuger.printfLog("onClickBlankFullscreen");
-        }
-
-        @Override
-        public void onEnterFullscreen(String url, Object... objects) {
-            super.onEnterFullscreen(url, objects);
-            Debuger.printfLog("onEnterFullscreen");
-        }
-    };
 
 }

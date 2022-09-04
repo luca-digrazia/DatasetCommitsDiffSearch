@@ -18,7 +18,6 @@ import com.shuyu.gsyvideoplayer.video.StandardGSYVideoPlayer;
 
 import butterknife.BindView;
 import butterknife.ButterKnife;
-import tv.danmaku.ijk.media.player.IjkMediaPlayer;
 
 public class ListVideoActivity extends AppCompatActivity {
 
@@ -26,9 +25,6 @@ public class ListVideoActivity extends AppCompatActivity {
     ListView videoList;
     @BindView(R.id.activity_list_video)
     RelativeLayout activityListVideo;
-
-
-    private long pauseTime;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -53,14 +49,10 @@ public class ListVideoActivity extends AppCompatActivity {
             @Override
             public void onScroll(AbsListView view, int firstVisibleItem, int visibleItemCount, int totalItemCount) {
                 int lastVisibleItem = firstVisibleItem + visibleItemCount;
-                //大于0说明有播放
                 if (GSYVideoManager.instance().getPlayPosition() >= 0) {
-                    //当前播放的位置
                     int position = GSYVideoManager.instance().getPlayPosition();
-                    //对应的播放列表TAG
                     if (GSYVideoManager.instance().getPlayTag().equals(ListNormalAdapter.TAG)
                             && (position < firstVisibleItem || position > lastVisibleItem)) {
-                        //如果滑出去了上面和下面就是否，和今日头条一样
                         GSYVideoPlayer.releaseAllVideos();
                         listNormalAdapter.notifyDataSetChanged();
                     }
@@ -76,33 +68,6 @@ public class ListVideoActivity extends AppCompatActivity {
             return;
         }
         super.onBackPressed();
-    }
-
-    @Override
-    protected void onPause() {
-        super.onPause();
-        if (GSYVideoManager.instance().getPlayPosition() >= 0 &&
-                GSYVideoManager.instance().getPlayTag().equals(ListNormalAdapter.TAG)) {
-            IjkMediaPlayer ijkMediaPlayer = GSYVideoManager.instance().getMediaPlayer();
-            if (ijkMediaPlayer != null && ijkMediaPlayer.isPlaying()) {
-                pauseTime = ijkMediaPlayer.getCurrentPosition();
-                ijkMediaPlayer.pause();
-            }
-        }
-    }
-
-    @Override
-    protected void onResume() {
-        super.onResume();
-        if (GSYVideoManager.instance().getPlayPosition() >= 0 &&
-                GSYVideoManager.instance().getPlayTag().equals(ListNormalAdapter.TAG)) {
-            IjkMediaPlayer ijkMediaPlayer = GSYVideoManager.instance().getMediaPlayer();
-            if (ijkMediaPlayer != null && !ijkMediaPlayer.isPlaying() && pauseTime > 0) {
-                ijkMediaPlayer.seekTo(pauseTime);
-                ijkMediaPlayer.start();
-                pauseTime = 0;
-            }
-        }
     }
 
     @Override
