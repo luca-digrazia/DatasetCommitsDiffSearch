@@ -34,7 +34,6 @@ import org.apache.directory.server.core.partition.impl.avl.AvlPartition;
 import org.apache.directory.server.ldap.LdapServer;
 import org.apache.shiro.authc.AuthenticationToken;
 import org.apache.shiro.authc.UsernamePasswordToken;
-import org.graylog2.ApacheDirectoryTestServiceFactory;
 import org.graylog2.Configuration;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.security.ldap.LdapConnector;
@@ -56,8 +55,8 @@ import java.util.Collections;
 import java.util.HashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Matchers.any;
+import static org.mockito.Matchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -69,7 +68,6 @@ import static org.mockito.Mockito.when;
 })
 @CreateDS(
         name = "LdapUserAuthenticatorTest",
-        factory = ApacheDirectoryTestServiceFactory.class, // Ensures a unique storage location
         partitions = {
                 @CreatePartition(
                         name = "example.com",
