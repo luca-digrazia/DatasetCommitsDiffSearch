@@ -13,11 +13,9 @@ import java.util.Map;
 import java.util.Set;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.AnnotationValue;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.Index;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
@@ -54,7 +52,6 @@ import io.quarkus.security.runtime.interceptor.SecurityCheckStorage;
 import io.quarkus.security.runtime.interceptor.SecurityCheckStorageBuilder;
 import io.quarkus.security.runtime.interceptor.SecurityConstrainer;
 import io.quarkus.security.runtime.interceptor.SecurityHandler;
-import io.quarkus.security.spi.AdditionalSecuredClassesBuildIem;
 
 public class SecurityProcessor {
 
@@ -115,24 +112,15 @@ public class SecurityProcessor {
     @BuildStep
     void gatherSecurityChecks(BuildProducer<BeanRegistrarBuildItem> beanRegistrars,
             ApplicationIndexBuildItem indexBuildItem,
-            BuildProducer<ApplicationClassPredicateBuildItem> classPredicate,
-            List<AdditionalSecuredClassesBuildIem> additionalSecuredClasses) {
+            BuildProducer<ApplicationClassPredicateBuildItem> classPredicate) {
         classPredicate.produce(new ApplicationClassPredicateBuildItem(new SecurityCheckStorage.AppPredicate()));
-
-        Set<ClassInfo> additionalSecured = new HashSet<>();
-        if (additionalSecuredClasses != null) {
-            for (AdditionalSecuredClassesBuildIem securedClasses : additionalSecuredClasses) {
-                additionalSecured.addAll(securedClasses.additionalSecuredClasses);
-            }
-        }
 
         beanRegistrars.produce(new BeanRegistrarBuildItem(new BeanRegistrar() {
 
             @Override
             public void register(RegistrationContext registrationContext) {
-
-                Map<MethodInfo, AnnotationInstance> methodAnnotations = gatherSecurityAnnotationsByLooping(indexBuildItem,
-                        registrationContext, additionalSecured);
+                Map<MethodInfo, AnnotationInstance> methodAnnotations = gatherSecurityAnnotations(indexBuildItem,
+                        registrationContext);
 
                 DotName name = DotName.createSimple(SecurityCheckStorage.class.getName());
 
@@ -186,7 +174,7 @@ public class SecurityProcessor {
             ResultHandle result = methodCreator.newArray(String.class, methodCreator.load(values.length));
             int i = 0;
             for (String val : values) {
-                methodCreator.writeArrayValue(result, i++, methodCreator.load(val));
+                methodCreator.writeArrayValue(result, i, methodCreator.load(val));
             }
             return result;
         }
@@ -203,27 +191,25 @@ public class SecurityProcessor {
         return result;
     }
 
-    private Map<MethodInfo, AnnotationInstance> gatherSecurityAnnotationsByLooping(ApplicationIndexBuildItem indexBuildItem,
-            BeanRegistrar.RegistrationContext registrationContext,
-            Set<ClassInfo> additionalSecuredClasses) {
+    private Map<MethodInfo, AnnotationInstance> gatherSecurityAnnotations(ApplicationIndexBuildItem indexBuildItem,
+            BeanRegistrar.RegistrationContext registrationContext) {
         Set<DotName> securityAnnotations = SecurityAnnotationsRegistrar.SECURITY_BINDINGS.keySet();
         AnnotationStore annotationStore = registrationContext.get(BuildExtension.Key.ANNOTATION_STORE);
-        Set<ClassInfo> classesWithSecurity = new HashSet<>(additionalSecuredClasses);
+        Set<ClassInfo> classesWithSecurity = new HashSet<>();
 
-        Index index = indexBuildItem.getIndex();
-        for (DotName securityAnno : SecurityAnnotationsRegistrar.SECURITY_BINDINGS.keySet()) {
-            for (AnnotationInstance annotation : index.getAnnotations(securityAnno)) {
-                AnnotationTarget target = annotation.target();
-                switch (target.kind()) {
-                    case CLASS:
-                        classesWithSecurity.add(target.asClass());
+        Collection<ClassInfo> classes = indexBuildItem.getIndex().getKnownClasses();
+        for (ClassInfo classInfo : classes) {
+            boolean hasSecurityAnnotations = annotationStore.hasAnyAnnotation(classInfo, securityAnnotations);
+            if (!hasSecurityAnnotations) {
+                for (MethodInfo method : classInfo.methods()) {
+                    if (annotationStore.hasAnyAnnotation(method, securityAnnotations)) {
+                        hasSecurityAnnotations = true;
                         break;
-                    case METHOD:
-                        classesWithSecurity.add(target.asMethod().declaringClass());
-                        break;
-                    default:
-                        throw new IllegalStateException("Security annotation discovered on unsupported target: " + target);
+                    }
                 }
+            }
+            if (hasSecurityAnnotations) {
+                classesWithSecurity.add(classInfo);
             }
         }
 
@@ -255,7 +241,7 @@ public class SecurityProcessor {
         for (AnnotationInstance annotation : classAnnotations) {
             if (securityAnnotations.contains(annotation.name())) {
                 if (result != null) {
-                    throw new IllegalStateException("Multiple security annotations on target: " + annotation.target());
+                    throw new IllegalStateException("Duplicate security annotations on class " + annotation.target());
                 }
                 result = annotation;
             }
