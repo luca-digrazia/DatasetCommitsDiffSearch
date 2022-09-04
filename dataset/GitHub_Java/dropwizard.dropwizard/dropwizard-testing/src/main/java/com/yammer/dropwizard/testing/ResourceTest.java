@@ -1,23 +1,24 @@
 package com.yammer.dropwizard.testing;
 
-import com.google.common.collect.Lists;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
 import com.google.common.collect.Maps;
+import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
+import org.codehaus.jackson.map.Module;
+import org.junit.After;
+import org.junit.Before;
+
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.sun.jersey.api.client.Client;
 import com.sun.jersey.test.framework.AppDescriptor;
 import com.sun.jersey.test.framework.JerseyTest;
 import com.sun.jersey.test.framework.LowLevelAppDescriptor;
 import com.yammer.dropwizard.bundles.JavaBundle;
-import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
 import com.yammer.dropwizard.jersey.JacksonMessageBodyProvider;
 import com.yammer.dropwizard.json.Json;
-import org.codehaus.jackson.map.Module;
-import org.junit.After;
-import org.junit.Before;
-
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * A base test class for testing Dropwizard resources.
@@ -27,7 +28,6 @@ public abstract class ResourceTest {
     private final Set<Class<?>> providers = Sets.newHashSet();
     private final List<Module> modules = Lists.newArrayList();
     private final Map<String, Boolean> features = Maps.newHashMap();
-    private final Map<String, Object> properties = Maps.newHashMap();
 
     private JerseyTest test;
 
@@ -49,10 +49,6 @@ public abstract class ResourceTest {
         features.put(feature, value);
     }
 
-    protected void addProperty(String property, Object value) {
-        properties.put(property, value);
-    }
-
     protected Json getJson() {
         final Json json = new Json();
         for (Module module : modules) {
@@ -71,19 +67,16 @@ public abstract class ResourceTest {
         this.test = new JerseyTest() {
             @Override
             protected AppDescriptor configure() {
-                final DropwizardResourceConfig config = new DropwizardResourceConfig(true);
+                final DropwizardResourceConfig config = new DropwizardResourceConfig();
                 for (Object provider : JavaBundle.DEFAULT_PROVIDERS) { // sorry, Scala folks
                     config.getSingletons().add(provider);
                 }
                 for (Class<?> provider : providers) {
                     config.getClasses().add(provider);
                 }
-                final Json json = getJson();
+                Json json = getJson();
                 for (Map.Entry<String, Boolean> feature : features.entrySet()) {
                     config.getFeatures().put(feature.getKey(), feature.getValue());
-                }
-                for (Map.Entry<String, Object> property : properties.entrySet()) {
-                    config.getProperties().put(property.getKey(), property.getValue());
                 }
                 config.getSingletons().add(new JacksonMessageBodyProvider(json));
                 config.getSingletons().addAll(singletons);
