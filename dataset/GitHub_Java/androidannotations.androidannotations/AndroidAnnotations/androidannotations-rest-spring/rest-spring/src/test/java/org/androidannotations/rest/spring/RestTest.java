@@ -113,12 +113,6 @@ public class RestTest extends AAProcessorTestHelper {
 	}
 
 	@Test
-	public void clientWithParameters() throws IOException {
-		CompileResult result = compileFiles(ClientWithParameters.class);
-		assertCompilationSuccessful(result);
-	}
-
-	@Test
 	public void fieldPathParamOnSameArgument() throws IOException {
 		CompileResult result = compileFiles(FieldPathParamOnSameArgument.class);
 		assertCompilationErrorOn(FieldPathParamOnSameArgument.class, "@Field", result);
