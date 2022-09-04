@@ -133,10 +133,8 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
 
     CppConfiguration cppConfiguration = ruleContext.getConfiguration().getFragment(
         CppConfiguration.class);
-    // TODO(b/64384912): Remove in favor of CcToolchainProvider
-    boolean stripAsDefault =
-        cppConfiguration.useFission()
-            && cppConfiguration.getCompilationMode() == CompilationMode.OPT;
+    boolean stripAsDefault = cppConfiguration.useFission()
+        && cppConfiguration.getCompilationMode() == CompilationMode.OPT;
     Artifact launcher = semantics.getLauncher(ruleContext, common, deployArchiveBuilder,
         runfilesBuilder, jvmFlags, attributesBuilder, stripAsDefault);
 
@@ -315,7 +313,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
                 .withEnforcementLevel(javaConfig.oneVersionEnforcementLevel())
                 .outputArtifact(
                     ruleContext.getImplicitOutputArtifact(JavaSemantics.JAVA_ONE_VERSION_ARTIFACT))
-                .useToolchain(JavaToolchainProvider.from(ruleContext))
+                .useToolchain(JavaToolchainProvider.fromRuleContext(ruleContext))
                 .checkJars(
                     NestedSetBuilder.fromNestedSet(attributes.getRuntimeClassPath())
                         .add(classJar)
@@ -394,9 +392,6 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
             runProguard || runfilesSupport == null ? null : runfilesSupport.getRunfilesMiddleman())
         .setCompression(runProguard ? UNCOMPRESSED : COMPRESSED)
         .setLauncher(launcher)
-        .setOneVersionEnforcementLevel(
-            javaConfig.oneVersionEnforcementLevel(),
-            JavaToolchainProvider.from(ruleContext).getOneVersionWhitelist())
         .build();
 
     Artifact unstrippedDeployJar =
@@ -470,7 +465,7 @@ public class JavaBinary implements RuleConfiguredTargetFactory {
   /** Add Java8 timezone resource jar to java binary, if specified in tool chain. */
   private void addTimezoneResourceForJavaBinaries(
       RuleContext ruleContext, JavaTargetAttributes.Builder attributesBuilder) {
-    JavaToolchainProvider toolchainProvider = JavaToolchainProvider.from(ruleContext);
+    JavaToolchainProvider toolchainProvider = JavaToolchainProvider.fromRuleContext(ruleContext);
     if (toolchainProvider.getTimezoneData() != null) {
       attributesBuilder.addResourceJars(
           NestedSetBuilder.create(Order.STABLE_ORDER, toolchainProvider.getTimezoneData()));
