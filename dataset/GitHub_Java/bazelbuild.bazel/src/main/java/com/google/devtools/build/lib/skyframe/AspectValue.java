@@ -33,16 +33,8 @@ import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.skyframe.BuildConfigurationValue.Key;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey.KeyAndHost;
-import com.google.devtools.build.lib.skyframe.serialization.ImmutableListCodec;
-import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
-import com.google.devtools.build.lib.skyframe.serialization.SerializationException;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.skyframe.SkyFunctionName;
-import com.google.protobuf.CodedInputStream;
-import com.google.protobuf.CodedOutputStream;
-import java.io.IOException;
 import java.util.List;
 import javax.annotation.Nullable;
 
@@ -60,24 +52,23 @@ public final class AspectValue extends ActionLookupValue {
 
   /** A base class for a key representing an aspect applied to a particular target. */
   public static class AspectKey extends AspectValueKey {
-    public static final ObjectCodec<AspectKey> CODEC = new AspectKeyCodec();
     private final Label label;
     private final ImmutableList<AspectKey> baseKeys;
-    private final BuildConfigurationValue.Key aspectConfigurationKey;
-    private final ConfiguredTargetKey baseConfiguredTargetKey;
+    private final BuildConfiguration aspectConfiguration;
+    private final ConfiguredTargetKey configuredTargetKey;
     private final AspectDescriptor aspectDescriptor;
     private int hashCode;
 
     private AspectKey(
         Label label,
-        BuildConfigurationValue.Key aspectConfigurationKey,
-        ConfiguredTargetKey baseConfiguredTargetKey,
+        ConfiguredTargetKey configuredTargetKey,
         ImmutableList<AspectKey> baseKeys,
-        AspectDescriptor aspectDescriptor) {
+        AspectDescriptor aspectDescriptor,
+        BuildConfiguration aspectConfiguration) {
       this.baseKeys = baseKeys;
       this.label = label;
-      this.aspectConfigurationKey = aspectConfigurationKey;
-      this.baseConfiguredTargetKey = baseConfiguredTargetKey;
+      this.configuredTargetKey = configuredTargetKey;
+      this.aspectConfiguration = aspectConfiguration;
       this.aspectDescriptor = aspectDescriptor;
     }
 
@@ -121,13 +112,8 @@ public final class AspectValue extends ActionLookupValue {
       }
     }
 
-    protected boolean aspectConfigurationIsHost() {
-      return false;
-    }
-
     /**
-     * Returns the key of the configured target of the aspect; that is, the configuration in which
-     * the aspect will be evaluated.
+     * Returns the configuration to be used for the evaluation of the aspect itself.
      *
      * <p>In trimmed configuration mode, the aspect may require more fragments than the target on
      * which it is being evaluated; in addition to configuration fragments required by the target
@@ -140,15 +126,15 @@ public final class AspectValue extends ActionLookupValue {
      *
      * <p>Because of these properties, this configuration is always a superset of the base target's
      * configuration. In untrimmed configuration mode, this configuration will be equivalent to the
-     * base target's configuration.
+     * base target's configuration..
      */
-    BuildConfigurationValue.Key getAspectConfigurationKey() {
-      return aspectConfigurationKey;
+    public BuildConfiguration getAspectConfiguration() {
+      return aspectConfiguration;
     }
 
     /** Returns the key for the base configured target for this aspect. */
-    ConfiguredTargetKey getBaseConfiguredTargetKey() {
-      return baseConfiguredTargetKey;
+    ConfiguredTargetKey getConfiguredTargetKey() {
+      return configuredTargetKey;
     }
 
     @Override
@@ -179,7 +165,7 @@ public final class AspectValue extends ActionLookupValue {
 
     private int computeHashCode() {
       return Objects.hashCode(
-          label, baseKeys, aspectConfigurationKey, baseConfiguredTargetKey, aspectDescriptor);
+          label, baseKeys, aspectConfiguration, configuredTargetKey, aspectDescriptor);
     }
 
     @Override
@@ -195,8 +181,8 @@ public final class AspectValue extends ActionLookupValue {
       AspectKey that = (AspectKey) other;
       return Objects.equal(label, that.label)
           && Objects.equal(baseKeys, that.baseKeys)
-          && Objects.equal(aspectConfigurationKey, that.aspectConfigurationKey)
-          && Objects.equal(baseConfiguredTargetKey, that.baseConfiguredTargetKey)
+          && Objects.equal(aspectConfiguration, that.aspectConfiguration)
+          && Objects.equal(configuredTargetKey, that.configuredTargetKey)
           && Objects.equal(aspectDescriptor, that.aspectDescriptor);
     }
 
@@ -209,12 +195,13 @@ public final class AspectValue extends ActionLookupValue {
           baseKeys.isEmpty()
           ? ""
           : String.format(" (over %s)", baseKeys.toString());
-      return String.format(
-          "%s with aspect %s%s%s",
+      return String.format("%s with aspect %s%s%s",
           label.toString(),
           aspectDescriptor.getAspectClass().getName(),
-          (aspectConfigurationKey != null && aspectConfigurationIsHost()) ? "(host) " : "",
-          baseKeysString);
+          (aspectConfiguration != null && aspectConfiguration.isHostConfiguration())
+              ? "(host) " : "",
+          baseKeysString
+      );
     }
 
     @Override
@@ -223,9 +210,9 @@ public final class AspectValue extends ActionLookupValue {
           + "#"
           + aspectDescriptor.getAspectClass().getName()
           + " "
-          + aspectConfigurationKey
+          + (aspectConfiguration == null ? "null" : aspectConfiguration.checksum())
           + " "
-          + baseConfiguredTargetKey
+          + configuredTargetKey
           + " "
           + aspectDescriptor.getParameters();
     }
@@ -240,63 +227,11 @@ public final class AspectValue extends ActionLookupValue {
           label,
           ConfiguredTargetKey.of(
               label,
-              baseConfiguredTargetKey.getConfigurationKey(),
-              baseConfiguredTargetKey.isHostConfiguration()),
+              configuredTargetKey.getConfigurationKey(),
+              configuredTargetKey.isHostConfiguration()),
           newBaseKeys.build(),
           aspectDescriptor,
-          aspectConfigurationKey,
-          aspectConfigurationIsHost());
-    }
-  }
-
-  /** An {@link AspectKey} for an aspect in the host configuration. */
-  static class HostAspectKey extends AspectKey {
-    static final ObjectCodec<AspectKey> CODEC = AspectKey.CODEC;
-
-    private HostAspectKey(
-        Label label,
-        Key aspectConfigurationKey,
-        ConfiguredTargetKey baseConfiguredTargetKey,
-        ImmutableList<AspectKey> baseKeys,
-        AspectDescriptor aspectDescriptor) {
-      super(label, aspectConfigurationKey, baseConfiguredTargetKey, baseKeys, aspectDescriptor);
-    }
-
-    @Override
-    protected boolean aspectConfigurationIsHost() {
-      return true;
-    }
-  }
-
-  private static class AspectKeyCodec implements ObjectCodec<AspectKey> {
-    private final ImmutableListCodec<AspectKey> listCodec = new ImmutableListCodec<>(this);
-
-    @Override
-    public Class<AspectKey> getEncodedClass() {
-      return AspectKey.class;
-    }
-
-    @Override
-    public void serialize(AspectKey obj, CodedOutputStream codedOut)
-        throws SerializationException, IOException {
-      Label.CODEC.serialize(obj.label, codedOut);
-      ConfiguredTargetKey.CODEC.serialize(obj.baseConfiguredTargetKey, codedOut);
-      listCodec.serialize(obj.baseKeys, codedOut);
-      AspectDescriptor.CODEC.serialize(obj.aspectDescriptor, codedOut);
-      Key.CODEC.serialize(obj.aspectConfigurationKey, codedOut);
-      codedOut.writeBoolNoTag(obj.aspectConfigurationIsHost());
-    }
-
-    @Override
-    public AspectKey deserialize(CodedInputStream codedIn)
-        throws SerializationException, IOException {
-      return createAspectKey(
-          Label.CODEC.deserialize(codedIn),
-          ConfiguredTargetKey.CODEC.deserialize(codedIn),
-          listCodec.deserialize(codedIn),
-          AspectDescriptor.CODEC.deserialize(codedIn),
-          Key.CODEC.deserialize(codedIn),
-          codedIn.readBool());
+          aspectConfiguration);
     }
   }
 
@@ -306,21 +241,22 @@ public final class AspectValue extends ActionLookupValue {
   public static class SkylarkAspectLoadingKey extends AspectValueKey {
 
     private final Label targetLabel;
-    private final BuildConfigurationValue.Key aspectConfigurationKey;
-    private final ConfiguredTargetKey baseConfiguredTargetKey;
+    private final BuildConfiguration aspectConfiguration;
+    private final ConfiguredTargetKey configuredTargetKey;
     private final SkylarkImport skylarkImport;
     private final String skylarkValueName;
     private int hashCode;
 
     private SkylarkAspectLoadingKey(
         Label targetLabel,
-        BuildConfigurationValue.Key aspectConfigurationKey,
-        ConfiguredTargetKey baseConfiguredTargetKey,
+        BuildConfiguration aspectConfiguration,
+        ConfiguredTargetKey configuredTargetKey,
         SkylarkImport skylarkImport,
         String skylarkFunctionName) {
       this.targetLabel = targetLabel;
-      this.aspectConfigurationKey = aspectConfigurationKey;
-      this.baseConfiguredTargetKey = baseConfiguredTargetKey;
+      this.aspectConfiguration = aspectConfiguration;
+      this.configuredTargetKey = configuredTargetKey;
+
       this.skylarkImport = skylarkImport;
       this.skylarkValueName = skylarkFunctionName;
     }
@@ -336,10 +272,6 @@ public final class AspectValue extends ActionLookupValue {
 
     public SkylarkImport getSkylarkImport() {
       return skylarkImport;
-    }
-
-    protected boolean isAspectConfigurationHost() {
-      return false;
     }
 
     @Override
@@ -377,11 +309,7 @@ public final class AspectValue extends ActionLookupValue {
 
     private int computeHashCode() {
       return Objects.hashCode(
-          targetLabel,
-          aspectConfigurationKey,
-          baseConfiguredTargetKey,
-          skylarkImport,
-          skylarkValueName);
+          targetLabel, aspectConfiguration, configuredTargetKey, skylarkImport, skylarkValueName);
     }
 
     @Override
@@ -395,8 +323,8 @@ public final class AspectValue extends ActionLookupValue {
       }
       SkylarkAspectLoadingKey that = (SkylarkAspectLoadingKey) o;
       return Objects.equal(targetLabel, that.targetLabel)
-          && Objects.equal(aspectConfigurationKey, that.aspectConfigurationKey)
-          && Objects.equal(baseConfiguredTargetKey, that.baseConfiguredTargetKey)
+          && Objects.equal(aspectConfiguration, that.aspectConfiguration)
+          && Objects.equal(configuredTargetKey, that.configuredTargetKey)
           && Objects.equal(skylarkImport, that.skylarkImport)
           && Objects.equal(skylarkValueName, that.skylarkValueName);
     }
@@ -404,34 +332,10 @@ public final class AspectValue extends ActionLookupValue {
     AspectKey toAspectKey(AspectClass aspectClass) {
       return createAspectKey(
           targetLabel,
-          baseConfiguredTargetKey,
+          configuredTargetKey,
           ImmutableList.of(),
           new AspectDescriptor(aspectClass, AspectParameters.EMPTY),
-          aspectConfigurationKey,
-          isAspectConfigurationHost());
-    }
-  }
-
-  /** A {@link SkylarkAspectLoadingKey} for an aspect in the host configuration. */
-  private static class HostSkylarkAspectLoadingKey extends SkylarkAspectLoadingKey {
-
-    private HostSkylarkAspectLoadingKey(
-        Label targetLabel,
-        Key aspectConfigurationKey,
-        ConfiguredTargetKey baseConfiguredTargetKey,
-        SkylarkImport skylarkImport,
-        String skylarkFunctionName) {
-      super(
-          targetLabel,
-          aspectConfigurationKey,
-          baseConfiguredTargetKey,
-          skylarkImport,
-          skylarkFunctionName);
-    }
-
-    @Override
-    protected boolean isAspectConfigurationHost() {
-      return true;
+          aspectConfiguration);
     }
   }
 
@@ -528,14 +432,12 @@ public final class AspectValue extends ActionLookupValue {
       ImmutableList<AspectKey> baseKeys,
       AspectDescriptor aspectDescriptor,
       BuildConfiguration aspectConfiguration) {
-    KeyAndHost aspectKeyAndHost = ConfiguredTargetKey.keyFromConfiguration(aspectConfiguration);
     return createAspectKey(
         label,
         ConfiguredTargetKey.of(label, baseConfiguration),
         baseKeys,
         aspectDescriptor,
-        aspectKeyAndHost.key,
-        aspectKeyAndHost.isHost);
+        aspectConfiguration);
   }
 
   private static final Interner<AspectKey> aspectKeyInterner = BlazeInterners.newWeakInterner();
@@ -545,14 +447,12 @@ public final class AspectValue extends ActionLookupValue {
       BuildConfiguration baseConfiguration,
       AspectDescriptor aspectDescriptor,
       BuildConfiguration aspectConfiguration) {
-    KeyAndHost aspectKeyAndHost = ConfiguredTargetKey.keyFromConfiguration(aspectConfiguration);
     return createAspectKey(
         label,
         ConfiguredTargetKey.of(label, baseConfiguration),
         ImmutableList.of(),
         aspectDescriptor,
-        aspectKeyAndHost.key,
-        aspectKeyAndHost.isHost);
+        aspectConfiguration);
   }
 
   private static AspectKey createAspectKey(
@@ -560,14 +460,10 @@ public final class AspectValue extends ActionLookupValue {
       ConfiguredTargetKey configuredTargetKey,
       ImmutableList<AspectKey> aspectKeys,
       AspectDescriptor aspectDescriptor,
-      BuildConfigurationValue.Key aspectConfigurationKey,
-      boolean aspectConfigurationIsHost) {
+      BuildConfiguration aspectConfiguration) {
     return aspectKeyInterner.intern(
-        aspectConfigurationIsHost
-            ? new HostAspectKey(
-                label, aspectConfigurationKey, configuredTargetKey, aspectKeys, aspectDescriptor)
-            : new AspectKey(
-                label, aspectConfigurationKey, configuredTargetKey, aspectKeys, aspectDescriptor));
+        new AspectKey(
+            label, configuredTargetKey, aspectKeys, aspectDescriptor, aspectConfiguration));
   }
 
   private static final Interner<SkylarkAspectLoadingKey> skylarkAspectKeyInterner =
@@ -579,22 +475,12 @@ public final class AspectValue extends ActionLookupValue {
       BuildConfiguration targetConfiguration,
       SkylarkImport skylarkImport,
       String skylarkExportName) {
-    KeyAndHost keyAndHost = ConfiguredTargetKey.keyFromConfiguration(aspectConfiguration);
-    SkylarkAspectLoadingKey key =
-        keyAndHost.isHost
-            ? new HostSkylarkAspectLoadingKey(
-                targetLabel,
-                keyAndHost.key,
-                ConfiguredTargetKey.of(targetLabel, targetConfiguration),
-                skylarkImport,
-                skylarkExportName)
-            : new SkylarkAspectLoadingKey(
-                targetLabel,
-                keyAndHost.key,
-                ConfiguredTargetKey.of(targetLabel, targetConfiguration),
-                skylarkImport,
-                skylarkExportName);
-
-    return skylarkAspectKeyInterner.intern(key);
+    return skylarkAspectKeyInterner.intern(
+        new SkylarkAspectLoadingKey(
+            targetLabel,
+            aspectConfiguration,
+            ConfiguredTargetKey.of(targetLabel, targetConfiguration),
+            skylarkImport,
+            skylarkExportName));
   }
 }
