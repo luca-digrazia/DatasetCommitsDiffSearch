@@ -17,12 +17,10 @@ import static com.android.resources.ResourceType.DECLARE_STYLEABLE;
 import static com.android.resources.ResourceType.ID;
 import static com.android.resources.ResourceType.PUBLIC;
 
-import com.android.aapt.Resources.Reference;
 import com.android.aapt.Resources.Value;
 import com.android.resources.ResourceType;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.android.AndroidCompiledDataDeserializer.ReferenceResolver;
 import com.google.devtools.build.android.FullyQualifiedName.Factory;
@@ -30,7 +28,6 @@ import com.google.devtools.build.android.FullyQualifiedName.VirtualType;
 import com.google.devtools.build.android.ParsedAndroidData.KeyValueConsumer;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.DataValueXml;
-import com.google.devtools.build.android.resources.Visibility;
 import com.google.devtools.build.android.xml.ArrayXmlResourceValue;
 import com.google.devtools.build.android.xml.AttrXmlResourceValue;
 import com.google.devtools.build.android.xml.IdXmlResourceValue;
@@ -176,16 +173,13 @@ public class DataResourceXml implements DataResource {
 
   public static DataResourceXml from(
       Value protoValue,
-      Visibility visibility,
       DataSource source,
       ResourceType resourceType,
       ReferenceResolver packageResolver)
       throws InvalidProtocolBufferException {
     DataResourceXml dataResourceXml =
         createWithNamespaces(
-            source,
-            valueFromProto(protoValue, visibility, resourceType, packageResolver),
-            Namespaces.empty());
+            source, valueFromProto(protoValue, resourceType, packageResolver), Namespaces.empty());
     return dataResourceXml;
   }
 
@@ -217,24 +211,21 @@ public class DataResourceXml implements DataResource {
   }
 
   private static XmlResourceValue valueFromProto(
-      Value proto,
-      Visibility visibility,
-      ResourceType resourceType,
-      ReferenceResolver packageResolver)
+      Value proto, ResourceType resourceType, ReferenceResolver packageResolver)
       throws InvalidProtocolBufferException {
     switch (resourceType) {
       case STYLE:
-        return StyleXmlResourceValue.from(proto, visibility);
+        return StyleXmlResourceValue.from(proto);
       case ARRAY:
-        return ArrayXmlResourceValue.from(proto, visibility);
+        return ArrayXmlResourceValue.from(proto);
       case PLURALS:
-        return PluralXmlResourceValue.from(proto, visibility);
+        return PluralXmlResourceValue.from(proto);
       case ATTR:
-        return AttrXmlResourceValue.from(proto, visibility);
+        return AttrXmlResourceValue.from(proto);
       case STYLEABLE:
-        return StyleableXmlResourceValue.from(proto, visibility, packageResolver);
+        return StyleableXmlResourceValue.from(proto, packageResolver);
       case ID:
-        return IdXmlResourceValue.from(proto, visibility);
+        return IdXmlResourceValue.of();
       case DIMEN:
       case LAYOUT:
       case STRING:
@@ -254,7 +245,7 @@ public class DataResourceXml implements DataResource {
       case TRANSITION:
       case FONT:
       case XML:
-        return SimpleXmlResourceValue.from(proto, visibility, resourceType);
+        return SimpleXmlResourceValue.from(proto, resourceType);
       default:
         throw new IllegalArgumentException("Unhandled type " + resourceType + " from " + proto);
     }
@@ -453,15 +444,5 @@ public class DataResourceXml implements DataResource {
     }
     DataResourceXml other = (DataResourceXml) value;
     return xml.compareMergePriorityTo(other.xml);
-  }
-
-  @Override
-  public Visibility getVisibility() {
-    return xml.getVisibility();
-  }
-
-  @Override
-  public ImmutableList<Reference> getReferencedResources() {
-    return xml.getReferencedResources();
   }
 }

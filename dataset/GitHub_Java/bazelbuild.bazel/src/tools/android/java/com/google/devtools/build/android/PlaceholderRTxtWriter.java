@@ -16,6 +16,7 @@ package com.google.devtools.build.android;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.android.resources.ResourceType;
+import com.google.common.base.Optional;
 import java.io.BufferedWriter;
 import java.io.Flushable;
 import java.io.IOException;
@@ -68,6 +69,9 @@ final class PlaceholderRTxtWriter implements Flushable, AndroidResourceSymbolSin
       attrSet.add(PlaceholderIdFieldInitializerBuilder.normalizeAttrName(attr));
     }
   }
+
+  @Override
+  public void acceptPublicResource(ResourceType type, String name, Optional<Integer> value) {}
 
   @Override
   public void flush() throws IOException {
