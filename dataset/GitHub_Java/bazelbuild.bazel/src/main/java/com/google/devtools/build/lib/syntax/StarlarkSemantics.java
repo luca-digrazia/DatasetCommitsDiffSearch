@@ -52,7 +52,6 @@ public abstract class StarlarkSemantics {
         StarlarkSemantics::experimentalStarlarkConfigTransitions),
     EXPERIMENTAL_STARLARK_UNUSED_INPUTS_LIST(
         StarlarkSemantics::experimentalStarlarkUnusedInputsList),
-    INCOMPATIBLE_DISABLE_DEPSET_INPUTS(StarlarkSemantics::incompatibleDisableDepsetItems),
     INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT(StarlarkSemantics::incompatibleNoOutputAttrDefault),
     INCOMPATIBLE_NO_RULE_OUTPUTS_PARAM(StarlarkSemantics::incompatibleNoRuleOutputsParam),
     INCOMPATIBLE_NO_TARGET_OUTPUT_GROUP(StarlarkSemantics::incompatibleNoTargetOutputGroup),
@@ -150,8 +149,6 @@ public abstract class StarlarkSemantics {
   public abstract boolean incompatibleDisableThirdPartyLicenseChecking();
 
   public abstract boolean incompatibleDisableDeprecatedAttrParams();
-
-  public abstract boolean incompatibleDisableDepsetItems();
 
   public abstract boolean incompatibleDisallowDictPlus();
 
@@ -264,7 +261,6 @@ public abstract class StarlarkSemantics {
           .incompatibleDisableTargetProviderFields(false)
           .incompatibleDisableThirdPartyLicenseChecking(true)
           .incompatibleDisableDeprecatedAttrParams(true)
-          .incompatibleDisableDepsetItems(false)
           .incompatibleDisallowDictPlus(true)
           .incompatibleDisallowEmptyGlob(false)
           .incompatibleDisallowLegacyJavaProvider(false)
@@ -333,8 +329,6 @@ public abstract class StarlarkSemantics {
     public abstract Builder incompatibleDisableThirdPartyLicenseChecking(boolean value);
 
     public abstract Builder incompatibleDisableDeprecatedAttrParams(boolean value);
-
-    public abstract Builder incompatibleDisableDepsetItems(boolean value);
 
     public abstract Builder incompatibleDisallowDictPlus(boolean value);
 

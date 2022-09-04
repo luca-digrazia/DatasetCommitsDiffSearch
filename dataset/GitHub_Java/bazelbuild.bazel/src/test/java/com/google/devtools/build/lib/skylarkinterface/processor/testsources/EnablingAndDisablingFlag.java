@@ -17,12 +17,11 @@ package com.google.devtools.build.lib.skylarkinterface.processor.testsources;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /**
  * Test case for a SkylarkCallable method which has both enablingFlag and disablingFlag specified.
  */
-public class EnablingAndDisablingFlag implements StarlarkValue {
+public class EnablingAndDisablingFlag {
 
   @SkylarkCallable(
       name = "someMethod",
@@ -31,8 +30,8 @@ public class EnablingAndDisablingFlag implements StarlarkValue {
         @Param(name = "one", type = String.class, named = true),
         @Param(name = "two", type = Integer.class, named = true),
       },
-      enableOnlyWithFlag = FlagIdentifier.INCOMPATIBLE_APPLICABLE_LICENSES,
-      disableWithFlag = FlagIdentifier.INCOMPATIBLE_APPLICABLE_LICENSES)
+      enableOnlyWithFlag = FlagIdentifier.INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT,
+      disableWithFlag = FlagIdentifier.INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT)
   public String someMethod(String one, Integer two) {
     return "foo";
   }
