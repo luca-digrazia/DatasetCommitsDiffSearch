@@ -103,15 +103,14 @@ public class AutoCodecProcessor extends AbstractProcessor {
           codecClassBuilder = buildClassWithPublicFieldsStrategy(encodedType);
           break;
         case SINGLETON:
-          codecClassBuilder = buildClassWithSingletonStrategy(encodedType, env);
+          codecClassBuilder = buildClassWithSingletonStrategy(encodedType);
           break;
         default:
           throw new IllegalArgumentException("Unknown strategy: " + annotation.strategy());
       }
       codecClassBuilder.addMethod(
-          AutoCodecUtil.initializeGetEncodedClassMethod(encodedType, env)
-              .addStatement(
-                  "return $T.class", TypeName.get(env.getTypeUtils().erasure(encodedType.asType())))
+          AutoCodecUtil.initializeGetEncodedClassMethod(encodedType)
+              .addStatement("return $T.class", TypeName.get(encodedType.asType()))
               .build());
       String packageName =
           env.getElementUtils().getPackageOf(encodedType).getQualifiedName().toString();
@@ -134,8 +133,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
     ExecutableElement constructor = selectInstantiator(encodedType);
     List<? extends VariableElement> fields = constructor.getParameters();
 
-    TypeSpec.Builder codecClassBuilder =
-        AutoCodecUtil.initializeCodecClassBuilder(encodedType, env);
+    TypeSpec.Builder codecClassBuilder = AutoCodecUtil.initializeCodecClassBuilder(encodedType);
 
     if (encodedType.getAnnotation(AutoValue.class) == null) {
       initializeUnsafeOffsets(codecClassBuilder, encodedType, fields);
@@ -146,9 +144,9 @@ public class AutoCodecProcessor extends AbstractProcessor {
     }
 
     MethodSpec.Builder deserializeBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType);
     buildDeserializeBody(deserializeBuilder, fields);
-    addReturnNew(deserializeBuilder, encodedType, constructor, env);
+    addReturnNew(deserializeBuilder, encodedType, constructor);
     codecClassBuilder.addMethod(deserializeBuilder.build());
 
     return codecClassBuilder;
@@ -202,7 +200,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
   private MethodSpec buildSerializeMethodWithInstantiator(
       TypeElement encodedType, List<? extends VariableElement> fields) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
     for (VariableElement parameter : fields) {
       Optional<FieldValueAndClass> hasField =
           getFieldByNameRecursive(encodedType, parameter.getSimpleName().toString());
@@ -287,7 +285,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
   private MethodSpec buildSerializeMethodWithInstantiatorForAutoValue(
       TypeElement encodedType, List<? extends VariableElement> fields) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
     for (VariableElement parameter : fields) {
       addSerializeParameterWithGetter(encodedType, parameter, serializeBuilder);
     }
@@ -295,8 +293,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
   }
 
   private TypeSpec.Builder buildClassWithPublicFieldsStrategy(TypeElement encodedType) {
-    TypeSpec.Builder codecClassBuilder =
-        AutoCodecUtil.initializeCodecClassBuilder(encodedType, env);
+    TypeSpec.Builder codecClassBuilder = AutoCodecUtil.initializeCodecClassBuilder(encodedType);
     ImmutableList<? extends VariableElement> publicFields =
         ElementFilter.fieldsIn(env.getElementUtils().getAllMembers(encodedType))
             .stream()
@@ -304,7 +301,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
             .collect(toImmutableList());
     codecClassBuilder.addMethod(buildSerializeMethodWithPublicFields(encodedType, publicFields));
     MethodSpec.Builder deserializeBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType);
     buildDeserializeBody(deserializeBuilder, publicFields);
     addInstantiatePopulateFieldsAndReturn(deserializeBuilder, encodedType, publicFields);
     codecClassBuilder.addMethod(deserializeBuilder.build());
@@ -322,7 +319,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
   private MethodSpec buildSerializeMethodWithPublicFields(
       TypeElement encodedType, List<? extends VariableElement> fields) {
     MethodSpec.Builder serializeBuilder =
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType);
     for (VariableElement parameter : fields) {
       String paramAccessor = "input." + parameter.getSimpleName();
       marshallers.writeSerializationCode(
@@ -353,10 +350,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
    * <p>Used by the {@link AutoCodec.Strategy#INSTANTIATOR} strategy.
    */
   private static void addReturnNew(
-      MethodSpec.Builder builder,
-      TypeElement type,
-      ExecutableElement instantiator,
-      ProcessingEnvironment env) {
+      MethodSpec.Builder builder, TypeElement type, ExecutableElement instantiator) {
     List<? extends TypeMirror> allThrown = instantiator.getThrownTypes();
     if (!allThrown.isEmpty()) {
       builder.beginControlFlow("try");
@@ -368,8 +362,7 @@ public class AutoCodecProcessor extends AbstractProcessor {
             .map(AutoCodecProcessor::handleFromParameter)
             .collect(Collectors.joining(", "));
     if (instantiator.getKind().equals(ElementKind.CONSTRUCTOR)) {
-      builder.addStatement(
-          "return new $T($L)", TypeName.get(env.getTypeUtils().erasure(type.asType())), parameters);
+      builder.addStatement("return new $T($L)", TypeName.get(type.asType()), parameters);
     } else { // Otherwise, it's a factory method.
       builder.addStatement(
           "return $T.$L($L)",
@@ -480,15 +473,13 @@ public class AutoCodecProcessor extends AbstractProcessor {
     return Optional.empty();
   }
 
-  private static TypeSpec.Builder buildClassWithSingletonStrategy(
-      TypeElement encodedType, ProcessingEnvironment env) {
-    TypeSpec.Builder codecClassBuilder =
-        AutoCodecUtil.initializeCodecClassBuilder(encodedType, env);
+  private static TypeSpec.Builder buildClassWithSingletonStrategy(TypeElement encodedType) {
+    TypeSpec.Builder codecClassBuilder = AutoCodecUtil.initializeCodecClassBuilder(encodedType);
     // Serialization is a no-op.
     codecClassBuilder.addMethod(
-        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType, env).build());
+        AutoCodecUtil.initializeSerializeMethodBuilder(encodedType).build());
     MethodSpec.Builder deserializeMethodBuilder =
-        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType, env);
+        AutoCodecUtil.initializeDeserializeMethodBuilder(encodedType);
     deserializeMethodBuilder.addStatement("return $T.INSTANCE", TypeName.get(encodedType.asType()));
     codecClassBuilder.addMethod(deserializeMethodBuilder.build());
     return codecClassBuilder;
