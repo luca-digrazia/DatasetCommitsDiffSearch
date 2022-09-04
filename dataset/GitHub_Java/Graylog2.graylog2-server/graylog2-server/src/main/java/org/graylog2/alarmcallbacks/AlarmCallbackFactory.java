@@ -16,10 +16,10 @@
  */
 package org.graylog2.alarmcallbacks;
 
-import com.google.inject.Injector;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallback;
 import org.graylog2.plugin.alarms.callbacks.AlarmCallbackConfigurationException;
 import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.shared.bindings.InstantiationService;
 
 import javax.inject.Inject;
 import java.util.Set;
@@ -28,13 +28,13 @@ import java.util.Set;
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class AlarmCallbackFactory {
-    private Injector injector;
+    private InstantiationService instantiationService;
     private final Set<Class<? extends AlarmCallback>> availableAlarmCallbacks;
 
     @Inject
-    public AlarmCallbackFactory(Injector injector,
+    public AlarmCallbackFactory(InstantiationService instantiationService,
                                 Set<Class<? extends AlarmCallback>> availableAlarmCallbacks) {
-        this.injector = injector;
+        this.instantiationService = instantiationService;
         this.availableAlarmCallbacks = availableAlarmCallbacks;
     }
 
@@ -54,6 +54,6 @@ public class AlarmCallbackFactory {
     }
 
     public AlarmCallback create(Class<? extends AlarmCallback> alarmCallbackClass) {
-        return injector.getInstance(alarmCallbackClass);
+        return instantiationService.getInstance(alarmCallbackClass);
     }
 }

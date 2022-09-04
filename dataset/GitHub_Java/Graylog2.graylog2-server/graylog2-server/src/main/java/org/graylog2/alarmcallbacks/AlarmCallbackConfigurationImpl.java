@@ -1,22 +1,19 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * This file is part of Graylog.
  *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.alarmcallbacks;
 
 import com.google.common.collect.Maps;
@@ -37,7 +34,7 @@ import java.util.Map;
 public class AlarmCallbackConfigurationImpl extends PersistedImpl implements AlarmCallbackConfiguration {
     private ObjectId stream_id;
     private String type;
-    private Configuration configuration;
+    private Map<String, Object> configuration;
     private DateTime createdAt;
     private String creatorUserId;
 
@@ -56,53 +53,29 @@ public class AlarmCallbackConfigurationImpl extends PersistedImpl implements Ala
         }
 
         this.type = (String)fields.get("type");
-        this.configuration = new Configuration((Map<String, Object>)fields.get("configuration"));
+        this.configuration = (Map<String, Object>)fields.get("configuration");
         this.createdAt = (DateTime)fields.get("created_at");
         this.creatorUserId = (String) fields.get("creator_user_id");
     }
 
     public String getStreamId() {
-        return stream_id.toStringMongod();
+        return stream_id.toHexString();
     }
 
     public String getType() {
         return type;
     }
 
-    public Configuration getConfiguration() {
+    public Map<String, Object> getConfiguration() {
         return configuration;
-    }
-
-    public void setStream(Stream stream) {
-        setStreamId(stream.getId());
-    }
-
-    public void setStreamId(String stream_id) {
-        this.stream_id = new ObjectId(stream_id);
-    }
-
-    public void setType(String type) {
-        this.type = type;
-    }
-
-    public void setConfiguration(Configuration configuration) {
-        this.configuration = configuration;
     }
 
     public DateTime getCreatedAt() {
         return createdAt;
     }
 
-    public void setCreatedAt(DateTime createdAt) {
-        this.createdAt = createdAt;
-    }
-
     public String getCreatorUserId() {
         return creatorUserId;
-    }
-
-    public void setCreatorUserId(String creatorUserId) {
-        this.creatorUserId = creatorUserId;
     }
 
     @Override
@@ -123,7 +96,7 @@ public class AlarmCallbackConfigurationImpl extends PersistedImpl implements Ala
         result.put("id", getId());
         result.put("stream_id", getStreamId());
         result.put("type", getType());
-        result.put("configuration", getConfiguration().getSource());
+        result.put("configuration", getConfiguration());
         result.put("created_at", getCreatedAt());
         result.put("creator_user_id", getCreatorUserId());
 

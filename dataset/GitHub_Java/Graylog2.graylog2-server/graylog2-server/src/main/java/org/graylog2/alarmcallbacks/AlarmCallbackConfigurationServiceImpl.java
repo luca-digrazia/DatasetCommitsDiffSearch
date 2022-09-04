@@ -16,43 +16,40 @@
  */
 package org.graylog2.alarmcallbacks;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import com.mongodb.DBCollection;
+import com.mongodb.BasicDBObject;
+import com.mongodb.DBObject;
 import org.bson.types.ObjectId;
-import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
-import org.graylog2.database.CollectionName;
 import org.graylog2.database.MongoConnection;
+import org.graylog2.database.PersistedServiceImpl;
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.rest.models.alarmcallbacks.requests.CreateAlarmCallbackRequest;
-import org.mongojack.DBCursor;
-import org.mongojack.DBQuery;
-import org.mongojack.JacksonDBCollection;
 
 import javax.inject.Inject;
-import java.util.Date;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class AlarmCallbackConfigurationServiceImpl implements AlarmCallbackConfigurationService {
-    private final JacksonDBCollection<AlarmCallbackConfigurationImpl, String> coll;
-
+public class AlarmCallbackConfigurationServiceImpl extends PersistedServiceImpl implements AlarmCallbackConfigurationService {
     @Inject
-    public AlarmCallbackConfigurationServiceImpl(MongoConnection mongoConnection,
-                                                 MongoJackObjectMapperProvider mapperProvider) {
-        final String collectionName = AlarmCallbackConfigurationImpl.class.getAnnotation(CollectionName.class).value();
-        final DBCollection dbCollection = mongoConnection.getDatabase().getCollection(collectionName);
-        this.coll = JacksonDBCollection.wrap(dbCollection, AlarmCallbackConfigurationImpl.class, String.class, mapperProvider.get());
-        dbCollection.createIndex(AlarmCallbackConfigurationImpl.FIELD_STREAM_ID);
+    public AlarmCallbackConfigurationServiceImpl(MongoConnection mongoConnection) {
+        super(mongoConnection);
     }
 
     @Override
     public List<AlarmCallbackConfiguration> getForStreamId(String streamId) {
-        try (DBCursor<AlarmCallbackConfigurationImpl> dbCursor = coll.find(DBQuery.is("stream_id", streamId))) {
-            return ImmutableList.copyOf((Iterable<AlarmCallbackConfigurationImpl>) dbCursor);
+        final List<AlarmCallbackConfiguration> alarmCallbackConfigurations = Lists.newArrayList();
+        final List<DBObject> respConfigurations = query(AlarmCallbackConfigurationImpl.class,
+                new BasicDBObject("stream_id", streamId)
+        );
+
+        for (DBObject configuration : respConfigurations) {
+            alarmCallbackConfigurations.add(new AlarmCallbackConfigurationImpl((ObjectId) configuration.get("_id"), configuration.toMap()));
         }
+
+        return alarmCallbackConfigurations;
     }
 
     @Override
@@ -62,53 +59,48 @@ public class AlarmCallbackConfigurationServiceImpl implements AlarmCallbackConfi
 
     @Override
     public AlarmCallbackConfiguration load(String alarmCallbackId) {
-        return coll.findOneById(alarmCallbackId);
+        DBObject rawModel = get(AlarmCallbackConfigurationImpl.class, alarmCallbackId);
+        return (rawModel == null ? null : new AlarmCallbackConfigurationImpl((ObjectId) (rawModel.get("_id")), rawModel.toMap()));
     }
 
     @Override
     public AlarmCallbackConfiguration create(String streamId, CreateAlarmCallbackRequest request, String userId) {
-        return AlarmCallbackConfigurationImpl.create(new ObjectId().toHexString(), streamId, request.type(), request.title(), request.configuration(), new Date(), userId);
+        Map<String, Object> fields = Maps.newHashMap();
+        fields.put("stream_id", new ObjectId(streamId));
+        fields.put("type", request.type);
+        fields.put("configuration", request.configuration);
+        fields.put("created_at", Tools.iso8601());
+        fields.put("creator_user_id", userId);
+
+        return new AlarmCallbackConfigurationImpl(fields);
     }
 
     @Override
     public long count() {
-        return coll.count();
+        return count(AlarmCallbackConfigurationImpl.class, new BasicDBObject());
     }
 
     @Override
-    public Map<String, Long> countPerType() {
-        final HashMap<String, Long> result = Maps.newHashMap();
-
-        try(DBCursor<AlarmCallbackConfigurationImpl> avs = coll.find()) {
-            for (AlarmCallbackConfigurationImpl av : avs) {
-                Long count = result.get(av.getType());
-                if (count == null) {
-                    count = 0L;
-                }
-                result.put(av.getType(), count + 1);
-            }
-        }
-
-        return result;
+    public AlarmCallbackConfiguration update(String streamId, String alarmCallbackId, Map<String, Object> deltas) {
+        return null;
     }
 
     @Override
     public String save(AlarmCallbackConfiguration model) throws ValidationException {
-        return coll.save(implOrFail(model)).getSavedId();
+
+        return super.save(getImplOrFail(model));
     }
 
     @Override
     public int destroy(AlarmCallbackConfiguration model) {
-        return coll.removeById(model.getId()).getN();
+        return super.destroy(getImplOrFail(model));
     }
 
-    private AlarmCallbackConfigurationImpl implOrFail(AlarmCallbackConfiguration callback) {
-        final AlarmCallbackConfigurationImpl callbackImpl;
-        if (callback instanceof AlarmCallbackConfigurationImpl) {
-            callbackImpl = (AlarmCallbackConfigurationImpl) callback;
-            return callbackImpl;
+    private AlarmCallbackConfigurationImpl getImplOrFail(AlarmCallbackConfiguration alarmCallback) {
+        if (alarmCallback instanceof AlarmCallbackConfigurationImpl) {
+            return (AlarmCallbackConfigurationImpl) alarmCallback;
         } else {
-            throw new IllegalArgumentException("Supplied output must be of implementation type AlarmCallbackConfigurationAVImpl, not " + callback.getClass());
+            throw new IllegalArgumentException("Argument must be of implementation class AlarmCallbackConfigurationImpl, not " + alarmCallback.getClass());
         }
     }
 }
