@@ -258,8 +258,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     getOutputPath().createDirectoryAndParents();
     ImmutableList<PrecomputedValue.Injected> extraPrecomputedValues =
         ImmutableList.of(
-            PrecomputedValue.injected(
-                PrecomputedValue.STARLARK_SEMANTICS, StarlarkSemantics.DEFAULT_SEMANTICS),
             PrecomputedValue.injected(PrecomputedValue.REPO_ENV, ImmutableMap.<String, String>of()),
             PrecomputedValue.injected(
                 RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
@@ -584,7 +582,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         /*extendedSanityChecks=*/ false,
         /*allowAnalysisFailures=*/ false,
         reporter,
-        skyframeExecutor.getSkyFunctionEnvironmentForTesting(reporter));
+        /* env= */ null);
   }
 
   /**
@@ -2002,7 +2000,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
     @Override
     public StarlarkSemantics getSkylarkSemantics() {
-      return starlarkSemanticsOptions.toSkylarkSemantics();
+      throw new UnsupportedOperationException();
     }
 
     @Override
@@ -2251,3 +2249,4 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
     }
   }
 }
+

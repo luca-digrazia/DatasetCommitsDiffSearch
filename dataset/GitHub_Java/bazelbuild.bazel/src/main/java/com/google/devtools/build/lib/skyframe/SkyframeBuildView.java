@@ -71,7 +71,6 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.skyframe.AspectFunction.AspectCreationException;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction.ConfiguredValueCreationException;
-import com.google.devtools.build.lib.skyframe.RegisteredExecutionPlatformsFunction.InvalidExecutionPlatformLabelException;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ConflictException;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
@@ -671,9 +670,7 @@ public final class SkyframeBuildView {
               || cause instanceof SkylarkImportFailedException
               // Only if we run the reduced loading phase and then analyze with --nokeep_going.
               || cause instanceof NoSuchTargetException
-              || cause instanceof NoSuchPackageException
-              // Platform-related:
-              || cause instanceof InvalidExecutionPlatformLabelException,
+              || cause instanceof NoSuchPackageException,
           "%s -> %s",
           key,
           errorInfo);

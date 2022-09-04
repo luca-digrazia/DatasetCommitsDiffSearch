@@ -895,8 +895,7 @@ public class ConfiguredRuleClassProvider implements RuleClassProvider {
             toolsRepository,
             configurationFragmentMap,
             repoMapping,
-            new SymbolGenerator<>(callerLabel),
-            /* analysisRuleLabel= */ null);
+            new SymbolGenerator<>(callerLabel));
     Environment env =
         Environment.builder(mutability)
             .setGlobals(globals)

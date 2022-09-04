@@ -379,7 +379,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
         reporter, ModifiedFileSet.EVERYTHING_MODIFIED, Root.fromPath(rootDirectory));
 
     TargetPatternPhaseValue loadingResult =
-        skyframeExecutor.loadTargetPatternsWithFilters(
+        skyframeExecutor.loadTargetPatterns(
             reporter,
             ImmutableList.copyOf(labels),
             PathFragment.EMPTY_FRAGMENT,
