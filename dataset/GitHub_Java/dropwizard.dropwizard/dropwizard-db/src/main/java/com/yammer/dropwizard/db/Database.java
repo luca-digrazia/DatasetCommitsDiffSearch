@@ -1,22 +1,21 @@
 package com.yammer.dropwizard.db;
 
-import ch.qos.logback.classic.Level;
-import ch.qos.logback.classic.Logger;
 import com.yammer.dropwizard.db.args.OptionalArgumentFactory;
-import com.yammer.dropwizard.db.logging.LogbackLog;
 import com.yammer.dropwizard.lifecycle.Managed;
 import com.yammer.metrics.Metrics;
 import com.yammer.metrics.jdbi.InstrumentedTimingCollector;
+import org.apache.log4j.Level;
+import org.apache.log4j.Logger;
 import org.apache.tomcat.dbcp.pool.ObjectPool;
 import org.skife.jdbi.v2.DBI;
 import org.skife.jdbi.v2.Handle;
-import org.slf4j.LoggerFactory;
+import org.skife.jdbi.v2.logging.Log4JLog;
 
 import javax.sql.DataSource;
 import java.sql.SQLException;
 
 public class Database extends DBI implements Managed {
-    private static final Logger LOGGER = (Logger) LoggerFactory.getLogger(Database.class);
+    private static final Logger LOGGER = Logger.getLogger(Database.class);
 
     private final ObjectPool pool;
     private final String validationQuery;
@@ -25,7 +24,7 @@ public class Database extends DBI implements Managed {
         super(dataSource);
         this.pool = pool;
         this.validationQuery = validationQuery;
-        setSQLLog(new LogbackLog(LOGGER, Level.TRACE));
+        setSQLLog(new Log4JLog(LOGGER, Level.TRACE));
         setTimingCollector(new InstrumentedTimingCollector(Metrics.defaultRegistry()));
         setStatementRewriter(new NamePrependingStatementRewriter());
         registerArgumentFactory(new OptionalArgumentFactory());

@@ -14,31 +14,31 @@ import org.skife.jdbi.v2.Handle;
 import org.skife.jdbi.v2.Query;
 import org.skife.jdbi.v2.util.StringMapper;
 
+import java.sql.SQLException;
 import java.sql.Types;
 
-import static com.yammer.dropwizard.db.DatabaseConfiguration.DatabaseConnectionConfiguration;
 import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 public class DatabaseTest {
-    private final DatabaseConfiguration config = new DatabaseConfiguration();
-    private final DatabaseConnectionConfiguration hsqlConfig = new DatabaseConnectionConfiguration();
+    private final DatabaseConfiguration hsqlConfig = new DatabaseConfiguration();
     {
         LoggingFactory.bootstrap();
         hsqlConfig.setUrl("jdbc:hsqldb:mem:DbTest-"+System.currentTimeMillis());
         hsqlConfig.setUser("sa");
         hsqlConfig.setDriverClass("org.hsqldb.jdbcDriver");
-        config.addConnection("hsql", hsqlConfig);
+        hsqlConfig.setValidationQuery("SELECT 1 FROM INFORMATION_SCHEMA.SYSTEM_USERS");
     }
-    private final DatabaseFactory factory = new DatabaseFactory(config);
     private final Environment environment = mock(Environment.class);
+    private final DatabaseFactory factory = new DatabaseFactory(environment);
     private Database database;
 
     @Before
     public void setUp() throws Exception {
-        this.database = factory.build("hsql", environment);
+        this.database = factory.build(hsqlConfig, "hsql");
         final Handle handle = database.open();
         try {
             handle.createCall("DROP TABLE people IF EXISTS").invoke();
@@ -87,7 +87,7 @@ public class DatabaseTest {
 
     @Test
     public void managesTheDatabaseWithTheEnvironment() throws Exception {
-        final Database db = factory.build("hsql", environment);
+        final Database db = factory.build(hsqlConfig, "hsql");
 
         verify(environment).manage(db);
     }
@@ -111,6 +111,17 @@ public class DatabaseTest {
                        is(ImmutableList.of("Coda Hale", "Kris Gale", "Old Guy")));
         } finally {
             database.close(dao);
+        }
+    }
+
+    @Test
+    @SuppressWarnings("CallToPrintStackTrace")
+    public void pingWorks() throws Exception {
+        try {
+            database.ping();
+        } catch (SQLException e) {
+            e.printStackTrace();
+            fail("shouldn't have thrown an exception but did");
         }
     }
 }

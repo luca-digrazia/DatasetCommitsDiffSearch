@@ -43,7 +43,7 @@ public class DatabaseFactory {
                                                                                           pool,
                                                                                           null,
                                                                                           connectionConfig.getValidationQuery(),
-                                                                                          connectionConfig.isDefaultReadOnly(),
+                                                                                          false,
                                                                                           true);
         connectionFactory.setPool(pool);
 
