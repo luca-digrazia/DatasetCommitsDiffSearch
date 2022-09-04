@@ -19,13 +19,11 @@ import org.apache.http.conn.DnsResolver;
 import org.apache.http.conn.routing.HttpRoutePlanner;
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 import org.apache.http.conn.socket.PlainConnectionSocketFactory;
-import org.apache.http.conn.ssl.NoopHostnameVerifier;
 import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
 import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.SystemDefaultCredentialsProvider;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -80,11 +78,6 @@ public class JerseyClientBuilderTest {
         when(environment.getObjectMapper()).thenReturn(objectMapper);
         when(environment.getValidator()).thenReturn(validator);
         builder.setApacheHttpClientBuilder(apacheHttpClientBuilder);
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        executorService.shutdown();
     }
 
     @Test
@@ -279,7 +272,8 @@ public class JerseyClientBuilderTest {
         }}, null);
         final Registry<ConnectionSocketFactory> customRegistry = RegistryBuilder.<ConnectionSocketFactory>create()
                 .register("http", PlainConnectionSocketFactory.getSocketFactory())
-                .register("https", new SSLConnectionSocketFactory(ctx, new NoopHostnameVerifier()))
+                .register("https", new SSLConnectionSocketFactory(ctx,
+                        SSLConnectionSocketFactory.ALLOW_ALL_HOSTNAME_VERIFIER))
                 .build();
         builder.using(customRegistry);
         verify(apacheHttpClientBuilder).using(customRegistry);
