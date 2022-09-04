@@ -155,14 +155,7 @@ public class StreamRouterEngine {
 
             final StreamRule streamRule = rule.getStreamRule();
             final StreamRuleType streamRuleType = streamRule.getType();
-            final Stream.MatchingType matchingType = rule.getMatchingType();
             if (streamRuleType != StreamRuleType.PRESENCE && !message.hasField(streamRule.getField())) {
-                if (matchingType == Stream.MatchingType.AND) {
-                    result.remove(rule.getStream());
-                    // blacklist stream because it can't match anymore
-                    blackList.add(rule.getStream());
-                }
-
                 continue;
             }
 
@@ -173,6 +166,7 @@ public class StreamRouterEngine {
                 stream = rule.matchWithTimeOut(message, streamProcessingTimeout, TimeUnit.MILLISECONDS);
             }
 
+            final Stream.MatchingType matchingType = rule.getMatchingType();
             if (stream == null) {
                 if (matchingType == Stream.MatchingType.AND) {
                     result.remove(rule.getStream());
@@ -322,7 +316,7 @@ public class StreamRouterEngine {
                     return matches.values().contains(false);
                 case AND:
                 default:
-                    return matches.size() > 0 && !matches.values().contains(false);
+                    return !matches.values().contains(false);
             }
         }
 
