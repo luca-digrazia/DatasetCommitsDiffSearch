@@ -25,7 +25,9 @@ import java.util.Set;
 import com.google.common.collect.Lists;
 import org.elasticsearch.index.query.FilterBuilder;
 import org.elasticsearch.index.query.FilterBuilders;
-import org.graylog2.indexer.searches.timeranges.*;
+import org.graylog2.indexer.searches.timeranges.AbsoluteRange;
+import org.graylog2.indexer.searches.timeranges.RelativeRange;
+import org.graylog2.indexer.searches.timeranges.TimeRange;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
 import org.joda.time.format.DateTimeFormat;
@@ -57,7 +59,7 @@ public class IndexHelper {
         return r;
     }
 
-    public static FilterBuilder getTimestampRangeFilter(TimeRange range) throws InvalidRangeFormatException {
+    public static FilterBuilder getTimestampRangeFilter(TimeRange range) {
     	if (range == null) {
     		return null;
     	}
@@ -66,25 +68,16 @@ public class IndexHelper {
             case RELATIVE:
                 return relativeFilterBuilder((RelativeRange) range);
             case ABSOLUTE:
-                return fromToRangeFilterBuilder((AbsoluteRange) range);
-            case KEYWORD:
-                return fromToRangeFilterBuilder((KeywordRange) range);
+                return absoluteFilterBuilder((AbsoluteRange) range);
             default:
                 throw new RuntimeException("No such range type: [" + range.getType() + "]");
         }
     }
 
-    private static FilterBuilder fromToRangeFilterBuilder(FromToRange range) throws InvalidRangeFormatException {
+    private static FilterBuilder absoluteFilterBuilder(AbsoluteRange range) {
         // Parse to DateTime first because it is intelligent and can deal with missing microseconds for example.
-        DateTime fromDate;
-        DateTime toDate;
-
-        try {
-            fromDate = DateTime.parse(range.getFrom(), Tools.timeFormatterWithOptionalMilliseconds());
-            toDate = DateTime.parse(range.getTo(), Tools.timeFormatterWithOptionalMilliseconds());
-        } catch(IllegalArgumentException e) {
-            throw new InvalidRangeFormatException();
-        }
+        DateTime fromDate = DateTime.parse(range.getFrom(), Tools.timeFormatterWithOptionalMilliseconds());
+        DateTime toDate = DateTime.parse(range.getTo(), Tools.timeFormatterWithOptionalMilliseconds());
 
         return FilterBuilders.rangeFilter("timestamp")
                 .gte(Tools.buildElasticSearchTimeFormatFromDateTime(fromDate))
@@ -120,7 +113,5 @@ public class IndexHelper {
         
         return r;
     }
-
-    public static class InvalidRangeFormatException extends Throwable {
-    }
+    
 }

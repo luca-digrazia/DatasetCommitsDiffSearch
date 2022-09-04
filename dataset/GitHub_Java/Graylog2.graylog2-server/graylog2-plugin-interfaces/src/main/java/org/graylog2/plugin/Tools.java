@@ -24,9 +24,13 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.management.ManagementFactory;
-import java.net.*;
-import java.text.DecimalFormat;
-import java.util.*;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.List;
+import java.util.UUID;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.InflaterInputStream;
 
@@ -35,7 +39,6 @@ import org.drools.util.codec.Base64;
 import org.elasticsearch.search.SearchHit;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
-import org.joda.time.Instant;
 import org.joda.time.format.*;
 
 /**
@@ -45,10 +48,8 @@ import org.joda.time.format.*;
  */
 public final class Tools {
 
-    public static final String ES_DATE_FORMAT = "yyyy-MM-dd HH:mm:ss.SSS";
-    public static final String ES_DATE_FORMAT_NO_MS = "yyyy-MM-dd HH:mm:ss";
-
-    private static final DecimalFormat doubleTimestampFormatter = new DecimalFormat("#.###");
+    public static final String ES_DATE_FORMAT = "yyyy-MM-dd HH-mm-ss.SSS";
+    public static final String ES_DATE_FORMAT_NO_MS = "yyyy-MM-dd HH-mm-ss";
 
     private Tools() { }
 
@@ -247,37 +248,23 @@ public final class Tools {
         return list;
     }
 
-    public static String buildElasticSearchTimeFormat(DateTime timestamp) {
-        return timestamp.toString(DateTimeFormat.forPattern(ES_DATE_FORMAT));
+    public static String buildElasticSearchTimeFormat(Object timestamp) {
+        if (timestamp instanceof Double || timestamp instanceof Integer) {
+            return buildElasticSearchTimeFormatFromDouble((Double) timestamp);
+        }
+
+        if (timestamp instanceof DateTime) {
+            return buildElasticSearchTimeFormatFromDateTime((DateTime) timestamp);
+        }
+
+        return buildElasticSearchTimeFormatFromDouble((getUTCTimestampWithMilliseconds()));
     }
 
-    /*
-     * The double representation of a UNIX timestamp with milliseconds is a strange, human readable format.
-     * We need to rip it apart and build milliseconds since UNIX from it to have a long value.
-     *
-     * This sucks and no format should use the double representation. Change GELF to use long. (zomg)
-     */
-    public static DateTime dateTimeFromDouble(double x) {
-        String d = doubleTimestampFormatter.format(x);
-        int delimiterPos = d.indexOf(".");
+    public static String buildElasticSearchTimeFormatFromDouble(double timestamp) {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeInMillis((long) (1000 * timestamp));
 
-        int scan = 0;
-        if (delimiterPos == -1) {
-            scan = d.length();
-        } else {
-            scan = delimiterPos;
-        }
-
-        // Get everything to the delimiter and multiply *1000 to get a long of milliseconds since UNIX.
-        long epoch = Integer.parseInt(d.substring(0, scan))*1000L;
-
-        int fraction = 0;
-        if (delimiterPos != -1) {
-            // Add the fraction which already is in milliseconds.
-            fraction = Integer.parseInt(d.substring(scan+1));
-        }
-
-        return new DateTime(epoch + fraction);
+        return String.format("%1$tY-%1$tm-%1$td %1$tH-%1$tM-%1$tS.%1$tL", cal); // ramtamtam
     }
 
     /**
@@ -299,6 +286,10 @@ public final class Tools {
                 .toFormatter();
     }
 
+    public static String buildElasticSearchTimeFormatFromDateTime(DateTime d) {
+        return d.toString(DateTimeFormat.forPattern(ES_DATE_FORMAT));
+    }
+
     public static int getTimestampOfMessage(SearchHit msg) {
         Object field = msg.getSource().get("timestamp");
         if (field == null) {
@@ -317,6 +308,10 @@ public final class Tools {
 
     public static String getISO8601String(DateTime time) {
         return ISODateTimeFormat.dateTime().print(time);
+    }
+
+    public static String getCurrentISO8601String() {
+        return getISO8601String(new DateTime(DateTimeZone.UTC));
     }
 
     /**
@@ -373,24 +368,5 @@ public final class Tools {
          */
         return Ints.tryParse(x.toString());
     }
-
-    public static InetAddress guessPrimaryNetworkAddress() throws SocketException, NoInterfaceFoundException {
-        Enumeration<NetworkInterface> interfaces = NetworkInterface.getNetworkInterfaces();
-
-        for (NetworkInterface interf : Collections.list(interfaces)) {
-            if (!interf.isLoopback() && interf.isUp()) {
-                // Interface is not loopback and up. Try to get the first address.
-                for(InetAddress addr : Collections.list(interf.getInetAddresses())) {
-                    if (addr instanceof Inet4Address) {
-                        return addr;
-                    }
-                }
-            }
-        }
-
-        throw new NoInterfaceFoundException();
-    }
-
-    public static class NoInterfaceFoundException extends Exception {
-    }
+ 
 }
