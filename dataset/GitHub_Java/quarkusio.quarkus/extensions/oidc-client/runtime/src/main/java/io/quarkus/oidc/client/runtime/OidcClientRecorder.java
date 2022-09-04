@@ -1,6 +1,8 @@
 package io.quarkus.oidc.client.runtime;
 
 import java.io.IOException;
+import java.net.ConnectException;
+import java.net.URI;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
@@ -14,6 +16,7 @@ import org.jboss.logging.Logger;
 import io.quarkus.oidc.client.OidcClient;
 import io.quarkus.oidc.client.OidcClientConfig;
 import io.quarkus.oidc.client.OidcClientConfig.Grant;
+import io.quarkus.oidc.client.OidcClientConfig.Grant.Type;
 import io.quarkus.oidc.client.OidcClientException;
 import io.quarkus.oidc.client.OidcClients;
 import io.quarkus.oidc.client.Tokens;
@@ -25,6 +28,7 @@ import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.ConfigurationException;
 import io.smallrye.mutiny.Uni;
 import io.vertx.core.Vertx;
+import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.client.WebClientOptions;
 import io.vertx.mutiny.core.MultiMap;
 import io.vertx.mutiny.ext.web.client.WebClient;
@@ -68,16 +72,6 @@ public class OidcClientRecorder {
         };
     }
 
-    public Supplier<OidcClient> createOidcClientBean(OidcClients clients, String clientName) {
-        return new Supplier<OidcClient>() {
-
-            @Override
-            public OidcClient get() {
-                return clients.getClient(clientName);
-            }
-        };
-    }
-
     public Supplier<OidcClients> createOidcClientsBean(OidcClients clients) {
         return new Supplier<OidcClients>() {
 
@@ -105,16 +99,18 @@ public class OidcClientRecorder {
         }
 
         try {
-            OidcCommonUtils.verifyCommonConfiguration(oidcConfig, false, false);
+            OidcCommonUtils.verifyCommonConfiguration(oidcConfig, false);
         } catch (Throwable t) {
-            LOG.debug(t.getMessage());
             String message = String.format("'%s' client configuration is not initialized", oidcClientId);
+            LOG.debug(message);
             return Uni.createFrom().item(new DisabledOidcClient(message));
         }
 
         String authServerUriString = OidcCommonUtils.getAuthServerUrl(oidcConfig);
+
         WebClientOptions options = new WebClientOptions();
 
+        URI authServerUri = URI.create(authServerUriString); // create uri for parse exception
         OidcCommonUtils.setHttpClientOptions(oidcConfig, tlsConfig, options);
 
         WebClient client = WebClient.create(new io.vertx.mutiny.core.Vertx(vertx.get()), options);
@@ -122,9 +118,9 @@ public class OidcClientRecorder {
         Uni<String> tokenRequestUriUni = null;
         if (!oidcConfig.discoveryEnabled) {
             tokenRequestUriUni = Uni.createFrom()
-                    .item(OidcCommonUtils.getOidcEndpointUrl(authServerUriString, oidcConfig.tokenPath));
+                    .item(OidcCommonUtils.getOidcEndpointUrl(authServerUri.toString(), oidcConfig.tokenPath));
         } else {
-            tokenRequestUriUni = discoverTokenRequestUri(client, authServerUriString.toString(), oidcConfig);
+            tokenRequestUriUni = discoverTokenRequestUri(client, authServerUri.toString(), oidcConfig);
         }
         return tokenRequestUriUni.onItemOrFailure()
                 .transform(new BiFunction<String, Throwable, OidcClient>() {
@@ -132,37 +128,30 @@ public class OidcClientRecorder {
                     @Override
                     public OidcClient apply(String tokenRequestUri, Throwable t) {
                         if (t != null) {
-                            throw toOidcClientException(authServerUriString, t);
+                            throw toOidcClientException(authServerUri.toString(), t);
                         }
 
                         if (tokenRequestUri == null) {
                             throw new ConfigurationException(
                                     "OpenId Connect Provider token endpoint URL is not configured and can not be discovered");
                         }
-                        String grantType = oidcConfig.grant.getType().getGrantType();
+                        MultiMap tokenGrantParams = new MultiMap(io.vertx.core.MultiMap.caseInsensitiveMultiMap());
 
-                        MultiMap tokenGrantParams = null;
+                        String grantType = oidcConfig.grant.getType() == Grant.Type.CLIENT
+                                ? OidcConstants.CLIENT_CREDENTIALS_GRANT
+                                : OidcConstants.PASSWORD_GRANT;
+                        setGrantClientParams(oidcConfig, tokenGrantParams, grantType);
 
-                        if (oidcConfig.grant.getType() != Grant.Type.REFRESH) {
-                            tokenGrantParams = new MultiMap(io.vertx.core.MultiMap.caseInsensitiveMultiMap());
-                            setGrantClientParams(oidcConfig, tokenGrantParams, grantType);
-
-                            if (oidcConfig.getGrantOptions() != null) {
-                                Map<String, String> grantOptions = oidcConfig.getGrantOptions()
-                                        .get(oidcConfig.grant.getType().name().toLowerCase());
-                                if (grantOptions != null) {
-                                    if (oidcConfig.grant.getType() == Grant.Type.PASSWORD) {
-                                        // Without this block `password` will be listed first, before `username`
-                                        // which is not a technical problem but might affect Wiremock tests or the endpoints
-                                        // which expect a specific order.
-                                        tokenGrantParams.add(OidcConstants.PASSWORD_GRANT_USERNAME,
-                                                grantOptions.get(OidcConstants.PASSWORD_GRANT_USERNAME));
-                                        tokenGrantParams.add(OidcConstants.PASSWORD_GRANT_PASSWORD,
-                                                grantOptions.get(OidcConstants.PASSWORD_GRANT_PASSWORD));
-                                    } else {
-                                        tokenGrantParams.addAll(grantOptions);
-                                    }
-                                }
+                        if (oidcConfig.getGrantOptions() != null) {
+                            Map<String, String> grantOptions = oidcConfig.getGrantOptions()
+                                    .get(oidcConfig.grant.getType().name().toLowerCase());
+                            if (oidcConfig.grant.getType() == Grant.Type.PASSWORD) {
+                                tokenGrantParams.add(OidcConstants.PASSWORD_GRANT_USERNAME,
+                                        grantOptions.get(OidcConstants.PASSWORD_GRANT_USERNAME));
+                                tokenGrantParams.add(OidcConstants.PASSWORD_GRANT_PASSWORD,
+                                        grantOptions.get(OidcConstants.PASSWORD_GRANT_PASSWORD));
+                            } else if (grantOptions != null && oidcConfig.grant.getType() == Grant.Type.CLIENT) {
+                                tokenGrantParams.addAll(grantOptions);
                             }
                         }
 
@@ -189,9 +178,24 @@ public class OidcClientRecorder {
     }
 
     private static Uni<String> discoverTokenRequestUri(WebClient client, String authServerUrl, OidcClientConfig oidcConfig) {
-        final long connectionDelayInMillisecs = OidcCommonUtils.getConnectionDelayInMillis(oidcConfig);
-        return OidcCommonUtils.discoverMetadata(client, authServerUrl, connectionDelayInMillisecs)
-                .onItem().transform(json -> json.getString("token_endpoint"));
+        final String discoveryUrl = authServerUrl + "/.well-known/openid-configuration";
+        final long connectionRetryCount = OidcCommonUtils.getConnectionRetryCount(oidcConfig);
+        final long expireInDelay = OidcCommonUtils.getConnectionDelayInMillis(oidcConfig);
+        if (connectionRetryCount > 1) {
+            LOG.infof("Connecting to IDP for up to %d times every 2 seconds", connectionRetryCount);
+        }
+        return client.getAbs(discoveryUrl).send().onItem().transform(resp -> {
+            if (resp.statusCode() == 200) {
+                JsonObject json = resp.bodyAsJsonObject();
+                return json.getString("token_endpoint");
+            } else {
+                LOG.tracef("Discovery has failed, status code: %d", resp.statusCode());
+                return null;
+            }
+        }).onFailure(ConnectException.class)
+                .retry()
+                .withBackOff(CONNECTION_BACKOFF_DURATION, CONNECTION_BACKOFF_DURATION)
+                .expireIn(expireInDelay);
     }
 
     protected static OidcClientException toOidcClientException(String authServerUrlString, Throwable cause) {
@@ -206,7 +210,7 @@ public class OidcClientRecorder {
         }
 
         @Override
-        public Uni<Tokens> getTokens(Map<String, String> grantParameters) {
+        public Uni<Tokens> getTokens() {
             throw new DisabledOidcClientException(message);
         }
 
