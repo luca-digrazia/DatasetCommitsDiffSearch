@@ -46,25 +46,15 @@ import javax.annotation.Nullable;
 @AutoCodec
 public class TreeArtifactValue implements SkyValue {
 
-  private static final TreeArtifactValue EMPTY =
-      new TreeArtifactValue(
-          DigestUtils.fromMetadata(ImmutableMap.of()).getDigestBytesUnsafe(),
-          ImmutableSortedMap.of(),
-          /* remote= */ false);
-
   private final byte[] digest;
   private final ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData;
   private BigInteger valueFingerprint;
-  private final boolean remote;
 
   @AutoCodec.VisibleForSerialization
   TreeArtifactValue(
-      byte[] digest,
-      ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData,
-      boolean remote) {
+      byte[] digest, ImmutableSortedMap<TreeFileArtifact, FileArtifactValue> childData) {
     this.digest = digest;
     this.childData = childData;
-    this.remote = remote;
   }
 
   /**
@@ -72,23 +62,15 @@ public class TreeArtifactValue implements SkyValue {
    * corresponding FileArtifactValues.
    */
   static TreeArtifactValue create(Map<TreeFileArtifact, FileArtifactValue> childFileValues) {
-    if (childFileValues.isEmpty()) {
-      return EMPTY;
-    }
     Map<String, FileArtifactValue> digestBuilder =
         Maps.newHashMapWithExpectedSize(childFileValues.size());
-    boolean remote = true;
     for (Map.Entry<TreeFileArtifact, FileArtifactValue> e : childFileValues.entrySet()) {
-      FileArtifactValue value = e.getValue();
-      // TODO(buchgr): Enforce that all children in a tree artifact are either remote or local
-      // once b/70354083 is fixed.
-      remote = remote && value.isRemote();
-      digestBuilder.put(e.getKey().getParentRelativePath().getPathString(), value);
+      digestBuilder.put(e.getKey().getParentRelativePath().getPathString(), e.getValue());
     }
+
     return new TreeArtifactValue(
         DigestUtils.fromMetadata(digestBuilder).getDigestBytesUnsafe(),
-        ImmutableSortedMap.copyOf(childFileValues),
-        remote);
+        ImmutableSortedMap.copyOf(childFileValues));
   }
 
   FileArtifactValue getSelfData() {
@@ -116,11 +98,6 @@ public class TreeArtifactValue implements SkyValue {
 
   ImmutableMap<TreeFileArtifact, FileArtifactValue> getChildValues() {
     return childData;
-  }
-
-  /** Returns true if the {@link TreeFileArtifact}s are only stored remotely. */
-  public boolean isRemote() {
-    return remote;
   }
 
   @Override
@@ -169,7 +146,7 @@ public class TreeArtifactValue implements SkyValue {
    * Java's concurrent collections disallow null members.
    */
   static final TreeArtifactValue MISSING_TREE_ARTIFACT =
-      new TreeArtifactValue(null, ImmutableSortedMap.of(), /* remote= */ false) {
+      new TreeArtifactValue(null, ImmutableSortedMap.of()) {
         @Override
         FileArtifactValue getSelfData() {
           throw new UnsupportedOperationException();
@@ -217,10 +194,8 @@ public class TreeArtifactValue implements SkyValue {
         }
       };
 
-  private static void explodeDirectory(
-      Path treeArtifactPath,
-      PathFragment pathToExplode,
-      ImmutableSet.Builder<PathFragment> valuesBuilder)
+  private static void explodeDirectory(Path treeArtifactPath,
+      PathFragment pathToExplode, ImmutableSet.Builder<PathFragment> valuesBuilder)
       throws IOException {
     Path dir = treeArtifactPath.getRelative(pathToExplode);
     Collection<Dirent> dirents = dir.readdir(Symlinks.NOFOLLOW);
@@ -246,11 +221,11 @@ public class TreeArtifactValue implements SkyValue {
         for (String pathSegment : linkTarget.getSegments()) {
           intermediatePath = intermediatePath.getRelative(pathSegment);
           if (intermediatePath.containsUplevelReferences()) {
-            String errorMessage =
-                String.format(
-                    "A TreeArtifact may not contain relative symlinks whose target paths traverse "
-                        + "outside of the TreeArtifact, found %s pointing to %s.",
-                    subpath, linkTarget);
+            String errorMessage = String.format(
+                "A TreeArtifact may not contain relative symlinks whose target paths traverse "
+                + "outside of the TreeArtifact, found %s pointing to %s.",
+                subpath,
+                linkTarget);
             throw new IOException(errorMessage);
           }
         }
