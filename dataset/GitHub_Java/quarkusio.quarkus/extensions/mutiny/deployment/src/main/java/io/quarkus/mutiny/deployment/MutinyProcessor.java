@@ -26,13 +26,7 @@ public class MutinyProcessor {
 
     @BuildStep
     @Record(ExecutionTime.RUNTIME_INIT)
-    public void defineDroppedExceptionHandler(MutinyInfrastructure recorder) {
+    public void defineDroppedExceptionHandler(ExecutorBuildItem executorBuildItem, MutinyInfrastructure recorder) {
         recorder.configureDroppedExceptionHandler();
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    public void defineThreadBlockingChecker(MutinyInfrastructure recorder) {
-        recorder.configureThreadBlockingChecker();
     }
 }
