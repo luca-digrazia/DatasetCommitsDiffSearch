@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
-import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.MoreCollectors;
@@ -210,6 +209,7 @@ public class CcToolchainTest extends BuildViewTestCase {
         "    module_map = 'map',",
         "    ar_files = 'ar-a',",
         "    as_files = 'as-a',",
+        "    cpu = 'cherry',",
         "    compiler_files = 'compile-a',",
         "    dwp_files = 'dwp-a',",
         "    coverage_files = 'gcov-a',",
@@ -229,7 +229,7 @@ public class CcToolchainTest extends BuildViewTestCase {
 
     useConfiguration();
 
-    getConfiguredTarget("//a:a");
+    getConfiguredTarget("//a:b");
   }
 
   @Test
@@ -539,7 +539,7 @@ public class CcToolchainTest extends BuildViewTestCase {
     scratch.overwriteFile(
         "tools/cpp/cc_toolchain_config_lib.bzl",
         ResourceLoader.readFromResources(
-            TestConstants.RULES_CC_REPOSITORY_EXECROOT + "cc/cc_toolchain_config_lib.bzl"));
+            TestConstants.BAZEL_REPO_PATH + "tools/cpp/cc_toolchain_config_lib.bzl"));
   }
 
   @Test
@@ -721,114 +721,31 @@ public class CcToolchainTest extends BuildViewTestCase {
         getOutputGroup(libTarget, "archive").toList().stream()
             .collect(MoreCollectors.onlyElement());
     ActionAnalysisMetadata staticAction = getGeneratingAction(staticLib);
-    assertThat(staticAction.getInputs().toList())
-        .containsAtLeastElementsIn(toolchainProvider.getArFiles().toList());
+    assertThat(staticAction.getInputs()).containsAtLeastElementsIn(toolchainProvider.getArFiles());
     Artifact dynamicLib =
         getOutputGroup(libTarget, "dynamic_library").toList().stream()
             .collect(MoreCollectors.onlyElement());
     ActionAnalysisMetadata dynamicAction = getGeneratingAction(dynamicLib);
-    assertThat(dynamicAction.getInputs().toList())
-        .containsAtLeastElementsIn(toolchainProvider.getLinkerFiles().toList());
+    assertThat(dynamicAction.getInputs())
+        .containsAtLeastElementsIn(toolchainProvider.getLinkerFiles());
     ActionAnalysisMetadata cCompileAction =
         libTarget.getActions().stream()
             .filter((a) -> a.getMnemonic().equals("CppCompile"))
             .collect(MoreCollectors.onlyElement());
-    assertThat(cCompileAction.getInputs().toList())
-        .containsAtLeastElementsIn(toolchainProvider.getCompilerFiles().toList());
+    assertThat(cCompileAction.getInputs())
+        .containsAtLeastElementsIn(toolchainProvider.getCompilerFiles());
     ActionAnalysisMetadata asmAction =
         ((RuleConfiguredTarget) getConfiguredTarget("//a:asm"))
             .getActions().stream()
                 .filter((a) -> a.getMnemonic().equals("CppCompile"))
                 .collect(MoreCollectors.onlyElement());
-    assertThat(asmAction.getInputs().toList())
-        .containsAtLeastElementsIn(toolchainProvider.getAsFiles().toList());
+    assertThat(asmAction.getInputs()).containsAtLeastElementsIn(toolchainProvider.getAsFiles());
     ActionAnalysisMetadata preprocessedAsmAction =
         ((RuleConfiguredTarget) getConfiguredTarget("//a:preprocessed-asm"))
             .getActions().stream()
                 .filter((a) -> a.getMnemonic().equals("CppCompile"))
                 .collect(MoreCollectors.onlyElement());
-    assertThat(preprocessedAsmAction.getInputs().toList())
-        .containsAtLeastElementsIn(toolchainProvider.getCompilerFiles().toList());
-  }
-
-  @Test
-  public void testCcToolchainLoadedThroughMacro() throws Exception {
-    setupTestCcToolchainLoadedThroughMacro(/* loadMacro= */ true);
-    assertThat(getConfiguredTarget("//a:a")).isNotNull();
-    assertNoEvents();
-  }
-
-  @Test
-  public void testCcToolchainNotLoadedThroughMacro() throws Exception {
-    setupTestCcToolchainLoadedThroughMacro(/* loadMacro= */ false);
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//a:a");
-    assertContainsEvent("rules are deprecated");
-  }
-
-  private void setupTestCcToolchainLoadedThroughMacro(boolean loadMacro) throws Exception {
-    useConfiguration("--incompatible_load_cc_rules_from_bzl");
-    scratch.file("a/cc_toolchain_config.bzl", MockCcSupport.EMPTY_CC_TOOLCHAIN);
-    scratch.file(
-        "a/BUILD",
-        "load(':cc_toolchain_config.bzl', 'cc_toolchain_config')",
-        getAnalysisMock().ccSupport().getMacroLoadStatement(loadMacro, "cc_toolchain"),
-        getToolchainRule("a"));
-  }
-
-  @Test
-  public void setupTestCcToolchainSuiteLoadedThroughMacro() throws Exception {
-    setupTestCcToolchainSuiteLoadedThroughMacro(/* loadMacro= */ true);
-    assertThat(getConfiguredTarget("//a:a")).isNotNull();
-    assertNoEvents();
-  }
-
-  private void setupTestCcToolchainSuiteLoadedThroughMacro(boolean loadMacro) throws Exception {
-    useConfiguration("--incompatible_load_cc_rules_from_bzl");
-    scratch.file("a/cc_toolchain_config.bzl", MockCcSupport.EMPTY_CC_TOOLCHAIN);
-    scratch.file(
-        "a/BUILD",
-        "load(':cc_toolchain_config.bzl', 'cc_toolchain_config')",
-        getAnalysisMock()
-            .ccSupport()
-            .getMacroLoadStatement(loadMacro, "cc_toolchain", "cc_toolchain_suite"),
-        "cc_toolchain_suite(",
-        "    name = 'a',",
-        "    toolchains = { 'k8': ':b' },",
-        ")",
-        getToolchainRule("b"));
-  }
-
-  @Test
-  public void testCcToolchainSuiteNotLoadedThroughMacro() throws Exception {
-    setupTestCcToolchainSuiteLoadedThroughMacro(/* loadMacro= */ false);
-    reporter.removeHandler(failFastHandler);
-    getConfiguredTarget("//a:a");
-    assertContainsEvent("rules are deprecated");
-  }
-
-  private static String getToolchainRule(String targetName) {
-    return Joiner.on("\n")
-        .join(
-            "cc_toolchain(",
-            "    name = '" + targetName + "',",
-            "    toolchain_identifier = 'toolchain-identifier-k8',",
-            "    toolchain_config = ':toolchain_config',",
-            "    all_files = ':banana',",
-            "    ar_files = ':empty',",
-            "    as_files = ':empty',",
-            "    compiler_files = ':empty',",
-            "    dwp_files = ':empty',",
-            "    linker_files = ':empty',",
-            "    strip_files = ':empty',",
-            "    objcopy_files = ':empty',",
-            "    dynamic_runtime_lib = ':empty',",
-            "    static_runtime_lib = ':empty')",
-            "filegroup(",
-            "   name='empty')",
-            "filegroup(",
-            "    name = 'banana',",
-            "    srcs = ['banana1', 'banana2'])",
-            "cc_toolchain_config(name='toolchain_config')");
+    assertThat(preprocessedAsmAction.getInputs())
+        .containsAtLeastElementsIn(toolchainProvider.getCompilerFiles());
   }
 }
