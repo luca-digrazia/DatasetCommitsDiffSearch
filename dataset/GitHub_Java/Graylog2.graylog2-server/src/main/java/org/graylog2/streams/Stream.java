@@ -20,99 +20,22 @@
 
 package org.graylog2.streams;
 
-import com.mongodb.BasicDBList;
-import com.mongodb.BasicDBObject;
-import com.mongodb.DBCollection;
-import com.mongodb.DBCursor;
-import com.mongodb.DBObject;
 import java.util.ArrayList;
 import java.util.List;
-import org.bson.types.ObjectId;
-import org.graylog2.Log;
-import org.graylog2.database.MongoConnection;
 
 /**
- * Stream.java: Mar 26, 2011 10:39:40 PM
+ * Stream.java: Mar 16, 2011 10:25:42 PM
  *
- * Representing a single stream from the streams collection. Also provides method
- * to get all streams of this collection.
+ * [description]
  *
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class Stream {
 
-    private ObjectId id = null;
-    private String title = null;
-    private List<StreamRule> streamRules = null;
-
-    private DBObject mongoObject = null;
-
-    public Stream (DBObject stream) {
-        this.id = (ObjectId) stream.get("_id");
-        this.title = (String) stream.get("title");
-        this.mongoObject = stream;
-    }
-
-    public static ArrayList<Stream> fetchAll() throws Exception {
-        if (StreamCache.getInstance().valid()) {
-            return StreamCache.getInstance().get();
-        }
-        
+    public static List<Stream> fetchAll() {
         ArrayList<Stream> streams = new ArrayList<Stream>();
 
-        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("streams");
-        DBCursor cur = coll.find(new BasicDBObject());
-
-        while (cur.hasNext()) {
-            try {
-                streams.add(new Stream(cur.next()));
-            } catch (Exception e) {
-                Log.warn("Can't fetch stream. Skipping. " + e.toString());
-            }
-        }
-
-        StreamCache.getInstance().set(streams);
-
         return streams;
-    }
-
-    public List<StreamRule> getStreamRules() {
-        if (this.streamRules != null) {
-            return this.streamRules;
-        }
-
-        ArrayList<StreamRule> rules = new ArrayList<StreamRule>();
-
-        BasicDBList rawRules = (BasicDBList) this.mongoObject.get("streamrules");
-        if (rawRules != null && rawRules.size() > 0) {
-            for (Object ruleObj : rawRules) {
-                StreamRule rule = new StreamRule((DBObject) ruleObj);
-                rules.add(rule);
-            }
-        }
-
-        this.streamRules = rules;
-        return rules;
-    }
-
-    /**
-     * @return the id
-     */
-    public ObjectId getId() {
-        return id;
-    }
-
-    /**
-     * @return the title
-     */
-    public String getTitle() {
-        return title;
-    }
-
-    @Override
-    public String toString() {
-        this.getStreamRules();
-        return this.id.toString() + ":" + this.title;
     }
 
 }
