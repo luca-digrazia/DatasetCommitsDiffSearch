@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.buildtool;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 
-import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.base.Stopwatch;
 import com.google.common.base.Suppliers;
@@ -595,6 +595,9 @@ public class ExecutionTool {
     Predicate<Action> executionFilter = CheckUpToDateFilter.fromOptions(
         request.getOptions(ExecutionOptions.class));
 
+    // jobs should have been verified in BuildRequest#validateOptions().
+    Preconditions.checkState(options.jobs >= -1);
+
     skyframeExecutor.setActionOutputRoot(actionOutputRoot);
     ArtifactFactory artifactFactory = env.getSkyframeBuildView().getArtifactFactory();
     return new SkyframeBuilder(
@@ -615,30 +618,16 @@ public class ExecutionTool {
         prefetcher);
   }
 
-  @VisibleForTesting
-  public static void configureResourceManager(BuildRequest request) {
+  private void configureResourceManager(BuildRequest request) {
     ResourceManager resourceMgr = ResourceManager.instance();
     ExecutionOptions options = request.getOptions(ExecutionOptions.class);
     ResourceSet resources;
     if (options.availableResources != null) {
-      logger.warning(
-          "--local_resources will be deprecated. Please use --local_ram_resources "
-              + "and/or --local_cpu_resources.");
       resources = options.availableResources;
       resourceMgr.setRamUtilizationPercentage(100);
-    } else if (options.ramUtilizationPercentage != 0) {
-      logger.warning(
-          "--ram_utilization_factor will soon be deprecated. Please use "
-              + "--local_ram_resources=HOST_RAM*<float>, where <float> is the percentage of "
-              + "available RAM you want to devote to Bazel.");
-      resources =
-          ResourceSet.createWithRamCpu(
-              LocalHostCapacity.getLocalHostCapacity().getMemoryMb(), options.localCpuResources);
-      resourceMgr.setRamUtilizationPercentage(options.ramUtilizationPercentage);
     } else {
-      resources =
-          ResourceSet.createWithRamCpu(options.localRamResources, options.localCpuResources);
-      resourceMgr.setRamUtilizationPercentage(100);
+      resources = LocalHostCapacity.getLocalHostCapacity();
+      resourceMgr.setRamUtilizationPercentage(options.ramUtilizationPercentage);
     }
     resourceMgr.setUseLocalMemoryEstimate(options.localMemoryEstimate);
 
