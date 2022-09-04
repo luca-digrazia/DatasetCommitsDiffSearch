@@ -352,10 +352,10 @@ final class ByteStreamUploader {
 
             @Override
             public void onClose(Status status, Metadata trailers) {
-              if (status.isOk()) {
-                listener.success();
-              } else {
+              if (!status.isOk()) {
                 listener.failure(status);
+              } else {
+                listener.success();
               }
             }
 
