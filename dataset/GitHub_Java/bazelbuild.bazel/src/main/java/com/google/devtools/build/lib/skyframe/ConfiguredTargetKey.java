@@ -23,6 +23,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.skyframe.SkyFunctionName;
+import com.google.devtools.build.skyframe.SkyKey;
 import java.util.Objects;
 import javax.annotation.Nullable;
 
@@ -32,11 +33,11 @@ import javax.annotation.Nullable;
  */
 public class ConfiguredTargetKey extends ActionLookupKey {
   private final Label label;
-  @Nullable private final BuildConfigurationValue.Key configurationKey;
+  @Nullable private final SkyKey configurationKey;
 
   private transient int hashCode;
 
-  private ConfiguredTargetKey(Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
+  private ConfiguredTargetKey(Label label, @Nullable SkyKey configurationKey) {
     this.label = Preconditions.checkNotNull(label);
     this.configurationKey = configurationKey;
   }
@@ -57,28 +58,24 @@ public class ConfiguredTargetKey extends ActionLookupKey {
       BlazeInterners.newWeakInterner();
 
   public static ConfiguredTargetKey of(Label label, @Nullable BuildConfiguration configuration) {
-    KeyAndHost keyAndHost = keyFromConfiguration(configuration);
-    return of(label, keyAndHost.key, keyAndHost.isHost);
+    SkyKey configurationKey =
+        configuration == null
+            ? null
+            : BuildConfigurationValue.key(
+            configuration.fragmentClasses(), configuration.getOptions());
+    return of(
+        label,
+        configurationKey,
+        configuration != null && configuration.isHostConfiguration());
   }
 
   static ConfiguredTargetKey of(
-      Label label,
-      @Nullable BuildConfigurationValue.Key configurationKey,
-      boolean isHostConfiguration) {
+      Label label, @Nullable SkyKey configurationKey, boolean isHostConfiguration) {
     if (isHostConfiguration) {
       return hostInterner.intern(new HostConfiguredTargetKey(label, configurationKey));
     } else {
       return interner.intern(new ConfiguredTargetKey(label, configurationKey));
     }
-  }
-
-  static KeyAndHost keyFromConfiguration(@Nullable BuildConfiguration configuration) {
-    return configuration == null
-        ? KeyAndHost.NULL_INSTANCE
-        : new KeyAndHost(
-            BuildConfigurationValue.key(
-                configuration.fragmentClasses(), configuration.getOptions()),
-            configuration.isHostConfiguration());
   }
 
   @Override
@@ -92,7 +89,7 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   @Nullable
-  BuildConfigurationValue.Key getConfigurationKey() {
+  SkyKey getConfigurationKey() {
     return configurationKey;
   }
 
@@ -166,30 +163,13 @@ public class ConfiguredTargetKey extends ActionLookupKey {
   }
 
   private static class HostConfiguredTargetKey extends ConfiguredTargetKey {
-    private HostConfiguredTargetKey(
-        Label label, @Nullable BuildConfigurationValue.Key configurationKey) {
+    private HostConfiguredTargetKey(Label label, @Nullable SkyKey configurationKey) {
       super(label, configurationKey);
     }
 
     @Override
     public boolean isHostConfiguration() {
       return true;
-    }
-  }
-
-  /**
-   * Simple wrapper class for turning a {@link BuildConfiguration} into a {@link
-   * BuildConfigurationValue.Key} and boolean isHost.
-   */
-  public static class KeyAndHost {
-    private static final KeyAndHost NULL_INSTANCE = new KeyAndHost(null, false);
-
-    @Nullable public final BuildConfigurationValue.Key key;
-    private final boolean isHost;
-
-    private KeyAndHost(@Nullable BuildConfigurationValue.Key key, boolean isHost) {
-      this.key = key;
-      this.isHost = isHost;
     }
   }
 }
