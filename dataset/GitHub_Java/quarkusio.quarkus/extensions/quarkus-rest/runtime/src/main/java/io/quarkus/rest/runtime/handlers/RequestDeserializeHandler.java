@@ -70,6 +70,7 @@ public class RequestDeserializeHandler implements RestHandler {
                         throw new BadRequestException(e);
                     }
                 } catch (Exception e) {
+                    requestContext.restart(requestContext.getAbortHandlerChain());
                     requestContext.resume(e);
                     return;
                 }
