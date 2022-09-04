@@ -15,6 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
+import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicate;
 import com.google.common.collect.Collections2;
@@ -130,7 +131,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   private final RecordingDifferencer recordingDiffer = new SequencedRecordingDifferencer();
   private final DiffAwarenessManager diffAwarenessManager;
   private final Iterable<SkyValueDirtinessChecker> customDirtinessCheckers;
-  private Set<String> previousClientEnvironment = ImmutableSet.of();
+  private Set<String> previousClientEnvironment = null;
 
   private SequencedSkyframeExecutor(
       EvaluatorSupplier evaluatorSupplier,
@@ -338,24 +339,25 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     handleClientEnvironmentChanges();
   }
 
-  /** Invalidates entries in the client environment. */
+  /** Invalidates entries in the client environment that have changed since last sync. */
   private void handleClientEnvironmentChanges() {
-    // Remove deleted client environmental variables.
-    Iterable<SkyKey> deletedKeys =
-        Sets.difference(previousClientEnvironment, clientEnv.get().keySet())
-            .stream()
-            .map(ClientEnvironmentFunction::key)
-            .collect(ImmutableList.toImmutableList());
-    recordingDiffer.invalidate(deletedKeys);
-    previousClientEnvironment = clientEnv.get().keySet();
-    // Inject current client environmental values. We can inject unconditionally without fearing
-    // over-invalidation; skyframe will not invalidate an injected key if the key's new value is the
-    // same as the old value.
+    Map<SkyKey, SkyValue> values = memoizingEvaluator.getValues();
     ImmutableMap.Builder<SkyKey, SkyValue> newValuesBuilder = ImmutableMap.builder();
-    for (Map.Entry<String, String> entry : clientEnv.get().entrySet()) {
-      newValuesBuilder.put(
-          ClientEnvironmentFunction.key(entry.getKey()),
-          new ClientEnvironmentValue(entry.getValue()));
+    HashSet<String> envToCheck = new HashSet<>();
+    if (previousClientEnvironment != null) {
+      envToCheck.addAll(previousClientEnvironment);
+    }
+    envToCheck.addAll(clientEnv.get().keySet());
+    previousClientEnvironment = clientEnv.get().keySet();
+    for (String env : envToCheck) {
+      SkyKey key = ClientEnvironmentFunction.key(env);
+      if (values.containsKey(key)) {
+        String value = ((ClientEnvironmentValue) values.get(key)).getValue();
+        String newValue = clientEnv.get().get(env);
+        if (!Objects.equal(newValue, value)) {
+          newValuesBuilder.put(key, new ClientEnvironmentValue(newValue));
+        }
+      }
     }
     recordingDiffer.inject(newValuesBuilder.build());
   }

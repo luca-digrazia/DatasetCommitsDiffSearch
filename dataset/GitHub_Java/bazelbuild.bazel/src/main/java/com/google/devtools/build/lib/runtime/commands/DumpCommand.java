@@ -86,6 +86,16 @@ public class DumpCommand implements BlazeCommand {
     public boolean dumpPackages;
 
     @Option(
+      name = "vfs",
+      defaultValue = "false",
+      category = "verbosity",
+      documentationCategory = OptionDocumentationCategory.OUTPUT_SELECTION,
+      effectTags = {OptionEffectTag.BAZEL_MONITORING},
+      help = "Dump virtual filesystem cache content."
+    )
+    public boolean dumpVfs;
+
+    @Option(
       name = "action_cache",
       defaultValue = "false",
       category = "verbosity",
@@ -202,6 +212,7 @@ public class DumpCommand implements BlazeCommand {
 
     boolean anyOutput =
         dumpOptions.dumpPackages
+            || dumpOptions.dumpVfs
             || dumpOptions.dumpActionCache
             || dumpOptions.dumpActionGraph != null
             || dumpOptions.dumpRuleClasses
@@ -209,19 +220,17 @@ public class DumpCommand implements BlazeCommand {
             || dumpOptions.skylarkMemory != null
             || (dumpOptions.dumpSkyframe != SkyframeDumpOption.OFF);
     if (!anyOutput) {
+      Map<String, String> categories = new HashMap<>();
+      categories.put("verbosity", "Options that control what internal state is dumped");
       Collection<Class<? extends OptionsBase>> optionList = new ArrayList<>();
       optionList.add(DumpOptions.class);
 
-      env.getReporter()
-          .getOutErr()
-          .printErrLn(
-              BlazeCommandUtils.expandHelpTopic(
-                  getClass().getAnnotation(Command.class).name(),
-                  getClass().getAnnotation(Command.class).help(),
-                  getClass(),
-                  optionList,
-                  OptionsParser.HelpVerbosity.LONG,
-                  runtime.getProductName()));
+      env.getReporter().getOutErr().printErrLn(BlazeCommandUtils.expandHelpTopic(
+          getClass().getAnnotation(Command.class).name(),
+          getClass().getAnnotation(Command.class).help(),
+          getClass(),
+          optionList, categories, OptionsParser.HelpVerbosity.LONG,
+          runtime.getProductName()));
       return BlazeCommandResult.exitCode(ExitCode.ANALYSIS_FAILURE);
     }
     PrintStream out = new PrintStream(env.getReporter().getOutErr().getOutputStream());
@@ -233,6 +242,13 @@ public class DumpCommand implements BlazeCommand {
 
       if (dumpOptions.dumpPackages) {
         env.getPackageManager().dump(out);
+        out.println();
+      }
+
+      if (dumpOptions.dumpVfs) {
+        // TODO(b/72498697): Remove this flag
+        out.println("Filesystem cache");
+        out.println("dump --vfs is no longer meaningful");
         out.println();
       }
 

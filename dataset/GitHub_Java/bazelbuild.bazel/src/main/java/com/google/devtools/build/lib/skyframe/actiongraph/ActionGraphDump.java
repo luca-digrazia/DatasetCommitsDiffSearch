@@ -28,8 +28,8 @@ import com.google.devtools.build.lib.analysis.AnalysisProtos;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
@@ -38,7 +38,7 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import java.util.List;
-import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 
 /**
@@ -103,10 +103,10 @@ public class ActionGraphDump {
     // store environment
     if (action instanceof SpawnAction) {
       SpawnAction spawnAction = (SpawnAction) action;
-      // TODO(twerth): This handles the fixed environment. We probably want to output the inherited
+      // TODO(twerth): This handles the fixed environemnt. We probably want to output the inherited
       // environment as well.
       ImmutableMap<String, String> fixedEnvironment = spawnAction.getEnvironment();
-      for (Map.Entry<String, String> environmentVariable : fixedEnvironment.entrySet()) {
+      for (Entry<String, String> environmentVariable : fixedEnvironment.entrySet()) {
         AnalysisProtos.KeyValuePair.Builder keyValuePairBuilder =
             AnalysisProtos.KeyValuePair.newBuilder();
         keyValuePairBuilder
@@ -122,8 +122,8 @@ public class ActionGraphDump {
 
     ActionOwner actionOwner = action.getOwner();
     if (actionOwner != null) {
-      BuildEvent event = actionOwner.getConfiguration();
-      actionBuilder.setConfigurationId(knownConfigurations.dataToId(event));
+      BuildConfiguration buildConfiguration = (BuildConfiguration) actionOwner.getConfiguration();
+      actionBuilder.setConfigurationId(knownConfigurations.dataToId(buildConfiguration));
 
       // store aspect
       for (AspectDescriptor aspectDescriptor : actionOwner.getAspectDescriptors()) {
