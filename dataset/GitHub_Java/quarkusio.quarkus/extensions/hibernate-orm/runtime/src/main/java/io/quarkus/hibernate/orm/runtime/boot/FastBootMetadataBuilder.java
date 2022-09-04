@@ -54,6 +54,7 @@ import org.hibernate.cfg.beanvalidation.BeanValidationIntegrator;
 import org.hibernate.dialect.Dialect;
 import org.hibernate.engine.jdbc.connections.spi.MultiTenantConnectionProvider;
 import org.hibernate.engine.jdbc.dialect.spi.DialectFactory;
+import org.hibernate.engine.transaction.jta.platform.spi.JtaPlatform;
 import org.hibernate.id.factory.spi.MutableIdentifierGeneratorFactory;
 import org.hibernate.integrator.spi.Integrator;
 import org.hibernate.internal.EntityManagerMessageLogger;
@@ -75,6 +76,7 @@ import org.infinispan.quarkus.hibernate.cache.QuarkusInfinispanRegionFactory;
 import io.quarkus.hibernate.orm.runtime.BuildTimeSettings;
 import io.quarkus.hibernate.orm.runtime.IntegrationSettings;
 import io.quarkus.hibernate.orm.runtime.customized.QuarkusIntegratorServiceImpl;
+import io.quarkus.hibernate.orm.runtime.customized.QuarkusJtaPlatformInitiator;
 import io.quarkus.hibernate.orm.runtime.customized.QuarkusStrategySelectorBuilder;
 import io.quarkus.hibernate.orm.runtime.integration.HibernateOrmIntegrations;
 import io.quarkus.hibernate.orm.runtime.proxies.PreGeneratedProxies;
@@ -338,11 +340,12 @@ public class FastBootMetadataBuilder {
                 (k, v) -> integrationSettingsBuilder.put(k, v));
 
         Dialect dialect = extractDialect();
+        JtaPlatform jtaPlatform = extractJtaPlatform();
         PrevalidatedQuarkusMetadata storeableMetadata = trimBootstrapMetadata(fullMeta);
         //Make sure that the service is destroyed after the metadata has been validated and trimmed, as validation needs to use it.
         destroyServiceRegistry(fullMeta);
         ProxyDefinitions proxyClassDefinitions = ProxyDefinitions.createFromMetadata(storeableMetadata, preGeneratedProxies);
-        return new RecordedState(dialect, storeableMetadata, buildTimeSettings, getIntegrators(),
+        return new RecordedState(dialect, jtaPlatform, storeableMetadata, buildTimeSettings, getIntegrators(),
                 providedServices, integrationSettingsBuilder.build(), proxyClassDefinitions, multiTenancyStrategy, jtaPresent);
     }
 
@@ -377,6 +380,11 @@ public class FastBootMetadataBuilder {
         );
 
         return PrevalidatedQuarkusMetadata.validateAndWrap(replacement);
+    }
+
+    private JtaPlatform extractJtaPlatform() {
+        final QuarkusJtaPlatformInitiator quarkusJtaPlatformInitiator = new QuarkusJtaPlatformInitiator(jtaPresent);
+        return quarkusJtaPlatformInitiator.buildJtaPlatformInstance();
     }
 
     private Dialect extractDialect() {

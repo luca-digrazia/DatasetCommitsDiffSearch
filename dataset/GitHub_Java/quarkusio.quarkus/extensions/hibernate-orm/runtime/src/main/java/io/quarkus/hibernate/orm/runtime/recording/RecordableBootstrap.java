@@ -65,8 +65,8 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
     private final BootstrapServiceRegistry bootstrapServiceRegistry;
     private final LoadedConfig aggregatedCfgXml;
 
-    public RecordableBootstrap(BootstrapServiceRegistry bootstrapServiceRegistry) {
-        this(bootstrapServiceRegistry, initialProperties(), LoadedConfig.baseline());
+    public RecordableBootstrap(BootstrapServiceRegistry bootstrapServiceRegistry, boolean jtaPresent) {
+        this(bootstrapServiceRegistry, initialProperties(), LoadedConfig.baseline(), jtaPresent);
     }
 
     private static Map initialProperties() {
@@ -76,12 +76,12 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
     }
 
     private RecordableBootstrap(BootstrapServiceRegistry bootstrapServiceRegistry, Map properties,
-            LoadedConfig loadedConfigBaseline) {
+            LoadedConfig loadedConfigBaseline, boolean jtaPresent) {
         super(bootstrapServiceRegistry, properties, loadedConfigBaseline, null);
         this.settings = properties;
         this.bootstrapServiceRegistry = bootstrapServiceRegistry;
         this.aggregatedCfgXml = loadedConfigBaseline;
-        this.initiators = standardInitiatorList();
+        this.initiators = standardInitiatorList(jtaPresent);
     }
 
     /**
@@ -94,7 +94,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
 
     // WARNING: this is a customized list: we started from a copy of ORM's standard
     // list, then changes have evolved.
-    private static List<StandardServiceInitiator> standardInitiatorList() {
+    private static List<StandardServiceInitiator> standardInitiatorList(boolean jtaIsPresent) {
         final ArrayList<StandardServiceInitiator> serviceInitiators = new ArrayList<StandardServiceInitiator>();
 
         //This one needs to be replaced after Metadata has been recorded:
@@ -134,7 +134,7 @@ public final class RecordableBootstrap extends StandardServiceRegistryBuilder {
         // Custom one! Also, this one has state so can't use the singleton.
         serviceInitiators.add(new QuarkusMutableIdentifierGeneratorFactoryInitiator());// MutableIdentifierGeneratorFactoryInitiator.INSTANCE);
 
-        serviceInitiators.add(new QuarkusJtaPlatformInitiator(true));
+        serviceInitiators.add(new QuarkusJtaPlatformInitiator(jtaIsPresent));
 
         serviceInitiators.add(SessionFactoryServiceRegistryFactoryInitiator.INSTANCE);
 
