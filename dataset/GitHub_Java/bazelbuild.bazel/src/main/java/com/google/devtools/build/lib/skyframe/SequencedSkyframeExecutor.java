@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContaine
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.Factory;
+import com.google.devtools.build.lib.analysis.buildinfo.BuildInfoFactory;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.cmdline.LabelConstants;
@@ -161,6 +162,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       BlazeDirectories directories,
       ActionKeyContext actionKeyContext,
       Factory workspaceStatusActionFactory,
+      ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions,
       Iterable<SkyValueDirtinessChecker> customDirtinessCheckers,
@@ -180,6 +182,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         directories,
         actionKeyContext,
         workspaceStatusActionFactory,
+        buildInfoFactories,
         extraSkyFunctions,
         ExternalFileAction.DEPEND_ON_EXTERNAL_PKG_FOR_EXTERNAL_REPO_PATHS,
         hardcodedBlacklistedPackagePrefixes,
@@ -956,6 +959,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     protected FileSystem fileSystem;
     protected BlazeDirectories directories;
     protected ActionKeyContext actionKeyContext;
+    protected ImmutableList<BuildInfoFactory> buildInfoFactories;
     protected BuildOptions defaultBuildOptions;
     private ImmutableSet<PathFragment> hardcodedBlacklistedPackagePrefixes;
     private PathFragment additionalBlacklistedPackagePrefixesFile;
@@ -981,6 +985,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       Preconditions.checkNotNull(fileSystem);
       Preconditions.checkNotNull(directories);
       Preconditions.checkNotNull(actionKeyContext);
+      Preconditions.checkNotNull(buildInfoFactories);
       Preconditions.checkNotNull(defaultBuildOptions);
       Preconditions.checkNotNull(hardcodedBlacklistedPackagePrefixes);
       Preconditions.checkNotNull(additionalBlacklistedPackagePrefixesFile);
@@ -997,6 +1002,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
               directories,
               actionKeyContext,
               workspaceStatusActionFactory,
+              buildInfoFactories,
               diffAwarenessFactories,
               extraSkyFunctions,
               customDirtinessCheckers,
@@ -1029,6 +1035,11 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
     public Builder setActionKeyContext(ActionKeyContext actionKeyContext) {
       this.actionKeyContext = actionKeyContext;
+      return this;
+    }
+
+    public Builder setBuildInfoFactories(ImmutableList<BuildInfoFactory> buildInfoFactories) {
+      this.buildInfoFactories = buildInfoFactories;
       return this;
     }
 

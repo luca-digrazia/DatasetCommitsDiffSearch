@@ -19,7 +19,6 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -57,7 +56,6 @@ import java.lang.management.MemoryUsage;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -665,21 +663,15 @@ public abstract class InfoItem {
    */
   private static byte[] getBuildLanguageDefinition(RuleClassProvider provider) {
     BuildLanguage.Builder resultPb = BuildLanguage.newBuilder();
-    ImmutableList<RuleClass> sortedRuleClasses =
-        ImmutableList.sortedCopyOf(
-            Comparator.comparing(RuleClass::getName), provider.getRuleClassMap().values());
-    for (RuleClass ruleClass : sortedRuleClasses) {
+    Collection<RuleClass> ruleClasses = provider.getRuleClassMap().values();
+    for (RuleClass ruleClass : ruleClasses) {
       if (isAbstractRule(ruleClass)) {
         continue;
       }
 
       RuleDefinition.Builder rulePb = RuleDefinition.newBuilder();
       rulePb.setName(ruleClass.getName());
-
-      ImmutableList<Attribute> sortedAttributeDefinitions =
-          ImmutableList.sortedCopyOf(
-              Comparator.comparing(Attribute::getName), ruleClass.getAttributes());
-      for (Attribute attr : sortedAttributeDefinitions) {
+      for (Attribute attr : ruleClass.getAttributes()) {
         Type<?> t = attr.getType();
         AttributeDefinition.Builder attrPb = AttributeDefinition.newBuilder();
         attrPb.setName(attr.getName());
@@ -701,7 +693,7 @@ public abstract class InfoItem {
         }
         attrPb.setExecutable(attr.isExecutable());
         if (BuildType.isLabelType(t)) {
-          attrPb.setAllowedRuleClasses(getAllowedRuleClasses(sortedRuleClasses, attr));
+          attrPb.setAllowedRuleClasses(getAllowedRuleClasses(ruleClasses, attr));
           attrPb.setNodep(t.getLabelClass() == Type.LabelClass.NONDEP_REFERENCE);
         }
         rulePb.addAttribute(attrPb);

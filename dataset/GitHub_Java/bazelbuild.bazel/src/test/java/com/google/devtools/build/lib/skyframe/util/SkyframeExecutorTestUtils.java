@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.skyframe.PackageValue;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
@@ -89,7 +88,7 @@ public class SkyframeExecutorTestUtils {
   public static ConfiguredTargetValue getExistingConfiguredTargetValue(
       SkyframeExecutor skyframeExecutor, Label label, BuildConfiguration config)
       throws InterruptedException {
-    SkyKey key = ConfiguredTargetKey.of(label, config);
+    SkyKey key = ConfiguredTargetValue.key(label, config);
     return (ConfiguredTargetValue) getExistingValue(skyframeExecutor, key);
   }
 

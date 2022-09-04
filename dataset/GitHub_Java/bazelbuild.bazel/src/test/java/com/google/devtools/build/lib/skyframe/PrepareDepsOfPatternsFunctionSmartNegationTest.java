@@ -92,6 +92,8 @@ public class PrepareDepsOfPatternsFunctionSmartNegationTest extends FoundationTe
             .setFileSystem(fileSystem)
             .setDirectories(directories)
             .setActionKeyContext(new ActionKeyContext())
+            .setBuildInfoFactories(
+                AnalysisMock.get().createRuleClassProvider().getBuildInfoFactories())
             .setDefaultBuildOptions(
                 DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
             .setExtraSkyFunctions(AnalysisMock.get().getSkyFunctions(directories))

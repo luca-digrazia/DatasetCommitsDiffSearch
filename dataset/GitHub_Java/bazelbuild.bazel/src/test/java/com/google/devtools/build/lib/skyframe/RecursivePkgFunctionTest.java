@@ -19,6 +19,7 @@ import static com.google.devtools.build.skyframe.WalkableGraphUtils.exists;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.vfs.Path;
@@ -45,7 +46,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class RecursivePkgFunctionTest extends BuildViewTestCase {
 
-  private static SkyKey buildRecursivePkgKey(
+  private SkyKey buildRecursivePkgKey(
       Path root, PathFragment rootRelativePath, ImmutableSet<PathFragment> excludedPaths) {
     RootedPath rootedPath = RootedPath.toRootedPath(Root.fromPath(root), rootRelativePath);
     return RecursivePkgValue.key(
@@ -101,11 +102,11 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
     setPackageCacheOptions("--package_path=" + "root1" + ":" + "root2");
 
     RecursivePkgValue valueForRoot1 = buildRecursivePkgValue(root1, PathFragment.create("a"));
-    String root1Pkg = valueForRoot1.getPackages().getSingleton();
+    String root1Pkg = Iterables.getOnlyElement(valueForRoot1.getPackages());
     assertThat(root1Pkg).isEqualTo("a");
 
     RecursivePkgValue valueForRoot2 = buildRecursivePkgValue(root2, PathFragment.create("a"));
-    String root2Pkg = valueForRoot2.getPackages().getSingleton();
+    String root2Pkg = Iterables.getOnlyElement(valueForRoot2.getPackages());
     assertThat(root2Pkg).isEqualTo("a/b");
   }
 
@@ -125,11 +126,11 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
     RecursivePkgValue value = evaluationResult.get(key);
 
     // Then the package corresponding to "a/b" is not present in the result,
-    assertThat(value.getPackages().toList()).doesNotContain("a/b");
+    assertThat(value.getPackages()).doesNotContain("a/b");
 
     // And the "a" package and "a/c" package are.
-    assertThat(value.getPackages().toList()).contains("a");
-    assertThat(value.getPackages().toList()).contains("a/c");
+    assertThat(value.getPackages()).contains("a");
+    assertThat(value.getPackages()).contains("a/c");
 
     // Also, the computation graph does not contain a cached value for "a/b".
     WalkableGraph graph = Preconditions.checkNotNull(evaluationResult.getWalkableGraph());
@@ -162,11 +163,11 @@ public class RecursivePkgFunctionTest extends BuildViewTestCase {
     RecursivePkgValue value = evaluationResult.get(key);
 
     // Then the package corresponding to the excluded subdirectory is not present in the result,
-    assertThat(value.getPackages().toList()).doesNotContain("a/b/c");
+    assertThat(value.getPackages()).doesNotContain("a/b/c");
 
     // And the top package and other subsubdirectory package are.
-    assertThat(value.getPackages().toList()).contains("a");
-    assertThat(value.getPackages().toList()).contains("a/b/d");
+    assertThat(value.getPackages()).contains("a");
+    assertThat(value.getPackages()).contains("a/b/d");
 
     // Also, the computation graph contains a cached value for "a/b" with "a/b/c" excluded, because
     // "a/b/c" does live underneath "a/b".
