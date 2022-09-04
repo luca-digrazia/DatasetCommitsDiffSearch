@@ -63,7 +63,7 @@ import org.graylog2.plugin.indexer.rotation.RotationStrategy;
 import org.graylog2.rest.NotFoundExceptionMapper;
 import org.graylog2.rest.RestAccessLogFilter;
 import org.graylog2.rest.ValidationExceptionMapper;
-import org.graylog2.shared.security.ShiroSecurityBinding;
+import org.graylog2.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsImpl;
@@ -82,7 +82,6 @@ import org.graylog2.system.activities.SystemMessageActivityWriter;
 import org.graylog2.system.jobs.SystemJobFactory;
 import org.graylog2.system.jobs.SystemJobManager;
 import org.graylog2.system.shutdown.GracefulShutdown;
-import org.graylog2.system.stats.ClusterStatsModule;
 
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
@@ -155,7 +154,6 @@ public class ServerBindings extends AbstractModule {
         bind(BundleService.class).in(Scopes.SINGLETON);
         bind(BundleImporterProvider.class).in(Scopes.SINGLETON);
         bind(BundleExporterProvider.class).in(Scopes.SINGLETON);
-        bind(ClusterStatsModule.class).asEagerSingleton();
 
         bind(String[].class).annotatedWith(Names.named("RestControllerPackages")).toInstance(new String[]{
                 "org.graylog2.rest.resources",
