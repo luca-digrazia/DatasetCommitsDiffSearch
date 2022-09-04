@@ -25,8 +25,6 @@ public class TransactionalRequestDispatcher implements RequestDispatcher {
         final Session session = sessionFactory.openSession();
         try {
             session.setDefaultReadOnly(transactional.readOnly());
-            session.setCacheMode(transactional.cacheMode());
-            session.setFlushMode(transactional.flushMode());
             ManagedSessionContext.bind(session);
             final Transaction txn = session.beginTransaction();
             try {
