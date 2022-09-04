@@ -113,6 +113,9 @@ public class FakeCcModule
 
   @Override
   public Object createLibraryLinkerInput(
+      Object skylarkRuleContext,
+      Object library,
+      Object skylarkArtifactCategory,
       Object actions,
       Object featureConfiguration,
       Object ccToolchainProvider,
@@ -128,6 +131,11 @@ public class FakeCcModule
 
   @Override
   public Object createCcLinkingInfo(
+      Object skylarkRuleContextObject,
+      Object staticModeParamsForDynamicLibraryObject,
+      Object staticModeParamsForExecutableObject,
+      Object dynamicModeParamsForDynamicLibraryObject,
+      Object dynamicModeParamsForExecutableObject,
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
       Location location,

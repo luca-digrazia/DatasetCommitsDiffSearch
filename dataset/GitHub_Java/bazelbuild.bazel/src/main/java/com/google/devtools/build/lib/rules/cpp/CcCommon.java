@@ -48,6 +48,7 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategor
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.CollidingProvidesException;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
+import com.google.devtools.build.lib.rules.cpp.FdoProvider.FdoMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -84,8 +85,7 @@ public final class CcCommon {
   public static final String MINIMUM_OS_VERSION_VARIABLE_NAME = "minimum_os_version";
 
   public static final String PIC_CONFIGURATION_ERROR =
-      "PIC compilation is requested but the toolchain does not support it "
-          + "(feature named 'supports_pic' is not enabled)";
+      "PIC compilation is requested but the toolchain does not support it";
 
   private static final String NO_COPTS_ATTRIBUTE = "nocopts";
 
@@ -160,14 +160,14 @@ public final class CcCommon {
 
   private final CcToolchainProvider ccToolchain;
 
-  private final FdoContext fdoContext;
+  private final FdoProvider fdoProvider;
 
   public CcCommon(RuleContext ruleContext) {
     this.ruleContext = ruleContext;
     this.ccToolchain =
         Preconditions.checkNotNull(
             CppHelper.getToolchainUsingDefaultCcToolchainAttribute(ruleContext));
-    this.fdoContext = ccToolchain.getFdoContext();
+    this.fdoProvider = ccToolchain.getFdoProvider();
   }
 
   /**
@@ -402,9 +402,11 @@ public final class CcCommon {
     return ccToolchain;
   }
 
-  /** Returns the C++ FDO optimization support provider. */
-  public FdoContext getFdoContext() {
-    return fdoContext;
+  /**
+   * Returns the C++ FDO optimization support provider.
+   */
+  public FdoProvider getFdoProvider() {
+    return fdoProvider;
   }
 
   /**
@@ -824,20 +826,10 @@ public final class CcCommon {
     if (toolchain.getCcInfo().getCcCompilationContext().getCppModuleMap() == null) {
       unsupportedFeaturesBuilder.add(CppRuleClasses.MODULE_MAPS);
     }
-    // If we're not using legacy crosstool fields, we assume 'static_link_cpp_runtimes' feature
-    // is enabled by default for toolchains that support it, and can be disabled by the user
-    // when needed using --feature=-static_link_cpp_runtimes option or
-    // features = [ '-static_link_cpp_runtimes' ] rule attribute.
-    if (!cppConfiguration.disableLegacyCrosstoolFields()) {
-      if (enableStaticLinkCppRuntimesFeature(requestedFeatures, unsupportedFeatures, toolchain)) {
-        allRequestedFeaturesBuilder.add(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES);
-      } else {
-        unsupportedFeaturesBuilder.add(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES);
-      }
-    }
-
-    if (cppConfiguration.forcePic()) {
-      allRequestedFeaturesBuilder.add(CppRuleClasses.SUPPORTS_PIC);
+    if (enableStaticLinkCppRuntimesFeature(requestedFeatures, unsupportedFeatures, toolchain)) {
+      allRequestedFeaturesBuilder.add(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES);
+    } else {
+      unsupportedFeaturesBuilder.add(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES);
     }
 
     ImmutableSet<String> allUnsupportedFeatures = unsupportedFeaturesBuilder.build();
@@ -861,10 +853,7 @@ public final class CcCommon {
     ImmutableList.Builder<String> allFeatures =
         new ImmutableList.Builder<String>()
             .addAll(ImmutableSet.of(toolchain.getCompilationMode().toString()))
-            .addAll(
-                cppConfiguration.disableLegacyCrosstoolFields()
-                    ? ImmutableList.of()
-                    : DEFAULT_FEATURES)
+            .addAll(DEFAULT_FEATURES)
             .addAll(DEFAULT_ACTION_CONFIGS)
             .addAll(requestedFeatures)
             .addAll(toolchain.getFeatures().getDefaultFeaturesAndActionConfigs());
@@ -875,41 +864,40 @@ public final class CcCommon {
       allFeatures.add("nonhost");
     }
 
-    if (toolchain.useFission() && !cppConfiguration.disableLegacyCrosstoolFields()) {
+    if (toolchain.useFission()) {
       allFeatures.add(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
     }
 
     allFeatures.addAll(getCoverageFeatures(toolchain));
 
-    String fdoInstrument = cppConfiguration.getFdoInstrument();
-    if (fdoInstrument != null && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_INSTRUMENT)) {
+    if (cppConfiguration.getFdoInstrument() != null
+        && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_INSTRUMENT)) {
       allFeatures.add(CppRuleClasses.FDO_INSTRUMENT);
     }
 
-    FdoContext.BranchFdoProfile branchFdoProvider = toolchain.getFdoContext().getBranchFdoProfile();
-    if (branchFdoProvider != null && toolchain.getCompilationMode() == CompilationMode.OPT) {
-      if (branchFdoProvider.isLlvmFdo()
-          && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_OPTIMIZE)) {
-        allFeatures.add(CppRuleClasses.FDO_OPTIMIZE);
-        // For LLVM, support implicit enabling of ThinLTO for FDO unless it has been
-        // explicitly disabled.
-        if (toolchain.isLLVMCompiler()
-            && !allUnsupportedFeatures.contains(CppRuleClasses.THIN_LTO)) {
-          allFeatures.add(CppRuleClasses.ENABLE_FDO_THINLTO);
-        }
+    FdoMode fdoMode = toolchain.getFdoMode();
+    boolean isFdo = fdoMode != FdoMode.OFF && toolchain.getCompilationMode() == CompilationMode.OPT;
+    if (isFdo
+        && fdoMode != FdoMode.AUTO_FDO
+        && fdoMode != FdoMode.XBINARY_FDO
+        && !allUnsupportedFeatures.contains(CppRuleClasses.FDO_OPTIMIZE)) {
+      allFeatures.add(CppRuleClasses.FDO_OPTIMIZE);
+      // For LLVM, support implicit enabling of ThinLTO for FDO unless it has been
+      // explicitly disabled.
+      if (toolchain.isLLVMCompiler() && !allUnsupportedFeatures.contains(CppRuleClasses.THIN_LTO)) {
+        allFeatures.add(CppRuleClasses.ENABLE_FDO_THINLTO);
       }
-      if (branchFdoProvider.isAutoFdo()) {
-        allFeatures.add(CppRuleClasses.AUTOFDO);
-        // For LLVM, support implicit enabling of ThinLTO for AFDO unless it has been
-        // explicitly disabled.
-        if (toolchain.isLLVMCompiler()
-            && !allUnsupportedFeatures.contains(CppRuleClasses.THIN_LTO)) {
-          allFeatures.add(CppRuleClasses.ENABLE_AFDO_THINLTO);
-        }
+    }
+    if (isFdo && fdoMode == FdoMode.AUTO_FDO) {
+      allFeatures.add(CppRuleClasses.AUTOFDO);
+      // For LLVM, support implicit enabling of ThinLTO for AFDO unless it has been
+      // explicitly disabled.
+      if (toolchain.isLLVMCompiler() && !allUnsupportedFeatures.contains(CppRuleClasses.THIN_LTO)) {
+        allFeatures.add(CppRuleClasses.ENABLE_AFDO_THINLTO);
       }
-      if (branchFdoProvider.isAutoXBinaryFdo()) {
-        allFeatures.add(CppRuleClasses.XBINARYFDO);
-      }
+    }
+    if (isFdo && fdoMode == FdoMode.XBINARY_FDO) {
+      allFeatures.add(CppRuleClasses.XBINARYFDO);
     }
     if (cppConfiguration.getFdoPrefetchHintsLabel() != null) {
       allRequestedFeaturesBuilder.add(CppRuleClasses.FDO_PREFETCH_HINTS);
@@ -937,8 +925,7 @@ public final class CcCommon {
         }
       }
       if ((cppConfiguration.forcePic() || toolchain.toolchainNeedsPic())
-          && (!featureConfiguration.isEnabled(CppRuleClasses.PIC)
-              && !featureConfiguration.isEnabled(CppRuleClasses.SUPPORTS_PIC))) {
+          && !featureConfiguration.isEnabled(CppRuleClasses.PIC)) {
         throw new EvalException(/* location= */ null, PIC_CONFIGURATION_ERROR);
       }
       return featureConfiguration;

@@ -73,7 +73,6 @@ import com.google.devtools.build.lib.syntax.Runtime.NoneType;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -613,8 +612,8 @@ public class CcModule
             doc = "the set of headers needed to compile this target",
             positional = false,
             named = true,
-            defaultValue = "unbound",
-            type = Object.class),
+            defaultValue = "depset([])",
+            type = SkylarkNestedSet.class),
         @Param(
             name = "system_includes",
             doc =
@@ -623,8 +622,8 @@ public class CcModule
                     + "or absolute. Usually passed with -isystem",
             positional = false,
             named = true,
-            defaultValue = "unbound",
-            type = Object.class),
+            defaultValue = "depset([])",
+            type = SkylarkNestedSet.class),
         @Param(
             name = "includes",
             doc =
@@ -632,8 +631,8 @@ public class CcModule
                     + "Usually passed with -I",
             positional = false,
             named = true,
-            defaultValue = "unbound",
-            type = Object.class),
+            defaultValue = "depset([])",
+            type = SkylarkNestedSet.class),
         @Param(
             name = "quote_includes",
             doc =
@@ -642,74 +641,42 @@ public class CcModule
                     + "root or absolute. Usually passed with -iquote",
             positional = false,
             named = true,
-            defaultValue = "unbound",
-            type = Object.class),
+            defaultValue = "depset([])",
+            type = SkylarkNestedSet.class),
         @Param(
             name = "defines",
             doc = "the set of defines needed to compile this target. Each define is a string",
             positional = false,
             named = true,
-            defaultValue = "unbound",
-            type = Object.class)
+            defaultValue = "depset([])",
+            type = SkylarkNestedSet.class)
       })
   public CcCompilationContext createCcCompilationContext(
       SkylarkRuleContext skylarkRuleContext,
-      Object headers,
-      Object systemIncludes,
-      Object includes,
-      Object quoteIncludes,
-      Object defines)
+      SkylarkNestedSet headers,
+      SkylarkNestedSet systemIncludes,
+      SkylarkNestedSet includes,
+      SkylarkNestedSet quoteIncludes,
+      SkylarkNestedSet defines)
       throws EvalException, InterruptedException {
     CcCommon.checkRuleWhitelisted(skylarkRuleContext);
     CcCompilationContext.Builder ccCompilationContext =
         new CcCompilationContext.Builder(/* ruleContext= */ null);
-    ccCompilationContext.addDeclaredIncludeSrcs(
-        toNestedSetOfArtifacts(headers, "headers").getSet(Artifact.class));
+    ccCompilationContext.addDeclaredIncludeSrcs(headers.getSet(Artifact.class));
     ccCompilationContext.addSystemIncludeDirs(
-        toNestedSetOfStrings(systemIncludes, "system_includes").getSet(String.class).toList()
-            .stream()
+        systemIncludes.getSet(String.class).toList().stream()
             .map(x -> PathFragment.create(x))
             .collect(ImmutableList.toImmutableList()));
     ccCompilationContext.addIncludeDirs(
-        toNestedSetOfStrings(includes, "includes").getSet(String.class).toList().stream()
+        includes.getSet(String.class).toList().stream()
             .map(x -> PathFragment.create(x))
             .collect(ImmutableList.toImmutableList()));
     ccCompilationContext.addQuoteIncludeDirs(
-        toNestedSetOfStrings(quoteIncludes, "quote_includes").getSet(String.class).toList().stream()
+        quoteIncludes.getSet(String.class).toList().stream()
             .map(x -> PathFragment.create(x))
             .collect(ImmutableList.toImmutableList()));
-    ccCompilationContext.addDefines(toNestedSetOfStrings(defines, "defines").getSet(String.class));
+    ccCompilationContext.addDefines(defines.getSet(String.class));
     return ccCompilationContext.build();
-  }
-
-  private static SkylarkNestedSet toNestedSetOfArtifacts(Object obj, String fieldName)
-      throws EvalException {
-    if (obj == Runtime.UNBOUND) {
-      return SkylarkNestedSet.of(SkylarkType.STRING, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
-    } else {
-      return SkylarkType.cast(
-          obj,
-          SkylarkNestedSet.class,
-          Artifact.class,
-          Location.BUILTIN,
-          "'%s' argument must be a depset of artifacts",
-          fieldName);
-    }
-  }
-
-  private static SkylarkNestedSet toNestedSetOfStrings(Object obj, String fieldName)
-      throws EvalException {
-    if (obj == Runtime.UNBOUND) {
-      return SkylarkNestedSet.of(SkylarkType.STRING, NestedSetBuilder.emptySet(Order.STABLE_ORDER));
-    } else {
-      return SkylarkType.cast(
-          obj,
-          SkylarkNestedSet.class,
-          String.class,
-          Location.BUILTIN,
-          "'%s' argument must be a depset of strings",
-          fieldName);
-    }
   }
 
   @Override
@@ -1113,8 +1080,8 @@ public class CcModule
 
     boolean supportsGoldLinker = featureNames.contains("supports_gold_linker");
     boolean supportsStartEndLib = featureNames.contains("supports_start_end_lib");
-    boolean supportsInterfaceSharedLibraries =
-        featureNames.contains("supports_interface_shared_libraries");
+    boolean supportsInterfaceSharedObjects =
+        featureNames.contains("supports_interface_shared_objects");
     boolean supportsEmbeddedRuntimes = featureNames.contains("supports_embedded_runtimes");
     boolean supportsFission = featureNames.contains("supports_fission");
     boolean dynamicLinkingMode = featureNames.contains("dynamic_linking_mode");
@@ -1208,7 +1175,7 @@ public class CcModule
               // This should be toolchain-based, rather than feature based, because
               // it controls whether or not to declare the feature at all.
               supportsEmbeddedRuntimes,
-              supportsInterfaceSharedLibraries)) {
+              supportsInterfaceSharedObjects)) {
         legacyFeaturesBuilder.add(new Feature(feature));
       }
       legacyFeaturesBuilder.addAll(
@@ -1277,11 +1244,12 @@ public class CcModule
         abiLibcVersion,
         supportsGoldLinker,
         supportsStartEndLib,
-        supportsInterfaceSharedLibraries,
+        supportsInterfaceSharedObjects,
         supportsEmbeddedRuntimes,
         /* staticRuntimesFilegroup= */ "",
         /* dynamicRuntimesFilegroup= */ "",
         supportsFission,
+        /* supportsDsym= */ false,
         needsPic,
         toolPathList,
         /* compilerFlags= */ ImmutableList.of(),

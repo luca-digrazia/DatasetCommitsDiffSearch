@@ -577,15 +577,17 @@ public final class CcToolchainProvider extends ToolchainInfo
   }
 
   /** Returns whether the toolchain supports the --start-lib/--end-lib options. */
-  public boolean supportsStartEndLib(FeatureConfiguration featureConfiguration) {
-    return toolchainInfo.supportsStartEndLib()
-        || featureConfiguration.isEnabled(CppRuleClasses.SUPPORTS_START_END_LIB);
+  public boolean supportsStartEndLib() {
+    return toolchainInfo.supportsStartEndLib();
   }
 
-  /** Returns whether this toolchain supports interface shared libraries. */
-  public boolean supportsInterfaceSharedLibraries(FeatureConfiguration featureConfiguration) {
-    return toolchainInfo.supportsInterfaceSharedLibraries()
-        || featureConfiguration.isEnabled(CppRuleClasses.SUPPORTS_INTERFACE_SHARED_LIBRARIES);
+  /**
+   * Returns whether this toolchain supports interface shared objects.
+   *
+   * <p>Should be true if this toolchain generates ELF objects.
+   */
+  public boolean supportsInterfaceSharedObjects() {
+    return toolchainInfo.supportsInterfaceSharedObjects();
   }
 
   @Nullable
@@ -630,7 +632,6 @@ public final class CcToolchainProvider extends ToolchainInfo
   }
 
   @Override
-  @Nullable
   public String getSysroot() {
     return sysroot != null ? sysroot.getPathString() : null;
   }
