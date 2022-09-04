@@ -101,12 +101,6 @@ public class ResteasyServerCommonProcessor {
             DotName.createSimple(Response.class.getName()),
             DotName.createSimple(AsyncResponse.class.getName()),
 
-            // RESTEasy
-            DotName.createSimple("org.jboss.resteasy.plugins.providers.multipart.MultipartInput"),
-            DotName.createSimple("org.jboss.resteasy.plugins.providers.multipart.MultipartFormDataInput"),
-            DotName.createSimple("org.jboss.resteasy.plugins.providers.multipart.MultipartOutput"),
-            DotName.createSimple("org.jboss.resteasy.plugins.providers.multipart.MultipartFormDataOutput"),
-
             // Vert-x
             DotName.createSimple("io.vertx.core.json.JsonArray"),
             DotName.createSimple("io.vertx.core.json.JsonObject")));
