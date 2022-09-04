@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.android;
 
-import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType.UNQUOTED;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
@@ -60,8 +59,6 @@ import com.google.devtools.build.lib.rules.java.JavaCommon;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationInfoProvider;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
-import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider.OutputJar;
 import com.google.devtools.build.lib.rules.java.proto.JavaProtoAspectCommon;
 import com.google.devtools.build.lib.rules.java.proto.JavaProtoLibraryAspectProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
@@ -273,15 +270,11 @@ public final class DexArchiveAspect extends NativeAspectClass implements Configu
       ConfiguredTarget base, RuleContext ruleContext) {
     if (isProtoLibrary(ruleContext)) {
       if (!ruleContext.getPrerequisites("srcs", Mode.TARGET).isEmpty()) {
-        JavaRuleOutputJarsProvider outputJarsProvider =
+        JavaCompilationArgsProvider javaCompilationArgsProvider =
             WrappingProvider.Helper.getWrappedProvider(
-                base, JavaProtoLibraryAspectProvider.class, JavaRuleOutputJarsProvider.class);
-        if (outputJarsProvider != null) {
-          return outputJarsProvider
-              .getOutputJars()
-              .stream()
-              .map(OutputJar::getClassJar)
-              .collect(toImmutableList());
+                base, JavaProtoLibraryAspectProvider.class, JavaCompilationArgsProvider.class);
+        if (javaCompilationArgsProvider != null) {
+          return javaCompilationArgsProvider.getJavaCompilationArgs().getRuntimeJars();
         }
       }
     } else {
