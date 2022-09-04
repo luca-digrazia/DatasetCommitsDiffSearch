@@ -13,7 +13,6 @@ import javax.persistence.Embedded;
 import javax.persistence.Entity;
 import javax.persistence.MappedSuperclass;
 
-import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
 import org.hibernate.protean.impl.PersistenceUnitsHolder;
 import org.jboss.jandex.AnnotationInstance;
@@ -50,12 +49,10 @@ final class JpaJandexScavenger {
 
     private final ArchiveContext archiveContext;
     private final ProcessorContext processorContext;
-    private final List<ParsedPersistenceXmlDescriptor> descriptors;
 
-    JpaJandexScavenger(final ArchiveContext archiveContext, final ProcessorContext processorContext, List<ParsedPersistenceXmlDescriptor> descriptors) {
+    JpaJandexScavenger(final ArchiveContext archiveContext, final ProcessorContext processorContext) {
         this.archiveContext = archiveContext;
         this.processorContext = processorContext;
-        this.descriptors = descriptors;
     }
 
     public KnownDomainObjects discoverModelAndRegisterForReflection() throws IOException {
@@ -69,7 +66,8 @@ final class JpaJandexScavenger {
         enlistJPAModelClasses(MAPPED_SUPERCLASS, collector, index);
         enlistReturnType(collector, index);
 
-        for (PersistenceUnitDescriptor pud : descriptors) {
+        List<PersistenceUnitDescriptor> persistenceUnitDescriptors = PersistenceUnitsHolder.getPersistenceUnitDescriptors();
+        for (PersistenceUnitDescriptor pud : persistenceUnitDescriptors) {
             enlistExplicitClasses(pud.getManagedClassNames(), collector, index);
         }
 
@@ -193,8 +191,6 @@ final class JpaJandexScavenger {
             }
         }
 
-
-
         void registerAllForReflection(final ProcessorContext processorContext) {
             for (String className : classNames) {
                 processorContext.addReflectiveClass(true, true, className);
@@ -210,11 +206,6 @@ final class JpaJandexScavenger {
         @Override
         public boolean contains(final String className) {
             return classNames.contains(className);
-        }
-
-        @Override
-        public Set<String> getClassNames() {
-            return classNames;
         }
 
         public void addEnumType(String s) {
