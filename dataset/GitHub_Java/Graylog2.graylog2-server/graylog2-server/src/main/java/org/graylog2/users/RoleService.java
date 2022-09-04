@@ -33,8 +33,6 @@ public interface RoleService {
 
     Map<String, Role> loadAllIdMap() throws NotFoundException;
 
-    Map<String, Role> loadAllLowercaseNameMap() throws NotFoundException;
-
     Role save(Role role) throws ValidationException;
 
     Set<ConstraintViolation<Role>> validate(Role role);
