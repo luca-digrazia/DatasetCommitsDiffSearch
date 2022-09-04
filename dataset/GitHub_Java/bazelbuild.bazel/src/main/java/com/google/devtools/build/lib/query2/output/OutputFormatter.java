@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.query2.AbstractBlazeQueryEnvironment;
-import com.google.devtools.build.lib.query2.CommonQueryOptions;
 import com.google.devtools.build.lib.query2.engine.AggregatingQueryExpressionVisitor.ContainsFunctionQueryExpressionVisitor;
 import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
 import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
@@ -143,7 +142,7 @@ public abstract class OutputFormatter implements Serializable {
    * passing to {@link Rule#getLabels()}, {@link XmlOutputFormatter}, etc.
    */
   public static DependencyFilter getDependencyFilter(
-      CommonQueryOptions queryOptions) {
+      QueryOptions queryOptions) {
     // TODO(bazel-team): Optimize: and(ALL_DEPS, x) -> x, etc.
     return DependencyFilter.and(
         queryOptions.includeHostDeps ? DependencyFilter.ALL_DEPS : DependencyFilter.NO_HOST_DEPS,
@@ -167,16 +166,12 @@ public abstract class OutputFormatter implements Serializable {
   }
 
   /**
-   * Format the result (a set of target nodes implicitly ordered according to the graph maintained
-   * by the QueryEnvironment), and print it to "out".
+   * Format the result (a set of target nodes implicitly ordered according to
+   * the graph maintained by the QueryEnvironment), and print it to "out".
    */
-  public abstract void output(
-      QueryOptions options,
-      Digraph<Target> result,
-      OutputStream out,
-      AspectResolver aspectProvider,
-      ConditionalEdges conditionalEdges)
-      throws IOException, InterruptedException;
+  public abstract void output(QueryOptions options, Digraph<Target> result, OutputStream out,
+      AspectResolver aspectProvider)
+          throws IOException, InterruptedException;
 
   /**
    * Unordered streamed output formatter (wrt. dependency ordering).
@@ -191,7 +186,7 @@ public abstract class OutputFormatter implements Serializable {
    */
   public interface StreamedFormatter {
     /** Specifies options to be used by subsequent calls to {@link #createStreamCallback}. */
-    void setOptions(CommonQueryOptions options, AspectResolver aspectResolver);
+    void setOptions(QueryOptions options, AspectResolver aspectResolver);
 
     /**
      * Returns a {@link ThreadSafeOutputFormatterCallback} whose
@@ -221,7 +216,7 @@ public abstract class OutputFormatter implements Serializable {
 
   abstract static class AbstractUnorderedFormatter extends OutputFormatter
       implements StreamedFormatter {
-    protected CommonQueryOptions options;
+    protected QueryOptions options;
     protected AspectResolver aspectResolver;
     protected DependencyFilter dependencyFilter;
 
@@ -235,7 +230,7 @@ public abstract class OutputFormatter implements Serializable {
     }
 
     @Override
-    public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
+    public void setOptions(QueryOptions options, AspectResolver aspectResolver) {
       this.options = options;
       this.aspectResolver = aspectResolver;
       this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
@@ -246,9 +241,7 @@ public abstract class OutputFormatter implements Serializable {
         QueryOptions options,
         Digraph<Target> result,
         OutputStream out,
-        AspectResolver aspectResolver,
-        ConditionalEdges conditionalEdges)
-        throws IOException, InterruptedException {
+        AspectResolver aspectResolver) throws IOException, InterruptedException {
       setOptions(options, aspectResolver);
       OutputFormatterCallback.processAllTargets(
           createPostFactoStreamCallback(out, options), getOrderedTargets(result, options));
@@ -611,9 +604,8 @@ public abstract class OutputFormatter implements Serializable {
         QueryOptions options,
         Digraph<Target> result,
         OutputStream out,
-        AspectResolver aspectResolver,
-        ConditionalEdges conditionalEdges)
-        throws IOException {
+        AspectResolver aspectResolver)
+            throws IOException {
       PrintStream printStream = new PrintStream(out);
       // getRoots() isn't defined for cyclic graphs, so in order to handle
       // cycles correctly, we need work on the strong component graph, as
@@ -681,9 +673,8 @@ public abstract class OutputFormatter implements Serializable {
         QueryOptions options,
         Digraph<Target> result,
         OutputStream out,
-        AspectResolver aspectResolver,
-        ConditionalEdges conditionalEdges)
-        throws IOException {
+        AspectResolver aspectResolver)
+            throws IOException {
       // In order to handle cycles correctly, we need work on the strong
       // component graph, as cycles should be treated a "clump" of nodes all on
       // the same rank. Graphs may contain cycles because there are errors in BUILD files.
@@ -803,7 +794,7 @@ public abstract class OutputFormatter implements Serializable {
       // directly into Type.
       return new PossibleAttributeValues(
           ImmutableList.<Object>of(
-              attributeMap.getReachableLabels(attr.getName(), /*includeSelectKeys=*/ false)),
+              attributeMap.getReachableLabels(attr.getName(), /*includeSelectKeys=*/false)),
           source);
     } else if ((list =
             attributeMap.getConcatenatedSelectorListsOfListType(
