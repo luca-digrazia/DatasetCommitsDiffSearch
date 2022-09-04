@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,41 +13,46 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.projection;
 
-import smile.math.matrix.DenseMatrix;
+import smile.math.matrix.Matrix;
 
-/** Linear projection. */
+/**
+ * Linear projection.
+ *
+ * @author Haifeng Li
+ */
 public interface LinearProjection extends Projection<double[]> {
 
     /**
      * Returns the projection matrix. The dimension reduced data can be obtained
      * by y = W * x.
+     * @return the projection matrix.
      */
-    DenseMatrix getProjection();
+    Matrix getProjection();
 
     @Override
     default double[] project(double[] x) {
-        DenseMatrix A = getProjection();
-        int p = A.nrows();
-        int n = A.ncols();
+        Matrix A = getProjection();
+        int p = A.nrow();
+        int n = A.ncol();
 
         if (x.length != n) {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x.length, n));
         }
 
         double[] y = new double[p];
-        A.ax(x, y);
+        A.mv(x, y);
         return y;
     }
 
     @Override
     default double[][] project(double[][] x) {
-        DenseMatrix A = getProjection();
-        int p = A.nrows();
-        int n = A.ncols();
+        Matrix A = getProjection();
+        int p = A.nrow();
+        int n = A.ncol();
 
         if (x[0].length != n) {
             throw new IllegalArgumentException(String.format("Invalid input vector size: %d, expected: %d", x[0].length, n));
@@ -55,7 +60,7 @@ public interface LinearProjection extends Projection<double[]> {
 
         double[][] y = new double[x.length][p];
         for (int i = 0; i < x.length; i++) {
-            A.ax(x[i], y[i]);
+            A.mv(x[i], y[i]);
         }
         return y;
     }

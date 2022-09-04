@@ -19,7 +19,6 @@ package smile.projection;
 
 import java.io.Serializable;
 import smile.math.MathEx;
-import smile.math.TimeFunction;
 import smile.math.matrix.Matrix;
 
 /**
@@ -42,7 +41,7 @@ import smile.math.matrix.Matrix;
  * <p>
  * Compared to regular batch PCA algorithm based on eigen decomposition, GHA is
  * an adaptive method and works with an arbitrarily large sample size. The storage
- * requirement is modest. Another attractive feature is that, in a non-stationary
+ * requirement is modest. Another attractive feature is that, in a nonstationary
  * environment, it has an inherent ability to track gradual changes in the
  * optimal solution in an inexpensive way.
  *
@@ -70,7 +69,7 @@ public class GHA implements LinearProjection, Serializable {
     /**
      * The learning rate;
      */
-    private final TimeFunction r;
+    private double r;
     /**
      * Projection matrix.
      */
@@ -83,17 +82,14 @@ public class GHA implements LinearProjection, Serializable {
      * Workspace for W' * y.
      */
     private final double[] wy;
-    /**
-     * The training iterations.
-     */
-    protected int t = 0;
+
     /**
      * Constructor.
      * @param n the dimension of input space.
      * @param p the dimension of feature space.
      * @param r the learning rate.
      */
-    public GHA(int n, int p, TimeFunction r) {
+    public GHA(int n, int p, double r) {
         if (n < 2) {
             throw new IllegalArgumentException("Invalid dimension of input space: " + n);
         }
@@ -121,7 +117,7 @@ public class GHA implements LinearProjection, Serializable {
      * @param w the initial projection matrix.
      * @param r the learning rate.
      */
-    public GHA(double[][] w, TimeFunction r) {
+    public GHA(double[][] w, double r) {
         this.p = w.length;
         this.n = w[0].length;
         this.r = r;
@@ -137,8 +133,24 @@ public class GHA implements LinearProjection, Serializable {
      * eigenvalues. The dimension reduced data can be obtained by y = W * x.
      */
     @Override
-    public Matrix projection() {
+    public Matrix getProjection() {
         return projection;
+    }
+
+    /**
+     * Returns the learning rate.
+     * @return the learning rate.
+     */
+    public double getLearningRate() {
+        return r;
+    }
+
+    /**
+     * Set the learning rate.
+     * @param r the learning rate.
+     */
+    public void setLearningRate(double r) {
+        this.r = r;
     }
 
     /**
@@ -159,7 +171,7 @@ public class GHA implements LinearProjection, Serializable {
                 for (int l = 0; l <= j; l++) {
                     delta -= projection.get(l, i) * y[l];
                 }
-                projection.add(j, i, r.apply(t) * y[j] * delta);
+                projection.add(j, i, r * y[j] * delta);
 
                 if (Double.isInfinite(projection.get(j, i))) {
                     throw new IllegalStateException("GHA lost convergence. Lower learning rate?");
@@ -167,7 +179,6 @@ public class GHA implements LinearProjection, Serializable {
             }
         }
 
-        t++;
         projection.mv(x, y);
         projection.tv(y, wy);
         return MathEx.squaredDistance(x, wy);

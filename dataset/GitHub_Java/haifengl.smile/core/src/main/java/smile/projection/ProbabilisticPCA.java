@@ -92,7 +92,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
      * by corresponding eigenvalues.
      * @return the variable loading matrix.
      */
-    public Matrix loadings() {
+    public Matrix getLoadings() {
         return loading;
     }
 
@@ -100,7 +100,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
      * Returns the center of data.
      * @return the center of data.
      */
-    public double[] center() {
+    public double[] getCenter() {
         return mu;
     }
 
@@ -108,7 +108,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
      * Returns the variance of noise.
      * @return the variance of noise.
      */
-    public double variance() {
+    public double getNoiseVariance() {
         return noise;
     }
 
@@ -117,7 +117,7 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
      * latent model.
      */
     @Override
-    public Matrix projection() {
+    public Matrix getProjection() {
         return projection;
     }
 
@@ -176,19 +176,19 @@ public class ProbabilisticPCA implements LinearProjection, Serializable {
 
         cov.uplo(UPLO.LOWER);
         Matrix.EVD eigen = cov.eigen(false, true, true).sort();
-        double[] eigvalues = eigen.wr;
-        Matrix eigvectors = eigen.Vr;
+        double[] evalues = eigen.wr;
+        Matrix evectors = eigen.Vr;
 
         double noise = 0.0;
         for (int i = k; i < n; i++) {
-            noise += eigvalues[i];
+            noise += evalues[i];
         }
         noise /= (n - k);
 
         Matrix loading = new Matrix(n, k);
         for (int i = 0; i < n; i++) {
             for (int j = 0; j < k; j++) {
-                loading.set(i, j, eigvectors.get(i, j) * Math.sqrt(eigvalues[j] - noise));
+                loading.set(i, j, evectors.get(i, j) * Math.sqrt(evalues[j] - noise));
             }
         }
 
