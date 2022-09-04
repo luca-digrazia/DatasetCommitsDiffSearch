@@ -1,7 +1,5 @@
 package org.jboss.protean.gizmo;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Objects;
 
 /**
@@ -22,6 +20,7 @@ public class ResultHandle {
     private ResultType resultType;
 
     ResultHandle(String type, BytecodeCreatorImpl owner) {
+        this.no = no;
         this.type = type;
         this.owner = owner;
         this.constant = null;
