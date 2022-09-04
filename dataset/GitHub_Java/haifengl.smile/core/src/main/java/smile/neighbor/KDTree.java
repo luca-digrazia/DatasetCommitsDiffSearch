@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.neighbor;
 
@@ -188,7 +188,7 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
         }
 
         // If the max spread is 0, make this a leaf node
-        if (MathEx.isZero(maxRadius, 1E-8)) {
+        if (maxRadius == 0) {
             node.lower = node.upper = null;
             return node;
         }
@@ -216,12 +216,6 @@ public class KDTree <E> implements NearestNeighborSearch<double[], E>, KNNSearch
             if (i2Good) {
                 i2--;
             }
-        }
-
-        // If either side is empty, make this a leaf node.
-        if (size == 0 || size == node.count) {
-            node.lower = node.upper = null;
-            return node;
         }
 
         // Create the child nodes
