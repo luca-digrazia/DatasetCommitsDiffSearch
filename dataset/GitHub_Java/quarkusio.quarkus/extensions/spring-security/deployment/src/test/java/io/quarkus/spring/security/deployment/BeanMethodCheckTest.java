@@ -1,10 +1,10 @@
 package io.quarkus.spring.security.deployment;
 
-import static io.quarkus.security.test.cdi.SecurityTestUtils.assertFailureFor;
-import static io.quarkus.security.test.cdi.SecurityTestUtils.assertSuccess;
 import static io.quarkus.security.test.utils.IdentityMock.ADMIN;
 import static io.quarkus.security.test.utils.IdentityMock.ANONYMOUS;
 import static io.quarkus.security.test.utils.IdentityMock.USER;
+import static io.quarkus.security.test.utils.SecurityTestUtils.assertFailureFor;
+import static io.quarkus.security.test.utils.SecurityTestUtils.assertSuccess;
 
 import javax.inject.Inject;
 
@@ -15,9 +15,9 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.security.ForbiddenException;
 import io.quarkus.security.UnauthorizedException;
-import io.quarkus.security.test.cdi.SecurityTestUtils;
 import io.quarkus.security.test.utils.AuthData;
 import io.quarkus.security.test.utils.IdentityMock;
+import io.quarkus.security.test.utils.SecurityTestUtils;
 import io.quarkus.spring.security.deployment.springapp.BeanWithBeanMethodChecks;
 import io.quarkus.spring.security.deployment.springapp.Person;
 import io.quarkus.spring.security.deployment.springapp.PersonChecker;
@@ -83,6 +83,15 @@ public class BeanMethodCheckTest {
         assertSuccess(() -> beanWithBeanMethodChecks.withParams("geo", new Person("geo")), "withParams", ANONYMOUS);
         assertFailureFor(() -> beanWithBeanMethodChecks.withParams("other", new Person("geo")), ForbiddenException.class, USER);
         assertSuccess(() -> beanWithBeanMethodChecks.withParams("geo", new Person("geo")), "withParams", USER);
+    }
+
+    @Test
+    public void testWithParamsAndConstant() {
+        assertSuccess(() -> beanWithBeanMethodChecks.withParamAndConstant(new Person("geo")), "withParamAndConstant",
+                ANONYMOUS);
+        assertFailureFor(() -> beanWithBeanMethodChecks.withParamAndConstant(new Person("other")), ForbiddenException.class,
+                USER);
+        assertSuccess(() -> beanWithBeanMethodChecks.withParamAndConstant(new Person("geo")), "withParamAndConstant", USER);
     }
 
     @Test
