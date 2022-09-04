@@ -35,7 +35,7 @@ public class NativeImageBuildLocalContainerRunner extends NativeImageBuildContai
             }
         }
 
-        Collections.addAll(containerRuntimeArgs, "-v",
+        Collections.addAll(containerRuntimeArgs, "--rm", "-v",
                 volumeOutputPath + ":" + NativeImageBuildStep.CONTAINER_BUILD_VOLUME_PATH + ":z");
         return containerRuntimeArgs;
     }
