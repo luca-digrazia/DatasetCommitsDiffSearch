@@ -11,7 +11,6 @@ import java.util.concurrent.Executor;
 import javax.ws.rs.container.CompletionCallback;
 import javax.ws.rs.container.ConnectionCallback;
 import org.jboss.logging.Logger;
-import org.jboss.resteasy.reactive.common.PreserveTargetException;
 import org.jboss.resteasy.reactive.spi.RestHandler;
 import org.jboss.resteasy.reactive.spi.ThreadSetupAction;
 
@@ -165,11 +164,7 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
                     }
                 } catch (Throwable t) {
                     boolean over = handlers == abortHandlerChain;
-                    if (t instanceof PreserveTargetException) {
-                        handleException(t.getCause(), true);
-                    } else {
-                        handleException(t);
-                    }
+                    handleException(t);
                     if (over) {
                         running = false;
                         return;
@@ -203,9 +198,6 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
 
     }
 
-    /**
-     * Ensures the CDI request scope is running when inside a handler chain
-     */
     public void requireCDIRequestScope() {
         if (!running) {
             throw new RuntimeException("Cannot be called when outside a handler chain");
@@ -224,14 +216,6 @@ public abstract class AbstractResteasyReactiveContext<T extends AbstractResteasy
             currentRequestScope = requestContext.currentState();
         }
         handleRequestScopeActivation();
-    }
-
-    /**
-     * Captures the CDI request scope for use outside of handler chains.
-     */
-    public ThreadSetupAction.ThreadState captureCDIRequestScope() {
-        requireCDIRequestScope();
-        return currentRequestScope;
     }
 
     protected abstract void handleRequestScopeActivation();
