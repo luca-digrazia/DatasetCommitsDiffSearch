@@ -223,7 +223,7 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
             CommandLines.of(argv),
             ruleContext.getConfiguration().getActionEnvironment(),
             ImmutableMap.copyOf(executionInfo),
-            CompositeRunfilesSupplier.fromSuppliers(commandHelper.getToolsRunfilesSuppliers()),
+            new CompositeRunfilesSupplier(commandHelper.getToolsRunfilesSuppliers()),
             progressMessage));
 
     RunfilesProvider runfilesProvider = RunfilesProvider.withData(
