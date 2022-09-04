@@ -914,11 +914,9 @@ public class PackageFunction implements SkyFunction {
         }
       }
       Token legacyIncludesToken =
-          globsToDelegate.isEmpty()
-              ? null
-              : legacyGlobber.runAsync(
-                  globsToDelegate, ImmutableList.of(), excludeDirs, allowEmpty);
-      return new HybridToken(globValueMap, globKeys, legacyIncludesToken, excludes, allowEmpty);
+          legacyGlobber.runAsync(globsToDelegate, ImmutableList.of(), excludeDirs, allowEmpty);
+
+      return new HybridToken(globValueMap, globKeys, legacyIncludesToken, excludes);
     }
 
     private Collection<SkyKey> getMissingKeys(Collection<SkyKey> globKeys,
@@ -972,23 +970,19 @@ public class PackageFunction implements SkyFunction {
       // (this is includes_sky above).
       private final Iterable<SkyKey> includesGlobKeys;
       // A token for computing legacy globs.
-      @Nullable private final Token legacyIncludesToken;
+      private final Token legacyIncludesToken;
 
       private final List<String> excludes;
-
-      private final boolean allowEmpty;
 
       private HybridToken(
           Map<SkyKey, ValueOrException2<IOException, BuildFileNotFoundException>> globValueMap,
           Iterable<SkyKey> includesGlobKeys,
-          @Nullable Token delegateIncludesToken,
-          List<String> excludes,
-          boolean allowEmpty) {
+          Token delegateIncludesToken,
+          List<String> excludes) {
         this.globValueMap = globValueMap;
         this.includesGlobKeys = includesGlobKeys;
         this.legacyIncludesToken = delegateIncludesToken;
         this.excludes = excludes;
-        this.allowEmpty = allowEmpty;
       }
 
       private List<String> resolve(Globber delegate)
@@ -996,31 +990,16 @@ public class PackageFunction implements SkyFunction {
         HashSet<String> matches = new HashSet<>();
         for (SkyKey includeGlobKey : includesGlobKeys) {
           // TODO(bazel-team): NestedSet expansion here is suboptimal.
-          boolean foundMatch = false;
           for (PathFragment match : getGlobMatches(includeGlobKey, globValueMap)) {
             matches.add(match.getPathString());
-            foundMatch = true;
-          }
-          if (!allowEmpty && !foundMatch) {
-            throw new BadGlobException(
-                "glob pattern '"
-                    + ((GlobDescriptor) includeGlobKey.argument()).getPattern()
-                    + "' didn't match anything, but allow_empty is set to False.");
           }
         }
-        if (legacyIncludesToken != null) {
-          matches.addAll(delegate.fetch(legacyIncludesToken));
-        }
+        matches.addAll(delegate.fetch(legacyIncludesToken));
         UnixGlob.removeExcludes(matches, excludes);
         List<String> result = new ArrayList<>(matches);
         // Skyframe glob results are unsorted. And we used a LegacyGlobber that doesn't sort.
         // Therefore, we want to unconditionally sort here.
         Collections.sort(result);
-
-        if (!allowEmpty && result.isEmpty()) {
-          throw new BadGlobException(
-              "all files in the glob have been excluded, but allow_empty is set to False.");
-        }
         return result;
       }
 
