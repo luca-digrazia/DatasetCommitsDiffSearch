@@ -31,9 +31,6 @@ import org.graylog2.audit.AuditEventSender;
 import org.graylog2.audit.AuditEventType;
 import org.graylog2.audit.PluginAuditEventTypes;
 import org.graylog2.audit.formatter.AuditEventFormatter;
-import org.graylog2.contentpacks.constraints.ConstraintChecker;
-import org.graylog2.contentpacks.facades.EntityFacade;
-import org.graylog2.contentpacks.model.ModelType;
 import org.graylog2.migrations.Migration;
 import org.graylog2.plugin.alarms.AlertCondition;
 import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
@@ -241,8 +238,6 @@ public abstract class Graylog2Module extends AbstractModule {
         installInput(inputMapBinder, target, factoryClass);
     }
 
-    // This should only be used by plugins that have been built before Graylog 3.0.1.
-    // See comments in MessageOutput.Factory and MessageOutput.Factory2 for details
     protected MapBinder<String, MessageOutput.Factory<? extends MessageOutput>> outputsMapBinder() {
         return MapBinder.newMapBinder(binder(),
                 TypeLiteral.get(String.class),
@@ -250,29 +245,9 @@ public abstract class Graylog2Module extends AbstractModule {
                 });
     }
 
-    // This should only be used by plugins that have been built before Graylog 3.0.1.
-    // See comments in MessageOutput.Factory and MessageOutput.Factory2 for details
     protected <T extends MessageOutput> void installOutput(MapBinder<String, MessageOutput.Factory<? extends MessageOutput>> outputMapBinder,
                                                            Class<T> target,
                                                            Class<? extends MessageOutput.Factory<T>> targetFactory) {
-        install(new FactoryModuleBuilder().implement(MessageOutput.class, target).build(targetFactory));
-        outputMapBinder.addBinding(target.getCanonicalName()).to(Key.get(targetFactory));
-    }
-
-    // This should be used by plugins that have been built for 3.0.1 or later.
-    // See comments in MessageOutput.Factory and MessageOutput.Factory2 for details
-    protected MapBinder<String, MessageOutput.Factory2<? extends MessageOutput>> outputsMapBinder2() {
-        return MapBinder.newMapBinder(binder(),
-                TypeLiteral.get(String.class),
-                new TypeLiteral<MessageOutput.Factory2<? extends MessageOutput>>() {
-                });
-    }
-
-    // This should be used by plugins that have been built for 3.0.1 or later.
-    // See comments in MessageOutput.Factory and MessageOutput.Factory2 for details
-    protected <T extends MessageOutput> void installOutput2(MapBinder<String, MessageOutput.Factory2<? extends MessageOutput>> outputMapBinder,
-                                                           Class<T> target,
-                                                           Class<? extends MessageOutput.Factory2<T>> targetFactory) {
         install(new FactoryModuleBuilder().implement(MessageOutput.class, target).build(targetFactory));
         outputMapBinder.addBinding(target.getCanonicalName()).to(Key.get(targetFactory));
     }
@@ -460,22 +435,9 @@ public abstract class Graylog2Module extends AbstractModule {
         return Multibinder.newSetBinder(binder(), Migration.class);
     }
 
-    protected MapBinder<ModelType, EntityFacade<?>> entityFacadeBinder() {
-        return MapBinder.newMapBinder(binder(), new TypeLiteral<ModelType>() {}, new TypeLiteral<EntityFacade<?>>() {});
-    }
-
-    protected Multibinder<ConstraintChecker> constraintCheckerBinder() {
-        return Multibinder.newSetBinder(binder(), ConstraintChecker.class);
-    }
-
     private static class DynamicFeatureType extends TypeLiteral<Class<? extends DynamicFeature>> {}
 
     private static class ContainerResponseFilterType extends TypeLiteral<Class<? extends ContainerResponseFilter>> {}
 
     private static class ExceptionMapperType extends TypeLiteral<Class<? extends ExceptionMapper>> {}
-
-    protected void registerRestControllerPackage(String packageName) {
-        final Multibinder<RestControllerPackage> restControllerPackages = Multibinder.newSetBinder(binder(), RestControllerPackage.class);
-        restControllerPackages.addBinding().toInstance(RestControllerPackage.create(packageName));
-    }
 }
