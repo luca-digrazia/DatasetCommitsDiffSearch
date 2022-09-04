@@ -28,6 +28,7 @@ import smile.io.Read;
 import smile.manifold.UMAP;
 import smile.plot.swing.Canvas;
 import smile.plot.swing.ScatterPlot;
+import smile.projection.PCA;
 
 /**
  * Visualization Demo for {@link UMAP} algorithm
@@ -37,9 +38,13 @@ import smile.plot.swing.ScatterPlot;
 @SuppressWarnings("serial")
 public class UMAPDemo extends JPanel implements Runnable, ActionListener {
 
-    private static final int DEFAULT_NEIGHBORS = 7;
+    private static final int DEFAULT_NEIGHBORS = 2;
     int neighbors = DEFAULT_NEIGHBORS;
-    JTextField neighborsField;
+    JTextField neighborsField;    
+
+    private static final double DEFAULT_MIN_DIST = 0.1;
+    double mdist = DEFAULT_MIN_DIST;
+    JTextField mdistField;
 
     private static String[] datasetName = {"MNIST"};
 
@@ -75,6 +80,10 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         optionPane.add(new JLabel("Neighbors:"));
         optionPane.add(neighborsField);
 
+        mdistField = new JTextField(Double.toString(mdist), 5);
+        optionPane.add(new JLabel("MinDist:"));
+        optionPane.add(mdistField);
+
         setLayout(new BorderLayout());
         add(optionPane, BorderLayout.NORTH);
     }
@@ -83,7 +92,7 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         JPanel pane = new JPanel(new GridLayout(1, 2));
         
         long clock = System.currentTimeMillis();
-        UMAP umap = UMAP.of(data, neighbors);
+        UMAP umap = new UMAP(data, neighbors, mdist);
         System.out.format("Learn UMAP from %d samples in %dms\n", data.length, System.currentTimeMillis() - clock);
 
         double[][] y = umap.coordinates;
@@ -101,6 +110,7 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         startButton.setEnabled(false);
         datasetBox.setEnabled(false);
         neighborsField.setEnabled(false);
+        mdistField.setEnabled(false);
 
         try {
             JComponent plot = learn();
@@ -118,6 +128,7 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
         startButton.setEnabled(true);
         datasetBox.setEnabled(true);
         neighborsField.setEnabled(true);
+        mdistField.setEnabled(true);
     }
 
     @Override
@@ -145,6 +156,19 @@ public class UMAPDemo extends JPanel implements Runnable, ActionListener {
                 }
             } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, "Invalid Neighbors: " + neighborsField.getText(), "Error",
+                        JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
+            try {
+                mdist = Double.parseDouble(mdistField.getText().trim());
+                if (mdist < 0 || mdist >= 1) {
+                    JOptionPane.showMessageDialog(this, "Invalid MinDist: " + mdist, "Error",
+                            JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Invalid MinDist: " + mdistField.getText(), "Error",
                         JOptionPane.ERROR_MESSAGE);
                 return;
             }
