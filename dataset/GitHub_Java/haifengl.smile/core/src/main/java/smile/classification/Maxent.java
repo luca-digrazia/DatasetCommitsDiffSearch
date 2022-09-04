@@ -20,9 +20,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import smile.math.Math;
+import smile.math.MathEx;
 import smile.math.DifferentiableMultivariateFunction;
 import smile.util.MulticoreExecutor;
 
@@ -52,7 +50,7 @@ import smile.util.MulticoreExecutor;
  */
 public class Maxent implements SoftClassifier<int[]> {
     private static final long serialVersionUID = 1L;
-    private static final Logger logger = LoggerFactory.getLogger(Maxent.class);
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Maxent.class);
 
     /**
      * The dimension of input space.
@@ -217,7 +215,7 @@ public class Maxent implements SoftClassifier<int[]> {
         this.p = p;
         
         // class label set.
-        int[] labels = Math.unique(y);
+        int[] labels = MathEx.unique(y);
         Arrays.sort(labels);
         
         for (int i = 0; i < labels.length; i++) {
@@ -242,7 +240,7 @@ public class Maxent implements SoftClassifier<int[]> {
 
             L = 0.0;
             try {
-                L = -Math.min(func, 5, w, tol, maxIter);
+                L = -MathEx.min(func, 5, w, tol, maxIter);
             } catch (Exception ex) {
                 logger.error("Failed to minimize binary objective function of Maximum Entropy Classifier", ex);
             }
@@ -253,7 +251,7 @@ public class Maxent implements SoftClassifier<int[]> {
 
             L = 0.0;
             try {
-                L = -Math.min(func, 5, w, tol, maxIter);
+                L = -MathEx.min(func, 5, w, tol, maxIter);
             } catch (Exception ex) {
                 logger.error("Failed to minimize multi-class objective function of Maximum Entropy Classifier", ex);
             }
@@ -274,7 +272,7 @@ public class Maxent implements SoftClassifier<int[]> {
      * @return the dimension of input space.
      */
     public int getDimension() {
-    	return p;
+        return p;
     }
     
     /**
@@ -372,13 +370,12 @@ public class Maxent implements SoftClassifier<int[]> {
                 
                 int start = 0;
                 int end = step;
-                for (int i = 0; i < m - 1 && start < n; i++) {
-                    if (end > n) end = n;
+                for (int i = 0; i < m - 1; i++) {
                     tasks.add(new FTask(w, start, end));
                     start += step;
                     end += step;
                 }
-                if (start < n) tasks.add(new FTask(w, start, n));
+                tasks.add(new FTask(w, start, n));
                 
                 try {
                     for (double fi : MulticoreExecutor.run(tasks)) {
@@ -438,7 +435,7 @@ public class Maxent implements SoftClassifier<int[]> {
                     double wx = dot(x[i], w);
                     f += log1pe(wx) - y[i] * wx;
 
-                    double yi = y[i] - Math.logistic(wx);
+                    double yi = y[i] - MathEx.logistic(wx);
                     for (int j : x[i]) {
                         g[j] -= yi * j;
                     }
@@ -463,7 +460,7 @@ public class Maxent implements SoftClassifier<int[]> {
                     double wx = dot(x[i], w);
                     f += log1pe(wx) - y[i] * wx;
 
-                    double yi = y[i] - Math.logistic(wx);
+                    double yi = y[i] - MathEx.logistic(wx);
                     for (int j : x[i]) {
                         g[j] -= yi * j;
                     }
@@ -476,13 +473,12 @@ public class Maxent implements SoftClassifier<int[]> {
                 
                 int start = 0;
                 int end = step;
-                for (int i = 0; i < m - 1 && start < n; i++) {
-                    if (end > n) end = n;
+                for (int i = 0; i < m - 1; i++) {
                     tasks.add(new GTask(w, start, end));
                     start += step;
                     end += step;
                 }
-                if (start < n) tasks.add(new GTask(w, start, n));
+                tasks.add(new GTask(w, start, n));
 
                 try {
                     for (double[] gi : MulticoreExecutor.run(tasks)) {
@@ -496,7 +492,7 @@ public class Maxent implements SoftClassifier<int[]> {
                         double wx = dot(x[i], w);
                         f += log1pe(wx) - y[i] * wx;
 
-                        double yi = y[i] - Math.logistic(wx);
+                        double yi = y[i] - MathEx.logistic(wx);
                         for (int j : x[i]) {
                             g[j] -= yi * j;
                         }
@@ -638,13 +634,12 @@ public class Maxent implements SoftClassifier<int[]> {
 
                 int start = 0;
                 int end = step;
-                for (int i = 0; i < m - 1 && start < n; i++) {
-                    if (end > n) end = n;
+                for (int i = 0; i < m - 1; i++) {
                     tasks.add(new FTask(w, start, end));
                     start += step;
                     end += step;
                 }
-                if (start < n) tasks.add(new FTask(w, start, n));
+                tasks.add(new FTask(w, start, n));
                 
                 try {
                     for (double fi : MulticoreExecutor.run(tasks)) {
@@ -667,7 +662,7 @@ public class Maxent implements SoftClassifier<int[]> {
                 double wnorm = 0.0;
                 for (int i = 0; i < k; i++) {
                     for (int j = 0; j < p; j++) {
-                        wnorm += Math.sqr(w[i*(p+1) + j]);
+                        wnorm += MathEx.sqr(w[i*(p+1) + j]);
                     }
                 }
 
@@ -771,13 +766,12 @@ public class Maxent implements SoftClassifier<int[]> {
                 
                 int start = 0;
                 int end = step;
-                for (int i = 0; i < m - 1 && start < n; i++) {
-                    if (end > n) end = n;
+                for (int i = 0; i < m - 1; i++) {
                     tasks.add(new GTask(w, start, end));
                     start += step;
                     end += step;
                 }
-                if (start < n) tasks.add(new GTask(w, start, n));
+                tasks.add(new GTask(w, start, n));
 
                 try {
                     for (double[] gi : MulticoreExecutor.run(tasks)) {

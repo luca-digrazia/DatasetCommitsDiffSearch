@@ -1,26 +1,26 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.clustering;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.stream.IntStream;
+import java.util.List;
+import java.util.concurrent.Callable;
 import smile.math.MathEx;
+import smile.util.MulticoreExecutor;
 
 /**
  * DENsity CLUstering. The DENCLUE algorithm employs a cluster model based on
@@ -41,15 +41,14 @@ import smile.math.MathEx;
  * 
  * @author Haifeng Li
  */
-public class DENCLUE extends PartitionClustering {
-    private static final long serialVersionUID = 2L;
+public class DENCLUE extends PartitionClustering<double[]> {
+    private static final long serialVersionUID = 1L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DENCLUE.class);
 
     /**
      * The epsilon of finishing density attractor searching.
      */
-    private static final double eps = 1E-7;
-
+    private double eps = 1E-7;
     /**
      * The smooth parameter in the Gaussian kernel. The user can
      * choose sigma such that number of density attractors is constant for a
@@ -63,7 +62,7 @@ public class DENCLUE extends PartitionClustering {
     /**
      * The density attractor of each cluster.
      */
-    public final double[][] attractors;
+    private double[][] attractors;
     /**
      * The radius of density attractor.
      */
@@ -74,18 +73,8 @@ public class DENCLUE extends PartitionClustering {
     private double[][] samples;
 
     /**
-     * Constructor.
-     * @param attractors the density attractor of each cluster.
-     * @param y the cluster labels.
-     */
-    public DENCLUE(double[][] attractors, int[] y) {
-        super(attractors.length, y);
-        this.attractors = attractors;
-    }
-
-    /**
-     * Clustering data.
-     * @param data the input data of which each row is an observation.
+     * Constructor. Clustering data.
+     * @param data the dataset for clustering.
      * @param sigma the smooth parameter in the Gaussian kernel. The user can
      * choose sigma such that number of density attractors is constant for a
      * long interval of sigma.
@@ -94,7 +83,7 @@ public class DENCLUE extends PartitionClustering {
      * to speed up the algorithm. It should also be large enough to capture
      * the sufficient information of underlying distribution.
      */
-    public static DENCLUE fit(double[][] data, double sigma, int m) {
+    public DENCLUE(double[][] data, double sigma, int m) {
         if (sigma <= 0.0) {
             throw new IllegalArgumentException("Invalid standard deviation of Gaussian kernel: " + sigma);
         }
@@ -107,53 +96,84 @@ public class DENCLUE extends PartitionClustering {
             throw new IllegalArgumentException("The number of selected samples is too small: " + m);
         }
         
-        double gamma = -0.5 / (sigma * sigma);
+        this.sigma = sigma;
+        this.gamma = -0.5 / (sigma * sigma);
         
-        KMeans kmeans = KMeans.fit(data, m);
-        double[][] samples = kmeans.centroids;
+        KMeans kmeans = new KMeans(data, m);
+        samples = kmeans.centroids();
 
         int n = data.length;
         int d = data[0].length;
 
-        double[][] attractors = new double[n][];
+        attractors = new double[n][];
         for (int i = 0; i < n; i++) {
             attractors[i] = data[i].clone();
         }
 
         double[] attractor = new double[d];
         double[] prob = new double[n];
-        double[] radius = new double[n];
+        radius = new double[n];
 
-        IntStream.range(0, n).parallel().forEach(i -> {
-            double diff = 1.0;
-            while (diff > eps) {
-                double weight = 0.0;
-                for (int j = 0; j < m; j++) {
-                    double w = Math.exp(gamma * MathEx.squaredDistance(attractors[i], samples[j]));
-                    weight += w;
-                    for (int l = 0; l < d; l++) {
-                        attractor[l] += w * samples[j][l];
-                    }
-                }
-
-                for (int l = 0; l < d; l++) {
-                    attractor[l] /= weight;
-                }
-
-                weight /= m;
-                diff = weight - prob[i];
-                prob[i] = weight;
-
-                if (diff > 1E-5) {
-                    radius[i] = 2 * MathEx.distance(attractors[i], attractor);
-                }
-
-                System.arraycopy(attractor, 0, attractors[i], 0, d);
-                Arrays.fill(attractor, 0.0);
+        int np = MulticoreExecutor.getThreadPoolSize();
+        List<DENCLUEThread> tasks = null;
+        if (n >= 1000 && np >= 2) {
+            tasks = new ArrayList<>(np + 1);
+            int step = n / np;
+            if (step < 100) {
+                step = 100;
             }
-        });
 
-        int[] y = new int[n];
+            int start = 0;
+            int end = step;
+            for (int i = 0; i < np-1; i++) {
+                tasks.add(new DENCLUEThread(prob, start, end));
+                start += step;
+                end += step;
+            }
+            
+            tasks.add(new DENCLUEThread(prob, start, n));
+            
+            try {
+                MulticoreExecutor.run(tasks);
+            } catch (Exception ex) {
+                logger.error("Failed to run DENCLUE on multi-core", ex);
+                for (DENCLUEThread task : tasks) {
+                    task.call();
+                }
+            }
+        } else {
+
+            for (int i = 0; i < n; i++) {
+                double diff = 1.0;
+                while (diff > eps) {
+                    double weight = 0.0;
+                    for (int j = 0; j < m; j++) {
+                        double w = Math.exp(gamma * MathEx.squaredDistance(attractors[i], samples[j]));
+                        weight += w;
+                        for (int l = 0; l < d; l++) {
+                            attractor[l] += w * samples[j][l];
+                        }
+                    }
+
+                    for (int l = 0; l < d; l++) {
+                        attractor[l] /= weight;
+                    }
+
+                    weight /= m;
+                    diff = weight - prob[i];
+                    prob[i] = weight;
+
+                    if (diff > 1E-5) {
+                        radius[i] = 2 * MathEx.distance(attractors[i], attractor);
+                    }
+
+                    System.arraycopy(attractor, 0, attractors[i], 0, d);
+                    Arrays.fill(attractor, 0.0);
+                }
+            }
+        }
+
+        y = new int[n];
         ArrayList<double[]> cluster = new ArrayList<>();
         ArrayList<Double> probability = new ArrayList<>();
         ArrayList<Double> step = new ArrayList<>();
@@ -187,8 +207,16 @@ public class DENCLUE extends PartitionClustering {
             }
         }
 
-        int k = cluster.size();
-        return new DENCLUE(cluster.toArray(new double[k][]), y);
+        size = new int[cluster.size()];
+        for (int i = 0; i < n; i++) {
+            size[y[i]]++;
+        }
+
+        k = cluster.size();
+        attractors = new double[k][];
+        for (int i = 0; i < k; i++) {
+            attractors[i] = cluster.get(i);
+        }
     }
 
     /**
@@ -198,6 +226,66 @@ public class DENCLUE extends PartitionClustering {
     public double getSigma() {
         return sigma;
     }
+    
+    /**
+     * Adapter for running DENCLUE algorithm in thread pool.
+     */
+    class DENCLUEThread implements Callable<DENCLUEThread> {
+
+        /**
+         * The start index of data portion for this task.
+         */
+        final int start;
+        /**
+         * The end index of data portion for this task.
+         */
+        final int end;
+        double[] attractor;
+        double[] prob;
+
+        DENCLUEThread(double[] prob, int start, int end) {
+            this.prob = prob;
+            this.start = start;
+            this.end = end;
+            attractor = new double[samples[0].length];
+        }
+
+        @Override
+        public DENCLUEThread call() {
+            int m = samples.length;
+            int d = samples[0].length;
+            for (int i = start; i < end; i++) {
+                double diff = 1.0;
+                while (diff > eps) {
+                    double weight = 0.0;
+                    for (int j = 0; j < m; j++) {
+                        double w = Math.exp(gamma * MathEx.squaredDistance(attractors[i], samples[j]));
+                        weight += w;
+                        for (int l = 0; l < d; l++) {
+                            attractor[l] += w * samples[j][l];
+                        }
+                    }
+
+                    for (int l = 0; l < d; l++) {
+                        attractor[l] /= weight;
+                    }
+
+                    weight /= m;
+                    diff = weight - prob[i];
+                    prob[i] = weight;
+
+                    if (diff > 1E-5) {
+                        radius[i] = 2 * MathEx.distance(attractors[i], attractor);
+                    }
+
+                    System.arraycopy(attractor, 0, attractors[i], 0, d);
+                    Arrays.fill(attractor, 0.0);
+                }
+            }
+            
+            return this;
+        }
+    }
 
     /**
      * Returns the density attractors of cluster.
@@ -206,11 +294,7 @@ public class DENCLUE extends PartitionClustering {
         return attractors;
     }
 
-    /**
-     * Classifies a new observation.
-     * @param x a new observation.
-     * @return the cluster label. Note that it may be {@link #OUTLIER}.
-     */
+    @Override
     public int predict(double[] x) {
         int p = attractors[0].length;
         if (x.length != p) {
@@ -258,5 +342,18 @@ public class DENCLUE extends PartitionClustering {
         }
 
         return OUTLIER;
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+
+        sb.append(String.format("DENCLUE clusters of %d data points:%n", y.length));
+        for (int i = 0; i < k; i++) {
+            int r = (int) Math.round(1000.0 * size[i] / y.length);
+            sb.append(String.format("%3d\t%5d (%2d.%1d%%)%n", i, size[i], r / 10, r % 10));
+        }
+
+        return sb.toString();
     }
 }

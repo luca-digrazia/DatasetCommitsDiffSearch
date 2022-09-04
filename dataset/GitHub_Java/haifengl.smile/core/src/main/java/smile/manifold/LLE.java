@@ -1,32 +1,35 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.manifold;
 
 import java.util.Arrays;
-import java.util.Optional;
+import java.util.Comparator;
+import smile.graph.AdjacencyList;
 import smile.graph.Graph;
 import smile.math.MathEx;
+import smile.math.distance.EuclideanDistance;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.SparseMatrix;
 import smile.math.matrix.LU;
 import smile.math.matrix.EVD;
-import smile.netlib.ARPACK;
+import smile.neighbor.CoverTree;
+import smile.neighbor.KDTree;
+import smile.neighbor.KNNSearch;
+import smile.neighbor.Neighbor;
 
 /**
  * Locally Linear Embedding. It has several advantages over Isomap, including
@@ -69,32 +72,12 @@ public class LLE {
 
     /**
      * Constructor.
-     * @param index the original sample index.
-     * @param coordinates the coordinates.
-     * @param graph the nearest neighbor graph.
-     */
-    public LLE(int[] index, double[][] coordinates, Graph graph) {
-        this.index = index;
-        this.coordinates = coordinates;
-        this.graph = graph;
-    }
-
-    /**
-     * Runs the LLE algorithm.
-     * @param data the dataset.
-     * @param k k-nearest neighbor.
-     */
-    public static LLE of(double[][] data, int k) {
-        return of(data, k, 2);
-    }
-
-    /**
-     * Runs the LLE algorithm.
      * @param data the dataset.
      * @param d the dimension of the manifold.
      * @param k k-nearest neighbor.
      */
-    public static LLE of(double[][] data, int k, int d) {
+    public LLE(double[][] data, int d, int k) {
+        int n = data.length;
         int D = data[0].length;
 
         double tol = 0.0;
@@ -103,28 +86,58 @@ public class LLE {
             tol = 1E-3;
         }
 
-        // Use largest connected component of nearest neighbor graph.
-        int[][] N = new int[data.length][k];
-        Graph graph = NearestNeighborGraph.of(data, k, Optional.of((v1, v2, weight, j) -> {
-            N[v1][j] = v2;
-        }));
-        NearestNeighborGraph nng = NearestNeighborGraph.largest(graph);
+        KNNSearch<double[], double[]> knn = null;
+        if (D < 10) {
+            knn = new KDTree<>(data, data);
+        } else {
+            knn = new CoverTree<>(data, new EuclideanDistance());
+        }
 
-        int[] index = nng.index;
-        int n = index.length;
-        graph = nng.graph;
+        Comparator<Neighbor<double[], double[]>> comparator = new Comparator<Neighbor<double[], double[]>>() {
 
-        // The reverse index maps the original data to the largest connected component
-        // in case that the graph is disconnected.
-        int[] reverseIndex = new int[n];
-        if (index.length == n) {
+            @Override
+            public int compare(Neighbor<double[], double[]> o1, Neighbor<double[], double[]> o2) {
+                return o1.index - o2.index;
+            }
+        };
+
+        int[][] N = new int[n][k];
+        graph = new AdjacencyList(n);
+        for (int i = 0; i < n; i++) {
+            Neighbor<double[], double[]>[] neighbors = knn.knn(data[i], k);
+            Arrays.sort(neighbors, comparator);
+
+            for (int j = 0; j < k; j++) {
+                graph.setWeight(i, neighbors[j].index, neighbors[j].distance);
+                N[i][j] = neighbors[j].index;
+            }
+        }
+
+        // Use largest connected component.
+        int[][] cc = graph.bfs();
+        int[] newIndex = new int[n];
+        if (cc.length == 1) {
+            index = new int[n];
             for (int i = 0; i < n; i++) {
-                reverseIndex[i] = i;
+                index[i] = i;
+                newIndex[i] = i;
             }
         } else {
-            n = index.length;
+            n = 0;
+            int component = 0;
+            for (int i = 0; i < cc.length; i++) {
+                if (cc[i].length > n) {
+                    component = i;
+                    n = cc[i].length;
+                }
+            }
+
+            logger.info("LLE: {} connected components, largest one has {} samples.", cc.length, n);
+
+            index = cc[component];
+            graph = graph.subgraph(index);
             for (int i = 0; i < index.length; i++) {
-                reverseIndex[index[i]] = i;
+                newIndex[index[i]] = i;
             }
         }
 
@@ -142,14 +155,11 @@ public class LLE {
         int m = 0;
         for (int i : index) {
             double trace = 0.0;
-            double[] xi = data[i];
             for (int p = 0; p < k; p++) {
-                double[] xip = data[N[i][p]];
                 for (int q = 0; q < k; q++) {
-                    double[] xiq = data[N[i][q]];
                     C.set(p, q, 0.0);
                     for (int l = 0; l < D; l++) {
-                        C.add(p, q, (xi[l] - xip[l]) * (xi[l] - xiq[l]));
+                        C.add(p, q, (data[i][l] - data[N[i][p]][l]) * (data[i][l] - data[N[i][q]][l]));
                     }
                 }
                 trace += C.get(p, p);
@@ -167,10 +177,9 @@ public class LLE {
             lu.solve(b);
 
             double sum = MathEx.sum(b);
-            int[] ni = N[i];
             for (int p = 0; p < k; p++) {
                 w[m * k + p] = b[p] / sum;
-                rowIndex[m * k + p] = reverseIndex[ni[p]];
+                rowIndex[m * k + p] = newIndex[N[i][p]];
             }
 
             m++;
@@ -178,22 +187,20 @@ public class LLE {
 
         // This is the transpose of W in the paper.
         SparseMatrix Wt = new SparseMatrix(n, n, w, rowIndex, colIndex);
+        IM im = new IM(Wt);
 
         // ARPACK may not find all needed eigen values for k = d + 1.
         // Set it to 10 * (d + 1) as a hack to NCV parameter of DSAUPD.
         // Our Lanczos class has no such issue.
-        EVD eigen = ARPACK.eigen(new M(Wt), Math.min(10*(d+1), n-1), "SM");
+        EVD eigen = im.eigen(Math.min(10*(d + 1), n - 1));
 
         DenseMatrix V = eigen.getEigenVectors();
-        double[][] coordinates = new double[n][d];
-        for (int j = d; --j >= 0; ) {
-            int c = V.ncols() - j - 2;
+        coordinates = new double[n][d];
+        for (int j = 0; j < d; j++) {
             for (int i = 0; i < n; i++) {
-                coordinates[i][j] = V.get(i, c);
+                coordinates[i][j] = V.get(i, j + 1);
             }
         }
-
-        return new LLE(index, coordinates, graph);
     }
 
     /**
@@ -220,17 +227,19 @@ public class LLE {
     }
 
     /**
-     * M = t(I - W) * (I - W) , t() as the transpose.
-     * we have Mv = v - Wv - t(W)v + t(W)Wv. As W is sparse and we can
+     * Instead of computing smallest eigen values of M, we
+     * computing the largest eigen values of I - M.
+     * Since M = t(I - W) * (I - W), t() as the transpose,
+     * we have (I - M)v = Wv + t(W)(v - Wv). As W is sparse and we can
      * compute only Wv and t(W)v efficiently.
      */
-    private static class M implements Matrix {
+    private static class IM implements Matrix {
 
         Matrix Wt;
         double[] Wx;
         double[] Wtx;
 
-        public M(Matrix Wt) {
+        public IM(Matrix Wt) {
             this.Wt = Wt;
 
             Wx = new double[Wt.nrows()];
@@ -253,29 +262,32 @@ public class LLE {
         }
 
         @Override
-        public M transpose() {
+        public IM transpose() {
             return this;
         }
 
         @Override
-        public M ata() {
+        public IM ata() {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public M aat() {
+        public IM aat() {
             throw new UnsupportedOperationException();
         }
 
         @Override
         public double[] ax(double[] x, double[] y) {
             Wt.atx(x, Wx);
-            Wt.ax(x, Wtx);
-            Wt.ax(Wx, y);
 
             int n = Wt.nrows();
             for (int i = 0; i < n; i++) {
-                y[i] = y[i] + x[i] - Wx[i] - Wtx[i];
+                Wtx[i] = x[i] - Wx[i];
+            }
+
+            Wt.ax(Wtx, y);
+            for (int i = 0; i < n; i++) {
+                y[i] += Wx[i];
             }
 
             return y;
@@ -315,5 +327,5 @@ public class LLE {
         public double[] atxpy(double[] x, double[] y, double b) {
             throw new UnsupportedOperationException();
         }
-    }
+    };
 }

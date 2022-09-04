@@ -1,34 +1,31 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.manifold;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import smile.data.SparseDataset;
 import smile.graph.AdjacencyList;
 import smile.graph.Graph;
 import smile.graph.Graph.Edge;
 import smile.math.MathEx;
+import smile.math.SparseArray;
 import smile.math.distance.EuclideanDistance;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.EVD;
 import smile.math.matrix.SparseMatrix;
-import smile.util.SparseArray;
 import smile.neighbor.CoverTree;
 import smile.neighbor.KDTree;
 import smile.neighbor.KNNSearch;
@@ -136,14 +133,12 @@ public class LaplacianEigenmap {
             graph = graph.subgraph(index);
         }
 
+        SparseDataset W = new SparseDataset(n);
         double[] D = new double[n];
         double gamma = -1.0 / t;
 
-        ArrayList<SparseArray> W = new ArrayList<>(n);
         for (int i = 0; i < n; i++) {
             Collection<Edge> edges = graph.getEdges(i);
-            SparseArray row = new SparseArray();
-            W.set(i, row);
             for (Edge edge : edges) {
                 int j = edge.v2;
                 if (i == j) {
@@ -151,7 +146,7 @@ public class LaplacianEigenmap {
                 }
 
                 double w = t <= 0 ? 1.0 : Math.exp(gamma * MathEx.sqr(edge.weight));
-                row.set(j, w);
+                W.set(i, j, w);
                 D[i] += w;
             }
 
@@ -159,19 +154,16 @@ public class LaplacianEigenmap {
         }
 
         for (int i = 0; i < n; i++) {
-            SparseArray edges = W.get(i);
+            SparseArray edges = W.get(i).x;
             for (SparseArray.Entry edge : edges) {
                 int j = edge.i;
-                if (j == i) {
-                    edge.x = 0.0;
-                } else {
-                    double s = D[i] * edge.x * D[j];
-                    edge.x = s;
-                }
+                double s = D[i] * edge.x * D[j];
+                W.set(i, j, s);
             }
+            W.set(i, i, 0.0);
         }
 
-        SparseMatrix L = SparseDataset.of(W).toMatrix();
+        SparseMatrix L = W.toSparseMatrix();
         L.setSymmetric(true);
 
         // ARPACK may not find all needed eigen values for k = d + 1.

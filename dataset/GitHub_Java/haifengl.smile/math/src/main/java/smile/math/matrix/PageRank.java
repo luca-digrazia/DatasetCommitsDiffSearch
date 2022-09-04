@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.math.matrix;
 
 import java.util.Arrays;
@@ -32,19 +30,18 @@ import smile.math.MathEx;
  *
  * @author Haifeng Li
  */
-public interface PageRank {
-    org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PageRank.class);
-
+public class PageRank {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PageRank.class);
     /**
      * Calculate the page rank vector.
      * @param A the matrix supporting matrix vector multiplication operation.
      * @return the page rank vector.
      */
-    static double[] apply(Matrix A) {
+    public static double[] pagerank(Matrix A) {
         int n = A.nrows();
         double[] v = new double[n];
         Arrays.fill(v, 1.0 / n);
-        return apply(A, v);
+        return pagerank(A, v);
     }
 
     /**
@@ -53,8 +50,8 @@ public interface PageRank {
      * @param v the teleportation vector.
      * @return the page rank vector.
      */
-    static double[] apply(Matrix A, double[] v) {
-        return apply(A, v, 0.85, 1E-7, 57);
+    public static double[] pagerank(Matrix A, double[] v) {
+        return pagerank(A, v, 0.85, 1E-7, 57);
     }
 
     /**
@@ -63,11 +60,11 @@ public interface PageRank {
      * @param v the teleportation vector.
      * @param damping the damper factor.
      * @param tol the desired convergence tolerance.
-     * @param maxIter the maximum number of iterations in case that the
-     *                algorithm does not converge.
+     * @param maxIter the maximum number of iterations in case that the algorithm
+     * does not converge.
      * @return the page rank vector.
      */
-    static double[] apply(Matrix A, double[] v, double damping, double tol, int maxIter) {
+    public static double[] pagerank(Matrix A, double[] v, double damping, double tol, int maxIter) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException("Matrix is not square.");
         }

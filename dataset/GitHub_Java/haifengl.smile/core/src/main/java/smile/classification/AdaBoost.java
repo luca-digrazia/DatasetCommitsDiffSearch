@@ -1,34 +1,27 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.classification;
 
 import java.util.Arrays;
-import java.util.Optional;
-import java.util.Properties;
-
-import smile.base.cart.CART;
-import smile.base.cart.SplitRule;
-import smile.data.DataFrame;
-import smile.data.Tuple;
-import smile.data.formula.Formula;
-import smile.data.type.StructType;
-import smile.data.vector.BaseVector;
+import smile.data.Attribute;
+import smile.data.AttributeDataset;
+import smile.data.NumericAttribute;
 import smile.math.MathEx;
+import smile.util.SmileUtils;
 import smile.validation.Accuracy;
 import smile.validation.ClassificationMeasure;
 
@@ -63,14 +56,11 @@ import smile.validation.ClassificationMeasure;
  * 
  * @author Haifeng Li
  */
-public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
-    private static final long serialVersionUID = 2L;
+public class AdaBoost implements SoftClassifier<double[]> {
+    private static final long serialVersionUID = 1L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(AdaBoost.class);
+    private static final String INVALID_NUMBER_OF_TREES = "Invalid number of trees: ";
 
-    /**
-     * Design matrix formula
-     */
-    private Formula formula;
     /**
      * The number of classes.
      */
@@ -96,100 +86,196 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
      * importance measure.
      */
     private double[] importance;
-    /**
-     * The class label encoder.
-     */
-    private ClassLabel labels;
 
     /**
-     * Constructor.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param k the number of classes.
-     * @param trees forest of decision trees.
-     * @param alpha the weight of each decision tree.
-     * @param error the weighted error of each decision tree during training.
-     * @param importance variable importance
+     * Trainer for AdaBoost classifiers.
      */
-    public AdaBoost(Formula formula, int k, DecisionTree[] trees, double[] alpha, double[] error, double[] importance) {
-        this(formula, k, trees, alpha, error, importance, ClassLabel.of(k));
+    public static class Trainer extends ClassifierTrainer<double[]> {
+        /**
+         * The number of trees.
+         */
+        private int ntrees = 500;
+        /**
+         * The maximum number of leaf nodes in the tree.
+         */
+        private int maxNodes = 2;
+
+        /**
+         * Default constructor of 500 trees and maximal 2 leaf nodes in the tree.
+         */
+        public Trainer() {
+
+        }
+
+        /**
+         * Constructor.
+         * 
+         * @param ntrees the number of trees.
+         */
+        public Trainer(int ntrees) {
+            if (ntrees < 1) {
+                throw new IllegalArgumentException(INVALID_NUMBER_OF_TREES + ntrees);
+            }
+
+            this.ntrees = ntrees;
+        }
+
+        /**
+         * Constructor.
+         * 
+         * @param attributes the attributes of independent variable.
+         * @param ntrees the number of trees.
+         */
+        public Trainer(Attribute[] attributes, int ntrees) {
+            super(attributes);
+
+            if (ntrees < 1) {
+                throw new IllegalArgumentException(INVALID_NUMBER_OF_TREES + ntrees);
+            }
+
+            this.ntrees = ntrees;
+        }
+        
+        /**
+         * Sets the number of trees in the random forest.
+         * @param ntrees the number of trees.
+         */
+        public Trainer setNumTrees(int ntrees) {
+            if (ntrees < 1) {
+                throw new IllegalArgumentException(INVALID_NUMBER_OF_TREES + ntrees);
+            }
+
+            this.ntrees = ntrees;
+            return this;
+        }
+        
+        /**
+         * Sets the maximum number of leaf nodes in the tree.
+         * @param maxNodes the maximum number of leaf nodes in the tree.
+         */
+        public Trainer setMaxNodes(int maxNodes) {
+            if (maxNodes < 2) {
+                throw new IllegalArgumentException("Invalid maximum number of leaf nodes: " + maxNodes);
+            }
+            
+            this.maxNodes = maxNodes;
+            return this;
+        }
+        
+        @Override
+        public AdaBoost train(double[][] x, int[] y) {
+            return new AdaBoost(attributes, x, y, ntrees, maxNodes);
+        }
+    }
+    
+    /**
+     * Constructor. Learns AdaBoost with decision stumps.
+     *
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     */
+    public AdaBoost(double[][] x, int[] y, int ntrees) {
+        this(null, x, y, ntrees);
     }
 
     /**
-     * Constructor.
+     * Constructor. Learns AdaBoost with decision trees.
      *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param k the number of classes.
-     * @param trees forest of decision trees.
-     * @param alpha the weight of each decision tree.
-     * @param error the weighted error of each decision tree during training.
-     * @param importance variable importance
-     * @param labels class labels
-     */
-    public AdaBoost(Formula formula, int k, DecisionTree[] trees, double[] alpha, double[] error, double[] importance, ClassLabel labels) {
-        this.formula = formula;
-        this.k = k;
-        this.trees = trees;
-        this.alpha = alpha;
-        this.error = error;
-        this.importance = importance;
-        this.labels = labels;
-    }
-
-    /**
-     * Learns a gradient tree boosting for regression.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static AdaBoost fit(Formula formula, DataFrame data) {
-        return fit(formula, data, new Properties());
-    }
-
-    /**
-     * Learns a gradient tree boosting for regression.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
-     */
-    public static AdaBoost fit(Formula formula, DataFrame data, Properties prop) {
-        int ntrees = Integer.valueOf(prop.getProperty("smile.adaboost.trees", "500"));
-        int maxNodes = Integer.valueOf(prop.getProperty("smile.adaboost.max.nodes", "6"));
-        int nodeSize = Integer.valueOf(prop.getProperty("smile.adaboost.node.size", "1"));
-        return fit(formula, data, ntrees, maxNodes, nodeSize);
-    }
-
-    /**
-     * Constructor.
-     *
-     * @param formula a symbolic description of the model to be fitted.
-     * @param data the data frame of the explanatory and response variables.
+     * @param x the training instances. 
+     * @param y the response variable.
      * @param ntrees the number of trees.
      * @param maxNodes the maximum number of leaf nodes in the trees.
-     * @param nodeSize the number of instances in a node below which the tree will
-     *                 not split, setting nodeSize = 5 generally gives good results.
      */
-    public static AdaBoost fit(Formula formula, DataFrame data, int ntrees, int maxNodes, int nodeSize) {
+    public AdaBoost(double[][] x, int[] y, int ntrees, int maxNodes) {
+        this(null, x, y, ntrees, maxNodes);
+    }
+
+    /**
+     * Constructor. Learns AdaBoost with decision stumps.
+     *
+     * @param attributes the attribute properties.
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     */
+    public AdaBoost(Attribute[] attributes, double[][] x, int[] y, int ntrees) {
+        this(attributes, x, y, ntrees, 2);
+    }
+
+    /**
+     * Constructor. Learns AdaBoost with decision stumps.
+     *
+     * @param data the dataset
+     * @param ntrees the number of trees.
+     */
+    public AdaBoost(AttributeDataset data, int ntrees) {
+        this(data.attributes(), data.x(), data.labels(), ntrees);
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param data the dataset
+     * @param ntrees the number of trees.
+     * @param maxNodes the maximum number of leaf nodes in the trees.
+     */
+    public AdaBoost(AttributeDataset data, int ntrees, int maxNodes) {
+        this(data.attributes(), data.x(), data.labels(), ntrees, maxNodes);
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param attributes the attribute properties.
+     * @param x the training instances. 
+     * @param y the response variable.
+     * @param ntrees the number of trees.
+     * @param maxNodes the maximum number of leaf nodes in the trees.
+     */
+    public AdaBoost(Attribute[] attributes, double[][] x, int[] y, int ntrees, int maxNodes) {
+        if (x.length != y.length) {
+            throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
+        }
+
         if (ntrees < 1) {
-            throw new IllegalArgumentException("Invalid number of trees: " + ntrees);
+            throw new IllegalArgumentException(INVALID_NUMBER_OF_TREES + ntrees);
         }
-
+        
         if (maxNodes < 2) {
-            throw new IllegalArgumentException("Invalid maximum number of leaves: " + maxNodes);
+            throw new IllegalArgumentException("Invalid maximum leaves: " + maxNodes);
+        }
+        
+        // class label set.
+        int[] labels = MathEx.unique(y);
+        Arrays.sort(labels);
+        
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i] < 0) {
+                throw new IllegalArgumentException("Negative class label: " + labels[i]); 
+            }
+            
+            if (i > 0 && labels[i] - labels[i-1] > 1) {
+                throw new IllegalArgumentException("Missing class: " + (labels[i-1]+1));
+            }
+        }
+        
+        k = labels.length;
+        if (k < 2) {
+            throw new IllegalArgumentException("Only one class.");            
+        }
+        
+        if (attributes == null) {
+            int p = x[0].length;
+            attributes = new Attribute[p];
+            for (int i = 0; i < p; i++) {
+                attributes[i] = new NumericAttribute("V" + (i + 1));
+            }
         }
 
-        if (nodeSize < 1) {
-            throw new IllegalArgumentException("Invalid minimum size of leaves: " + nodeSize);
-        }
-
-        DataFrame x = formula.x(data);
-        BaseVector y = formula.y(data);
-
-        ClassLabel.Result codec = ClassLabel.fit(y);
-        int[][] order = CART.order(x);
-
-        int k = codec.k;
-        int n = data.size();
+        int[][] order = SmileUtils.sort(attributes, x);
+        
+        int n = x.length;
         int[] samples = new int[n];
         double[] w = new double[n];
         boolean[] err = new boolean[n];
@@ -200,10 +286,10 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
         double guess = 1.0 / k; // accuracy of random guess.
         double b = Math.log(k - 1); // the bias to tree weight in case of multi-class.
         int failures = 0; // the number of weak classifiers less accurate than guess.
-
-        DecisionTree[] trees = new DecisionTree[ntrees];
-        double[] alpha = new double[ntrees];
-        double[] error = new double[ntrees];
+        
+        trees = new DecisionTree[ntrees];
+        alpha = new double[ntrees];
+        error = new double[ntrees];
         for (int t = 0; t < ntrees; t++) {
             double W = MathEx.sum(w);
             for (int i = 0; i < n; i++) {
@@ -215,11 +301,11 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
             for (int s : rand) {
                 samples[s]++;
             }
-
-            trees[t] = new DecisionTree(x, codec.y, codec.field.get(), k, SplitRule.GINI, maxNodes, nodeSize, -1, samples, order);
+            
+            trees[t] = new DecisionTree(attributes, x, y, maxNodes, 1, x[0].length, DecisionTree.SplitRule.GINI, samples, order);
             
             for (int i = 0; i < n; i++) {
-                err[i] = trees[t].predict(x.get(i)) != y.getInt(i);
+                err[i] = trees[t].predict(x[i]) != y[i];
             }
             
             double e = 0.0; // weighted error
@@ -252,25 +338,13 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
             }
         }
         
-        double[] importance = new double[x.ncols()];
+        importance = new double[attributes.length];
         for (DecisionTree tree : trees) {
             double[] imp = tree.importance();
             for (int i = 0; i < imp.length; i++) {
                 importance[i] += imp[i];
             }
         }
-
-        return new AdaBoost(formula, k, trees, alpha, error, importance, codec.labels);
-    }
-
-    @Override
-    public Optional<Formula> formula() {
-        return Optional.of(formula);
-    }
-
-    @Override
-    public Optional<StructType> schema() {
-        return trees[0].schema();
     }
 
     /**
@@ -294,14 +368,7 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
     public int size() {
         return trees.length;
     }
-
-    /**
-     * Returns the decision trees.
-     */
-    public DecisionTree[] trees() {
-        return trees;
-    }
-
+    
     /**
      * Trims the tree model set to a smaller size in case of over-fitting.
      * Or if extra decision trees in the model don't improve the performance,
@@ -327,15 +394,14 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
     }
     
     @Override
-    public int predict(Tuple x) {
-        Tuple xt = formula.x(x);
+    public int predict(double[] x) {
         double[] y = new double[k];
 
         for (int i = 0; i < trees.length; i++) {
-            y[trees[i].predict(xt)] += alpha[i];
+            y[trees[i].predict(x)] += alpha[i];
         }
             
-        return labels.label(MathEx.whichMax(y));
+        return MathEx.whichMax(y);
     }
     
     /**
@@ -343,7 +409,7 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
      * probabilities. Not supported.
      */
     @Override
-    public int predict(Tuple x, double[] posteriori) {
+    public int predict(double[] x, double[] posteriori) {
         Arrays.fill(posteriori, 0.0);
 
         for (int i = 0; i < trees.length; i++) {
@@ -355,43 +421,100 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier {
             posteriori[i] /= sum;
         }
 
-        return labels.label(MathEx.whichMax(posteriori));
+        return MathEx.whichMax(posteriori);
     }
     
     /**
      * Test the model on a validation dataset.
      * 
-     * @return the predictions with first 1, 2, ..., decision trees.
+     * @param x the test data set.
+     * @param y the test data response values.
+     * @return accuracies with first 1, 2, ..., decision trees.
      */
-    public int[][] test(DataFrame data) {
-        DataFrame x = formula.x(data);
+    public double[] test(double[][] x, int[] y) {
+        int T = trees.length;
+        double[] accuracy = new double[T];
 
-        int n = x.size();
-        int ntrees = trees.length;
-        int[][] prediction = new int[ntrees][n];
+        int n = x.length;
+        int[] label = new int[n];
 
+        Accuracy measure = new Accuracy();
+        
         if (k == 2) {
-            for (int j = 0; j < n; j++) {
-                Tuple xj = x.get(j);
-                double base = 0;
-                for (int i = 0; i < ntrees; i++) {
-                    base += alpha[i] * trees[i].predict(xj);
-                    prediction[i][j] = base > 0 ? 1 : 0;
+            double[] prediction = new double[n];
+            for (int i = 0; i < T; i++) {
+                for (int j = 0; j < n; j++) {
+                    prediction[j] += alpha[i] * trees[i].predict(x[j]);
+                    label[j] = prediction[j] > 0 ? 1 : 0;
                 }
+                accuracy[i] = measure.measure(y, label);
             }
         } else {
-            double[] p = new double[k];
-            for (int j = 0; j < n; j++) {
-                Tuple xj = x.get(j);
-                Arrays.fill(p, 0);
-                for (int i = 0; i < ntrees; i++) {
-                    p[trees[i].predict(xj)] += alpha[i];
-                    prediction[i][j] = MathEx.whichMax(p);
+            double[][] prediction = new double[n][k];
+            for (int i = 0; i < T; i++) {
+                for (int j = 0; j < n; j++) {
+                    prediction[j][trees[i].predict(x[j])] += alpha[i];
+                    label[j] = MathEx.whichMax(prediction[j]);
                 }
+
+                accuracy[i] = measure.measure(y, label);
             }
         }
         
-        return prediction;
+        return accuracy;
+    }
+    
+    /**
+     * Test the model on a validation dataset.
+     * 
+     * @param x the test data set.
+     * @param y the test data labels.
+     * @param measures the performance measures of classification.
+     * @return performance measures with first 1, 2, ..., decision trees.
+     */
+    public double[][] test(double[][] x, int[] y, ClassificationMeasure[] measures) {
+        int T = trees.length;
+        int m = measures.length;
+        double[][] results = new double[T][m];
+
+        int n = x.length;
+        int[] label = new int[n];
+
+        if (k == 2) {
+            double[] prediction = new double[n];
+            for (int i = 0; i < T; i++) {
+                for (int j = 0; j < n; j++) {
+                    prediction[j] += alpha[i] * trees[i].predict(x[j]);
+                    label[j] = prediction[j] > 0 ? 1 : 0;
+                }
+
+                for (int j = 0; j < m; j++) {
+                    results[i][j] = measures[j].measure(y, label);
+                }
+            }
+        } else {
+            double[][] prediction = new double[n][k];
+            for (int i = 0; i < T; i++) {
+                for (int j = 0; j < n; j++) {
+                    prediction[j][trees[i].predict(x[j])] += alpha[i];
+                    label[j] = MathEx.whichMax(prediction[j]);
+                }
+
+                for (int j = 0; j < m; j++) {
+                    results[i][j] = measures[j].measure(y, label);
+                }
+            }
+
+        }
+        
+        return results;
+    }
+
+    /**
+     * Returns the decision trees.
+     */
+    public DecisionTree[] getTrees() {
+        return trees;
     }
 }
 

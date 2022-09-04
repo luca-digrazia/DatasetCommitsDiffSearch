@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.math;
 
 import java.util.Arrays;
@@ -253,7 +251,7 @@ public class MathEx {
      * Logistic sigmoid function.
      */
     public static double logistic(double x) {
-        double y;
+        double y = 0.0;
         if (x < -40) {
             y = 2.353853e+17;
         } else if (x > 40) {
@@ -263,14 +261,6 @@ public class MathEx {
         }
 
         return 1.0 / y;
-    }
-
-    /**
-     * Hyperbolic tangent function. The tanh function is a rescaling of the
-     * logistic sigmoid, such that its outputs range from -1 to 1.
-     */
-    public static double tanh(double x) {
-        return 2.0 * logistic(2.0 * x) - 1.0;
     }
 
     /**
@@ -2442,11 +2432,20 @@ public class MathEx {
         }
 
         QuickSort.sort(wksp1, wksp2);
-        crank(wksp1);
+        double sf = crank(wksp1);
         QuickSort.sort(wksp2, wksp1);
-        crank(wksp2);
+        double sg = crank(wksp2);
 
-        return cor(wksp1, wksp2);
+        double d = 0.0;
+        for (int j = 0; j < n; j++) {
+            d += sqr(wksp1[j] - wksp2[j]);
+        }
+
+        int en = n;
+        double en3n = en * en * en - en;
+        double fac = (1.0 - sf / en3n) * (1.0 - sg / en3n);
+        double rs = (1.0 - (6.0 / en3n) * (d + (sf + sg) / 12.0)) / Math.sqrt(fac);
+        return rs;
     }
 
     /**
@@ -2469,11 +2468,20 @@ public class MathEx {
         }
 
         QuickSort.sort(wksp1, wksp2);
-        crank(wksp1);
+        double sf = crank(wksp1);
         QuickSort.sort(wksp2, wksp1);
-        crank(wksp2);
+        double sg = crank(wksp2);
 
-        return cor(wksp1, wksp2);
+        double d = 0.0;
+        for (int j = 0; j < n; j++) {
+            d += sqr(wksp1[j] - wksp2[j]);
+        }
+
+        int en = n;
+        double en3n = en * en * en - en;
+        double fac = (1.0 - sf / en3n) * (1.0 - sg / en3n);
+        double rs = (1.0 - (6.0 / en3n) * (d + (sf + sg) / 12.0)) / Math.sqrt(fac);
+        return rs;
     }
 
     /**
@@ -2487,15 +2495,29 @@ public class MathEx {
             throw new IllegalArgumentException("Input vector sizes are different.");
         }
 
-        double[] wksp1 = x.clone();
-        double[] wksp2 = y.clone();
+        int n = x.length;
+        double[] wksp1 = new double[n];
+        double[] wksp2 = new double[n];
+        for (int j = 0; j < n; j++) {
+            wksp1[j] = x[j];
+            wksp2[j] = y[j];
+        }
 
         QuickSort.sort(wksp1, wksp2);
-        crank(wksp1);
+        double sf = crank(wksp1);
         QuickSort.sort(wksp2, wksp1);
-        crank(wksp2);
+        double sg = crank(wksp2);
 
-        return cor(wksp1, wksp2);
+        double d = 0.0;
+        for (int j = 0; j < n; j++) {
+            d += sqr(wksp1[j] - wksp2[j]);
+        }
+
+        int en = n;
+        double en3n = en * en * en - en;
+        double fac = (1.0 - sf / en3n) * (1.0 - sg / en3n);
+        double rs = (1.0 - (6.0 / en3n) * (d + (sf + sg) / 12.0)) / Math.sqrt(fac);
+        return rs;
     }
 
     /**

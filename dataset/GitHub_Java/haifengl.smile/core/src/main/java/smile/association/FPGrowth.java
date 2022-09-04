@@ -1,27 +1,29 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.association;
 
-import java.util.*;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
+import java.io.PrintStream;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.concurrent.Callable;
 import smile.association.FPTree.HeaderTableItem;
 import smile.association.FPTree.Node;
+import smile.util.MulticoreExecutor;
 
 /**
  * Frequent item set mining based on the FP-growth (frequent pattern growth)
@@ -58,7 +60,9 @@ import smile.association.FPTree.Node;
  * 
  * @author Haifeng Li
  */
-public class FPGrowth implements Iterable<ItemSet> {
+public class FPGrowth {
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(FPGrowth.class);
+
     /**
      * The required minimum support of item sets.
      */
@@ -67,21 +71,61 @@ public class FPGrowth implements Iterable<ItemSet> {
      * FP-tree.
      */
     private FPTree T0;
-    /**
-     * The buffer to collect mining results.
-     */
-    private Queue<ItemSet> buffer = new LinkedList<>();
 
     /**
-     * Constructor.
-     * @param tree the FP-tree.
+     * Constructor. This is for mining frequent item sets by scanning database
+     * twice. The user first scans the database to obtains the frequency of
+     * single items and calls this constructor. Then the user add item sets to
+     * the object by {@link #add(int[])} during the second scan of the database.
+     * In this way, we don't need load the whole database into the main memory.
+     * In the database, the item identifiers have to be in [0, n), where n is
+     * the number of items.
+     * @param frequency the frequency of single items.
+     * @param minSupport the required minimum support of item sets in terms
      * of frequency.
      */
-    FPGrowth(FPTree tree) {
-        this.minSupport = tree.minSupport;
-        T0 = tree;
+    public FPGrowth(int[] frequency, int minSupport) {
+        this.minSupport = minSupport;
+        T0 = new FPTree(frequency, minSupport);
     }
 
+    /**
+     * Constructor. This is a one-step construction of FP-tree if the database
+     * is available in main memory.
+     * @param itemsets the item set dataset. Each row is a item set, which
+     * may have different length. The item identifiers have to be in [0, n),
+     * where n is the number of items.
+     * @param minSupport the required minimum support of item sets in terms
+     * of percentage.
+     */
+    public FPGrowth(int[][] itemsets, double minSupport) {
+        this(itemsets, (int) Math.ceil(itemsets.length * minSupport));
+    }
+
+    /**
+     * Constructor. This is a one-step construction of FP-tree if the database
+     * is available in main memory.
+     * @param itemsets the item set database. Each row is a item set, which
+     * may have different length. The item identifiers have to be in [0, n),
+     * where n is the number of items. Item set should NOT contain duplicated
+     * items. Note that it is reordered after the call.
+     * @param minSupport the required minimum support of item sets in terms
+     * of frequency.
+     */
+    public FPGrowth(int[][] itemsets, int minSupport) {
+        this.minSupport = minSupport;
+        T0 = new FPTree(itemsets, minSupport);
+    }
+
+    /**
+     * Add an item set into the database.
+     * @param itemset an item set, which should NOT contain duplicated items.
+     * Note that it is reordered after the call.
+     */
+    public void add(int[] itemset) {
+        T0.add(itemset);
+    }
+    
     /**
      * Returns the number transactions in the database.
      * @return the number transactions in the database
@@ -90,54 +134,103 @@ public class FPGrowth implements Iterable<ItemSet> {
         return T0.size();
     }
 
-    @Override
-    public Iterator<ItemSet> iterator() {
-        return new Iterator<ItemSet>() {
-            int[] prefixItemset = new int[T0.maxItemSetSize];
-            int[] localItemSupport = new int[T0.numItems];
-            int i = T0.headerTable.length;
-
-            @Override
-            public boolean hasNext() {
-                if (buffer.isEmpty()) {
-                    /*
-                     * Mines frequent item sets. Start with the bottom of the header table and
-                     * work upwards. For each available FP tree node:
-                     *
-                     * - Count the support.
-                     * - Build up item set sofar.
-                     * - Add to supported sets.
-                     * - Build a new FP tree: (i) create a new local root, (ii) create a
-                     *   new local header table and (iii) populate with ancestors.
-                     * - If new local FP tree is not empty repeat mining operation.
-                     *
-                     * Otherwise end.
-                     */
-                    if (i-- > 0) {
-                        grow(T0.headerTable[i], null, localItemSupport, prefixItemset);
-                    }
-                }
-
-                return !buffer.isEmpty();
-            }
-
-            @Override
-            public ItemSet next() {
-                return buffer.poll();
-            }
-        };
+    /**
+     * Mines the frequent item sets. The discovered frequent item sets
+     * will be returned in a list.
+     * @return the list of frequent item sets
+     */
+    public List<ItemSet> learn() {
+        List<ItemSet> list = new ArrayList<>();
+        learn(null, list, null);
+        return list;
     }
 
     /**
-     * Mines the frequent item sets.
-     * @param tree the FP-tree of item sets.
-     * @return the stream of frequent item sets.
+     * Mines the frequent item sets. The discovered frequent item sets
+     * will be printed out to the provided stream.
+     * @param out a print stream for output of frequent item sets.
+     * @return the number of discovered frequent item sets.
      */
-    public static Stream<ItemSet> apply(FPTree tree) {
-        FPGrowth growth = new FPGrowth(tree);
-        return StreamSupport.stream(growth.spliterator(), false);
+    public long learn(PrintStream out) {
+        return learn(out, null, null);
     }
 
+    /**
+     * Mines the frequent item sets. The discovered frequent item sets
+     * will be stored in a total support tree.
+     */
+    TotalSupportTree buildTotalSupportTree() {
+        TotalSupportTree ttree = new TotalSupportTree(minSupport, T0.numFreqItems, T0.order);
+        learn(null, null, ttree);
+        return ttree;
+    }
+    
+    /**
+     * Mines the frequent item sets. The discovered frequent item sets
+     * will be printed out to the provided stream.
+     * @param out a print stream for output of frequent item sets.
+     * @return the number of discovered frequent item sets.
+     */
+    private long learn(PrintStream out, List<ItemSet> list, TotalSupportTree ttree) {
+        if (MulticoreExecutor.getThreadPoolSize() > 1) {
+            return grow(out, list, ttree, T0, null, null, null);
+        } else {
+            return grow(out, list, ttree, T0, null);            
+        }
+    }
+
+    /**
+     * FP-Growth task to execute on each frequent item in the header table.
+     */
+    class FPGrowthTask implements Callable<Long> {
+        /**
+         * The header table item to start.
+         */
+        List<HeaderTableItem> headers;
+        /**
+         * A print stream for output of frequent item sets
+         */
+        PrintStream out;
+        /**
+         * A list to store frequent item sets.
+         */
+        List<ItemSet> list;
+        /**
+         * Total support tree to store frequent item sets. Used later for
+         * association rule generation.
+         */
+        TotalSupportTree ttree;
+        /**
+         * A temporary buffer to store prefix of current item set during FP-growth.
+         */
+        int[] prefixItemset = null;
+        /**
+         * The local item support to generate conditional FP-tree.
+         */
+        int[] localItemSupport = null;
+
+        /**
+         * Constructor.
+         */
+        FPGrowthTask(List<HeaderTableItem> headers, PrintStream out, List<ItemSet> list, TotalSupportTree ttree) {
+            this.headers = headers;
+            this.out = out;
+            this.list = list;
+            this.ttree = ttree;
+            prefixItemset = new int[T0.maxItemSetSize];
+            localItemSupport = new int[T0.numItems];
+        }
+
+        @Override
+        public Long call() {
+            long n = 0;
+            for (HeaderTableItem header : headers) {
+                n += grow(out, list, ttree, header, null, localItemSupport, prefixItemset);
+            }
+            return n;
+        }
+    }
+    
     /**
      * Mines frequent item sets. Start with the bottom of the header table and
      * work upwards. For each available FP tree node:
@@ -152,29 +245,109 @@ public class FPGrowth implements Iterable<ItemSet> {
      * Otherwise end.
      * @param itemset the current item sets as generated so far (null at start).
      */
-    private void grow(FPTree fptree, int[] itemset, int[] localItemSupport, int[] prefixItemset) {
+    private long grow(PrintStream out, List<ItemSet> list, TotalSupportTree ttree, FPTree fptree, int[] itemset) {
+        long n = 0;
+        int[] prefixItemset = new int[T0.maxItemSetSize];
+        int[] localItemSupport = new int[T0.numItems];
+        
         // Loop through header table from end to start, item by item
         for (int i = fptree.headerTable.length; i-- > 0;) {
-            grow(fptree.headerTable[i], itemset, localItemSupport, prefixItemset);
+            n += grow(out, list, ttree, fptree.headerTable[i], itemset, localItemSupport, prefixItemset);
+        }
+
+        return n;
+    }
+    
+    /**
+     * Mines frequent item sets. Start with the bottom of the header table and
+     * work upwards. For each available FP tree node:
+     * <OL>
+     * <LI> Count the support.
+     * <LI> Build up item set sofar.
+     * <LI> Add to supported sets.
+     * <LI> Build a new FP tree: (i) create a new local root, (ii) create a
+     * new local header table and (iii) populate with ancestors.
+     * <LI> If new local FP tree is not empty repeat mining operation.
+     * </OL>
+     * Otherwise end.
+     * @param itemset the current item sets as generated so far (null at start).
+     */
+    private long grow(PrintStream out, List<ItemSet> list, TotalSupportTree ttree, FPTree fptree, int[] itemset, int[] localItemSupport, int[] prefixItemset) {
+        if (fptree == T0) {
+            int nprocs = MulticoreExecutor.getThreadPoolSize();
+            List<List<HeaderTableItem>> headers = new ArrayList<>();
+            for (int i = 0; i < 2*nprocs; i++) {
+                headers.add(new ArrayList<>());
+            }
+            
+            for (int i = fptree.headerTable.length; i-- > 0;) {
+                headers.get(i % headers.size()).add(fptree.headerTable[i]);  
+            }
+            
+            List<FPGrowthTask> tasks = new ArrayList<>();
+            // Loop through header table from end to start, item by item
+            for (int i = 0; i < headers.size(); i++) {
+                // process trail of links from header table element
+                tasks.add(new FPGrowthTask(headers.get(i), out, list, ttree));
+            }
+
+            long n = 0;
+            try {
+                List<Long> results = MulticoreExecutor.run(tasks);
+                
+                for (long i : results) {
+                    n += i;
+                }
+            } catch (Exception e) {
+                logger.error("Failed to run FPGrowth on multi-core", e);
+            }         
+            return n;
+            
+        } else {
+            long n = 0;
+            // Loop through header table from end to start, item by item
+            for (int i = fptree.headerTable.length; i-- > 0;) {
+                n += grow(out, list, ttree, fptree.headerTable[i], itemset, localItemSupport, prefixItemset);
+            }
+
+            return n;
         }
     }
 
     /**
      * Adds an item set to the result.
      */
-    private void collect(int[] itemset, int support) {
-        buffer.offer(new ItemSet(itemset, support));
+    private void collect(PrintStream out, List<ItemSet> list, TotalSupportTree ttree, int[] itemset, int support) {
+        if (list != null) {
+            synchronized (list) {
+                list.add(new ItemSet(itemset, support));
+            }
+        }
+        if (out != null) {
+            synchronized (out) {
+                for (int i = 0; i < itemset.length; i++) {
+                    out.format("%d ", itemset[i]);
+                }
+                out.format("(%d)%n", support);
+            }
+        }
+        if (ttree != null) {
+            synchronized (ttree) {
+                ttree.add(itemset, support);
+            }
+        }
     }
 
     /**
      * Mines all combinations along a single path tree
      */
-    private void grow(FPTree.Node node, int[] itemset, int support) {
+    private long grow(PrintStream out, List<ItemSet> list, TotalSupportTree ttree, FPTree.Node node, int[] itemset, int support) {
         int height = 0;
         for (FPTree.Node currentNode = node; currentNode != null; currentNode = currentNode.parent) {
             height ++;
         }
 
+        int n = 0;
         if (height > 0) {
             int[] items = new int[height];
             int i = 0;
@@ -185,25 +358,29 @@ public class FPGrowth implements Iterable<ItemSet> {
             int[] itemIndexStack = new int[height];
             int itemIndexStackPos = 0;
             itemset = insert(itemset, items[itemIndexStack[itemIndexStackPos]]);
-            collect(itemset, support);
-
+            collect(out, list, ttree, itemset, support);
+            n ++;
             while (itemIndexStack[0] < height - 1) {
                 if (itemIndexStack[itemIndexStackPos] < height - 1) {
                     itemIndexStackPos ++;
                     itemIndexStack[itemIndexStackPos] = itemIndexStack[itemIndexStackPos - 1] + 1;
                     itemset = insert(itemset, items[itemIndexStack[itemIndexStackPos]]);
-                    collect(itemset, support);
+                    collect(out, list, ttree, itemset, support);
+                    n ++;
                 } else {
                     itemset = drop(itemset);
                     if (itemset != null) {
                         itemIndexStackPos --;
                         itemIndexStack[itemIndexStackPos] = itemIndexStack[itemIndexStackPos] + 1;
                         itemset[0] = items[itemIndexStack[itemIndexStackPos]];
-                        collect(itemset, support);
+                        collect(out, list, ttree, itemset, support);
+                        n ++;
                     }
                 }
             }
         }
+
+        return n;
     }
 
     /**
@@ -211,25 +388,28 @@ public class FPGrowth implements Iterable<ItemSet> {
      * @param header the header table item of interest.
      * @param itemset the item set represented by the current FP-tree.
      */
-    private void grow(HeaderTableItem header, int[] itemset, int[] localItemSupport, int[] prefixItemset) {
+    private long grow(PrintStream out, List<ItemSet> list, TotalSupportTree ttree, HeaderTableItem header, int[] itemset, int[] localItemSupport, int[] prefixItemset) {
+        long n = 1;
         int support = header.count;
         int item = header.id;
         itemset = insert(itemset, item);
 
-        collect(itemset, support);
+        collect(out, list, ttree, itemset, support);
         
         if (header.node.next == null) {
             FPTree.Node node = header.node;
-            grow(node.parent, itemset, support);
+            n += grow(out, list, ttree, node.parent, itemset, support);
         } else {
             // Count singles in linked list
             if (getLocalItemSupport(header.node, localItemSupport)) {
                 // Create local FP tree
                 FPTree fptree = getLocalFPTree(header.node, localItemSupport, prefixItemset);
                 // Mine new FP-tree
-                grow(fptree, itemset, localItemSupport, prefixItemset);
+                n += grow(out, list, ttree, fptree, itemset, localItemSupport, prefixItemset);
             }
         }
+
+        return n;
     }
 
     /**
@@ -260,7 +440,7 @@ public class FPGrowth implements Iterable<ItemSet> {
      * @rerurn the local FP-tree.
      */
     private FPTree getLocalFPTree(FPTree.Node node, int[] localItemSupport, int[] prefixItemset) {
-        FPTree tree = new FPTree(minSupport, localItemSupport);
+        FPTree tree = new FPTree(localItemSupport, minSupport);
 
         while (node != null) {
             Node parent = node.parent;
@@ -271,7 +451,6 @@ public class FPGrowth implements Iterable<ItemSet> {
                 }
                 parent = parent.parent;
             }
-
             if (i < prefixItemset.length) {
                 tree.add(i, prefixItemset.length, prefixItemset, node.count);
             }
@@ -309,7 +488,7 @@ public class FPGrowth implements Iterable<ItemSet> {
      * @param itemset the original item set.
      * @return the reduced item set or null if the original is empty
      */
-    private static int[] drop(int[] itemset) {
+    static int[] drop(int[] itemset) {
         if (itemset.length >= 1) {
             int n = itemset.length - 1;
             int[] newItemset = new int[n];

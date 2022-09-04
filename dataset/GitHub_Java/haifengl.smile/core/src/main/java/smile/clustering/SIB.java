@@ -1,20 +1,18 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
-
 package smile.clustering;
 
 import java.util.ArrayList;
@@ -22,7 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.Callable;
 import smile.math.MathEx;
-import smile.util.SparseArray;
+import smile.math.SparseArray;
 import smile.data.SparseDataset;
 import smile.util.MulticoreExecutor;
 
@@ -229,7 +227,7 @@ public class SIB extends PartitionClustering<double[]> {
         int n = data.size();
 
         int[] y = new int[n];
-        SparseArray centroid = data.get(MathEx.randomInt(n));
+        SparseArray centroid = data.get(MathEx.randomInt(n)).x;
 
         double[] D = new double[n];
         for (int i = 0; i < n; i++) {
@@ -239,7 +237,7 @@ public class SIB extends PartitionClustering<double[]> {
         // pick the next center
         for (int i = 1; i < k; i++) {
             for (int j = 0; j < n; j++) {
-                double dist = MathEx.JensenShannonDivergence(data.get(j), centroid);
+                double dist = MathEx.JensenShannonDivergence(data.get(j).x, centroid);
                 if (dist < D[j]) {
                     D[j] = dist;
                     y[j] = i - 1;
@@ -256,12 +254,12 @@ public class SIB extends PartitionClustering<double[]> {
                 }
             }
 
-            centroid = data.get(index);
+            centroid = data.get(index).x;
         }
 
         for (int j = 0; j < n; j++) {
             // compute the distance between this sample and the current center
-            double dist = MathEx.JensenShannonDivergence(data.get(j), centroid);
+            double dist = MathEx.JensenShannonDivergence(data.get(j).x, centroid);
             if (dist < D[j]) {
                 D[j] = dist;
                 y[j] = k - 1;
@@ -308,7 +306,7 @@ public class SIB extends PartitionClustering<double[]> {
 
         for (int i = 0; i < n; i++) {
             size[y[i]]++;
-            for (SparseArray.Entry e : data.get(i)) {
+            for (SparseArray.Entry e : data.get(i).x) {
                 centroids[y[i]][e.i] += e.x;
             }
         }
@@ -326,7 +324,7 @@ public class SIB extends PartitionClustering<double[]> {
                 double nearest = Double.MAX_VALUE;
                 int c = -1;
                 for (int j = 0; j < k; j++) {
-                    double dist = MathEx.JensenShannonDivergence(data.get(i), centroids[j]);
+                    double dist = MathEx.JensenShannonDivergence(data.get(i).x, centroids[j]);
                     if (nearest > dist) {
                         nearest = dist;
                         c = j;
@@ -340,7 +338,7 @@ public class SIB extends PartitionClustering<double[]> {
                         centroids[o][j] *= size[o];
                     }
 
-                    for (SparseArray.Entry e : data.get(i)) {
+                    for (SparseArray.Entry e : data.get(i).x) {
                         int j = e.i;
                         double p = e.x;
                         centroids[c][j] += p;
@@ -371,7 +369,7 @@ public class SIB extends PartitionClustering<double[]> {
 
         distortion = 0;
         for (int i = 0; i < n; i++) {
-            distortion += MathEx.JensenShannonDivergence(data.get(i), centroids[y[i]]);
+            distortion += MathEx.JensenShannonDivergence(data.get(i).x, centroids[y[i]]);
         }            
     }
 
@@ -524,7 +522,7 @@ public class SIB extends PartitionClustering<double[]> {
         sb.append(String.format("Sequential Information Bottleneck distortion: %.5f%n", distortion));
         sb.append(String.format("Clusters of %d data points of dimension %d:%n", y.length, centroids[0].length));
         for (int i = 0; i < k; i++) {
-            int r = (int) Math.round(1000.0 * size[i] / y.length);
+            int r = (int) MathEx.round(1000.0 * size[i] / y.length);
             sb.append(String.format("%3d\t%5d (%2d.%1d%%)%n", i, size[i], r / 10, r % 10));
         }
         

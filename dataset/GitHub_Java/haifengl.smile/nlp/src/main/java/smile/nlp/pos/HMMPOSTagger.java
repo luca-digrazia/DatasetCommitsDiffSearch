@@ -1,19 +1,18 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.nlp.pos;
 
@@ -30,9 +29,12 @@ import smile.math.MathEx;
  * @author Haifeng Li
  */
 public class HMMPOSTagger implements POSTagger, Serializable {
-    private static final long serialVersionUID = 2L;
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(HMMPOSTagger.class);
 
+    /**
+     * Serialization Version UID.
+     */
+    private static final long serialVersionUID = 6600840654340610562L;
     /**
      * The emission symbols of HMM and corresponding indices.
      */
@@ -143,6 +145,19 @@ public class HMMPOSTagger implements POSTagger, Serializable {
     }
 
     /**
+     * Returns natural log without underflow.
+     */
+    private static double log(double x) {
+        double y = 0.0;
+        if (x < 1E-300) {
+            y = -690.7755;
+        } else {
+            y = java.lang.Math.log(x);
+        }
+        return y;
+    }
+
+    /**
      * Returns the most likely state sequence given the observation sequence by
      * the Viterbi algorithm, which maximizes the probability of
      * <code>P(I | O, HMM)</code>. Note that only s[i] taking value -1 will be
@@ -165,9 +180,9 @@ public class HMMPOSTagger implements POSTagger, Serializable {
 
         for (int i = 0; i < numStates; i++) {
             if (o[0][0] == 0 && o[0][1] >= 0) {
-                delta[0][i] = MathEx.log(pi[i]) + MathEx.log(c[i][o[0][1]]);
+                delta[0][i] = log(pi[i]) + log(c[i][o[0][1]]);                
             } else {
-                delta[0][i] = MathEx.log(pi[i]) + MathEx.log(b[i][o[0][0]]);
+                delta[0][i] = log(pi[i]) + log(b[i][o[0][0]]);
             }
         }
 
@@ -177,7 +192,7 @@ public class HMMPOSTagger implements POSTagger, Serializable {
                 int maxPsy = -1;
 
                 for (int i = 0; i < numStates; i++) {
-                    double thisDelta = delta[t - 1][i] + MathEx.log(a[i][k]);
+                    double thisDelta = delta[t - 1][i] + log(a[i][k]);
 
                     if (maxDelta < thisDelta) {
                         maxDelta = thisDelta;
@@ -186,9 +201,9 @@ public class HMMPOSTagger implements POSTagger, Serializable {
                 }
 
                 if (o[t][0] == 0 && o[t][1] >= 0) {
-                    delta[t][k] = maxDelta + MathEx.log(c[k][o[t][1]]);
+                    delta[t][k] = maxDelta + log(c[k][o[t][1]]);
                 } else {
-                    delta[t][k] = maxDelta + MathEx.log(b[k][o[t][0]]);
+                    delta[t][k] = maxDelta + log(b[k][o[t][0]]);
                 }
 
                 psy[t][k] = maxPsy;
@@ -253,9 +268,9 @@ public class HMMPOSTagger implements POSTagger, Serializable {
     }
 
     /**
-     * Fits an HMM POS tagger by maximum likelihood estimation.
+     * Learns an HMM POS tagger by maximum likelihood estimation.
      */
-    public static HMMPOSTagger fit(String[][] sentences, PennTreebankPOS[][] labels) {
+    public static HMMPOSTagger learn(String[][] sentences, PennTreebankPOS[][] labels) {
         int index = 1;
         int suffixIndex = 0;
         Map<String, Integer> symbol = new HashMap<>();
@@ -324,7 +339,7 @@ public class HMMPOSTagger implements POSTagger, Serializable {
      * Load training data from a corpora.
      * @param dir a file object defining the top directory
      */
-    public static void read(String dir, List<String[]> sentences, List<PennTreebankPOS[]> labels) {
+    public static void load(String dir, List<String[]> sentences, List<PennTreebankPOS[]> labels) {
         List<File> files = new ArrayList<>();
         walkin(new File(dir), files);
 
@@ -403,13 +418,13 @@ public class HMMPOSTagger implements POSTagger, Serializable {
         List<String[]> sentences = new ArrayList<>();
         List<PennTreebankPOS[]> labels = new ArrayList<>();
         
-        read("PennTreebank/PennTreebank2/TAGGED/POS/WSJ", sentences, labels);
-        read("PennTreebank/PennTreebank2/TAGGED/POS/BROWN", sentences, labels);
+        load("D:\\sourceforge\\corpora\\PennTreebank\\PennTreebank2\\TAGGED\\POS\\WSJ", sentences, labels);        
+        load("D:\\sourceforge\\corpora\\PennTreebank\\PennTreebank2\\TAGGED\\POS\\BROWN", sentences, labels);
         
         String[][] x = sentences.toArray(new String[sentences.size()][]);
         PennTreebankPOS[][] y = labels.toArray(new PennTreebankPOS[labels.size()][]);
         
-        HMMPOSTagger tagger = HMMPOSTagger.fit(x, y);
+        HMMPOSTagger tagger = HMMPOSTagger.learn(x, y);
 
         try {
             FileOutputStream fos = new FileOutputStream("hmmpostagger.model");

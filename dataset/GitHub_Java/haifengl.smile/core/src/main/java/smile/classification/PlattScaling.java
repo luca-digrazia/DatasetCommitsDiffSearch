@@ -1,18 +1,17 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.classification;
@@ -40,31 +39,20 @@ import static java.lang.Math.*;
  * @author Haifeng Li
  */
 public class PlattScaling implements Serializable {
-    private static final long serialVersionUID = 2L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PlattScaling.class);
+    private static final long serialVersionUID = 1L;
 
-    /** The scaling parameter. */
+    /** The scalar parameters to be learned by the algorithm. */
     private double alpha;
-    /** The scaling parameter. */
     private double beta;
-
-    /**
-     * Constructor. P(y = 1 | x) = 1 / (1 + exp(alpha * f(x) + beta))
-     * @param alpha The scaling parameter.
-     * @param beta The scaling parameter.
-     */
-    public PlattScaling(double alpha, double beta) {
-        this.alpha = alpha;
-        this.beta = beta;
-    }
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PlattScaling.class);
 
     /**
      * Trains the Platt scaling.
      * @param scores The predicted scores.
      * @param y The training labels.
      */
-    public static PlattScaling fit(double[] scores, int[] y) {
-        return fit(scores, y, 100);
+    public PlattScaling(double[] scores, int[] y) {
+        this(scores, y, 100);
     }
 
     /**
@@ -73,7 +61,7 @@ public class PlattScaling implements Serializable {
      * @param y The training labels.
      * @param maxIters The maximal number of iterations.
      */
-    public static PlattScaling fit(double[] scores, int[] y, int maxIters) {
+    public PlattScaling(double[] scores, int[] y, int maxIters) {
         int l = scores.length;
         double prior1 = 0, prior0 = 0;
         int i;
@@ -91,8 +79,8 @@ public class PlattScaling implements Serializable {
         double[] t = new double[l];
 
         // Initial Point and Initial Fun Value
-        double alpha = 0.0;
-        double beta = Math.log((prior0 + 1.0) / (prior1 + 1.0));
+        alpha = 0.0;
+        beta = Math.log((prior0 + 1.0) / (prior1 + 1.0));
         double fval = 0.0;
 
         for (i = 0; i < l; i++) {
@@ -178,8 +166,6 @@ public class PlattScaling implements Serializable {
         if (iter >= maxIters) {
             logger.warn("Reaches maximal iterations");
         }
-
-        return new PlattScaling(alpha, beta);
     }
 
     /**
