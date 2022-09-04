@@ -132,7 +132,7 @@ public class RestTest extends AAProcessorTestHelper {
 		assertCompilationErrorOn(FieldPathParamOnSameArgument.class, "@Field", result);
 		assertCompilationErrorOn(FieldPathParamOnSameArgument.class, "@Path", result);
 
-		assertCompilationErrorCount(2, result);
+		assertCompilationErrorCount(3, result);
 	}
 
 	@Test
