@@ -27,7 +27,6 @@ import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.core.Configuration;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ExecutorService;
 
 import static com.google.common.base.Preconditions.checkNotNull;
@@ -273,7 +272,6 @@ public class JerseyClientBuilder {
                 .executorService("jersey-client-" + name + "-%d")
                 .minThreads(configuration.getMinThreads())
                 .maxThreads(configuration.getMaxThreads())
-                .workQueue(new ArrayBlockingQueue<Runnable>(configuration.getWorkQueueSize()))
                 .build(),
                 environment.getObjectMapper(),
                 environment.getValidator());
