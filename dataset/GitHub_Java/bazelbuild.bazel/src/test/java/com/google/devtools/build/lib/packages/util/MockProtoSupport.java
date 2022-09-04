@@ -151,7 +151,8 @@ public final class MockProtoSupport {
         "        outs = [ 'descriptor.pb.go' ],",
         "        cmd = '')",
         "proto_library(name='descriptor',",
-        "              srcs=['descriptor.proto'])");
+        "              srcs=['descriptor.proto'],",
+        "              internal_bootstrap_hack = 1)");
     config.create("net/proto2/go/BUILD",
         "package(default_visibility=['//visibility:public'])",
         "go_library(name = 'proto',",
