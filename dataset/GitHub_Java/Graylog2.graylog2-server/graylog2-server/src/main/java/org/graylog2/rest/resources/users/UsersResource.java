@@ -20,11 +20,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import io.swagger.annotations.Api;
-import io.swagger.annotations.ApiOperation;
-import io.swagger.annotations.ApiParam;
-import io.swagger.annotations.ApiResponse;
-import io.swagger.annotations.ApiResponses;
+import com.wordnik.swagger.annotations.Api;
+import com.wordnik.swagger.annotations.ApiOperation;
+import com.wordnik.swagger.annotations.ApiParam;
+import com.wordnik.swagger.annotations.ApiResponse;
+import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
 import org.apache.shiro.authz.annotation.RequiresPermissions;
 import org.graylog2.Configuration;
@@ -229,7 +229,7 @@ public class UsersResource extends RestResource {
         }
         final boolean permitted = isPermitted(USERS_PERMISSIONSEDIT, user.getName());
         if (permitted && cr.permissions() != null) {
-            user.setPermissions(getEffectiveUserPermissions(user, cr.permissions()));
+            user.setPermissions(cr.permissions());
         }
 
         if (isPermitted(USERS_ROLESEDIT, user.getName())) {
@@ -294,7 +294,7 @@ public class UsersResource extends RestResource {
             throw new NotFoundException();
         }
 
-        user.setPermissions(getEffectiveUserPermissions(user, permissionRequest.permissions()));
+        user.setPermissions(permissionRequest.permissions());
         userService.save(user);
     }
 
@@ -465,6 +465,7 @@ public class UsersResource extends RestResource {
 
             if (roleNames.isEmpty()) {
                 LOG.error("Unable to load role names for role IDs {} for user {}", roleIds, user);
+                throw new InternalServerErrorException("Unable to load role names");
             }
         }
 
@@ -482,12 +483,5 @@ public class UsersResource extends RestResource {
                 user.getStartpage(),
                 roleNames
         );
-    }
-
-    // Filter the permissions granted by roles from the permissions list
-    private List<String> getEffectiveUserPermissions(final User user, final List<String> permissions) {
-        final List<String> effectivePermissions = Lists.newArrayList(permissions);
-        effectivePermissions.removeAll(userService.getUserPermissionsFromRoles(user));
-        return effectivePermissions;
     }
 }
