@@ -462,7 +462,7 @@ public abstract class BaseConfiguration {
     @ValidatorMethod
     @SuppressWarnings("unused")
     public void validateWebTlsConfig() throws ValidationException {
-        if(isWebEnableTls() && !isRestAndWebOnSamePort()) {
+        if(isWebEnableTls()) {
             if(!isRegularFileAndReadable(getWebTlsKeyFile())) {
                 throw new ValidationException("Unreadable or missing web interface private key: " + getWebTlsKeyFile());
             }
