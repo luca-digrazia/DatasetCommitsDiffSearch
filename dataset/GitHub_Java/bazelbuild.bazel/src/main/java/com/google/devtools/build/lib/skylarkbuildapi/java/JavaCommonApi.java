@@ -527,39 +527,17 @@ public interface JavaCommonApi<
             name = "ctx",
             positional = true,
             named = false,
-            type = Object.class,
-            allowedTypes = {@ParamType(type = SkylarkRuleContextApi.class)},
-            noneable = true,
-            defaultValue = "None",
+            type = SkylarkRuleContextApi.class,
             doc = "The rule context."),
-        @Param(
-            name = "java_toolchain_attr",
-            positional = false,
-            named = true,
-            type = Object.class,
-            allowedTypes = {@ParamType(type = String.class)},
-            noneable = true,
-            defaultValue = "None"),
-        @Param(
-            name = "java_toolchain",
-            positional = false,
-            named = true,
-            type = Object.class,
-            allowedTypes = {@ParamType(type = ToolchainInfoApi.class)},
-            noneable = true,
-            defaultValue = "None",
-            doc =
-                "A JavaToolchainInfo to be used for retrieving the ijar "
-                    + "tool. Only set when use_ijar is True."),
+        @Param(name = "java_toolchain_attr", positional = false, named = true, type = String.class),
       },
       useSkylarkSemantics = true,
       useLocation = true)
   // TODO(b/78512644): migrate callers to passing explicit javacopts or using custom toolchains, and
   // delete
   public ImmutableList<String> getDefaultJavacOpts(
-      Object skylarkRuleContext,
-      Object javaToolchainAttr,
-      Object javaToolchain,
+      SkylarkRuleContextT skylarkRuleContext,
+      String javaToolchainAttr,
       Location loc,
       SkylarkSemantics semantics)
       throws EvalException;
