@@ -32,7 +32,6 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 
 /**
  * A parser for options. Typical use case in a main method:
@@ -200,28 +199,16 @@ public class OptionsParser implements OptionsProvider {
   public static final class OptionDescription {
 
     private final String name;
-
-    // For valued flags
     private final Object defaultValue;
     private final Converter<?> converter;
     private final boolean allowMultiple;
 
-    private final ImmutableList<OptionValueDescription> expansions;
-    private final ImmutableList<OptionValueDescription> implicitRequirements;
-
-    OptionDescription(
-        String name,
-        Object defaultValue,
-        Converter<?> converter,
-        boolean allowMultiple,
-        ImmutableList<OptionValueDescription> expansions,
-        ImmutableList<OptionValueDescription> implicitRequirements) {
+    public OptionDescription(String name, Object defaultValue, Converter<?> converter,
+        boolean allowMultiple) {
       this.name = name;
       this.defaultValue = defaultValue;
       this.converter = converter;
       this.allowMultiple = allowMultiple;
-      this.expansions = expansions;
-      this.implicitRequirements = implicitRequirements;
     }
 
     public String getName() {
@@ -239,14 +226,6 @@ public class OptionsParser implements OptionsProvider {
     public boolean getAllowMultiple() {
       return allowMultiple;
     }
-
-    public ImmutableList<OptionValueDescription> getImplicitRequirements() {
-      return implicitRequirements;
-    }
-
-    public ImmutableList<OptionValueDescription> getExpansions() {
-      return expansions;
-    }
   }
   
   /**
@@ -256,25 +235,22 @@ public class OptionsParser implements OptionsProvider {
    */
   public static class OptionValueDescription {
     private final String name;
-    @Nullable private final String originalValueString;
-    @Nullable private final Object value;
-    @Nullable private final OptionPriority priority;
-    @Nullable private final String source;
-    @Nullable private final String implicitDependant;
-    @Nullable private final String expandedFrom;
+    private final Object value;
+    private final OptionPriority priority;
+    private final String source;
+    private final String implicitDependant;
+    private final String expandedFrom;
     private final boolean allowMultiple;
 
     public OptionValueDescription(
         String name,
-        @Nullable String originalValueString,
-        @Nullable Object value,
-        @Nullable OptionPriority priority,
-        @Nullable String source,
-        @Nullable String implicitDependant,
-        @Nullable String expandedFrom,
+        Object value,
+        OptionPriority priority,
+        String source,
+        String implicitDependant,
+        String expandedFrom,
         boolean allowMultiple) {
       this.name = name;
-      this.originalValueString = originalValueString;
       this.value = value;
       this.priority = priority;
       this.source = source;
@@ -285,10 +261,6 @@ public class OptionsParser implements OptionsProvider {
 
     public String getName() {
       return name;
-    }
-
-    public String getOriginalValueString() {
-      return originalValueString;
     }
 
     // Need to suppress unchecked warnings, because the "multiple occurrence"
@@ -313,7 +285,6 @@ public class OptionsParser implements OptionsProvider {
       }
       return value;
     }
-
     /**
      * @return the priority of the thing that set this value for this flag
      */
@@ -614,10 +585,10 @@ public class OptionsParser implements OptionsProvider {
   /**
    * Returns a description of the option.
    *
-   * @return The {@link OptionDescription} for the option, or null if there is no option by the
-   *     given name.
+   * @return The {@link OptionValueDescription} for the option, or null if there is no option by
+   *        the given name.
    */
-  public OptionDescription getOptionDescription(String name) throws OptionsParsingException {
+  public OptionDescription getOptionDescription(String name) {
     return impl.getOptionDescription(name);
   }
 
@@ -652,7 +623,7 @@ public class OptionsParser implements OptionsProvider {
    * {@code parse(OptionPriority.COMMAND_LINE, null, Arrays.asList(args))}.
    */
   public void parse(String... args) throws OptionsParsingException {
-    parse(OptionPriority.COMMAND_LINE, null, Arrays.asList(args));
+    parse(OptionPriority.COMMAND_LINE, (String) null, Arrays.asList(args));
   }
 
   /**
@@ -660,7 +631,7 @@ public class OptionsParser implements OptionsProvider {
    * {@code parse(OptionPriority.COMMAND_LINE, null, args)}.
    */
   public void parse(List<String> args) throws OptionsParsingException {
-    parse(OptionPriority.COMMAND_LINE, null, args);
+    parse(OptionPriority.COMMAND_LINE, (String) null, args);
   }
 
   /**

@@ -215,6 +215,15 @@ public class OptionsTest {
   }
 
   @Test
+  public void booleanNoUnderscore() throws OptionsParsingException {
+    Options<HttpOptions> options =
+        Options.parse(HttpOptions.class, new String[]{"--no_debug", "--no_tristate"});
+    HttpOptions webFlags = options.getOptions();
+    assertThat(webFlags.isDebugging).isEqualTo(false);
+    assertThat(webFlags.triState).isEqualTo(TriState.NO);
+  }
+
+  @Test
   public void booleanAbbrevMinus() throws OptionsParsingException {
     Options<HttpOptions> options =
         Options.parse(HttpOptions.class, new String[]{"-d-", "-t-"});
@@ -476,9 +485,8 @@ public class OptionsTest {
     try {
       Options.parse(K.class, NO_ARGS).getOptions();
       fail();
-    } catch (OptionsParser.ConstructionException e) {
-      assertThat(e.getCause()).isInstanceOf(IllegalStateException.class);
-      assertThat(e.getCause().getMessage())
+    } catch (IllegalStateException e) {
+      assertThat(e.getMessage())
           .isEqualTo(
               "OptionsParsingException while retrieving default for "
                   + "int1: 'null' is not an int");

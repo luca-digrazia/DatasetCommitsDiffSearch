@@ -13,11 +13,9 @@
 // limitations under the License.
 package com.google.devtools.common.options;
 
-import com.google.common.collect.ImmutableList;
-
 /**
- * A function from an option parser's static setup (what flags it knows about) to a list of
- * expansion Strings to use for one of its options.
+ * A function from an option parser's static setup (what flags it knows about) to an expansion
+ * String[] to use for one of its options.
  */
 public interface ExpansionFunction {
 
@@ -29,5 +27,5 @@ public interface ExpansionFunction {
    *     information is computed
    * @return An expansion to use for all occurrences of this option in this parser
    */
-  ImmutableList<String> getExpansion(IsolatedOptionsData optionsData);
+  public String[] getExpansion(IsolatedOptionsData optionsData);
 }

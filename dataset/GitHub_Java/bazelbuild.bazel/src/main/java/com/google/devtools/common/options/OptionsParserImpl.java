@@ -225,14 +225,7 @@ class OptionsParserImpl {
         Object value = optionsData.getDefaultValue(field);
         result.add(
             new OptionValueDescription(
-                fieldName,
-                /* originalValueString */null,
-                value,
-                OptionPriority.DEFAULT,
-                /* source */ null,
-                /* implicitDependant */ null,
-                /* expandedFrom */ null,
-                false));
+                fieldName, value, OptionPriority.DEFAULT, null, null, null, false));
       } else {
         result.add(entry);
       }
@@ -302,13 +295,13 @@ class OptionsParserImpl {
         parsedValues.put(
             field,
             new OptionValueDescription(
-                name, null, value, priority, source, implicitDependant, expandedFrom, false));
+                name, value, priority, source, implicitDependant, expandedFrom, false));
       }
     } else {
       parsedValues.put(
           field,
           new OptionValueDescription(
-              name, null, value, priority, source, implicitDependant, expandedFrom, false));
+              name, value, priority, source, implicitDependant, expandedFrom, false));
       maybeAddDeprecationWarning(field);
     }
   }
@@ -320,7 +313,6 @@ class OptionsParserImpl {
       entry =
           new OptionValueDescription(
               field.getName(),
-              /* originalValueString */ null,
               ArrayListMultimap.create(),
               priority,
               source,
@@ -340,12 +332,30 @@ class OptionsParserImpl {
       throw new IllegalArgumentException("No such option '" + optionName + "'");
     }
     Option option = field.getAnnotation(Option.class);
+    clearValue(field, option, clearedValues);
+  }
 
-    // Actually remove the value from various lists tracking effective options.
-    canonicalizeValues.removeAll(field);
+  private void clearValue(
+      Field field, Option option, Map<String, OptionValueDescription> clearedValues)
+      throws OptionsParsingException {
+
     OptionValueDescription removed = parsedValues.remove(field);
     if (removed != null) {
       clearedValues.put(option.name(), removed);
+    }
+
+    canonicalizeValues.removeAll(field);
+
+    // Recurse to remove any implicit or expansion flags that this flag may have added when
+    // originally parsed.
+    String[] expansion = optionsData.getEvaluatedExpansion(field);
+    for (String[] args : new String[][] {option.implicitRequirements(), expansion}) {
+      Iterator<String> argsIterator = Iterators.forArray(args);
+      while (argsIterator.hasNext()) {
+        String arg = argsIterator.next();
+        ParseOptionResult parseOptionResult = parseOption(arg, argsIterator);
+        clearValue(parseOptionResult.field, parseOptionResult.option, clearedValues);
+      }
     }
   }
 
@@ -357,7 +367,7 @@ class OptionsParserImpl {
     return parsedValues.get(field);
   }
 
-  OptionDescription getOptionDescription(String name) throws OptionsParsingException {
+  OptionDescription getOptionDescription(String name) {
     Field field = optionsData.getFieldFromName(name);
     if (field == null) {
       return null;
@@ -368,44 +378,7 @@ class OptionsParserImpl {
         name,
         optionsData.getDefaultValue(field),
         optionsData.getConverter(field),
-        optionsData.getAllowMultiple(field),
-        getExpansionDescriptions(
-            optionsData.getEvaluatedExpansion(field),
-            /* expandedFrom */ name,
-            /* implicitDependant */ null),
-        getExpansionDescriptions(
-            optionAnnotation.implicitRequirements(),
-            /* expandedFrom */ null,
-            /* implicitDependant */ name));
-  }
-
-  /**
-   * @return A list of the descriptions corresponding to the list of unparsed flags passed in.
-   * These descriptions are are divorced from the command line - there is no correct priority or
-   * source for these, as they are not actually set values. The value itself is also a string, no
-   * conversion has taken place.
-   */
-  private ImmutableList<OptionValueDescription> getExpansionDescriptions(
-      String[] optionStrings, String expandedFrom, String implicitDependant)
-      throws OptionsParsingException {
-    ImmutableList.Builder<OptionValueDescription> builder = ImmutableList.builder();
-    ImmutableList<String> options = ImmutableList.copyOf(optionStrings);
-    Iterator<String> optionsIterator = options.iterator();
-
-    while (optionsIterator.hasNext()) {
-      String unparsedFlagExpression = optionsIterator.next();
-      ParseOptionResult parseResult = parseOption(unparsedFlagExpression, optionsIterator);
-      builder.add(new OptionValueDescription(
-          parseResult.option.name(),
-          parseResult.value,
-          /* value */ null,
-          /* priority */ null,
-          /* source */null,
-          implicitDependant,
-          expandedFrom,
-          optionsData.getAllowMultiple(parseResult.field)));
-    }
-    return builder.build();
+        optionAnnotation.allowMultiple());
   }
 
   boolean containsExplicitOption(String name) {
@@ -444,7 +417,7 @@ class OptionsParserImpl {
       List<String> args) throws OptionsParsingException {
 
     List<String> unparsedArgs = Lists.newArrayList();
-    LinkedHashMap<String, List<String>> implicitRequirements = Maps.newLinkedHashMap();
+    LinkedHashMap<String,List<String>> implicitRequirements = Maps.newLinkedHashMap();
 
     Iterator<String> argsIterator = argsPreProcessor.preProcess(args).iterator();
     while (argsIterator.hasNext()) {
@@ -460,10 +433,10 @@ class OptionsParserImpl {
         break;
       }
 
-      ParseOptionResult parseOptionResult = parseOption(arg, argsIterator);
-      Field field = parseOptionResult.field;
-      Option option = parseOptionResult.option;
-      String value = parseOptionResult.value;
+      ParseOptionResult optionParseResult = parseOption(arg, argsIterator);
+      Field field = optionParseResult.field;
+      Option option = optionParseResult.option;
+      String value = optionParseResult.value;
 
       final String originalName = option.name();
 
@@ -478,11 +451,8 @@ class OptionsParserImpl {
               ImmutableList.of(value));
 
           if (!unparsed.isEmpty()) {
-            throw new OptionsParsingException(
-                "Unparsed options remain after unwrapping "
-                    + arg
-                    + ": "
-                    + Joiner.on(' ').join(unparsed));
+            throw new OptionsParsingException("Unparsed options remain after unwrapping " +
+              arg + ": " + Joiner.on(' ').join(unparsed));
           }
 
           // Don't process implicitRequirements or expansions for wrapper options. In particular,
@@ -531,11 +501,8 @@ class OptionsParserImpl {
         if (!unparsed.isEmpty()) {
           // Throw an assertion, because this indicates an error in the code that specified the
           // expansion for the current option.
-          throw new AssertionError(
-              "Unparsed options remain after parsing expansion of "
-                  + arg
-                  + ": "
-                  + Joiner.on(' ').join(unparsed));
+          throw new AssertionError("Unparsed options remain after parsing expansion of " +
+            arg + ": " + Joiner.on(' ').join(unparsed));
         }
       } else {
         Converter<?> converter = optionsData.getConverter(field);
