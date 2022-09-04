@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.BigIntegerFingerprint;
 import com.google.devtools.build.lib.vfs.DigestHashFunction;
-import com.google.devtools.build.lib.vfs.DigestHashFunction.DefaultHashFunctionNotSetException;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -32,7 +31,6 @@ import com.google.devtools.build.skyframe.SkyValue;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigInteger;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
 import javax.annotation.Nullable;
@@ -101,6 +99,7 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     // TODO(janakr): return fingerprint in other cases: symlink, directory.
     return null;
   }
+
 
   /**
    * Index used to resolve remote files.
@@ -246,45 +245,12 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
     return new RegularFileArtifactValue(digest, /*proxy=*/ null, size);
   }
 
-  public static FileArtifactValue createForUnresolvedSymlink(PathFragment symlinkTarget) {
-    DigestHashFunction digestHashFunction;
-
-    try {
-      digestHashFunction = DigestHashFunction.getDefault();
-    } catch (DefaultHashFunctionNotSetException e) {
-      throw new IllegalStateException(e);
-    }
-
-    byte[] digest =
-        digestHashFunction
-            .getHashFunction()
-            .hashString(symlinkTarget.getPathString(), StandardCharsets.ISO_8859_1)
-            .asBytes();
-
-    // We need to be able to tell the difference between a symlink and a file containing the same
-    // text. So we transform the digest a bit. This works because if one wants to craft a file with
-    // the same digest as a symlink, one would need to mount a preimage attack on the digest
-    // function (this would be different if we tweaked the data before applying the hash function)
-    digest[0] = (byte) (digest[0] ^ 0xff);
-
-    return new UnresolvedSymlinkArtifactValue(digest);
-  }
-
   @VisibleForTesting
   public static FileArtifactValue createForNormalFile(
       byte[] digest, @Nullable FileContentsProxy proxy, long size, boolean isShareable) {
     return isShareable
         ? new RegularFileArtifactValue(digest, proxy, size)
         : new UnshareableRegularFileArtifactValue(digest, proxy, size);
-  }
-
-  /**
-   * Create a FileArtifactValue using the {@link Path} and size. FileArtifactValue#create will
-   * handle getting the digest using the Path and size values.
-   */
-  public static FileArtifactValue createForNormalFileUsingPath(Path path, long size)
-      throws IOException {
-    return create(path, true, size, null, null, true);
   }
 
   public static FileArtifactValue createForDirectoryWithHash(byte[] digest) {
@@ -615,46 +581,6 @@ public abstract class FileArtifactValue implements SkyValue, HasDigest {
           .add("size", size)
           .add("locationIndex", locationIndex)
           .toString();
-    }
-  }
-
-  /** A {@link FileArtifactValue} representing a symlink that is not to be resolved. */
-  public static final class UnresolvedSymlinkArtifactValue extends FileArtifactValue {
-    private final byte[] digest;
-
-    private UnresolvedSymlinkArtifactValue(byte[] digest) {
-      this.digest = digest;
-    }
-
-    @Override
-    public FileStateType getType() {
-      return FileStateType.SYMLINK;
-    }
-
-    @Override
-    public byte[] getDigest() {
-      return digest;
-    }
-
-    @Override
-    public long getSize() {
-      return 0;
-    }
-
-    @Override
-    public long getModifiedTime() {
-      throw new IllegalStateException();
-    }
-
-    @Override
-    public FileContentsProxy getContentsProxy() {
-      throw new IllegalStateException();
-    }
-
-    @Override
-    public boolean wasModifiedSinceDigest(Path path) {
-      // We could store an mtime but I have no clue where to get one from createFromMetadata
-      return true;
     }
   }
 
