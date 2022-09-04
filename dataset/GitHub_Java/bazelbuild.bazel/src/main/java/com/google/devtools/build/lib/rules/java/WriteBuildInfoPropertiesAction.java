@@ -177,7 +177,9 @@ public class WriteBuildInfoPropertiesAction extends AbstractFileWriteAction {
       Map<String, Key> keys) {
     boolean redacted = values.isEmpty();
     for (Map.Entry<String, WorkspaceStatusAction.Key> key : keys.entrySet()) {
-      result.put(key.getKey(), gePropertyValue(values, redacted, key));
+      if (key.getValue().isInLanguage("Java")) {
+        result.put(key.getKey(), gePropertyValue(values, redacted, key));
+      }
     }
   }
 

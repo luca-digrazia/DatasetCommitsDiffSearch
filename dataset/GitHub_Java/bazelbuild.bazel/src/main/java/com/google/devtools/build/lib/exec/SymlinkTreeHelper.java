@@ -21,12 +21,15 @@ import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.UserExecException;
+import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.shell.CommandException;
 import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.OsUtils;
@@ -60,8 +63,8 @@ public final class SymlinkTreeHelper {
    *
    * @param inputManifest exec path to the input runfiles manifest
    * @param symlinkTreeRoot the root of the symlink tree to be created
-   * @param filesetTree true if this is fileset symlink tree, false if this is a runfiles symlink
-   *     tree.
+   * @param filesetTree true if this is fileset symlink tree,
+   *                    false if this is a runfiles symlink tree.
    */
   public SymlinkTreeHelper(Path inputManifest, Path symlinkTreeRoot, boolean filesetTree) {
     this.inputManifest = inputManifest;
@@ -77,23 +80,20 @@ public final class SymlinkTreeHelper {
    * Creates a symlink tree using a CommandBuilder. This means that the symlink tree will always be
    * present on the developer's workstation. Useful when running commands locally.
    *
-   * <p>Warning: this method REALLY executes the command on the box Bazel is running on, without any
+   * Warning: this method REALLY executes the command on the box Bazel is running on, without any
    * kind of synchronization, locking, or anything else.
    *
    * @param config the configuration that is used for creating the symlink tree.
    * @throws CommandException
    */
   public void createSymlinksUsingCommand(
-      Path execRoot, BinTools binTools, ImmutableMap<String, String> shellEnvironment)
-      throws CommandException {
+      Path execRoot, BuildConfiguration config, BinTools binTools)
+          throws CommandException {
     List<String> argv = getSpawnArgumentList(execRoot, binTools.getExecPath(BUILD_RUNFILES));
-    Preconditions.checkNotNull(shellEnvironment);
-    new CommandBuilder()
-        .addArgs(argv)
-        .setWorkingDir(execRoot)
-        .setEnv(shellEnvironment)
-        .build()
-        .execute();
+    CommandBuilder builder = new CommandBuilder();
+    builder.addArgs(argv);
+    builder.setWorkingDir(execRoot);
+    builder.build().execute();
   }
 
   /**
@@ -105,19 +105,27 @@ public final class SymlinkTreeHelper {
    * @param enableRunfiles
    * @return a list of SpawnResults created during symlink creation, if any
    */
-  public void createSymlinks(
+  public List<SpawnResult> createSymlinks(
+      ActionExecutionMetadata owner,
       ActionExecutionContext actionExecutionContext,
       BinTools binTools,
       ImmutableMap<String, String> shellEnvironment,
+      Artifact inputManifestArtifact,
       boolean enableRunfiles)
-      throws ExecException {
+          throws ExecException, InterruptedException {
+    Preconditions.checkState(
+        actionExecutionContext.getInputPath(inputManifestArtifact).equals(inputManifest));
     if (enableRunfiles) {
-      try {
-        createSymlinksUsingCommand(
-            actionExecutionContext.getExecRoot(), binTools, shellEnvironment);
-      } catch (CommandException e) {
-        throw new UserExecException(e.getMessage(), e);
-      }
+      return actionExecutionContext
+          .getSpawnActionContext(owner.getMnemonic())
+          .exec(
+              createSpawn(
+                  owner,
+                  actionExecutionContext.getExecRoot(),
+                  binTools,
+                  shellEnvironment,
+                  inputManifestArtifact),
+              actionExecutionContext);
     } else {
       // Pretend we created the runfiles tree by copying the manifest
       try {
@@ -126,6 +134,7 @@ public final class SymlinkTreeHelper {
       } catch (IOException e) {
         throw new UserExecException(e.getMessage(), e);
       }
+      return ImmutableList.of();
     }
   }
 
@@ -150,7 +159,9 @@ public final class SymlinkTreeHelper {
         RESOURCE_SET);
   }
 
-  /** Returns the complete argument list build-runfiles has to be called with. */
+  /**
+   * Returns the complete argument list build-runfiles has to be called with.
+   */
   private ImmutableList<String> getSpawnArgumentList(Path execRoot, PathFragment buildRunfiles) {
     List<String> args = Lists.newArrayList();
     args.add(buildRunfiles.getPathString());

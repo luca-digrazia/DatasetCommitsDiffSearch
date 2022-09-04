@@ -210,7 +210,7 @@ public class BazelWorkspaceStatusModule extends BlazeModule {
         stableMap.put(BuildInfo.BUILD_EMBED_LABEL, options.embedLabel);
         stableMap.put(BuildInfo.BUILD_HOST, hostname);
         stableMap.put(BuildInfo.BUILD_USER, username);
-        volatileMap.put(BuildInfo.BUILD_TIMESTAMP, Long.toString(getCurrentTimeMillis() / 1000));
+        volatileMap.put(BuildInfo.BUILD_TIMESTAMP, Long.toString(getCurrentTimeMillis()));
 
         Map<String, String> overallMap = new TreeMap<>();
         overallMap.putAll(volatileMap);

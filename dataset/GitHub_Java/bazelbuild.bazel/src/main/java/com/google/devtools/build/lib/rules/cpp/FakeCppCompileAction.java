@@ -118,6 +118,7 @@ public class FakeCppCompileAction extends CppCompileAction {
         ImmutableList.<Artifact>of(),
         GUID,
         executionInfo,
+        ImmutableMap.<String, String>of(),
         CppCompileAction.CPP_COMPILE,
         cppSemantics,
         cppProvider,

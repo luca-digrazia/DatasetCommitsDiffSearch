@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.analysis.actions;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -24,25 +25,27 @@ import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionExecutionMetadata;
 import com.google.devtools.build.lib.actions.ActionInput;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
+import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
+import com.google.devtools.build.lib.actions.ActionResult;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.Artifact.SpecialArtifact;
 import com.google.devtools.build.lib.actions.Artifact.TreeFileArtifact;
 import com.google.devtools.build.lib.actions.ArtifactPrefixConflictException;
 import com.google.devtools.build.lib.actions.BaseSpawn;
 import com.google.devtools.build.lib.actions.ExecException;
-import com.google.devtools.build.lib.actions.Executor;
-import com.google.devtools.build.lib.actions.ResourceSet;
+import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
 import com.google.devtools.build.lib.actions.SpawnActionContext;
+import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.util.Fingerprint;
-import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
-
 import java.io.IOException;
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -73,7 +76,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
 
   private final Artifact archive;
   private final Artifact archiveManifest;
-  private final Artifact outputTreeArtifact;
+  private final SpecialArtifact outputTreeArtifact;
   private final FilesToRunProvider zipper;
 
   /**
@@ -90,7 +93,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
       ActionOwner owner,
       Artifact archive,
       Artifact archiveManifest,
-      Artifact treeArtifactToPopulate,
+      SpecialArtifact treeArtifactToPopulate,
       FilesToRunProvider zipper) {
     super(
         owner,
@@ -112,7 +115,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
   }
 
   private static class PopulateTreeArtifactSpawn extends BaseSpawn {
-    private final Artifact treeArtifact;
+    private final SpecialArtifact treeArtifact;
     private final Iterable<PathFragment> entriesToExtract;
 
     // The output TreeFileArtifacts are created lazily outside of the contructor because potentially
@@ -120,16 +123,16 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
     private Collection<TreeFileArtifact> outputTreeFileArtifacts;
 
     PopulateTreeArtifactSpawn(
-        Artifact treeArtifact,
+        SpecialArtifact treeArtifact,
         Iterable<PathFragment> entriesToExtract,
         Iterable<String> commandLine,
-        Map<PathFragment, Artifact> runfilesManifests,
+        RunfilesSupplier runfilesSupplier,
         ActionExecutionMetadata action) {
       super(
         ImmutableList.copyOf(commandLine),
         ImmutableMap.<String, String>of(),
         ImmutableMap.<String, String>of(),
-        ImmutableMap.copyOf(runfilesManifests),
+        runfilesSupplier,
         action,
         AbstractAction.DEFAULT_RESOURCE_SET);
       this.treeArtifact = treeArtifact;
@@ -152,9 +155,8 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
   }
 
   @Override
-  public void execute(ActionExecutionContext actionExecutionContext)
+  public ActionResult execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
-    Executor executor = actionExecutionContext.getExecutor();
     Spawn spawn;
 
     // Create a spawn to unzip the archive file into the output TreeArtifact.
@@ -166,6 +168,12 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
       throw new ActionExecutionException(e, this, true);
     }
 
+    // If the spawn does not have any output, it means the archive file contains nothing. In this
+    // case we just return without generating anything under the output TreeArtifact.
+    if (spawn.getOutputFiles().isEmpty()) {
+      return ActionResult.EMPTY;
+    }
+
     // Check spawn output TreeFileArtifact conflicts.
     try {
       checkOutputConflicts(spawn.getOutputFiles());
@@ -173,13 +181,24 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
       throw new ActionExecutionException(e, this, true);
     }
 
-    // Execute the spawn.
+    // Create parent directories for the output TreeFileArtifacts.
     try {
-      getContext(executor).exec(spawn, actionExecutionContext);
+      for (ActionInput fileEntry : spawn.getOutputFiles()) {
+        FileSystemUtils.createDirectoryAndParents(
+            actionExecutionContext.getInputPath(((Artifact) fileEntry)).getParentDirectory());
+      }
+    } catch (IOException e) {
+      throw new ActionExecutionException(e, this, false);
+    }
+
+    // Execute the spawn.
+    List<SpawnResult> spawnResults;
+    try {
+      spawnResults = getContext(actionExecutionContext).exec(spawn, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           getMnemonic() + " action failed for target: " + getOwner().getLabel(),
-          executor.getVerboseFailures(),
+          actionExecutionContext.getVerboseFailures(),
           this);
     }
 
@@ -188,22 +207,20 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
       actionExecutionContext.getMetadataHandler().addExpandedTreeOutput(
           (TreeFileArtifact) fileEntry);
     }
+    return ActionResult.create(spawnResults);
   }
 
   @Override
-  protected String computeKey() {
-    Fingerprint f = new Fingerprint();
-    f.addString(GUID);
-    f.addString(getMnemonic());
-    f.addStrings(spawnCommandLine());
-    Map<PathFragment, Artifact> zipperManifest = zipperExecutableRunfilesManifest();
-    f.addInt(zipperManifest.size());
-    for (Map.Entry<PathFragment, Artifact> input : zipperManifest.entrySet()) {
-      f.addString(input.getKey().getPathString() + "/");
-      f.addPath(input.getValue().getExecPath());
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
+    fp.addString(GUID);
+    fp.addString(getMnemonic());
+    fp.addStrings(spawnCommandLine());
+    fp.addPaths(zipper.getRunfilesSupplier().getRunfilesDirs());
+    List<Artifact> runfilesManifests = zipper.getRunfilesSupplier().getManifests();
+    fp.addInt(runfilesManifests.size());
+    for (Artifact manifest : runfilesManifests) {
+      fp.addPath(manifest.getExecPath());
     }
-
-    return f.hexDigestAndReset();
   }
 
   @Override
@@ -216,16 +233,8 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
     return true;
   }
 
-  @Override
-  public ResourceSet estimateResourceConsumption(Executor executor) {
-    if (getContext(executor).willExecuteRemotely(true)) {
-      return ResourceSet.ZERO;
-    }
-    return AbstractAction.DEFAULT_RESOURCE_SET;
-  }
-
-  private SpawnActionContext getContext(Executor executor) {
-    return executor.getSpawnActionContext(getMnemonic());
+  private SpawnActionContext getContext(ActionExecutionContext actionExecutionContext) {
+    return actionExecutionContext.getSpawnActionContext(getMnemonic());
   }
 
   /**
@@ -239,7 +248,7 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
         outputTreeArtifact,
         entries,
         spawnCommandLine(),
-        zipperExecutableRunfilesManifest(),
+        zipper.getRunfilesSupplier(),
         this);
   }
 
@@ -253,39 +262,22 @@ public final class PopulateTreeArtifactAction extends AbstractAction {
         "@" + archiveManifest.getExecPathString());
   }
 
-  private Map<PathFragment, Artifact> zipperExecutableRunfilesManifest() {
-    if (zipper.getRunfilesManifest() != null) {
-      return ImmutableMap.of(
-          BaseSpawn.runfilesForFragment(zipper.getExecutable().getExecPath()),
-          zipper.getRunfilesManifest());
-    } else {
-      return ImmutableMap.<PathFragment, Artifact>of();
-    }
-  }
-
   private Iterable<PathFragment> readAndCheckManifestEntries()
       throws IOException, IllegalManifestFileException {
     ImmutableList.Builder<PathFragment> manifestEntries = ImmutableList.builder();
-    boolean hasNonEmptyLines = false;
 
     for (String line :
         FileSystemUtils.iterateLinesAsLatin1(archiveManifest.getPath())) {
       if (!line.isEmpty()) {
-        hasNonEmptyLines = true;
-        PathFragment path = new PathFragment(line);
+        PathFragment path = PathFragment.create(line);
 
-        if (!path.isNormalized() || path.isAbsolute()) {
+        if (!PathFragment.isNormalized(line) || path.isAbsolute()) {
           throw new IllegalManifestFileException(
               path + " is not a proper relative path");
         }
 
         manifestEntries.add(path);
       }
-    }
-
-    if (!hasNonEmptyLines) {
-      throw new IllegalManifestFileException(
-          String.format("Archive manifest %s must not be empty.", archiveManifest));
     }
 
     return manifestEntries.build();

@@ -163,7 +163,21 @@ public class StandaloneTestStrategy extends TestStrategy {
                 workingDirectory);
       }
       processLastTestAttempt(attempt, dataBuilder, standaloneTestResult.testResultData());
-      ImmutableList<Pair<String, Path>> testOutputs = action.getTestOutputsMapping(execRoot);
+      ImmutableList.Builder<Pair<String, Path>> testOutputsBuilder = new ImmutableList.Builder<>();
+      if (actionExecutionContext.getInputPath(action.getTestLog()).exists()) {
+        testOutputsBuilder.add(
+            Pair.of(
+                TestFileNameConstants.TEST_LOG,
+                actionExecutionContext.getInputPath(action.getTestLog())));
+      }
+      if (action.getCoverageData() != null
+          && actionExecutionContext.getInputPath(action.getCoverageData()).exists()) {
+        testOutputsBuilder.add(
+            Pair.of(
+                TestFileNameConstants.TEST_COVERAGE,
+                actionExecutionContext.getInputPath(action.getCoverageData())));
+      }
+      testOutputsBuilder.addAll(TestResult.testOutputsFromPaths(resolvedPaths));
       actionExecutionContext
           .getEventBus()
           .post(
@@ -173,7 +187,7 @@ public class StandaloneTestStrategy extends TestStrategy {
                   standaloneTestResult.testResultData().getStatus(),
                   standaloneTestResult.testResultData().getStartTimeMillisEpoch(),
                   standaloneTestResult.testResultData().getRunDurationMillis(),
-                  testOutputs,
+                  testOutputsBuilder.build(),
                   standaloneTestResult.testResultData().getWarningList(),
                   true));
       finalizeTest(actionExecutionContext, action, dataBuilder.build());
@@ -203,33 +217,39 @@ public class StandaloneTestStrategy extends TestStrategy {
     attemptsDir.createDirectory();
     String attemptPrefix = "attempt_" + attempt;
     Path testLog = attemptsDir.getChild(attemptPrefix + ".log");
+    if (actionExecutionContext.getInputPath(action.getTestLog()).exists()) {
+      actionExecutionContext.getInputPath(action.getTestLog()).renameTo(testLog);
+      testOutputsBuilder.add(Pair.of(TestFileNameConstants.TEST_LOG, testLog));
+    }
+    if (action.getCoverageData() != null
+        && actionExecutionContext.getInputPath(action.getCoverageData()).exists()) {
+      testOutputsBuilder.add(
+          Pair.of(
+              TestFileNameConstants.TEST_COVERAGE,
+              actionExecutionContext.getInputPath(action.getCoverageData())));
+    }
 
     // Get the normal test output paths, and then update them to use "attempt_N" names, and
     // attemptDir, before adding them to the outputs.
-    ImmutableList<Pair<String, Path>> testOutputs =
-        action.getTestOutputsMapping(actionExecutionContext.getExecRoot());
+    ResolvedPaths resolvedPaths = action.resolve(actionExecutionContext.getExecRoot());
+    ImmutableList<Pair<String, Path>> testOutputs = TestResult.testOutputsFromPaths(resolvedPaths);
     for (Pair<String, Path> testOutput : testOutputs) {
       // e.g. /testRoot/test.dir/file, an example we follow throughout this loop's comments.
       Path testOutputPath = testOutput.getSecond();
-      Path destinationPath;
-      if (testOutput.getFirst().equals(TestFileNameConstants.TEST_LOG)) {
-        // The rename rules for the test log are different than for all the other files.
-        destinationPath = testLog;
-      } else {
-        // e.g. test.dir/file
-        PathFragment relativeToTestDirectory = testOutputPath.relativeTo(testRoot);
 
-        // e.g. attempt_1.dir/file
-        String destinationPathFragmentStr =
-            relativeToTestDirectory.getSafePathString().replaceFirst("test", attemptPrefix);
-        PathFragment destinationPathFragment = PathFragment.create(destinationPathFragmentStr);
+      // e.g. test.dir/file
+      PathFragment relativeToTestDirectory = testOutputPath.relativeTo(testRoot);
 
-        // e.g. /attemptsDir/attempt_1.dir/file
-        destinationPath = attemptsDir.getRelative(destinationPathFragment);
-        destinationPath.getParentDirectory().createDirectory();
-      }
+      // e.g. attempt_1.dir/file
+      String destinationPathFragmentStr =
+          relativeToTestDirectory.getSafePathString().replaceFirst("test", attemptPrefix);
+      PathFragment destinationPathFragment = PathFragment.create(destinationPathFragmentStr);
 
-      // Move to the destination.
+      // e.g. /attemptsDir/attempt_1.dir/file
+      Path destinationPath = attemptsDir.getRelative(destinationPathFragment);
+      destinationPath.getParentDirectory().createDirectory();
+
+      // Copy to the destination.
       testOutputPath.renameTo(destinationPath);
 
       testOutputsBuilder.add(Pair.of(testOutput.getFirst(), destinationPath));
@@ -327,7 +347,8 @@ public class StandaloneTestStrategy extends TestStrategy {
     TestResultData.Builder builder = TestResultData.newBuilder();
 
     long startTime = actionExecutionContext.getClock().currentTimeMillis();
-    SpawnActionContext spawnActionContext = actionExecutionContext.getSpawnActionContext(spawn);
+    SpawnActionContext spawnActionContext =
+        actionExecutionContext.getSpawnActionContext(action.getMnemonic());
     List<SpawnResult> spawnResults = ImmutableList.of();
     try {
       try {

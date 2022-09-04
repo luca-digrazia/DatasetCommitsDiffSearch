@@ -22,8 +22,8 @@ import com.google.devtools.build.lib.actions.cache.MetadataHandler;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.events.Event;
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
-import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.Path;
@@ -172,7 +172,7 @@ public class ActionExecutionContext implements Closeable {
     return executor.getEventBus();
   }
 
-  public ExtendedEventHandler getEventHandler() {
+  public EventHandler getEventHandler() {
     return executor.getEventHandler();
   }
 
@@ -183,9 +183,11 @@ public class ActionExecutionContext implements Closeable {
     return executor.getContext(type);
   }
 
-  /** Returns the action context implementation for a given spawn action. */
-  public SpawnActionContext getSpawnActionContext(Spawn spawn) {
-    return executor.getSpawnActionContext(spawn);
+  /**
+   * Returns the action context implementation for spawn actions with a given mnemonic.
+   */
+  public SpawnActionContext getSpawnActionContext(String mnemonic) {
+    return executor.getSpawnActionContext(mnemonic);
   }
 
   /**
