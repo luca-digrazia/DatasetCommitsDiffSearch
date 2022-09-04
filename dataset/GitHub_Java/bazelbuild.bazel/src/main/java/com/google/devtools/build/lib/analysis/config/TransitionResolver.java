@@ -129,11 +129,17 @@ public final class TransitionResolver {
     Target target = targetAndConfig.getTarget();
     BuildConfiguration fromConfig = targetAndConfig.getConfiguration();
 
+    // Top-level transitions (chosen by configuration fragments):
+    ConfigurationTransition topLevelTransition = fromConfig.topLevelConfigurationHook(target);
+    if (topLevelTransition == null) {
+      topLevelTransition = NoTransition.INSTANCE;
+    }
+
     // Rule class transitions (chosen by rule class definitions):
     if (target.getAssociatedRule() == null) {
-      return NoTransition.INSTANCE;
+      return topLevelTransition;
     }
-    ConfigurationTransition ruleTransition = applyRuleTransition(NoTransition.INSTANCE, target);
+    ConfigurationTransition ruleTransition = applyRuleTransition(topLevelTransition, target);
     ConfigurationTransition trimmingTransition =
         applyTransitionFromFactory(ruleTransition, target, trimmingTransitionFactory);
     return trimmingTransition;

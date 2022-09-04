@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.android.DataBinding.DataBindingContext;
 import java.util.Optional;
 import javax.annotation.Nullable;
 
@@ -287,7 +286,6 @@ public final class ResourceApk {
    */
   public static ResourceApk processFromTransitiveLibraryData(
       AndroidDataContext dataContext,
-      DataBindingContext dataBindingContext,
       ResourceDependencies resourceDeps,
       AssetDependencies assetDeps,
       StampedAndroidManifest manifest)
@@ -305,6 +303,6 @@ public final class ResourceApk {
         .withAssetDependencies(assetDeps)
         .setDebug(dataContext.useDebug())
         .setThrowOnResourceConflict(dataContext.getAndroidConfig().throwOnResourceConflict())
-        .buildWithoutLocalResources(dataContext, manifest, dataBindingContext);
+        .buildWithoutLocalResources(dataContext, manifest);
   }
 }
