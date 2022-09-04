@@ -21,10 +21,8 @@ import com.codahale.metrics.Meter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import com.google.common.collect.Lists;
-import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.indexer.IndexSet;
 import org.graylog2.indexer.cluster.Cluster;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.plugin.Message;
@@ -36,7 +34,6 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -54,7 +51,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
     private final Meter bufferFlushes;
     private final Meter bufferFlushesRequested;
 
-    private volatile List<Map.Entry<IndexSet, Message>> buffer;
+    private volatile List<Message> buffer;
 
     private static final AtomicInteger activeFlushThreads = new AtomicInteger(0);
     private final AtomicLong lastFlushTime = new AtomicLong();
@@ -92,15 +89,9 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
 
     @Override
     public void write(Message message) throws Exception {
-        for (IndexSet indexSet : message.getIndexSets()) {
-            writeMessageEntry(Maps.immutableEntry(indexSet, message));
-        }
-    }
-
-    public void writeMessageEntry(Map.Entry<IndexSet, Message> entry) throws Exception {
-        List<Map.Entry<IndexSet, Message>> flushBatch = null;
+        List<Message> flushBatch = null;
         synchronized (this) {
-            buffer.add(entry);
+            buffer.add(message);
 
             if (buffer.size() >= maxBufferSize) {
                 flushBatch = buffer;
@@ -115,7 +106,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
         }
     }
 
-    private void flush(List<Map.Entry<IndexSet, Message>> messages) {
+    private void flush(List<Message> messages) {
         if (!cluster.isConnected() || !cluster.isDeflectorHealthy()) {
             try {
                 cluster.waitForConnectedAndDeflectorHealthy();
@@ -134,7 +125,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
 
         try (Timer.Context ignored = processTime.time()) {
             lastFlushTime.set(System.nanoTime());
-            writeMessageEntries(messages);
+            write(messages);
             batchSize.update(messages.size());
             bufferFlushes.mark();
         } catch (Exception e) {
@@ -157,7 +148,7 @@ public class BlockingBatchedESOutput extends ElasticSearchOutput {
                     return;
                 }
         // flip buffer quickly and initiate flush
-        final List<Map.Entry<IndexSet, Message>> flushBatch;
+        final List<Message> flushBatch;
         synchronized (this) {
             flushBatch = buffer;
             buffer = Lists.newArrayListWithCapacity(maxBufferSize);

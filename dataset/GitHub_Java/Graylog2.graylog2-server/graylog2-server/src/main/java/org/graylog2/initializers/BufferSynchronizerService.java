@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.initializers;
 
@@ -28,16 +28,12 @@ import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.EnumSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
-import static org.graylog2.buffers.Buffers.Type.INPUT;
-import static org.graylog2.buffers.Buffers.Type.OUTPUT;
-import static org.graylog2.buffers.Buffers.Type.PROCESS;
 
 @Singleton
 public class BufferSynchronizerService extends AbstractIdleService {
@@ -66,20 +62,21 @@ public class BufferSynchronizerService extends AbstractIdleService {
     @Override
     protected void shutDown() throws Exception {
         LOG.debug("Stopping BufferSynchronizerService");
-        final ExecutorService executorService = executorService(metricRegistry);
-
-        EnumSet<Buffers.Type> buffersToDrain = EnumSet.of(INPUT);
         if (cluster.isConnected() && cluster.isDeflectorHealthy()) {
-            buffersToDrain.add(PROCESS);
-            buffersToDrain.add(OUTPUT);
+            final ExecutorService executorService = executorService(metricRegistry);
+
+            executorService.submit(new Runnable() {
+                @Override
+                public void run() {
+                    bufferSynchronizer.waitForEmptyBuffers(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
+                }
+            });
+
+            executorService.shutdown();
+            executorService.awaitTermination(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
         } else {
-            LOG.warn("Elasticsearch is unavailable. Not waiting to clear process and output buffers and caches, as we" +
-                    " have no healthy cluster.");
+            LOG.warn("Elasticsearch is unavailable. Not waiting to clear buffers and caches, as we have no healthy cluster.");
         }
-        executorService.submit(() -> bufferSynchronizer.waitForEmptyBuffers(buffersToDrain,
-                configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS));
-        executorService.shutdown();
-        executorService.awaitTermination(configuration.getShutdownTimeout(), TimeUnit.MILLISECONDS);
         LOG.debug("Stopped BufferSynchronizerService");
     }
 
