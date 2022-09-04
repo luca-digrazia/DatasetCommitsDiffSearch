@@ -29,7 +29,7 @@ import org.junit.runners.JUnit4;
 
 /** Tests for Depset. */
 @RunWith(JUnit4.class)
-public final class DepsetTest extends EvaluationTestCase {
+public class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testConstructor() throws Exception {
@@ -53,13 +53,13 @@ public final class DepsetTest extends EvaluationTestCase {
     assertThat(get("s_three").getContentType()).isEqualTo(SkylarkType.TUPLE);
     assertThat(get("s_eight").getContentType()).isEqualTo(SkylarkType.TUPLE);
 
-    assertThat(get("s_four").getSet(Tuple.class).toList())
+    assertThat(get("s_four").getSet(Tuple.class))
         .containsExactly(
             Tuple.of("1", "3"), Tuple.of("1", "2"), Tuple.of("3", "4"), Tuple.of("5", "6"));
-    assertThat(get("s_five").getSet(Tuple.class).toList())
+    assertThat(get("s_five").getSet(Tuple.class))
         .containsExactly(
             Tuple.of("1", "3", "5"), Tuple.of("1", "2"), Tuple.of("3", "4"), Tuple.of("5", "6"));
-    assertThat(get("s_eight").getSet(Tuple.class).toList())
+    assertThat(get("s_eight").getSet(Tuple.class))
         .containsExactly(
             Tuple.of(1, 3), Tuple.of("1", "2"), Tuple.of("3", "4"), Tuple.of("5", "6"));
   }
@@ -67,24 +67,24 @@ public final class DepsetTest extends EvaluationTestCase {
   @Test
   public void testGetSet() throws Exception {
     exec("s = depset(['a', 'b'])");
-    assertThat(get("s").getSet(String.class).toList()).containsExactly("a", "b").inOrder();
-    assertThat(get("s").getSet(Object.class).toList()).containsExactly("a", "b").inOrder();
+    assertThat(get("s").getSet(String.class)).containsExactly("a", "b").inOrder();
+    assertThat(get("s").getSet(Object.class)).containsExactly("a", "b").inOrder();
     assertThrows(Depset.TypeException.class, () -> get("s").getSet(Integer.class));
   }
 
   @Test
   public void testGetSetDirect() throws Exception {
     exec("s = depset(direct = ['a', 'b'])");
-    assertThat(get("s").getSet(String.class).toList()).containsExactly("a", "b").inOrder();
-    assertThat(get("s").getSet(Object.class).toList()).containsExactly("a", "b").inOrder();
+    assertThat(get("s").getSet(String.class)).containsExactly("a", "b").inOrder();
+    assertThat(get("s").getSet(Object.class)).containsExactly("a", "b").inOrder();
     assertThrows(Depset.TypeException.class, () -> get("s").getSet(Integer.class));
   }
 
   @Test
   public void testGetSetItems() throws Exception {
     exec("s = depset(items = ['a', 'b'])");
-    assertThat(get("s").getSet(String.class).toList()).containsExactly("a", "b").inOrder();
-    assertThat(get("s").getSet(Object.class).toList()).containsExactly("a", "b").inOrder();
+    assertThat(get("s").getSet(String.class)).containsExactly("a", "b").inOrder();
+    assertThat(get("s").getSet(Object.class)).containsExactly("a", "b").inOrder();
     assertThrows(Depset.TypeException.class, () -> get("s").getSet(Integer.class));
   }
 
@@ -239,8 +239,7 @@ public final class DepsetTest extends EvaluationTestCase {
   public void testTooManyPositionals() throws Exception {
     new BothModesTest()
         .testIfErrorContains(
-            "depset() accepts no more than 2 positional arguments but got 3",
-            "depset([], 'default', [])");
+            "expected no more than 2 positional arguments, but got 3", "depset([], 'default', [])");
   }
 
 

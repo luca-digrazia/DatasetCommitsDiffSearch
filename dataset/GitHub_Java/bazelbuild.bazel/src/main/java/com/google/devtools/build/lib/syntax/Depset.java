@@ -132,8 +132,10 @@ public final class Depset implements StarlarkValue {
         itemsBuilder.add(x);
       }
     } else {
-      throw Starlark.errorf(
-          "cannot union value of type '%s' to a depset", EvalUtils.getDataTypeName(item));
+      throw new EvalException(
+          null,
+          String.format(
+              "cannot union value of type '%s' to a depset", EvalUtils.getDataTypeName(item)));
     }
     ImmutableList<Object> items = itemsBuilder.build();
     ImmutableList<NestedSet<?>> transitiveItems = transitiveItemsBuilder.build();
@@ -146,7 +148,7 @@ public final class Depset implements StarlarkValue {
       }
     } catch (IllegalArgumentException e) {
       // Order mismatch between item and builder.
-      throw Starlark.errorf("%s", e.getMessage());
+      throw new EvalException(null, e.getMessage());
     }
     return new Depset(contentType, builder.build(), items, transitiveItems);
   }
@@ -171,13 +173,14 @@ public final class Depset implements StarlarkValue {
     // which are Starlark-unhashable even if frozen.
     // TODO(adonovan): also remove StarlarkList.hashCode.
     if (strict && !EvalUtils.isImmutable(x)) {
-      throw Starlark.errorf("depset elements must not be mutable values");
+      throw new EvalException(null, "depset elements must not be mutable values");
     }
 
     // Even the looser regime forbids the toplevel constructor to be list or dict.
     if (x instanceof StarlarkList || x instanceof Dict) {
-      throw Starlark.errorf(
-          "depsets cannot contain items of type '%s'", EvalUtils.getDataTypeName(x));
+      throw new EvalException(
+          null,
+          String.format("depsets cannot contain items of type '%s'", EvalUtils.getDataTypeName(x)));
     }
   }
 
@@ -227,8 +230,9 @@ public final class Depset implements StarlarkValue {
     if (depsetType == SkylarkType.TOP || depsetType.equals(itemType)) {
       return itemType;
     }
-    throw Starlark.errorf(
-        "cannot add an item of type '%s' to a depset of '%s'", itemType, depsetType);
+    throw new EvalException(
+        null,
+        String.format("cannot add an item of type '%s' to a depset of '%s'", itemType, depsetType));
   }
 
   /**
@@ -346,9 +350,10 @@ public final class Depset implements StarlarkValue {
       Depset depset = (Depset) depsetOrNone;
       return depset.getSetFromParam(expectedType, fieldName);
     } else {
-      throw Starlark.errorf(
-          "expected a depset of '%s' but got '%s' for parameter '%s'",
-          EvalUtils.getDataTypeNameFromClass(expectedType), depsetOrNone, fieldName);
+      throw new EvalException(
+          String.format(
+              "expected a depset of '%s' but got '%s' for parameter '%s'",
+              EvalUtils.getDataTypeNameFromClass(expectedType), depsetOrNone, fieldName));
     }
   }
 
@@ -382,7 +387,7 @@ public final class Depset implements StarlarkValue {
   @Override
   public void repr(Printer printer) {
     printer.append("depset(");
-    printer.printList(set.toList(), "[", ", ", "]", null);
+    printer.printList(set, "[", ", ", "]", null);
     Order order = getOrder();
     if (order != Order.STABLE_ORDER) {
       printer.append(", order = ");
@@ -448,9 +453,11 @@ public final class Depset implements StarlarkValue {
       if (!x.isEmpty()) {
         type = checkType(type, x.getContentType());
         if (!order.isCompatible(x.getOrder())) {
-          throw Starlark.errorf(
-              "Order '%s' is incompatible with order '%s'",
-              order.getSkylarkName(), x.getOrder().getSkylarkName());
+          throw new EvalException(
+              null,
+              String.format(
+                  "Order '%s' is incompatible with order '%s'",
+                  order.getSkylarkName(), x.getOrder().getSkylarkName()));
         }
         builder.addTransitive(x.getSet());
       }
