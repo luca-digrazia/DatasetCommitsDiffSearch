@@ -18,6 +18,7 @@ import static com.google.common.collect.Iterables.getOnlyElement;
 import static com.google.devtools.build.lib.packages.Aspect.INJECTING_RULE_KIND_PARAMETER_KEY;
 import static com.google.devtools.build.lib.util.Preconditions.checkNotNull;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
+import static java.util.Objects.requireNonNull;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
@@ -61,6 +62,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -105,8 +108,10 @@ public final class JavaCompileAction extends SpawnAction {
    */
   private final ImmutableList<Artifact> extdirInputs;
 
-  /** The list of classpath entries to search for annotation processors. */
-  private final NestedSet<Artifact> processorPath;
+  /**
+   * The list of classpath entries to search for annotation processors.
+   */
+  private final ImmutableList<Artifact> processorPath;
 
   /**
    * The list of annotation processor classes to run.
@@ -114,15 +119,22 @@ public final class JavaCompileAction extends SpawnAction {
   private final ImmutableList<String> processorNames;
 
   /**
-   * The list of custom javac flags to pass to annotation processors.
+   * The set of resources to put into the jar.
    */
-  private final ImmutableList<String> processorFlags;
+  private final ImmutableList<Artifact> resources;
+
+  /**
+   * The set of resource jars to merge into the jar.
+   */
+  private final NestedSet<Artifact> resourceJars;
 
   /** Set of additional Java source files to compile. */
   private final ImmutableList<Artifact> sourceJars;
 
-  /** The set of explicit Java source files to compile. */
-  private final ImmutableSet<Artifact> sourceFiles;
+  /**
+   * The set of explicit Java source files to compile.
+   */
+  private final ImmutableList<Artifact> sourceFiles;
 
   /**
    * The compiler options to pass to javac.
@@ -137,8 +149,10 @@ public final class JavaCompileAction extends SpawnAction {
    */
   private final BuildConfiguration.StrictDepsMode strictJavaDeps;
 
-  /** The set of .jdeps artifacts provided by direct dependencies. */
-  private final NestedSet<Artifact> compileTimeDependencyArtifacts;
+  /**
+   * The set of .jdeps artifacts provided by direct dependencies.
+   */
+  private final ImmutableList<Artifact> compileTimeDependencyArtifacts;
 
   /**
    * Constructs an action to compile a set of Java source files to class files.
@@ -158,7 +172,8 @@ public final class JavaCompileAction extends SpawnAction {
    * @param extdirInputs the compile-time extclasspath entries
    * @param processorPath the classpath to search for annotation processors
    * @param processorNames the annotation processors to run
-   * @param processorFlags custom annotation processor flags to pass to javac
+   * @param resources the resources to add to the output jar
+   * @param resourceJars jars of resources to merge into the output jar
    * @param sourceJars jars of sources to compile
    * @param sourceFiles source files to compile
    * @param javacOpts the javac options for the compilation
@@ -181,16 +196,17 @@ public final class JavaCompileAction extends SpawnAction {
       ImmutableList<Artifact> bootclasspathEntries,
       ImmutableList<Artifact> sourcePathEntries,
       ImmutableList<Artifact> extdirInputs,
-      NestedSet<Artifact> processorPath,
+      List<Artifact> processorPath,
       List<String> processorNames,
-      List<String> processorFlags,
+      Map<PathFragment, Artifact> resources,
+      NestedSet<Artifact> resourceJars,
       Collection<Artifact> sourceJars,
-      ImmutableSet<Artifact> sourceFiles,
+      Collection<Artifact> sourceFiles,
       List<String> javacOpts,
       NestedSet<Artifact> directJars,
       Map<String, String> executionInfo,
       StrictDepsMode strictJavaDeps,
-      NestedSet<Artifact> compileTimeDependencyArtifacts,
+      Collection<Artifact> compileTimeDependencyArtifacts,
       String progressMessage) {
     super(
         owner,
@@ -216,21 +232,38 @@ public final class JavaCompileAction extends SpawnAction {
     this.bootclasspathEntries = ImmutableList.copyOf(bootclasspathEntries);
     this.sourcePathEntries = ImmutableList.copyOf(sourcePathEntries);
     this.extdirInputs = extdirInputs;
-    this.processorPath = processorPath;
+    this.processorPath = ImmutableList.copyOf(processorPath);
     this.processorNames = ImmutableList.copyOf(processorNames);
-    this.processorFlags = ImmutableList.copyOf(processorFlags);
+    this.resources = ImmutableList.copyOf(resources.values());
+    this.resourceJars = resourceJars;
     this.sourceJars = ImmutableList.copyOf(sourceJars);
-    this.sourceFiles = sourceFiles;
+    this.sourceFiles = ImmutableList.copyOf(sourceFiles);
     this.javacOpts = ImmutableList.copyOf(javacOpts);
     this.directJars = checkNotNull(directJars, "directJars must not be null");
     this.strictJavaDeps = strictJavaDeps;
-    this.compileTimeDependencyArtifacts = compileTimeDependencyArtifacts;
+    this.compileTimeDependencyArtifacts = ImmutableList.copyOf(compileTimeDependencyArtifacts);
   }
 
-  /** Returns the given (passed to constructor) source files. */
+  /**
+   * Returns the given (passed to constructor) source files.
+   */
   @VisibleForTesting
-  ImmutableSet<Artifact> getSourceFiles() {
+  Collection<Artifact> getSourceFiles() {
     return sourceFiles;
+  }
+
+  /**
+   * Returns the list of paths that represent the resources to be added to the
+   * jar.
+   */
+  @VisibleForTesting
+  public Collection<Artifact> getResources() {
+    return resources;
+  }
+
+  @VisibleForTesting
+  public NestedSet<Artifact> getResourceJars() {
+    return resourceJars;
   }
 
   /**
@@ -269,9 +302,11 @@ public final class JavaCompileAction extends SpawnAction {
     return sourceJars;
   }
 
-  /** Returns the list of paths that represents the processor path. */
+  /**
+   * Returns the list of paths that represents the processor path.
+   */
   @VisibleForTesting
-  public NestedSet<Artifact> getProcessorpath() {
+  public List<Artifact> getProcessorpath() {
     return processorPath;
   }
 
@@ -286,7 +321,7 @@ public final class JavaCompileAction extends SpawnAction {
   }
 
   @VisibleForTesting
-  public NestedSet<Artifact> getCompileTimeDependencyArtifacts() {
+  public Collection<Artifact> getCompileTimeDependencyArtifacts() {
     return compileTimeDependencyArtifacts;
   }
 
@@ -308,13 +343,9 @@ public final class JavaCompileAction extends SpawnAction {
     return processorNames;
   }
 
-  private List<String> getProcessorFlags() {
-    return processorFlags;
-  }
-
   /**
-   * Returns the output jar artifact that gets generated by archiving the results of the Java
-   * compilation.
+   * Returns the output jar artifact that gets generated by archiving the
+   * results of the Java compilation and the declared resources.
    */
   public Artifact getOutputJar() {
     return outputJar;
@@ -364,6 +395,27 @@ public final class JavaCompileAction extends SpawnAction {
 
     return super.getExtraActionInfo()
         .setExtension(JavaCompileInfo.javaCompileInfo, info.build());
+  }
+
+  private static void addAsResourcePrefixedExecPath(PathFragment resourcePath,
+      Artifact artifact, CustomCommandLine.Builder builder) {
+    PathFragment execPath = artifact.getExecPath();
+    if (execPath.equals(resourcePath)) {
+      builder.addPaths(":%s", resourcePath);
+    } else {
+      // execPath must end with resourcePath in all cases
+      PathFragment rootPrefix = trimTail(execPath, resourcePath);
+      builder.addPaths("%s:%s", rootPrefix, resourcePath);
+    }
+  }
+
+  /**
+   * Returns the root-part of a given path by trimming off the end specified by
+   * a given tail. Assumes that the tail is known to match, and simply relies on
+   * the segment lengths.
+   */
+  private static PathFragment trimTail(PathFragment path, PathFragment tail) {
+    return path.subFragment(0, path.segmentCount() - tail.segmentCount());
   }
 
   /**
@@ -496,13 +548,16 @@ public final class JavaCompileAction extends SpawnAction {
     private Collection<Artifact> additionalOutputs;
     private Artifact paramFile;
     private Artifact metadata;
-    private ImmutableSet<Artifact> sourceFiles = ImmutableSet.of();
+    private final Collection<Artifact> sourceFiles = new ArrayList<>();
     private final Collection<Artifact> sourceJars = new ArrayList<>();
+    private final Map<PathFragment, Artifact> resources = new LinkedHashMap<>();
+    private NestedSet<Artifact> resourceJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
+    private final Collection<Artifact> classpathResources = new ArrayList<>();
+    private final Collection<Artifact> translations = new LinkedHashSet<>();
     private BuildConfiguration.StrictDepsMode strictJavaDeps =
         BuildConfiguration.StrictDepsMode.OFF;
     private NestedSet<Artifact> directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-    private NestedSet<Artifact> compileTimeDependencyArtifacts =
-        NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+    private final Collection<Artifact> compileTimeDependencyArtifacts = new ArrayList<>();
     private List<String> javacOpts = new ArrayList<>();
     private ImmutableList<String> javacJvmOpts = ImmutableList.of();
     private ImmutableMap<String, String> executionInfo = ImmutableMap.of();
@@ -518,9 +573,9 @@ public final class JavaCompileAction extends SpawnAction {
     private PathFragment sourceGenDirectory;
     private PathFragment tempDirectory;
     private PathFragment classDirectory;
-    private NestedSet<Artifact> processorPath = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
+    private final List<Artifact> processorPath = new ArrayList<>();
+    private final Set<PathFragment> processorPathDirs = new LinkedHashSet<>();
     private final List<String> processorNames = new ArrayList<>();
-    private final List<String> processorFlags = new ArrayList<>();
     private String ruleKind;
     private Label targetLabel;
 
@@ -565,13 +620,13 @@ public final class JavaCompileAction extends SpawnAction {
       // dependencyArtifacts are ignored
       if (strictJavaDeps == BuildConfiguration.StrictDepsMode.OFF) {
         directJars = NestedSetBuilder.emptySet(Order.NAIVE_LINK_ORDER);
-        compileTimeDependencyArtifacts = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+        compileTimeDependencyArtifacts.clear();
       }
 
       // Invariant: if java_classpath is set to 'off', dependencyArtifacts are ignored
       JavaConfiguration javaConfiguration = configuration.getFragment(JavaConfiguration.class);
       if (javaConfiguration.getReduceJavaClasspath() == JavaClasspathMode.OFF) {
-        compileTimeDependencyArtifacts = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+        compileTimeDependencyArtifacts.clear();
       }
 
       if (paramFile == null) {
@@ -627,10 +682,14 @@ public final class JavaCompileAction extends SpawnAction {
       NestedSet<Artifact> inputs =
           NestedSetBuilder.<Artifact>stableOrder()
               .addTransitive(classpathEntries)
-              .addTransitive(compileTimeDependencyArtifacts)
-              .addTransitive(processorPath)
+              .addAll(compileTimeDependencyArtifacts)
+              .addAll(processorPath)
+              .addAll(translations)
+              .addAll(resources.values())
+              .addTransitive(resourceJars)
               .addAll(sourceJars)
               .addAll(sourceFiles)
+              .addAll(classpathResources)
               .addAll(javabaseInputs)
               .addAll(bootclasspathEntries)
               .addAll(sourcePathEntries)
@@ -654,7 +713,8 @@ public final class JavaCompileAction extends SpawnAction {
           extdirInputs,
           processorPath,
           processorNames,
-          processorFlags,
+          resources,
+          resourceJars,
           sourceJars,
           sourceFiles,
           internedJcopts,
@@ -703,14 +763,36 @@ public final class JavaCompileAction extends SpawnAction {
       if (!sourcePathEntries.isEmpty()) {
         result.addJoinExecPaths("--sourcepath", pathSeparator, sourcePathEntries);
       }
-      if (!processorPath.isEmpty()) {
-        result.addJoinExecPaths("--processorpath", pathSeparator, processorPath);
+      if (!processorPath.isEmpty() || !processorPathDirs.isEmpty()) {
+        ImmutableList.Builder<String> execPathStrings = ImmutableList.<String>builder();
+        execPathStrings.addAll(Artifact.toExecPaths(processorPath));
+        for (PathFragment processorPathDir : processorPathDirs) {
+          execPathStrings.add(processorPathDir.toString());
+        }
+        result.addJoinStrings(
+            "--processorpath", pathSeparator, execPathStrings.build());
       }
       if (!processorNames.isEmpty()) {
         result.add("--processors", processorNames);
       }
-      if (!processorFlags.isEmpty()) {
-        result.add("--javacopts", processorFlags);
+      if (!translations.isEmpty()) {
+        result.add("--messages");
+        for (Artifact message : translations) {
+          addAsResourcePrefixedExecPath(
+              semantics.getDefaultJavaResourcePath(message.getRootRelativePath()), message, result);
+        }
+      }
+      if (!resources.isEmpty()) {
+        result.add("--resources");
+        for (Map.Entry<PathFragment, Artifact> resource : resources.entrySet()) {
+          addAsResourcePrefixedExecPath(resource.getKey(), resource.getValue(), result);
+        }
+      }
+      if (!resourceJars.isEmpty()) {
+        result.addExecPaths("--resource_jars", resourceJars);
+      }
+      if (!classpathResources.isEmpty()) {
+        result.addExecPaths("--classpath_resources", classpathResources);
       }
       if (!sourceJars.isEmpty()) {
         result.addExecPaths("--source_jars", sourceJars);
@@ -778,6 +860,8 @@ public final class JavaCompileAction extends SpawnAction {
       boolean first = true;
       first = appendCount(sb, first, sourceFiles.size(), "source file");
       first = appendCount(sb, first, sourceJars.size(), "source jar");
+      int resourceCount = resources.size() + classpathResources.size() + translations.size();
+      first = appendCount(sb, first, resourceCount, "resource");
       sb.append(")");
       return sb.toString();
     }
@@ -846,13 +930,38 @@ public final class JavaCompileAction extends SpawnAction {
       return this;
     }
 
-    public Builder setSourceFiles(ImmutableSet<Artifact> sourceFiles) {
-      this.sourceFiles = sourceFiles;
+    public Builder addSourceFile(Artifact sourceFile) {
+      sourceFiles.add(sourceFile);
+      return this;
+    }
+
+    public Builder addSourceFiles(Collection<Artifact> sourceFiles) {
+      this.sourceFiles.addAll(sourceFiles);
       return this;
     }
 
     public Builder addSourceJars(Collection<Artifact> sourceJars) {
       this.sourceJars.addAll(sourceJars);
+      return this;
+    }
+
+    public Builder addResources(Map<PathFragment, Artifact> resources) {
+      this.resources.putAll(resources);
+      return this;
+    }
+
+    public Builder setResourceJars(NestedSet<Artifact> resourceJars) {
+      this.resourceJars = requireNonNull(resourceJars);
+      return this;
+    }
+
+    public Builder addClasspathResources(Collection<Artifact> classpathResources) {
+      this.classpathResources.addAll(classpathResources);
+      return this;
+    }
+
+    public Builder addTranslations(Collection<Artifact> translations) {
+      this.translations.addAll(translations);
       return this;
     }
 
@@ -871,9 +980,8 @@ public final class JavaCompileAction extends SpawnAction {
       return this;
     }
 
-    public Builder setCompileTimeDependencyArtifacts(NestedSet<Artifact> dependencyArtifacts) {
-      checkNotNull(compileTimeDependencyArtifacts, "dependencyArtifacts must not be null");
-      this.compileTimeDependencyArtifacts = dependencyArtifacts;
+    public Builder addCompileTimeDependencyArtifacts(Collection<Artifact> dependencyArtifacts) {
+      this.compileTimeDependencyArtifacts.addAll(dependencyArtifacts);
       return this;
     }
 
@@ -935,18 +1043,18 @@ public final class JavaCompileAction extends SpawnAction {
       return this;
     }
 
-    public Builder setProcessorPaths(NestedSet<Artifact> processorPaths) {
-      this.processorPath = processorPaths;
+    public Builder addProcessorPaths(Collection<Artifact> processorPaths) {
+      this.processorPath.addAll(processorPaths);
+      return this;
+    }
+
+    public Builder addProcessorPathDirs(Collection<PathFragment> processorPathDirs) {
+      this.processorPathDirs.addAll(processorPathDirs);
       return this;
     }
 
     public Builder addProcessorNames(Collection<String> processorNames) {
       this.processorNames.addAll(processorNames);
-      return this;
-    }
-
-    public Builder addProcessorFlags(Collection<String> processorFlags) {
-      this.processorFlags.addAll(processorFlags);
       return this;
     }
 
