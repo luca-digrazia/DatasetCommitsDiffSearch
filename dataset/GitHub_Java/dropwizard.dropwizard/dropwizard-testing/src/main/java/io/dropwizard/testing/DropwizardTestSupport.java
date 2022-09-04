@@ -72,25 +72,19 @@ public class DropwizardTestSupport<C extends Configuration> {
     }
 
     public void after() {
-        stopIfRequired();
-        resetConfigOverrides();
-    }
-
-    private void stopIfRequired() {
-        if( jettyServer != null) {
-            for (ServiceListener<C> listener : listeners) {
-                try {
-                    listener.onStop(this);
-                } catch (Exception ignored) {
-                }
-            }
+        for (ServiceListener<C> listener : listeners) {
             try {
-                jettyServer.stop();
-            } catch (Exception e) {
-                throw propagate(e);
-            } finally {
-                jettyServer = null;
+                listener.onStop(this);
+            } catch (Exception ignored) {
             }
+        }
+        resetConfigOverrides();
+        try {
+            jettyServer.stop();
+        } catch (Exception e) {
+            throw propagate(e);
+        } finally {
+            jettyServer = null;
         }
     }
 

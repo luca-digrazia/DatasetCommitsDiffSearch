@@ -26,14 +26,17 @@ public class DBIHealthCheckTest {
         DBI dbi = mock(DBI.class);
         Handle handle = mock(Handle.class);
         when(dbi.open()).thenReturn(handle);
-        Mockito.doAnswer(invocation -> {
-            try {
-                TimeUnit.SECONDS.sleep(10);
-            } catch (Exception ignored) {
+        Mockito.doAnswer(new Answer<Object>() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                try {
+                    TimeUnit.SECONDS.sleep(10);
+                } catch (Exception ignored) {
+                }
+                return null;
             }
-            return null;
         }).when(handle).execute(validationQuery);
-
+        
         ExecutorService executorService = Executors.newSingleThreadExecutor();
         DBIHealthCheck dbiHealthCheck = new DBIHealthCheck(executorService,
                 Duration.milliseconds(5),

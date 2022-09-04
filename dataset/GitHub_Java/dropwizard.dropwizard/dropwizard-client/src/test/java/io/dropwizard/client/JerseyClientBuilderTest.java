@@ -24,7 +24,6 @@ import org.apache.http.impl.client.DefaultHttpRequestRetryHandler;
 import org.apache.http.impl.client.SystemDefaultCredentialsProvider;
 import org.apache.http.impl.conn.SystemDefaultDnsResolver;
 import org.apache.http.impl.conn.SystemDefaultRoutePlanner;
-import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
@@ -79,11 +78,6 @@ public class JerseyClientBuilderTest {
         when(environment.getObjectMapper()).thenReturn(objectMapper);
         when(environment.getValidator()).thenReturn(validator);
         builder.setApacheHttpClientBuilder(apacheHttpClientBuilder);
-    }
-
-    @After
-    public void tearDown() throws Exception {
-        executorService.shutdown();
     }
 
     @Test
@@ -268,13 +262,13 @@ public class JerseyClientBuilderTest {
 
            @Override
            public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
-
+               
            }
        });
         builder.using(customHttpRoutePlanner);
         verify(apacheHttpClientBuilder).using(customHttpRoutePlanner);
     }
-
+    
     @Test
     public void usesACustomCredentialsProvider(){
         CredentialsProvider customCredentialsProvider = new SystemDefaultCredentialsProvider();

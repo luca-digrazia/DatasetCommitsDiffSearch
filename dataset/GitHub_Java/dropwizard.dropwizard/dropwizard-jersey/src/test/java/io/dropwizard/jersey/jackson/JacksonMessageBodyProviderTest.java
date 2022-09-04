@@ -235,7 +235,7 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch(ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                .containsOnly("text may not be null");
+                .containsOnly("text may not be null (was null)");
         }
     }
 
@@ -279,7 +279,7 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch (ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .containsOnly("id must be greater than or equal to 0");
+                    .containsOnly("id must be greater than or equal to 0 (was -1)");
         }
     }
 
@@ -440,8 +440,8 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch (ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .contains("id must be greater than or equal to 0",
-                            "id must be greater than or equal to 0");
+                    .contains("id must be greater than or equal to 0 (was -1)",
+                            "id must be greater than or equal to 0 (was -2)");
         }
     }
 
@@ -463,7 +463,7 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch (ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .contains("id must be greater than or equal to 0");
+                    .contains("id must be greater than or equal to 0 (was -2)");
         }
     }
 
@@ -485,8 +485,8 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch (ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .contains("id must be greater than or equal to 0",
-                            "id must be greater than or equal to 0");
+                    .contains("id must be greater than or equal to 0 (was -1)",
+                            "id must be greater than or equal to 0 (was -2)");
         }
     }
 
@@ -508,8 +508,8 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch (ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .containsOnly("id must be greater than or equal to 0",
-                            "id must be greater than or equal to 0");
+                    .containsOnly("id must be greater than or equal to 0 (was -1)",
+                            "id must be greater than or equal to 0 (was -2)");
         }
     }
 
@@ -531,8 +531,8 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch (ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .contains("id must be greater than or equal to 0",
-                            "id must be greater than or equal to 0");
+                    .contains("id must be greater than or equal to 0 (was -1)",
+                            "id must be greater than or equal to 0 (was -2)");
         }
     }
 
@@ -578,7 +578,7 @@ public class JacksonMessageBodyProviderTest {
             failBecauseExceptionWasNotThrown(ConstraintViolationException.class);
         } catch (ConstraintViolationException e) {
             assertThat(ConstraintViolations.formatUntyped(e.getConstraintViolations()))
-                    .containsOnly("examples may not be empty");
+                    .containsOnly("examples may not be empty (was null)");
         }
     }
 
