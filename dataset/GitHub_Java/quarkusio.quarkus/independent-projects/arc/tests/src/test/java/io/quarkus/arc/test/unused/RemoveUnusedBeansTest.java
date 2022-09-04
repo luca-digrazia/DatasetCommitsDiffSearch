@@ -4,10 +4,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-import io.quarkus.arc.Arc;
-import io.quarkus.arc.ArcContainer;
-import io.quarkus.arc.test.ArcTestContainer;
 import java.math.BigDecimal;
+
 import javax.annotation.PostConstruct;
 import javax.annotation.Priority;
 import javax.enterprise.context.Dependent;
@@ -19,6 +17,10 @@ import javax.inject.Inject;
 import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
+
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.test.ArcTestContainer;
 import org.junit.Rule;
 import org.junit.Test;
 
@@ -26,8 +28,7 @@ public class RemoveUnusedBeansTest {
 
     @Rule
     public ArcTestContainer container = ArcTestContainer.builder()
-            .beanClasses(HasObserver.class, Foo.class, FooAlternative.class, HasName.class, UnusedProducers.class,
-                    InjectedViaInstance.class, InjectedViaProvider.class, Excluded.class, UsedProducers.class)
+            .beanClasses(HasObserver.class, Foo.class, FooAlternative.class, HasName.class, UnusedProducers.class, InjectedViaInstance.class, InjectedViaProvider.class, Excluded.class, UsedProducers.class)
             .removeUnusedBeans(true)
             .addRemovalExclusion(b -> b.getBeanClass().toString().equals(Excluded.class.getName()))
             .build();
@@ -67,7 +68,7 @@ public class RemoveUnusedBeansTest {
 
     @Dependent
     static class Foo {
-
+        
         @Inject
         Provider<InjectedViaProvider> provider;
 
@@ -94,17 +95,17 @@ public class RemoveUnusedBeansTest {
     static class InjectedViaInstance {
 
     }
-
+    
     @Singleton
     static class InjectedViaProvider {
-
+        
         private boolean isValid;
-
+        
         @PostConstruct
         void init() {
             isValid = true;
         }
-
+        
         boolean isValid() {
             return isValid;
         }
@@ -120,7 +121,7 @@ public class RemoveUnusedBeansTest {
         }
 
     }
-
+    
     @Singleton
     static class UsedProducers {
 
@@ -130,14 +131,14 @@ public class RemoveUnusedBeansTest {
         }
 
     }
-
+    
     @Singleton
     static class Excluded {
-
+        
         String ping() {
             return "pong";
         }
-
+        
     }
 
 }
