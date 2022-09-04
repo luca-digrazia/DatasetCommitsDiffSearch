@@ -53,7 +53,6 @@ import java.util.Map;
 import static javax.ws.rs.core.Response.Status.*;
 import static javax.ws.rs.core.Response.*;
 import static org.graylog2.security.RestPermissions.USERS_EDIT;
-import static org.graylog2.security.RestPermissions.USERS_PERMISSIONSEDIT;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -170,8 +169,7 @@ public class UsersResource extends RestResource {
         if (cr.fullname != null) {
             user.setFullName(cr.fullname);
         }
-        final boolean permitted = isPermitted(USERS_PERMISSIONSEDIT, user.getName());
-        if (permitted && cr.permissions != null) {
+        if (cr.permissions != null) {
             user.setPermissions(cr.permissions);
         }
         if (cr.timezone != null) {
