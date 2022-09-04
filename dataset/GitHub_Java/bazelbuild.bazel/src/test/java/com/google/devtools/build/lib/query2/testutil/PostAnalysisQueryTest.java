@@ -18,18 +18,14 @@ import static com.google.devtools.build.lib.packages.Attribute.attr;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static com.google.devtools.build.lib.testutil.TestConstants.PLATFORM_LABEL;
 
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
 import com.google.devtools.build.lib.analysis.test.TestConfiguration.TestOptions;
 import com.google.devtools.build.lib.analysis.util.MockRule;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.Type;
@@ -113,7 +109,7 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   // Parse the universe if the universe has not been set manually through the helper.
   private void maybeParseUniverseScope(String query) throws Exception {
     if (!getHelper()
-        .getUniverseScopeAsStringList()
+        .getUniverseScope()
         .equals(Collections.singletonList(getDefaultUniverseScope()))) {
       return;
     }
@@ -352,15 +348,10 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
     }
 
     @Override
-    public ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
-      return ImmutableSet.of(TestOptions.class);
-    }
-
-    @Override
-    public BuildOptions patch(BuildOptionsView options, EventHandler eventHandler) {
-      BuildOptionsView result = options.clone();
+    public BuildOptions patch(BuildOptions options) {
+      BuildOptions result = options.clone();
       result.get(TestOptions.class).testArguments = Collections.singletonList(toOption);
-      return result.underlying();
+      return result;
     }
   }
 
@@ -423,37 +414,6 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
         .isNotEqualTo(getConfiguration(Iterables.getOnlyElement(eval("//test:top-level"))));
   }
 
-  private void writeSimpleTarget() throws Exception {
-    MockRule simpleRule =
-        () ->
-            MockRule.define(
-                "simple_rule", attr("dep", LABEL).allowedFileTypes(FileTypeSet.ANY_FILE));
-    helper.useRuleClassProvider(setRuleClassProviders(simpleRule).build());
-
-    writeFile("test/BUILD", "simple_rule(name = 'target')");
-  }
-
-  @Test
-  public void testVisibleFunctionDoesNotWork() throws Exception {
-    writeSimpleTarget();
-    assertThat(evalThrows("visible(//test:target, //test:*)", true))
-        .isEqualTo("visible() is not supported on configured targets");
-  }
-
-  @Test
-  public void testSiblingsFunctionDoesNotWork() throws Exception {
-    writeSimpleTarget();
-    assertThat(evalThrows("siblings(//test:target)", true))
-        .isEqualTo("siblings() not supported for post analysis queries");
-  }
-
-  @Test
-  public void testBuildfilesFunctionDoesNotWork() throws Exception {
-    writeSimpleTarget();
-    assertThat(evalThrows("buildfiles(//test:target)", true))
-        .isEqualTo("buildfiles() doesn't make sense for the configured target graph");
-  }
-
   // LabelListAttr not currently supported.
   @Override
   public void testLabelsOperator() {}
@@ -496,10 +456,10 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   public void testTestsOperatorReportsMissingTargets() {}
 
   @Override
-  public void testCycleInStarlark() {}
+  public void testCycleInSkylark() {}
 
   @Override
-  public void testCycleInStarlarkParentDir() {}
+  public void testCycleInSkylarkParentDir() {}
 
   @Override
   public void testCycleInSubpackage() {}
@@ -623,19 +583,19 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   // siblings() operator.
 
   @Override
-  public void testSiblings_duplicatePackages() {}
+  public void testSiblings_DuplicatePackages() {}
 
   @Override
-  public void testSiblings_samePackageRdeps() {}
+  public void testSiblings_SamePackageRdeps() {}
 
   @Override
-  public void testSiblings_matchesTargetNamedAll() {}
+  public void testSiblings_MatchesTargetNamedAll() {}
 
   @Override
-  public void testSiblings_simple() {}
+  public void testSiblings_Simple() {}
 
   @Override
-  public void testSiblings_withBuildfiles() {}
+  public void testSiblings_WithBuildfiles() {}
 
   // same_pkg_direct_rdeps() operator.
 
@@ -679,10 +639,10 @@ public abstract class PostAnalysisQueryTest<T> extends AbstractQueryTest<T> {
   // We don't support --nodep_deps=false.
   @Override
   @Test
-  public void testNodepDeps_false() throws Exception {}
+  public void testNodepDeps_False() throws Exception {}
 
   // package_group instances have a null configuration and are filtered out by --host_deps=false.
   @Override
   @Test
-  public void testDefaultVisibilityReturnedInDeps_nonEmptyDependencyFilter() throws Exception {}
+  public void testDefaultVisibilityReturnedInDeps_NonEmptyDependencyFilter() throws Exception {}
 }
