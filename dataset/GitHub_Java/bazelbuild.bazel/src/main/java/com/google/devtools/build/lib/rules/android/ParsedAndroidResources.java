@@ -15,11 +15,13 @@ package com.google.devtools.build.lib.rules.android;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
+import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import java.util.Objects;
 import java.util.Optional;
@@ -37,8 +39,13 @@ public class ParsedAndroidResources extends AndroidResources {
       AndroidDataContext dataContext,
       AndroidResources resources,
       StampedAndroidManifest manifest,
+      AndroidAaptVersion aaptVersion,
       DataBindingContext dataBindingContext)
       throws InterruptedException {
+
+    boolean isAapt2 = aaptVersion == AndroidAaptVersion.AAPT2;
+    Preconditions.checkState(isAapt2);
+
     AndroidResourceParsingActionBuilder builder = new AndroidResourceParsingActionBuilder();
 
     // TODO(b/120093531): This is only used in Databinding v1.
@@ -49,7 +56,9 @@ public class ParsedAndroidResources extends AndroidResources {
 
     return builder
         .setCompiledSymbolsOutput(
-            dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS))
+            isAapt2
+                ? dataContext.createOutputArtifact(AndroidRuleClasses.ANDROID_COMPILED_SYMBOLS)
+                : null)
         .build(dataContext, databindingProcessedResources, manifest, dataBindingContext);
   }
 
@@ -129,9 +138,12 @@ public class ParsedAndroidResources extends AndroidResources {
   }
 
   /** Merges this target's resources with resources from dependencies. */
-  MergedAndroidResources merge(AndroidDataContext dataContext, ResourceDependencies resourceDeps)
+  MergedAndroidResources merge(
+      AndroidDataContext dataContext,
+      ResourceDependencies resourceDeps,
+      AndroidAaptVersion aaptVersion)
       throws InterruptedException {
-    return MergedAndroidResources.mergeFrom(dataContext, this, resourceDeps);
+    return MergedAndroidResources.mergeFrom(dataContext, this, resourceDeps, aaptVersion);
   }
 
   @Override

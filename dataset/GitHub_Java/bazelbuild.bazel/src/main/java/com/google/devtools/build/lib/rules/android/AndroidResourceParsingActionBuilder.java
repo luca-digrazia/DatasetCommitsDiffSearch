@@ -18,6 +18,7 @@ import static java.util.stream.Collectors.joining;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.rules.android.AndroidConfiguration.AndroidAaptVersion;
 import com.google.devtools.build.lib.rules.android.databinding.DataBindingContext;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
@@ -98,7 +99,7 @@ public class AndroidResourceParsingActionBuilder {
     if (compiledSymbols != null) {
       BusyBoxActionBuilder compiledBuilder =
           BusyBoxActionBuilder.create(dataContext, "COMPILE_LIBRARY_RESOURCES")
-              .addAapt()
+              .addAapt(AndroidAaptVersion.AAPT2)
               .addInput("--resources", resourceDirectories, resourceArtifacts)
               .addOutput("--output", compiledSymbols);
 
