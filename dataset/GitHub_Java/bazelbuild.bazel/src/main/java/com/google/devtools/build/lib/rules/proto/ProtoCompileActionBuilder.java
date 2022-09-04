@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.LazyString;
-import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.HashSet;
 import java.util.List;
@@ -258,10 +257,6 @@ public class ProtoCompileActionBuilder {
     return result;
   }
 
-  private static String getOutputDirectory(RuleContext ruleContext) {
-    return ruleContext.getBinDirectory().getExecPath().getSegment(0);
-  }
-
   @Nullable
   private FilesToRunProvider getLangPluginTarget() throws MissingPrerequisiteException {
     if (langPluginName == null) {
@@ -306,9 +301,8 @@ public class ProtoCompileActionBuilder {
 
     // Add include maps
     addIncludeMapArguments(
-        getOutputDirectory(ruleContext),
         result,
-        areDepsStrict ? protoInfo.getStrictImportableProtoSourcesImportPaths() : null,
+        areDepsStrict ? protoInfo.getStrictImportableProtoSources() : null,
         protoInfo.getStrictImportableProtoSourceRoots(),
         protoInfo.getTransitiveProtoSources());
 
@@ -326,8 +320,7 @@ public class ProtoCompileActionBuilder {
       result.add("--disallow_services");
     }
     if (checkStrictImportPublic) {
-      NestedSet<Pair<Artifact, String>> protosInExports =
-          protoInfo.getExportedProtoSourcesImportPaths();
+      NestedSet<Artifact> protosInExports = protoInfo.getExportedProtoSources();
       if (protosInExports.isEmpty()) {
         // This line is necessary to trigger the check.
         result.add("--allowed_public_imports=");
@@ -336,10 +329,7 @@ public class ProtoCompileActionBuilder {
             "--allowed_public_imports",
             VectorArg.join(":")
                 .each(protosInExports)
-                .mapped(
-                    new ExpandToPathFnWithImports(
-                        getOutputDirectory(ruleContext),
-                        protoInfo.getTransitiveProtoSourceRoots())));
+                .mapped(new ExpandToPathFn(protoInfo.getTransitiveProtoSourceRoots())));
       }
     }
 
@@ -491,7 +481,6 @@ public class ProtoCompileActionBuilder {
         .addCommandLine(
             createCommandLineFromToolchains(
                 toolchainInvocations,
-                getOutputDirectory(ruleContext),
                 protoInfo,
                 ruleLabel,
                 areDepsStrict(ruleContext) ? Deps.STRICT : Deps.NON_STRICT,
@@ -532,7 +521,6 @@ public class ProtoCompileActionBuilder {
   @VisibleForTesting
   static CustomCommandLine createCommandLineFromToolchains(
       List<ToolchainInvocation> toolchainInvocations,
-      String outputDirectory,
       ProtoInfo protoInfo,
       Label ruleLabel,
       Deps strictDeps,
@@ -579,9 +567,8 @@ public class ProtoCompileActionBuilder {
 
     // Add include maps
     addIncludeMapArguments(
-        outputDirectory,
         cmdLine,
-        strictDeps == Deps.STRICT ? protoInfo.getStrictImportableProtoSourcesImportPaths() : null,
+        strictDeps == Deps.STRICT ? protoInfo.getStrictImportableProtoSources() : null,
         protoInfo.getStrictImportableProtoSourceRoots(),
         protoInfo.getTransitiveProtoSources());
 
@@ -590,17 +577,15 @@ public class ProtoCompileActionBuilder {
     }
 
     if (useExports == Exports.USE) {
-      if (protoInfo.getExportedProtoSourcesImportPaths().isEmpty()) {
+      if (protoInfo.getExportedProtoSources().isEmpty()) {
         // This line is necessary to trigger the check.
         cmdLine.add("--allowed_public_imports=");
       } else {
         cmdLine.addAll(
             "--allowed_public_imports",
             VectorArg.join(":")
-                .each(protoInfo.getExportedProtoSourcesImportPaths())
-                .mapped(
-                    new ExpandToPathFnWithImports(
-                        outputDirectory, protoInfo.getExportedProtoSourceRoots())));
+                .each(protoInfo.getExportedProtoSources())
+                .mapped(new ExpandToPathFn(protoInfo.getExportedProtoSourceRoots())));
       }
     }
 
@@ -617,53 +602,28 @@ public class ProtoCompileActionBuilder {
 
   @VisibleForTesting
   static void addIncludeMapArguments(
-      String outputDirectory,
       CustomCommandLine.Builder commandLine,
-      @Nullable NestedSet<Pair<Artifact, String>> protosInDirectDependencies,
+      @Nullable NestedSet<Artifact> protosInDirectDependencies,
       NestedSet<String> directProtoSourceRoots,
       NestedSet<Artifact> transitiveImports) {
     // For each import, include both the import as well as the import relativized against its
     // protoSourceRoot. This ensures that protos can reference either the full path or the short
     // path when including other protos.
     commandLine.addAll(
-        VectorArg.of(transitiveImports)
-            .mapped(new ExpandImportArgsFn(outputDirectory, directProtoSourceRoots)));
+        VectorArg.of(transitiveImports).mapped(new ExpandImportArgsFn(directProtoSourceRoots)));
     if (protosInDirectDependencies != null) {
       if (!protosInDirectDependencies.isEmpty()) {
         commandLine.addAll(
             "--direct_dependencies",
             VectorArg.join(":")
                 .each(protosInDirectDependencies)
-                .mapped(new ExpandToPathFnWithImports(outputDirectory, directProtoSourceRoots)));
+                .mapped(new ExpandToPathFn(directProtoSourceRoots)));
 
       } else {
         // The proto compiler requires an empty list to turn on strict deps checking
         commandLine.add("--direct_dependencies=");
       }
     }
-  }
-
-  private static String guessProtoPathUnderRoot(
-      String outputDirectory, PathFragment sourceRootPath, Artifact proto) {
-    // TODO(lberki): Instead of guesswork like this, we should track which proto belongs to
-    // which source root. Unfortunately, that's a non-trivial migration since
-    // ProtoInfo is on the Starlark API. Therefore, we hack:
-    // - If the source root is under the output directory (itself determined in a hacky way and
-    // relying on the fact that the output roots of all repositories are under the same directory
-    // under the exec root), we check whether the .proto file is under it. If so, we have a match.
-    // - Otherwise, we check whether the .proto file is either under that source directory or under
-    // bin or genfiles by prefix-matching its root-relative path.
-    if (sourceRootPath.segmentCount() > 0 && sourceRootPath.getSegment(0).equals(outputDirectory)) {
-      if (proto.getExecPath().startsWith(sourceRootPath)) {
-        return proto.getExecPath().relativeTo(sourceRootPath).getPathString();
-      }
-    } else {
-      if (proto.getRootRelativePath().startsWith(sourceRootPath)) {
-        return proto.getRootRelativePath().relativeTo(sourceRootPath).getPathString();
-      }
-    }
-
-    return null;
   }
 
   @AutoCodec @AutoCodec.VisibleForSerialization
@@ -674,15 +634,12 @@ public class ProtoCompileActionBuilder {
         }
       };
 
-
   @AutoCodec
   @AutoCodec.VisibleForSerialization
   static final class ExpandImportArgsFn implements CapturingMapFn<Artifact> {
-    private final String outputDirectory;
     private final NestedSet<String> directProtoSourceRoots;
 
-    public ExpandImportArgsFn(String outputDirectory, NestedSet<String> directProtoSourceRoots) {
-      this.outputDirectory = outputDirectory;
+    public ExpandImportArgsFn(NestedSet<String> directProtoSourceRoots) {
       this.directProtoSourceRoots = directProtoSourceRoots;
     }
 
@@ -697,9 +654,12 @@ public class ProtoCompileActionBuilder {
       String pathIgnoringRepository = getPathIgnoringRepository(proto);
 
       for (String directProtoSourceRoot : directProtoSourceRoots) {
+        // TODO(lberki): Instead of guesswork like this, we should track which proto belongs to
+        // which source root. Unfortunately, that's a non-trivial migration since
+        // ProtoInfo is on the Starlark API.
         PathFragment sourceRootPath = PathFragment.create(directProtoSourceRoot);
-        String arg = guessProtoPathUnderRoot(outputDirectory, sourceRootPath, proto);
-        if (arg != null) {
+        if (proto.getRootRelativePath().startsWith(sourceRootPath)) {
+          String arg = proto.getRootRelativePath().relativeTo(sourceRootPath).getPathString();
           if (arg.equals(pathIgnoringRepository)) {
             repositoryPathAdded = true;
           }
@@ -717,39 +677,35 @@ public class ProtoCompileActionBuilder {
 
   @AutoCodec
   @AutoCodec.VisibleForSerialization
-  static final class ExpandToPathFnWithImports implements CapturingMapFn<Pair<Artifact, String>> {
-    private final String outputDirectory;
+  static final class ExpandToPathFn implements CapturingMapFn<Artifact> {
     private final NestedSet<String> directProtoSourceRoots;
 
-    public ExpandToPathFnWithImports(
-        String outputDirectory, NestedSet<String> directProtoSourceRoots) {
-      this.outputDirectory = outputDirectory;
+    public ExpandToPathFn(NestedSet<String> directProtoSourceRoots) {
       this.directProtoSourceRoots = directProtoSourceRoots;
     }
 
     @Override
-    public void expandToCommandLine(Pair<Artifact, String> proto, Consumer<String> args) {
-      if (proto.second != null) {
-        args.accept(proto.second);
-      } else {
-        boolean repositoryPathAdded = false;
-        String pathIgnoringRepository = getPathIgnoringRepository(proto.first);
+    public void expandToCommandLine(Artifact proto, Consumer<String> args) {
+      boolean repositoryPathAdded = false;
+      String pathIgnoringRepository = getPathIgnoringRepository(proto);
 
-        for (String directProtoSourceRoot : directProtoSourceRoots) {
-          PathFragment sourceRootPath = PathFragment.create(directProtoSourceRoot);
-          String arg = guessProtoPathUnderRoot(outputDirectory, sourceRootPath, proto.first);
-          if (arg != null) {
-            if (arg.equals(pathIgnoringRepository)) {
-              repositoryPathAdded = true;
-            }
-            args.accept(arg);
+      for (String directProtoSourceRoot : directProtoSourceRoots) {
+        PathFragment sourceRootPath = PathFragment.create(directProtoSourceRoot);
+        // TODO(lberki): Instead of guesswork like this, we should track which proto belongs to
+        // which source root. Unfortunately, that's a non-trivial migration since
+        // ProtoInfo is on the Starlark API.
+        if (proto.getRootRelativePath().startsWith(sourceRootPath)) {
+          String arg = proto.getRootRelativePath().relativeTo(sourceRootPath).getPathString();
+          if (arg.equals(pathIgnoringRepository)) {
+            repositoryPathAdded = true;
           }
+          args.accept(arg);
         }
+      }
 
-        // TODO(lberki): This should really be removed. It's only there for backward compatibility.
-        if (!repositoryPathAdded) {
-          args.accept(pathIgnoringRepository);
-        }
+      // TODO(lberki): This should really be removed. It's only there for backward compatibility.
+      if (!repositoryPathAdded) {
+        args.accept(pathIgnoringRepository);
       }
     }
   }
