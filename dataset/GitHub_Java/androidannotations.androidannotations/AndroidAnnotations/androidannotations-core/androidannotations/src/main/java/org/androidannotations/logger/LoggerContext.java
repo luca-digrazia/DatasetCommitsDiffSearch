@@ -22,21 +22,21 @@ import javax.lang.model.element.AnnotationMirror;
 import javax.lang.model.element.Element;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.Option;
 import org.androidannotations.logger.appender.Appender;
 import org.androidannotations.logger.appender.ConsoleAppender;
 import org.androidannotations.logger.appender.FileAppender;
 import org.androidannotations.logger.appender.MessagerAppender;
 import org.androidannotations.logger.formatter.Formatter;
+import org.androidannotations.process.Option;
 
 public final class LoggerContext {
 
-	public static final Option OPTION_LOG_LEVEL = new Option("logLevel", "WARN");
+	public static final Option OPTION_LOG_LEVEL = new Option("logLevel", "DEBUG");
 	public static final Option OPTION_LOG_APPENDER_CONSOLE = new Option("logAppenderConsole", "false");
 	public static final Option OPTION_LOG_APPENDER_FILE = new Option("logAppenderFile", "true");
 
 	private static LoggerContext instance = null;
-	private static final Level DEFAULT_LEVEL = Level.WARN;
+	private static final Level DEFAULT_LEVEL = Level.DEBUG;
 
 	private Level currentLevel = DEFAULT_LEVEL;
 	private List<Appender> appenders = new ArrayList<>();
@@ -92,7 +92,7 @@ public final class LoggerContext {
 	}
 
 	private void resolveLogLevel(AndroidAnnotationsEnvironment environment) {
-		Level level = Level.WARN;
+		Level level = Level.DEBUG;
 		try {
 			level = Level.parse(environment.getOptionValue(OPTION_LOG_LEVEL));
 		} catch (Exception ignored) {

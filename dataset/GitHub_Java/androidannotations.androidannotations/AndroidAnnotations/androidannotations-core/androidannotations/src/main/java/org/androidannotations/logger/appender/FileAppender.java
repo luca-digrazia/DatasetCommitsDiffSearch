@@ -1,6 +1,5 @@
 /**
- * Copyright (C) 2010-2016 eBusiness Information, Excilys Group
- * Copyright (C) 2016-2017 the AndroidAnnotations project
+ * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -27,11 +26,11 @@ import javax.lang.model.element.Element;
 import javax.tools.Diagnostic.Kind;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
-import org.androidannotations.Option;
-import org.androidannotations.internal.helper.FileHelper;
+import org.androidannotations.helper.FileHelper;
 import org.androidannotations.logger.Level;
 import org.androidannotations.logger.LoggerContext;
 import org.androidannotations.logger.formatter.FormatterFull;
+import org.androidannotations.process.Option;
 
 public class FileAppender extends Appender {
 
@@ -58,7 +57,7 @@ public class FileAppender extends Appender {
 	}
 
 	@Override
-	public synchronized void close(boolean lastRound) {
+	public synchronized void close() {
 		if (isStreamOpened()) {
 			try {
 				outputStream.close();
@@ -90,14 +89,10 @@ public class FileAppender extends Appender {
 
 	private void resolveLogFile(AndroidAnnotationsEnvironment environment) {
 		String logFile = environment.getOptionValue(OPTION_LOG_FILE);
-		try {
-			if (logFile != null) {
-				file = resolveLogFileInSpecifiedPath(logFile);
-			} else {
-				file = resolveLogFileInParentsDirectories();
-			}
-		} catch (FileNotFoundException exception) {
-			file = null;
+		if (logFile != null) {
+			file = resolveLogFileInSpecifiedPath(logFile);
+		} else {
+			file = resolveLogFileInParentsDirectories();
 		}
 
 		Level logLevel = LoggerContext.getInstance().getCurrentLevel();
@@ -111,13 +106,13 @@ public class FileAppender extends Appender {
 		}
 	}
 
-	private File resolveLogFileInSpecifiedPath(String logFile) throws FileNotFoundException {
+	private File resolveLogFileInSpecifiedPath(String logFile) {
 		File outputDirectory = FileHelper.resolveOutputDirectory(processingEnv);
 		logFile = logFile.replace("{outputFolder}", outputDirectory.getAbsolutePath());
 		return new File(logFile);
 	}
 
-	private File resolveLogFileInParentsDirectories() throws FileNotFoundException {
+	private File resolveLogFileInParentsDirectories() {
 		File outputDirectory = FileHelper.resolveOutputDirectory(processingEnv);
 		return new File(outputDirectory, DEFAULT_FILENAME);
 	}
