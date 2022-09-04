@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics.FlagIdentifier;
 import javax.annotation.Nullable;
 
 /** Info object representing data about a specific platform. */
@@ -51,6 +51,8 @@ public interface ConstraintCollectionApi<
         @Param(
             name = "constraint",
             type = ConstraintSettingInfoApi.class,
+            defaultValue = "None",
+            noneable = true,
             named = true,
             doc = "The constraint setting to fetch the value for.")
       },
@@ -65,6 +67,8 @@ public interface ConstraintCollectionApi<
         @Param(
             name = "constraint",
             type = ConstraintSettingInfoApi.class,
+            defaultValue = "None",
+            noneable = true,
             named = true,
             doc = "The constraint setting to check.")
       },

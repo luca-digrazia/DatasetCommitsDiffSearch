@@ -227,10 +227,7 @@ public class PlatformInfo extends NativeInfo
       // Merge parent constraints and the validated constraints to a single set and create a
       // collection.
       ConstraintCollection platformConstraints =
-          ConstraintCollection.builder()
-              .parent(parentConstraints())
-              .addConstraints(validatedConstraints)
-              .build();
+          new ConstraintCollection(parentConstraints(), validatedConstraints);
 
       // Merge the remote execution properties.
       String remoteExecutionProperties =

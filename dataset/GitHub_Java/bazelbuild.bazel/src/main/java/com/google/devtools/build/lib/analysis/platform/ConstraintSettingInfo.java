@@ -17,12 +17,13 @@ package com.google.devtools.build.lib.analysis.platform;
 import com.google.common.base.Objects;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.packages.NativeProvider;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintSettingInfoApi;
-import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.util.Fingerprint;
 import javax.annotation.Nullable;
 
@@ -41,8 +42,8 @@ public class ConstraintSettingInfo extends NativeInfo implements ConstraintSetti
   @Nullable private final Label defaultConstraintValueLabel;
 
   @VisibleForSerialization
-  ConstraintSettingInfo(Label label, Label defaultConstraintValueLabel) {
-    super(PROVIDER);
+  ConstraintSettingInfo(Label label, Label defaultConstraintValueLabel, Location location) {
+    super(PROVIDER, location);
 
     this.label = label;
     this.defaultConstraintValueLabel = defaultConstraintValueLabel;
@@ -88,7 +89,7 @@ public class ConstraintSettingInfo extends NativeInfo implements ConstraintSetti
   }
 
   @Override
-  public void repr(Printer printer) {
+  public void repr(SkylarkPrinter printer) {
     printer.format("ConstraintSettingInfo(%s", label.toString());
     if (defaultConstraintValueLabel != null) {
       printer.format(", default_constraint_value=%s", defaultConstraintValueLabel.toString());
@@ -98,12 +99,18 @@ public class ConstraintSettingInfo extends NativeInfo implements ConstraintSetti
 
   /** Returns a new {@link ConstraintSettingInfo} with the given data. */
   public static ConstraintSettingInfo create(Label constraintSetting) {
-    return create(constraintSetting, null);
+    return create(constraintSetting, null, Location.BUILTIN);
   }
 
   /** Returns a new {@link ConstraintSettingInfo} with the given data. */
   public static ConstraintSettingInfo create(
       Label constraintSetting, Label defaultConstraintValue) {
-    return new ConstraintSettingInfo(constraintSetting, defaultConstraintValue);
+    return create(constraintSetting, defaultConstraintValue, Location.BUILTIN);
+  }
+
+  /** Returns a new {@link ConstraintSettingInfo} with the given data. */
+  public static ConstraintSettingInfo create(
+      Label constraintSetting, Label defaultConstraintValue, Location location) {
+    return new ConstraintSettingInfo(constraintSetting, defaultConstraintValue, location);
   }
 }
