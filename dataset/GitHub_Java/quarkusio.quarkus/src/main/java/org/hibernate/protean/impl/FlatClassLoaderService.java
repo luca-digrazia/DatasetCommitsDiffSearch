@@ -14,9 +14,6 @@ import org.hibernate.boot.registry.classloading.spi.ClassLoaderService;
 import org.hibernate.internal.CoreLogging;
 import org.hibernate.internal.CoreMessageLogger;
 
-/**
- * Replaces the ClassLoaderService in Hibernate ORM with one which should work in Substrate.
- */
 public class FlatClassLoaderService implements ClassLoaderService {
 
 	private static final CoreMessageLogger log = CoreLogging.messageLogger( ClassLoaderServiceImpl.class );
@@ -27,7 +24,7 @@ public class FlatClassLoaderService implements ClassLoaderService {
 			return (Class<T>) Class.forName( className );
 		}
 		catch (ClassNotFoundException e) {
-			log.errorf( "Could not load class '%s' using Class.forName(String)", className );
+			log.error( "Could not load class '%s' using Class.forName(String)" );
 		}
 		return null;
 	}
