@@ -27,7 +27,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.ArtifactExpanderImpl;
-import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.CommandLine;
 import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.CompositeRunfilesSupplier;
@@ -685,7 +684,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     @SuppressWarnings("unchecked")
     CompositeRunfilesSupplier runfilesSupplier =
         new CompositeRunfilesSupplier((List<RunfilesSupplier>) lookup("input_manifests"));
-    assertThat(runfilesSupplier.getMappings(ArtifactPathResolver.IDENTITY)).hasSize(1);
+    assertThat(runfilesSupplier.getMappings()).hasSize(1);
   }
 
   @Test
@@ -927,8 +926,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
             "symlinks = {'sym1': artifacts[1]})");
     Runfiles runfiles = (Runfiles) result;
     reporter.removeHandler(failFastHandler); // So it doesn't throw an exception.
-    assertThat(assertThrows(IOException.class,
-        () -> runfiles.getRunfilesInputs(reporter, null, ArtifactPathResolver.IDENTITY)))
+    assertThat(assertThrows(IOException.class, () -> runfiles.getRunfilesInputs(reporter, null)))
         .hasMessageThat()
         .matches("runfile [\\w_]+/sym1 mapped to both foo/b.img and foo/a.txt");
   }

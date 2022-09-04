@@ -172,7 +172,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
           new ParameterFileWriteAction(
               ruleContext.getActionOwner(),
               skylarkSemantics.incompatibleExpandDirectories()
-                  ? args.getDirectoryArtifacts()
+                  ? args.getTreeArtifacts()
                   : ImmutableList.of(),
               (Artifact) output,
               args.build(),
@@ -352,7 +352,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
                   .setInputs(
                       skylarkSemantics.incompatibleExpandDirectories()
                               && !context.getConfiguration().deferParamFiles()
-                          ? args.getDirectoryArtifacts()
+                          ? args.getTreeArtifacts()
                           : ImmutableList.of())
                   .build();
         }
@@ -550,8 +550,8 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
     private final Mutability mutability;
     private final SkylarkSemantics skylarkSemantics;
     private final SkylarkCustomCommandLine.Builder commandLine;
-    private List<NestedSet<Object>> potentialDirectoryArtifacts = new ArrayList<>();
-    private final Set<Artifact> directoryArtifacts = new HashSet<>();
+    private List<NestedSet<Object>> potentialTreeArtifacts = new ArrayList<>();
+    private final Set<Artifact> treeArtifacts = new HashSet<>();
     private ParameterFileType parameterFileType = ParameterFileType.SHELL_QUOTED;
     private String flagFormatString;
     private boolean useAlways;
@@ -734,14 +734,14 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
         SkylarkNestedSet skylarkNestedSet = ((SkylarkNestedSet) value);
         NestedSet<Object> nestedSet = skylarkNestedSet.getSet(Object.class);
         if (expandDirectories) {
-          potentialDirectoryArtifacts.add(nestedSet);
+          potentialTreeArtifacts.add(nestedSet);
         }
         vectorArg = new SkylarkCustomCommandLine.VectorArg.Builder(nestedSet);
       } else {
         @SuppressWarnings("unchecked")
         SkylarkList<Object> skylarkList = (SkylarkList<Object>) value;
         if (expandDirectories) {
-          scanForDirectories(skylarkList);
+          scanForTreeArtifacts(skylarkList);
         }
         vectorArg = new SkylarkCustomCommandLine.VectorArg.Builder(skylarkList);
       }
@@ -816,7 +816,7 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
 
     private void addScalarArg(Object value, String format, BaseFunction mapFn, Location loc)
         throws EvalException {
-      validateNoDirectory(value, loc);
+      validateNoTreeArtifact(value, loc);
       validateFormatString("format", format, loc);
       if (format == null && mapFn == null) {
         commandLine.add(value);
@@ -827,18 +827,16 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       }
     }
 
-    private void validateNoDirectory(Object value, Location loc) throws EvalException {
-      if (skylarkSemantics.incompatibleExpandDirectories() && isDirectory(value)) {
+    private void validateNoTreeArtifact(Object value, Location loc) throws EvalException {
+      if (skylarkSemantics.incompatibleExpandDirectories()
+          && (value instanceof Artifact)
+          && ((Artifact) value).isTreeArtifact()) {
         throw new EvalException(
             loc,
             "Cannot add directories to Args#add since they may expand to multiple values. "
                 + "Either use Args#add_all (if you want expansion) "
                 + "or args.add(directory.path) (if you do not).");
       }
-    }
-
-    private static boolean isDirectory(Object object) {
-      return ((object instanceof Artifact) && ((Artifact) object).isDirectory());
     }
 
     @Override
@@ -905,18 +903,18 @@ public class SkylarkActionFactory implements SkylarkActionFactoryApi {
       }
     }
 
-    ImmutableSet<Artifact> getDirectoryArtifacts() {
-      for (Iterable<Object> collection : potentialDirectoryArtifacts) {
-        scanForDirectories(collection);
+    ImmutableSet<Artifact> getTreeArtifacts() {
+      for (Iterable<Object> collection : potentialTreeArtifacts) {
+        scanForTreeArtifacts(collection);
       }
-      potentialDirectoryArtifacts.clear();
-      return ImmutableSet.copyOf(directoryArtifacts);
+      potentialTreeArtifacts.clear();
+      return ImmutableSet.copyOf(treeArtifacts);
     }
 
-    private void scanForDirectories(Iterable<?> objects) {
+    private void scanForTreeArtifacts(Iterable<?> objects) {
       for (Object object : objects) {
-        if (isDirectory(object)) {
-          directoryArtifacts.add((Artifact) object);
+        if ((object instanceof Artifact) && ((Artifact) object).isTreeArtifact()) {
+          treeArtifacts.add((Artifact) object);
         }
       }
     }
