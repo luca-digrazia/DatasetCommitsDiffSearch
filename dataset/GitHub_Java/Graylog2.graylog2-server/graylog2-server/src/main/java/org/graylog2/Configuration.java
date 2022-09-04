@@ -253,15 +253,6 @@ public class Configuration extends BaseConfiguration {
     @Parameter(value = "stream_processing_max_faults", required = false)
     private int streamProcessingMaxFaults = 3;
 
-    @Parameter(value = "output_module_timeout", required = false)
-    private long outputModuleTimeout = 10000;
-
-    @Parameter(value = "message_cache_spool_dir", required = false)
-    private String messageCacheSpoolDir = "spool";
-
-    @Parameter(value = "message_cache_compaction_watermark", required = false)
-    private float messageCacheCompactionWatermark = 30;
-
     public boolean isMaster() {
         return isMaster;
     }
@@ -566,20 +557,8 @@ public class Configuration extends BaseConfiguration {
         return streamProcessingMaxFaults;
     }
 
-    public long getOutputModuleTimeout() {
-        return outputModuleTimeout;
-    }
-
     public long getEsClusterDiscoveryTimeout() {
         return esClusterDiscoveryTimeout;
-    }
-
-    public String getMessageCacheSpoolDir() {
-        return messageCacheSpoolDir;
-    }
-
-    public float getMessageCacheCompactionWatermark() {
-        return messageCacheCompactionWatermark;
     }
 }
 
