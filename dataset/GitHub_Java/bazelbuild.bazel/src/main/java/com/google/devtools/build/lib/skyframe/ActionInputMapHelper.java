@@ -18,7 +18,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.ActionInputMapSink;
+import com.google.devtools.build.lib.actions.ActionInputMap;
 import com.google.devtools.build.lib.actions.ActionLookupValue;
 import com.google.devtools.build.lib.actions.ActionLookupValue.ActionLookupKey;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -37,18 +37,17 @@ class ActionInputMapHelper {
   // Adds a value obtained by an Artifact skyvalue lookup to the action input map. May do Skyframe
   // lookups.
   static void addToMap(
-      ActionInputMapSink inputMap,
+      ActionInputMap inputMap,
       Map<Artifact, Collection<Artifact>> expandedArtifacts,
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
       Artifact key,
       SkyValue value,
-      Environment env)
-      throws InterruptedException {
+      Environment env) throws InterruptedException {
     if (value instanceof AggregatingArtifactValue) {
       AggregatingArtifactValue aggregatingValue = (AggregatingArtifactValue) value;
       for (Pair<Artifact, FileArtifactValue> entry : aggregatingValue.getFileArtifacts()) {
         Artifact artifact = entry.first;
-        inputMap.put(artifact, entry.second, /*depOwner=*/ key);
+        inputMap.put(artifact, entry.second);
         if (artifact.isFileset()) {
           ImmutableList<FilesetOutputSymlink> expandedFileset = getFilesets(env, artifact);
           if (expandedFileset != null) {
@@ -61,12 +60,11 @@ class ActionInputMapHelper {
             entry.getFirst(),
             Preconditions.checkNotNull(entry.getSecond()),
             expandedArtifacts,
-            inputMap,
-            /*depOwner=*/ key);
+            inputMap);
       }
       // We have to cache the "digest" of the aggregating value itself,
       // because the action cache checker may want it.
-      inputMap.put(key, aggregatingValue.getSelfData(), /*depOwner=*/ key);
+      inputMap.put(key, aggregatingValue.getSelfData());
       // While not obvious at all this code exists to ensure that we don't expand the
       // .runfiles/MANIFEST file into the inputs. The reason for that being that the MANIFEST
       // file contains absolute paths that don't work with remote execution.
@@ -82,10 +80,11 @@ class ActionInputMapHelper {
       }
     } else if (value instanceof TreeArtifactValue) {
       expandTreeArtifactAndPopulateArtifactData(
-          key, (TreeArtifactValue) value, expandedArtifacts, inputMap, /*depOwner=*/ key);
+          key, (TreeArtifactValue) value, expandedArtifacts, inputMap);
+
     } else {
       Preconditions.checkState(value instanceof FileArtifactValue);
-      inputMap.put(key, (FileArtifactValue) value, /*depOwner=*/ key);
+      inputMap.put(key, (FileArtifactValue) value);
     }
   }
 
@@ -127,16 +126,15 @@ class ActionInputMapHelper {
       Artifact treeArtifact,
       TreeArtifactValue value,
       Map<Artifact, Collection<Artifact>> expandedArtifacts,
-      ActionInputMapSink inputMap,
-      Artifact depOwner) {
+      ActionInputMap inputMap) {
     ImmutableSet.Builder<Artifact> children = ImmutableSet.builder();
     for (Map.Entry<Artifact.TreeFileArtifact, FileArtifactValue> child :
         value.getChildValues().entrySet()) {
       children.add(child.getKey());
-      inputMap.put(child.getKey(), child.getValue(), depOwner);
+      inputMap.put(child.getKey(), child.getValue());
     }
     expandedArtifacts.put(treeArtifact, children.build());
     // Again, we cache the "digest" of the value for cache checking.
-    inputMap.put(treeArtifact, value.getSelfData(), depOwner);
+    inputMap.put(treeArtifact, value.getSelfData());
   }
 }
