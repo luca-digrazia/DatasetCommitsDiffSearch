@@ -575,11 +575,7 @@ public class AarImportTest extends BuildViewTestCase {
 
   @Test
   public void testTransitiveExports() throws Exception {
-    assertThat(
-            getConfiguredTarget("//a:bar")
-                .get(JavaInfo.PROVIDER)
-                .getTransitiveExports()
-                .getSet(Label.class))
+    assertThat(getConfiguredTarget("//a:bar").get(JavaInfo.PROVIDER).getTransitiveExports())
         .containsExactly(
             Label.parseAbsolute("//a:foo", ImmutableMap.of()),
             Label.parseAbsolute("//java:baz", ImmutableMap.of()));
@@ -589,8 +585,7 @@ public class AarImportTest extends BuildViewTestCase {
   public void testRClassFromAarImportInCompileClasspath() throws Exception {
     NestedSet<Artifact> compilationClasspath =
         JavaInfo.getProvider(JavaCompilationInfoProvider.class, getConfiguredTarget("//a:library"))
-            .getCompilationClasspath()
-            .getSet(Artifact.class);
+            .getCompilationClasspath();
 
     assertThat(
             compilationClasspath.toList().stream()
