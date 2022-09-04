@@ -152,9 +152,6 @@ public class GraylogServer implements Runnable {
                 System.exit(1);
             }
         }
-        
-        ////// XXXXXXXXXXX
-        indexer.createRecentIndex();
 
         // Statically set timeout for LogglyForwarder.
         // TODO: This is a code smell and needs to be fixed.

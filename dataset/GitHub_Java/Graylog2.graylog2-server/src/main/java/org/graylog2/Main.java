@@ -40,7 +40,6 @@ import org.graylog2.healthchecks.MessageFlowHealthCheck;
 import org.graylog2.initializers.*;
 import org.graylog2.inputs.gelf.GELFTCPInput;
 import org.graylog2.inputs.gelf.GELFUDPInput;
-import org.graylog2.inputs.syslog.SyslogTCPInput;
 import org.graylog2.inputs.syslog.SyslogUDPInput;
 import org.graylog2.outputs.ElasticSearchOutput;
 
@@ -121,12 +120,11 @@ public final class Main {
         server.registerInitializer(new DroolsInitializer(server, configuration));
         server.registerInitializer(new HostCounterCacheWriterInitializer(server));
         server.registerInitializer(new MessageCounterInitializer(server));
+        server.registerInitializer(new SyslogServerInitializer(server, configuration));
         server.registerInitializer(new MessageRetentionInitializer(server));
         if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer(server)); }
         if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer(server)); }
-        if (configuration.isEnableHealthCheckHttpApi()) {
-            server.registerInitializer(new HealthCheckHTTPServerInitializer(configuration.getHealthCheckHttpApiPort()));
-        }
+        server.registerInitializer(new HealthCheckHTTPServerInitializer(8001));
 
         // Register inputs.
         if (configuration.isUseGELF()) {
@@ -134,10 +132,11 @@ public final class Main {
             server.registerInput(new GELFTCPInput());
         }
         
-        if (configuration.isSyslogUdpEnabled()) { server.registerInput(new SyslogUDPInput()); }
-        if (configuration.isSyslogTcpEnabled()) { server.registerInput(new SyslogTCPInput()); }
+        if (configuration.getSyslogProtocol().equals("udp")) {
+            server.registerInput(new SyslogUDPInput());
+        }
 
-        // Register message filters.
+        // Register message filters. - Passing classes here instead of objects, because we need to create a new instance in every filter. (they are stateful)
         server.registerFilter(RewriteFilter.class);
         server.registerFilter(BlacklistFilter.class);
         if (configuration.isEnableTokenizerFilter()) { server.registerFilter(TokenizerFilter.class); }
