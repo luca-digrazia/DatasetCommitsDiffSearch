@@ -3,7 +3,7 @@ package io.quarkus.deployment.dev;
 import java.io.Closeable;
 import java.io.File;
 import java.nio.file.Path;
-import java.util.HashMap;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
@@ -24,7 +24,6 @@ import io.quarkus.bootstrap.resolver.maven.workspace.LocalWorkspace;
 import io.quarkus.bootstrap.util.PathsUtils;
 import io.quarkus.bootstrap.util.QuarkusModelHelper;
 import io.quarkus.bootstrap.utils.BuildToolHelper;
-import io.quarkus.dev.spi.DevModeType;
 
 public class IDEDevModeMain implements BiConsumer<CuratedApplication, Map<String, Object>>, Closeable {
 
@@ -80,11 +79,8 @@ public class IDEDevModeMain implements BiConsumer<CuratedApplication, Map<String
 
         terminateIfRunning();
         delegate = new IsolatedDevModeMain();
-        Map<String, Object> params = new HashMap<>();
-        params.put(DevModeContext.class.getName(), devModeContext);
-        params.put(DevModeType.class.getName(), DevModeType.LOCAL);
         delegate.accept(curatedApplication,
-                params);
+                Collections.singletonMap(DevModeContext.class.getName(), devModeContext));
     }
 
     @Override
@@ -111,7 +107,6 @@ public class IDEDevModeMain implements BiConsumer<CuratedApplication, Map<String
             // Peek the first one as we assume that it is the primary
             resourceDirectory = module.getSourceSet().getResourceDirectories().iterator().next().toString();
         }
-
         return new DevModeContext.ModuleInfo.Builder()
                 .setAppArtifactKey(key)
                 .setName(module.getArtifactCoords().getArtifactId())
@@ -126,6 +121,7 @@ public class IDEDevModeMain implements BiConsumer<CuratedApplication, Map<String
     }
 
     private DevModeContext.ModuleInfo toModule(LocalProject project) {
+
         return new DevModeContext.ModuleInfo.Builder()
                 .setAppArtifactKey(project.getKey())
                 .setName(project.getArtifactId())
@@ -139,10 +135,6 @@ public class IDEDevModeMain implements BiConsumer<CuratedApplication, Map<String
                                 .collect(Collectors.toCollection(LinkedHashSet::new))))
                 .setSourceParents(PathsCollection.of(project.getSourcesDir()))
                 .setPreBuildOutputDir(project.getCodeGenOutputDir().toString())
-                .setTargetDir(project.getOutputDir().toString())
-                .setTestSourcePaths(PathsCollection.of(project.getTestSourcesSourcesDir()))
-                .setTestClassesPath(project.getTestClassesDir().toAbsolutePath().toString())
-                .setTestResourcesOutputPath(project.getTestClassesDir().toAbsolutePath().toString())
-                .setTestResourcePaths(PathsCollection.from(project.getTestResourcesSourcesDirs())).build();
+                .setTargetDir(project.getOutputDir().toString()).build();
     }
 }
