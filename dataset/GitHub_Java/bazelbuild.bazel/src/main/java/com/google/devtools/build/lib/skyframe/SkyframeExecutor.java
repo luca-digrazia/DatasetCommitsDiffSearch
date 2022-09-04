@@ -205,7 +205,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   private final PackageFactory pkgFactory;
   private final WorkspaceStatusAction.Factory workspaceStatusActionFactory;
   private final FileSystem fileSystem;
-  protected final BlazeDirectories directories;
+  private final BlazeDirectories directories;
   protected final ExternalFilesHelper externalFilesHelper;
   private final GraphInconsistencyReceiver graphInconsistencyReceiver;
   @Nullable protected OutputService outputService;
@@ -2260,8 +2260,9 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   public void sync(
       ExtendedEventHandler eventHandler,
       PackageCacheOptions packageCacheOptions,
-      PathPackageLocator pathPackageLocator,
       SkylarkSemanticsOptions skylarkSemanticsOptions,
+      Path outputBase,
+      Path workingDirectory,
       String defaultsPackageContents,
       UUID commandId,
       Map<String, String> clientEnv,
@@ -2270,26 +2271,35 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       throws InterruptedException, AbruptExitException {
     getActionEnvFromOptions(options);
     syncPackageLoading(
+        eventHandler,
         packageCacheOptions,
-        pathPackageLocator,
         skylarkSemanticsOptions,
+        outputBase,
+        workingDirectory,
         defaultsPackageContents,
         commandId,
         clientEnv,
         tsgm);
   }
 
-  protected void syncPackageLoading(
+  private void syncPackageLoading(
+      ExtendedEventHandler eventHandler,
       PackageCacheOptions packageCacheOptions,
-      PathPackageLocator pathPackageLocator,
       SkylarkSemanticsOptions skylarkSemanticsOptions,
+      Path outputBase,
+      Path workingDirectory,
       String defaultsPackageContents,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm)
       throws AbruptExitException {
     preparePackageLoading(
-        pathPackageLocator,
+        createPackageLocator(
+            eventHandler,
+            packageCacheOptions.packagePath,
+            outputBase,
+            directories.getWorkspace(),
+            workingDirectory),
         packageCacheOptions,
         skylarkSemanticsOptions,
         defaultsPackageContents,
@@ -2319,15 +2329,15 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     PrecomputedValue.ACTION_ENV.set(injectable(), actionEnv);
   }
 
-  public PathPackageLocator createPackageLocator(
-      ExtendedEventHandler eventHandler, List<String> packagePaths, Path workingDirectory) {
+  protected PathPackageLocator createPackageLocator(
+      ExtendedEventHandler eventHandler,
+      List<String> packagePaths,
+      Path outputBase,
+      Path workspace,
+      Path workingDirectory)
+      throws AbruptExitException {
     return PathPackageLocator.create(
-        directories.getOutputBase(),
-        packagePaths,
-        eventHandler,
-        directories.getWorkspace(),
-        workingDirectory,
-        buildFilesByPriority);
+        outputBase, packagePaths, eventHandler, workspace, workingDirectory, buildFilesByPriority);
   }
 
   private CyclesReporter createCyclesReporter() {
