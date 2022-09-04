@@ -20,7 +20,6 @@ import org.eclipse.aether.repository.RemoteRepository;
 import io.quarkus.bootstrap.app.AugmentAction;
 import io.quarkus.bootstrap.app.AugmentResult;
 import io.quarkus.bootstrap.app.CuratedApplication;
-import io.quarkus.bootstrap.util.IoUtils;
 
 /**
  * Build the application.
@@ -98,7 +97,7 @@ public class BuildMojo extends QuarkusBootstrapMojo {
                         final Path standardJar = curatedApplication.getAppModel().getAppArtifact().getPaths().getSinglePath();
                         if (Files.exists(standardJar)) {
                             try {
-                                IoUtils.recursiveDelete(result.getJar().getOriginalArtifact());
+                                Files.deleteIfExists(result.getJar().getOriginalArtifact());
                                 Files.move(standardJar, result.getJar().getOriginalArtifact());
                             } catch (IOException e) {
                                 throw new UncheckedIOException(e);
