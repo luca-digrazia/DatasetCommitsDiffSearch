@@ -22,6 +22,9 @@ import org.graylog2.restclient.models.dashboards.Dashboard;
 
 import java.util.Map;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 public class SearchResultCountWidget extends DashboardWidget {
 
     private static final int WIDTH = 1;
