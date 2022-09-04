@@ -16,11 +16,10 @@ public final class ExtensionProcessor {
     public enum CodestartKind {
         CORE,
         EXTENSION_CODESTART,
-        EXAMPLE,
-        SINGLETON_EXAMPLE;
+        EXAMPLE;
 
         public boolean providesCode() {
-            return this == EXTENSION_CODESTART || this == EXAMPLE || this == SINGLETON_EXAMPLE;
+            return this == EXTENSION_CODESTART || this == EXAMPLE;
         }
     }
 
@@ -45,10 +44,6 @@ public final class ExtensionProcessor {
 
     public static List<String> getCategories(Extension extension) {
         return getMetadataValue(extension, MD_CATEGORIES).asStringList();
-    }
-
-    public static String getBuiltWithQuarkusCore(Extension extension) {
-        return getMetadataValue(extension, MD_BUILT_WITH_QUARKUS_CORE).asString();
     }
 
     public static String getCodestartName(Extension extension) {
@@ -118,10 +113,6 @@ public final class ExtensionProcessor {
 
     public Extension getExtension() {
         return extension;
-    }
-
-    public String getBuiltWithQuarkusCore() {
-        return getBuiltWithQuarkusCore(extension);
     }
 
     /**
