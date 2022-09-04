@@ -22,7 +22,7 @@ import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
-import com.google.devtools.build.lib.analysis.config.transitions.PatchTransition;
+import com.google.devtools.build.lib.analysis.config.PatchTransition;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.Rule;
@@ -49,9 +49,10 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
     @Override
     @Nullable
     public <O extends OptionsBase> O getOptions(Class<O> optionsClass) {
-      if (optionsClass.equals(ConfigFeatureFlagOptions.class)) {
-        ConfigFeatureFlagOptions options =
-            (ConfigFeatureFlagOptions) new ConfigFeatureFlagOptions().getDefault();
+      if (optionsClass.equals(ConfigFeatureFlagConfiguration.Options.class)) {
+        ConfigFeatureFlagConfiguration.Options options =
+            (ConfigFeatureFlagConfiguration.Options)
+                new ConfigFeatureFlagConfiguration.Options().getDefault();
         options.replaceFlagValues(flagValues);
         return optionsClass.cast(options);
       }
@@ -66,7 +67,8 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
 
   private static BuildOptions getOptionsWithFlagFragment(Map<Label, String> values) {
     return BuildOptions.of(
-        ImmutableList.<Class<? extends FragmentOptions>>of(ConfigFeatureFlagOptions.class),
+        ImmutableList.<Class<? extends FragmentOptions>>of(
+            ConfigFeatureFlagConfiguration.Options.class),
         new ConfigFeatureFlagsOptionsProvider(values));
   }
 
@@ -88,7 +90,7 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
     BuildOptions converted = transition.apply(original);
 
     assertThat(converted).isSameAs(original);
-    assertThat(original.contains(ConfigFeatureFlagOptions.class)).isFalse();
+    assertThat(original.contains(ConfigFeatureFlagConfiguration.Options.class)).isFalse();
   }
 
   @Test
@@ -111,7 +113,7 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
     BuildOptions converted = transition.apply(original);
 
     assertThat(converted).isSameAs(original);
-    assertThat(original.contains(ConfigFeatureFlagOptions.class)).isFalse();
+    assertThat(original.contains(ConfigFeatureFlagConfiguration.Options.class)).isFalse();
   }
 
   @Test
@@ -125,9 +127,10 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
     BuildOptions converted = transition.apply(original);
 
     assertThat(converted).isNotSameAs(original);
-    assertThat(original.get(ConfigFeatureFlagOptions.class).getFlagValues())
+    assertThat(original.get(ConfigFeatureFlagConfiguration.Options.class).getFlagValues())
         .containsExactlyEntriesIn(originalFlagMap);
-    assertThat(converted.get(ConfigFeatureFlagOptions.class).getFlagValues()).isEmpty();
+    assertThat(converted.get(ConfigFeatureFlagConfiguration.Options.class).getFlagValues())
+        .isEmpty();
   }
 
   @Test
@@ -153,9 +156,9 @@ public final class ConfigFeatureFlagTransitionFactoryTest extends BuildViewTestC
     BuildOptions converted = transition.apply(original);
 
     assertThat(converted).isNotSameAs(original);
-    assertThat(original.get(ConfigFeatureFlagOptions.class).getFlagValues())
+    assertThat(original.get(ConfigFeatureFlagConfiguration.Options.class).getFlagValues())
         .containsExactlyEntriesIn(originalFlagMap);
-    assertThat(converted.get(ConfigFeatureFlagOptions.class).getFlagValues())
+    assertThat(converted.get(ConfigFeatureFlagConfiguration.Options.class).getFlagValues())
         .containsExactlyEntriesIn(expectedFlagMap);
   }
 

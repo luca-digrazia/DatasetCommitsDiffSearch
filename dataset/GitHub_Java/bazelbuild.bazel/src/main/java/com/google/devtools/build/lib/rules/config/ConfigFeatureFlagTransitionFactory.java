@@ -90,13 +90,8 @@ public class ConfigFeatureFlagTransitionFactory implements RuleTransitionFactory
 
   @Override
   public PatchTransition buildTransitionFor(Rule rule) {
-    NonconfigurableAttributeMapper attrs = NonconfigurableAttributeMapper.of(rule);
-    if (attrs.isAttributeValueExplicitlySpecified(attributeName)) {
-      return new ConfigFeatureFlagValuesTransition(
-          attrs.get(attributeName, LABEL_KEYED_STRING_DICT));
-    } else {
-      return null;
-    }
+    return new ConfigFeatureFlagValuesTransition(
+        NonconfigurableAttributeMapper.of(rule).get(attributeName, LABEL_KEYED_STRING_DICT));
   }
 
   @Override
