@@ -3,6 +3,7 @@ package com.davemorrissey.labs.subscaleview;
 import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.net.Uri;
+import android.support.annotation.NonNull;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
@@ -15,6 +16,7 @@ import java.net.URLDecoder;
  * When you are using a preview image, you must set the dimensions of the full size image on the
  * ImageSource object for the full size image using the {@link #dimensions(int, int)} method.
  */
+@SuppressWarnings({"unused", "WeakerAccess"})
 public final class ImageSource {
 
     static final String FILE_SCHEME = "file:///";
@@ -39,7 +41,7 @@ public final class ImageSource {
         this.cached = cached;
     }
 
-    private ImageSource(Uri uri) {
+    private ImageSource(@NonNull Uri uri) {
         // #114 If file doesn't exist, attempt to url decode the URI and try again
         String uriString = uri.toString();
         if (uriString.startsWith(FILE_SCHEME)) {
@@ -70,6 +72,7 @@ public final class ImageSource {
      * @param resId resource ID.
      * @return an {@link ImageSource} instance.
      */
+    @NonNull
     public static ImageSource resource(int resId) {
         return new ImageSource(resId);
     }
@@ -79,7 +82,9 @@ public final class ImageSource {
      * @param assetName asset name.
      * @return an {@link ImageSource} instance.
      */
-    public static ImageSource asset(String assetName) {
+    @NonNull
+    public static ImageSource asset(@NonNull String assetName) {
+        //noinspection ConstantConditions
         if (assetName == null) {
             throw new NullPointerException("Asset name must not be null");
         }
@@ -92,7 +97,9 @@ public final class ImageSource {
      * @param uri image URI.
      * @return an {@link ImageSource} instance.
      */
-    public static ImageSource uri(String uri) {
+    @NonNull
+    public static ImageSource uri(@NonNull String uri) {
+        //noinspection ConstantConditions
         if (uri == null) {
             throw new NullPointerException("Uri must not be null");
         }
@@ -110,7 +117,9 @@ public final class ImageSource {
      * @param uri image URI.
      * @return an {@link ImageSource} instance.
      */
-    public static ImageSource uri(Uri uri) {
+    @NonNull
+    public static ImageSource uri(@NonNull Uri uri) {
+        //noinspection ConstantConditions
         if (uri == null) {
             throw new NullPointerException("Uri must not be null");
         }
@@ -122,7 +131,9 @@ public final class ImageSource {
      * @param bitmap bitmap to be displayed.
      * @return an {@link ImageSource} instance.
      */
-    public static ImageSource bitmap(Bitmap bitmap) {
+    @NonNull
+    public static ImageSource bitmap(@NonNull Bitmap bitmap) {
+        //noinspection ConstantConditions
         if (bitmap == null) {
             throw new NullPointerException("Bitmap must not be null");
         }
@@ -136,7 +147,9 @@ public final class ImageSource {
      * @param bitmap bitmap to be displayed.
      * @return an {@link ImageSource} instance.
      */
-    public static ImageSource cachedBitmap(Bitmap bitmap) {
+    @NonNull
+    public static ImageSource cachedBitmap(@NonNull Bitmap bitmap) {
+        //noinspection ConstantConditions
         if (bitmap == null) {
             throw new NullPointerException("Bitmap must not be null");
         }
@@ -148,6 +161,7 @@ public final class ImageSource {
      * and tiling cannot be disabled when displaying a region of the source image.
      * @return this instance for chaining.
      */
+    @NonNull
     public ImageSource tilingEnabled() {
         return tiling(true);
     }
@@ -157,6 +171,7 @@ public final class ImageSource {
      * and tiling cannot be disabled when displaying a region of the source image.
      * @return this instance for chaining.
      */
+    @NonNull
     public ImageSource tilingDisabled() {
         return tiling(false);
     }
@@ -167,6 +182,7 @@ public final class ImageSource {
      * @param tile whether tiling should be enabled.
      * @return this instance for chaining.
      */
+    @NonNull
     public ImageSource tiling(boolean tile) {
         this.tile = tile;
         return this;
@@ -178,6 +194,7 @@ public final class ImageSource {
      * @param sRegion the region of the source image to be displayed.
      * @return this instance for chaining.
      */
+    @NonNull
     public ImageSource region(Rect sRegion) {
         this.sRegion = sRegion;
         setInvariants();
@@ -192,6 +209,7 @@ public final class ImageSource {
      * @param sHeight height of the source image.
      * @return this instance for chaining.
      */
+    @NonNull
     public ImageSource dimensions(int sWidth, int sHeight) {
         if (bitmap == null) {
             this.sWidth = sWidth;

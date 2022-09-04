@@ -2,9 +2,8 @@ package com.davemorrissey.labs.subscaleview.decoder;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.Point;
-import android.graphics.Rect;
 import android.net.Uri;
+import android.support.annotation.NonNull;
 
 /**
  * Interface for image decoding classes, allowing the default {@link android.graphics.BitmapFactory}
@@ -26,6 +25,6 @@ public interface ImageDecoder {
      * @return the decoded bitmap
      * @throws Exception if decoding fails.
      */
-    Bitmap decode(Context context, Uri uri) throws Exception;
+    @NonNull Bitmap decode(Context context, @NonNull Uri uri) throws Exception;
 
 }

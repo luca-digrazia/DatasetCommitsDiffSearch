@@ -14,15 +14,15 @@ import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
 import android.graphics.RectF;
-import androidx.annotation.Nullable;
-import androidx.exifinterface.media.ExifInterface;
+import android.support.annotation.Nullable;
+import android.support.media.ExifInterface;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Handler;
 import android.os.Message;
 import android.provider.MediaStore;
-import androidx.annotation.AnyThread;
-import androidx.annotation.NonNull;
+import android.support.annotation.AnyThread;
+import android.support.annotation.NonNull;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.Log;
@@ -1080,7 +1080,7 @@ public class SubsamplingScaleImageView extends View {
                 }
             }
 
-        } else if (bitmap != null && !bitmap.isRecycled()) {
+        } else if (bitmap != null) {
 
             float xScale = scale, yScale = scale;
             if (bitmapIsPreview) {
