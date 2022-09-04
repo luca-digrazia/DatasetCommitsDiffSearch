@@ -48,11 +48,11 @@ public class ProcessBufferProcessor implements EventHandler<LogMessageEvent> {
 
         LOG.debug("Starting to process message <" + msg.getId() + ">.");
 
-        for (Class<? extends MessageFilter> filterType : server.getFilters()) {
+        for (Class filterType : server.getFilters()) {
             try {
                 // Always create a new instance of this filter.
-                MessageFilter filter = filterType.newInstance();
-
+                MessageFilter filter = (MessageFilter) filterType.newInstance();
+      
                 String name = filterType.getSimpleName();
                 LOG.debug("Applying filter [" + name +"] on message <" + msg.getId() + ">.");
 
