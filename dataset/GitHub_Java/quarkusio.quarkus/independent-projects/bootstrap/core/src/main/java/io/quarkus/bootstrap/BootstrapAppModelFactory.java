@@ -257,27 +257,14 @@ public class BootstrapAppModelFactory {
 
         try {
             Path cachedCpPath = null;
-
             if (workspace != null && enableClasspathCache) {
                 cachedCpPath = resolveCachedCpPath(localProject);
-                if (Files.exists(cachedCpPath)
-                        && workspace.getLastModified() < Files.getLastModifiedTime(cachedCpPath).toMillis()) {
+                if (Files.exists(cachedCpPath)) {
                     try (DataInputStream reader = new DataInputStream(Files.newInputStream(cachedCpPath))) {
                         if (reader.readInt() == CP_CACHE_FORMAT_ID) {
                             if (reader.readInt() == workspace.getId()) {
                                 ObjectInputStream in = new ObjectInputStream(reader);
-                                AppModel appModel = (AppModel) in.readObject();
-                                for (AppDependency i : appModel.getFullDeploymentDeps()) {
-                                    if (!Files.exists(i.getArtifact().getPath())) {
-                                        throw new IOException("Cached artifact does not exist: " + i.getArtifact().getPath());
-                                    }
-                                }
-                                for (AppDependency i : appModel.getUserDependencies()) {
-                                    if (!Files.exists(i.getArtifact().getPath())) {
-                                        throw new IOException("Cached artifact does not exist: " + i.getArtifact().getPath());
-                                    }
-                                }
-                                return new CurationResult(appModel);
+                                return new CurationResult((AppModel) in.readObject());
                             } else {
                                 debug("Cached deployment classpath has expired for %s", appArtifact);
                             }
