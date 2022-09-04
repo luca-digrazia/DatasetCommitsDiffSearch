@@ -73,7 +73,7 @@ public class ShamrockJaegerMetricsFactory implements MetricsFactory {
       };
     }
 
-    static Metadata meta(final String name, final Map<String, String> tags, MetricType type) {
+    static Metadata meta(String name, final Map<String, String> tags, MetricType type) {
       Metadata meta = new Metadata(name, type);
       meta.setDisplayName(name);
       meta.setUnit("none");
