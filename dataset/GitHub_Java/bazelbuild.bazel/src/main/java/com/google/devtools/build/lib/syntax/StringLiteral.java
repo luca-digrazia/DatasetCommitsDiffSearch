@@ -13,34 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.lib.syntax;
 
-import java.io.IOException;
-
 /**
  * Syntax node for a string literal.
  */
-public final class StringLiteral extends Expression {
-  String value;
-
-  public String getValue() {
-    return value;
-  }
-
-  @Override
-  Object doEval(Environment env) {
-    return value;
-  }
+public final class StringLiteral extends Literal<String> {
 
   public StringLiteral(String value) {
-    this.value = value;
+    super(value);
   }
 
   @Override
-  public void prettyPrint(Appendable buffer) throws IOException {
-    buffer.append(Printer.repr(value));
+  public String toString() {
+    return Printer.repr(value);
   }
 
   @Override
   public void accept(SyntaxTreeVisitor visitor) {
     visitor.visit(this);
+  }
+
+  @Override
+  void validate(ValidationEnvironment env) throws EvalException {
   }
 }
