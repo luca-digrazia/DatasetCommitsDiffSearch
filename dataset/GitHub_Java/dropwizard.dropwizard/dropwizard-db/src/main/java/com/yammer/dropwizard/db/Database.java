@@ -30,7 +30,6 @@ public class Database extends DBI implements Managed {
         setSQLLog(new Log4JLog(LOGGER, Level.TRACE));
         setTimingCollector(new MetricsTimingCollector(Metrics.defaultRegistry()));
         setStatementRewriter(new NamePrependingStatementRewriter());
-        setStatementLocator(new ScopedStatementLocator());
     }
 
     @Override

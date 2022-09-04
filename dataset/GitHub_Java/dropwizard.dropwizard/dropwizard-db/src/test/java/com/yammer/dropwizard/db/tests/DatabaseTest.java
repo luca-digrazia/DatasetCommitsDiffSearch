@@ -1,6 +1,5 @@
 package com.yammer.dropwizard.db.tests;
 
-import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.yammer.dropwizard.config.Environment;
 import com.yammer.dropwizard.config.LoggingFactory;
@@ -90,16 +89,5 @@ public class DatabaseTest {
         final Database db = factory.build("hsql", environment);
 
         verify(environment).manage(db);
-    }
-
-    @Test
-    public void sqlObjectsCanReturnImmutableLists() throws Exception {
-        final PersonDAO dao = database.open(PersonDAO.class);
-        try {
-            assertThat(dao.findByName(Optional.of("Coda Hale")),
-                       is("Coda Hale"));
-        } finally {
-            database.close(dao);
-        }
     }
 }
