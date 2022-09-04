@@ -16,7 +16,6 @@
  */
 package org.graylog2.inputs.codecs;
 
-import com.eaio.uuid.UUID;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -25,12 +24,9 @@ import org.apache.commons.lang3.StringUtils;
 import org.graylog2.inputs.codecs.gelf.GELFMessage;
 import org.graylog2.inputs.transports.TcpTransport;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
-import org.graylog2.plugin.configuration.fields.ConfigurationField;
-import org.graylog2.plugin.configuration.fields.NumberField;
 import org.graylog2.plugin.inputs.annotations.Codec;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
 import org.graylog2.plugin.inputs.annotations.FactoryClass;
@@ -51,19 +47,16 @@ import java.util.Map;
 @Codec(name = "gelf", displayName = "GELF")
 public class GelfCodec extends AbstractCodec {
     private static final Logger log = LoggerFactory.getLogger(GelfCodec.class);
-    private static final String CK_DECOMPRESS_SIZE_LIMIT = "decompress_size_limit";
-    private static final int DEFAULT_DECOMPRESS_SIZE_LIMIT = 8388608;
 
     private final GelfChunkAggregator aggregator;
     private final ObjectMapper objectMapper;
-    private final long decompressSizeLimit;
 
     @Inject
     public GelfCodec(@Assisted Configuration configuration, GelfChunkAggregator aggregator) {
         super(configuration);
         this.aggregator = aggregator;
-        this.objectMapper = new ObjectMapper().enable(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS);
-        this.decompressSizeLimit = configuration.getInt(CK_DECOMPRESS_SIZE_LIMIT, DEFAULT_DECOMPRESS_SIZE_LIMIT);
+        this.objectMapper = new ObjectMapper();
+        objectMapper.configure(JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true);
     }
 
     private static String stringValue(final JsonNode json, final String fieldName) {
@@ -114,7 +107,7 @@ public class GelfCodec extends AbstractCodec {
     @Override
     public Message decode(@Nonnull final RawMessage rawMessage) {
         final GELFMessage gelfMessage = new GELFMessage(rawMessage.getPayload(), rawMessage.getRemoteAddress());
-        final String json = gelfMessage.getJSON(decompressSizeLimit);
+        final String json = gelfMessage.getJSON();
 
         final JsonNode node;
 
@@ -126,10 +119,8 @@ public class GelfCodec extends AbstractCodec {
             throw new IllegalStateException("JSON is null/could not be parsed (invalid JSON)", e);
         }
 
-        validateGELFMessage(node, rawMessage.getId(), rawMessage.getRemoteAddress());
-
         // Timestamp.
-        final double messageTimestamp = doubleValue(node, Message.FIELD_TIMESTAMP);
+        final double messageTimestamp = doubleValue(node, "timestamp");
         final DateTime timestamp;
         if (messageTimestamp <= 0) {
             timestamp = rawMessage.getTimestamp();
@@ -144,7 +135,7 @@ public class GelfCodec extends AbstractCodec {
                 timestamp
         );
 
-        message.addField(Message.FIELD_FULL_MESSAGE, stringValue(node, "full_message"));
+        message.addField("full_message", stringValue(node, "full_message"));
 
         final String file = stringValue(node, "file");
 
@@ -164,7 +155,7 @@ public class GelfCodec extends AbstractCodec {
         }
 
         // Facility is set by server if not specified by client.
-        final String facility = stringValue(node, "facility");
+        final String facility = stringValue(node, ("facility"));
         if (facility != null && !facility.isEmpty()) {
             message.addField("facility", facility);
         }
@@ -187,12 +178,12 @@ public class GelfCodec extends AbstractCodec {
             }
 
             // We already set short_message and host as message and source. Do not add as fields again.
-            if ("short_message".equals(key) || "host".equals(key)) {
+            if (key.equals("short_message") || key.equals("host")) {
                 continue;
             }
 
             // Skip standard or already set fields.
-            if (message.getField(key) != null || Message.RESERVED_FIELDS.contains(key) && !Message.RESERVED_SETTABLE_FIELDS.contains(key)) {
+            if (message.getField(key) != null || (Message.RESERVED_FIELDS.contains(key) && !Message.RESERVED_SETTABLE_FIELDS.contains(key))) {
                 continue;
             }
 
@@ -222,47 +213,6 @@ public class GelfCodec extends AbstractCodec {
         return message;
     }
 
-    private void validateGELFMessage(JsonNode jsonNode, UUID id, ResolvableInetSocketAddress remoteAddress) {
-        final String prefix = "GELF message <" + id + "> " + (remoteAddress == null ? "" : "(received from <" + remoteAddress + ">) ");
-
-        final JsonNode hostNode = jsonNode.path("host");
-        if (hostNode.isMissingNode()) {
-            log.warn(prefix + "is missing mandatory \"host\" field.");
-        } else {
-            if (!hostNode.isTextual()) {
-                throw new IllegalArgumentException(prefix + "has invalid \"host\": " + hostNode.asText());
-            }
-            if (StringUtils.isBlank(hostNode.asText())) {
-                throw new IllegalArgumentException(prefix + "has empty mandatory \"host\" field.");
-            }
-        }
-
-        final JsonNode shortMessageNode = jsonNode.path("short_message");
-        final JsonNode messageNode = jsonNode.path("message");
-        if (!shortMessageNode.isMissingNode()) {
-            if (!shortMessageNode.isTextual()) {
-                throw new IllegalArgumentException(prefix + "has invalid \"short_message\": " + shortMessageNode.asText());
-            }
-            if (StringUtils.isBlank(shortMessageNode.asText())) {
-                throw new IllegalArgumentException(prefix + "has empty mandatory \"short_message\" field.");
-            }
-        } else if (!messageNode.isMissingNode()) {
-            if (!messageNode.isTextual()) {
-                throw new IllegalArgumentException(prefix + "has invalid \"message\": " + messageNode.asText());
-            }
-            if (StringUtils.isBlank(messageNode.asText())) {
-                throw new IllegalArgumentException(prefix + "has empty mandatory \"message\" field.");
-            }
-        } else {
-            throw new IllegalArgumentException(prefix + "is missing mandatory \"short_message\" or \"message\" field.");
-        }
-
-        final JsonNode timestampNode = jsonNode.path("timestamp");
-        if (timestampNode.isValueNode() && !timestampNode.isNumber()) {
-            throw new IllegalArgumentException(prefix + "has invalid \"timestamp\": " + timestampNode.asText());
-        }
-    }
-
     @Nullable
     @Override
     public CodecAggregator getAggregator() {
@@ -276,26 +226,10 @@ public class GelfCodec extends AbstractCodec {
 
         @Override
         Config getConfig();
-
-        @Override
-        Descriptor getDescriptor();
     }
 
     @ConfigClass
     public static class Config extends AbstractCodec.Config {
-        @Override
-        public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest requestedConfiguration = super.getRequestedConfiguration();
-            requestedConfiguration.addField(new NumberField(
-                CK_DECOMPRESS_SIZE_LIMIT,
-                "Decompressed size limit",
-                DEFAULT_DECOMPRESS_SIZE_LIMIT,
-                "The maximum number of bytes after decompression.",
-                ConfigurationField.Optional.OPTIONAL));
-
-            return requestedConfiguration;
-        }
-
         @Override
         public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
             if (cr.containsField(NettyTransport.CK_PORT)) {
@@ -306,13 +240,6 @@ public class GelfCodec extends AbstractCodec {
             if (cr.containsField(TcpTransport.CK_USE_NULL_DELIMITER)) {
                 cr.getField(TcpTransport.CK_USE_NULL_DELIMITER).setDefaultValue(true);
             }
-        }
-    }
-
-    public static class Descriptor extends AbstractCodec.Descriptor {
-        @Inject
-        public Descriptor() {
-            super(GelfCodec.class.getAnnotation(Codec.class).displayName());
         }
     }
 }
