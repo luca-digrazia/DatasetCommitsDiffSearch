@@ -35,7 +35,13 @@ public abstract class Module {
   public abstract String getName();
 
   /** The version of the module. Must be empty iff the module has a {@link NonRegistryOverride}. */
-  public abstract String getVersion();
+  public abstract Version getVersion();
+
+  /**
+   * The compatibility level of the module, which essentially signifies the "major version" of the
+   * module in terms of SemVer.
+   */
+  public abstract int getCompatibilityLevel();
 
   /**
    * The direct dependencies of this module. The key type is the repo name of the dep, and the value
@@ -55,7 +61,10 @@ public abstract class Module {
 
   /** Returns a new, empty {@link Builder}. */
   public static Builder builder() {
-    return new AutoValue_Module.Builder();
+    return new AutoValue_Module.Builder()
+        .setName("")
+        .setVersion(Version.EMPTY)
+        .setCompatibilityLevel(0);
   }
 
   /**
@@ -73,9 +82,14 @@ public abstract class Module {
   /** Builder type for {@link Module}. */
   @AutoValue.Builder
   public abstract static class Builder {
+    /** Optional; defaults to the empty string. */
     public abstract Builder setName(String value);
 
-    public abstract Builder setVersion(String value);
+    /** Optional; defaults to {@link Version#EMPTY}. */
+    public abstract Builder setVersion(Version value);
+
+    /** Optional; defaults to {@code 0}. */
+    public abstract Builder setCompatibilityLevel(int value);
 
     public abstract Builder setDeps(ImmutableMap<String, ModuleKey> value);
 
