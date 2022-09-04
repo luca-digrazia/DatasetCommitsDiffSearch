@@ -48,7 +48,6 @@ import io.quarkus.bootstrap.model.AppDependency;
 import io.quarkus.deployment.util.FileUtil;
 import io.quarkus.test.common.PathTestHelper;
 import io.quarkus.test.common.RestAssuredURLManager;
-import io.quarkus.test.common.TestResourceManager;
 import io.quarkus.utilities.JavaBinFinder;
 
 /**
@@ -96,9 +95,6 @@ public class QuarkusProdModeTest
     private Optional<Field> logfileField = Optional.empty();
     private List<AppArtifact> forcedDependencies = Collections.emptyList();
     private InMemoryLogHandler inMemoryLogHandler = new InMemoryLogHandler((r) -> false);
-    private boolean expectExit;
-    private String startupConsoleOutput;
-    private int exitCode;
 
     public Supplier<JavaArchive> getArchiveProducer() {
         return archiveProducer;
@@ -174,31 +170,7 @@ public class QuarkusProdModeTest
      */
     public QuarkusProdModeTest setForcedDependencies(List<AppArtifact> forcedDependencies) {
         this.forcedDependencies = forcedDependencies;
-
         return this;
-    }
-
-    /**
-     * If this is true then the Quarkus application is expected to exit immediately (i.e. is a command mode app)
-     */
-    public QuarkusProdModeTest setExpectExit(boolean expectExit) {
-        this.expectExit = expectExit;
-        return this;
-    }
-
-    /**
-     * Returns the console output from startup. If {@link #expectExit} is true then this will contain
-     * all the console output.
-     */
-    public String getStartupConsoleOutput() {
-        return startupConsoleOutput;
-    }
-
-    /**
-     * Returns the process exit code, this can only be used if {@link #expectExit} is true
-     */
-    public int getExitCode() {
-        return exitCode;
     }
 
     private void exportArchive(Path deploymentDir, Class<?> testClass) {
@@ -258,19 +230,6 @@ public class QuarkusProdModeTest
             }
         };
         timeoutTimer.schedule(timeoutTask, 1000 * 60 * 5);
-
-        ExtensionContext.Store store = extensionContext.getRoot().getStore(ExtensionContext.Namespace.GLOBAL);
-        if (store.get(TestResourceManager.class.getName()) == null) {
-            TestResourceManager manager = new TestResourceManager(extensionContext.getRequiredTestClass());
-            manager.start();
-            store.put(TestResourceManager.class.getName(), new ExtensionContext.Store.CloseableResource() {
-
-                @Override
-                public void close() throws Throwable {
-                    manager.close();
-                }
-            });
-        }
 
         Class<?> testClass = extensionContext.getRequiredTestClass();
 
@@ -391,33 +350,19 @@ public class QuarkusProdModeTest
 
     private void ensureApplicationStartupOrFailure() throws IOException {
         BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8));
-        StringBuilder sb = new StringBuilder();
         while (true) {
+            if (!process.isAlive()) {
+                in.close();
+                throw new RuntimeException(
+                        "The produced jar could not be launched. Consult the above output for the exact cause.");
+            }
             String line = in.readLine();
             if (line != null) {
                 System.out.println(line);
-                sb.append(line);
-                sb.append("\n");
-                if (!expectExit && line.contains(EXPECTED_OUTPUT_FROM_SUCCESSFULLY_STARTED)) {
+                if (line.contains(EXPECTED_OUTPUT_FROM_SUCCESSFULLY_STARTED)) {
                     in.close();
-                    this.startupConsoleOutput = sb.toString();
                     break;
                 }
-            } else {
-                //process has exited
-                this.startupConsoleOutput = sb.toString();
-                in.close();
-                try {
-                    process.waitFor();
-                } catch (InterruptedException e) {
-                    throw new RuntimeException(e);
-                }
-                exitCode = process.exitValue();
-                if (expectExit) {
-                    return;
-                }
-                throw new RuntimeException(
-                        "The produced jar could not be launched. Consult the above output for the exact cause.");
             }
         }
     }
