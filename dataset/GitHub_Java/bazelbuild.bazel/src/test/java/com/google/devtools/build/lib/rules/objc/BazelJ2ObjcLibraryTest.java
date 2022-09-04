@@ -109,7 +109,7 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
     useConfiguration(
         "--proto_toolchain_for_java=//tools/proto/toolchains:java",
         "--incompatible_objc_compile_info_migration=false");
-    setBuildLanguageOptions("--incompatible_objc_provider_remove_compile_info=false");
+    setStarlarkSemanticsOptions("--incompatible_objc_provider_remove_compile_info=false");
     testJ2ObjCInformationExportedFromJ2ObjcLibrary();
   }
 
@@ -841,8 +841,10 @@ public class BazelJ2ObjcLibraryTest extends J2ObjcLibraryTest {
         (UmbrellaHeaderAction) getGeneratingAction(umbrellaHeader);
     Artifact headers = getFirstArtifactEndingWith(provider.header(), "header_files");
 
-    // Test that the module map action contains the header tree artifact as public header.
+    // Test that the module map action contains the header tree artifact as both the public header
+    // and part of the action inputs.
     assertThat(moduleMapAction.getPublicHeaders()).contains(headers);
+    assertThat(moduleMapAction.getInputs().toList()).contains(headers);
 
     ActionExecutionContext dummyActionExecutionContext =
         new ActionExecutionContext(
