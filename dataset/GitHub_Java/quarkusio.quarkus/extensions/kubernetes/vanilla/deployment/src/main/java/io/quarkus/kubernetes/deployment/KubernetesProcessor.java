@@ -82,6 +82,7 @@ import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationInfoBuildItem;
+import io.quarkus.deployment.builditem.ArchiveRootBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedFileSystemResourceBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
@@ -159,6 +160,7 @@ class KubernetesProcessor {
 
     @BuildStep(onlyIf = IsNormal.class)
     public void build(ApplicationInfoBuildItem applicationInfo,
+            ArchiveRootBuildItem archiveRoot,
             OutputTargetBuildItem outputTarget,
             PackageConfig packageConfig,
             KubernetesConfig kubernetesConfig,
@@ -194,7 +196,7 @@ class KubernetesProcessor {
                 .map(KubernetesDeploymentTargetBuildItem::getName)
                 .collect(Collectors.toSet());
 
-        Path artifactPath = outputTarget.getOutputDirectory().resolve(
+        Path artifactPath = archiveRoot.getArchiveRoot().resolve(
                 String.format(OUTPUT_ARTIFACT_FORMAT, outputTarget.getBaseName(), packageConfig.runnerSuffix));
 
         final Map<String, String> generatedResourcesMap;
