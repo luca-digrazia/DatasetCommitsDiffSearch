@@ -49,6 +49,7 @@ public class ServerStatus {
 
     public enum Capability {
         SERVER,
+        RADIO,
         MASTER,
         LOCALMODE
     }

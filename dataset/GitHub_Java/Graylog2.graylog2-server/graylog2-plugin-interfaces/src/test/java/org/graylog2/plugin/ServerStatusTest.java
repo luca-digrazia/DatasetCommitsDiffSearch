@@ -1,32 +1,36 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * The MIT License
+ * Copyright (c) 2012 Graylog, Inc.
  *
- * This file is part of Graylog2.
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
  *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * The above copyright notice and this permission notice shall be included in
+ * all copies or substantial portions of the Software.
  *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+ * THE SOFTWARE.
  */
-
 package org.graylog2.plugin;
 
 import com.google.common.collect.Sets;
 import com.google.common.eventbus.EventBus;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.joda.time.DateTimeZone;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.testng.annotations.BeforeMethod;
-import org.testng.annotations.Test;
+import org.mockito.runners.MockitoJUnitRunner;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -34,9 +38,17 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.mockito.Mockito.*;
-import static org.testng.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.class)
 public class ServerStatusTest {
     @Mock private BaseConfiguration config;
     @Mock private EventBus eventBus;
@@ -44,12 +56,10 @@ public class ServerStatusTest {
     private ServerStatus status;
     private File tempFile;
 
-    @BeforeMethod
+    @Before
     public void setUp() throws Exception {
         tempFile = File.createTempFile("server-status-test", "node-id");
         tempFile.deleteOnExit();
-
-        MockitoAnnotations.initMocks(this);
 
         when(config.getNodeIdFile()).thenReturn(tempFile.getPath());
 
@@ -68,28 +78,27 @@ public class ServerStatusTest {
 
     @Test
     public void testSetLifecycleRunning() throws Exception {
-        status.setLifecycle(Lifecycle.RUNNING);
+        status.start();
         assertTrue(status.isProcessing());
         verify(eventBus).post(Lifecycle.RUNNING);
     }
 
     @Test
     public void testSetLifecycleUninitialized() throws Exception {
-        status.setLifecycle(Lifecycle.UNINITIALIZED);
         assertFalse(status.isProcessing());
-        verify(eventBus, times(2)).post(Lifecycle.UNINITIALIZED);
+        verify(eventBus, never()).post(Lifecycle.UNINITIALIZED);
     }
 
     @Test
     public void testSetLifecycleStarting() throws Exception {
-        status.setLifecycle(Lifecycle.STARTING);
+        status.initialize();
         assertFalse(status.isProcessing());
         verify(eventBus).post(Lifecycle.STARTING);
     }
 
     @Test
     public void testSetLifecyclePaused() throws Exception {
-        status.setLifecycle(Lifecycle.PAUSED);
+        status.pauseMessageProcessing(false);
         assertFalse(status.isProcessing());
         verify(eventBus).post(Lifecycle.PAUSED);
     }
@@ -115,7 +124,7 @@ public class ServerStatusTest {
         startLatch.await(5, TimeUnit.SECONDS);
         verify(runnable, never()).run();
 
-        status.setLifecycle(Lifecycle.RUNNING);
+        status.start();
 
         stopLatch.await(5, TimeUnit.SECONDS);
         verify(runnable).run();
@@ -144,7 +153,7 @@ public class ServerStatusTest {
         }).start();
 
         startLatch.await(5, TimeUnit.SECONDS);
-        status.setLifecycle(Lifecycle.RUNNING);
+        status.start();
         stopLatch.await(5, TimeUnit.SECONDS);
 
         assertTrue(exceptionCaught.get());
@@ -168,8 +177,8 @@ public class ServerStatusTest {
 
     @Test
     public void testAddCapabilities() throws Exception {
-        assertEquals(status.addCapabilities(ServerStatus.Capability.LOCALMODE, ServerStatus.Capability.STATSMODE), status);
-        assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.LOCALMODE, ServerStatus.Capability.STATSMODE));
+        assertEquals(status.addCapabilities(ServerStatus.Capability.LOCALMODE), status);
+        assertTrue(status.hasCapabilities(ServerStatus.Capability.MASTER, ServerStatus.Capability.LOCALMODE));
     }
 
     @Test
@@ -212,7 +221,7 @@ public class ServerStatusTest {
         assertEquals(status.getLifecycle(), Lifecycle.RUNNING);
     }
 
-    @Test(expectedExceptions = ProcessingPauseLockedException.class)
+    @Test(expected = ProcessingPauseLockedException.class)
     public void testResumeMessageProcessingWithLock() throws Exception {
         status.pauseMessageProcessing(true);
         status.resumeMessageProcessing();
@@ -225,15 +234,6 @@ public class ServerStatusTest {
 
         status.unlockProcessingPause();
         assertFalse(status.processingPauseLocked());
-    }
-
-    @Test
-    public void testSetStatsMode() throws Exception {
-        status.setStatsMode(false);
-        assertFalse(status.hasCapability(ServerStatus.Capability.STATSMODE));
-
-        status.setStatsMode(true);
-        assertTrue(status.hasCapability(ServerStatus.Capability.STATSMODE));
     }
 
     @Test

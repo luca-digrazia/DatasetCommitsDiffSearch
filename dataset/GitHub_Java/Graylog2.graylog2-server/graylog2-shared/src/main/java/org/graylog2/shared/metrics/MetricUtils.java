@@ -168,7 +168,7 @@ public class MetricUtils {
         return new SingleMetricFilter(name);
     }
 
-    public static class SingleMetricFilter implements MetricFilter {
+    private static class SingleMetricFilter implements MetricFilter {
         private final String allowedName;
         public SingleMetricFilter(String allowedName) {
             this.allowedName = allowedName;

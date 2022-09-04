@@ -57,10 +57,10 @@ public class ThroughputResource extends RestResource {
         final SortedMap<String, Gauge> gauges = metricRegistry.getGauges(MetricUtils.filterSingleMetric(
                 GlobalMetricNames.OUTPUT_THROUGHPUT_RATE));
         final Gauge gauge = Iterables.getOnlyElement(gauges.values(), null);
-        if (gauge == null || !(gauge.getValue() instanceof Number)) {
+        if (gauge == null || !(gauge.getValue() instanceof Long)) {
             return Throughput.create(0);
         } else {
-            return Throughput.create(((Number) gauge.getValue()).longValue());
+            return Throughput.create((Long) gauge.getValue());
         }
     }
 }

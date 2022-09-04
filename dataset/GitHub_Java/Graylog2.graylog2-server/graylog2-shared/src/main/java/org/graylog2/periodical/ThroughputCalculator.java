@@ -20,13 +20,14 @@ import com.codahale.metrics.Counter;
 import com.codahale.metrics.Gauge;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.Iterables;
-import org.graylog2.plugin.GlobalMetricNames;
 import org.graylog2.plugin.periodical.Periodical;
+import org.graylog2.plugin.GlobalMetricNames;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
 import java.util.SortedMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static org.graylog2.shared.metrics.MetricUtils.filterSingleMetric;
 
@@ -35,9 +36,9 @@ public class ThroughputCalculator extends Periodical {
 
     private final MetricRegistry metricRegistry;
     private long prevOutputCount = 0;
-    private volatile long outputCountAvgLastSecond = 0L;
+    private final AtomicLong outputCountAvgLastSecond = new AtomicLong(0);
     private long prevInputCount = 0;
-    private volatile long inputCountAvgLastSecond = 0L;
+    private AtomicLong inputCountAvgLastSecond = new AtomicLong(0);
 
     @Inject
     public ThroughputCalculator(MetricRegistry metricRegistry) {
@@ -46,14 +47,14 @@ public class ThroughputCalculator extends Periodical {
             metricRegistry.register(GlobalMetricNames.OUTPUT_THROUGHPUT_RATE, new Gauge<Long>() {
                 @Override
                 public Long getValue() {
-                    return outputCountAvgLastSecond;
+                    return outputCountAvgLastSecond.get();
                 }
             });
 
             metricRegistry.register(GlobalMetricNames.INPUT_THROUGHPUT_RATE, new Gauge<Long>() {
                 @Override
                 public Long getValue() {
-                    return inputCountAvgLastSecond;
+                    return inputCountAvgLastSecond.get();
                 }
             });
 
@@ -113,7 +114,7 @@ public class ThroughputCalculator extends Periodical {
             log.debug("Could not find throughput meter '{}'. Trying again later.", GlobalMetricNames.OUTPUT_THROUGHPUT);
         } else {
             final long currentOutputThroughput = outputThroughput.getCount();
-            outputCountAvgLastSecond = currentOutputThroughput - prevOutputCount;
+            outputCountAvgLastSecond.set(currentOutputThroughput - prevOutputCount);
             prevOutputCount = currentOutputThroughput;
         }
 
@@ -127,7 +128,7 @@ public class ThroughputCalculator extends Periodical {
             log.debug("Could not find throughput meter '{}'. Trying again later.", GlobalMetricNames.INPUT_THROUGHPUT);
         } else {
             final long currentInputThroughput = inputThroughput.getCount();
-            inputCountAvgLastSecond = currentInputThroughput - prevInputCount;
+            inputCountAvgLastSecond.set(currentInputThroughput - prevInputCount);
             prevInputCount = currentInputThroughput;
         }
     }
