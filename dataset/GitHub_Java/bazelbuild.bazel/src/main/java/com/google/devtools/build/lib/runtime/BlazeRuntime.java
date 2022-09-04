@@ -34,7 +34,6 @@ import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.OutputFilter;
 import com.google.devtools.build.lib.flags.CommandNameCache;
-import com.google.devtools.build.lib.flags.InvocationPolicyParser;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
@@ -194,7 +193,7 @@ public final class BlazeRuntime {
     this.pathToUriConverter = pathToUriConverter;
   }
 
-  public BlazeWorkspace initWorkspace(BlazeDirectories directories, BinTools binTools)
+  public void initWorkspace(BlazeDirectories directories, BinTools binTools)
       throws AbruptExitException {
     Preconditions.checkState(this.workspace == null);
     WorkspaceBuilder builder = new WorkspaceBuilder(directories, binTools);
@@ -203,7 +202,6 @@ public final class BlazeRuntime {
     }
     this.workspace = builder.build(
         this, packageFactory, ruleClassProvider, getProductName(), eventBusExceptionHandler);
-    return workspace;
   }
 
   @Nullable public CoverageReportActionFactory getCoverageReportActionFactory(
@@ -238,6 +236,16 @@ public final class BlazeRuntime {
     for (BlazeCommand command : commands) {
       addCommand(command);
     }
+  }
+
+  /**
+   * Initializes a CommandEnvironment to execute a command in this server.
+   *
+   * <p>This method should be called from the "main" thread on which the command will execute;
+   * that thread will receive interruptions if a module requests an early exit.
+   */
+  public CommandEnvironment initCommand() {
+    return workspace.initCommand();
   }
 
   @Nullable
@@ -739,17 +747,13 @@ public final class BlazeRuntime {
             + commandLineOptions.getStartupArgs());
 
     BlazeRuntime runtime;
-    InvocationPolicy policy;
     try {
       runtime = newRuntime(modules, commandLineOptions.getStartupArgs(), null);
-      policy = InvocationPolicyParser.parsePolicy(
-          runtime.getStartupOptionsProvider().getOptions(BlazeServerStartupOptions.class)
-              .invocationPolicy);
     } catch (OptionsParsingException e) {
-      OutErr.SYSTEM_OUT_ERR.printErrLn(e.getMessage());
+      OutErr.SYSTEM_OUT_ERR.printErr(e.getMessage());
       return ExitCode.COMMAND_LINE_ERROR.getNumericExitCode();
     } catch (AbruptExitException e) {
-      OutErr.SYSTEM_OUT_ERR.printErrLn(e.getMessage());
+      OutErr.SYSTEM_OUT_ERR.printErr(e.getMessage());
       return e.getExitCode().getNumericExitCode();
     }
 
@@ -757,7 +761,7 @@ public final class BlazeRuntime {
 
     try {
       LOG.info(getRequestLogString(commandLineOptions.getOtherArgs()));
-      return dispatcher.exec(policy, commandLineOptions.getOtherArgs(), OutErr.SYSTEM_OUT_ERR,
+      return dispatcher.exec(commandLineOptions.getOtherArgs(), OutErr.SYSTEM_OUT_ERR,
           LockingMode.ERROR_OUT, "batch client", runtime.getClock().currentTimeMillis());
     } catch (BlazeCommandDispatcher.ShutdownBlazeServerException e) {
       return e.getExitStatus();
@@ -1012,8 +1016,9 @@ public final class BlazeRuntime {
           ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
     }
     runtime.initWorkspace(directories, binTools);
-    CustomExitCodePublisher.setAbruptExitStatusFileDir(serverDirectories.getOutputBase());
-
+    if (startupOptions.useCustomExitCodeOnAbruptExit) {
+      CustomExitCodePublisher.setAbruptExitStatusFileDir(serverDirectories.getOutputBase());
+    }
     AutoProfiler.setClock(runtime.getClock());
     BugReport.setRuntime(runtime);
     return runtime;
