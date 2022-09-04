@@ -1084,9 +1084,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
 
     /** Returns a {@link CustomCommandLine.Builder} for executable arguments. */
     public CustomCommandLine.Builder executableArguments() {
-      if (executableArgs == null) {
-        executableArgs = CustomCommandLine.builder();
-      }
+      Preconditions.checkState(executableArgs != null);
       return this.executableArgs;
     }
 
