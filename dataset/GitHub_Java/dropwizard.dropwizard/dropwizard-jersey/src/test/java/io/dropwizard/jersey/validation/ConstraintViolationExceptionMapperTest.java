@@ -1,30 +1,29 @@
-    package io.dropwizard.jersey.validation;
+package io.dropwizard.jersey.validation;
 
-    import com.codahale.metrics.MetricRegistry;
-    import io.dropwizard.jersey.AbstractJerseyTest;
-    import io.dropwizard.jersey.DropwizardResourceConfig;
-    import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.Example;
-    import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.ListExample;
-    import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.PartialExample;
-    import org.junit.AfterClass;
-    import org.junit.BeforeClass;
-    import org.junit.Test;
+import com.codahale.metrics.MetricRegistry;
+import io.dropwizard.jersey.AbstractJerseyTest;
+import io.dropwizard.jersey.DropwizardResourceConfig;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.Example;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.ListExample;
+import io.dropwizard.jersey.jackson.JacksonMessageBodyProviderTest.PartialExample;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
+import org.junit.Test;
 
-    import javax.ws.rs.client.Entity;
-    import javax.ws.rs.core.Application;
-    import javax.ws.rs.core.Form;
-    import javax.ws.rs.core.GenericType;
-    import javax.ws.rs.core.MediaType;
-    import javax.ws.rs.core.Response;
-    import java.util.Collection;
-    import java.util.List;
-    import java.util.Locale;
-    import java.util.Map;
+import javax.ws.rs.client.Entity;
+import javax.ws.rs.core.Application;
+import javax.ws.rs.core.Form;
+import javax.ws.rs.core.GenericType;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
+import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
-    import static java.util.Objects.requireNonNull;
-    import static org.assertj.core.api.Assertions.assertThat;
-    import static org.hamcrest.CoreMatchers.is;
-    import static org.junit.Assume.assumeThat;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.CoreMatchers.is;
+import static org.junit.Assume.assumeThat;
 
 public class ConstraintViolationExceptionMapperTest extends AbstractJerseyTest {
 
@@ -373,16 +372,6 @@ public class ConstraintViolationExceptionMapperTest extends AbstractJerseyTest {
     }
 
     @Test
-    public void invalidNullPartialValidatedRequestEntities() {
-        final Response response = target("/valid/validatedPartialExample")
-            .request().post(Entity.json(null));
-
-        assertThat(response.getStatus()).isEqualTo(422);
-        assertThat(response.readEntity(String.class))
-            .isEqualTo("{\"errors\":[\"The request body may not be null\"]}");
-    }
-
-    @Test
     public void invalidEntityExceptionForPartialValidatedRequestEntities() {
         final Response response = target("/valid/validatedPartialExampleBoth")
                 .request().post(Entity.json("{\"id\":1}"));
@@ -390,16 +379,6 @@ public class ConstraintViolationExceptionMapperTest extends AbstractJerseyTest {
         assertThat(response.getStatus()).isEqualTo(422);
         assertThat(response.readEntity(String.class))
                 .isEqualTo("{\"errors\":[\"text may not be null\"]}");
-    }
-
-    @Test
-    public void invalidNullPartialBothValidatedRequestEntities() {
-        final Response response = target("/valid/validatedPartialExampleBoth")
-            .request().post(Entity.json(null));
-
-        assertThat(response.getStatus()).isEqualTo(422);
-        assertThat(response.readEntity(String.class))
-            .isEqualTo("{\"errors\":[\"The request body may not be null\"]}");
     }
 
     @Test
@@ -526,8 +505,8 @@ public class ConstraintViolationExceptionMapperTest extends AbstractJerseyTest {
 
         Map<String, Example> map = response.readEntity(new GenericType<Map<String, Example>>() {
         });
-        assertThat(requireNonNull(map.get("one")).id).isEqualTo(1);
-        assertThat(requireNonNull(map.get("two")).id).isEqualTo(2);
+        assertThat(map.get("one").id).isEqualTo(1);
+        assertThat(map.get("two").id).isEqualTo(2);
     }
 
     @Test
@@ -626,25 +605,6 @@ public class ConstraintViolationExceptionMapperTest extends AbstractJerseyTest {
             .request()
             .get();
         assertThat(response.getStatus()).isEqualTo(200);
-    }
-
-    @Test
-    public void minCustomMessage() {
-        final Response response = target("/valid/messageValidation")
-            .queryParam("length", 1)
-            .request()
-            .get();
-        assertThat(response.getStatus()).isEqualTo(400);
-        assertThat(response.readEntity(String.class))
-            .containsOnlyOnce("query param length The value 1 is less then 2");
-
-        final Response response2 = target("/valid/messageValidation")
-            .queryParam("length", 0)
-            .request()
-            .get();
-        assertThat(response2.getStatus()).isEqualTo(400);
-        assertThat(response2.readEntity(String.class))
-            .containsOnlyOnce("query param length The value 0 is less then 2");
     }
 
     @Test
