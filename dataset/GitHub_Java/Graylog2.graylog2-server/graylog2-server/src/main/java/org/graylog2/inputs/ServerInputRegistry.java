@@ -21,15 +21,15 @@ import com.google.common.collect.Lists;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.ServerStatus;
-import org.graylog2.plugin.buffers.InputBuffer;
 import org.graylog2.plugin.inputs.InputState;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.inputs.MessageInput;
+import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
-import org.graylog2.system.activities.Activity;
-import org.graylog2.system.activities.ActivityWriter;
+import org.graylog2.shared.system.activities.Activity;
+import org.graylog2.shared.system.activities.ActivityWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,13 +43,13 @@ public class ServerInputRegistry extends InputRegistry {
     private final ActivityWriter activityWriter;
 
     public ServerInputRegistry(MessageInputFactory messageInputFactory,
-                               InputBuffer inputBuffer,
+                               ProcessBuffer processBuffer,
                                ServerStatus serverStatus,
                                ActivityWriter activityWriter,
                                InputService inputService,
                                NotificationService notificationService,
                                MetricRegistry metricRegistry) {
-        super(messageInputFactory, inputBuffer, metricRegistry);
+        super(messageInputFactory, processBuffer, metricRegistry);
         this.serverStatus = serverStatus;
         this.activityWriter = activityWriter;
         this.inputService = inputService;

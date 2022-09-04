@@ -19,6 +19,7 @@ package org.graylog2.restclient.models.dashboards.widgets;
 import com.google.common.collect.Maps;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
 import org.graylog2.restclient.models.dashboards.Dashboard;
+import play.mvc.Call;
 
 import java.util.Map;
 
@@ -39,7 +40,7 @@ public class SearchResultCountWidget extends DashboardWidget {
     }
 
     public SearchResultCountWidget(Dashboard dashboard, String query, TimeRange timerange, String description) {
-        this(dashboard, query, timerange, description, false, 0, "");
+        this(dashboard, query, timerange, description, false, -1, null);
     }
 
     public SearchResultCountWidget(Dashboard dashboard, String id, String description, int cacheTime, String query, TimeRange timerange, boolean trend, int intervalAmount, String intervalUnit, String creatorUserId) {
@@ -56,8 +57,8 @@ public class SearchResultCountWidget extends DashboardWidget {
         config.putAll(getTimerange().getQueryParams());
         config.put("query", getQuery());
         config.put("trend", trend);
-        config.put("interval_amount", intervalAmount);
-        config.put("interval_unit", intervalUnit);
+        config.put("intervalAmount", intervalAmount);
+        config.put("intervalUnit", intervalUnit);
 
         return config;
     }

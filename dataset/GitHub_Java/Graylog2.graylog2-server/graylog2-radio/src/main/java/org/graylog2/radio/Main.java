@@ -24,12 +24,10 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.ParameterException;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
-import com.github.joschi.jadconfig.guice.NamedConfigParametersModule;
 import com.github.joschi.jadconfig.jodatime.JodaTimeConverterFactory;
 import com.github.joschi.jadconfig.repositories.EnvironmentRepository;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
 import com.github.joschi.jadconfig.repositories.SystemPropertiesRepository;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Injector;
@@ -77,7 +75,6 @@ public class Main extends NodeRunner {
     private static final String profileName = "Radio";
 
     private static final Version version = Version.CURRENT_CLASSPATH;
-    private static final Configuration configuration = new Configuration();
 
     /**
      * @param args the command line arguments
@@ -111,7 +108,7 @@ public class Main extends NodeRunner {
 
         final JadConfig jadConfig = new JadConfig();
         jadConfig.addConverterFactory(new JodaTimeConverterFactory());
-        final NamedConfigParametersModule configModule = readConfiguration(jadConfig, commandLineArguments.getConfigFile());
+        final Configuration configuration = readConfiguration(jadConfig, commandLineArguments.getConfigFile());
 
         if (commandLineArguments.isDumpConfig()) {
             System.out.println(dumpConfiguration(jadConfig.dump()));
@@ -134,7 +131,7 @@ public class Main extends NodeRunner {
 
         LOG.debug("Loaded modules: " + pluginModules);
 
-        final Injector injector = setupInjector(configModule, pluginModules);
+        final Injector injector = setupInjector(configuration, pluginModules);
 
         if (injector == null) {
             LOG.error("Injector could not be created, exiting! (Please include the previous stacktraces in bug reports.)");
@@ -227,20 +224,15 @@ public class Main extends NodeRunner {
         }
     }
 
-    private static Injector setupInjector(NamedConfigParametersModule configModule, List<PluginModule> pluginModules) {
+    private static Injector setupInjector(Configuration configuration, List<PluginModule> pluginModules) {
         try {
-            final GuiceInstantiationService instantiationService = new GuiceInstantiationService();
-
-            final ImmutableList.Builder<Module> modules = ImmutableList.builder();
-            modules.add(configModule);
-            modules.addAll(
-                    getBindingsModules(instantiationService,
-                            new RadioBindings(configuration),
-                            new RadioInitializerBindings()));
+            GuiceInstantiationService instantiationService = new GuiceInstantiationService();
+            List<Module> bindingsModules = getBindingsModules(instantiationService,
+                    new RadioBindings(configuration),
+                    new RadioInitializerBindings());
             LOG.debug("Adding plugin modules: " + pluginModules);
-            modules.addAll(pluginModules);
-
-            final Injector injector = GuiceInjectorHolder.createInjector(modules.build());
+            bindingsModules.addAll(pluginModules);
+            final Injector injector = GuiceInjectorHolder.createInjector(bindingsModules);
             instantiationService.setInjector(injector);
 
             return injector;
@@ -262,7 +254,9 @@ public class Main extends NodeRunner {
         return sb.toString();
     }
 
-    private static NamedConfigParametersModule readConfiguration(final JadConfig jadConfig, final String configFile) {
+    private static Configuration readConfiguration(final JadConfig jadConfig, final String configFile) {
+        final Configuration configuration = new Configuration();
+
         jadConfig.addConfigurationBean(configuration);
         jadConfig.setRepositories(Arrays.asList(
                 new EnvironmentRepository(ENVIRONMENT_PREFIX),
@@ -286,6 +280,6 @@ public class Main extends NodeRunner {
             LOG.debug("No rest_transport_uri set. Using default [{}].", configuration.getRestTransportUri());
         }
 
-        return new NamedConfigParametersModule(Arrays.asList(configuration));
+        return configuration;
     }
 }

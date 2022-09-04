@@ -17,17 +17,13 @@
 package org.graylog2.rest.resources.system.inputs;
 
 import com.codahale.metrics.annotation.Timed;
-import com.wordnik.swagger.annotations.Api;
-import com.wordnik.swagger.annotations.ApiOperation;
-import com.wordnik.swagger.annotations.ApiParam;
-import com.wordnik.swagger.annotations.ApiResponse;
-import com.wordnik.swagger.annotations.ApiResponses;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
+import org.graylog2.database.*;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.Input;
 import org.graylog2.inputs.InputService;
 import org.graylog2.plugin.Message;
+import com.wordnik.swagger.annotations.*;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.CreateStaticFieldRequest;
@@ -39,20 +35,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.validation.Valid;
-import javax.validation.constraints.NotNull;
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.Consumes;
-import javax.ws.rs.DELETE;
-import javax.ws.rs.POST;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
+import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import java.net.URI;
+import java.io.IOException;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "StaticFields", description = "Static fields of an input")
 @Path("/system/inputs/{inputId}/staticfields")
@@ -77,49 +67,61 @@ public class StaticFieldsResource extends RestResource {
             @ApiResponse(code = 400, message = "Field/Key is reserved."),
             @ApiResponse(code = 400, message = "Missing or invalid configuration.")
     })
-    public Response create(@ApiParam(name = "inputId", required = true)
-                           @PathParam("inputId") String inputId,
-                           @ApiParam(name = "JSON body", required = true)
-                           @Valid @NotNull CreateStaticFieldRequest csfr) throws NotFoundException, ValidationException {
+    public Response create(@ApiParam(name = "JSON body", required = true) String body,
+                           @ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) throws NotFoundException {
+        if (inputId == null || inputId.isEmpty()) {
+            LOG.error("Missing inputId. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
         checkPermission(RestPermissions.INPUTS_EDIT, inputId);
 
-        final MessageInput input = inputs.getRunningInput(inputId);
+        MessageInput input = inputs.getRunningInput(inputId);
 
         if (input == null) {
             LOG.error("Input <{}> not found.", inputId);
-            throw new javax.ws.rs.NotFoundException();
+            throw new WebApplicationException(404);
+        }
+
+        // Build extractor.
+        CreateStaticFieldRequest csfr;
+        try {
+            csfr = objectMapper.readValue(body, CreateStaticFieldRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
         // Check if key is a valid message key.
         if (!Message.validKey(csfr.key)) {
             LOG.error("Invalid key: [{}]", csfr.key);
-            throw new BadRequestException();
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
         if (csfr.key == null || csfr.value == null || csfr.key.isEmpty() || csfr.value.isEmpty()) {
             LOG.error("Missing parameters. Returning HTTP 400.");
-            throw new BadRequestException();
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
         if (Message.RESERVED_FIELDS.contains(csfr.key) && !Message.RESERVED_SETTABLE_FIELDS.contains(csfr.key)) {
             LOG.error("Cannot add static field. Field [{}] is reserved.", csfr.key);
-            throw new BadRequestException();
+            throw new WebApplicationException(Response.Status.BAD_REQUEST);
         }
 
         input.addStaticField(csfr.key, csfr.value);
 
-        final Input mongoInput = inputService.find(input.getPersistId());
-        inputService.addStaticField(mongoInput, csfr.key, csfr.value);
+        Input mongoInput = inputService.find(input.getPersistId());
+        try {
+            inputService.addStaticField(mongoInput, csfr.key, csfr.value);
+        } catch (ValidationException e) {
+            LOG.error("Static field persist validation failed.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
-        final String msg = "Added static field [" + csfr.key + "] to input <" + inputId + ">.";
+        String msg = "Added static field [" + csfr.key + "] to input <" + inputId + ">.";
         LOG.info(msg);
         activityWriter.write(new Activity(msg, StaticFieldsResource.class));
 
-        final URI inputUri = UriBuilder.fromResource(InputsResource.class)
-                .path("{inputId}")
-                .build(mongoInput.getInputId());
-
-        return Response.created(inputUri).build();
+        return Response.status(Response.Status.CREATED).build();
     }
 
     @DELETE
@@ -132,22 +134,24 @@ public class StaticFieldsResource extends RestResource {
             @ApiResponse(code = 404, message = "No such static field.")
     })
     @Path("/{key}")
-    public void delete(@ApiParam(name = "Key", required = true)
-                       @PathParam("key") String key,
-                       @ApiParam(name = "inputId", required = true)
-                       @PathParam("inputId") String inputId) throws NotFoundException {
+    public Response delete(@ApiParam(name = "Key", required = true) @PathParam("key") String key,
+                           @ApiParam(name = "inputId", required = true) @PathParam("inputId") String inputId) throws NotFoundException {
+        if (inputId == null || inputId.isEmpty()) {
+            LOG.error("Missing inputId. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
         checkPermission(RestPermissions.INPUTS_EDIT, inputId);
 
         MessageInput input = inputs.getRunningInput(inputId);
 
         if (input == null) {
             LOG.error("Input <{}> not found.", inputId);
-            throw new javax.ws.rs.NotFoundException();
+            throw new WebApplicationException(404);
         }
 
-        if (!input.getStaticFields().containsKey(key)) {
+        if(!input.getStaticFields().containsKey(key)) {
             LOG.error("No such static field [{}] on input <{}>.", key, inputId);
-            throw new javax.ws.rs.NotFoundException();
+            throw new WebApplicationException(404);
         }
 
         input.getStaticFields().remove(key);
@@ -155,8 +159,12 @@ public class StaticFieldsResource extends RestResource {
         Input mongoInput = inputService.find(input.getPersistId());
         inputService.removeStaticField(mongoInput, key);
 
-        final String msg = "Removed static field [" + key + "] of input <" + inputId + ">.";
+        String msg = "Removed static field [" + key + "] of input <" + inputId + ">.";
         LOG.info(msg);
         activityWriter.write(new Activity(msg, StaticFieldsResource.class));
+
+        return Response.status(Response.Status.NO_CONTENT).build();
     }
+
+
 }

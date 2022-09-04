@@ -25,17 +25,20 @@ import com.google.inject.multibindings.Multibinder;
 import com.google.inject.name.Names;
 import com.google.inject.util.Providers;
 import com.ning.http.client.AsyncHttpClient;
+import org.graylog2.inputs.BasicCache;
+import org.graylog2.inputs.InputCache;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
-import org.graylog2.plugin.BaseConfiguration;
-import org.graylog2.plugin.ServerStatus;
 import org.graylog2.radio.Configuration;
 import org.graylog2.radio.bindings.providers.AsyncHttpClientProvider;
 import org.graylog2.radio.bindings.providers.RadioInputRegistryProvider;
 import org.graylog2.radio.bindings.providers.RadioTransportProvider;
 import org.graylog2.radio.buffers.processors.RadioProcessBufferProcessor;
-import org.graylog2.radio.inputs.InputStateListener;
 import org.graylog2.radio.system.activities.NullActivityWriter;
 import org.graylog2.radio.transports.RadioTransport;
+import org.graylog2.radio.transports.amqp.AMQPProducer;
+import org.graylog2.radio.transports.kafka.KafkaProducer;
+import org.graylog2.plugin.BaseConfiguration;
+import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.bindings.providers.ObjectMapperProvider;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.system.activities.ActivityWriter;
@@ -67,11 +70,6 @@ public class RadioBindings extends AbstractModule {
         bindContainerResponseFilters();
         bindExceptionMappers();
         bind(ActivityWriter.class).to(NullActivityWriter.class);
-        bindEventBusListeners();
-    }
-
-    private void bindEventBusListeners() {
-        bind(InputStateListener.class).asEagerSingleton();
     }
 
     private void bindSingletons() {
@@ -88,10 +86,7 @@ public class RadioBindings extends AbstractModule {
         bind(URI.class).annotatedWith(Names.named("ServerUri")).toInstance(configuration.getGraylog2ServerUri());
         bind(URI.class).annotatedWith(Names.named("OurRadioUri")).toInstance(configuration.getRestTransportUri());
 
-        bind(String[].class).annotatedWith(Names.named("RestControllerPackages")).toInstance(new String[]{
-                "org.graylog2.radio.rest.resources",
-                "org.graylog2.shared.rest.resources"
-        });
+        bind(InputCache.class).to(BasicCache.class).in(Scopes.SINGLETON);
     }
 
     private void bindProviders() {

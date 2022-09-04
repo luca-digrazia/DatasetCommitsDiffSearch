@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog.
+ * This file is part of Graylog2.
  *
- * Graylog is free software: you can redistribute it and/or modify
+ * Graylog2 is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog is distributed in the hope that it will be useful,
+ * Graylog2 is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.indexer.ranges;
 
@@ -30,9 +30,6 @@ import org.graylog2.plugin.ServerStatus;
 import org.graylog2.shared.system.activities.Activity;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.system.jobs.SystemJob;
-import org.joda.time.DateTime;
-import org.joda.time.format.DateTimeFormat;
-import org.joda.time.format.DateTimeFormatter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -145,19 +142,6 @@ public class RebuildIndexRangesJob extends SystemJob {
         return deflectorIndexRange;
     }
 
-    private static int getTimestampOfMessage(SearchHit msg) {
-        Object field = msg.getSource().get("timestamp");
-        if (field == null) {
-            throw new RuntimeException("Document has no field timestamp.");
-        }
-
-        DateTimeFormatter formatter = DateTimeFormat.forPattern(Tools.ES_DATE_FORMAT).withZoneUTC();
-        DateTime dt = formatter.parseDateTime(field.toString());
-
-        return (int) (dt.getMillis() / 1000);
-    }
-
-
     protected Map<String, Object> calculateRange(String index) throws EmptyIndexException {
         Map<String, Object> range = Maps.newHashMap();
 
@@ -168,7 +152,7 @@ public class RebuildIndexRangesJob extends SystemJob {
             throw new EmptyIndexException();
         }
 
-        int rangeStart = getTimestampOfMessage(doc);
+        int rangeStart = Tools.getTimestampOfMessage(doc);
         int took = (int) x.stop().elapsed(TimeUnit.MILLISECONDS);
 
         range.put("index", index);

@@ -21,10 +21,10 @@ import org.graylog2.inputs.InputService;
 import org.graylog2.inputs.ServerInputRegistry;
 import org.graylog2.notifications.NotificationService;
 import org.graylog2.plugin.ServerStatus;
-import org.graylog2.plugin.buffers.InputBuffer;
+import org.graylog2.shared.buffers.ProcessBuffer;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
-import org.graylog2.system.activities.ActivityWriter;
+import org.graylog2.shared.system.activities.ActivityWriter;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -34,14 +34,14 @@ public class ServerInputRegistryProvider implements Provider<InputRegistry> {
 
     @Inject
     public ServerInputRegistryProvider(MessageInputFactory messageInputFactory,
-                                       InputBuffer inputBuffer,
+                                       ProcessBuffer processBuffer,
                                        ServerStatus serverStatus,
                                        ActivityWriter activityWriter,
                                        InputService inputService,
                                        NotificationService notificationService,
                                        MetricRegistry metricRegistry) {
         if (serverInputRegistry == null) {
-            serverInputRegistry = new ServerInputRegistry(messageInputFactory, inputBuffer,
+            serverInputRegistry = new ServerInputRegistry(messageInputFactory, processBuffer,
                     serverStatus, activityWriter, inputService, notificationService, metricRegistry);
         }
     }

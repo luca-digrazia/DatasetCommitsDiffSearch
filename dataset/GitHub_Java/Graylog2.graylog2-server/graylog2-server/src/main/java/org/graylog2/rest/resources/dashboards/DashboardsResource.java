@@ -18,7 +18,6 @@ package org.graylog2.rest.resources.dashboards;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.wordnik.swagger.annotations.Api;
@@ -34,7 +33,6 @@ import org.graylog2.dashboards.DashboardRegistry;
 import org.graylog2.dashboards.DashboardService;
 import org.graylog2.dashboards.widgets.DashboardWidget;
 import org.graylog2.dashboards.widgets.InvalidWidgetConfigurationException;
-import org.graylog2.database.NotFoundException;
 import org.graylog2.database.ValidationException;
 import org.graylog2.indexer.searches.Searches;
 import org.graylog2.indexer.searches.timeranges.InvalidRangeParametersException;
@@ -52,8 +50,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.validation.Valid;
-import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -65,12 +61,14 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriBuilder;
-import java.net.URI;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+/**
+ * @author Lennart Koopmann <lennart@torch.sh>
+ */
 @RequiresAuthentication
 @Api(value = "Dashboards", description = "Manage dashboards")
 @Path("/dashboards")
@@ -105,8 +103,16 @@ public class DashboardsResource extends RestResource {
     @ApiResponses(value = {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
-    public Response create(@ApiParam(name = "JSON body", required = true) CreateRequest cr) throws ValidationException {
+    public Response create(@ApiParam(required = true) String body) {
         restrictToMaster();
+
+        CreateRequest cr;
+        try {
+            cr = objectMapper.readValue(body, CreateRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
         // Create dashboard.
         Map<String, Object> dashboardData = Maps.newHashMap();
@@ -115,43 +121,47 @@ public class DashboardsResource extends RestResource {
         dashboardData.put("creator_user_id", getCurrentUser().getName());
         dashboardData.put("created_at", Tools.iso8601());
 
-        final Dashboard dashboard = new DashboardImpl(dashboardData);
-        final String id = dashboardService.save(dashboard);
+        Dashboard dashboard = new DashboardImpl(dashboardData);
+        String id;
+        try {
+            id = dashboardService.save(dashboard);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
         dashboardRegistry.add(dashboard);
 
-        final Map<String, String> result = ImmutableMap.of("dashboard_id", id);
-        final URI dashboardUri = UriBuilder.fromResource(DashboardsResource.class)
-                .path("{dashboardId}")
-                .build(id);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("dashboard_id", id);
 
-        return Response.created(dashboardUri).entity(result).build();
+        return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "Get a list of all dashboards and all configurations of their widgets.")
     @Produces(MediaType.APPLICATION_JSON)
     @ApiResponses(value = {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
-    public Map<String, Object> list() {
+    public String list() {
         restrictToMaster();
+        List<Map<String, Object>> dashboards = Lists.newArrayList();
 
-        final List<Map<String, Object>> dashboards = Lists.newArrayList();
         for (Dashboard dashboard : dashboardService.all()) {
             if (isPermitted(RestPermissions.DASHBOARDS_READ, dashboard.getId())) {
                 dashboards.add(dashboard.asMap());
             }
         }
 
-        return ImmutableMap.of(
-                "total", dashboards.size(),
-                "dashboards", dashboards);
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("total", dashboards.size());
+        result.put("dashboards", dashboards);
+
+        return json(result);
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "Get a single dashboards and all configurations of its widgets.")
     @Path("/{dashboardId}")
     @ApiResponses(value = {
@@ -159,16 +169,19 @@ public class DashboardsResource extends RestResource {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Object> get(@ApiParam(name = "dashboardId", required = true)
-                                   @PathParam("dashboardId") String dashboardId) throws NotFoundException {
+    public String get(@ApiParam(name= "dashboardId", required = true) @PathParam("dashboardId") String dashboardId) {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_READ, dashboardId);
 
-        return dashboardService.load(dashboardId).asMap();
+        try {
+            Dashboard dashboard = dashboardService.load(dashboardId);
+            return json(dashboard.asMap());
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
     }
 
-    @DELETE
-    @Timed
+    @DELETE @Timed
     @ApiOperation(value = "Delete a dashboard and all its widgets")
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/{dashboardId}")
@@ -176,66 +189,98 @@ public class DashboardsResource extends RestResource {
             @ApiResponse(code = 404, message = "Dashboard not found."),
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
-    public void delete(@ApiParam(name = "dashboardId", required = true)
-                       @PathParam("dashboardId") String dashboardId) throws NotFoundException {
+    public Response delete(@ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId) {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
-        final Dashboard dashboard = dashboardService.load(dashboardId);
-        dashboardRegistry.remove(dashboardId);
-        dashboardService.destroy(dashboard);
+        try {
+            Dashboard dashboard = dashboardService.load(dashboardId);
+            dashboardRegistry.remove(dashboardId);
+            dashboardService.destroy(dashboard);
 
-        final String msg = "Deleted dashboard <" + dashboard.getId() + ">. Reason: REST request.";
-        LOG.info(msg);
-        activityWriter.write(new Activity(msg, DashboardsResource.class));
+            String msg = "Deleted dashboard <" + dashboard.getId() + ">. Reason: REST request.";
+            LOG.info(msg);
+            activityWriter.write(new Activity(msg, DashboardsResource.class));
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        }
+
+        return Response.status(Response.Status.fromStatusCode(204)).build();
     }
 
-    @PUT
-    @Timed
+    @PUT @Timed
     @ApiOperation(value = "Update the settings of a dashboard.")
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/{dashboardId}")
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Dashboard not found.")
     })
-    public void update(@ApiParam(name = "dashboardId", required = true)
-                       @PathParam("dashboardId") String dashboardId,
-                       @ApiParam(name = "JSON body", required = true) UpdateRequest cr) throws ValidationException, NotFoundException {
+    public Response update(@ApiParam(name = "JSON body", required = true) String body,
+                           @ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId) {
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
+        try {
+            UpdateRequest cr;
+            try {
+                cr = objectMapper.readValue(body, UpdateRequest.class);
+            } catch(IOException e) {
+                LOG.error("Error while parsing JSON", e);
+                throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+            }
 
-        final Dashboard dashboard = dashboardService.load(dashboardId);
-        if (cr.title != null) {
-            dashboard.setTitle(cr.title);
+            Dashboard dashboard = dashboardService.load(dashboardId);
+
+            if(cr.title != null) {
+                dashboard.setTitle(cr.title);
+            }
+
+            if (cr.description != null) {
+                dashboard.setDescription(cr.description);
+            }
+
+            // Validations are happening here.
+            dashboardService.save(dashboard);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
-        if (cr.description != null) {
-            dashboard.setDescription(cr.description);
-        }
-
-        // Validations are happening here.
-        dashboardService.save(dashboard);
+        return Response.status(Response.Status.OK).build();
     }
 
-    @PUT
-    @Timed
+    @PUT @Timed
     @ApiOperation(value = "Update/set the positions of dashboard widgets.")
     @Produces(MediaType.APPLICATION_JSON)
     @Path("/{dashboardId}/positions")
     @ApiResponses(value = {
             @ApiResponse(code = 404, message = "Dashboard not found.")
     })
-    public void setPositions(
-            @ApiParam(name = "dashboardId", required = true)
-            @PathParam("dashboardId") String dashboardId,
-            @ApiParam(name = "JSON body", required = true) UpdateWidgetPositionsRequest uwpr) throws NotFoundException, ValidationException {
+    public Response setPositions(@ApiParam(name = "JSON body", required = true) String body,
+                           @ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId) {
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
+        try {
+            UpdateWidgetPositionsRequest uwpr;
+            try {
+                uwpr = objectMapper.readValue(body, UpdateWidgetPositionsRequest.class);
+            } catch(IOException e) {
+                LOG.error("Error while parsing JSON", e);
+                throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+            }
 
-        final Dashboard dashboard = dashboardService.load(dashboardId);
-        dashboardService.updateWidgetPositions(dashboard, uwpr.positions);
+            Dashboard dashboard = dashboardService.load(dashboardId);
+            dashboardService.updateWidgetPositions(dashboard, uwpr.positions);
+        } catch (org.graylog2.database.NotFoundException e) {
+            throw new WebApplicationException(404);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
+
+        return Response.status(Response.Status.OK).build();
     }
 
-    @POST
-    @Timed
+    @POST @Timed
     @ApiOperation(value = "Add a widget to a dashboard")
     @Consumes(MediaType.APPLICATION_JSON)
     @Produces(MediaType.APPLICATION_JSON)
@@ -246,12 +291,18 @@ public class DashboardsResource extends RestResource {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
     @Path("/{dashboardId}/widgets")
-    public Response addWidget(
-            @ApiParam(name = "dashboardId", required = true)
-            @PathParam("dashboardId") String dashboardId,
-            @ApiParam(name = "JSON body", required = true) AddWidgetRequest awr) throws ValidationException {
+    public Response addWidget(@ApiParam(name = "JSON body", required = true) String body,
+                              @ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId) {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
+
+        AddWidgetRequest awr;
+        try {
+            awr = objectMapper.readValue(body, AddWidgetRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
         // Bind to streams for reader users and check stream permission.
         if (awr.config.containsKey("stream_id")) {
@@ -274,27 +325,27 @@ public class DashboardsResource extends RestResource {
             }
 
             dashboardService.addWidget(dashboard, widget);
+        } catch (ValidationException e1) {
+            LOG.error("Validation error.", e1);
+            throw new WebApplicationException(e1, Response.Status.BAD_REQUEST);
         } catch (DashboardWidget.NoSuchWidgetTypeException e2) {
             LOG.error("No such widget type.", e2);
-            throw new BadRequestException(e2);
+            throw new WebApplicationException(e2, Response.Status.BAD_REQUEST);
         } catch (InvalidRangeParametersException e3) {
             LOG.error("Invalid timerange parameters provided.", e3);
-            throw new BadRequestException(e3);
+            throw new WebApplicationException(e3, Response.Status.BAD_REQUEST);
         } catch (InvalidWidgetConfigurationException e4) {
             LOG.error("Invalid widget configuration.", e4);
-            throw new BadRequestException(e4);
+            throw new WebApplicationException(e4, Response.Status.BAD_REQUEST);
         }
 
-        final Map<String, String> result = ImmutableMap.of("widget_id", widget.getId());
-        final URI widgetUri = UriBuilder.fromResource(DashboardsResource.class)
-                .path("{dashboardId}/widgets/{widgetId}")
-                .build(dashboardId, widget.getId());
+        Map<String, Object> result = Maps.newHashMap();
+        result.put("widget_id", widget.getId());
 
-        return Response.created(widgetUri).entity(result).build();
+        return Response.status(Response.Status.CREATED).entity(json(result)).build();
     }
 
-    @DELETE
-    @Timed
+    @DELETE @Timed
     @ApiOperation(value = "Delete a widget")
     @Path("/{dashboardId}/widgets/{widgetId}")
     @ApiResponses(value = {
@@ -303,30 +354,41 @@ public class DashboardsResource extends RestResource {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public void remove(
-            @ApiParam(name = "dashboardId", required = true)
-            @PathParam("dashboardId") String dashboardId,
-            @ApiParam(name = "widgetId", required = true)
-            @PathParam("widgetId") String widgetId) {
+    public Response remove(
+            @ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId,
+            @ApiParam(name = "widgetId", required = true) @PathParam("widgetId") String widgetId) {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
+        if (dashboardId == null || dashboardId.isEmpty()) {
+            LOG.error("Missing dashboard ID. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
+
+        if (widgetId == null || widgetId.isEmpty()) {
+            LOG.error("Missing widget ID. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
+
         final Dashboard dashboard = dashboardRegistry.get(dashboardId);
+
         if (dashboard == null) {
             LOG.error("Dashboard not found.");
-            throw new javax.ws.rs.NotFoundException();
+            throw new WebApplicationException(404);
         }
 
         final DashboardWidget widget = dashboard.getWidget(widgetId);
+
         dashboardService.removeWidget(dashboard, widget);
 
-        final String msg = "Deleted widget <" + widgetId + "> from dashboard <" + dashboardId + ">. Reason: REST request.";
+        String msg = "Deleted widget <" + widgetId + "> from dashboard <" + dashboardId + ">. Reason: REST request.";
         LOG.info(msg);
         activityWriter.write(new Activity(msg, DashboardsResource.class));
+
+        return Response.status(Response.Status.NO_CONTENT).build();
     }
 
-    @GET
-    @Timed
+    @GET @Timed
     @ApiOperation(value = "Get a single widget value.")
     @Path("/{dashboardId}/widgets/{widgetId}/value")
     @ApiResponses(value = {
@@ -336,10 +398,8 @@ public class DashboardsResource extends RestResource {
             @ApiResponse(code = 504, message = "Computation failed on indexer side.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public Map<String, Object> widgetValue(@ApiParam(name = "dashboardId", required = true)
-                                           @PathParam("dashboardId") String dashboardId,
-                                           @ApiParam(name = "widgetId", required = true)
-                                           @PathParam("widgetId") String widgetId) {
+    public Response widgetValue(@ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId,
+                              @ApiParam(name = "widgetId", required = true) @PathParam("widgetId") String widgetId) {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_READ, dashboardId);
 
@@ -347,25 +407,25 @@ public class DashboardsResource extends RestResource {
 
         if (dashboard == null) {
             LOG.error("Dashboard not found.");
-            throw new javax.ws.rs.NotFoundException();
+            throw new WebApplicationException(404);
         }
 
-        final DashboardWidget widget = dashboard.getWidget(widgetId);
+        DashboardWidget widget = dashboard.getWidget(widgetId);
+
         if (widget == null) {
             LOG.error("Widget not found.");
-            throw new javax.ws.rs.NotFoundException();
+            throw new WebApplicationException(404);
         }
 
         try {
-            return widget.getComputationResult().asMap();
+            return Response.status(Response.Status.OK).entity(json(widget.getComputationResult().asMap())).build();
         } catch (ExecutionException e) {
             LOG.error("Error while computing dashboard.", e);
-            throw new WebApplicationException(e, Response.Status.GATEWAY_TIMEOUT);
+            return Response.status(Response.Status.GATEWAY_TIMEOUT).build();
         }
     }
 
-    @PUT
-    @Timed
+    @PUT @Timed
     @ApiOperation(value = "Update description of a widget")
     @Path("/{dashboardId}/widgets/{widgetId}/description")
     @ApiResponses(value = {
@@ -374,34 +434,57 @@ public class DashboardsResource extends RestResource {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public void updateDescription(@ApiParam(name = "dashboardId", required = true)
-                                  @PathParam("dashboardId") String dashboardId,
-                                  @ApiParam(name = "widgetId", required = true)
-                                  @PathParam("widgetId") String widgetId,
-                                  @ApiParam(name = "JSON body", required = true)
-                                  @Valid UpdateWidgetRequest uwr) throws ValidationException {
+    public Response updateDescription(
+            @ApiParam(name = "JSON body", required = true) String body,
+            @ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId,
+            @ApiParam(name = "widgetId", required = true) @PathParam("widgetId") String widgetId) {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
-        final Dashboard dashboard = dashboardRegistry.get(dashboardId);
-        if (dashboard == null) {
-            LOG.error("Dashboard not found.");
-            throw new javax.ws.rs.NotFoundException();
+        UpdateWidgetRequest uwr;
+        try {
+            uwr = objectMapper.readValue(body, UpdateWidgetRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
-        final DashboardWidget widget = dashboard.getWidget(widgetId);
-        if (widget == null) {
-            LOG.error("Widget not found.");
-            throw new javax.ws.rs.NotFoundException();
+        if (dashboardId == null || dashboardId.isEmpty()) {
+            LOG.error("Missing dashboard ID. Returning HTTP 400.");
+            throw new WebApplicationException(400);
         }
 
-        dashboardService.updateWidgetDescription(dashboard, widget, uwr.description);
+        if (widgetId == null || widgetId.isEmpty()) {
+            LOG.error("Missing widget ID. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
+
+        try {
+            Dashboard dashboard = dashboardRegistry.get(dashboardId);
+
+            if (dashboard == null) {
+                LOG.error("Dashboard not found.");
+                throw new WebApplicationException(404);
+            }
+
+            DashboardWidget widget = dashboard.getWidget(widgetId);
+
+            if (widget == null) {
+                LOG.error("Widget not found.");
+                throw new WebApplicationException(404);
+            }
+
+            dashboardService.updateWidgetDescription(dashboard, widget, uwr.description);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
         LOG.info("Updated description of widget <" + widgetId + "> on dashboard <" + dashboardId + ">. Reason: REST request.");
+        return Response.status(Response.Status.OK).build();
     }
 
-    @PUT
-    @Timed
+    @PUT @Timed
     @ApiOperation(value = "Update cache time of a widget")
     @Path("/{dashboardId}/widgets/{widgetId}/cachetime")
     @ApiResponses(value = {
@@ -410,30 +493,55 @@ public class DashboardsResource extends RestResource {
             @ApiResponse(code = 403, message = "Request must be performed against master node.")
     })
     @Produces(MediaType.APPLICATION_JSON)
-    public void updateCacheTime(@ApiParam(name = "dashboardId", required = true)
-                                @PathParam("dashboardId") String dashboardId,
-                                @ApiParam(name = "widgetId", required = true)
-                                @PathParam("widgetId") String widgetId,
-                                @ApiParam(name = "JSON body", required = true)
-                                @Valid UpdateWidgetRequest uwr) throws ValidationException {
+    public Response updateCacheTime(
+            @ApiParam(name = "JSON body", required = true) String body,
+            @ApiParam(name = "dashboardId", required = true) @PathParam("dashboardId") String dashboardId,
+            @ApiParam(name = "widgetId", required = true) @PathParam("widgetId") String widgetId) {
         restrictToMaster();
         checkPermission(RestPermissions.DASHBOARDS_EDIT, dashboardId);
 
-        final Dashboard dashboard = dashboardRegistry.get(dashboardId);
-        if (dashboard == null) {
-            LOG.error("Dashboard not found.");
-            throw new javax.ws.rs.NotFoundException();
+        UpdateWidgetRequest uwr;
+        try {
+            uwr = objectMapper.readValue(body, UpdateWidgetRequest.class);
+        } catch(IOException e) {
+            LOG.error("Error while parsing JSON", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
 
-        final DashboardWidget widget = dashboard.getWidget(widgetId);
-        if (widget == null) {
-            LOG.error("Widget not found.");
-            throw new javax.ws.rs.NotFoundException();
+        if (dashboardId == null || dashboardId.isEmpty()) {
+            LOG.error("Missing dashboard ID. Returning HTTP 400.");
+            throw new WebApplicationException(400);
         }
 
-        dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime);
+        if (widgetId == null || widgetId.isEmpty()) {
+            LOG.error("Missing widget ID. Returning HTTP 400.");
+            throw new WebApplicationException(400);
+        }
+
+        try {
+            Dashboard dashboard = dashboardRegistry.get(dashboardId);
+
+            if (dashboard == null) {
+                LOG.error("Dashboard not found.");
+                throw new WebApplicationException(404);
+            }
+
+            DashboardWidget widget = dashboard.getWidget(widgetId);
+
+            if (widget == null) {
+                LOG.error("Widget not found.");
+                throw new WebApplicationException(404);
+            }
+
+            dashboardService.updateWidgetCacheTime(dashboard, widget, uwr.cacheTime);
+        } catch (ValidationException e) {
+            LOG.error("Validation error.", e);
+            throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
+        }
 
         LOG.info("Updated cache time of widget <" + widgetId + "> on dashboard <" + dashboardId + "> to " +
                 "[" + uwr.cacheTime + "]. Reason: REST request.");
+        return Response.status(Response.Status.OK).build();
     }
+
 }
