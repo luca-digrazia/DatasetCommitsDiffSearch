@@ -250,7 +250,7 @@ public final class BuildResult {
    * null if the execution phase was not attempted, as may happen if there are errors in the loading
    * phase, for example.
    */
-  public ImmutableSet<AspectKey> getSuccessfulAspects() {
+  ImmutableSet<AspectKey> getSuccessfulAspects() {
     return successfulAspects;
   }
 

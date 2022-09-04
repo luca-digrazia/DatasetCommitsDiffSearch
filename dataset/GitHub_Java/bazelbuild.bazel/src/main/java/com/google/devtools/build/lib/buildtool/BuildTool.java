@@ -21,7 +21,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
 import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.actions.BuildFailedException;
-import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.TestExecException;
 import com.google.devtools.build.lib.analysis.AnalysisResult;
 import com.google.devtools.build.lib.analysis.BuildInfoEvent;
@@ -30,15 +29,11 @@ import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.WorkspaceStatusAction.DummyEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.buildeventstream.BuildEvent.LocalFile.LocalFileType;
-import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader.UploadContext;
 import com.google.devtools.build.lib.buildeventstream.BuildEventIdUtil;
-import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildInterruptedEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildStartingEvent;
 import com.google.devtools.build.lib.buildtool.buildevent.NoExecutionEvent;
-import com.google.devtools.build.lib.buildtool.buildevent.StartingAqueryDumpAfterBuildEvent;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.OutputFilter;
@@ -48,31 +43,17 @@ import com.google.devtools.build.lib.pkgcache.LoadingFailedException;
 import com.google.devtools.build.lib.profiler.ProfilePhase;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.query2.aquery.ActionGraphProtoV2OutputFormatterCallback;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.server.FailureDetails.ActionQuery;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.server.FailureDetails.Interrupted.Code;
-import com.google.devtools.build.lib.skyframe.DetailedTargetParsingException;
-import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.ActionGraphDump;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.AqueryOutputHandler;
-import com.google.devtools.build.lib.skyframe.actiongraph.v2.AqueryOutputHandler.OutputType;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.vfs.Path;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsProvider;
 import com.google.devtools.common.options.RegexPatternOption;
-import java.io.BufferedOutputStream;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.PrintStream;
-import javax.annotation.Nullable;
 
 /**
  * Provides the bulk of the implementation of the 'blaze build' command.
@@ -126,8 +107,7 @@ public class BuildTool {
   public void buildTargets(BuildRequest request, BuildResult result, TargetValidator validator)
       throws BuildFailedException, InterruptedException, ViewCreationFailedException,
           TargetParsingException, LoadingFailedException, AbruptExitException,
-          InvalidConfigurationException, TestExecException, ExitException,
-          PostExecutionActionGraphDumpException {
+          InvalidConfigurationException, TestExecException, ExitException {
     try (SilentCloseable c = Profiler.instance().profile("validateOptions")) {
       validateOptions(request);
     }
@@ -209,23 +189,9 @@ public class BuildTool {
         } else {
           env.getReporter().post(new NoExecutionEvent());
         }
-        FailureDetail delayedFailureDetail = analysisResult.getFailureDetail();
-        if (delayedFailureDetail != null) {
-          throw new BuildFailedException(
-              delayedFailureDetail.getMessage(), DetailedExitCode.of(delayedFailureDetail));
-        }
-
-        // Only consider builds with SequencedSkyframeExecutor.
-        if (env.getSkyframeExecutor() instanceof SequencedSkyframeExecutor
-            && request.getBuildOptions().aqueryDumpAfterBuildFormat != null) {
-          try (SilentCloseable c = Profiler.instance().profile("postExecutionDumpSkyframe")) {
-            dumpSkyframeStateAfterBuild(
-                request.getOptions(BuildEventProtocolOptions.class),
-                request.getBuildOptions().aqueryDumpAfterBuildFormat,
-                request.getBuildOptions().aqueryDumpAfterBuildOutputFile);
-          } catch (CommandLineExpansionException | IOException e) {
-            throw new PostExecutionActionGraphDumpException(e);
-          }
+        String delayedErrorMsg = analysisResult.getError();
+        if (delayedErrorMsg != null) {
+          throw new BuildFailedException(delayedErrorMsg);
         }
       }
       Profiler.instance().markPhase(ProfilePhase.FINISH);
@@ -283,87 +249,6 @@ public class BuildTool {
    */
   protected void postProcessAnalysisResult(BuildRequest request, AnalysisResult analysisResult)
       throws InterruptedException, ViewCreationFailedException, ExitException {}
-
-  /**
-   * Produces an aquery dump of the state of Skyframe.
-   *
-   * <p>There are 2 possible output channels: a local file or a remote FS.
-   */
-  private void dumpSkyframeStateAfterBuild(
-      @Nullable BuildEventProtocolOptions besOptions,
-      String format,
-      @Nullable PathFragment outputFilePathFragment)
-      throws CommandLineExpansionException, IOException {
-    Preconditions.checkState(env.getSkyframeExecutor() instanceof SequencedSkyframeExecutor);
-
-    UploadContext streamingContext = null;
-    Path localOutputFilePath = null;
-    String outputFileName;
-
-    if (outputFilePathFragment == null) {
-      outputFileName = getDefaultOutputFileName(format);
-      if (besOptions != null && besOptions.streamingLogFileUploads) {
-        streamingContext =
-            runtime
-                .getBuildEventArtifactUploaderFactoryMap()
-                .select(besOptions.buildEventUploadStrategy)
-                .create(env)
-                .startUpload(LocalFileType.PERFORMANCE_LOG, /* inputSupplier= */ null);
-      } else {
-        localOutputFilePath = env.getOutputBase().getRelative(outputFileName);
-      }
-    } else {
-      localOutputFilePath = env.getOutputBase().getRelative(outputFilePathFragment);
-      outputFileName = localOutputFilePath.getBaseName();
-    }
-
-    if (localOutputFilePath != null) {
-      getReporter().handle(Event.info("Writing aquery dump to " + localOutputFilePath));
-      getReporter()
-          .post(new StartingAqueryDumpAfterBuildEvent(localOutputFilePath, outputFileName));
-    } else {
-      getReporter().handle(Event.info("Streaming aquery dump."));
-      getReporter().post(new StartingAqueryDumpAfterBuildEvent(streamingContext, outputFileName));
-    }
-
-    try (OutputStream outputStream = initOutputStream(streamingContext, localOutputFilePath);
-        PrintStream printStream = new PrintStream(outputStream)) {
-      AqueryOutputHandler aqueryOutputHandler =
-          ActionGraphProtoV2OutputFormatterCallback.constructAqueryOutputHandler(
-              OutputType.fromString(format), outputStream, printStream);
-      // These options are fixed for simplicity. We'll add more configurability if the need arises.
-      ActionGraphDump actionGraphDump =
-          new ActionGraphDump(
-              /* includeActionCmdLine= */ false,
-              /* includeArtifacts= */ true,
-              /* actionFilters= */ null,
-              /* includeParamFiles= */ true,
-              aqueryOutputHandler);
-      ((SequencedSkyframeExecutor) env.getSkyframeExecutor()).dumpSkyframeState(actionGraphDump);
-      aqueryOutputHandler.close();
-    }
-  }
-
-  private static String getDefaultOutputFileName(String format) {
-    switch (format) {
-      case "proto":
-        return "aquery_dump.proto";
-      case "textproto":
-        return "aquery_dump.textproto";
-      case "jsonproto":
-        return "aquery_dump.json";
-      default:
-        throw new IllegalArgumentException("Unsupported format type: " + format);
-    }
-  }
-
-  private static OutputStream initOutputStream(
-      @Nullable UploadContext streamingContext, Path outputFilePath) throws IOException {
-    if (streamingContext != null) {
-      return new BufferedOutputStream(streamingContext.getOutputStream());
-    }
-    return new BufferedOutputStream(outputFilePath.getOutputStream());
-  }
 
   private void reportExceptionError(Exception e) {
     if (e.getMessage() != null) {
@@ -426,9 +311,6 @@ public class BuildTool {
         reportExceptionError(environmentPendingAbruptExitException);
         result.setCatastrophe();
       }
-    } catch (DetailedTargetParsingException e) {
-      detailedExitCode = e.getDetailedExitCode();
-      reportExceptionError(e);
     } catch (TargetParsingException | LoadingFailedException | ViewCreationFailedException e) {
       detailedExitCode = DetailedExitCode.justExitCode(ExitCode.PARSING_FAILURE);
       reportExceptionError(e);
@@ -452,17 +334,6 @@ public class BuildTool {
       detailedExitCode = e.getDetailedExitCode();
       reportExceptionError(e);
       result.setCatastrophe();
-    } catch (PostExecutionActionGraphDumpException e) {
-      detailedExitCode =
-          DetailedExitCode.of(
-              FailureDetail.newBuilder()
-                  .setMessage(e.getMessage())
-                  .setActionQuery(
-                      ActionQuery.newBuilder()
-                          .setCode(ActionQuery.Code.SKYFRAME_STATE_AFTER_EXECUTION)
-                          .build())
-                  .build());
-      reportExceptionError(e);
     } catch (Throwable throwable) {
       detailedExitCode = CrashFailureDetails.detailedExitCodeForThrowable(throwable);
       catastrophe = throwable;
