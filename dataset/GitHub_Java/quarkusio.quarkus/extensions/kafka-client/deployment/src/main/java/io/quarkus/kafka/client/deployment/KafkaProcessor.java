@@ -2,6 +2,7 @@ package io.quarkus.kafka.client.deployment;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.zip.Checksum;
 
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
@@ -33,11 +34,17 @@ import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 
 import io.quarkus.deployment.Capabilities;
+import io.quarkus.deployment.GizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.JniBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.gizmo.ClassCreator;
+import io.quarkus.gizmo.ClassOutput;
+import io.quarkus.gizmo.MethodCreator;
+import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.kafka.client.serialization.JsonbDeserializer;
 import io.quarkus.kafka.client.serialization.JsonbSerializer;
 import io.quarkus.kafka.client.serialization.ObjectMapperDeserializer;
@@ -68,6 +75,7 @@ public class KafkaProcessor {
             StringDeserializer.class,
             FloatDeserializer.class,
     };
+    static final String TARGET_JAVA_9_CHECKSUM_FACTORY = "io.quarkus.kafka.client.generated.Target_Java9ChecksumFactory";
 
     @BuildStep
     public void build(CombinedIndexBuildItem indexBuildItem, BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
@@ -106,5 +114,30 @@ public class KafkaProcessor {
 
         // enable JNI
         jni.produce(new JniBuildItem());
+    }
+
+    /**
+     * Generate a class which replaces the usage of {@code MethodHandle} in {@code Java9ChecksumFactory} with a plain
+     * constructor invocation when run under GraalVM. This is necessary because the native image generator does not
+     * support method handles.
+     *
+     * @return the generated class
+     */
+    @BuildStep
+    public void replaceJava9Code(BuildProducer<GeneratedClassBuildItem> producer) {
+        // make our own class output to ensure that our step is run.
+        ClassOutput classOutput = new GizmoAdaptor(producer, false);
+        try (ClassCreator cc = ClassCreator.builder().className(TARGET_JAVA_9_CHECKSUM_FACTORY)
+                .classOutput(classOutput).setFinal(true).superClass(Object.class).build()) {
+
+            cc.addAnnotation("com/oracle/svm/core/annotate/TargetClass").addValue("className",
+                    "org.apache.kafka.common.utils.Crc32C$Java9ChecksumFactory");
+            cc.addAnnotation("com/oracle/svm/core/annotate/Substitute");
+
+            try (MethodCreator mc = cc.getMethodCreator("create", Checksum.class)) {
+                mc.addAnnotation("com/oracle/svm/core/annotate/Substitute");
+                mc.returnValue(mc.newInstance(MethodDescriptor.ofConstructor("java.util.zip.CRC32C")));
+            }
+        }
     }
 }

@@ -12,7 +12,7 @@ import java.util.Optional;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.spi.DeploymentException;
 
-import org.eclipse.microprofile.config.ConfigProvider;
+import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
 import org.eclipse.microprofile.reactive.messaging.spi.Connector;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
@@ -38,7 +38,7 @@ import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionPointInfo;
-import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
+import io.quarkus.deployment.GizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -206,7 +206,7 @@ public class SmallRyeReactiveMessagingProcessor {
 
         List<QuarkusMediatorConfiguration> configurations = new ArrayList<>(mediatorMethods.size());
 
-        ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
+        ClassOutput classOutput = new GizmoAdaptor(generatedClass, true);
 
         /*
          * Go through the collected MediatorMethods and build up the corresponding MediaConfiguration
@@ -236,7 +236,7 @@ public class SmallRyeReactiveMessagingProcessor {
         recorder.registerMediators(configurations, beanContainer.getValue());
 
         for (EmitterBuildItem it : emitterFields) {
-            int defaultBufferSize = ConfigProvider.getConfig()
+            int defaultBufferSize = ConfigProviderResolver.instance().getConfig()
                     .getOptionalValue("smallrye.messaging.emitter.default-buffer-size", Integer.class).orElse(127);
             if (it.getOverflow() != null) {
                 recorder.configureEmitter(beanContainer.getValue(), it.getName(), it.getOverflow(), it.getBufferSize(),
