@@ -340,10 +340,9 @@ public class JibProcessor {
         if (jibConfig.nativeEntrypoint.isPresent()) {
             entrypoint = jibConfig.nativeEntrypoint.get();
         } else {
-            List<String> nativeArguments = jibConfig.nativeArguments.orElse(Collections.emptyList());
-            entrypoint = new ArrayList<>(nativeArguments.size() + 1);
+            entrypoint = new ArrayList<>(jibConfig.nativeArguments.size() + 1);
             entrypoint.add("./" + BINARY_NAME_IN_CONTAINER);
-            entrypoint.addAll(nativeArguments);
+            entrypoint.addAll(jibConfig.nativeArguments);
         }
         try {
             AbsoluteUnixPath workDirInContainer = AbsoluteUnixPath.get("/work");

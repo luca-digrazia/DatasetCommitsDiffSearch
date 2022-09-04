@@ -40,14 +40,6 @@ public class ContainerImageConfig {
     public Optional<String> registry;
 
     /**
-     * Represents the entire image string.
-     * If set, then {@code group}, {@code name}, {@code registry}, {@code tags}, {@code additionalTags}
-     * are ignored
-     */
-    @ConfigItem
-    public Optional<String> image;
-
-    /**
      * The username to use to authenticate with the registry where the built image will be pushed
      */
     @ConfigItem
@@ -87,7 +79,6 @@ public class ContainerImageConfig {
     /**
      * Since user.name which is default value can be uppercase and uppercase values are not allowed
      * in the repository part of image references, we need to make the username lowercase.
-     * If spaces exist in the user name, we replace them with the dash character.
      *
      * We purposely don't change the value of an explicitly set group.
      */
@@ -95,7 +86,7 @@ public class ContainerImageConfig {
         if (group.isPresent()) {
             String originalGroup = group.get();
             if (originalGroup.equals(System.getProperty("user.name"))) {
-                return Optional.of(originalGroup.toLowerCase().replace(' ', '-'));
+                return Optional.of(originalGroup.toLowerCase());
             }
         }
         return group;
