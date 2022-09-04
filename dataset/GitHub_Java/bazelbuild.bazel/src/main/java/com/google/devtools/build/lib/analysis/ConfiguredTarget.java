@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableCollection;
 import com.google.devtools.build.lib.actions.Artifact.SourceArtifact;
-import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.syntax.ClassObject;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
@@ -34,10 +33,14 @@ import javax.annotation.Nullable;
  */
 public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject, StarlarkValue {
 
-  /** All <code>ConfiguredTarget</code>s have a "label" field. */
+  /**
+   *  All <code>ConfiguredTarget</code>s have a "label" field.
+   */
   String LABEL_FIELD = "label";
 
-  /** All <code>ConfiguredTarget</code>s have a "files" field. */
+  /**
+   *  All <code>ConfiguredTarget</code>s have a "files" field.
+   */
   String FILES_FIELD = "files";
 
   default String getConfigurationChecksum() {
@@ -64,8 +67,8 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject,
   /**
    * Returns a legacy Skylark provider.
    *
-   * <p>Overrides {@link ClassObject#getValue(String)}, but does not allow EvalException to be
-   * thrown.
+   * Overrides {@link ClassObject#getValue(String)}, but does not allow EvalException to
+   * be thrown.
    */
   @Nullable
   @Override
@@ -75,22 +78,5 @@ public interface ConfiguredTarget extends TransitiveInfoCollection, ClassObject,
   @Nullable
   default SourceArtifact getSourceArtifact() {
     return null;
-  }
-
-  /**
-   * If the configured target is an alias, return the actual target, otherwise return the current
-   * target. This follows alias chains.
-   */
-  default ConfiguredTarget getActual() {
-    return this;
-  }
-
-  /**
-   * If the configured target is an alias, return the original label, otherwise return the current
-   * label. This is not the same as {@code getActual().getLabel()}, because it does not follow alias
-   * chains.
-   */
-  default Label getOriginalLabel() {
-    return getLabel();
   }
 }

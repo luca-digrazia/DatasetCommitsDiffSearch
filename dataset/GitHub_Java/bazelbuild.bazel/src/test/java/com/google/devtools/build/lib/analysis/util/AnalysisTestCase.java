@@ -58,14 +58,13 @@ import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.MockToolsConfig;
 import com.google.devtools.build.lib.pkgcache.LoadingOptions;
+import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PackageManager;
-import com.google.devtools.build.lib.pkgcache.PackageOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
-import com.google.devtools.build.lib.skyframe.BuildInfoCollectionFunction;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
@@ -217,12 +216,12 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
 
   private void reinitializeSkyframeExecutor() {
     SkyframeExecutorTestHelper.process(skyframeExecutor);
-    PackageOptions packageOptions = Options.getDefaults(PackageOptions.class);
-    packageOptions.showLoadingProgress = true;
-    packageOptions.globbingThreads = 3;
+    PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
+    packageCacheOptions.showLoadingProgress = true;
+    packageCacheOptions.globbingThreads = 3;
     skyframeExecutor.preparePackageLoading(
         pkgLocator,
-        packageOptions,
+        packageCacheOptions,
         Options.getDefaults(StarlarkSemanticsOptions.class),
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
@@ -240,7 +239,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
                 RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
                 RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY),
             PrecomputedValue.injected(
-                BuildInfoCollectionFunction.BUILD_INFO_FACTORIES,
+                PrecomputedValue.BUILD_INFO_FACTORIES,
                 ruleClassProvider.getBuildInfoFactoriesAsMap())));
   }
 
@@ -269,7 +268,7 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
                 Iterables.concat(
                     Arrays.asList(
                         ExecutionOptions.class,
-                        PackageOptions.class,
+                        PackageCacheOptions.class,
                         StarlarkSemanticsOptions.class,
                         BuildRequestOptions.class,
                         AnalysisOptions.class,
@@ -353,24 +352,24 @@ public abstract class AnalysisTestCase extends FoundationTestCase {
     boolean discardAnalysisCache = viewOptions.discardAnalysisCache;
     viewOptions.skyframePrepareAnalysis = flags.contains(Flag.SKYFRAME_PREPARE_ANALYSIS);
 
-    PackageOptions packageOptions = optionsParser.getOptions(PackageOptions.class);
+    PackageCacheOptions packageCacheOptions = optionsParser.getOptions(PackageCacheOptions.class);
     PathPackageLocator pathPackageLocator =
         PathPackageLocator.create(
             outputBase,
-            packageOptions.packagePath,
+            packageCacheOptions.packagePath,
             reporter,
             rootDirectory,
             rootDirectory,
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
-    packageOptions.showLoadingProgress = true;
-    packageOptions.globbingThreads = 7;
+    packageCacheOptions.showLoadingProgress = true;
+    packageCacheOptions.globbingThreads = 7;
 
     StarlarkSemanticsOptions starlarkSemanticsOptions =
         optionsParser.getOptions(StarlarkSemanticsOptions.class);
 
     skyframeExecutor.preparePackageLoading(
         pathPackageLocator,
-        packageOptions,
+        packageCacheOptions,
         starlarkSemanticsOptions,
         UUID.randomUUID(),
         ImmutableMap.<String, String>of(),
