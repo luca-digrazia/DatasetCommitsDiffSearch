@@ -286,15 +286,11 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
     // We cannot flip an incompatible flag that expands to other flags, so we do it manually here.
     // If an option is specified explicitly, we give that preference.
     boolean commandSupportsProfile =
-        (commandAnnotation.builds() || "query".equals(commandName))
-            && !"clean".equals(commandName)
-            && !"info".equals(commandName);
-    boolean profileExplicitlyDisabled =
-        options.containsExplicitOption("experimental_generate_json_trace_profile")
-            && !commonOptions.enableTracer;
+        (commandAnnotation.builds() || "query".equals(commandName)) && !"clean".equals(commandName);
     if (commandSupportsProfile
         && commonOptions.enableProfileByDefault
-        && !profileExplicitlyDisabled) {
+        && (!options.containsExplicitOption("experimental_generate_json_trace_profile")
+            || commonOptions.enableTracer)) {
       commonOptions.enableTracer = true;
       if (!options.containsExplicitOption("experimental_slim_json_profile")) {
         commonOptions.enableJsonProfileDiet = true;

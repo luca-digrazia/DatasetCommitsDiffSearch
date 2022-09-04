@@ -14,29 +14,73 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.base.Preconditions;
-import com.google.devtools.build.lib.syntax.BuildFileAST;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Interner;
+import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.vfs.RootedPath;
-import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.AbstractSkyKey;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.build.skyframe.SkyValue;
+import java.util.List;
 
 /**
- * A SkyValue that stores the parsed WORKSPACE file as an AST.
+ * A SkyValue that stores the parsed WORKSPACE file as a list of AST. Each AST contains the part
+ * of the WORKSPACE file between the first load statement of a series of load statements and the
+ * last statement before the next load statement. As example, the comment indicate where the next
+ * file would be split:
+ *
+ * <p><code>
+ * # First AST
+ * load('//foo:bar.bzl', 'foobar')
+ * foo_bar = 1
+ *
+ * # Second AST
+ * load('//foo:baz.bzl', 'foos')
+ * load('//bar:foo.bzl', 'bars')
+ * foos()
+ * bars()
+ *
+ * # Third AST
+ * load('//:bleh.bzl', 'bleh')
+ * </code>
  */
 public class WorkspaceASTValue implements SkyValue {
 
-  private final BuildFileAST ast;
+  private final ImmutableList<StarlarkFile> asts;
 
-  public WorkspaceASTValue(BuildFileAST ast) {
-    Preconditions.checkNotNull(ast);
-    this.ast = ast;
+  public WorkspaceASTValue(List<StarlarkFile> asts) {
+    Preconditions.checkNotNull(asts);
+    this.asts = ImmutableList.copyOf(asts);
   }
 
-  public BuildFileAST getAST() {
-    return ast;
+  public ImmutableList<StarlarkFile> getASTs() {
+    return asts;
   }
 
-  public static SkyKey key(RootedPath path) {
-    return new SkyKey(SkyFunctions.WORKSPACE_AST, path);
+  public static Key key(RootedPath path) {
+    return Key.create(path);
+  }
+
+  @AutoCodec.VisibleForSerialization
+  @AutoCodec
+  static class Key extends AbstractSkyKey<RootedPath> {
+    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
+
+    private Key(RootedPath arg) {
+      super(arg);
+    }
+
+    @AutoCodec.VisibleForSerialization
+    @AutoCodec.Instantiator
+    static Key create(RootedPath arg) {
+      return interner.intern(new Key(arg));
+    }
+
+    @Override
+    public SkyFunctionName functionName() {
+      return SkyFunctions.WORKSPACE_AST;
+    }
   }
 }
-

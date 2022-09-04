@@ -19,20 +19,16 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.collect.ImmutableList;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.analysis.BlazeVersionInfo;
-import com.google.devtools.build.lib.util.CrashFailureDetails;
 import com.google.devtools.build.lib.util.CustomExitCodePublisher;
-import com.google.devtools.build.lib.util.CustomFailureDetailPublisher;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
-import com.google.devtools.build.lib.util.TestType;
 import com.google.devtools.build.lib.util.io.OutErr;
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
+import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -44,7 +40,7 @@ import javax.annotation.Nullable;
  */
 public abstract class BugReport {
 
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
+  private static final Logger logger = Logger.getLogger(BugReport.class.getName());
 
   static final BugReporter REPORTER_INSTANCE = new DefaultBugReporter();
 
@@ -55,8 +51,10 @@ public abstract class BugReport {
   @Nullable private static volatile Throwable unprocessedThrowableInTest = null;
   private static final Object LOCK = new Object();
 
+  private static final boolean IN_TEST = System.getenv("TEST_TMPDIR") != null;
+
   private static final boolean SHOULD_NOT_SEND_BUG_REPORT_BECAUSE_IN_TEST =
-      TestType.isInTest() && System.getenv("ENABLE_BUG_REPORT_LOGGING_IN_TEST") == null;
+      IN_TEST && System.getenv("ENABLE_BUG_REPORT_LOGGING_IN_TEST") == null;
 
   private BugReport() {}
 
@@ -70,13 +68,12 @@ public abstract class BugReport {
      * Perform all possible clean-up before crashing, posting events etc. so long as crashing isn't
      * significantly delayed or another crash isn't triggered.
      */
-    void cleanUpForCrash(DetailedExitCode exitCode);
+    void cleanUpForCrash(ExitCode exitCode);
   }
 
   public static void setRuntime(BlazeRuntimeInterface newRuntime) {
     Preconditions.checkNotNull(newRuntime);
-    Preconditions.checkState(
-        runtime == null || TestType.isInTest(), "runtime already set: %s, %s", runtime, newRuntime);
+    Preconditions.checkState(runtime == null, "runtime already set: %s, %s", runtime, newRuntime);
     runtime = newRuntime;
   }
 
@@ -89,7 +86,7 @@ public abstract class BugReport {
    * is about to block on thread completion that might hang because of a failed halt below.
    */
   public static void maybePropagateUnprocessedThrowableIfInTest() {
-    if (TestType.isInTest()) {
+    if (IN_TEST) {
       // Instead of the jvm having been halted, we might have a saved Throwable.
       synchronized (LOCK) {
         Throwable lastUnprocessedThrowableInTest = unprocessedThrowableInTest;
@@ -124,7 +121,7 @@ public abstract class BugReport {
           "Bug reports in tests should crash: " + args + ", " + Arrays.toString(values), exception);
     }
     if (!versionInfo.isReleasedBlaze()) {
-      logger.atInfo().log("(Not a released binary; not logged.)");
+      logger.info("(Not a released binary; not logged.)");
       return;
     }
 
@@ -132,7 +129,7 @@ public abstract class BugReport {
   }
 
   private static void logCrash(Throwable throwable, boolean sendBugReport, String... args) {
-    logger.atSevere().withCause(throwable).log("Crash");
+    logger.severe("Crash: " + throwable + " " + Throwables.getStackTraceAsString(throwable));
     if (sendBugReport) {
       BugReport.sendBugReport(throwable, Arrays.asList(args));
     }
@@ -142,18 +139,14 @@ public abstract class BugReport {
   }
 
   /**
-   * Print, log, and then cause the current Blaze command to fail with the specified exit code, and
-   * then cause the jvm to terminate.
+   * Print, log, send a bug report, and then cause the current Blaze command to fail with the
+   * specified exit code, and then cause the jvm to terminate.
    *
    * <p>Has no effect if another crash has already been handled by {@link BugReport}.
    */
   public static void handleCrashWithoutSendingBugReport(
       Throwable throwable, ExitCode exitCode, String... args) {
-    handleCrash(
-        throwable,
-        /*sendBugReport=*/ false,
-        DetailedExitCode.of(exitCode, CrashFailureDetails.forThrowable(throwable)),
-        args);
+    handleCrash(throwable, /*sendBugReport=*/ false, exitCode, args);
   }
 
   /**
@@ -163,11 +156,7 @@ public abstract class BugReport {
    * <p>Has no effect if another crash has already been handled by {@link BugReport}.
    */
   public static void handleCrash(Throwable throwable, ExitCode exitCode, String... args) {
-    handleCrash(
-        throwable,
-        /*sendBugReport=*/ true,
-        DetailedExitCode.of(exitCode, CrashFailureDetails.forThrowable(throwable)),
-        args);
+    handleCrash(throwable, /*sendBugReport=*/ true, exitCode, args);
   }
 
   /**
@@ -176,36 +165,25 @@ public abstract class BugReport {
    *
    * <p>Has no effect if another crash has already been handled by {@link BugReport}.
    */
-  public static RuntimeException handleCrash(Throwable throwable, String... args) {
-    throw handleCrash(
-        throwable,
-        /*sendBugReport=*/ true,
-        CrashFailureDetails.detailedExitCodeForThrowable(throwable),
-        args);
+  public static void handleCrash(Throwable throwable, String... args) {
+    handleCrash(throwable, /*sendBugReport=*/ true, /*exitCode=*/ null, args);
   }
 
-  private static RuntimeException handleCrash(
-      Throwable throwable,
-      boolean sendBugReport,
-      DetailedExitCode detailedExitCode,
-      String... args) {
-    int numericExitCode = detailedExitCode.getExitCode().getNumericExitCode();
+  private static void handleCrash(
+      Throwable throwable, boolean sendBugReport, @Nullable ExitCode exitCode, String... args) {
+    ExitCode exitCodeToUse = exitCode == null ? getExitCodeForThrowable(throwable) : exitCode;
+    int numericExitCode = exitCodeToUse.getNumericExitCode();
     try {
       synchronized (LOCK) {
-        if (TestType.isInTest()) {
+        if (IN_TEST) {
           unprocessedThrowableInTest = throwable;
         }
-        // Don't try to send a bug report during a crash in a test, it will throw itself.
-        if (!TestType.isInTest() || !sendBugReport) {
-          logCrash(throwable, sendBugReport, args);
-        }
+        logCrash(throwable, sendBugReport, args);
         try {
           if (runtime != null) {
-            runtime.cleanUpForCrash(detailedExitCode);
+            runtime.cleanUpForCrash(exitCodeToUse);
           }
           CustomExitCodePublisher.maybeWriteExitStatusFile(numericExitCode);
-          CustomFailureDetailPublisher.maybeWriteFailureDetailFile(
-              detailedExitCode.getFailureDetail());
         } finally {
           // Avoid shutdown deadlock issues: If an application shutdown hook crashes, it will
           // trigger our Blaze crash handler (this method). Calling System#exit() here, would
@@ -231,7 +209,6 @@ public abstract class BugReport {
 
       Runtime.getRuntime().halt(numericExitCode);
     }
-    throw new IllegalStateException("never get here", throwable);
   }
 
   /** Get exit code corresponding to throwable. */
@@ -245,7 +222,7 @@ public abstract class BugReport {
     PrintStream err = new PrintStream(outErr.getErrorStream());
     e.printStackTrace(err);
     err.flush();
-    logger.atSevere().withCause(e).log("%s crashed", getProductName());
+    logger.log(Level.SEVERE, getProductName() + " crashed", e);
   }
 
   /**
@@ -295,7 +272,7 @@ public abstract class BugReport {
   // Log the exception.  Because this method is only called in a blaze release,
   // this will result in a report being sent to a remote logging service.
   private static void logException(Throwable exception, List<String> args, String... values) {
-    logger.atSevere().withCause(exception).log("Exception");
+    logger.severe("Exception: " + Throwables.getStackTraceAsString(exception));
     // The preamble is used in the crash watcher, so don't change it
     // unless you know what you're doing.
     String preamble = getProductName()
@@ -314,11 +291,6 @@ public abstract class BugReport {
     @Override
     public void sendBugReport(Throwable exception, List<String> args, String... values) {
       BugReport.sendBugReport(exception, args, values);
-    }
-
-    @Override
-    public RuntimeException handleCrash(Throwable throwable, String... args) {
-      throw BugReport.handleCrash(throwable, args);
     }
   }
 }

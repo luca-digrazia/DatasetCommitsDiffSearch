@@ -20,55 +20,40 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.StarlarkFile;
-import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.skyframe.AbstractSkyKey;
 import com.google.devtools.build.skyframe.NotComparableSkyValue;
 import com.google.devtools.build.skyframe.SkyFunctionName;
-import com.google.devtools.build.skyframe.SkyKey;
-import com.google.errorprone.annotations.FormatMethod;
-import java.util.Objects;
-import javax.annotation.Nullable;
 
-// TODO(adonovan): Ensure the result is always resolved and update the docstring.
 /**
  * A value that represents an AST file lookup result. There are two subclasses: one for the case
  * where the file is found, and another for the case where the file is missing (but there are no
  * other errors).
  */
-// In practice, almost any change to a .bzl causes the ASTFileLookupValue to be recomputed.
-// We could do better with a finer-grained notion of equality for StarlarkFile than "the source
-// files differ". In particular, a trivial change such as fixing a typo in a comment should not
-// cause invalidation. (Changes that are only slightly more substantial may be semantically
-// significant. For example, inserting a blank line affects subsequent line numbers, which appear
-// in error messages and query output.)
-//
-// Comparing syntax trees for equality is complex and expensive, so the most practical
-// implementation of this optimization will have to wait until Starlark files are compiled,
-// at which point byte-equality of the compiled representation (which is simple to compute)
-// will serve. (At that point, ASTFileLookup should be renamed CompileStarlark.)
-//
+// In practice, if a ASTFileLookupValue is re-computed (i.e. not changed pruned), then it will
+// almost certainly be unequal to the previous value. This is because of (i) the change-pruning
+// semantics of the PackageLookupValue dep and the FileValue dep; consider the latter: if the
+// FileValue for the bzl file has changed, then the contents of the bzl file probably changed and
+// (ii) we don't currently have skylark-semantic-equality in StarlarkFile, so two StarlarkFile
+// instances representing two different contents of a bzl file will be different.
+// TODO(bazel-team): Consider doing better here. As a pre-req, we would need
+// skylark-semantic-equality in StarlarkFile, rather than equality naively based on the contents of
+// the bzl file. For a concrete example, the contents of comment lines do not currently impact
+// skylark semantics.
 public abstract class ASTFileLookupValue implements NotComparableSkyValue {
-
-  // TODO(adonovan): flatten this hierarchy into a single class.
-  // It would only cost one word per Starlark file.
-  // Eliminate lookupSuccessful; use getAST() != null.
-
   public abstract boolean lookupSuccessful();
 
   public abstract StarlarkFile getAST();
 
-  public abstract byte[] getDigest();
-
-  public abstract String getError();
+  public abstract String getErrorMsg();
 
   /** If the file is found, this class encapsulates the parsed AST. */
   @AutoCodec.VisibleForSerialization
   public static class ASTLookupWithFile extends ASTFileLookupValue {
     private final StarlarkFile ast;
-    private final byte[] digest;
 
-    private ASTLookupWithFile(StarlarkFile ast, byte[] digest) {
-      this.ast = Preconditions.checkNotNull(ast);
-      this.digest = Preconditions.checkNotNull(digest);
+    private ASTLookupWithFile(StarlarkFile ast) {
+      Preconditions.checkNotNull(ast);
+      this.ast = ast;
     }
 
     @Override
@@ -82,12 +67,7 @@ public abstract class ASTFileLookupValue implements NotComparableSkyValue {
     }
 
     @Override
-    public byte[] getDigest() {
-      return this.digest;
-    }
-
-    @Override
-    public String getError() {
+    public String getErrorMsg() {
       throw new IllegalStateException(
           "attempted to retrieve unsuccessful lookup reason for successful lookup");
     }
@@ -113,96 +93,47 @@ public abstract class ASTFileLookupValue implements NotComparableSkyValue {
     }
 
     @Override
-    public byte[] getDigest() {
-      throw new IllegalStateException("attempted to retrieve digest for unsuccessful lookup");
-    }
-
-    @Override
-    public String getError() {
+    public String getErrorMsg() {
       return this.errorMsg;
     }
   }
 
-  /** Constructs a value from a failure before parsing a file. */
-  @FormatMethod
-  static ASTFileLookupValue noFile(String format, Object... args) {
-    return new ASTLookupNoFile(String.format(format, args));
+  static ASTFileLookupValue forBadPackage(Label fileLabel, String reason) {
+    return new ASTLookupNoFile(
+        String.format("Unable to load package for '%s': %s", fileLabel, reason));
   }
 
-  /** Constructs a value from a parsed file. */
-  public static ASTFileLookupValue withFile(StarlarkFile ast, byte[] digest) {
-    return new ASTLookupWithFile(ast, digest);
+  static ASTFileLookupValue forMissingFile(Label fileLabel) {
+    return new ASTLookupNoFile(
+        String.format("Unable to load file '%s': file doesn't exist", fileLabel));
   }
 
-  private static final Interner<Key> keyInterner = BlazeInterners.newWeakInterner();
-
-  /** Types of bzl files we may encounter. */
-  enum Kind {
-    /** A regular .bzl file loaded on behalf of a BUILD or WORKSPACE file. */
-    // The reason we can share a single key type for these environments is that they have the same
-    // symbol names, even though their symbol definitions (particularly for the "native" object)
-    // differ. (See also #11954, which aims to make even the symbol definitions the same.)
-    NORMAL,
-
-    /** A .bzl file loaded during evaluation of the {@code @builtins} pseudo-repository. */
-    BUILTINS,
-
-    /** The prelude file, whose declarations are implicitly loaded by all BUILD files. */
-    PRELUDE,
-
-    /**
-     * A virtual empty file that does not correspond to a lookup in the filesystem. This is used for
-     * the default prelude contents, when the real prelude's contents should be ignored (in
-     * particular, when its package is missing).
-     */
-    EMPTY_PRELUDE,
+  static ASTFileLookupValue forBadFile(Label fileLabel) {
+    return new ASTLookupNoFile(
+        String.format("Unable to load file '%s': it isn't a regular file", fileLabel));
   }
 
-  /** SkyKey for retrieving a .bzl AST. */
-  static class Key implements SkyKey {
+  public static ASTFileLookupValue withFile(StarlarkFile ast) {
+    return new ASTLookupWithFile(ast);
+  }
 
-    /** The root in which the .bzl file is to be found. Null for EMPTY_PRELUDE. */
-    @Nullable final Root root;
+  public static Key key(Label astFileLabel) {
+    return ASTFileLookupValue.Key.create(astFileLabel);
+  }
 
-    /** The label of the .bzl to be retrieved. Null for EMPTY_PRELUDE. */
-    @Nullable final Label label;
+  @AutoCodec.VisibleForSerialization
+  @AutoCodec
+  static class Key extends AbstractSkyKey<Label> {
+    private static final Interner<Key> interner = BlazeInterners.newWeakInterner();
 
-    final Kind kind;
-
-    private Key(Root root, Label label, Kind kind) {
-      this.root = root;
-      this.label = label;
-      this.kind = Preconditions.checkNotNull(kind);
-      if (kind != Kind.EMPTY_PRELUDE) {
-        Preconditions.checkNotNull(root);
-        Preconditions.checkNotNull(label);
-      }
+    private Key(Label arg) {
+      super(arg);
     }
 
-    boolean isPrelude() {
-      return kind == Kind.PRELUDE || kind == Kind.EMPTY_PRELUDE;
-    }
-
-    @Override
-    public int hashCode() {
-      // TODO(bazel-team): Consider optimizing e.g. by omitting root from the hash. Roots are not
-      // interned and in the common case there's only one.
-      return Objects.hash(Key.class, root, label, kind);
-    }
-
-    @Override
-    public boolean equals(Object other) {
-      if (this == other) {
-        return true;
-      }
-      if (other instanceof Key) {
-        Key that = (Key) other;
-        // Compare roots last since that's the more expensive step.
-        return this.kind == that.kind
-            && Objects.equals(this.label, that.label)
-            && Objects.equals(this.root, that.root);
-      }
-      return false;
+    @AutoCodec.VisibleForSerialization
+    @AutoCodec.Instantiator
+    static Key create(Label arg) {
+      return interner.intern(new Key(arg));
     }
 
     @Override
@@ -210,24 +141,4 @@ public abstract class ASTFileLookupValue implements NotComparableSkyValue {
       return SkyFunctions.AST_FILE_LOOKUP;
     }
   }
-
-  /** Constructs a key for loading a regular (non-prelude) .bzl. */
-  public static Key key(Root root, Label label) {
-    return keyInterner.intern(new Key(root, label, Kind.NORMAL));
-  }
-
-  /** Constructs a key for loading a builtins .bzl. */
-  // TODO(#11437): Retrieve the builtins bzl from the root given by
-  // --experimental_builtins_bzl_path, instead of making the caller specify it here.
-  public static Key keyForBuiltins(Root root, Label label) {
-    return keyInterner.intern(new Key(root, label, Kind.BUILTINS));
-  }
-
-  /** Constructs a key for loading the prelude .bzl. */
-  static Key keyForPrelude(Root root, Label label) {
-    return keyInterner.intern(new Key(root, label, Kind.PRELUDE));
-  }
-
-  /** The unique SkyKey of EMPTY_PRELUDE kind. */
-  static final Key EMPTY_PRELUDE_KEY = new Key(/*root=*/ null, /*label=*/ null, Kind.EMPTY_PRELUDE);
 }

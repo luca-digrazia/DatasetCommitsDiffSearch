@@ -149,7 +149,7 @@ public class SkylarkSignatureProcessor {
       }
       FunctionSignature.WithValues<Object, SkylarkType> signature =
           FunctionSignature.WithValues.of(paramList);
-      for (String paramName : signature.getSignature().getParameterNames()) {
+      for (String paramName : signature.getSignature().getNames()) {
         if (enforcedTypesList != null) {
           enforcedTypesList.add(enforcedTypes.get(paramName));
         }
@@ -248,9 +248,10 @@ public class SkylarkSignatureProcessor {
               StarlarkThread.builder(mutability)
                   .useDefaultSemantics()
                   .setGlobals(StarlarkThread.CONSTANTS_ONLY)
+                  .setEventHandler(StarlarkThread.FAIL_FAST_HANDLER)
                   .build()
                   .update("unbound", Runtime.UNBOUND);
-          defaultValue = EvalUtils.execOrEval(ParserInput.fromLines(paramDefaultValue), thread);
+          defaultValue = StarlarkFile.eval(ParserInput.fromLines(paramDefaultValue), thread);
           defaultValueCache.put(paramDefaultValue, defaultValue);
           return defaultValue;
         }

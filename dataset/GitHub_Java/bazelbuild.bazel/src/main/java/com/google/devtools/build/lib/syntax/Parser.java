@@ -29,8 +29,10 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import javax.annotation.Nullable;
 
 /**
@@ -1038,15 +1040,18 @@ final class Parser {
     expect(TokenKind.COMMA);
 
     ImmutableList.Builder<LoadStatement.Binding> bindings = ImmutableList.builder();
-    // At least one symbol is required.
-    parseLoadSymbol(bindings);
+    // previousSymbols is used to detect duplicate symbols in the same statement.
+    Set<String> previousSymbols = new HashSet<>();
+
+    parseLoadSymbol(bindings, previousSymbols); // At least one symbol is required
+
     while (token.kind != TokenKind.RPAREN && token.kind != TokenKind.EOF) {
-      // A trailing comma is permitted after the last symbol.
       expect(TokenKind.COMMA);
       if (token.kind == TokenKind.RPAREN) {
         break;
       }
-      parseLoadSymbol(bindings);
+
+      parseLoadSymbol(bindings, previousSymbols);
     }
 
     LoadStatement stmt = new LoadStatement(importString, bindings.build());
@@ -1062,7 +1067,8 @@ final class Parser {
    * alias is used, "name" and "declared" will be identical. "Declared" refers to the original name
    * in the Bazel file that should be loaded, while "name" will be the key of the entry in the map.
    */
-  private void parseLoadSymbol(ImmutableList.Builder<LoadStatement.Binding> symbols) {
+  private void parseLoadSymbol(
+      ImmutableList.Builder<LoadStatement.Binding> symbols, Set<String> previousSymbols) {
     if (token.kind != TokenKind.STRING && token.kind != TokenKind.IDENTIFIER) {
       syntaxError("expected either a literal string or an identifier");
       return;
@@ -1070,6 +1076,11 @@ final class Parser {
 
     String name = (String) token.value;
     Identifier local = setLocation(Identifier.of(name), token.left, token.right);
+
+    if (previousSymbols.contains(local.getName())) {
+      syntaxError(String.format("Identifier '%s' is used more than once", local.getName()));
+    }
+    previousSymbols.add(local.getName());
 
     Identifier original;
     if (token.kind == TokenKind.STRING) {
