@@ -149,9 +149,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
         "    resources = [':avoid.png']",
         ")");
 
-    ObjcProvider provider = getConfiguredTarget("//package:test")
-        .get(AppleStaticLibraryProvider.SKYLARK_CONSTRUCTOR)
-        .getDepsObjcProvider();
+    ObjcProvider provider = providerForTarget("//package:test");
     // Do not remove SDK_FRAMEWORK values in avoid_deps.
     assertThat(provider.get(ObjcProvider.SDK_FRAMEWORK))
         .containsAllOf(new SdkFramework("AvoidSDK"), new SdkFramework("BaseSDK"));
@@ -244,6 +242,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
 
     useConfiguration(
         "--ios_multi_cpus=i386,x86_64",
+        "--experimental_disable_go",
         "--experimental_disable_jvm",
         "--crosstool_top=//tools/osx/crosstool:crosstool");
 
@@ -595,7 +594,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
         "objc_library(name = 'objcLib', srcs = [ 'b.m' ], deps = [':avoidLib'])",
         "objc_library(name = 'avoidLib', srcs = [ 'c.m' ])");
 
-    useConfiguration("--experimental_disable_jvm");
+    useConfiguration("--experimental_disable_go", "--experimental_disable_jvm");
     CommandAction action = linkLibAction("//package:test");
     assertThat(Artifact.toRootRelativePaths(action.getInputs())).contains(
         "package/libobjcLib.a");
@@ -618,7 +617,7 @@ public class AppleStaticLibraryTest extends ObjcRuleTestCase {
         "objc_library(name = 'objcLib', srcs = [ 'b.m' ])",
         "objc_library(name = 'avoidLib', srcs = [ 'c.m' ])");
 
-    useConfiguration("--experimental_disable_jvm");
+    useConfiguration("--experimental_disable_go", "--experimental_disable_jvm");
     CommandAction action = linkLibAction("//package:test");
     assertThat(Artifact.toRootRelativePaths(action.getInputs())).contains(
         "package/libobjcLib.a");
