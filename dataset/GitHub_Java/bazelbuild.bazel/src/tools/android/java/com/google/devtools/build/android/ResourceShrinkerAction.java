@@ -309,11 +309,11 @@ public class ResourceShrinkerAction {
           options.shrunkApk,
           null /* proguardOutput */,
           null /* mainDexProguardOutput */,
-          /* publicResourcesOut= */ null,
-          /* dataBindingInfoOut= */ null);
+          null /* publicResourcesOut */,
+          null /* dataBindingInfoOut */);
       if (options.shrunkResources != null) {
         ResourcesZip.from(shrunkResources, resourceFiles.resolve("assets"))
-            .writeTo(options.shrunkResources, /* compress= */ false);
+            .writeTo(options.shrunkResources, false /* compress */);
       }
       if (options.rTxtOutput != null) {
         AndroidResourceOutputs.copyRToOutput(

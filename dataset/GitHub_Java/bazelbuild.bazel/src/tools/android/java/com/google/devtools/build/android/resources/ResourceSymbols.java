@@ -31,6 +31,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.TreeMap;
 import java.util.concurrent.Callable;
@@ -134,8 +135,7 @@ public class ResourceSymbols {
           dependency, executor.submit(new PackageParsingTask(dependency.getManifest())));
     }
     Multimap<String, ListenableFuture<ResourceSymbols>> packageToTable = HashMultimap.create();
-    for (Map.Entry<SymbolFileProvider, ListenableFuture<String>> entry :
-        providerToPackage.entrySet()) {
+    for (Entry<SymbolFileProvider, ListenableFuture<String>> entry : providerToPackage.entrySet()) {
       File symbolFile = entry.getKey().getSymbolFile();
       if (!Objects.equals(entry.getValue().get(), packageToExclude)) {
         packageToTable.put(entry.getValue().get(), load(symbolFile.toPath(), executor));
