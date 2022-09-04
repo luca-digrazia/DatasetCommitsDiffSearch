@@ -20,7 +20,7 @@ package smile.math.kernel;
 import smile.math.MathEx;
 
 /**
- * Gaussian Kernel, also referred as RBF kernel or squared exponential kernel.
+ * The Gaussian Kernel.
  * <p>
  * <pre>
  *     k(u, v) = e<sup>-||u-v||<sup>2</sup> / (2 * &sigma;<sup>2</sup>)</sup>
@@ -35,7 +35,7 @@ import smile.math.MathEx;
 public class GaussianKernel extends Gaussian implements MercerKernel<double[]> {
     /**
      * Constructor.
-     * @param sigma The length scale of kernel.
+     * @param sigma the smooth/width parameter of Gaussian kernel.
      */
     public GaussianKernel(double sigma) {
         super(sigma);
@@ -43,6 +43,6 @@ public class GaussianKernel extends Gaussian implements MercerKernel<double[]> {
 
     @Override
     public double k(double[] x, double[] y) {
-        return k(MathEx.distance(x, y));
+        return k(MathEx.squaredDistance(x, y));
     }
 }

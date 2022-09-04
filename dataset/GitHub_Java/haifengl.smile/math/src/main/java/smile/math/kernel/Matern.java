@@ -18,18 +18,15 @@
 package smile.math.kernel;
 
 /**
- * The class of Matérn kernels is a generalization of the Gaussian/RBF.
+ * The class of Matérn kernels is a generalization of the RBF.
  * It has an additional parameter nu which controls the smoothness of
  * the kernel function. The smaller nu, the less smooth the approximated
  * function is. As nu -> inf, the kernel becomes equivalent to the
  * Gaussian/RBF kernel. When nu = 1/2, the kernel becomes identical to the
- * Laplacian kernel. The Matern kernel become especially simple
+ * absolute exponential kernel. The Matern kernel become especially simple
  * when nu is half-integer. Important intermediate values are 3/2
  * (once differentiable functions) and 5/2 (twice differentiable functions).
- *
- * @see Gaussian
- * @see Laplacian
- *
+
  * @author Haifeng Li
  */
 public class Matern implements IsotropicKernel {
@@ -48,7 +45,7 @@ public class Matern implements IsotropicKernel {
 
     /**
      * Constructor.
-     * @param length The length scale of kernel.
+     * @param length The length scale of the kernel function.
      * @param nu The smoothness of the kernel function. Only 0.5, 1.5, 2.5 and Inf are accepted.
      */
     public Matern(double length, int nu) {
@@ -66,7 +63,7 @@ public class Matern implements IsotropicKernel {
 
     @Override
     public String toString() {
-        return String.format("Matern(%.4f, %.1f)", length, nu);
+        return String.format("Matern(length = %.4f, nu = %.1f)", length, nu);
     }
 
     @Override
@@ -86,6 +83,11 @@ public class Matern implements IsotropicKernel {
         if (nu == 2.5) {
             d *= SQRT5;
             return (1.0 + d) * Math.exp(-d);
+        }
+
+        if (nu == 1.5) {
+            d *= SQRT3;
+            return (1.0 + d + d * d / 3.0) * Math.exp(-d);
         }
 
         if (nu == 0.5) {

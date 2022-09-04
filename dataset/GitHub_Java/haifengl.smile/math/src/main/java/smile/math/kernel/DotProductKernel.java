@@ -29,24 +29,18 @@ import smile.math.matrix.Matrix;
 public interface DotProductKernel extends Function {
 
     @Override
-    default double f(double dot) {
-        return k(dot);
+    default double f(double dist) {
+        return k(dist);
     }
 
     /**
-     * Computes the dot product kernel function.
+     * Kernel function.
      * @param dot the dot product.
      */
     double k(double dot);
 
     /**
-     * Computes the dot product kernel function and its gradient over hyperparameters..
-     * @param dot The dot product.
-     */
-    double[] kg(double dot);
-
-    /**
-     * Computes the kernel function.
+     * Kernel function.
      * This is simply for Scala convenience.
      */
     default double apply(double dot) {
@@ -54,7 +48,7 @@ public interface DotProductKernel extends Function {
     }
 
     /**
-     * Computes the kernel matrix.
+     * Returns the kernel matrix.
      *
      * @param pdot the pairwise dot product matrix.
      * @return the kernel matrix.

@@ -17,6 +17,7 @@
 
 package smile.math.kernel;
 
+
 import smile.math.Function;
 import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
@@ -36,7 +37,7 @@ public interface IsotropicKernel extends Function {
     }
 
     /**
-     * The isotropic kernel function.
+     * Kernel function.
      * @param dist the squared distance.
      */
     double k(double dist);
