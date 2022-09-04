@@ -9,6 +9,7 @@ import io.dropwizard.jackson.Jackson;
 import io.dropwizard.validation.BaseValidator;
 import org.assertj.core.data.MapEntry;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -26,7 +27,7 @@ import java.util.Locale;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.Assertions.failBecauseExceptionWasNotThrown;
 
 public class ConfigurationFactoryTest {
@@ -71,9 +72,6 @@ public class ConfigurationFactoryTest {
 
         private boolean admin;
 
-        @JsonProperty("my.logger")
-        private Map<String, String> logger = new LinkedHashMap<>();
-
         public String getName() {
             return name;
         }
@@ -96,10 +94,6 @@ public class ConfigurationFactoryTest {
 
         public void setAdmin(boolean admin) {
             this.admin = admin;
-        }
-
-        public Map<String, String> getLogger() {
-            return logger;
         }
     }
 
@@ -205,22 +199,6 @@ public class ConfigurationFactoryTest {
         final Example example = factory.build(validFile);
         assertThat(example.getName())
             .isEqualTo("Coda Hale Overridden");
-    }
-
-    @Test
-    public void handlesExistingOverrideWithPeriod() throws Exception {
-        System.setProperty("dw.my\\.logger.level", "debug");
-        final Example example = factory.build(validFile);
-        assertThat(example.getLogger().get("level"))
-            .isEqualTo("debug");
-    }
-
-    @Test
-    public void handlesNewOverrideWithPeriod() throws Exception {
-        System.setProperty("dw.my\\.logger.com\\.example", "error");
-        final Example example = factory.build(validFile);
-        assertThat(example.getLogger().get("com.example"))
-            .isEqualTo("error");
     }
 
     @Test
@@ -416,50 +394,63 @@ public class ConfigurationFactoryTest {
     @Test
     public void throwsAnExceptionIfDefaultConfigurationCantBeInstantiated() throws Exception {
         System.setProperty("dw.name", "Coda Hale Overridden");
-        final YamlConfigurationFactory<NonInsatiableExample> factory =
-            new YamlConfigurationFactory<>(NonInsatiableExample.class, validator, Jackson.newObjectMapper(), "dw");
-        assertThatThrownBy(factory::build)
-            .isInstanceOf(IllegalArgumentException.class)
-            .hasMessage("Unable create an instance of the configuration class: " +
-                "'io.dropwizard.configuration.ConfigurationFactoryTest.NonInsatiableExample'");
+        try {
+            new YamlConfigurationFactory<>(NonInsatiableExample.class, validator, Jackson.newObjectMapper(), "dw").build();
+            Assert.fail("Configuration is parsed, but shouldn't be");
+        } catch (IllegalArgumentException e){
+            assertThat(e).hasMessage("Unable create an instance of the configuration class: " +
+                    "'io.dropwizard.configuration.ConfigurationFactoryTest.NonInsatiableExample'");
+        }
+
     }
 
     @Test
     public void printsDidYouMeanOnUnrecognizedField() throws Exception {
         final File resourceFileName = resourceFileName("factory-test-typo.yml");
-        assertThatThrownBy(() -> factory.build(resourceFileName))
-            .isInstanceOf(ConfigurationParsingException.class)
-            .hasMessage(resourceFileName + " has an error:" + NEWLINE +
-                "  * Unrecognized field at: propertis" + NEWLINE +
-                "    Did you mean?:" + NEWLINE +
-                "      - properties" + NEWLINE +
-                "      - servers" + NEWLINE +
-                "      - type" + NEWLINE +
-                "      - name" + NEWLINE +
-                "      - age" + NEWLINE +
-                "        [2 more]" + NEWLINE);
+        try {
+            factory.build(resourceFileName);
+            fail("Typo in a configuration should be caught");
+        } catch (ConfigurationParsingException e) {
+            assertThat(e.getMessage()).isEqualTo(resourceFileName + " has an error:" + NEWLINE +
+                    "  * Unrecognized field at: propertis" + NEWLINE +
+                    "    Did you mean?:" + NEWLINE +
+                    "      - properties" + NEWLINE +
+                    "      - servers" + NEWLINE +
+                    "      - type" + NEWLINE +
+                    "      - name" + NEWLINE +
+                    "      - age" + NEWLINE +
+                    "        [1 more]" + NEWLINE);
+        }
     }
 
     @Test
     public void incorrectTypeIsFound() throws Exception {
         final File resourceFileName = resourceFileName("factory-test-wrong-type.yml");
-        assertThatThrownBy(() -> factory.build(resourceFileName))
-            .isInstanceOf(ConfigurationParsingException.class)
-            .hasMessage(resourceFileName + " has an error:" + NEWLINE +
-                "  * Incorrect type of value at: age; is of type: String, expected: int" + NEWLINE);
+        try {
+            factory.build(resourceFileName);
+            fail("Incorrect type in a configuration should be found");
+        } catch (ConfigurationParsingException e) {
+            assertThat(e.getMessage()).isEqualTo(resourceFileName + " has an error:" + NEWLINE +
+                    "  * Incorrect type of value at: age; is of type: String, expected: int" + NEWLINE);
+        }
     }
 
     @Test
     public void printsDetailedInformationOnMalformedYaml() throws Exception {
         final File resourceFileName = resourceFileName("factory-test-malformed-advanced.yml");
-        assertThatThrownBy(() -> factory.build(resourceFileName))
-            .hasMessage("YAML decoding problem: while parsing a flow sequence\n" +
-                " in 'reader', line 2, column 7:\n" +
-                "    type: [ coder,wizard\n" +
-                "          ^\n" +
-                "expected ',' or ']', but got StreamEnd\n" +
-                " in 'reader', line 2, column 21:\n" +
-                "    wizard\n" +
-                "          ^\n");
+        try {
+            factory.build(resourceFileName);
+            fail("Should print a detailed error on a malformed YAML file");
+        } catch (Exception e) {
+            assertThat(e.getMessage()).isEqualTo(
+                    "YAML decoding problem: while parsing a flow sequence\n" +
+                    " in 'reader', line 2, column 7:\n" +
+                    "    type: [ coder,wizard\n" +
+                    "          ^\n" +
+                    "expected ',' or ']', but got StreamEnd\n" +
+                    " in 'reader', line 2, column 21:\n" +
+                    "    wizard\n" +
+                    "          ^\n");
+        }
     }
 }
