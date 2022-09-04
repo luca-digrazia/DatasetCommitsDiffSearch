@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.analysis;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.packages.Attribute.attr;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
@@ -94,29 +94,29 @@ public class AspectDefinitionTest {
 
   @Test
   public void testAspectWithDuplicateAttribute_FailsToAdd() throws Exception {
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            new AspectDefinition.Builder(TEST_ASPECT_CLASS)
-                .add(
-                    attr("$runtime", BuildType.LABEL)
-                        .value(Label.parseAbsoluteUnchecked("//run:time")))
-                .add(
-                    attr("$runtime", BuildType.LABEL)
-                        .value(Label.parseAbsoluteUnchecked("//oops"))));
+    try {
+      new AspectDefinition.Builder(TEST_ASPECT_CLASS)
+          .add(attr("$runtime", BuildType.LABEL).value(Label.parseAbsoluteUnchecked("//run:time")))
+          .add(attr("$runtime", BuildType.LABEL).value(Label.parseAbsoluteUnchecked("//oops")));
+      fail(); // expected IllegalArgumentException
+    } catch (IllegalArgumentException e) {
+      // expected
+    }
   }
 
   @Test
   public void testAspectWithUserVisibleAttribute_FailsToAdd() throws Exception {
-    assertThrows(
-        IllegalArgumentException.class,
-        () ->
-            new AspectDefinition.Builder(TEST_ASPECT_CLASS)
-                .add(
-                    attr("invalid", BuildType.LABEL)
-                        .value(Label.parseAbsoluteUnchecked("//run:time"))
-                        .allowedFileTypes(FileTypeSet.NO_FILE))
-                .build());
+    try {
+      new AspectDefinition.Builder(TEST_ASPECT_CLASS)
+          .add(
+              attr("invalid", BuildType.LABEL)
+                  .value(Label.parseAbsoluteUnchecked("//run:time"))
+                  .allowedFileTypes(FileTypeSet.NO_FILE))
+          .build();
+      fail(); // expected IllegalArgumentException
+    } catch (IllegalArgumentException e) {
+      // expected
+    }
   }
 
   @Test

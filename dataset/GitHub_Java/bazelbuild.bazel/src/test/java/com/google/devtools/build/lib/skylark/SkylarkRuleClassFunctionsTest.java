@@ -25,6 +25,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkAttr.Descriptor;
+import com.google.devtools.build.lib.analysis.skylark.SkylarkFileType;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleClassFunctions.SkylarkRuleFunction;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -56,7 +57,7 @@ import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.syntax.SkylarkList.Tuple;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.testutil.MoreAsserts;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -199,12 +200,11 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void testDisableDeprecatedParams() throws Exception {
-    ev =
-        createEvaluationTestCase(
-            StarlarkSemantics.DEFAULT_SEMANTICS
-                .toBuilder()
-                .incompatibleDisableDeprecatedAttrParams(true)
-                .build());
+    ev = createEvaluationTestCase(
+        SkylarkSemantics.DEFAULT_SEMANTICS
+            .toBuilder()
+            .incompatibleDisableDeprecatedAttrParams(true)
+            .build());
     ev.initialize();
 
     // Verify 'single_file' deprecation.
@@ -245,6 +245,13 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
     assertThat(attr.getAllowedFileTypesPredicate().apply("a.xml")).isTrue();
     assertThat(attr.getAllowedFileTypesPredicate().apply("a.txt")).isFalse();
     assertThat(attr.isSingleArtifact()).isTrue();
+  }
+
+  @Test
+  public void testAttrWithSkylarkFileType() throws Exception {
+    Attribute attr = buildAttribute("a1", "attr.label_list(allow_files = FileType(['.xml']))");
+    assertThat(attr.getAllowedFileTypesPredicate().apply("a.xml")).isTrue();
+    assertThat(attr.getAllowedFileTypesPredicate().apply("a.txt")).isFalse();
   }
 
   private static SkylarkProviderIdentifier legacy(String legacyId) {
@@ -581,7 +588,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   @Test
   public void testAttrCfg() throws Exception {
     Attribute attr = buildAttribute("a1", "attr.label(cfg = 'host', allow_files = True)");
-    assertThat(attr.hasHostConfigurationTransition()).isTrue();
+    assertThat(attr.getConfigurationTransition().isHostTransition()).isTrue();
   }
 
   @Test
@@ -592,12 +599,11 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
 
   @Test
   public void incompatibleDataTransition() throws Exception {
-    ev =
-        createEvaluationTestCase(
-            StarlarkSemantics.DEFAULT_SEMANTICS
-                .toBuilder()
-                .incompatibleDisallowDataTransition(true)
-                .build());
+    ev = createEvaluationTestCase(
+        SkylarkSemantics.DEFAULT_SEMANTICS
+            .toBuilder()
+            .incompatibleDisallowDataTransition(true)
+            .build());
     ev.initialize();
     EvalException expected =
         assertThrows(EvalException.class, () -> eval("attr.label(cfg = 'data')"));
@@ -645,10 +651,7 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   public void testNoAttrLicense() throws Exception {
     ev =
         createEvaluationTestCase(
-            StarlarkSemantics.DEFAULT_SEMANTICS
-                .toBuilder()
-                .incompatibleNoAttrLicense(true)
-                .build());
+            SkylarkSemantics.DEFAULT_SEMANTICS.toBuilder().incompatibleNoAttrLicense(true).build());
     ev.initialize();
 
     EvalException expected = assertThrows(EvalException.class, () -> eval("attr.license()"));
@@ -857,9 +860,16 @@ public class SkylarkRuleClassFunctionsTest extends SkylarkTestCase {
   }
 
   @Test
+  public void testFileType() throws Exception {
+    Object result = evalRuleClassCode("FileType(['.css'])");
+    SkylarkFileType fts = (SkylarkFileType) result;
+    assertThat(fts.getExtensions()).isEqualTo(ImmutableList.of(".css"));
+  }
+
+  @Test
   public void testFileTypeIsDisabled() throws Exception {
-    StarlarkSemantics semantics =
-        StarlarkSemantics.DEFAULT_SEMANTICS.toBuilder().incompatibleDisallowFileType(true).build();
+    SkylarkSemantics semantics =
+        SkylarkSemantics.DEFAULT_SEMANTICS.toBuilder().incompatibleDisallowFileType(true).build();
     EvalException expected =
         assertThrows(EvalException.class, () -> evalRuleClassCode(semantics, "FileType(['.css'])"));
     assertThat(expected).hasMessageThat().contains("FileType function is not available.");

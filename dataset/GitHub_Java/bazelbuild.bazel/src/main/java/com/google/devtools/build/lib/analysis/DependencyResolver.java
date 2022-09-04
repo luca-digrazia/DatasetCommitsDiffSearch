@@ -141,12 +141,12 @@ public abstract class DependencyResolver {
 
     public abstract ConfigurationTransition getTransition();
 
-    public abstract ImmutableList<Aspect> getPropagatingAspects();
+    public abstract ImmutableList<Aspect> getBaseAspects();
 
     static PartiallyResolvedDependency of(
-        Label label, ConfigurationTransition transition, ImmutableList<Aspect> propagatingAspects) {
+        Label label, ConfigurationTransition transition, ImmutableList<Aspect> baseAspects) {
       return new AutoValue_DependencyResolver_PartiallyResolvedDependency(
-          label, transition, propagatingAspects);
+          label, transition, baseAspects);
     }
   }
 
@@ -323,18 +323,14 @@ public abstract class DependencyResolver {
       }
 
       Attribute attribute = entry.getKey().getAttribute();
-      ImmutableList.Builder<Aspect> propagatingAspects = ImmutableList.builder();
-      propagatingAspects.addAll(attribute.getAspects(fromRule));
-      collectPropagatingAspects(
-          aspects, attribute.getName(), entry.getKey().getOwningAspect(), propagatingAspects);
-
+      ImmutableList<Aspect> baseAspects = attribute.getAspects(fromRule);
       ConfigurationTransition attributeTransition =
           attribute.hasSplitConfigurationTransition()
               ? attribute.getSplitTransition(attributeMap)
               : attribute.getConfigurationTransition();
       partiallyResolvedDeps.put(
           entry.getKey(),
-          PartiallyResolvedDependency.of(toLabel, attributeTransition, propagatingAspects.build()));
+          PartiallyResolvedDependency.of(toLabel, attributeTransition, baseAspects));
     }
 
     OrderedSetMultimap<Attribute, Dependency> outgoingEdges = OrderedSetMultimap.create();
@@ -385,13 +381,15 @@ public abstract class DependencyResolver {
       }
 
       Attribute attribute = entry.getKey().getAttribute();
+      AspectClass ownerAspect = entry.getKey().getOwningAspect();
 
       ConfigurationTransition transition =
           TransitionResolver.evaluateTransition(
               node.getConfiguration(), dep.getTransition(), toTarget, trimmingTransitionFactory);
 
       AspectCollection requiredAspects =
-          requiredAspects(fromRule, dep.getPropagatingAspects(), attribute.getName(), toTarget);
+          requiredAspects(
+              fromRule, aspects, dep.getBaseAspects(), attribute.getName(), ownerAspect, toTarget);
       outgoingEdges.put(
           attribute,
           transition == NullTransition.INSTANCE
@@ -582,26 +580,61 @@ public abstract class DependencyResolver {
   }
 
   /**
-   * Collects the aspects from {@code aspectPath} that need to be propagated along the attribute
-   * {@code attributeName}.
+   * Collects into {@code filteredAspectPath} aspects from {@code aspectPath} that propagate along
+   * {@code attributeAndOwner} and apply to a given {@code target}.
    *
-   * <p>It can happen that some of the aspects cannot be propagated if the dependency doesn't have a
-   * provider that's required by them. These will be filtered out after the rule class of the
-   * dependency is known.
+   * <p>The last aspect in {@code aspectPath} is (potentially) visible and recorded in {@code
+   * visibleAspects}.
    */
   private static void collectPropagatingAspects(
       Iterable<Aspect> aspectPath,
       String attributeName,
       @Nullable AspectClass aspectOwningAttribute,
-      ImmutableList.Builder<Aspect> filteredAspectPath) {
+      Rule target,
+      ImmutableList.Builder<Aspect> filteredAspectPath,
+      ImmutableSet.Builder<AspectDescriptor> visibleAspects) {
+
+    Aspect lastAspect = null;
     for (Aspect aspect : aspectPath) {
       if (aspect.getAspectClass().equals(aspectOwningAttribute)) {
         // Do not propagate over the aspect's own attributes.
         continue;
       }
-
-      if (aspect.getDefinition().propagateAlong(attributeName)) {
+      lastAspect = aspect;
+      if (aspect.getDefinition().propagateAlong(attributeName)
+          && aspect
+              .getDefinition()
+              .getRequiredProviders()
+              .isSatisfiedBy(target.getRuleClassObject().getAdvertisedProviders())) {
         filteredAspectPath.add(aspect);
+      } else {
+        lastAspect = null;
+      }
+    }
+
+    if (lastAspect != null) {
+      visibleAspects.add(lastAspect.getDescriptor());
+    }
+  }
+
+  /**
+   * Collect all aspects that originate on {@code attribute} of {@code originalRule} and are
+   * applicable to a {@code target}
+   *
+   * <p>They are appended to {@code filteredAspectPath} and registered in {@code visibleAspects}
+   * set.
+   */
+  private static void collectOriginatingAspects(
+      Iterable<Aspect> baseAspects,
+      Rule target,
+      ImmutableList.Builder<Aspect> filteredAspectPath,
+      ImmutableSet.Builder<AspectDescriptor> visibleAspects) {
+    RuleClass ruleClass = target.getRuleClassObject();
+    for (Aspect baseAspect : baseAspects) {
+      if (baseAspect.getDefinition().getRequiredProviders()
+          .isSatisfiedBy(ruleClass.getAdvertisedProviders())) {
+        filteredAspectPath.add(baseAspect);
+        visibleAspects.add(baseAspect.getDescriptor());
       }
     }
   }
@@ -631,25 +664,26 @@ public abstract class DependencyResolver {
   }
 
   private AspectCollection requiredAspects(
-      Rule fromRule, Iterable<Aspect> aspects, String attributeName, Target toTarget)
+      Rule fromRule,
+      Iterable<Aspect> aspects,
+      Iterable<Aspect> baseAspects,
+      String attributeName,
+      AspectClass ownerAspect,
+      Target toTarget)
       throws InconsistentAspectOrderException {
     if (!(toTarget instanceof Rule)) {
       return AspectCollection.EMPTY;
     }
 
-    Rule toRule = (Rule) toTarget;
     ImmutableList.Builder<Aspect> filteredAspectPath = ImmutableList.builder();
     ImmutableSet.Builder<AspectDescriptor> visibleAspects = ImmutableSet.builder();
 
-    for (Aspect aspect : aspects) {
-      if (aspect
-          .getDefinition()
-          .getRequiredProviders()
-          .isSatisfiedBy(toRule.getRuleClassObject().getAdvertisedProviders())) {
-        filteredAspectPath.add(aspect);
-        visibleAspects.add(aspect.getDescriptor());
-      }
+    if (ownerAspect == null) {
+      collectOriginatingAspects(baseAspects, (Rule) toTarget, filteredAspectPath, visibleAspects);
     }
+
+    collectPropagatingAspects(
+        aspects, attributeName, ownerAspect, (Rule) toTarget, filteredAspectPath, visibleAspects);
     try {
       return AspectCollection.create(filteredAspectPath.build(), visibleAspects.build());
     } catch (AspectCycleOnPathException e) {
