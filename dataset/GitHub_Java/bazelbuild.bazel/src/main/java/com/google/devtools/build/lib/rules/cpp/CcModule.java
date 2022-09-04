@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.platform.ConstraintValueInfo;
 import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkActionFactory;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
@@ -93,7 +92,6 @@ public abstract class CcModule
         CcLinkingContext,
         LibraryToLink,
         CcToolchainVariables,
-        ConstraintValueInfo,
         SkylarkRuleContext,
         CcToolchainConfigInfo,
         CcCompilationOutputs> {
@@ -256,7 +254,7 @@ public abstract class CcModule
         Depset.getSetFromNoneableParam(
             frameworkIncludeDirs, String.class, "framework_include_directories"),
         Depset.getSetFromNoneableParam(defines, String.class, "preprocessor_defines"),
-        ImmutableList.of());
+        NestedSetBuilder.emptySet(Order.STABLE_ORDER));
   }
 
   @Override
@@ -369,8 +367,6 @@ public abstract class CcModule
    * @param dynamicLibraryObject Artifact
    * @param interfaceLibraryObject Artifact
    * @param alwayslink boolean
-   * @param dynamicLibraryPath String
-   * @param interfaceLibraryPath String
    * @return
    * @throws EvalException
    * @throws InterruptedException
@@ -385,8 +381,6 @@ public abstract class CcModule
       Object dynamicLibraryObject,
       Object interfaceLibraryObject,
       boolean alwayslink,
-      String dynamicLibraryPath,
-      String interfaceLibraryPath,
       Location location,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
@@ -401,32 +395,9 @@ public abstract class CcModule
     Artifact dynamicLibrary = nullIfNone(dynamicLibraryObject, Artifact.class);
     Artifact interfaceLibrary = nullIfNone(interfaceLibraryObject, Artifact.class);
 
+    Artifact notNullArtifactForIdentifier = null;
     StringBuilder extensionErrorsBuilder = new StringBuilder();
     String extensionErrorMessage = "does not have any of the allowed extensions";
-
-    PathFragment dynamicLibraryPathFragment = null;
-    if (!Strings.isNullOrEmpty(dynamicLibraryPath)) {
-      dynamicLibraryPathFragment = PathFragment.create(dynamicLibraryPath);
-      validateSymlinkPath(
-          location,
-          "dynamic_library_symlink_path",
-          dynamicLibraryPathFragment,
-          Link.ONLY_SHARED_LIBRARY_FILETYPES,
-          extensionErrorsBuilder);
-    }
-
-    PathFragment interfaceLibraryPathFragment = null;
-    if (!Strings.isNullOrEmpty(interfaceLibraryPath)) {
-      interfaceLibraryPathFragment = PathFragment.create(interfaceLibraryPath);
-      validateSymlinkPath(
-          location,
-          "interface_library_symlink_path",
-          interfaceLibraryPathFragment,
-          Link.ONLY_INTERFACE_LIBRARY_FILETYPES,
-          extensionErrorsBuilder);
-    }
-
-    Artifact notNullArtifactForIdentifier = null;
     if (staticLibrary != null) {
       String filename = staticLibrary.getFilename();
       if (!Link.ARCHIVE_FILETYPES.matches(filename)
@@ -489,64 +460,29 @@ public abstract class CcModule
     if (!featureConfiguration.getFeatureConfiguration().isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
       if (dynamicLibrary != null) {
         resolvedSymlinkDynamicLibrary = dynamicLibrary;
-        if (dynamicLibraryPathFragment != null) {
-          if (dynamicLibrary.getRootRelativePath().getSegment(0).startsWith("_solib_")) {
-            throw new EvalException(
-                location,
-                String.format(
-                    "dynamic_library must not be a symbolic link in the solib directory. Got '%s'",
-                    dynamicLibrary.getRootRelativePath()));
-          }
-          dynamicLibrary =
-              SolibSymlinkAction.getDynamicLibrarySymlink(
-                  skylarkActionFactory.asActionRegistry(location, skylarkActionFactory),
-                  skylarkActionFactory.getActionConstructionContext(),
-                  ccToolchainProvider.getSolibDirectory(),
-                  dynamicLibrary,
-                  dynamicLibraryPathFragment);
-        } else {
-          dynamicLibrary =
-              SolibSymlinkAction.getDynamicLibrarySymlink(
-                  skylarkActionFactory.asActionRegistry(location, skylarkActionFactory),
-                  skylarkActionFactory.getActionConstructionContext(),
-                  ccToolchainProvider.getSolibDirectory(),
-                  dynamicLibrary,
-                  /* preserveName= */ true,
-                  /* prefixConsumer= */ true);
-        }
+        dynamicLibrary =
+            SolibSymlinkAction.getDynamicLibrarySymlink(
+                /* actionRegistry= */ skylarkActionFactory.asActionRegistry(
+                    location, skylarkActionFactory),
+                /* actionConstructionContext= */ skylarkActionFactory
+                    .getActionConstructionContext(),
+                ccToolchainProvider.getSolibDirectory(),
+                dynamicLibrary,
+                /* preserveName= */ true,
+                /* prefixConsumer= */ true);
       }
       if (interfaceLibrary != null) {
         resolvedSymlinkInterfaceLibrary = interfaceLibrary;
-        if (interfaceLibraryPathFragment != null) {
-          if (interfaceLibrary.getRootRelativePath().getSegment(0).startsWith("_solib_")) {
-            throw new EvalException(
-                location,
-                String.format(
-                    "interface_library must not be a symbolic link in the solib directory. Got"
-                        + " '%s'",
-                    interfaceLibrary.getRootRelativePath()));
-          }
-          interfaceLibrary =
-              SolibSymlinkAction.getDynamicLibrarySymlink(
-                  /* actionRegistry= */ skylarkActionFactory.asActionRegistry(
-                      location, skylarkActionFactory),
-                  /* actionConstructionContext= */ skylarkActionFactory
-                      .getActionConstructionContext(),
-                  ccToolchainProvider.getSolibDirectory(),
-                  interfaceLibrary,
-                  interfaceLibraryPathFragment);
-        } else {
-          interfaceLibrary =
-              SolibSymlinkAction.getDynamicLibrarySymlink(
-                  /* actionRegistry= */ skylarkActionFactory.asActionRegistry(
-                      location, skylarkActionFactory),
-                  /* actionConstructionContext= */ skylarkActionFactory
-                      .getActionConstructionContext(),
-                  ccToolchainProvider.getSolibDirectory(),
-                  interfaceLibrary,
-                  /* preserveName= */ true,
-                  /* prefixConsumer= */ true);
-        }
+        interfaceLibrary =
+            SolibSymlinkAction.getDynamicLibrarySymlink(
+                /* actionRegistry= */ skylarkActionFactory.asActionRegistry(
+                    location, skylarkActionFactory),
+                /* actionConstructionContext= */ skylarkActionFactory
+                    .getActionConstructionContext(),
+                ccToolchainProvider.getSolibDirectory(),
+                interfaceLibrary,
+                /* preserveName= */ true,
+                /* prefixConsumer= */ true);
       }
     }
     if (staticLibrary == null
@@ -570,28 +506,6 @@ public abstract class CcModule
         .build();
   }
 
-  private static void validateSymlinkPath(
-      Location location,
-      String attrName,
-      PathFragment symlinkPath,
-      FileTypeSet filetypes,
-      StringBuilder errorsBuilder)
-      throws EvalException {
-    if (symlinkPath.isEmpty()
-        || symlinkPath.isAbsolute()
-        || symlinkPath.containsUplevelReferences()) {
-      throw new EvalException(
-          location,
-          String.format("%s must be a relative file path. Got '%s'", attrName, symlinkPath));
-    }
-    if (!filetypes.matches(symlinkPath.getBaseName())) {
-      errorsBuilder.append(
-          String.format(
-              "'%s' %s %s", symlinkPath, "does not have any of the allowed extensions", filetypes));
-      errorsBuilder.append(LINE_SEPARATOR.value());
-    }
-  }
-
   @Override
   public CcInfo mergeCcInfos(Sequence<?> ccInfos) throws EvalException {
     return CcInfo.merge(ccInfos.getContents(CcInfo.class, /* description= */ null));
@@ -610,8 +524,7 @@ public abstract class CcModule
     CcCompilationContext.Builder ccCompilationContext =
         CcCompilationContext.builder(
             /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null);
-    ccCompilationContext.addDeclaredIncludeSrcs(
-        toNestedSetOfArtifacts(headers, "headers").toList());
+    ccCompilationContext.addDeclaredIncludeSrcs(toNestedSetOfArtifacts(headers, "headers"));
     ccCompilationContext.addSystemIncludeDirs(
         toNestedSetOfStrings(systemIncludes, "system_includes").toList().stream()
             .map(x -> PathFragment.create(x))
@@ -632,7 +545,7 @@ public abstract class CcModule
             .collect(ImmutableList.toImmutableList()));
     ccCompilationContext.addDefines(toNestedSetOfStrings(defines, "defines"));
     ccCompilationContext.addNonTransitiveDefines(
-        toNestedSetOfStrings(localDefines, "local_defines").toList());
+        toNestedSetOfStrings(localDefines, "local_defines"));
     return ccCompilationContext.build();
   }
 
@@ -1798,8 +1711,8 @@ public abstract class CcModule
         convertToNestedSet(picObjectsObject, Artifact.class, "pic_objects");
     validateExtensions(
         location, "pic_objects", picObjects.toList(), Link.OBJECT_FILETYPES, Link.OBJECT_FILETYPES);
-    ccCompilationOutputsBuilder.addObjectFiles(objects.toList());
-    ccCompilationOutputsBuilder.addPicObjectFiles(picObjects.toList());
+    ccCompilationOutputsBuilder.addObjectFiles(objects);
+    ccCompilationOutputsBuilder.addPicObjectFiles(picObjects);
     return ccCompilationOutputsBuilder.build();
   }
 

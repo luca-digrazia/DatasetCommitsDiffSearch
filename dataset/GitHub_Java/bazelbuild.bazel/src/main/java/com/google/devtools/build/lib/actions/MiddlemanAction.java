@@ -14,18 +14,14 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.analysis.platform.PlatformInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.util.Fingerprint;
-import javax.annotation.Nullable;
 
 /**
  * An action that depends on a set of inputs and creates a single output file whenever it runs. This
@@ -61,10 +57,7 @@ public final class MiddlemanAction extends AbstractAction {
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     // TODO(bazel-team): Need to take middlemanType into account here.
     // Only the set of inputs matters, and the dependency checker is
     // responsible for considering those.
@@ -96,19 +89,6 @@ public final class MiddlemanAction extends AbstractAction {
   @Override
   public boolean mayInsensitivelyPropagateInputs() {
     return true;
-  }
-
-  @Override
-  @Nullable
-  public PlatformInfo getExecutionPlatform() {
-    // Middleman actions do not execute actual actions, and therefore have no execution platform.
-    return null;
-  }
-
-  @Override
-  public ImmutableMap<String, String> getExecProperties() {
-    // Middleman actions do not execute actual actions, and therefore have no execution properties.
-    return ImmutableMap.of();
   }
 
   /** Creates a new middleman action. */

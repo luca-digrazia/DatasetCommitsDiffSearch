@@ -128,7 +128,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
       Label label, ObjcCommon common, SymbolGenerator<?> symbolGenerator) {
     ImmutableSet.Builder<LibraryToLink> libraries = new ImmutableSet.Builder<>();
     ObjcProvider objcProvider = common.getObjcProvider();
-    for (Artifact library : objcProvider.get(ObjcProvider.LIBRARY).toList()) {
+    for (Artifact library : objcProvider.get(ObjcProvider.LIBRARY)) {
       libraries.add(
           LibraryToLink.builder()
               .setStaticLibrary(library)
@@ -137,8 +137,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
               .build());
     }
 
-    libraries.addAll(
-        convertLibrariesToStaticLibraries(objcProvider.get(ObjcProvider.CC_LIBRARY).toList()));
+    libraries.addAll(convertLibrariesToStaticLibraries(objcProvider.get(ObjcProvider.CC_LIBRARY)));
 
     CcLinkingContext.Builder ccLinkingContext =
         CcLinkingContext.builder()
@@ -146,7 +145,7 @@ public class ObjcLibrary implements RuleConfiguredTargetFactory {
             .addLibraries(ImmutableList.copyOf(libraries.build()));
 
     ImmutableList.Builder<LinkOptions> userLinkFlags = ImmutableList.builder();
-    for (SdkFramework sdkFramework : objcProvider.get(ObjcProvider.SDK_FRAMEWORK).toList()) {
+    for (SdkFramework sdkFramework : objcProvider.get(ObjcProvider.SDK_FRAMEWORK)) {
       userLinkFlags.add(
           LinkOptions.of(ImmutableList.of("-framework", sdkFramework.getName()), symbolGenerator));
     }

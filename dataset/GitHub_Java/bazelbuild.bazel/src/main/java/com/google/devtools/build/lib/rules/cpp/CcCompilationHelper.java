@@ -117,7 +117,7 @@ public final class CcCompilationHelper {
     FdoContext.BranchFdoProfile branchFdoProfile = fdoContext.getBranchFdoProfile();
     // Optimization phase
     if (branchFdoProfile != null) {
-      if (!getAuxiliaryFdoInputs(fdoContext).isEmpty()) {
+      if (!Iterables.isEmpty(getAuxiliaryFdoInputs(fdoContext))) {
         if (featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)
             || featureConfiguration.isEnabled(CppRuleClasses.XBINARYFDO)) {
           variablesBuilder.put(
@@ -136,8 +136,8 @@ public final class CcCompilationHelper {
   }
 
   /** Returns the auxiliary files that need to be added to the {@link CppCompileAction}. */
-  private static NestedSet<Artifact> getAuxiliaryFdoInputs(FdoContext fdoContext) {
-    NestedSetBuilder<Artifact> auxiliaryInputs = NestedSetBuilder.stableOrder();
+  private static Iterable<Artifact> getAuxiliaryFdoInputs(FdoContext fdoContext) {
+    ImmutableSet.Builder<Artifact> auxiliaryInputs = ImmutableSet.builder();
 
     if (fdoContext.getPrefetchHintsArtifact() != null) {
       auxiliaryInputs.add(fdoContext.getPrefetchHintsArtifact());
@@ -396,15 +396,7 @@ public final class CcCompilationHelper {
    * Add the corresponding files as public textual header files. These files will not be compiled
    * into a target's header module, but will be made visible as textual includes to dependent rules.
    */
-  public CcCompilationHelper addPublicTextualHeaders(NestedSet<Artifact> textualHeaders) {
-    return addPublicTextualHeaders(textualHeaders.toList());
-  }
-
-  /**
-   * Add the corresponding files as public textual header files. These files will not be compiled
-   * into a target's header module, but will be made visible as textual includes to dependent rules.
-   */
-  public CcCompilationHelper addPublicTextualHeaders(List<Artifact> textualHeaders) {
+  public CcCompilationHelper addPublicTextualHeaders(Iterable<Artifact> textualHeaders) {
     Iterables.addAll(this.publicTextualHeaders, textualHeaders);
     for (Artifact header : textualHeaders) {
       this.additionalExportedHeaders.add(header.getExecPath());
@@ -955,7 +947,7 @@ public final class CcCompilationHelper {
     mergeToolchainDependentCcCompilationContext(ccToolchain, ccCompilationContextBuilder);
 
     // But defines come after those inherited from deps.
-    ccCompilationContextBuilder.addDefines(NestedSetBuilder.wrap(Order.LINK_ORDER, defines));
+    ccCompilationContextBuilder.addDefines(defines);
 
     ccCompilationContextBuilder.addNonTransitiveDefines(localDefines);
 
@@ -1195,14 +1187,14 @@ public final class CcCompilationHelper {
 
     HashMap<String, Integer> count = new LinkedHashMap<>();
     HashMap<String, Integer> number = new LinkedHashMap<>();
-    for (Artifact source : sourceArtifacts.toList()) {
+    for (Artifact source : sourceArtifacts) {
       String outputName =
           FileSystemUtils.removeExtension(source.getRootRelativePath()).getBaseName();
       count.put(outputName.toLowerCase(),
           count.getOrDefault(outputName.toLowerCase(), 0) + 1);
     }
 
-    for (Artifact source : sourceArtifacts.toList()) {
+    for (Artifact source : sourceArtifacts) {
       String outputName =
           FileSystemUtils.removeExtension(source.getRootRelativePath()).getBaseName();
       if (count.getOrDefault(outputName.toLowerCase(), 0) > 1) {
