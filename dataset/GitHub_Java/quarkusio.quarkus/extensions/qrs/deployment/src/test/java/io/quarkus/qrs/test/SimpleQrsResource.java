@@ -3,7 +3,6 @@ package io.quarkus.qrs.test;
 import io.quarkus.qrs.Blocking;
 import io.quarkus.runtime.BlockingOperationControl;
 
-import javax.ws.rs.FormParam;
 import javax.ws.rs.GET;
 import javax.ws.rs.HeaderParam;
 import javax.ws.rs.POST;
@@ -27,13 +26,12 @@ public class SimpleQrsResource {
         return "GET:" + id;
     }
 
-    @POST
+    @GET
     @Path("params/{p}")
     public String params(@PathParam("p") String p, 
                          @QueryParam("q") String q,
-                         @HeaderParam("h") String h,
-                         @FormParam("f") String f) {
-        return "params: p: " + p+", q: "+q+", h: "+h+", f: "+f;
+                         @HeaderParam("h") String h) {
+        return "params: p: " + p+", q: "+q+", h: "+h;
     }
 
     @POST
