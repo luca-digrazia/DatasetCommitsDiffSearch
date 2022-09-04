@@ -16,7 +16,6 @@ package com.google.devtools.build.android.resources;
 import com.android.builder.core.VariantConfiguration;
 import com.android.builder.dependency.SymbolFileProvider;
 import com.android.resources.ResourceType;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.LinkedHashMultimap;
 import com.google.common.collect.Multimap;
 import com.google.common.util.concurrent.ListenableFuture;
@@ -28,6 +27,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -55,9 +55,8 @@ public class ResourceSymbols {
     public ResourceSymbols call() throws Exception {
       List<String> lines = Files.readAllLines(rTxtSymbols, StandardCharsets.UTF_8);
 
-      // NB: the inner map is working around a bug in R.txt generation!
-      // TODO(b/140643407): read directly without having to dedup by field name
-      final Map<ResourceType, Map<String, FieldInitializer>> initializers = new TreeMap<>();
+      Map<ResourceType, Map<String, FieldInitializer>> initializers =
+          new EnumMap<>(ResourceType.class);
 
       for (int lineIndex = 1; lineIndex <= lines.size(); lineIndex++) {
         String line = null;
@@ -74,16 +73,19 @@ public class ResourceSymbols {
           String name = line.substring(pos2 + 1, pos3);
           String value = line.substring(pos3 + 1);
 
-          FieldInitializer initializer;
-          if ("int".equals(type)) {
-            initializer = IntFieldInitializer.of(name, value);
+          final ResourceType resourceType = ResourceType.getEnum(className);
+          final Map<String, FieldInitializer> fields;
+          if (initializers.containsKey(resourceType)) {
+            fields = initializers.get(resourceType);
           } else {
-            initializer = IntArrayFieldInitializer.of(name, value);
+            fields = new TreeMap<>();
+            initializers.put(resourceType, fields);
           }
-
-          initializers
-              .computeIfAbsent(ResourceType.getEnum(className), k -> new TreeMap<>())
-              .put(name, initializer);
+          if ("int".equals(type)) {
+            fields.put(name, IntFieldInitializer.of(value));
+          } else {
+            fields.put(name, IntArrayFieldInitializer.of(value));
+          }
         } catch (IndexOutOfBoundsException e) {
           String s =
               String.format(
@@ -93,13 +95,7 @@ public class ResourceSymbols {
           throw new IOException(s, e);
         }
       }
-
-      return ResourceSymbols.from(
-          FieldInitializers.copyOf(
-              initializers.entrySet().stream()
-                  .collect(
-                      ImmutableMap.toImmutableMap(
-                          Map.Entry::getKey, entry -> entry.getValue().values()))));
+      return ResourceSymbols.from(FieldInitializers.copyOf(initializers));
     }
   }
 

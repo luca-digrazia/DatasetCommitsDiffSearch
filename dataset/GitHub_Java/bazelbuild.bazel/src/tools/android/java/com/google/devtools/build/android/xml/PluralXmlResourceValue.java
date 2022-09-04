@@ -14,23 +14,19 @@
 package com.google.devtools.build.android.xml;
 
 import com.android.aapt.Resources.Plural;
-import com.android.aapt.Resources.Reference;
 import com.android.aapt.Resources.Value;
 import com.google.common.base.MoreObjects;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.xml.XmlEscapers;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
 import com.google.devtools.build.android.AndroidDataWritingVisitor.ValuesResourceDefinition;
 import com.google.devtools.build.android.AndroidResourceSymbolSink;
 import com.google.devtools.build.android.DataSource;
-import com.google.devtools.build.android.DependencyInfo;
 import com.google.devtools.build.android.FullyQualifiedName;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
 import com.google.devtools.build.android.proto.SerializeFormat;
 import com.google.devtools.build.android.proto.SerializeFormat.DataValueXml.XmlType;
-import com.google.devtools.build.android.resources.Visibility;
 import com.google.protobuf.CodedOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -59,19 +55,12 @@ public class PluralXmlResourceValue implements XmlResourceValue {
 
   private static final QName PLURALS = QName.valueOf("plurals");
 
-  private final Visibility visibility;
-  private final Plural plural;
-  // TODO(b/112848607): remove the weakly-typed "values" member in favor of "plural" above.
   private final ImmutableMap<String, String> values;
+
   private final ImmutableMap<String, String> attributes;
 
   private PluralXmlResourceValue(
-      Visibility visibility,
-      Plural plural,
-      ImmutableMap<String, String> attributes,
-      ImmutableMap<String, String> values) {
-    this.visibility = visibility;
-    this.plural = plural;
+      ImmutableMap<String, String> attributes, ImmutableMap<String, String> values) {
     this.attributes = attributes;
     this.values = values;
   }
@@ -82,8 +71,7 @@ public class PluralXmlResourceValue implements XmlResourceValue {
 
   public static XmlResourceValue createWithAttributesAndValues(
       ImmutableMap<String, String> attributes, ImmutableMap<String, String> values) {
-    return new PluralXmlResourceValue(
-        Visibility.UNKNOWN, Plural.getDefaultInstance(), attributes, values);
+    return new PluralXmlResourceValue(attributes, values);
   }
 
   @Override
@@ -114,14 +102,13 @@ public class PluralXmlResourceValue implements XmlResourceValue {
   }
 
   @Override
-  public void writeResourceToClass(
-      DependencyInfo dependencyInfo, FullyQualifiedName key, AndroidResourceSymbolSink sink) {
-    sink.acceptSimpleResource(dependencyInfo, visibility, key.type(), key.name());
+  public void writeResourceToClass(FullyQualifiedName key, AndroidResourceSymbolSink sink) {
+    sink.acceptSimpleResource(key.type(), key.name());
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(visibility, values, attributes);
+    return Objects.hash(attributes, values);
   }
 
   @Override
@@ -130,10 +117,7 @@ public class PluralXmlResourceValue implements XmlResourceValue {
       return false;
     }
     PluralXmlResourceValue other = (PluralXmlResourceValue) obj;
-    return Objects.equals(visibility, other.visibility)
-        // TODO(b/112848607): include the "plural" proto in comparison; right now it's redundant.
-        && Objects.equals(values, other.values)
-        && Objects.equals(attributes, other.attributes);
+    return Objects.equals(values, other.values) && Objects.equals(attributes, other.attributes);
   }
 
   @Override
@@ -151,7 +135,7 @@ public class PluralXmlResourceValue implements XmlResourceValue {
         ImmutableMap.copyOf(proto.getMappedStringValue()));
   }
 
-  public static XmlResourceValue from(Value proto, Visibility visibility) {
+  public static XmlResourceValue from(Value proto) {
     Plural plural = proto.getCompoundValue().getPlural();
 
     Map<String, String> items = new LinkedHashMap<>();
@@ -166,8 +150,9 @@ public class PluralXmlResourceValue implements XmlResourceValue {
       items.put(name, value);
     }
 
-    return new PluralXmlResourceValue(
-        visibility, plural, ImmutableMap.of(), ImmutableMap.copyOf(items));
+    return createWithAttributesAndValues(
+        ImmutableMap.of(),
+        ImmutableMap.copyOf(items));
   }
 
   @Override
@@ -203,18 +188,5 @@ public class PluralXmlResourceValue implements XmlResourceValue {
   @Override
   public String asConflictStringWith(DataSource source) {
     return source.asConflictString();
-  }
-
-  @Override
-  public Visibility getVisibility() {
-    return visibility;
-  }
-
-  @Override
-  public ImmutableList<Reference> getReferencedResources() {
-    return plural.getEntryList().stream()
-        .filter(entry -> entry.getItem().hasRef())
-        .map(entry -> entry.getItem().getRef())
-        .collect(ImmutableList.toImmutableList());
   }
 }

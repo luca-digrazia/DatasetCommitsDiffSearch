@@ -28,7 +28,6 @@ import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.singlejar.ZipCombiner;
 import com.google.devtools.build.singlejar.ZipCombiner.OutputMode;
-import com.google.devtools.build.singlejar.ZipEntryFilter;
 import com.google.devtools.build.zip.ZipFileEntry;
 import com.google.devtools.build.zip.ZipReader;
 import java.io.IOException;
@@ -37,7 +36,7 @@ import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -53,9 +52,12 @@ import java.util.regex.Pattern;
  * extension of '.*' was specified.
  *
  * <p>Assuming each Zip as a set of entries, the result is:
+ *
  * <pre> outputZip = inputZip - union[x intersect filterTypes for x in filterZips]</pre>
  *
- * <p><pre>
+ * <p>
+ *
+ * <pre>
  * Example Usage:
  *   java/com/google/build/android/ZipFilterAction\
  *      --inputZip path/to/inputZip
@@ -64,12 +66,30 @@ import java.util.regex.Pattern;
  *      --filterTypes [fileExtension[,fileExtension]...]
  *      --explicitFilters [fileRegex[,fileRegex]...]
  *      --outputMode [DONT_CARE|FORCE_DEFLATE|FORCE_STORED]
- *      --errorOnHashMismatch
+ *      --checkHashMismatch [IGNORE|WARN|ERROR]
  * </pre>
  */
 public class ZipFilterAction {
 
   private static final Logger logger = Logger.getLogger(ZipFilterAction.class.getName());
+
+  /** Modes of performing content hash checking during zip filtering. */
+  public enum HashMismatchCheckMode {
+    /** Filter file from input zip iff a file is found with the same filename in filter zips. */
+    IGNORE,
+
+    /**
+     * Filter file from input zip iff a file is found with the same filename and content hash in
+     * filter zips. Print warning if the filename is identical but content hash is not.
+     */
+    WARN,
+
+    /**
+     * Same behavior as WARN, but throw an error if a file is found with the same filename with
+     * different content hash.
+     */
+    ERROR
+  }
 
   @Parameters(optionPrefixes = "--")
   static class Options {
@@ -106,14 +126,30 @@ public class ZipFilterAction {
     OutputMode outputMode = OutputMode.DONT_CARE;
 
     @Parameter(
+      names = "--checkHashMismatch",
+      description =
+          "Ignore, warn or throw an error if the content hashes of two files with the "
+              + "same name are different."
+    )
+    HashMismatchCheckMode hashMismatchCheckMode = HashMismatchCheckMode.WARN;
+
+    /**
+     * @deprecated please use --checkHashMismatch ERROR instead. Other options are IGNORE and WARN.
+     */
+    @Deprecated
+    @Parameter(
       names = "--errorOnHashMismatch",
       description = "Error on entry filter with hash mismatch."
     )
     boolean errorOnHashMismatch = false;
 
-    // This is a hack to support existing users of --noerrorOnHashMismatch. JCommander does not
-    // support setting boolean flags with "--no", so instead we set the default to false and just
-    // ignore anyone who passes --noerrorOnHashMismatch.
+    /**
+     * @deprecated please use --checkHashMismatch WARN instead. Other options are IGNORE and WARN.
+     *     <p>This is a hack to support existing users of --noerrorOnHashMismatch. JCommander does
+     *     not support setting boolean flags with "--no", so instead we set the default to false and
+     *     just ignore anyone who passes --noerrorOnHashMismatch.
+     */
+    @Deprecated
     @Parameter(names = "--noerrorOnHashMismatch")
     boolean ignored = false;
   }
@@ -155,7 +191,7 @@ public class ZipFilterAction {
   static Multimap<String, Long> getEntriesToOmit(
       Collection<Path> filterZips, Collection<String> filterTypes) throws IOException {
     // Escape filter types to prevent regex abuse
-    Set<String> escapedFilterTypes = new HashSet<>();
+    Set<String> escapedFilterTypes = new LinkedHashSet<>();
     for (String filterType : filterTypes) {
       escapedFilterTypes.add(Pattern.quote(filterType));
     }
@@ -176,6 +212,10 @@ public class ZipFilterAction {
   }
 
   public static void main(String[] args) throws IOException {
+    System.exit(run(args));
+  }
+
+  static int run(String[] args) throws IOException {
     Options options = new Options();
     new JCommander(options).parse(args);
     logger.fine(
@@ -184,7 +224,7 @@ public class ZipFilterAction {
             options.filterTypes, options.filterZips));
 
     final Stopwatch timer = Stopwatch.createStarted();
-    final Multimap<String, Long> entriesToOmit =
+    Multimap<String, Long> entriesToOmit =
         getEntriesToOmit(options.filterZips, options.filterTypes);
     final String explicitFilter =
         options.explicitFilters.isEmpty()
@@ -198,14 +238,21 @@ public class ZipFilterAction {
         inputEntries.put(entry.getName(), entry.getCrc());
       }
     }
-    ZipEntryFilter entryFilter =
+
+    // TODO(jingwen): Remove --errorOnHashMismatch when Blaze release with --checkHashMismatch
+    // is checked in.
+    if (options.errorOnHashMismatch) {
+      options.hashMismatchCheckMode = HashMismatchCheckMode.ERROR;
+    }
+    ZipFilterEntryFilter entryFilter =
         new ZipFilterEntryFilter(
-            explicitFilter, entriesToOmit, inputEntries.build(), options.errorOnHashMismatch);
+            explicitFilter, entriesToOmit, inputEntries.build(), options.hashMismatchCheckMode);
 
     try (OutputStream out = Files.newOutputStream(options.outputZip);
         ZipCombiner combiner = new ZipCombiner(options.outputMode, entryFilter, out)) {
       combiner.addZip(options.inputZip.toFile());
     }
     logger.fine(String.format("Filtering completed in %dms", timer.elapsed(TimeUnit.MILLISECONDS)));
+    return entryFilter.sawErrors() ? 1 : 0;
   }
 }

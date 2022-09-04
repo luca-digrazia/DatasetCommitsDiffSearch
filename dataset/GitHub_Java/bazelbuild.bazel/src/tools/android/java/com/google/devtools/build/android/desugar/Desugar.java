@@ -1010,7 +1010,7 @@ class Desugar {
     if (options.persistentWorker) {
       runPersistentWorker(dumpDirectory);
     } else {
-      processRequest(options, dumpDirectory);
+      System.exit(processRequest(options, dumpDirectory));
     }
   }
 

@@ -14,16 +14,14 @@
 package com.google.devtools.build.android.xml;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.android.DataResourceXml;
 import com.google.devtools.build.android.XmlResourceValue;
 import com.google.devtools.build.android.XmlResourceValues;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Set;
 import java.util.logging.Logger;
@@ -39,14 +37,14 @@ import javax.xml.stream.events.StartElement;
  * resources tag to combining multiple {@link DataResourceXml}s, the Namespaces must be tracked and
  * kept with each value.
  */
-public class Namespaces implements Iterable<Entry<String, String>> {
+public class Namespaces implements Iterable<Map.Entry<String, String>> {
   private static final Logger logger = Logger.getLogger(Namespaces.class.getCanonicalName());
   private static final Namespaces EMPTY_INSTANCE =
-      new Namespaces(ImmutableMap.<String, String>of());
+      new Namespaces(ImmutableSortedMap.<String, String>of());
 
   /** Collects prefix and uri pairs from elements. */
   public static class Collector {
-    private Map<String, String> prefixToUri = new HashMap<>();
+    private Map<String, String> prefixToUri = new LinkedHashMap<>();
 
     public Namespaces toNamespaces() {
       return Namespaces.from(prefixToUri);
@@ -66,7 +64,7 @@ public class Namespaces implements Iterable<Entry<String, String>> {
       Iterator<Attribute> attributes = XmlResourceValues.iterateAttributesFrom(start);
       Iterator<Namespace> localNamespaces = XmlResourceValues.iterateNamespacesFrom(start);
       // Collect the local prefixes to make sure a prefix isn't declared locally.
-      Set<String> prefixes = new HashSet<>();
+      Set<String> prefixes = new LinkedHashSet<>();
       while (localNamespaces.hasNext()) {
         prefixes.add(localNamespaces.next().getPrefix());
       }
@@ -94,7 +92,7 @@ public class Namespaces implements Iterable<Entry<String, String>> {
     if (prefixToUri.isEmpty()) {
       return empty();
     }
-    return new Namespaces(ImmutableMap.copyOf(prefixToUri));
+    return new Namespaces(ImmutableSortedMap.copyOf(prefixToUri));
   }
 
   /**
@@ -105,16 +103,18 @@ public class Namespaces implements Iterable<Entry<String, String>> {
     if (name.getPrefix().isEmpty()) {
       return empty();
     }
-    return new Namespaces(ImmutableMap.of(name.getPrefix(), name.getNamespaceURI()));
+    return new Namespaces(ImmutableSortedMap.of(name.getPrefix(), name.getNamespaceURI()));
   }
 
   public static Namespaces empty() {
     return EMPTY_INSTANCE;
   }
 
-  private ImmutableMap<String, String> prefixToUri;
+  // Keep the prefixes in a sorted map so that when this object is iterated over, the order is
+  // deterministic.
+  private final ImmutableSortedMap<String, String> prefixToUri;
 
-  private Namespaces(ImmutableMap<String, String> prefixToUri) {
+  private Namespaces(ImmutableSortedMap<String, String> prefixToUri) {
     this.prefixToUri = prefixToUri;
   }
 
@@ -128,7 +128,7 @@ public class Namespaces implements Iterable<Entry<String, String>> {
     // Keeping behavior for backwards compatibility.
     Map<String, String> combinedNamespaces = new LinkedHashMap<>();
     combinedNamespaces.putAll(other.prefixToUri);
-    for (Entry<String, String> namespace : prefixToUri.entrySet()) {
+    for (Map.Entry<String, String> namespace : prefixToUri.entrySet()) {
       String prefix = namespace.getKey();
       String namespaceUri = namespace.getValue();
       if (combinedNamespaces.containsKey(prefix)
@@ -145,7 +145,7 @@ public class Namespaces implements Iterable<Entry<String, String>> {
   }
 
   @Override
-  public Iterator<Entry<String, String>> iterator() {
+  public Iterator<Map.Entry<String, String>> iterator() {
     return prefixToUri.entrySet().iterator();
   }
 

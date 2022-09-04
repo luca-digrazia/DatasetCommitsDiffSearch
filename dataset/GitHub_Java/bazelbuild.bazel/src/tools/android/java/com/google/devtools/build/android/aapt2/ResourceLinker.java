@@ -109,6 +109,9 @@ public class ResourceLinker {
   private static final boolean OVERRIDE_STYLES_INSTEAD_OF_OVERLAYING =
       Boolean.parseBoolean(System.getProperty(OVERRIDE_STYLES_INSTEAD_OF_OVERLAYING_KEY, "false"));
 
+  public static final String ENABLE_RESOURCE_PATH_SHORTENING_KEY =
+      ResourceProcessorBusyBox.PROPERTY_KEY_PREFIX + "aapt2_enable_resource_path_shortening";
+
   /** Represents errors thrown during linking. */
   public static class LinkError extends Aapt2Exception {
 
@@ -525,6 +528,12 @@ public class ResourceLinker {
   }
 
   private Path optimize(CompiledResources compiled, Path binary) throws IOException {
+    boolean enableResourcePathShorteningJvmArg =
+        Boolean.parseBoolean(System.getProperty(ENABLE_RESOURCE_PATH_SHORTENING_KEY, "false"));
+    if (enableResourcePathShorteningJvmArg) {
+      optimizations = optimizations.toBuilder().setResourcePathShortening(true).build();
+    }
+
     if (!optimizations.hasOptimizations() && densities.size() < 2) {
       return binary;
     }

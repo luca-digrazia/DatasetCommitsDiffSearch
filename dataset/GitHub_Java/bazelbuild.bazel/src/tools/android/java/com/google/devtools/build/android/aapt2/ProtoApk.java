@@ -126,7 +126,9 @@ public class ProtoApk implements Closeable {
       dstTableBuilder.setSourcePool(resourceTable.getSourcePool());
       for (Package pkg : resourceTable.getPackageList()) {
         Package dstPkg = copyPackage(resourceFilter, dstZip, pkg);
-        dstTableBuilder.addPackage(dstPkg);
+        if (!dstPkg.getTypeList().isEmpty()) {
+          dstTableBuilder.addPackage(dstPkg);
+        }
       }
       dstZip.addEntry(RESOURCE_TABLE, dstTableBuilder.build().toByteArray(), ZipEntry.DEFLATED);
       srcZip.stream()
