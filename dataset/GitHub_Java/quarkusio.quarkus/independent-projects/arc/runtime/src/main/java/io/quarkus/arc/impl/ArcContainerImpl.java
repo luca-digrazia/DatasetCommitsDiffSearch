@@ -144,7 +144,7 @@ public class ArcContainerImpl implements ArcContainer {
         // BeanManager, Event<?>, Instance<?>
         beans.add(new BeanManagerBean());
         beans.add(new EventBean());
-        beans.add(InstanceBean.INSTANCE);
+        beans.add(new InstanceBean());
     }
 
     public void init() {

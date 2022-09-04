@@ -202,23 +202,20 @@ public final class Reflections {
         final Class<?> clazz;
         final String methodName;
         final Class<?>[] parameterTypes;
-        final int hashCode;
 
         public MethodKey(Class<?> clazz, String methodName, Class<?>[] parameterTypes) {
             this.clazz = clazz;
             this.methodName = methodName;
             this.parameterTypes = parameterTypes;
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + Arrays.hashCode(parameterTypes);
-            result = prime * result + ((clazz == null) ? 0 : clazz.hashCode());
-            result = prime * result + ((methodName == null) ? 0 : methodName.hashCode());
-            this.hashCode = result;
         }
 
         @Override
         public int hashCode() {
-            return hashCode;
+            final int prime = 31;
+            int result = 1;
+            result = prime * result + Arrays.hashCode(parameterTypes);
+            result = prime * result + Objects.hash(clazz, methodName);
+            return result;
         }
 
         @Override
@@ -243,21 +240,15 @@ public final class Reflections {
 
         final Class<?> clazz;
         final String fieldName;
-        final int hashCode;
 
         public FieldKey(Class<?> clazz, String fieldName) {
             this.clazz = clazz;
             this.fieldName = fieldName;
-            final int prime = 31;
-            int result = 1;
-            result = prime * result + ((clazz == null) ? 0 : clazz.hashCode());
-            result = prime * result + ((fieldName == null) ? 0 : fieldName.hashCode());
-            this.hashCode = result;
         }
 
         @Override
         public int hashCode() {
-            return hashCode;
+            return Objects.hash(clazz, fieldName);
         }
 
         @Override
@@ -276,5 +267,4 @@ public final class Reflections {
         }
 
     }
-
 }
