@@ -146,7 +146,9 @@ public class AlarmCallbackConfigurationServiceMJImplTest extends MongoDBServiceT
     @Test
     @UsingDataSet(loadStrategy = LoadStrategyEnum.DELETE_ALL)
     public void testCreate() throws Exception {
-        final CreateAlarmCallbackRequest request = CreateAlarmCallbackRequest.create("", Collections.emptyMap());
+        final CreateAlarmCallbackRequest request = new CreateAlarmCallbackRequest();
+        request.type = "";
+        request.configuration = Collections.emptyMap();
 
         final String streamId = "54e3deadbeefdeadbeefaffe";
         final String userId = "someuser";

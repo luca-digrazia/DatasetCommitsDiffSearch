@@ -144,8 +144,7 @@ public class AlarmCallbackResource extends RestResource {
                            @ApiParam(name = "JSON body", required = true) CreateAlarmCallbackRequest cr) throws NotFoundException {
         checkPermission(RestPermissions.STREAMS_EDIT, streamid);
 
-        // make sure the values are correctly converted to the declared configuration types
-        cr.configuration = convertConfigurationValues(cr);
+        final Stream stream = streamService.load(streamid);
 
         final AlarmCallbackConfiguration alarmCallbackConfiguration = alarmCallbackConfigurationService.create(streamid, cr, getCurrentUser().getName());
 
@@ -230,24 +229,6 @@ public class AlarmCallbackResource extends RestResource {
             throw new NotFoundException("Unable to find alarm callback configuration " + alarmCallbackId);
         }
 
-        final Map<String, Object> configuration = convertConfigurationValues(alarmCallbackRequest);
-
-        final AlarmCallbackConfigurationAVImpl newConfig = AlarmCallbackConfigurationAVImpl.create(
-                alarmCallbackId,
-                aCC.getStreamId(),
-                aCC.getType(),
-                configuration,
-                aCC.getCreatedAt(),
-                aCC.getCreatorUserId());
-
-        try {
-             alarmCallbackConfigurationService.save(newConfig);
-        } catch (ValidationException e) {
-            throw new BadRequestException("Unable to save alarm callback configuration", e);
-        }
-    }
-
-    private Map<String, Object> convertConfigurationValues(@ApiParam(name = "JSON body", required = true) CreateAlarmCallbackRequest alarmCallbackRequest) {
         final ConfigurationRequest requestedConfiguration;
         try {
             final AlarmCallback alarmCallback = alarmCallbackFactory.create(alarmCallbackRequest.type);
@@ -264,6 +245,19 @@ public class AlarmCallbackResource extends RestResource {
         } catch (ValidationException e) {
             throw new BadRequestException("Invalid configuration map", e);
         }
-        return configuration;
+
+        final AlarmCallbackConfigurationAVImpl newConfig = AlarmCallbackConfigurationAVImpl.create(
+                alarmCallbackId,
+                aCC.getStreamId(),
+                aCC.getType(),
+                configuration,
+                aCC.getCreatedAt(),
+                aCC.getCreatorUserId());
+
+        try {
+             alarmCallbackConfigurationService.save(newConfig);
+        } catch (ValidationException e) {
+            throw new BadRequestException("Unable to save alarm callback configuration", e);
+        }
     }
 }
