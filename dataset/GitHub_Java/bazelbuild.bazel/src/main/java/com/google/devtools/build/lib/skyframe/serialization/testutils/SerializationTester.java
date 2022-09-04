@@ -30,7 +30,6 @@ import com.google.protobuf.ByteString;
 import com.google.protobuf.InvalidProtocolBufferException;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Map;
 import java.util.Random;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -62,8 +61,6 @@ public class SerializationTester {
   private final ImmutableMap.Builder<Class<?>, Object> dependenciesBuilder;
   private final ArrayList<ObjectCodec<?>> additionalCodecs = new ArrayList<>();
   private boolean memoize;
-  private boolean allowFutureBlocking;
-  private ObjectCodecs objectCodecs;
 
   @SuppressWarnings("rawtypes")
   private VerificationFunction verificationFunction =
@@ -86,11 +83,6 @@ public class SerializationTester {
     return this;
   }
 
-  public SerializationTester addDependencies(Map<Class<?>, Object> dependencies) {
-    dependenciesBuilder.putAll(dependencies);
-    return this;
-  }
-
   public SerializationTester addCodec(ObjectCodec<?> codec) {
     additionalCodecs.add(codec);
     return this;
@@ -98,17 +90,6 @@ public class SerializationTester {
 
   public SerializationTester makeMemoizing() {
     this.memoize = true;
-    return this;
-  }
-
-  public SerializationTester makeMemoizingAndAllowFutureBlocking(boolean allowFutureBlocking) {
-    makeMemoizing();
-    this.allowFutureBlocking = allowFutureBlocking;
-    return this;
-  }
-
-  public SerializationTester setObjectCodecs(ObjectCodecs objectCodecs) {
-    this.objectCodecs = objectCodecs;
     return this;
   }
 
@@ -126,13 +107,6 @@ public class SerializationTester {
   }
 
   public void runTests() throws Exception {
-    ObjectCodecs codecs = this.objectCodecs == null ? createObjectCodecs() : this.objectCodecs;
-    testSerializeDeserialize(codecs);
-    testStableSerialization(codecs);
-    testDeserializeJunkData(codecs);
-  }
-
-  private ObjectCodecs createObjectCodecs() {
     ObjectCodecRegistry registry = AutoRegistry.get();
     ImmutableMap<Class<?>, Object> dependencies = dependenciesBuilder.build();
     ObjectCodecRegistry.Builder registryBuilder = registry.getBuilder();
@@ -142,16 +116,16 @@ public class SerializationTester {
     for (ObjectCodec<?> codec : additionalCodecs) {
       registryBuilder.add(codec);
     }
-    return new ObjectCodecs(registryBuilder.build(), dependencies);
+    ObjectCodecs codecs = new ObjectCodecs(registryBuilder.build(), dependencies);
+    testSerializeDeserialize(codecs);
+    testStableSerialization(codecs);
+    testDeserializeJunkData(codecs);
   }
 
-  private ByteString serialize(Object subject, ObjectCodecs codecs) throws SerializationException {
+  private ByteString serialize(Object subject, ObjectCodecs codecs)
+      throws SerializationException, IOException {
     if (memoize) {
-      if (allowFutureBlocking) {
-        return codecs.serializeMemoizedAndBlocking(subject).getObject();
-      } else {
-        return codecs.serializeMemoized(subject);
-      }
+      return codecs.serializeMemoized(subject);
     } else {
       return codecs.serialize(subject);
     }
