@@ -1,4 +1,4 @@
-/*
+/*******************************************************************************
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ ******************************************************************************/
 
 package smile.regression;
 
@@ -27,7 +27,6 @@ import smile.validation.metric.RMSE;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  *
@@ -157,39 +156,15 @@ public class RandomForestTest {
     }
 
     @Test
-    public void testTrim() {
-        System.out.println("trim");
-
-        RandomForest model = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Arrays.stream(seeds));
-        System.out.println(model.metrics());
-        assertEquals(50, model.size());
-
-        double rmse = RMSE.of(Abalone.testy, model.predict(Abalone.test));
-        System.out.format("RMSE = %.4f%n", rmse);
-        assertEquals(2.0858, rmse, 1E-4);
-
-        RandomForest trimmed = model.trim(40);
-        assertEquals(50, model.size());
-        assertEquals(40, trimmed.size());
-
-        double rmse1 = Arrays.stream(model.models()).mapToDouble(m -> m.metrics.rmse).max().getAsDouble();
-        double rmse2 = Arrays.stream(trimmed.models()).mapToDouble(m -> m.metrics.rmse).max().getAsDouble();
-        assertTrue(rmse1 > rmse2);
-
-        rmse = RMSE.of(Abalone.testy, trimmed.predict(Abalone.test));
-        assertEquals(2.0897, rmse, 1E-4);
-    }
-
-    @Test
-    public void testMerge() throws Exception {
-        System.out.println("merge");
+    public void testRandomForestMerging() throws Exception {
+        System.out.println("Random forest merging");
 
         RandomForest forest1 = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Arrays.stream(seeds));
         RandomForest forest2 = RandomForest.fit(Abalone.formula, Abalone.train, 50, 3, 20, 100, 5, 1.0, Arrays.stream(seeds).skip(50));
         RandomForest forest = forest1.merge(forest2);
-        double rmse1 = RMSE.of(Abalone.testy, forest1.predict(Abalone.test));
-        double rmse2 = RMSE.of(Abalone.testy, forest2.predict(Abalone.test));
-        double rmse  = RMSE.of(Abalone.testy, forest.predict(Abalone.test));
+        double rmse1 = RMSE.of(Abalone.testy, Validation.test(forest1, Abalone.test));
+        double rmse2 = RMSE.of(Abalone.testy, Validation.test(forest2, Abalone.test));
+        double rmse  = RMSE.of(Abalone.testy, Validation.test(forest,  Abalone.test));
         System.out.format("Forest 1 RMSE = %.4f%n", rmse1);
         System.out.format("Forest 2 RMSE = %.4f%n", rmse2);
         System.out.format("Merged   RMSE = %.4f%n", rmse);
