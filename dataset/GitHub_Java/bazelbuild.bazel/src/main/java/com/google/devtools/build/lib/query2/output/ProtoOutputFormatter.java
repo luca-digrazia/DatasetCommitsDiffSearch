@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,57 +13,57 @@
 // limitations under the License.
 package com.google.devtools.build.lib.query2.output;
 
-import static com.google.devtools.build.lib.packages.Type.BOOLEAN;
-import static com.google.devtools.build.lib.packages.Type.DISTRIBUTIONS;
-import static com.google.devtools.build.lib.packages.Type.FILESET_ENTRY_LIST;
-import static com.google.devtools.build.lib.packages.Type.INTEGER;
-import static com.google.devtools.build.lib.packages.Type.INTEGER_LIST;
-import static com.google.devtools.build.lib.packages.Type.LABEL;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.LABEL_LIST_DICT;
-import static com.google.devtools.build.lib.packages.Type.LICENSE;
-import static com.google.devtools.build.lib.packages.Type.NODEP_LABEL;
-import static com.google.devtools.build.lib.packages.Type.NODEP_LABEL_LIST;
-import static com.google.devtools.build.lib.packages.Type.OUTPUT;
-import static com.google.devtools.build.lib.packages.Type.OUTPUT_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING;
-import static com.google.devtools.build.lib.packages.Type.STRING_DICT;
-import static com.google.devtools.build.lib.packages.Type.STRING_DICT_UNARY;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST;
-import static com.google.devtools.build.lib.packages.Type.STRING_LIST_DICT;
-import static com.google.devtools.build.lib.packages.Type.TRISTATE;
+import static com.google.devtools.build.lib.query2.proto.proto2api.Build.Target.Discriminator.ENVIRONMENT_GROUP;
 import static com.google.devtools.build.lib.query2.proto.proto2api.Build.Target.Discriminator.GENERATED_FILE;
 import static com.google.devtools.build.lib.query2.proto.proto2api.Build.Target.Discriminator.PACKAGE_GROUP;
 import static com.google.devtools.build.lib.query2.proto.proto2api.Build.Target.Discriminator.RULE;
 import static com.google.devtools.build.lib.query2.proto.proto2api.Build.Target.Discriminator.SOURCE_FILE;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Preconditions;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMultimap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.events.Location;
+import com.google.common.collect.Maps;
+import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.graph.Digraph;
+import com.google.devtools.build.lib.packages.AggregatingAttributeMapper;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.AttributeFormatter;
+import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.EnvironmentGroup;
 import com.google.devtools.build.lib.packages.InputFile;
-import com.google.devtools.build.lib.packages.License;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageGroup;
 import com.google.devtools.build.lib.packages.ProtoUtils;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.TriState;
-import com.google.devtools.build.lib.query2.FakeSubincludeTarget;
-import com.google.devtools.build.lib.query2.output.OutputFormatter.UnorderedFormatter;
+import com.google.devtools.build.lib.query2.CommonQueryOptions;
+import com.google.devtools.build.lib.query2.FakeLoadTarget;
+import com.google.devtools.build.lib.query2.engine.OutputFormatterCallback;
+import com.google.devtools.build.lib.query2.engine.QueryEnvironment;
+import com.google.devtools.build.lib.query2.engine.SynchronizedDelegatingOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.engine.ThreadSafeOutputFormatterCallback;
+import com.google.devtools.build.lib.query2.output.OutputFormatter.AbstractUnorderedFormatter;
+import com.google.devtools.build.lib.query2.output.QueryOptions.OrderOutput;
 import com.google.devtools.build.lib.query2.proto.proto2api.Build;
-import com.google.devtools.build.lib.syntax.FilesetEntry;
-import com.google.devtools.build.lib.syntax.GlobCriteria;
-import com.google.devtools.build.lib.syntax.GlobList;
-import com.google.devtools.build.lib.syntax.Label;
-import com.google.devtools.build.lib.syntax.SkylarkEnvironment;
-import com.google.devtools.build.lib.util.BinaryPredicate;
-
+import com.google.devtools.build.lib.query2.proto.proto2api.Build.GeneratedFile;
+import com.google.devtools.build.lib.query2.proto.proto2api.Build.QueryResult;
+import com.google.devtools.build.lib.query2.proto.proto2api.Build.SourceFile;
+import com.google.devtools.build.lib.syntax.Type;
 import java.io.IOException;
-import java.io.PrintStream;
+import java.io.OutputStream;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 
 /**
  * An output formatter that outputs a protocol buffer representation
@@ -71,14 +71,25 @@ import java.util.Map;
  * By taking the bytes and calling {@code mergeFrom()} on a
  * {@code Build.QueryResult} object the full result can be reconstructed.
  */
-public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFormatter {
-
+public class ProtoOutputFormatter extends AbstractUnorderedFormatter {
   /**
    * A special attribute name for the rule implementation hash code.
    */
   public static final String RULE_IMPLEMENTATION_HASH_ATTR_NAME = "$rule_implementation_hash";
 
-  private BinaryPredicate<Rule, Attribute> dependencyFilter;
+  private static final Comparator<Build.Attribute> ATTRIBUTE_NAME =
+      Comparator.comparing(Build.Attribute::getName);
+
+  @SuppressWarnings("unchecked")
+  private static final ImmutableSet<Type<?>> SCALAR_TYPES =
+      ImmutableSet.<Type<?>>of(
+          Type.INTEGER, Type.STRING, BuildType.LABEL, BuildType.NODEP_LABEL, BuildType.OUTPUT,
+          Type.BOOLEAN, BuildType.TRISTATE, BuildType.LICENSE);
+
+  private boolean relativeLocations = false;
+  protected boolean includeDefaultValues = true;
+  private Predicate<String> ruleAttributePredicate = Predicates.alwaysTrue();
+  private boolean flattenSelects = true;
 
   protected void setDependencyFilter(QueryOptions options) {
     this.dependencyFilter = OutputFormatter.getDependencyFilter(options);
@@ -90,80 +101,154 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
   }
 
   @Override
-  public void outputUnordered(QueryOptions options, Iterable<Target> result, PrintStream out)
-      throws IOException {
-    setDependencyFilter(options);
+  public void setOptions(CommonQueryOptions options, AspectResolver aspectResolver) {
+    super.setOptions(options, aspectResolver);
+    this.relativeLocations = options.relativeLocations;
+    this.includeDefaultValues = options.protoIncludeDefaultValues;
+    this.ruleAttributePredicate = newAttributePredicate(options.protoOutputRuleAttributes);
+    this.flattenSelects = options.protoFlattenSelects;
+  }
 
-    Build.QueryResult.Builder queryResult = Build.QueryResult.newBuilder();
-    for (Target target : result) {
-      addTarget(queryResult, target);
+  private static Predicate<String> newAttributePredicate(List<String> outputAttributes) {
+    if (outputAttributes.equals(ImmutableList.of("all"))) {
+      return Predicates.alwaysTrue();
+    } else if (outputAttributes.isEmpty()) {
+      return Predicates.alwaysFalse();
+    } else {
+      return Predicates.in(ImmutableSet.copyOf(outputAttributes));
     }
-
-    queryResult.build().writeTo(out);
   }
 
   @Override
-  public void output(QueryOptions options, Digraph<Target> result, PrintStream out)
-      throws IOException {
-    outputUnordered(options, result.getLabels(), out);
+  public OutputFormatterCallback<Target> createPostFactoStreamCallback(
+      final OutputStream out, final QueryOptions options) {
+    return new OutputFormatterCallback<Target>() {
+
+      private QueryResult.Builder queryResult;
+
+      @Override
+      public void start() {
+        queryResult = Build.QueryResult.newBuilder();
+      }
+
+      @Override
+      public void processOutput(Iterable<Target> partialResult)
+          throws IOException, InterruptedException {
+
+        for (Target target : partialResult) {
+          queryResult.addTarget(toTargetProtoBuffer(target));
+        }
+      }
+
+      @Override
+      public void close(boolean failFast) throws IOException {
+        if (!failFast) {
+          queryResult.build().writeTo(out);
+        }
+      }
+    };
   }
 
-  /**
-   * Add the target to the query result.
-   * @param queryResult The query result that contains all rule, input and
-   *   output targets.
-   * @param target The query target being converted to a protocol buffer.
-   */
-  private void addTarget(Build.QueryResult.Builder queryResult, Target target) {
-    queryResult.addTarget(toTargetProtoBuffer(target));
+  @Override
+  public ThreadSafeOutputFormatterCallback<Target> createStreamCallback(
+      OutputStream out, QueryOptions options, QueryEnvironment<?> env) {
+    return createStreamCallback(out, options);
   }
 
-  /**
-   * Converts a logical Target object into a Target protobuffer.
-   */
-  protected Build.Target toTargetProtoBuffer(Target target) {
+  @VisibleForTesting
+  public ThreadSafeOutputFormatterCallback<Target> createStreamCallback(
+      OutputStream out, QueryOptions options) {
+    return new SynchronizedDelegatingOutputFormatterCallback<>(
+        createPostFactoStreamCallback(out, options));
+  }
+
+  private static Iterable<Target> getSortedLabels(Digraph<Target> result) {
+    return Iterables.transform(
+        result.getTopologicalOrder(new TargetOrdering()), EXTRACT_NODE_LABEL);
+  }
+
+  @Override
+  protected Iterable<Target> getOrderedTargets(Digraph<Target> result, QueryOptions options) {
+    return options.orderOutput == OrderOutput.FULL ? getSortedLabels(result) : result.getLabels();
+  }
+
+  /** Converts a logical {@link Target} object into a {@link Build.Target} protobuffer. */
+  @VisibleForTesting
+  public Build.Target toTargetProtoBuffer(Target target) throws InterruptedException {
+    return toTargetProtoBuffer(target, null);
+  }
+
+  /** Converts a logical {@link Target} object into a {@link Build.Target} protobuffer. */
+  @VisibleForTesting
+  public Build.Target toTargetProtoBuffer(Target target, Object extraDataForPostProcess)
+      throws InterruptedException {
     Build.Target.Builder targetPb = Build.Target.newBuilder();
 
-    String location = target.getLocation().print();
+    String location = getLocation(target, relativeLocations);
     if (target instanceof Rule) {
       Rule rule = (Rule) target;
       Build.Rule.Builder rulePb = Build.Rule.newBuilder()
           .setName(rule.getLabel().toString())
-          .setRuleClass(rule.getRuleClass())
-          .setLocation(location);
-
-      for (Attribute attr : rule.getAttributes()) {
-        addAttributeToProto(rulePb, attr, getAttributeValues(rule, attr).first, null,
-            rule.isAttributeValueExplicitlySpecified(attr), false);
+          .setRuleClass(rule.getRuleClass());
+      if (includeLocation()) {
+        rulePb.setLocation(location);
       }
-
-      SkylarkEnvironment env = rule.getRuleClassObject().getRuleDefinitionEnvironment();
-      if (env != null) {
+      addAttributes(rulePb, rule, extraDataForPostProcess);
+      String transitiveHashCode = rule.getRuleClassObject().getRuleDefinitionEnvironmentHashCode();
+      if (transitiveHashCode != null && includeRuleDefinitionEnvironment()) {
         // The RuleDefinitionEnvironment is always defined for Skylark rules and
         // always null for non Skylark rules.
         rulePb.addAttribute(
             Build.Attribute.newBuilder()
                 .setName(RULE_IMPLEMENTATION_HASH_ATTR_NAME)
-                .setType(ProtoUtils.getDiscriminatorFromType(
-                    com.google.devtools.build.lib.packages.Type.STRING))
-                .setStringValue(env.getTransitiveFileContentHashCode()));
+                .setType(ProtoUtils.getDiscriminatorFromType(Type.STRING))
+                .setStringValue(transitiveHashCode));
       }
 
-      // Include explicit elements for all direct inputs and outputs of a rule;
-      // this goes beyond what is available from the attributes above, since it
-      // may also (depending on options) include implicit outputs,
-      // host-configuration outputs, and default values.
-      for (Label label : rule.getLabels(dependencyFilter)) {
-        rulePb.addRuleInput(label.toString());
+      ImmutableMultimap<Attribute, Label> aspectsDependencies =
+          aspectResolver.computeAspectDependencies(target, dependencyFilter);
+      // Add information about additional attributes from aspects.
+      List<Build.Attribute> attributes = new ArrayList<>(aspectsDependencies.asMap().size());
+      for (Map.Entry<Attribute, Collection<Label>> entry : aspectsDependencies.asMap().entrySet()) {
+        Attribute attribute = entry.getKey();
+        Collection<Label> labels = entry.getValue();
+        if (!includeAspectAttribute(attribute, labels)) {
+          continue;
+        }
+        Object attributeValue = getAspectAttributeValue(attribute, labels);
+        Build.Attribute serializedAttribute =
+            AttributeFormatter.getAttributeProto(
+                attribute,
+                attributeValue,
+                /*explicitlySpecified=*/ false,
+                /*encodeBooleanAndTriStateAsIntegerAndString=*/ true);
+        attributes.add(serializedAttribute);
       }
-      for (OutputFile outputFile : rule.getOutputFiles()) {
-        Label fileLabel = outputFile.getLabel();
-        rulePb.addRuleOutput(fileLabel.toString());
+      rulePb.addAllAttribute(
+          attributes.stream().distinct().sorted(ATTRIBUTE_NAME).collect(Collectors.toList()));
+      if (includeRuleInputsAndOutputs()) {
+        // Add all deps from aspects as rule inputs of current target.
+         aspectsDependencies
+             .values()
+             .stream()
+             .distinct()
+             .forEach(dep -> rulePb.addRuleInput(dep.toString()));
+        // Include explicit elements for all direct inputs and outputs of a rule;
+        // this goes beyond what is available from the attributes above, since it
+        // may also (depending on options) include implicit outputs,
+        // host-configuration outputs, and default values.
+        rule.getLabels(dependencyFilter)
+            .stream()
+            .distinct()
+            .forEach(input -> rulePb.addRuleInput(input.toString()));
+        rule.getOutputFiles()
+            .stream()
+            .distinct()
+            .forEach(output -> rulePb.addRuleOutput(output.getLabel().toString()));
       }
-      for (String feature : rule.getFeatures()) {
+      for (String feature : rule.getPackage().getFeatures()) {
         rulePb.addDefaultSetting(feature);
       }
-
       targetPb.setType(RULE);
       targetPb.setRule(rulePb);
     } else if (target instanceof OutputFile) {
@@ -171,34 +256,41 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
       Label label = outputFile.getLabel();
 
       Rule generatingRule = outputFile.getGeneratingRule();
-      Build.GeneratedFile output = Build.GeneratedFile.newBuilder()
-          .setLocation(location)
-          .setGeneratingRule(generatingRule.getLabel().toString())
-          .setName(label.toString())
-          .build();
+      GeneratedFile.Builder output =
+          GeneratedFile.newBuilder()
+                       .setGeneratingRule(generatingRule.getLabel().toString())
+                       .setName(label.toString());
 
+      if (includeLocation()) {
+        output.setLocation(location);
+      }
       targetPb.setType(GENERATED_FILE);
-      targetPb.setGeneratedFile(output);
+      targetPb.setGeneratedFile(output.build());
     } else if (target instanceof InputFile) {
       InputFile inputFile = (InputFile) target;
       Label label = inputFile.getLabel();
 
       Build.SourceFile.Builder input = Build.SourceFile.newBuilder()
-          .setLocation(location)
           .setName(label.toString());
 
-      if (inputFile.getName().equals("BUILD")) {
-        for (Label subinclude : inputFile.getPackage().getSubincludeLabels()) {
-          input.addSubinclude(subinclude.toString());
-        }
+      if (includeLocation()) {
+        input.setLocation(location);
+      }
 
-        for (Label skylarkFileDep : inputFile.getPackage().getSkylarkFileDependencies()) {
-          input.addSubinclude(skylarkFileDep.toString());
+      if (inputFile.getName().equals("BUILD")) {
+        Iterable<Label> skylarkLoadLabels = aspectResolver == null
+            ? inputFile.getPackage().getSkylarkFileDependencies()
+            : aspectResolver.computeBuildFileDependencies(inputFile.getPackage());
+
+        for (Label skylarkLoadLabel : skylarkLoadLabels) {
+          input.addSubinclude(skylarkLoadLabel.toString());
         }
 
         for (String feature : inputFile.getPackage().getFeatures()) {
           input.addFeature(feature);
         }
+
+        input.setPackageContainsErrors(inputFile.getPackage().containsErrors());
       }
 
       for (Label visibilityDependency : target.getVisibility().getDependencyLabels()) {
@@ -211,15 +303,16 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
 
       targetPb.setType(SOURCE_FILE);
       targetPb.setSourceFile(input);
-    } else if (target instanceof FakeSubincludeTarget) {
+    } else if (target instanceof FakeLoadTarget) {
       Label label = target.getLabel();
-      Build.SourceFile input = Build.SourceFile.newBuilder()
-          .setLocation(location)
-          .setName(label.toString())
-          .build();
+      SourceFile.Builder input = SourceFile.newBuilder()
+                                           .setName(label.toString());
 
+      if (includeLocation()) {
+        input.setLocation(location);
+      }
       targetPb.setType(SOURCE_FILE);
-      targetPb.setSourceFile(input);
+      targetPb.setSourceFile(input.build());
     } else if (target instanceof PackageGroup) {
       PackageGroup packageGroup = (PackageGroup) target;
       Build.PackageGroup.Builder packageGroupPb = Build.PackageGroup.newBuilder()
@@ -233,6 +326,20 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
 
       targetPb.setType(PACKAGE_GROUP);
       targetPb.setPackageGroup(packageGroupPb);
+    } else if (target instanceof EnvironmentGroup) {
+      EnvironmentGroup envGroup = (EnvironmentGroup) target;
+      Build.EnvironmentGroup.Builder envGroupPb =
+          Build.EnvironmentGroup
+              .newBuilder()
+              .setName(envGroup.getLabel().toString());
+      for (Label env : envGroup.getEnvironments()) {
+        envGroupPb.addEnvironment(env.toString());
+      }
+      for (Label defaultEnv : envGroup.getDefaults()) {
+        envGroupPb.addDefault(defaultEnv.toString());
+      }
+      targetPb.setType(ENVIRONMENT_GROUP);
+      targetPb.setEnvironmentGroup(envGroupPb);
     } else {
       throw new IllegalArgumentException(target.toString());
     }
@@ -240,252 +347,157 @@ public class ProtoOutputFormatter extends OutputFormatter implements UnorderedFo
     return targetPb.build();
   }
 
-  /**
-   * Adds the serialized version of the specified attribute to the specified message.
-   *
-   * @param rulePb the message to amend
-   * @param attr the attribute to add
-   * @param value the possible values of the attribute (can be a multi-value list for
-   *              configurable attributes)
-   * @param location the location of the attribute in the source file
-   * @param explicitlySpecified whether the attribute was explicitly specified or not
-   * @param includeGlobs add glob expression for attributes that contain them
-   */
-  @SuppressWarnings("unchecked")
-  public static void addAttributeToProto(
-      Build.Rule.Builder rulePb, Attribute attr, Iterable<Object> values,
-      Location location, Boolean explicitlySpecified, boolean includeGlobs) {
-    // Get the attribute type.  We need to convert and add appropriately
-    com.google.devtools.build.lib.packages.Type<?> type = attr.getType();
-
-    Build.Attribute.Builder attrPb = Build.Attribute.newBuilder();
-
-    // Set the type, name and source
-    attrPb.setName(attr.getName());
-    attrPb.setType(ProtoUtils.getDiscriminatorFromType(type));
-
-    if (location != null) {
-      attrPb.setParseableLocation(serialize(location));
+  protected void addAttributes(Build.Rule.Builder rulePb, Rule rule, Object extraDataForPostProcess)
+      throws InterruptedException {
+    Map<Attribute, Build.Attribute> serializedAttributes = Maps.newHashMap();
+    AggregatingAttributeMapper attributeMapper = AggregatingAttributeMapper.of(rule);
+    for (Attribute attr : rule.getAttributes()) {
+      if (!shouldIncludeAttribute(rule, attr)) {
+        continue;
+      }
+      Object attributeValue;
+      if (flattenSelects || !attributeMapper.isConfigurable(attr.getName())) {
+        attributeValue =
+            flattenAttributeValues(attr.getType(), getPossibleAttributeValues(rule, attr));
+      } else {
+        attributeValue = attributeMapper.getSelectorList(attr.getName(), attr.getType());
+      }
+      Build.Attribute serializedAttribute =
+          AttributeFormatter.getAttributeProto(
+              attr,
+              attributeValue,
+              rule.isAttributeValueExplicitlySpecified(attr),
+              /*encodeBooleanAndTriStateAsIntegerAndString=*/ true);
+      serializedAttributes.put(attr, serializedAttribute);
     }
+    rulePb.addAllAttribute(
+        serializedAttributes
+            .values()
+            .stream()
+            .distinct()
+            .sorted(ATTRIBUTE_NAME)
+            .collect(Collectors.toList()));
 
-    if (explicitlySpecified != null) {
-      attrPb.setExplicitlySpecified(explicitlySpecified);
-    }
+    postProcess(rule, rulePb, serializedAttributes, extraDataForPostProcess);
+  }
 
-    // Convenience binding for single-value attributes. Because those attributes can only
-    // have a single value, when we encounter configurable versions of them we need to
-    // react somehow to having multiple possible values to report. We currently just
-    // refrain from setting *any* value in that scenario. This variable is set to null
-    // to indicate that scenario.
-    Object singleAttributeValue = Iterables.size(values) == 1
-        ? Iterables.getOnlyElement(values)
-        : null;
+  protected boolean shouldIncludeAttribute(Rule rule, Attribute attr) {
+    return (includeDefaultValues || rule.isAttributeValueExplicitlySpecified(attr))
+        && includeAttribute(rule, attr);
+  }
 
-    /*
-     * Set the appropriate type and value.  Since string and string list store
-     * values for multiple types, use the toString() method on the objects
-     * instead of casting them.  Note that Boolean and TriState attributes have
-     * both an integer and string representation.
-     */
-    if (type == INTEGER) {
-      if (singleAttributeValue != null) {
-        attrPb.setIntValue((Integer) singleAttributeValue);
-      }
-    } else if (type == STRING || type == LABEL || type == NODEP_LABEL || type == OUTPUT) {
-      if (singleAttributeValue != null) {
-        attrPb.setStringValue(singleAttributeValue.toString());
-      }
-    } else if (type == STRING_LIST || type == LABEL_LIST || type == NODEP_LABEL_LIST
-        || type == OUTPUT_LIST || type == DISTRIBUTIONS) {
-      for (Object value : values) {
-        for (Object entry : (Collection<?>) value) {
-          attrPb.addStringListValue(entry.toString());
-        }
-      }
-    } else if (type == INTEGER_LIST) {
-      for (Object value : values) {
-        for (Integer entry : (Collection<Integer>) value) {
-          attrPb.addIntListValue(entry);
-        }
-      }
-    } else if (type == BOOLEAN) {
-      if (singleAttributeValue != null) {
-        if ((Boolean) singleAttributeValue) {
-          attrPb.setStringValue("true");
-          attrPb.setBooleanValue(true);
-        } else {
-          attrPb.setStringValue("false");
-          attrPb.setBooleanValue(false);
-        }
-        // This maintains partial backward compatibility for external users of the
-        // protobuf that were expecting an integer field and not a true boolean.
-        attrPb.setIntValue((Boolean) singleAttributeValue ? 1 : 0);
-      }
-    } else if (type == TRISTATE) {
-      if (singleAttributeValue != null) {
-        switch ((TriState) singleAttributeValue) {
-          case AUTO:
-            attrPb.setIntValue(-1);
-            attrPb.setStringValue("auto");
-            attrPb.setTristateValue(Build.Attribute.Tristate.AUTO);
-            break;
-          case NO:
-            attrPb.setIntValue(0);
-            attrPb.setStringValue("no");
-            attrPb.setTristateValue(Build.Attribute.Tristate.NO);
-            break;
-          case YES:
-            attrPb.setIntValue(1);
-            attrPb.setStringValue("yes");
-            attrPb.setTristateValue(Build.Attribute.Tristate.YES);
-            break;
-          default:
-            throw new IllegalStateException("Execpted AUTO/NO/YES to cover all possible cases");
-        }
-      }
-    } else if (type == LICENSE) {
-      if (singleAttributeValue != null) {
-        License license = (License) singleAttributeValue;
-        Build.License.Builder licensePb = Build.License.newBuilder();
-        for (License.LicenseType licenseType : license.getLicenseTypes()) {
-          licensePb.addLicenseType(licenseType.toString());
-        }
-        for (Label exception : license.getExceptions()) {
-          licensePb.addException(exception.toString());
-        }
-        attrPb.setLicense(licensePb);
-      }
-    } else if (type == STRING_DICT) {
-      // TODO(bazel-team): support better de-duping here and in other dictionaries.
-      for (Object value : values) {
-      Map<String, String> dict = (Map<String, String>) value;
-        for (Map.Entry<String, String> keyValueList : dict.entrySet()) {
-          Build.StringDictEntry entry = Build.StringDictEntry.newBuilder()
-              .setKey(keyValueList.getKey())
-              .setValue(keyValueList.getValue())
-              .build();
-          attrPb.addStringDictValue(entry);
-        }
-      }
-    } else if (type == STRING_DICT_UNARY) {
-      for (Object value : values) {
-        Map<String, String> dict = (Map<String, String>) value;
-        for (Map.Entry<String, String> dictEntry : dict.entrySet()) {
-          Build.StringDictUnaryEntry entry = Build.StringDictUnaryEntry.newBuilder()
-              .setKey(dictEntry.getKey())
-              .setValue(dictEntry.getValue())
-              .build();
-          attrPb.addStringDictUnaryValue(entry);
-        }
-      }
-    } else if (type == STRING_LIST_DICT) {
-      for (Object value : values) {
-        Map<String, List<String>> dict = (Map<String, List<String>>) value;
-        for (Map.Entry<String, List<String>> dictEntry : dict.entrySet()) {
-          Build.StringListDictEntry.Builder entry = Build.StringListDictEntry.newBuilder()
-              .setKey(dictEntry.getKey());
-          for (Object dictEntryValue : dictEntry.getValue()) {
-            entry.addValue(dictEntryValue.toString());
-          }
-          attrPb.addStringListDictValue(entry);
-        }
-      }
-    } else if (type == LABEL_LIST_DICT) {
-      for (Object value : values) {
-        Map<String, List<Label>> dict = (Map<String, List<Label>>) value;
-        for (Map.Entry<String, List<Label>> dictEntry : dict.entrySet()) {
-          Build.LabelListDictEntry.Builder entry = Build.LabelListDictEntry.newBuilder()
-              .setKey(dictEntry.getKey());
-          for (Object dictEntryValue : dictEntry.getValue()) {
-            entry.addValue(dictEntryValue.toString());
-          }
-          attrPb.addLabelListDictValue(entry);
-        }
-      }
-    } else if (type == FILESET_ENTRY_LIST) {
-      for (Object value : values) {
-        List<FilesetEntry> filesetEntries = (List<FilesetEntry>) value;
-        for (FilesetEntry filesetEntry : filesetEntries) {
-          Build.FilesetEntry.Builder filesetEntryPb = Build.FilesetEntry.newBuilder()
-              .setSource(filesetEntry.getSrcLabel().toString())
-              .setDestinationDirectory(filesetEntry.getDestDir().getPathString())
-              .setSymlinkBehavior(symlinkBehaviorToPb(filesetEntry.getSymlinkBehavior()))
-              .setStripPrefix(filesetEntry.getStripPrefix())
-              .setFilesPresent(filesetEntry.getFiles() != null);
-
-          if (filesetEntry.getFiles() != null) {
-            for (Label file : filesetEntry.getFiles()) {
-              filesetEntryPb.addFile(file.toString());
-            }
-          }
-
-          if (filesetEntry.getExcludes() != null) {
-            for (String exclude : filesetEntry.getExcludes()) {
-              filesetEntryPb.addExclude(exclude);
-            }
-          }
-
-          attrPb.addFilesetListValue(filesetEntryPb);
-        }
-      }
+  private static Object getAspectAttributeValue(Attribute attribute, Collection<Label> labels) {
+    Type<?> attributeType = attribute.getType();
+    if (attributeType.equals(BuildType.LABEL)) {
+      Preconditions.checkState(labels.size() == 1, "attribute=%s, labels=%s", attribute, labels);
+      return Iterables.getOnlyElement(labels);
     } else {
-      throw new IllegalStateException("Unknown type: " + type);
+      Preconditions.checkState(
+          attributeType.equals(BuildType.LABEL_LIST),
+          "attribute=%s, type=%s, labels=%s",
+          attribute,
+          attributeType,
+          labels);
+      return labels;
+    }
+  }
+
+  /** Further customize the proto output */
+  protected void postProcess(
+      Rule rule,
+      Build.Rule.Builder rulePb,
+      Map<Attribute, Build.Attribute> serializedAttributes,
+      Object extraDataForPostProcess) {}
+
+  /** Filter out some attributes */
+  protected boolean includeAttribute(Rule rule, Attribute attr) {
+    return ruleAttributePredicate.apply(attr.getName());
+  }
+
+  /** Allow filtering of aspect attributes. */
+  protected boolean includeAspectAttribute(Attribute attr, Collection<Label> value) {
+    return true;
+  }
+
+  protected boolean includeRuleDefinitionEnvironment() {
+    return true;
+  }
+
+  protected boolean includeRuleInputsAndOutputs() {
+    return true;
+  }
+
+  protected boolean includeLocation() {
+    return true;
+  }
+
+  /**
+   * Coerces the list {@param possibleValues} of values of type {@param attrType} to a single
+   * value of that type, in the following way:
+   *
+   * <p>If the list contains a single value, return that value.
+   *
+   * <p>If the list contains zero or multiple values and the type is a scalar type, return {@code
+   * null}.
+   *
+   * <p>If the list contains zero or multiple values and the type is a collection or map type,
+   * merge the collections/maps in the list and return the merged collection/map.
+   */
+  @Nullable
+  @SuppressWarnings("unchecked")
+  private static Object flattenAttributeValues(Type<?> attrType, Iterable<Object> possibleValues) {
+
+    // If there is only one possible value, return it.
+    if (Iterables.size(possibleValues) == 1) {
+      return Iterables.getOnlyElement(possibleValues);
     }
 
-    if (includeGlobs) {
-      for (Object value : values) {
-        if (value instanceof GlobList<?>) {
-          GlobList<?> globList = (GlobList<?>) value;
+    // Otherwise, there are multiple possible values. To conform to the message shape expected by
+    // query output's clients, we must transform the list of possible values. This transformation
+    // will be lossy, but this is the best we can do.
 
-          for (GlobCriteria criteria : globList.getCriteria()) {
-            Build.GlobCriteria.Builder criteriaPb = Build.GlobCriteria.newBuilder()
-                .setGlob(criteria.isGlob());
-            for (String include : criteria.getIncludePatterns()) {
-              criteriaPb.addInclude(include);
-            }
-            for (String exclude : criteria.getExcludePatterns()) {
-              criteriaPb.addExclude(exclude);
-            }
+    // If the attribute's type is not a collection type, return null. Query output's clients do
+    // not support list values for scalar attributes.
+    if (SCALAR_TYPES.contains(attrType)) {
+      return null;
+    }
 
-            attrPb.addGlobCriteria(criteriaPb);
-          }
+    // If the attribute's type is a collection type, merge the list of collections into a single
+    // collection. This is a sensible solution for query output's clients, which are happy to get
+    // the union of possible values.
+    // TODO(bazel-team): replace below with "is ListType" check (or some variant)
+    if (attrType == Type.STRING_LIST
+        || attrType == BuildType.LABEL_LIST
+        || attrType == BuildType.NODEP_LABEL_LIST
+        || attrType == BuildType.OUTPUT_LIST
+        || attrType == BuildType.DISTRIBUTIONS
+        || attrType == Type.INTEGER_LIST
+        || attrType == BuildType.FILESET_ENTRY_LIST) {
+      ImmutableList.Builder<Object> builder = ImmutableList.<Object>builder();
+      for (Object possibleValue : possibleValues) {
+        Collection<Object> collection = (Collection<Object>) possibleValue;
+        for (Object o : collection) {
+          builder.add(o);
         }
       }
+      return builder.build();
     }
 
-    rulePb.addAttribute(attrPb);
-  }
-
-  // This is needed because I do not want to use the SymlinkBehavior from the
-  // protocol buffer all over the place, so there are two classes that do
-  // essentially the same thing.
-  private static Build.FilesetEntry.SymlinkBehavior symlinkBehaviorToPb(
-      FilesetEntry.SymlinkBehavior symlinkBehavior) {
-    switch (symlinkBehavior) {
-      case COPY:
-        return Build.FilesetEntry.SymlinkBehavior.COPY;
-      case DEREFERENCE:
-        return Build.FilesetEntry.SymlinkBehavior.DEREFERENCE;
-      default:
-        throw new AssertionError("Unhandled FilesetEntry.SymlinkBehavior");
-    }
-  }
-
-  private static Build.Location serialize(Location location) {
-    Build.Location.Builder result = Build.Location.newBuilder();
-
-    result.setStartOffset(location.getStartOffset());
-    if (location.getStartLineAndColumn() != null) {
-      result.setStartLine(location.getStartLineAndColumn().getLine());
-      result.setStartColumn(location.getStartLineAndColumn().getColumn());
+    // Same for maps as for collections.
+    if (attrType == Type.STRING_DICT
+        || attrType == Type.STRING_LIST_DICT
+        || attrType == BuildType.LABEL_DICT_UNARY
+        || attrType == BuildType.LABEL_KEYED_STRING_DICT) {
+      Map<Object, Object> mergedDict = new HashMap<>();
+      for (Object possibleValue : possibleValues) {
+        Map<Object, Object> stringDict = (Map<Object, Object>) possibleValue;
+        for (Map.Entry<Object, Object> entry : stringDict.entrySet()) {
+          mergedDict.put(entry.getKey(), entry.getValue());
+        }
+      }
+      return mergedDict;
     }
 
-    result.setEndOffset(location.getEndOffset());
-    if (location.getEndLineAndColumn() != null) {
-      result.setEndLine(location.getEndLineAndColumn().getLine());
-      result.setEndColumn(location.getEndLineAndColumn().getColumn());
-    }
-
-    return result.build();
+    throw new AssertionError("Unknown type: " + attrType);
   }
 }
