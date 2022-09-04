@@ -317,9 +317,6 @@ public class FakeCcModule
       StarlarkInt stamp,
       Sequence<?> additionalInputs,
       Object grepIncludes,
-      Object linkArtifactNameSuffix,
-      Object neverLink,
-      Object testOnlyTarget,
       StarlarkThread thread)
       throws InterruptedException, EvalException {
     return null;
