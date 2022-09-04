@@ -1,6 +1,7 @@
 package io.quarkus.deployment.pkg;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -15,7 +16,7 @@ public class NativeConfig {
      * Additional arguments to pass to the build process
      */
     @ConfigItem
-    public Optional<List<String>> additionalBuildArgs;
+    public List<String> additionalBuildArgs;
 
     /**
      * If the HTTP url handler should be enabled, allowing you to do URL.openConnection() for HTTP URLs
@@ -36,10 +37,9 @@ public class NativeConfig {
     public boolean enableAllSecurityServices;
 
     /**
-     * @deprecated JNI is always enabled starting from GraalVM 19.3.1.
+     * If JNI should be enabled
      */
-    @Deprecated
-    @ConfigItem(defaultValue = "true")
+    @ConfigItem(defaultValue = "false")
     public boolean enableJni;
 
     /**
@@ -52,7 +52,7 @@ public class NativeConfig {
      * The location of the Graal distribution
      */
     @ConfigItem(defaultValue = "${GRAALVM_HOME:}")
-    public Optional<String> graalvmHome;
+    public String graalvmHome;
 
     /**
      * The location of the JDK
@@ -74,7 +74,7 @@ public class NativeConfig {
 
     /**
      * If the native image build should wait for a debugger to be attached before running. This is an advanced option
-     * and is generally only intended for those familiar with GraalVM internals
+     * and is generally only intended for those familiar with Substrate internals
      */
     @ConfigItem(defaultValue = "false")
     public boolean debugBuildProcess;
@@ -90,6 +90,18 @@ public class NativeConfig {
      */
     @ConfigItem(defaultValue = "false")
     public boolean cleanupServer;
+
+    /**
+     * This will report on the size of the retained heap after image build
+     */
+    @ConfigItem(defaultValue = "false")
+    public boolean enableRetainedHeapReporting;
+
+    /**
+     * This enables reporting of the code size of the native image
+     */
+    @ConfigItem(defaultValue = "false")
+    public boolean enableCodeSizeReporting;
 
     /**
      * If isolates should be enabled
@@ -133,7 +145,7 @@ public class NativeConfig {
     /**
      * The docker image to use to do the image build
      */
-    @ConfigItem(defaultValue = "quay.io/quarkus/ubi-quarkus-native-image:19.3.1-java8")
+    @ConfigItem(defaultValue = "quay.io/quarkus/ubi-quarkus-native-image:19.2.1")
     public String builderImage;
 
     /**
@@ -141,13 +153,13 @@ public class NativeConfig {
      * a container build is always done.
      */
     @ConfigItem
-    public Optional<String> containerRuntime;
+    public String containerRuntime = "";
 
     /**
      * Options to pass to the container runtime
      */
     @ConfigItem
-    public Optional<List<String>> containerRuntimeOptions;
+    public List<String> containerRuntimeOptions = new ArrayList<>();
 
     /**
      * If the resulting image should allow VM introspection
