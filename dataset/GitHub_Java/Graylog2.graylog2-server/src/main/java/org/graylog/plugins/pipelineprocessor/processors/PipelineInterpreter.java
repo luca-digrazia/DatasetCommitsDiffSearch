@@ -80,7 +80,6 @@ public class PipelineInterpreter implements MessageProcessor {
     private final PipelineStreamConnectionsService pipelineStreamConnectionsService;
     private final PipelineRuleParser pipelineRuleParser;
     private final Journal journal;
-    private final MetricRegistry metricRegistry;
     private final ScheduledExecutorService scheduler;
     private final Meter filteredOutMessages;
 
@@ -102,7 +101,6 @@ public class PipelineInterpreter implements MessageProcessor {
         this.pipelineRuleParser = pipelineRuleParser;
 
         this.journal = journal;
-        this.metricRegistry = metricRegistry;
         this.scheduler = scheduler;
         this.filteredOutMessages = metricRegistry.meter(name(ProcessBufferProcessor.class, "filteredOutMessages"));
 
@@ -119,7 +117,7 @@ public class PipelineInterpreter implements MessageProcessor {
         for (RuleDao ruleDao : ruleService.loadAll()) {
             Rule rule;
             try {
-                rule = pipelineRuleParser.parseRule(ruleDao.id(), ruleDao.source(), false);
+                rule = pipelineRuleParser.parseRule(ruleDao.source(), false);
             } catch (ParseException e) {
                 rule = Rule.alwaysFalse("Failed to parse rule: " + ruleDao.id());
             }
@@ -208,11 +206,9 @@ public class PipelineInterpreter implements MessageProcessor {
                     } else {
                         // get the default stream pipeline connections for this message
                         pipelinesToRun = streamConnection.get("default");
-                        if (log.isDebugEnabled()) {
-                            log.debug("[{}] running default stream pipelines: [{}]",
-                                      msgId,
-                                      pipelinesToRun.stream().map(Pipeline::name).toArray());
-                        }
+                        log.debug("[{}] running default stream pipelines: [{}]",
+                                 msgId,
+                                 pipelinesToRun.stream().map(Pipeline::name).toArray());
                     }
                 } else {
                     // 2. if a message-stream combination has already been processed (is in the set), skip that execution
@@ -226,11 +222,8 @@ public class PipelineInterpreter implements MessageProcessor {
                     log.debug("[{}] running pipelines {} for streams {}", msgId, pipelinesToRun, streamsIds);
                 }
 
-                // record execution of pipeline in metrics
-                pipelinesToRun.stream().forEach(pipeline -> metricRegistry.counter(name(Pipeline.class, pipeline.id(), "executed")).inc());
-
                 final StageIterator stages = new StageIterator(pipelinesToRun);
-                final Set<Pipeline> pipelinesToSkip = Sets.newHashSet();
+                final Set<Pipeline> pipelinesToProceedWith = Sets.newHashSet();
 
                 // iterate through all stages for all matching pipelines, per "stage slice" instead of per pipeline.
                 // pipeline execution ordering is not guaranteed
@@ -239,13 +232,13 @@ public class PipelineInterpreter implements MessageProcessor {
                     for (Tuple2<Stage, Pipeline> pair : stageSet) {
                         final Stage stage = pair.v1();
                         final Pipeline pipeline = pair.v2();
-                        if (pipelinesToSkip.contains(pipeline)) {
+                        if (!pipelinesToProceedWith.isEmpty() &&
+                                !pipelinesToProceedWith.contains(pipeline)) {
                             log.debug("[{}] previous stage result prevents further processing of pipeline `{}`",
                                      msgId,
                                      pipeline.name());
                             continue;
                         }
-                        metricRegistry.counter(name(Pipeline.class, pipeline.id(), "stage", String.valueOf(stage.stage()), "executed")).inc();
                         log.debug("[{}] evaluating rule conditions in stage {}: match {}",
                                  msgId,
                                  stage.stage(),
@@ -256,12 +249,8 @@ public class PipelineInterpreter implements MessageProcessor {
 
                         // 3. iterate over all the stages in these pipelines and execute them in order
                         final ArrayList<Rule> rulesToRun = Lists.newArrayListWithCapacity(stage.getRules().size());
-                        boolean anyRulesMatched = false;
                         for (Rule rule : stage.getRules()) {
                             if (rule.when().evaluateBool(context)) {
-                                anyRulesMatched = true;
-                                countRuleExecution(rule, pipeline, stage, "matched");
-
                                 if (context.hasEvaluationErrors()) {
                                     final EvaluationContext.EvalError lastError = Iterables.getLast(context.evaluationErrors());
                                     appendProcessingError(rule, message, lastError.toString());
@@ -272,12 +261,10 @@ public class PipelineInterpreter implements MessageProcessor {
                                 log.debug("[{}] rule `{}` matches, scheduling to run", msgId, rule.name());
                                 rulesToRun.add(rule);
                             } else {
-                                countRuleExecution(rule, pipeline, stage, "not-matched");
                                 log.debug("[{}] rule `{}` does not match", msgId, rule.name());
                             }
                         }
                         for (Rule rule : rulesToRun) {
-                            countRuleExecution(rule, pipeline, stage, "executed");
                             log.debug("[{}] rule `{}` matched running actions", msgId, rule.name());
                             for (Statement statement : rule.then()) {
                                 statement.evaluate(context);
@@ -287,7 +274,6 @@ public class PipelineInterpreter implements MessageProcessor {
                                     appendProcessingError(rule, message, lastError.toString());
                                     log.debug("Encountered evaluation error, skipping rest of the rule: {}",
                                               lastError);
-                                    countRuleExecution(rule, pipeline, stage, "failed");
                                     break;
                                 }
                             }
@@ -298,14 +284,10 @@ public class PipelineInterpreter implements MessageProcessor {
                         // any rule could match, but at least one had to,
                         // record that it is ok to proceed with the pipeline
                         if ((stage.matchAll() && (rulesToRun.size() == stage.getRules().size()))
-                                || (rulesToRun.size() > 0 && anyRulesMatched)) {
-                            log.debug("[{}] stage {} for pipeline `{}` required match: {}, ok to proceed with next stage",
-                                     msgId, stage.stage(), pipeline.name(), stage.matchAll() ? "all" : "either");
-                        } else {
-                            // no longer execute stages from this pipeline, the guard prevents it
-                            log.debug("[{}] stage {} for pipeline `{}` required match: {}, NOT ok to proceed with next stage",
-                                      msgId, stage.stage(), pipeline.name(), stage.matchAll() ? "all" : "either");
-                            pipelinesToSkip.add(pipeline);
+                                || (rulesToRun.size() > 0)) {
+                            log.debug("[{}] stage for pipeline `{}` required match: {}, ok to proceed with next stage",
+                                     msgId, pipeline.name(), stage.matchAll() ? "all" : "either");
+                            pipelinesToProceedWith.add(pipeline);
                         }
 
                         // 4. after each complete stage run, merge the processing changes, stages are isolated from each other
@@ -349,11 +331,6 @@ public class PipelineInterpreter implements MessageProcessor {
         return new MessageCollection(fullyProcessed);
     }
 
-    private void countRuleExecution(Rule rule, Pipeline pipeline, Stage stage, String type) {
-        metricRegistry.counter(name(Rule.class, rule.id(), type)).inc();
-        metricRegistry.counter(name(Rule.class, rule.id(), pipeline.id(), String.valueOf(stage.stage()), type)).inc();
-    }
-
     private void appendProcessingError(Rule rule, Message message, String errorString) {
         final String msg = "For rule '" + rule.name() + "': " + errorString;
         if (message.hasField(GL2_PROCESSING_ERROR)) {
@@ -367,7 +344,6 @@ public class PipelineInterpreter implements MessageProcessor {
     public void handleRuleChanges(RulesChangedEvent event) {
         event.deletedRuleIds().forEach(id -> {
             log.debug("Invalidated rule {}", id);
-            metricRegistry.removeMatching((name, metric) -> name.startsWith(name(Rule.class, id)));
         });
         event.updatedRuleIds().forEach(id -> {
             log.debug("Refreshing rule {}", id);
@@ -379,7 +355,6 @@ public class PipelineInterpreter implements MessageProcessor {
     public void handlePipelineChanges(PipelinesChangedEvent event) {
         event.deletedPipelineIds().forEach(id -> {
             log.debug("Invalidated pipeline {}", id);
-            metricRegistry.removeMatching((name, metric) -> name.startsWith(name(Pipeline.class, id)));
         });
         event.updatedPipelineIds().forEach(id -> {
             log.debug("Refreshing pipeline {}", id);
