@@ -79,9 +79,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "${native-image.docker-build}")
     private boolean dockerBuild;
 
-    @Parameter(defaultValue = "false")
-    private boolean enableVMInspection;
-
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
 
@@ -173,9 +170,7 @@ public class NativeImageMojo extends AbstractMojo {
             if(!enableServer) {
                 command.add("--no-server");
             }
-            if (enableVMInspection) {
-                command.add("-H:+AllowVMInspection");
-            }
+            //command.add("-H:+AllowVMInspection");
             System.out.println(command);
             Process process = Runtime.getRuntime().exec(command.toArray(new String[0]), null, outputDirectory);
             new Thread(new ProcessReader(process.getInputStream(), false)).start();
