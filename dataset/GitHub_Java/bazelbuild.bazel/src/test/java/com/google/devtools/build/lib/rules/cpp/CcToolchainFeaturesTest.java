@@ -732,7 +732,7 @@ public class CcToolchainFeaturesTest {
           createVariables("v1", "1", "v1", "2", "v2", "1", "v2", "2"));
       fail("Expected ExpansionException");
     } catch (ExpansionException e) {
-      assertThat(e).hasMessageThat().contains("'v1' and 'v2'");
+      assertThat(e.getMessage()).contains("'v1' and 'v2'");
     }
   }
   
@@ -782,7 +782,7 @@ public class CcToolchainFeaturesTest {
       getCommandLineForFlagGroups(nestedGroup, createNestedVariables("v", 2, 3));
       fail("Expected ExpansionException");
     } catch (ExpansionException e) {
-      assertThat(e).hasMessageThat().contains("'v'");
+      assertThat(e.getMessage()).contains("'v'");
     }
 
     try {
@@ -799,7 +799,7 @@ public class CcToolchainFeaturesTest {
           "}");
       fail("Expected ExpansionException");
     } catch (ExpansionException e) {
-      assertThat(e).hasMessageThat().contains("Invalid toolchain configuration");
+      assertThat(e.getMessage()).contains("Invalid toolchain configuration");
     }
   }
 
@@ -906,7 +906,7 @@ public class CcToolchainFeaturesTest {
           "feature { name: '<<<collision>>>' }");
       fail("Expected InvalidConfigurationException");
     } catch (InvalidConfigurationException e) {
-      assertThat(e).hasMessageThat().contains("<<<collision>>>");
+      assertThat(e.getMessage()).contains("<<<collision>>>");
     }
   }
 
@@ -916,7 +916,7 @@ public class CcToolchainFeaturesTest {
       buildFeatures("feature { name: 'a' implies: '<<<undefined>>>' }");
       fail("Expected InvalidConfigurationException");
     } catch (InvalidConfigurationException e) {
-      assertThat(e).hasMessageThat().contains("<<<undefined>>>");
+      assertThat(e.getMessage()).contains("<<<undefined>>>");
     }
   }
 
@@ -1319,8 +1319,7 @@ public class CcToolchainFeaturesTest {
       noFeaturesConfiguration.getToolForAction("action-a").getToolPath(crosstoolPath);
       fail("Expected IllegalArgumentException");
     } catch (IllegalArgumentException e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .contains("Matching tool for action action-a not found for given feature configuration");
     }
   }
@@ -1381,8 +1380,7 @@ public class CcToolchainFeaturesTest {
           "}");
       fail("Expected InvalidConfigurationException");
     } catch (InvalidConfigurationException e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .contains("feature or action config 'action-a' was specified multiple times.");
     }
   }
@@ -1401,7 +1399,7 @@ public class CcToolchainFeaturesTest {
           "}");
       fail("Expected InvalidConfigurationException");
     } catch (InvalidConfigurationException e) {
-      assertThat(e).hasMessageThat().contains("multiple action configs for action 'action-a'");
+      assertThat(e.getMessage()).contains("multiple action configs for action 'action-a'");
     }
   }
 
@@ -1438,8 +1436,7 @@ public class CcToolchainFeaturesTest {
           .getFeatureConfiguration("c++-compile");
       fail("Should throw InvalidConfigurationException");
     } catch (InvalidConfigurationException e) {
-      assertThat(e)
-          .hasMessageThat()
+      assertThat(e.getMessage())
           .contains(String.format(ActionConfig.FLAG_SET_WITH_ACTION_ERROR, "c++-compile"));
     }
   }
