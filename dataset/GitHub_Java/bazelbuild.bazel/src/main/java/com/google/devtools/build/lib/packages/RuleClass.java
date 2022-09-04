@@ -71,7 +71,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -2106,7 +2105,7 @@ public class RuleClass {
             .map(attr -> attributes.getSelectorList(attr.getName(), attr.getType()))
             .filter(Predicates.notNull())
             .flatMap(selectorList -> selectorList.getKeyLabels().stream())
-            .collect(Collectors.toCollection(LinkedHashSet::new));
+            .collect(Collectors.toSet());
 
     rule.setAttributeValue(configDepsAttribute, ImmutableList.copyOf(configLabels),
         /*explicit=*/false);
