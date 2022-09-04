@@ -1,12 +1,16 @@
 package io.quarkus.hibernate.orm.rest.data.panache.deployment;
 
+import static io.quarkus.gizmo.MethodDescriptor.ofMethod;
+
 import java.util.List;
 
 import javax.enterprise.context.ApplicationScoped;
+import javax.transaction.Transactional;
 
 import org.jboss.jandex.FieldInfo;
 import org.jboss.logging.Logger;
 
+import io.quarkus.gizmo.BranchResult;
 import io.quarkus.gizmo.BytecodeCreator;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.ClassOutput;
@@ -64,7 +68,13 @@ class ResourceImplementor {
         MethodCreator methodCreator = classCreator.getMethodCreator("list", List.class, Page.class, Sort.class);
         ResultHandle page = methodCreator.getMethodParam(0);
         ResultHandle sort = methodCreator.getMethodParam(1);
-        methodCreator.returnValue(dataAccessImplementor.findAll(methodCreator, page, sort));
+        ResultHandle columns = methodCreator.invokeVirtualMethod(ofMethod(Sort.class, "getColumns", List.class), sort);
+        ResultHandle isEmptySort = methodCreator.invokeInterfaceMethod(ofMethod(List.class, "isEmpty", boolean.class), columns);
+
+        BranchResult isEmptySortBranch = methodCreator.ifTrue(isEmptySort);
+        isEmptySortBranch.trueBranch().returnValue(dataAccessImplementor.findAll(isEmptySortBranch.trueBranch(), page));
+        isEmptySortBranch.falseBranch().returnValue(dataAccessImplementor.findAll(isEmptySortBranch.falseBranch(), page, sort));
+
         methodCreator.close();
     }
 
@@ -89,6 +99,7 @@ class ResourceImplementor {
 
     private void implementAdd(ClassCreator classCreator, DataAccessImplementor dataAccessImplementor) {
         MethodCreator methodCreator = classCreator.getMethodCreator("add", Object.class, Object.class);
+        methodCreator.addAnnotation(Transactional.class);
         ResultHandle entity = methodCreator.getMethodParam(0);
         methodCreator.returnValue(dataAccessImplementor.persist(methodCreator, entity));
         methodCreator.close();
@@ -97,6 +108,7 @@ class ResourceImplementor {
     private void implementUpdate(ClassCreator classCreator, DataAccessImplementor dataAccessImplementor,
             String entityType) {
         MethodCreator methodCreator = classCreator.getMethodCreator("update", Object.class, Object.class, Object.class);
+        methodCreator.addAnnotation(Transactional.class);
         ResultHandle id = methodCreator.getMethodParam(0);
         ResultHandle entity = methodCreator.getMethodParam(1);
         // Set entity ID before executing an update to make sure that a requested object ID matches a given entity ID.
@@ -107,6 +119,7 @@ class ResourceImplementor {
 
     private void implementDelete(ClassCreator classCreator, DataAccessImplementor dataAccessImplementor) {
         MethodCreator methodCreator = classCreator.getMethodCreator("delete", boolean.class, Object.class);
+        methodCreator.addAnnotation(Transactional.class);
         ResultHandle id = methodCreator.getMethodParam(0);
         methodCreator.returnValue(dataAccessImplementor.deleteById(methodCreator, id));
         methodCreator.close();
