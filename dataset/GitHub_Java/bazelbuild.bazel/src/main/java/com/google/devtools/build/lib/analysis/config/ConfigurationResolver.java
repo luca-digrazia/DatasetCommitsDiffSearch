@@ -30,7 +30,6 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.Dependency;
 import com.google.devtools.build.lib.analysis.DependencyResolver.DependencyKind;
-import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
 import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.analysis.config.transitions.NoTransition;
@@ -45,21 +44,17 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetFunction;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
-import com.google.devtools.build.lib.skyframe.PlatformMappingValue;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TransitiveTargetKey;
 import com.google.devtools.build.lib.skyframe.TransitiveTargetValue;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
-import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.build.skyframe.ValueOrException;
-import com.google.devtools.common.options.OptionsParsingException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -198,17 +193,6 @@ public final class ConfigurationResolver {
 
       if (sameFragments) {
         if (transition == NoTransition.INSTANCE) {
-          if (ctgValue.getConfiguration().trimConfigurationsRetroactively()
-              && !dep.getAspects().isEmpty()) {
-            String message =
-                ctgValue.getLabel()
-                    + " has aspects attached, but these are not supported in retroactive"
-                    + " trimming mode.";
-            env.getListener()
-                .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-            throw new ConfiguredTargetFunction.DependencyEvaluationException(
-                new InvalidConfigurationException(message));
-          }
           // The dep uses the same exact configuration. Let's re-use the current configuration and
           // skip adding a Skyframe dependency edge on it.
           putOnlyEntry(
@@ -223,16 +207,6 @@ public final class ConfigurationResolver {
           // uniquely frequent. It's possible, e.g., for every node in the configured target graph
           // to incur multiple host transitions. So we aggressively optimize to avoid hurting
           // analysis time.
-          if (hostConfiguration.trimConfigurationsRetroactively() && !dep.getAspects().isEmpty()) {
-            String message =
-                ctgValue.getLabel()
-                    + " has aspects attached, but these are not supported in retroactive"
-                    + " trimming mode.";
-            env.getListener()
-                .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-            throw new ConfiguredTargetFunction.DependencyEvaluationException(
-                new InvalidConfigurationException(message));
-          }
           putOnlyEntry(
               resolvedDeps,
               dependencyEdge,
@@ -278,17 +252,6 @@ public final class ConfigurationResolver {
       if (sameFragments
           && toOptions.size() == 1
           && Iterables.getOnlyElement(toOptions).equals(currentConfiguration.getOptions())) {
-        if (ctgValue.getConfiguration().trimConfigurationsRetroactively()
-            && !dep.getAspects().isEmpty()) {
-          String message =
-              ctgValue.getLabel()
-                  + " has aspects attached, but these are not supported in retroactive"
-                  + " trimming mode.";
-          env.getListener()
-              .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-          throw new ConfiguredTargetFunction.DependencyEvaluationException(
-              new InvalidConfigurationException(message));
-        }
         putOnlyEntry(
             resolvedDeps,
             dependencyEdge,
@@ -298,38 +261,20 @@ public final class ConfigurationResolver {
       }
 
       // If we get here, we have to get the configuration from Skyframe.
-      PathFragment platformMappingPath =
-          currentConfiguration.getOptions().get(PlatformOptions.class).platformMappings;
-      PlatformMappingValue platformMappingValue =
-          (PlatformMappingValue) env.getValue(PlatformMappingValue.Key.create(platformMappingPath));
-      if (platformMappingValue == null) {
-        return null;
-      }
+      for (BuildOptions options : toOptions) {
+        if (sameFragments) {
+          keysToEntries.put(
+              BuildConfigurationValue.key(
+                  currentConfiguration.fragmentClasses(),
+                  BuildOptions.diffForReconstruction(defaultBuildOptions, options)),
+              depsEntry);
 
-      try {
-        for (BuildOptions options : toOptions) {
-          if (sameFragments) {
-            keysToEntries.put(
-                BuildConfigurationValue.keyWithPlatformMapping(
-                    platformMappingValue,
-                    defaultBuildOptions,
-                    currentConfiguration.fragmentClasses(),
-                    BuildOptions.diffForReconstruction(defaultBuildOptions, options)),
-                depsEntry);
-
-          } else {
-            keysToEntries.put(
-                BuildConfigurationValue.keyWithPlatformMapping(
-                    platformMappingValue,
-                    defaultBuildOptions,
-                    depFragments,
-                    BuildOptions.diffForReconstruction(defaultBuildOptions, options)),
-                depsEntry);
-          }
+        } else {
+          keysToEntries.put(
+              BuildConfigurationValue.key(
+                  depFragments, BuildOptions.diffForReconstruction(defaultBuildOptions, options)),
+              depsEntry);
         }
-      } catch (OptionsParsingException e) {
-        throw new ConfiguredTargetFunction.DependencyEvaluationException(
-            new InvalidConfigurationException(e));
       }
     }
 
@@ -363,25 +308,12 @@ public final class ConfigurationResolver {
           // null out on missing values from *this specific Skyframe request*.
           return null;
         }
-        BuildConfiguration trimmedConfig =
-            ((BuildConfigurationValue) valueOrException.get()).getConfiguration();
+        BuildConfigurationValue trimmedConfig = (BuildConfigurationValue) valueOrException.get();
         for (Map.Entry<DependencyKind, Dependency> info : keysToEntries.get(key)) {
           Dependency originalDep = info.getValue();
-          if (trimmedConfig.trimConfigurationsRetroactively()
-              && !originalDep.getAspects().isEmpty()) {
-            String message =
-                ctgValue.getLabel()
-                    + " has aspects attached, but these are not supported in retroactive"
-                    + " trimming mode.";
-            env.getListener()
-                .handle(Event.error(TargetUtils.getLocationMaybe(ctgValue.getTarget()), message));
-            throw new ConfiguredTargetFunction.DependencyEvaluationException(
-                new InvalidConfigurationException(message));
-          }
           DependencyEdge attr = new DependencyEdge(info.getKey(), originalDep.getLabel());
-          Dependency resolvedDep =
-              Dependency.withConfigurationAndAspects(
-                  originalDep.getLabel(), trimmedConfig, originalDep.getAspects());
+          Dependency resolvedDep = Dependency.withConfigurationAndAspects(originalDep.getLabel(),
+              trimmedConfig.getConfiguration(), originalDep.getAspects());
           Attribute attribute = attr.dependencyKind.getAttribute();
           if (attribute != null && attribute.getTransitionFactory().isSplit()) {
             resolvedDeps.put(attr, resolvedDep);
@@ -699,8 +631,7 @@ public final class ConfigurationResolver {
       Iterable<TargetAndConfiguration> defaultContext,
       Multimap<BuildConfiguration, Dependency> targetsToEvaluate,
       ExtendedEventHandler eventHandler,
-      SkyframeExecutor skyframeExecutor)
-      throws InvalidConfigurationException {
+      SkyframeExecutor skyframeExecutor) {
 
     Map<Label, Target> labelsToTargets = new LinkedHashMap<>();
     for (TargetAndConfiguration targetAndConfig : defaultContext) {

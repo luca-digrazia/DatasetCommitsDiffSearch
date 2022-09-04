@@ -592,7 +592,7 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     map.put(
         SkyFunctions.REGISTERED_EXECUTION_PLATFORMS, new RegisteredExecutionPlatformsFunction());
     map.put(SkyFunctions.REGISTERED_TOOLCHAINS, new RegisteredToolchainsFunction());
-    map.put(SkyFunctions.SINGLE_TOOLCHAIN_RESOLUTION, new SingleToolchainResolutionFunction());
+    map.put(SkyFunctions.TOOLCHAIN_RESOLUTION, new ToolchainResolutionFunction());
     map.put(SkyFunctions.REPOSITORY_MAPPING, new RepositoryMappingFunction());
     map.put(SkyFunctions.RESOLVED_HASH_VALUES, new ResolvedHashesFunction());
     map.put(SkyFunctions.RESOLVED_FILE, new ResolvedFileFunction());
@@ -888,6 +888,8 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
     return true;
   }
 
+  protected abstract boolean discardPackagesWhenDiscardingAnalysisObjects();
+
   /**
    * If not null, this is the only source root in the build, corresponding to the single element in
    * a single-element package path. Such a single-source-root build need not plant the execroot
@@ -907,34 +909,12 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   @VisibleForTesting
   protected abstract Injectable injectable();
 
-  /**
-   * Types that are created during loading, use significant space, and are definitely not needed
-   * during execution unless explicitly named.
-   *
-   * <p>Some keys, like globs, may be re-evaluated during execution, so these types should only be
-   * discarded if reverse deps are not being tracked!
-   */
   private static final ImmutableSet<SkyFunctionName> LOADING_TYPES =
       ImmutableSet.of(
           SkyFunctions.PACKAGE,
           SkyFunctions.SKYLARK_IMPORTS_LOOKUP,
           SkyFunctions.AST_FILE_LOOKUP,
           SkyFunctions.GLOB);
-
-  /** Data that should be discarded in {@link #discardPreExecutionCache}. */
-  protected enum DiscardType {
-    ALL,
-    ANALYSIS_REFS_ONLY,
-    LOADING_NODES_ONLY;
-
-    boolean discardsAnalysis() {
-      return this != LOADING_NODES_ONLY;
-    }
-
-    boolean discardsLoading() {
-      return this != ANALYSIS_REFS_ONLY;
-    }
-  }
 
   /**
    * Save memory by removing references to configured targets and aspects in Skyframe.
@@ -946,26 +926,21 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
    * phase. Instead, their analysis-time data is cleared while preserving the generating action info
    * needed for execution. The next build will delete the nodes (and recreate them if necessary).
    *
-   * <p>{@code discardType} can be used to specify which data to discard.
+   * <p>If {@link #discardPackagesWhenDiscardingAnalysisObjects} is true, then also delete
+   * loading-phase nodes (as determined by {@link #LOADING_TYPES}) from the graph.
    */
-  protected void discardPreExecutionCache(
-      Collection<ConfiguredTarget> topLevelTargets,
-      Collection<AspectValue> topLevelAspects,
-      DiscardType discardType) {
-    if (discardType.discardsAnalysis()) {
-      topLevelTargets = ImmutableSet.copyOf(topLevelTargets);
-      topLevelAspects = ImmutableSet.copyOf(topLevelAspects);
-    }
+  private void discardAnalysisCache(
+      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects) {
+    topLevelTargets = ImmutableSet.copyOf(topLevelTargets);
+    topLevelAspects = ImmutableSet.copyOf(topLevelAspects);
     // This is to prevent throwing away Packages we may need during execution.
     ImmutableSet.Builder<PackageIdentifier> packageSetBuilder = ImmutableSet.builder();
-    if (discardType.discardsLoading()) {
-      packageSetBuilder.addAll(
-          Collections2.transform(
-              topLevelTargets, target -> target.getLabel().getPackageIdentifier()));
-      packageSetBuilder.addAll(
-          Collections2.transform(
-              topLevelAspects, aspect -> aspect.getLabel().getPackageIdentifier()));
-    }
+    packageSetBuilder.addAll(
+        Collections2.transform(
+            topLevelTargets, target -> target.getLabel().getPackageIdentifier()));
+    packageSetBuilder.addAll(
+        Collections2.transform(
+            topLevelAspects, aspect -> aspect.getLabel().getPackageIdentifier()));
     ImmutableSet<PackageIdentifier> topLevelPackages = packageSetBuilder.build();
     try (AutoProfiler p = AutoProfiler.logged("discarding analysis cache", logger)) {
       lastAnalysisDiscarded = true;
@@ -979,42 +954,37 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
         }
         SkyKey key = keyAndEntry.getKey();
         SkyFunctionName functionName = key.functionName();
-        if (discardType.discardsLoading()) {
-          // Keep packages for top-level targets and aspects in memory to get the target from later.
-          if (functionName.equals(SkyFunctions.PACKAGE)
-              && topLevelPackages.contains(key.argument())) {
-            continue;
-          }
-          if (LOADING_TYPES.contains(functionName)) {
-            it.remove();
-            continue;
-          }
+        // Keep packages for top-level targets and aspects in memory to get the target from later.
+        if (functionName.equals(SkyFunctions.PACKAGE)
+            && topLevelPackages.contains(key.argument())) {
+          continue;
         }
-        if (discardType.discardsAnalysis()) {
-          if (functionName.equals(SkyFunctions.CONFIGURED_TARGET)) {
-            ConfiguredTargetValue ctValue;
-            try {
-              ctValue = (ConfiguredTargetValue) entry.getValue();
-            } catch (InterruptedException e) {
-              throw new IllegalStateException(
-                  "No interruption in in-memory retrieval: " + entry, e);
-            }
-            // ctValue may be null if target was not successfully analyzed.
-            if (ctValue != null) {
-              ctValue.clear(!topLevelTargets.contains(ctValue.getConfiguredTarget()));
-            }
-          } else if (functionName.equals(SkyFunctions.ASPECT)) {
-            AspectValue aspectValue;
-            try {
-              aspectValue = (AspectValue) entry.getValue();
-            } catch (InterruptedException e) {
-              throw new IllegalStateException(
-                  "No interruption in in-memory retrieval: " + entry, e);
-            }
-            // value may be null if target was not successfully analyzed.
-            if (aspectValue != null) {
-              aspectValue.clear(!topLevelAspects.contains(aspectValue));
-            }
+        if (discardPackagesWhenDiscardingAnalysisObjects()
+            && LOADING_TYPES.contains(functionName)) {
+          it.remove();
+          continue;
+        }
+        if (functionName.equals(SkyFunctions.CONFIGURED_TARGET)) {
+          ConfiguredTargetValue ctValue;
+          try {
+            ctValue = (ConfiguredTargetValue) entry.getValue();
+          } catch (InterruptedException e) {
+            throw new IllegalStateException("No interruption in in-memory retrieval: " + entry, e);
+          }
+          // ctValue may be null if target was not successfully analyzed.
+          if (ctValue != null) {
+            ctValue.clear(!topLevelTargets.contains(ctValue.getConfiguredTarget()));
+          }
+        } else if (functionName.equals(SkyFunctions.ASPECT)) {
+          AspectValue aspectValue;
+          try {
+            aspectValue = (AspectValue) entry.getValue();
+          } catch (InterruptedException e) {
+            throw new IllegalStateException("No interruption in in-memory retrieval: " + entry, e);
+          }
+          // value may be null if target was not successfully analyzed.
+          if (aspectValue != null) {
+            aspectValue.clear(!topLevelAspects.contains(aspectValue));
           }
         }
       }
@@ -1023,11 +993,12 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
 
   /**
    * Saves memory by clearing analysis objects from Skyframe. Clears their data without deleting
-   * them (they will be deleted on the next build). May also delete loading-phase objects from the
-   * graph.
+   * them (they will be deleted on the next build).
    */
-  public abstract void clearAnalysisCache(
-      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects);
+  public void clearAnalysisCache(
+      Collection<ConfiguredTarget> topLevelTargets, Collection<AspectValue> topLevelAspects) {
+    discardAnalysisCache(topLevelTargets, topLevelAspects);
+  }
 
   protected abstract void dropConfiguredTargetsNow(final ExtendedEventHandler eventHandler);
 
@@ -1739,34 +1710,15 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
           try {
             ConfiguredTarget mergedTarget =
                 MergedConfiguredTarget.of(configuredTarget, configuredAspects);
-            BuildConfigurationValue.Key configKey = mergedTarget.getConfigurationKey();
-            BuildConfiguration resolvedConfig = depConfig;
-            if (configKey == null) {
-              // Unfortunately, it's possible to get a configured target with a null configuration
-              // when depConfig is non-null, so we need to explicitly override it in that case.
-              resolvedConfig = null;
-            } else if (!configKey.equals(BuildConfigurationValue.key(depConfig))) {
-              // Retroactive trimming may change the configuration associated with the dependency.
-              // If it does, we need to get that instance.
-              // TODO(mstaib): doing these individually instead of doing them all at once may end
-              // up being wasteful use of Skyframe. Although these configurations are guaranteed
-              // to be in the Skyframe cache (because the dependency would have had to retrieve
-              // them to be created in the first place), looking them up repeatedly may be slower
-              // than just keeping a local cache and assigning the same configuration to all the
-              // CTs which need it. Profile this and see if there's a better way.
-              if (!depConfig.trimConfigurationsRetroactively()) {
-                throw new AssertionError(
-                    "Loading configurations mid-dependency resolution should ONLY happen when "
-                        + "retroactive trimming is enabled.");
-              }
-              resolvedConfig = getConfiguration(eventHandler, mergedTarget.getConfigurationKey());
-            }
             cts.put(
                 key,
                 new ConfiguredTargetAndData(
                     mergedTarget,
                     packageValue.getPackage().getTarget(configuredTarget.getLabel().getName()),
-                    resolvedConfig));
+                    // This is terrible, but our tests' use of configurations is terrible. It's only
+                    // by accident that getting a null-configuration ConfiguredTarget works even if
+                    // depConfig is not null.
+                    mergedTarget.getConfigurationKey() == null ? null : depConfig));
 
           } catch (DuplicateException | NoSuchTargetException e) {
             throw new IllegalStateException(
@@ -2488,7 +2440,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
       OptionsProvider options)
       throws InterruptedException, AbruptExitException {
     getActionEnvFromOptions(options);
-    setRepoEnv(options);
     RemoteOptions remoteOptions = options.getOptions(RemoteOptions.class);
     setRemoteOutputsMode(
         remoteOptions != null
@@ -2548,17 +2499,6 @@ public abstract class SkyframeExecutor<T extends BuildDriver> implements Walkabl
   @VisibleForTesting
   public void setActionEnv(Map<String, String> actionEnv) {
     PrecomputedValue.ACTION_ENV.set(injectable(), actionEnv);
-  }
-
-  private void setRepoEnv(OptionsProvider options) {
-    BuildConfiguration.Options opt = options.getOptions(BuildConfiguration.Options.class);
-    LinkedHashMap<String, String> repoEnv = new LinkedHashMap<>();
-    if (opt != null) {
-      for (Map.Entry<String, String> v : opt.repositoryEnvironment) {
-        repoEnv.put(v.getKey(), v.getValue());
-      }
-    }
-    PrecomputedValue.REPO_ENV.set(injectable(), repoEnv);
   }
 
   public PathPackageLocator createPackageLocator(
