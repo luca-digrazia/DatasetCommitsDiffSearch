@@ -314,6 +314,11 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     }
   }
 
+  @Override
+  public void addGlobalMakeVariables(ImmutableMap.Builder<String, String> globalMakeEnvBuilder) {
+    globalMakeEnvBuilder.put("JAVA_TRANSLATIONS", buildTranslations() ? "1" : "0");
+  }
+
   /**
    * Returns true iff Java compilation should use ijars.
    */

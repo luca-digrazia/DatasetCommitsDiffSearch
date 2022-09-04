@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.rules.android;
 import static com.google.common.truth.Truth.assertThat;
 
 import com.google.common.base.Predicates;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -576,8 +575,6 @@ public class AarImportTest extends BuildViewTestCase {
   @Test
   public void testTransitiveExports() throws Exception {
     assertThat(getConfiguredTarget("//a:bar").get(JavaInfo.PROVIDER).getTransitiveExports())
-        .containsExactly(
-            Label.parseAbsolute("//a:foo", ImmutableMap.of()),
-            Label.parseAbsolute("//java:baz", ImmutableMap.of()));
+        .containsExactly(Label.parseAbsolute("//a:foo"), Label.parseAbsolute("//java:baz"));
   }
 }
