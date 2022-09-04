@@ -16,31 +16,20 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.Type.ConversionException;
 import com.google.devtools.build.lib.skylarkbuildapi.SkylarkNativeModuleApi;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkUtils;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.syntax.Type.ConversionException;
 
-/** The Skylark native module. */
-// TODO(laurentlb): Some definitions are duplicated from PackageFactory.
-// This class defines:
-// native.existing_rule
-// native.existing_rules
-// native.exports_files -- also global
-// native.glob          -- also global
-// native.package_group -- also global
-// native.package_name
-// native.repository_name
-//
-// PackageFactory also defines:
-// distribs            -- hidden?
-// licenses            -- hidden?
-// package             -- global
-// environment_group   -- hidden?
+/**
+ * A class for the Skylark native module. TODO(laurentlb): Some definitions are duplicated from
+ * PackageFactory.
+ */
 public class SkylarkNativeModule implements SkylarkNativeModuleApi {
 
   @Override
@@ -48,24 +37,20 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
       SkylarkList<?> include,
       SkylarkList<?> exclude,
       Integer excludeDirectories,
-      Object allowEmpty,
-      Location loc,
-      StarlarkThread thread)
+      Boolean allowEmpty,
+      FuncallExpression ast,
+      Environment env)
       throws EvalException, ConversionException, InterruptedException {
-    SkylarkUtils.checkLoadingPhase(thread, "native.glob", loc);
-    try {
-      return PackageFactory.callGlob(
-          null, include, exclude, excludeDirectories != 0, allowEmpty, loc, thread);
-    } catch (IllegalArgumentException e) {
-      throw new EvalException(loc, "illegal argument in call to glob", e);
-    }
+    SkylarkUtils.checkLoadingPhase(env, "native.glob", ast.getLocation());
+    return PackageFactory.callGlob(
+        null, include, exclude, excludeDirectories != 0, allowEmpty, ast, env);
   }
 
   @Override
-  public Object existingRule(String name, Location loc, StarlarkThread thread)
+  public Object existingRule(String name, FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException {
-    SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "native.existing_rule", loc);
-    return PackageFactory.callExistingRule(name, loc, thread);
+    SkylarkUtils.checkLoadingOrWorkspacePhase(env, "native.existing_rule", ast.getLocation());
+    return PackageFactory.callExistingRule(name, ast, env);
   }
 
   /*
@@ -74,44 +59,43 @@ public class SkylarkNativeModule implements SkylarkNativeModuleApi {
   */
   @Override
   public SkylarkDict<String, SkylarkDict<String, Object>> existingRules(
-      Location loc, StarlarkThread thread) throws EvalException, InterruptedException {
-    SkylarkUtils.checkLoadingOrWorkspacePhase(thread, "native.existing_rules", loc);
-    return PackageFactory.callExistingRules(loc, thread);
+      FuncallExpression ast, Environment env)
+      throws EvalException, InterruptedException {
+    SkylarkUtils.checkLoadingOrWorkspacePhase(env, "native.existing_rules", ast.getLocation());
+    return PackageFactory.callExistingRules(ast, env);
   }
 
   @Override
-  public Runtime.NoneType packageGroup(
-      String name,
-      SkylarkList<?> packages,
+  public Runtime.NoneType packageGroup(String name, SkylarkList<?> packages,
       SkylarkList<?> includes,
-      Location loc,
-      StarlarkThread thread)
-      throws EvalException {
-    SkylarkUtils.checkLoadingPhase(thread, "native.package_group", loc);
-    return PackageFactory.callPackageFunction(name, packages, includes, loc, thread);
+      FuncallExpression ast, Environment env) throws EvalException {
+    SkylarkUtils.checkLoadingPhase(env, "native.package_group", ast.getLocation());
+    return PackageFactory.callPackageFunction(name, packages, includes, ast, env);
   }
 
   @Override
-  public Runtime.NoneType exportsFiles(
-      SkylarkList<?> srcs, Object visibility, Object licenses, Location loc, StarlarkThread thread)
+  public Runtime.NoneType exportsFiles(SkylarkList<?> srcs, Object visibility, Object licenses,
+      FuncallExpression ast, Environment env)
       throws EvalException {
-    SkylarkUtils.checkLoadingPhase(thread, "native.exports_files", loc);
-    return PackageFactory.callExportsFiles(srcs, visibility, licenses, loc, thread);
+    SkylarkUtils.checkLoadingPhase(env, "native.exports_files", ast.getLocation());
+    return PackageFactory.callExportsFiles(srcs, visibility, licenses, ast, env);
   }
 
   @Override
-  public String packageName(Location loc, StarlarkThread thread) throws EvalException {
-    SkylarkUtils.checkLoadingPhase(thread, "native.package_name", loc);
+  public String packageName(FuncallExpression ast, Environment env)
+      throws EvalException {
+    SkylarkUtils.checkLoadingPhase(env, "native.package_name", ast.getLocation());
     PackageIdentifier packageId =
-        PackageFactory.getContext(thread, loc).getBuilder().getPackageIdentifier();
+        PackageFactory.getContext(env, ast.getLocation()).getBuilder().getPackageIdentifier();
     return packageId.getPackageFragment().getPathString();
   }
 
   @Override
-  public String repositoryName(Location location, StarlarkThread thread) throws EvalException {
-    SkylarkUtils.checkLoadingPhase(thread, "native.repository_name", location);
+  public String repositoryName(Location location, Environment env)
+      throws EvalException {
+    SkylarkUtils.checkLoadingPhase(env, "native.repository_name", location);
     PackageIdentifier packageId =
-        PackageFactory.getContext(thread, location).getBuilder().getPackageIdentifier();
+        PackageFactory.getContext(env, location).getBuilder().getPackageIdentifier();
     return packageId.getRepository().toString();
   }
 }

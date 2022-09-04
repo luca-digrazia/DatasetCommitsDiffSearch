@@ -19,11 +19,12 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.FuncallExpression;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
  * Interface for a module with native rule and package helper functions.
@@ -76,24 +77,24 @@ public interface SkylarkNativeModuleApi {
             doc = "A flag whether to exclude directories or not."),
         @Param(
             name = "allow_empty",
-            type = Object.class,
-            defaultValue = "unbound",
+            type = Boolean.class,
+            defaultValue = "True",
             named = true,
             doc =
                 "Whether we allow glob patterns to match nothing. If `allow_empty` is False, each"
                     + " individual include pattern must match something and also the final"
-                    + " result must be non-empty (after the matches of the `exclude` patterns are"
+                    + " resultmust be non-empty (after the matches of the `exclude` patterns are"
                     + " excluded).")
       },
-      useLocation = true,
-      useStarlarkThread = true)
+      useAst = true,
+      useEnvironment = true)
   public SkylarkList<?> glob(
       SkylarkList<?> include,
       SkylarkList<?> exclude,
       Integer excludeDirectories,
-      Object allowEmpty,
-      Location loc,
-      StarlarkThread thread)
+      Boolean allowEmpty,
+      FuncallExpression ast,
+      Environment env)
       throws EvalException, InterruptedException;
 
   @SkylarkCallable(
@@ -112,9 +113,9 @@ public interface SkylarkNativeModuleApi {
             legacyNamed = true,
             doc = "The name of the target.")
       },
-      useLocation = true,
-      useStarlarkThread = true)
-  public Object existingRule(String name, Location loc, StarlarkThread thread)
+      useAst = true,
+      useEnvironment = true)
+  public Object existingRule(String name, FuncallExpression ast, Environment env)
       throws EvalException, InterruptedException;
 
   @SkylarkCallable(
@@ -126,49 +127,27 @@ public interface SkylarkNativeModuleApi {
               + ""
               + "<p><i>Note: If possible, avoid using this function. It makes BUILD files brittle "
               + "and order-dependent.</i>",
-      useLocation = true,
-      useStarlarkThread = true)
+      useAst = true,
+      useEnvironment = true)
   public SkylarkDict<String, SkylarkDict<String, Object>> existingRules(
-      Location loc, StarlarkThread thread) throws EvalException, InterruptedException;
+      FuncallExpression ast, Environment env) throws EvalException, InterruptedException;
 
-  @SkylarkCallable(
-      name = "package_group",
-      doc =
-          "This function defines a set of packages and assigns a label to the group. "
-              + "The label can be referenced in <code>visibility</code> attributes.",
+  @SkylarkCallable(name = "package_group",
+      doc = "This function defines a set of packages and assigns a label to the group. "
+          + "The label can be referenced in <code>visibility</code> attributes.",
       parameters = {
-        @Param(
-            name = "name",
-            type = String.class,
-            named = true,
-            positional = false,
-            doc = "The unique name for this rule."),
-        @Param(
-            name = "packages",
-            type = SkylarkList.class,
-            generic1 = String.class,
-            defaultValue = "[]",
-            named = true,
-            positional = false,
-            doc = "A complete enumeration of packages in this group."),
-        @Param(
-            name = "includes",
-            type = SkylarkList.class,
-            generic1 = String.class,
-            defaultValue = "[]",
-            named = true,
-            positional = false,
-            doc = "Other package groups that are included in this one.")
-      },
-      useLocation = true,
-      useStarlarkThread = true)
-  public Runtime.NoneType packageGroup(
-      String name,
-      SkylarkList<?> packages,
+      @Param(name = "name", type = String.class, named = true, positional = false,
+          doc = "The unique name for this rule."),
+      @Param(name = "packages", type = SkylarkList.class, generic1 = String.class,
+          defaultValue = "[]", named = true, positional = false,
+          doc = "A complete enumeration of packages in this group."),
+      @Param(name = "includes", type = SkylarkList.class, generic1 = String.class,
+          defaultValue = "[]", named = true, positional = false,
+          doc = "Other package groups that are included in this one.")},
+      useAst = true, useEnvironment = true)
+  public Runtime.NoneType packageGroup(String name, SkylarkList<?> packages,
       SkylarkList<?> includes,
-      Location loc,
-      StarlarkThread thread)
-      throws EvalException;
+      FuncallExpression ast, Environment env) throws EvalException;
 
   @SkylarkCallable(
       name = "exports_files",
@@ -202,37 +181,45 @@ public interface SkylarkNativeModuleApi {
             defaultValue = "None",
             doc = "Licenses to be specified.")
       },
-      useLocation = true,
-      useStarlarkThread = true)
+      useAst = true,
+      useEnvironment = true)
   public Runtime.NoneType exportsFiles(
-      SkylarkList<?> srcs, Object visibility, Object licenses, Location loc, StarlarkThread thread)
+      SkylarkList<?> srcs,
+      Object visibility,
+      Object licenses,
+      FuncallExpression ast,
+      Environment env)
       throws EvalException;
 
   @SkylarkCallable(
-      name = "package_name",
-      doc =
-          "The name of the package being evaluated. "
-              + "For example, in the BUILD file <code>some/package/BUILD</code>, its value "
-              + "will be <code>some/package</code>. "
-              + "If the BUILD file calls a function defined in a .bzl file, "
-              + "<code>package_name()</code> will match the caller BUILD file package. "
-              + "This function is equivalent to the deprecated variable <code>PACKAGE_NAME</code>.",
-      parameters = {},
-      useLocation = true,
-      useStarlarkThread = true)
-  public String packageName(Location loc, StarlarkThread thread) throws EvalException;
+    name = "package_name",
+    doc =
+        "The name of the package being evaluated. "
+            + "For example, in the BUILD file <code>some/package/BUILD</code>, its value "
+            + "will be <code>some/package</code>. "
+            + "If the BUILD file calls a function defined in a .bzl file, "
+            + "<code>package_name()</code> will match the caller BUILD file package. "
+            + "This function is equivalent to the deprecated variable <code>PACKAGE_NAME</code>.",
+    parameters = {},
+    useAst = true,
+    useEnvironment = true
+  )
+  public String packageName(FuncallExpression ast, Environment env)
+      throws EvalException;
 
   @SkylarkCallable(
-      name = "repository_name",
-      doc =
-          "The name of the repository the rule or build extension is called from. "
-              + "For example, in packages that are called into existence by the WORKSPACE stanza "
-              + "<code>local_repository(name='local', path=...)</code> it will be set to "
-              + "<code>@local</code>. In packages in the main repository, it will be set to "
-              + "<code>@</code>. This function is equivalent to the deprecated variable "
-              + "<code>REPOSITORY_NAME</code>.",
-      parameters = {},
-      useLocation = true,
-      useStarlarkThread = true)
-  public String repositoryName(Location location, StarlarkThread thread) throws EvalException;
+    name = "repository_name",
+    doc =
+        "The name of the repository the rule or build extension is called from. "
+            + "For example, in packages that are called into existence by the WORKSPACE stanza "
+            + "<code>local_repository(name='local', path=...)</code> it will be set to "
+            + "<code>@local</code>. In packages in the main repository, it will be set to "
+            + "<code>@</code>. This function is equivalent to the deprecated variable "
+            + "<code>REPOSITORY_NAME</code>.",
+    parameters = {},
+    useLocation = true,
+    useEnvironment = true
+  )
+  public String repositoryName(Location location, Environment env)
+      throws EvalException;
 }

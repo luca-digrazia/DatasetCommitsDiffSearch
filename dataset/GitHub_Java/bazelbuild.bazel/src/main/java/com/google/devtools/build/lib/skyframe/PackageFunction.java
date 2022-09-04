@@ -81,7 +81,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -358,15 +357,10 @@ public class PackageFunction implements SkyFunction {
     if (!packageLookupValue.packageExists()) {
       switch (packageLookupValue.getErrorReason()) {
         case NO_BUILD_FILE:
-          throw new PackageFunctionException(
-              new BuildFileNotFoundException(
-                  packageId, PackageLookupFunction.explainNoBuildFileValue(packageId, env)),
-              Transience.PERSISTENT);
         case DELETED_PACKAGE:
         case REPOSITORY_NOT_FOUND:
-          throw new PackageFunctionException(
-              new BuildFileNotFoundException(packageId, packageLookupValue.getErrorMsg()),
-              Transience.PERSISTENT);
+          throw new PackageFunctionException(new BuildFileNotFoundException(packageId,
+              packageLookupValue.getErrorMsg()), Transience.PERSISTENT);
         case INVALID_PACKAGE_NAME:
           throw new PackageFunctionException(new InvalidPackageNameException(packageId,
               packageLookupValue.getErrorMsg()), Transience.PERSISTENT);
@@ -717,11 +711,10 @@ public class PackageFunction implements SkyFunction {
                 containingPkgLookupKeys,
                 BuildFileNotFoundException.class,
                 InconsistentFilesystemException.class);
-    if (env.valuesMissing() || containingPkgLookupKeys.isEmpty()) {
+    if (env.valuesMissing()) {
       return;
     }
-    for (Iterator<Target> iterator = pkgBuilder.getTargets().iterator(); iterator.hasNext(); ) {
-      Target target = iterator.next();
+    for (Target target : ImmutableSet.copyOf(pkgBuilder.getTargets())) {
       SkyKey key = targetToKey.get(target);
       if (!containingPkgLookupValues.containsKey(key)) {
         continue;
@@ -735,7 +728,7 @@ public class PackageFunction implements SkyFunction {
           target.getLabel(),
           target.getLocation(),
           containingPackageLookupValue)) {
-        iterator.remove();
+        pkgBuilder.removeTarget(target);
         pkgBuilder.setContainsErrors();
       }
     }
