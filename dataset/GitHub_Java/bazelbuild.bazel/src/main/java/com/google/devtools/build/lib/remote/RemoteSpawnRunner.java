@@ -184,6 +184,11 @@ class RemoteSpawnRunner implements SpawnRunner {
         return execLocallyOrFail(spawn, policy, inputMap, actionKey, uploadLocalResults, e);
       }
 
+      boolean executionFailed = result.getExitCode() != 0;
+      if (options.remoteLocalFallback && executionFailed) {
+        return execLocally(spawn, policy, inputMap, uploadLocalResults, remoteCache, actionKey);
+      }
+
       try {
         return downloadRemoteResults(result, policy.getFileOutErr());
       } catch (IOException e) {
@@ -211,7 +216,7 @@ class RemoteSpawnRunner implements SpawnRunner {
       boolean uploadLocalResults,
       IOException cause)
       throws ExecException, InterruptedException, IOException {
-    if (options.remoteLocalFallback && !(cause instanceof TimeoutException)) {
+    if (options.remoteLocalFallback) {
       return execLocally(spawn, policy, inputMap, uploadLocalResults, remoteCache, actionKey);
     }
     return handleError(cause, policy.getFileOutErr());

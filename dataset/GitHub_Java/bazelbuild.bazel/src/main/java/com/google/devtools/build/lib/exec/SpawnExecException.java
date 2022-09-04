@@ -13,8 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.exec;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.devtools.build.lib.actions.Action;
@@ -36,8 +34,6 @@ public class SpawnExecException extends ExecException {
   public SpawnExecException(
       String message, SpawnResult result, boolean forciblyRunRemotely) {
     super(message, result.isCatastrophe());
-    checkArgument(!Status.SUCCESS.equals(result.status()), "Can't create exception with successful"
-        + " spawn result.");
     this.result = Preconditions.checkNotNull(result);
     this.forciblyRunRemotely = forciblyRunRemotely;
   }
