@@ -16,6 +16,7 @@
 
 package smile.regression;
 
+import java.io.Serializable;
 import smile.math.Math;
 import smile.math.matrix.Matrix;
 import smile.math.matrix.Cholesky;
@@ -63,7 +64,7 @@ import smile.math.special.Beta;
  *
  * @author Haifeng Li
  */
-public class RidgeRegression implements Regression<double[]> {
+public class RidgeRegression implements Regression<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
