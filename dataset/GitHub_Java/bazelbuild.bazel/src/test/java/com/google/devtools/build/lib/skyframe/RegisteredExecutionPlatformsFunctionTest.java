@@ -20,7 +20,7 @@ import static com.google.devtools.build.skyframe.EvaluationResultSubjectFactory.
 import com.google.common.collect.ImmutableList;
 import com.google.common.testing.EqualsTester;
 import com.google.common.truth.IterableSubject;
-import com.google.devtools.build.lib.analysis.platform.ConstraintCollection;
+import com.google.devtools.build.lib.analysis.platform.PlatformInfo.DuplicateConstraintException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.rules.platform.ToolchainTestCase;
@@ -110,7 +110,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // Verify that the target registered with the extra_execution_platforms flag is first in the
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
-        .containsAtLeast(
+        .containsAllOf(
             makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
@@ -136,7 +136,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // Verify that the target registered with the extra_execution_platforms flag is first in the
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
-        .containsAtLeast(
+        .containsAllOf(
             makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
@@ -160,7 +160,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // Verify that the target registered with the extra_execution_platforms flag is first in the
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
-        .containsAtLeast(
+        .containsAllOf(
             makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
@@ -211,7 +211,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
     // Verify that the target registered with the extra_execution_platforms flag is first in the
     // list.
     assertExecutionPlatformLabels(result.get(executionPlatformsKey))
-        .containsAtLeast(
+        .containsAllOf(
             makeLabel("//extra:execution_platform_1"), makeLabel("//extra:execution_platform_2"))
         .inOrder();
   }
@@ -265,7 +265,7 @@ public class RegisteredExecutionPlatformsFunctionTest extends ToolchainTestCase 
 
   @Test
   public void testRegisteredExecutionPlatformsValue_equalsAndHashCode()
-      throws ConstraintCollection.DuplicateConstraintException {
+      throws DuplicateConstraintException {
     ConfiguredTargetKey executionPlatformKey1 =
         ConfiguredTargetKey.of(makeLabel("//test:executionPlatform1"), null, false);
     ConfiguredTargetKey executionPlatformKey2 =

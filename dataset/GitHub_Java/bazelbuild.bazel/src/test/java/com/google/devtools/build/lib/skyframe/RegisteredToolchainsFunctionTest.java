@@ -48,7 +48,8 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
     // Check that the number of toolchains created for this test is correct.
     assertThat(
             value.registeredToolchains().stream()
-                .filter(toolchain -> toolchain.toolchainType().equals(testToolchainType))
+                .filter(
+                    toolchain -> toolchain.toolchainType().typeLabel().equals(testToolchainType))
                 .collect(Collectors.toList()))
         .hasSize(2);
 
@@ -56,7 +57,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
             value.registeredToolchains().stream()
                 .anyMatch(
                     toolchain ->
-                        toolchain.toolchainType().equals(testToolchainType)
+                        toolchain.toolchainType().typeLabel().equals(testToolchainType)
                             && toolchain.execConstraints().get(setting).equals(linuxConstraint)
                             && toolchain.targetConstraints().get(setting).equals(macConstraint)
                             && toolchain
@@ -68,7 +69,7 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
             value.registeredToolchains().stream()
                 .anyMatch(
                     toolchain ->
-                        toolchain.toolchainType().equals(testToolchainType)
+                        toolchain.toolchainType().typeLabel().equals(testToolchainType)
                             && toolchain.execConstraints().get(setting).equals(macConstraint)
                             && toolchain.targetConstraints().get(setting).equals(linuxConstraint)
                             && toolchain
@@ -280,19 +281,17 @@ public class RegisteredToolchainsFunctionTest extends ToolchainTestCase {
   @Test
   public void testRegisteredToolchainsValue_equalsAndHashCode() {
     DeclaredToolchainInfo toolchain1 =
-        DeclaredToolchainInfo.builder()
-            .toolchainType(ToolchainTypeInfo.create(makeLabel("//test:toolchain")))
-            .addExecConstraints(ImmutableList.of())
-            .addTargetConstraints(ImmutableList.of())
-            .toolchainLabel(makeLabel("//test/toolchain_impl_1"))
-            .build();
+        DeclaredToolchainInfo.create(
+            ToolchainTypeInfo.create(makeLabel("//test:toolchain")),
+            ImmutableList.of(),
+            ImmutableList.of(),
+            makeLabel("//test/toolchain_impl_1"));
     DeclaredToolchainInfo toolchain2 =
-        DeclaredToolchainInfo.builder()
-            .toolchainType(ToolchainTypeInfo.create(makeLabel("//test:toolchain")))
-            .addExecConstraints(ImmutableList.of())
-            .addTargetConstraints(ImmutableList.of())
-            .toolchainLabel(makeLabel("//test/toolchain_impl_2"))
-            .build();
+        DeclaredToolchainInfo.create(
+            ToolchainTypeInfo.create(makeLabel("//test:toolchain")),
+            ImmutableList.of(),
+            ImmutableList.of(),
+            makeLabel("//test/toolchain_impl_2"));
 
     new EqualsTester()
         .addEqualityGroup(
