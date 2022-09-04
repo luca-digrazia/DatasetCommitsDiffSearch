@@ -1,6 +1,6 @@
 /**
- * Copyright 2010 Lennart Koopmann <lennart@scopeport.org>
- * 
+ * Copyright 2010, 2011, 2012 Lennart Koopmann <lennart@socketfeed.com>
+ *
  * This file is part of Graylog2.
  *
  * Graylog2 is free software: you can redistribute it and/or modify
@@ -20,159 +20,235 @@
 
 package org.graylog2;
 
-import java.io.BufferedWriter;
-import org.graylog2.periodical.HostDistinctThread;
-import org.graylog2.messagehandlers.syslog.SyslogServerThread;
-import org.graylog2.messagehandlers.gelf.GELFMainThread;
-import org.graylog2.messagehandlers.gelf.GELF;
-import org.graylog2.database.MongoConnection;
-import java.io.FileInputStream;
-import java.io.FileWriter;
-import java.util.ArrayList;
-import java.util.Properties;
-import org.graylog2.periodical.RRDThread;
+import org.graylog2.plugin.Tools;
+import com.beust.jcommander.JCommander;
+import com.github.joschi.jadconfig.JadConfig;
+import com.github.joschi.jadconfig.RepositoryException;
+import com.github.joschi.jadconfig.ValidationException;
+import com.github.joschi.jadconfig.repositories.PropertiesRepository;
+import org.apache.commons.io.IOUtils;
+import org.apache.log4j.Level;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.graylog2.activities.Activity;
+import org.graylog2.alarms.transports.EmailTransport;
+import org.graylog2.alarms.transports.JabberTransport;
+import org.graylog2.filters.*;
+import org.graylog2.initializers.*;
+import org.graylog2.inputs.amqp.AMQPInput;
+import org.graylog2.inputs.gelf.GELFTCPInput;
+import org.graylog2.inputs.gelf.GELFUDPInput;
+import org.graylog2.inputs.http.GELFHttpInput;
+import org.graylog2.inputs.syslog.SyslogTCPInput;
+import org.graylog2.inputs.syslog.SyslogUDPInput;
+import org.graylog2.outputs.ElasticSearchOutput;
 
-// TODO: indizes richtig setzen
+import java.io.File;
+import java.io.FileWriter;
+import java.io.Writer;
+import org.graylog2.cluster.Cluster;
+import org.graylog2.plugin.initializers.InitializerConfigurationException;
+import org.graylog2.plugins.PluginInstaller;
 
 /**
+ * Main class of Graylog2.
  *
- * @author Lennart Koopmann <lennart@scopeport.org>
+ * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class Main {
+public final class Main {
 
-    public static boolean debugMode = false;
-
-    // This holds the configuration from /etc/graylog2.conf
-    public static Properties masterConfig = null;
-
-    public static Thread syslogCoreThread = null;
+    private static final Logger LOG = LoggerFactory.getLogger(Main.class);
 
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) {
-        System.out.println("[x] Graylog2 starting up. (JRE: " + Tools.getSystemInformation() + ")");
 
-        // Read config.
-        System.out.println("[x] Reading config.");
-        Main.masterConfig = new Properties();
+        // So jung kommen wir nicht mehr zusammen.
+
+        final CommandLineArguments commandLineArguments = new CommandLineArguments();
+        final JCommander jCommander = new JCommander(commandLineArguments, args);
+        jCommander.setProgramName("graylog2");
+
+        if (commandLineArguments.isShowHelp()) {
+            jCommander.usage();
+            System.exit(0);
+        }
+
+        if (commandLineArguments.isShowVersion()) {
+            System.out.println("Graylog2 Server " + Core.GRAYLOG2_VERSION);
+            System.out.println("JRE: " + Tools.getSystemInformation());
+            System.exit(0);
+        }
+        
+        String configFile = commandLineArguments.getConfigFile();
+        LOG.info("Using config file: {}", configFile);
+
+        final Configuration configuration = new Configuration();
+        JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
+
+        LOG.info("Loading configuration");
         try {
-            FileInputStream configStream = new FileInputStream("/etc/graylog2.conf");
-            Main.masterConfig.load(configStream);
-            configStream.close();
-        } catch(java.io.IOException e) {
-            System.out.println("Could not read config file: " + e.toString());
+            jadConfig.process();
+        } catch (RepositoryException e) {
+            LOG.error("Couldn't load configuration file " + configFile, e);
+            System.exit(1);
+        } catch (ValidationException e) {
+            LOG.error("Invalid configuration", e);
+            System.exit(1);
         }
-
-        // Define required configuration fields.
-        ArrayList<String> requiredConfigFields = new ArrayList<String>();
-        requiredConfigFields.add("syslog_listen_port");
-        requiredConfigFields.add("syslog_protocol");
-        requiredConfigFields.add("mongodb_useauth");
-        requiredConfigFields.add("mongodb_user");
-        requiredConfigFields.add("mongodb_password");
-        requiredConfigFields.add("mongodb_host");
-        requiredConfigFields.add("mongodb_database");
-        requiredConfigFields.add("mongodb_port");
-        requiredConfigFields.add("messages_collection_size");
-        requiredConfigFields.add("use_gelf");
-        requiredConfigFields.add("gelf_listen_port");
-        requiredConfigFields.add("rrd_storage_dir");
-
-        // Check if all required configuration fields are set.
-        for (Object requiredConfigFieldO : requiredConfigFields) {
-            String requiredConfigField = (String) requiredConfigFieldO;
-            try {
-                if (Main.masterConfig.getProperty(requiredConfigField).length() <= 0) {
-                    throw new Exception("Not set");
-                }
-            } catch (Exception e) {
-                System.out.println("Missing configuration variable '" + requiredConfigField + "' - Terminating. (" + e.toString() + ")");
-                System.exit(1); // Exit with error.
-            }
-        }
-
-        // Is the syslog_procotol valid? ("tcp"/"udp")
-        ArrayList<String> allowedSyslogProtocols = new ArrayList<String>();
-        allowedSyslogProtocols.add("tcp");
-        allowedSyslogProtocols.add("udp");
-        if(!allowedSyslogProtocols.contains(Main.masterConfig.getProperty("syslog_protocol"))) {
-            System.out.println("Invalid syslog_protocol: " + Main.masterConfig.getProperty("syslog_protocol"));
-            System.exit(1); // Exit with error.
+        
+        if (commandLineArguments.isInstallPlugin()) {
+            System.out.println("Plugin installation requested.");
+            PluginInstaller installer = new PluginInstaller(
+                    commandLineArguments.getPluginShortname(),
+                    commandLineArguments.getPluginVersion(),
+                    configuration,
+                    commandLineArguments.isForcePlugin()
+            );
+            
+            installer.install();
+            System.exit(0);
         }
 
         // Are we in debug mode?
-        if (args.length > 0 && args[0].equalsIgnoreCase("debug")) {
-            System.out.println("[x] Running in Debug mode");
-            Main.debugMode = true;
-        } else {
-            System.out.println("[x] Not in Debug mode.");
+        if (commandLineArguments.isDebug()) {
+            LOG.info("Running in Debug mode");
+            org.apache.log4j.Logger.getRootLogger().setLevel(Level.ALL);
+            org.apache.log4j.Logger.getLogger(Main.class.getPackage().getName()).setLevel(Level.ALL);
         }
 
-        // Write a PID file.
+        LOG.info("Graylog2 {} starting up. (JRE: {})", Core.GRAYLOG2_VERSION, Tools.getSystemInformation());
+
+        // If we only want to check our configuration, we just initialize the rules engine to check if the rules compile
+        if (commandLineArguments.isConfigTest()) {
+            Core server = new Core();
+            server.setConfiguration(configuration);
+            DroolsInitializer drools = new DroolsInitializer();
+            try {
+                drools.initialize(server, null);
+            } catch (InitializerConfigurationException e) {
+                LOG.error("Drools initialization failed.", e);
+            }
+            // rules have been checked, exit gracefully
+            System.exit(0);
+        }
+
+        // Do not use a PID file if the user requested not to
+        if (!commandLineArguments.isNoPidFile()) {
+            savePidFile(commandLineArguments.getPidFile());
+        }
+
+        // Le server object. This is where all the magic happens.
+        Core server = new Core();
+        server.initialize(configuration);
+        
+        // Could it be that there is another master instance already?
+        if (configuration.isMaster() && server.cluster().masterCountExcept(server.getServerId()) != 0) {
+            LOG.warn("Detected another master in the cluster. Retrying in {} seconds to make sure it is not "
+                    + "an old stale instance.", Cluster.PING_TIMEOUT);
+            try {
+                Thread.sleep(Cluster.PING_TIMEOUT*1000);
+            } catch (InterruptedException e) { /* nope */ }
+            
+            if (server.cluster().masterCountExcept(server.getServerId()) != 0) {
+                // All devils here.
+                String what = "Detected other master node in the cluster! Starting as non-master! "
+                        + "This is a mis-configuration you should fix.";
+                LOG.warn(what);
+                server.getActivityWriter().write(new Activity(what, Main.class));
+
+                configuration.setIsMaster(false);
+            } else {
+                LOG.warn("Stale master has gone. Starting as master.");
+            }
+        }
+        
+        // Enable local mode?
+        if (commandLineArguments.isLocal() || commandLineArguments.isDebug()) {
+            // In local mode, systemstats are sent to localhost for example.
+            LOG.info("Running in local mode");
+            server.setLocalMode(true);
+        }
+
+        // Are we in stats mode?
+        if (commandLineArguments.isStats()) {
+            LOG.info("Printing system utilization information.");
+            server.setStatsMode(true);
+        }
+        
+        // Register transports.
+        if (configuration.isTransportEmailEnabled()) { server.registerTransport(new EmailTransport()); }
+        if (configuration.isTransportJabberEnabled()) {  server.registerTransport(new JabberTransport()); }
+
+        // Register initializers.
+        server.registerInitializer(new ServerValueWriterInitializer());
+        server.registerInitializer(new DroolsInitializer());
+        server.registerInitializer(new HostCounterCacheWriterInitializer());
+        server.registerInitializer(new MessageCounterInitializer());
+        server.registerInitializer(new AlarmScannerInitializer());
+        if (configuration.isEnableGraphiteOutput())       { server.registerInitializer(new GraphiteInitializer()); }
+        if (configuration.isEnableLibratoMetricsOutput()) { server.registerInitializer(new LibratoMetricsInitializer()); }
+        server.registerInitializer(new DeflectorThreadsInitializer());
+        server.registerInitializer(new AnonymousInformationCollectorInitializer());
+        if (configuration.performRetention() && commandLineArguments.performRetention()) {
+            server.registerInitializer(new IndexRetentionInitializer());
+        }
+        if (configuration.isAmqpEnabled()) {
+            server.registerInitializer(new AMQPSyncInitializer());
+        }
+        server.registerInitializer(new BufferWatermarkInitializer());
+        if (commandLineArguments.isStats()) { server.registerInitializer(new StatisticsPrinterInitializer()); }
+        
+        // Register inputs.
+        if (configuration.isUseGELF()) {
+            server.registerInput(new GELFUDPInput());
+            server.registerInput(new GELFTCPInput());
+        }
+        
+        if (configuration.isSyslogUdpEnabled()) { server.registerInput(new SyslogUDPInput()); }
+        if (configuration.isSyslogTcpEnabled()) { server.registerInput(new SyslogTCPInput()); }
+
+        if (configuration.isAmqpEnabled()) { server.registerInput(new AMQPInput()); }
+
+        if (configuration.isHttpEnabled()) { server.registerInput(new GELFHttpInput()); }
+
+        // Register message filters.
+        server.registerFilter(new BlacklistFilter());
+        if (configuration.isEnableTokenizerFilter()) { server.registerFilter(new TokenizerFilter()); }
+        server.registerFilter(new StreamMatcherFilter());
+        server.registerFilter(new CounterUpdateFilter());
+        server.registerFilter(new RewriteFilter());
+
+        // Register outputs.
+        server.registerOutput(new ElasticSearchOutput());
+        
+        // Blocks until we shut down.
+        server.run();
+
+        LOG.info("Graylog2 {} exiting.", Core.GRAYLOG2_VERSION);
+    }
+
+    private static void savePidFile(String pidFile) {
+
+        String pid = Tools.getPID();
+        Writer pidFileWriter = null;
+
         try {
-            String pid = Tools.getPID();
-            if (pid == null || pid.length() == 0) {
+            if (pid == null || pid.isEmpty() || pid.equals("unknown")) {
                 throw new Exception("Could not determine PID.");
             }
 
-            FileWriter fstream = new FileWriter("/tmp/graylog2.pid");
-            BufferedWriter out = new BufferedWriter(fstream);
-            out.write(pid);
-            out.close();
+            pidFileWriter = new FileWriter(pidFile);
+            IOUtils.write(pid, pidFileWriter);
         } catch (Exception e) {
-            System.out.println("Could not write PID file: " + e.toString());
-            System.exit(1); // Exit with error.
+            LOG.error("Could not write PID file: " + e.getMessage(), e);
+            System.exit(1);
+        } finally {
+            IOUtils.closeQuietly(pidFileWriter);
+            // make sure to remove our pid when we exit
+            new File(pidFile).deleteOnExit();
         }
-
-        try {
-            MongoConnection.getInstance().connect(
-                    Main.masterConfig.getProperty("mongodb_user"),
-                    Main.masterConfig.getProperty("mongodb_password"),
-                    Main.masterConfig.getProperty("mongodb_host"),
-                    Main.masterConfig.getProperty("mongodb_database"),
-                    Integer.valueOf(Main.masterConfig.getProperty("mongodb_port")),
-                    Main.masterConfig.getProperty("mongodb_useauth")
-            );
-        } catch (Exception e) {
-            System.out.println("Could not create MongoDB connection: " + e.toString());
-            e.printStackTrace();
-            System.exit(1); // Exit with error.
-        }
-
-        // Start the Syslog thread that accepts syslog packages.
-        SyslogServerThread syslogServerThread = new SyslogServerThread(Integer.parseInt(Main.masterConfig.getProperty("syslog_listen_port")));
-        syslogServerThread.start();
-
-        // Check if the thread started up completely.
-        try { Thread.sleep(1000); } catch(InterruptedException e) {}
-        if(syslogCoreThread.isAlive()) {
-            System.out.println("[x] Syslog server thread is up.");
-        } else {
-            System.out.println("Could not start syslog server core thread. Do you have permissions to listen on port " + Main.masterConfig.getProperty("syslog_listen_port") + "?");
-            System.exit(1); // Exit with error.
-        }
-
-        // Start GELF thread.
-        if (GELF.isEnabled()) {
-            GELFMainThread gelfThread = new GELFMainThread(Integer.parseInt(Main.masterConfig.getProperty("gelf_listen_port")));
-            gelfThread.start();
-            System.out.println("[x] GELF thread is up.");
-        }
-
-         // Start RRD writer thread.
-        //if (GELF.isEnabled()) { XXX: TODO
-            RRDThread rrdThread = new RRDThread();
-            rrdThread.start();
-            System.out.println("[x] RRD writer thread is up.");
-        //}
-
-        // Start the thread that distincts hosts.
-        HostDistinctThread hostDistinctThread = new HostDistinctThread();
-        hostDistinctThread.start();
-        System.out.println("[x] Host distinction thread is up.");
-
-        System.out.println("[x] Graylog2 up and running.");
     }
 
 }
