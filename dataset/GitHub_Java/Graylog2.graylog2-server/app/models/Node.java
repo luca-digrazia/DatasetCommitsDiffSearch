@@ -1,5 +1,5 @@
-/**
- * Copyright 2013 Lennart Koopmann <lennart@torch.sh>
+/*
+ * Copyright 2013 TORCH UG
  *
  * This file is part of Graylog2.
  *
@@ -15,113 +15,320 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- *
  */
 package models;
 
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.net.MediaType;
+import com.google.inject.assistedinject.Assisted;
+import com.google.inject.assistedinject.AssistedInject;
 import lib.APIException;
-import lib.Api;
-import lib.Configuration;
-import models.api.responses.*;
-import models.api.responses.system.InputSummaryResponse;
-import models.api.responses.system.InputsResponse;
+import lib.ApiClient;
+import lib.ExclusiveInputException;
+import lib.metrics.Metric;
+import models.api.requests.InputLaunchRequest;
+import models.api.responses.BuffersResponse;
+import models.api.responses.EmptyResponse;
+import models.api.responses.cluster.NodeSummaryResponse;
+import models.api.responses.SystemOverviewResponse;
+import models.api.responses.metrics.MetricsListResponse;
+import models.api.responses.system.*;
+import models.api.responses.system.loggers.LoggerSubsystemSummary;
+import models.api.responses.system.loggers.LoggerSubsystemsResponse;
+import models.api.responses.system.loggers.LoggerSummary;
+import models.api.responses.system.loggers.LoggersResponse;
 import org.joda.time.DateTime;
+import org.joda.time.DateTimeZone;
+import org.slf4j.LoggerFactory;
 import play.Logger;
+import play.mvc.Http;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
  */
-public class Node {
+public class Node extends ClusterEntity {
 
-    private static final Random randomGenerator = new Random();
+    public interface Factory {
+        Node fromSummaryResponse(NodeSummaryResponse r);
+        Node fromTransportAddress(URI transportAddress);
+    }
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(Node.class);
+    private final ApiClient api;
 
-    private final String transportAddress;
-    private final DateTime lastSeen;
-    private final String nodeId;
-    private final String shortNodeId;
-    private final String hostname;
-    private final boolean isMaster;
+    private final Input.Factory inputFactory;
+    private final InputState.Factory inputStateFactory;
 
+    private final URI transportAddress;
+    private DateTime lastSeen;
+    private DateTime lastContact;
+    private String nodeId;
+    private boolean isMaster;
+    private String shortNodeId;
+    private AtomicBoolean active = new AtomicBoolean();
+
+    private final boolean fromConfiguration;
+    private SystemOverviewResponse systemInfo;
+    private NodeJVMStats jvmInfo;
+
+    private AtomicInteger failureCount = new AtomicInteger(0);
+
+    /* for initial set up in test */
     public Node(NodeSummaryResponse r) {
-        transportAddress = r.transportAddress;
-        lastSeen = new DateTime(r.lastSeen);
-        nodeId = r.nodeId;
+        this(null, null, null, r);
+    }
+
+    @AssistedInject
+    public Node(ApiClient api,
+                Input.Factory inputFactory,
+                InputState.Factory inputStateFactory,
+                @Assisted NodeSummaryResponse r) {
+        this.api = api;
+        this.inputFactory = inputFactory;
+        this.inputStateFactory = inputStateFactory;
+
+        transportAddress = normalizeUriPath(r.transportAddress);
+        lastSeen = new DateTime(r.lastSeen, DateTimeZone.UTC);
+        nodeId = r.id;
         shortNodeId = r.shortNodeId;
-        hostname = r.hostname;
         isMaster = r.isMaster;
+        fromConfiguration = false;
     }
 
-    public static Node fromId(String id) {
-        NodeSummaryResponse response = null;
+    @AssistedInject
+    public Node(ApiClient api,
+                Input.Factory inputFactory,
+                InputState.Factory inputStateFactory,
+                @Assisted URI transportAddress) {
+        this.api = api;
+        this.inputFactory = inputFactory;
+        this.inputStateFactory = inputStateFactory;
+
+        this.transportAddress = normalizeUriPath(transportAddress);
+        lastSeen = null;
+        nodeId = null;
+        shortNodeId = "unresolved";
+        isMaster = false;
+        fromConfiguration = true;
+    }
+
+    public BufferInfo getBufferInfo() {
         try {
-            response = Api.get(
-                    Configuration.getServerRestUris().get(0),
-                    "/cluster/nodes/" + id,
-                    NodeSummaryResponse.class);
-        } catch (IOException e) {
-            return null;
+            return new BufferInfo(
+                    api.get(BuffersResponse.class)
+                    .node(this)
+                    .path("/system/buffers")
+                    .execute());
         } catch (APIException e) {
-            return null;
+            log.error("Unable to read buffer info from node " + this, e);
+        } catch (IOException e) {
+            log.error("Unexpected exception", e);
         }
-
-        return new Node(response);
+        return null;
     }
 
-    public static List<Node> all() throws IOException, APIException {
-        List<Node> nodes = Lists.newArrayList();
+    public Map<String, InternalLoggerSubsystem> allLoggerSubsystems() {
+        Map<String, InternalLoggerSubsystem> subsystems = Maps.newHashMap();
+        try {
+            LoggerSubsystemsResponse response = api.get(LoggerSubsystemsResponse.class)
+                    .node(this)
+                    .path("/system/loggers/subsystems")
+                    .execute();
 
-        NodeResponse response = Api.get(Configuration.getServerRestUris().get(0), "/cluster/nodes/", NodeResponse.class);
-        for (NodeSummaryResponse nsr : response.nodes) {
-            nodes.add(new Node(nsr));
+            for (Map.Entry<String, LoggerSubsystemSummary> ss : response.subsystems.entrySet()) {
+                subsystems.put(ss.getKey(), new InternalLoggerSubsystem(
+                        ss.getValue().title,
+                        ss.getValue().level,
+                        ss.getValue().levelSyslog
+                ));
+            }
+        } catch (APIException e) {
+            log.error("Unable to load subsystems for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load subsystems for node " + this, e);
         }
-
-        return nodes;
+        return subsystems;
     }
 
-    public static Map<String, Node> map() throws IOException, APIException {
-        Map<String, Node> map = Maps.newHashMap();
-        for (Node node : all()) {
-            map.put(node.getNodeId(), node);
-        }
+    public List<InternalLogger> allLoggers() {
+        List<InternalLogger> loggers = Lists.newArrayList();
+        try {
+            LoggersResponse response = api.get(LoggersResponse.class)
+                    .node(this)
+                    .path("/system/loggers")
+                    .execute();
 
-        return map;
+            for (Map.Entry<String, LoggerSummary> logger : response.loggers.entrySet()) {
+                loggers.add(new InternalLogger(logger.getKey(), logger.getValue().level, logger.getValue().syslogLevel));
+            }
+        } catch (APIException e) {
+            log.error("Unable to load loggers for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load loggers for node " + this, e);
+        }
+        return loggers;
     }
 
-    public static Node random() throws IOException, APIException {
-        List<Node> nodes = all();
-        return all().get(randomGenerator.nextInt(nodes.size()));
+    public void setSubsystemLoggerLevel(String subsystem, String level) throws APIException, IOException {
+        api.put().node(this)
+                .path("/system/loggers/subsystems/{0}/level/{1}", subsystem, level)
+                .execute();
     }
 
     public String getThreadDump() throws IOException, APIException {
-        return Api.get(this, "/system/threaddump", String.class);
+        return api.get(String.class)
+                .node(this)
+                .path("/system/threaddump")
+                .accept(MediaType.ANY_TEXT_TYPE)
+                .execute();
+    }
+
+    public List<InputState> getInputStates() {
+        List<InputState> inputStates = Lists.newArrayList();
+        for (InputStateSummaryResponse issr : inputs().inputs) {
+            inputStates.add(inputStateFactory.fromSummaryResponse(issr, this));
+        }
+        return inputStates;
     }
 
     public List<Input> getInputs() {
         List<Input> inputs = Lists.newArrayList();
 
-        for (InputSummaryResponse input : inputs().inputs) {
-            inputs.add(new Input(input));
+        for (InputState input : getInputStates()) {
+            inputs.add(input.getInput());
         }
 
         return inputs;
     }
 
     public Input getInput(String inputId) throws IOException, APIException {
-        return new Input(Api.get(this, "/system/inputs/" + inputId, InputSummaryResponse.class));
+        final InputSummaryResponse inputSummaryResponse = api.get(InputSummaryResponse.class).node(this).path("/system/inputs/{0}", inputId).execute();
+        return inputFactory.fromSummaryResponse(inputSummaryResponse, this);
     }
 
     public int numberOfInputs() {
         return inputs().total;
     }
 
+    @Override
+    public InputLaunchResponse launchInput(String title, String type, Boolean global, Map<String, Object> configuration, User creator, boolean isExclusive) throws ExclusiveInputException {
+        if (isExclusive) {
+            for (Input input : getInputs()) {
+                if (input.getType().equals(type)) {
+                    throw new ExclusiveInputException();
+                }
+            }
+        }
+
+        InputLaunchRequest request = new InputLaunchRequest();
+        request.title = title;
+        request.type = type;
+        request.global = global;
+        request.configuration = configuration;
+        request.creatorUserId = creator.getId();
+
+        InputLaunchResponse ilr = null;
+        try {
+            ilr = api.post(InputLaunchResponse.class)
+                    .path("/system/inputs")
+                    .node(this)
+                    .body(request)
+                    .expect(Http.Status.ACCEPTED)
+                    .execute();
+        } catch (APIException e) {
+            log.error("Could not launch input " + title, e);
+        } catch (IOException e) {
+            log.error("Could not launch input " + title, e);
+        }
+        return ilr;
+    }
+
+    public boolean launchExistingInput(String inputId) {
+        try {
+            api.get(EmptyResponse.class).path("/system/inputs/{0}/launch", inputId)
+                    .node(this)
+                    .expect(Http.Status.ACCEPTED)
+                    .execute();
+            return true;
+        } catch (APIException e) {
+            log.error("Could not launch input " + inputId, e);
+        } catch (IOException e) {
+            log.error("Could not launch input " + inputId, e);
+        }
+
+        return false;
+    }
+
+    @Override
+    public boolean terminateInput(String inputId) {
+        try {
+            api.delete().path("/system/inputs/{0}", inputId)
+                    .node(this)
+                    .expect(Http.Status.ACCEPTED)
+                    .execute();
+            return true;
+        } catch (APIException e) {
+            log.error("Could not terminate input " + inputId, e);
+        } catch (IOException e) {
+            log.error("Could not terminate input " + inputId, e);
+        }
+
+        return false;
+    }
+
+    public Map<String, String> getInputTypes() throws IOException, APIException {
+        return api.get(InputTypesResponse.class).node(this).path("/system/inputs/types").execute().types;
+    }
+
+    public InputTypeSummaryResponse getInputTypeInformation(String type) throws IOException, APIException {
+        return api.get(InputTypeSummaryResponse.class).node(this).path("/system/inputs/types/{0}", type).execute();
+    }
+
+    public Map<String, InputTypeSummaryResponse> getAllInputTypeInformation() throws IOException, APIException {
+        Map<String, InputTypeSummaryResponse> types = Maps.newHashMap();
+
+        for (String type : getInputTypes().keySet()) {
+            InputTypeSummaryResponse itr = getInputTypeInformation(type);
+            types.put(itr.type, itr);
+        }
+
+        return types;
+    }
+
+    // TODO nodes should not have state beyond their activity status
+    public synchronized void loadSystemInformation() {
+        try {
+            this.systemInfo = api.get(SystemOverviewResponse.class).path("/system").node(this).execute();
+        } catch (APIException e) {
+            log.error("Unable to load system information for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load system information for node " + this, e);
+        }
+    }
+
+    public synchronized void loadJVMInformation() {
+        try {
+            jvmInfo = new NodeJVMStats(api.get(ClusterEntityJVMStatsResponse.class).path("/system/jvm").node(this).execute());
+        } catch (APIException e) {
+            log.error("Unable to load JVM information for node " + this, e);
+        } catch (IOException e) {
+            log.error("Unable to load JVM information for node " + this, e);
+        }
+    }
+
+    @Override
     public String getTransportAddress() {
+        return transportAddress.toASCIIString();
+    }
+
+    public URI getTransportAddressUri() {
         return transportAddress;
     }
 
@@ -133,16 +340,90 @@ public class Node {
         return nodeId;
     }
 
+    @Override
     public String getShortNodeId() {
         return shortNodeId;
     }
 
+    @Override
     public String getHostname() {
-        return hostname;
+        requireSystemInfo();
+        return systemInfo.hostname;
     }
 
     public boolean isMaster() {
         return isMaster;
+    }
+
+    public boolean isProcessing() {
+        requireSystemInfo();
+        return this.systemInfo.isProcessing;
+    }
+
+    public String getVersion() {
+        requireSystemInfo();
+        return systemInfo.version;
+    }
+
+    public String getCodename() {
+        requireSystemInfo();
+        return systemInfo.codename;
+    }
+
+    public String getPid() {
+        requireJVMInfo();
+        return jvmInfo.getPid();
+    }
+
+    public String getJVMDescription() {
+        requireJVMInfo();
+        return jvmInfo.getInfo();
+    }
+
+    public NodeJVMStats jvm() {
+        requireJVMInfo();
+        return jvmInfo;
+    }
+
+    public Map<String, Metric> getMetrics(String namespace) throws APIException, IOException {
+        MetricsListResponse response = api.get(MetricsListResponse.class)
+                .node(this)
+                .path("/system/metrics/namespace/{0}", namespace)
+                .expect(200, 404)
+                .execute();
+        if (response == null) {
+            return Maps.newHashMap();
+        }
+        return response.getMetrics();
+    }
+
+    public Metric getSingleMetric(String metricName) throws APIException, IOException {
+        return getMetrics(metricName).get(metricName);
+    }
+
+    public void pause() throws IOException, APIException {
+        api.put()
+            .path("/system/processing/pause")
+            .node(this)
+            .execute();
+    }
+
+    public void resume() throws IOException, APIException {
+        api.put()
+            .path("/system/processing/resume")
+            .node(this)
+            .execute();
+    }
+
+    public int getThroughput() {
+        try {
+            return api.get(NodeThroughputResponse.class).node(this).path("/system/throughput").execute().throughput;
+        } catch (APIException e) {
+            log.error("Could not load throughput for node " + this, e);
+        } catch (IOException e) {
+            log.error("Could not load throughput for node " + this, e);
+        }
+        return 0;
     }
 
     /**
@@ -150,12 +431,114 @@ public class Node {
      *
      * @return List of running inputs o this node.
      */
-    private InputsResponse inputs()  {
+    private InputsResponse inputs() {
         try {
-            return Api.get(this, "/system/inputs", InputsResponse.class);
+            return api.get(InputsResponse.class).node(this).path("/system/inputs").execute();
         } catch (Exception e) {
             Logger.error("Could not get inputs.", e);
             throw new RuntimeException("Could not get inputs.", e);
         }
+    }
+    public boolean isFromConfiguration() {
+        return fromConfiguration;
+    }
+
+    @Override
+    public void markFailure() {
+        failureCount.incrementAndGet();
+        setActive(false);
+        log.info("{} failed, marking as inactive.", this);
+    }
+
+    public int getFailureCount() {
+        return failureCount.get();
+    }
+
+    public DateTime getLastContact() {
+        return lastContact;
+    }
+
+    public void merge(Node updatedNode) {
+        log.debug("Merging node {} in this node {}", updatedNode, this);
+        this.lastSeen = updatedNode.lastSeen;
+        this.isMaster = updatedNode.isMaster;
+        this.nodeId = updatedNode.nodeId;
+        this.shortNodeId = updatedNode.shortNodeId;
+        this.setActive(updatedNode.isActive());
+    }
+
+    @Override
+    public void touch() {
+        this.lastContact = DateTime.now(DateTimeZone.UTC);
+        setActive(true);
+    }
+
+    public boolean isActive() {
+        return active.get();
+    }
+
+    public void setActive(boolean active) {
+        this.active.set(active);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Node node = (Node) o;
+
+        // if both have a node id, and they are the same, the nodes are the same.
+        if (nodeId != null && node.nodeId != null) {
+            if (nodeId.equals(node.nodeId)) {
+                return true;
+            }
+        }
+        // otherwise if the transport addresses are the same, we consider the nodes to be the same.
+        if (transportAddress.equals(node.transportAddress)) return true;
+
+        // otherwise the nodes aren't the same
+        return false;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = transportAddress.hashCode();
+        result = 31 * result + (nodeId != null ? nodeId.hashCode() : 0);
+        return result;
+    }
+
+    @Override
+    public String toString() {
+        final StringBuilder b = new StringBuilder();
+        if (nodeId == null) {
+            b.append("UnresolvedNode {'").append(transportAddress).append("'}");
+            return b.toString();
+        }
+
+        b.append("Node {");
+        b.append("'").append(nodeId).append("'");
+        b.append(", ").append(transportAddress);
+        if (isMaster) {
+            b.append(", master");
+        }
+        if (isActive()) {
+            b.append(", active");
+        } else {
+            b.append(", inactive");
+        }
+        final int failures = getFailureCount();
+        if (failures > 0) {
+            b.append(", failed: ").append(failures).append(" times");
+        }
+        b.append("}");
+        return b.toString();
+    }
+
+    public void requireSystemInfo() {
+        loadSystemInformation();
+    }
+    public void requireJVMInfo() {
+        loadJVMInformation();
     }
 }
