@@ -17,6 +17,8 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.docgen.DocgenConsts.RuleType;
+import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
+import com.google.devtools.build.lib.packages.RuleClass;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -42,7 +44,6 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
   private final String ruleName;
   private final RuleType ruleType;
   private final String ruleFamily;
-  private final String familySummary;
   private final String htmlDocumentation;
   // Store these information for error messages
   private final int startLineCount;
@@ -52,6 +53,7 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
   private final Map<String, String> docVariables = new HashMap<>();
   // Only one attribute per attributeName is allowed
   private final Set<RuleDocumentationAttribute> attributes = new TreeSet<>();
+  private final ConfiguredRuleClassProvider ruleClassProvider;
 
   private RuleLinkExpander linkExpander;
 
@@ -64,54 +66,23 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
    * Creates a RuleDocumentation from the rule's name, type, family and raw html documentation
    * (meaning without expanding the variables in the doc).
    */
-  RuleDocumentation(
-      String ruleName,
-      String ruleType,
-      String ruleFamily,
-      String htmlDocumentation,
-      int startLineCount,
-      String fileName,
-      ImmutableSet<String> flags,
-      String familySummary)
-      throws BuildEncyclopediaDocException {
+  RuleDocumentation(String ruleName, String ruleType, String ruleFamily,
+      String htmlDocumentation, int startLineCount, String fileName, ImmutableSet<String> flags,
+      ConfiguredRuleClassProvider ruleClassProvider) throws BuildEncyclopediaDocException {
     Preconditions.checkNotNull(ruleName);
     this.ruleName = ruleName;
-    if (flags.contains(DocgenConsts.FLAG_GENERIC_RULE)) {
-      this.ruleType = RuleType.OTHER;
-    } else {
-      try {
-        this.ruleType = RuleType.valueOf(ruleType);
-      } catch (IllegalArgumentException e) {
-        throw new BuildEncyclopediaDocException(
-            fileName, startLineCount, "Invalid rule type " + ruleType);
-      }
+    try {
+      this.ruleType = RuleType.valueOf(ruleType);
+    } catch (IllegalArgumentException e) {
+      throw new BuildEncyclopediaDocException(
+          fileName, startLineCount, "Invalid rule type " + ruleType);
     }
     this.ruleFamily = ruleFamily;
     this.htmlDocumentation = htmlDocumentation;
     this.startLineCount = startLineCount;
     this.fileName = fileName;
     this.flags = flags;
-    this.familySummary = familySummary;
-  }
-
-  RuleDocumentation(
-      String ruleName,
-      String ruleType,
-      String ruleFamily,
-      String htmlDocumentation,
-      int startLineCount,
-      String fileName,
-      ImmutableSet<String> flags)
-      throws BuildEncyclopediaDocException {
-    this(
-        ruleName,
-        ruleType,
-        ruleFamily,
-        htmlDocumentation,
-        startLineCount,
-        fileName,
-        flags,
-        "");
+    this.ruleClassProvider = ruleClassProvider;
   }
 
   /**
@@ -135,14 +106,6 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
    */
   String getRuleFamily() {
     return ruleFamily;
-  }
-
-  /**
-   * Return the contribution of this rule to the summary for the rule family. Usually, the "main"
-   * rule in a family provides the summary, but all contributions are accumulated.
-   */
-  String getFamilySummary() {
-    return familySummary;
   }
 
   /**
@@ -261,6 +224,14 @@ public class RuleDocumentation implements Comparable<RuleDocumentation> {
       }
     }
     return expandedDoc;
+  }
+
+  /**
+   * Returns whether this rule has public visibility by default.
+   */
+  public boolean isPublicByDefault() {
+    RuleClass ruleClass = ruleClassProvider.getRuleClassMap().get(ruleName);
+    return ruleClass != null && ruleClass.isPublicByDefault();
   }
 
   /**

@@ -32,6 +32,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.RuleClass;
 
@@ -62,7 +63,7 @@ public final class FeatureFlagSetterRule implements RuleDefinition, RuleConfigur
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("feature_flag_setter")
-        .ancestors(BaseRuleClasses.NativeBuildRule.class)
+        .ancestors(BaseRuleClasses.BaseRule.class)
         .factoryClass(FeatureFlagSetterRule.class)
         .build();
   }
@@ -70,17 +71,19 @@ public final class FeatureFlagSetterRule implements RuleDefinition, RuleConfigur
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    TransitiveInfoCollection exportedFlag = ruleContext.getPrerequisite("exports_flag");
+    TransitiveInfoCollection exportedFlag =
+        ruleContext.getPrerequisite("exports_flag", Mode.TARGET);
     ConfigFeatureFlagProvider exportedFlagProvider =
         exportedFlag != null ? ConfigFeatureFlagProvider.fromTarget(exportedFlag) : null;
 
-    TransitiveInfoCollection exportedSetting = ruleContext.getPrerequisite("exports_setting");
+    TransitiveInfoCollection exportedSetting =
+        ruleContext.getPrerequisite("exports_setting", Mode.TARGET);
     ConfigMatchingProvider exportedSettingProvider =
         exportedSetting != null ? exportedSetting.getProvider(ConfigMatchingProvider.class) : null;
 
     RuleConfiguredTargetBuilder builder =
         new RuleConfiguredTargetBuilder(ruleContext)
-            .setFilesToBuild(PrerequisiteArtifacts.nestedSet(ruleContext, "deps"))
+            .setFilesToBuild(PrerequisiteArtifacts.nestedSet(ruleContext, "deps", Mode.TARGET))
             .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY);
     if (exportedFlagProvider != null) {
       builder.addNativeDeclaredProvider(exportedFlagProvider);

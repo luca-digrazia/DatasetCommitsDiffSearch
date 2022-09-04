@@ -67,6 +67,7 @@ public final class BazelFilegroupRule implements RuleDefinition {
         <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
         .add(
             attr("data", LABEL_LIST)
+                .cfg(env.getLipoDataTransition())
                 .allowedFileTypes(FileTypeSet.ANY_FILE)
                 .dontCheckConstraints())
         .add(attr("output_licenses", LICENSE))

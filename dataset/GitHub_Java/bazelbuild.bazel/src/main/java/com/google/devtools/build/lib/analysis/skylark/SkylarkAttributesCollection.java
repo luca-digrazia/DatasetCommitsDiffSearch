@@ -24,8 +24,11 @@ import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider;
-import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAttributesCollectionApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Runtime;
@@ -38,8 +41,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Information about attributes of a rule an aspect is applied to. */
-class SkylarkAttributesCollection implements SkylarkAttributesCollectionApi {
+@SkylarkModule(
+  name = "rule_attributes",
+  category = SkylarkModuleCategory.NONE,
+  doc = "Information about attributes of a rule an aspect is applied to."
+)
+class SkylarkAttributesCollection implements SkylarkValue {
   private final SkylarkRuleContext skylarkRuleContext;
   private final Info attrObject;
   private final Info executableObject;
@@ -84,31 +91,35 @@ class SkylarkAttributesCollection implements SkylarkAttributesCollectionApi {
     skylarkRuleContext.checkMutable("rule." + attrName);
   }
 
-  @Override
+  @SkylarkCallable(name = "attr", structField = true, doc = SkylarkRuleContext.ATTR_DOC)
   public Info getAttr() throws EvalException {
     checkMutable("attr");
     return attrObject;
   }
 
-  @Override
+  @SkylarkCallable(name = "executable", structField = true, doc = SkylarkRuleContext.EXECUTABLE_DOC)
   public Info getExecutable() throws EvalException {
     checkMutable("executable");
     return executableObject;
   }
 
-  @Override
+  @SkylarkCallable(name = "file", structField = true, doc = SkylarkRuleContext.FILE_DOC)
   public Info getFile() throws EvalException {
     checkMutable("file");
     return fileObject;
   }
 
-  @Override
+  @SkylarkCallable(name = "files", structField = true, doc = SkylarkRuleContext.FILES_DOC)
   public Info getFiles() throws EvalException {
     checkMutable("files");
     return filesObject;
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "kind",
+    structField = true,
+    doc = "The kind of a rule, such as 'cc_library'"
+  )
   public String getRuleClassName() throws EvalException {
     checkMutable("kind");
     return ruleClassName;

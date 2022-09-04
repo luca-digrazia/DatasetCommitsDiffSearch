@@ -30,9 +30,11 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.pkgcache.PackageProvider;
+import com.google.devtools.build.lib.util.BinaryPredicate;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
+import javax.annotation.Nullable;
 
 /**
  * An aspect resolver that returns only those aspects that are possibly active given the rule
@@ -51,7 +53,8 @@ public class PreciseAspectResolver implements AspectResolver {
 
   @Override
   public ImmutableMultimap<Attribute, Label> computeAspectDependencies(Target target,
-      DependencyFilter dependencyFilter) throws InterruptedException {
+      DependencyFilter dependencyFilter)
+      throws InterruptedException {
     Multimap<Attribute, Label> result = LinkedListMultimap.create();
     if (target instanceof Rule) {
       Multimap<Attribute, Label> transitions =
@@ -76,7 +79,8 @@ public class PreciseAspectResolver implements AspectResolver {
   }
 
   @Override
-  public Set<Label> computeBuildFileDependencies(Package pkg) throws InterruptedException {
+  public Set<Label> computeBuildFileDependencies(Package pkg)
+      throws InterruptedException {
     Set<Label> result = new LinkedHashSet<>();
     result.addAll(pkg.getSkylarkFileDependencies());
 
@@ -93,14 +97,17 @@ public class PreciseAspectResolver implements AspectResolver {
       Multimap<Attribute, Label> depsWithPossibleAspects =
           ((Rule) target)
               .getTransitions(
-                  (Rule rule, Attribute attribute) -> {
-                    for (Aspect aspectWithParameters : attribute.getAspects(rule)) {
-                      if (!aspectWithParameters.getDefinition().getAttributes().isEmpty()) {
-                        return true;
+                  new BinaryPredicate<Rule, Attribute>() {
+                    @Override
+                    public boolean apply(@Nullable Rule rule, Attribute attribute) {
+                      for (Aspect aspectWithParameters : attribute.getAspects(rule)) {
+                        if (!aspectWithParameters.getDefinition().getAttributes().isEmpty()) {
+                          return true;
+                        }
                       }
-                    }
 
-                    return false;
+                      return false;
+                    }
                   });
 
       // ...and add the package of the aspect.

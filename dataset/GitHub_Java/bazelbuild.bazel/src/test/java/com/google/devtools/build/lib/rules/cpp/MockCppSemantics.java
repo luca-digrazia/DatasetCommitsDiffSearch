@@ -16,12 +16,10 @@ package com.google.devtools.build.lib.rules.cpp;
 
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.HeadersCheckingMode;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
@@ -37,13 +35,11 @@ public final class MockCppSemantics implements CppSemantics {
 
   @Override
   public void finalizeCompileActionBuilder(
-      BuildConfiguration configuration,
-      FeatureConfiguration featureConfiguration,
-      CppCompileActionBuilder actionBuilder) {}
+      RuleContext ruleContext, CppCompileActionBuilder actionBuilder) {}
 
   @Override
-  public void setupCcCompilationContext(
-      RuleContext ruleContext, CcCompilationContext.Builder ccCompilationContextBuilder) {}
+  public void setupCcCompilationContextInfo(
+      RuleContext ruleContext, CcCompilationContextInfo.Builder ccCompilationContextInfoBuilder) {}
 
   @Override
   public NestedSet<Artifact> getAdditionalPrunableIncludes() {
@@ -58,6 +54,11 @@ public final class MockCppSemantics implements CppSemantics {
   @Override
   public HeadersCheckingMode determineHeadersCheckingMode(RuleContext ruleContext) {
     return HeadersCheckingMode.LOOSE;
+  }
+
+  @Override
+  public boolean needsIncludeScanning(RuleContext ruleContext) {
+    return false;
   }
 
   @Override

@@ -21,7 +21,6 @@ import static com.google.devtools.build.lib.syntax.Type.STRING;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
-import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.packages.RuleClass;
@@ -30,17 +29,9 @@ import com.google.devtools.build.lib.packages.RuleClass;
  * Rule definition for genquery the rule.
  */
 public final class GenQueryRule implements RuleDefinition {
-
-  /** Adds {@link GenQueryRule} and its dependencies to the provided builder. */
-  public static void register(ConfiguredRuleClassProvider.Builder builder) {
-    builder.addConfigurationFragment(new GenQueryConfiguration.Loader());
-    builder.addRuleDefinition(new GenQueryRule());
-  }
-
   @Override
   public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
     return builder
-        .requiresConfigurationFragments(GenQueryConfiguration.class)
         /* <!-- #BLAZE_RULE(genquery).ATTRIBUTE(scope) -->
         The scope of the query. The query is not allowed to touch targets outside the transitive
         closure of these targets.
@@ -48,7 +39,7 @@ public final class GenQueryRule implements RuleDefinition {
         .add(attr("scope", LABEL_LIST).mandatory().legacyAllowAnyFileType())
         /* <!-- #BLAZE_RULE(genquery).ATTRIBUTE(strict) -->
         If true, targets whose queries escape the transitive closure of their scopes will fail to
-        build. If false, Bazel will print a warning and skip whatever query path led it outside of
+        build. If false, Blaze will print a warning and skip whatever query path led it outside of
         the scope, while completing the rest of the query.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("strict", BOOLEAN).value(true))
@@ -61,10 +52,10 @@ public final class GenQueryRule implements RuleDefinition {
         .add(attr("expression", STRING).mandatory())
         /* <!-- #BLAZE_RULE(genquery).ATTRIBUTE(opts) -->
         The options that are passed to the query engine. These correspond to the command line
-        options that can be passed to <code>bazel query</code>. Some query options are not allowed
+        options that can be passed to <code>blaze query</code>. Some query options are not allowed
         here: <code>--keep_going</code>, <code>--query_file</code>, <code>--universe_scope</code>,
         <code>--order_results</code> and <code>--order_output</code>. Options not specified here
-        will have their default values just like on the command line of <code>bazel query</code>.
+        will have their default values just like on the command line of <code>blaze query</code>.
         <!-- #END_BLAZE_RULE.ATTRIBUTE --> */
         .add(attr("opts", STRING_LIST))
         .build();

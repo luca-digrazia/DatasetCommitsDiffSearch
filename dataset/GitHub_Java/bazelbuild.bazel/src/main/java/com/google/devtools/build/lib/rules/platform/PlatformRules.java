@@ -11,24 +11,38 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-package com.google.devtools.build.lib.rules.test;
+package com.google.devtools.build.lib.rules.platform;
 
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider.RuleSet;
+import com.google.devtools.build.lib.analysis.PlatformConfigurationLoader;
+import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.rules.core.CoreRules;
 
-/** Rules exposing testing infrastructure to Skylark */
-public final class TestingSupportRules implements RuleSet {
-  public static final TestingSupportRules INSTANCE = new TestingSupportRules();
+/**
+ * Rules for supporting different platforms in Bazel.
+ */
+public class PlatformRules implements RuleSet {
+  public static final PlatformRules INSTANCE = new PlatformRules();
 
-  private TestingSupportRules() {
+  protected PlatformRules() {
     // Use the static INSTANCE field instead.
   }
 
   @Override
   public void init(ConfiguredRuleClassProvider.Builder builder) {
-    builder.addSkylarkAccessibleTopLevels("testing", new SkylarkTestingModule());
+    builder.addConfigurationOptions(PlatformOptions.class);
+    builder.addConfigurationFragment(new PlatformConfigurationLoader());
+
+    builder.addRuleDefinition(new PlatformBaseRule());
+    builder.addRuleDefinition(new ConstraintSettingRule());
+    builder.addRuleDefinition(new ConstraintValueRule());
+    builder.addRuleDefinition(new PlatformRule());
+
+    builder.addRuleDefinition(new ToolchainRule());
+
+    builder.addSkylarkAccessibleTopLevels("platform_common", new PlatformCommon());
   }
 
   @Override

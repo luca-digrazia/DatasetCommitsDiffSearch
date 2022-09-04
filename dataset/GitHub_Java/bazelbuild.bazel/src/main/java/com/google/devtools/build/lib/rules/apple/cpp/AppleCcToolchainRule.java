@@ -35,9 +35,7 @@ public class AppleCcToolchainRule implements RuleDefinition {
   public Metadata getMetadata() {
     return RuleDefinition.Metadata.builder()
         .name("apple_cc_toolchain")
-        .ancestors(
-            BaseRuleClasses.NativeBuildRule.class,
-            CcToolchainRule.class,
+        .ancestors(BaseRuleClasses.BaseRule.class, CcToolchainRule.class,
             AppleToolchain.RequiresXcodeConfigRule.class)
         .factoryClass(AppleCcToolchain.class)
         .build();

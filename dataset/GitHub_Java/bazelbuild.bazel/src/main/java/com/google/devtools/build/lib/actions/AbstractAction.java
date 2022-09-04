@@ -30,9 +30,11 @@ import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.skylarkbuildapi.ActionApi;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
@@ -56,7 +58,22 @@ import javax.annotation.concurrent.GuardedBy;
  */
 @Immutable
 @ThreadSafe
-public abstract class AbstractAction implements Action, ActionApi {
+@SkylarkModule(
+  name = "Action",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "An action created during rule analysis."
+          + "<p>This object is visible for the purpose of testing, and may be obtained from an "
+          + "<a href=\"globals.html#Actions\">Actions</a> provider. It is normally not necessary "
+          + "to access <code>Action</code> objects or their fields within a rule's implementation "
+          + "function. You may instead want to see the "
+          + "<a href='../rules.$DOC_EXT#actions'>Rules page</a> for a general discussion of how to "
+          + "use actions when defining custom rules, or the <a href='actions.html'>API reference"
+          + "</a> for creating actions."
+          + "<p>Some fields of this object are only applicable for certain kinds of actions. "
+          + "Fields that are inapplicable are set to <code>None</code>."
+)
+public abstract class AbstractAction implements Action, SkylarkValue {
   /**
    * An arbitrary default resource set. Currently 250MB of memory, 50% CPU and 0% of total I/O.
    */
@@ -106,31 +123,10 @@ public abstract class AbstractAction implements Action, ActionApi {
   /**
    * Construct an abstract action with the specified inputs and outputs;
    */
-  protected AbstractAction(
-      ActionOwner owner,
-      Iterable<Artifact> inputs,
-      Iterable<Artifact> outputs) {
-    this(
-        owner,
-        /*tools = */ImmutableList.of(),
-        inputs,
-        EmptyRunfilesSupplier.INSTANCE,
-        outputs,
-        ActionEnvironment.EMPTY);
-  }
-
-  protected AbstractAction(
-      ActionOwner owner,
-      Iterable<Artifact> inputs,
-      Iterable<Artifact> outputs,
-      ActionEnvironment env) {
-    this(
-        owner,
-        /*tools = */ImmutableList.of(),
-        inputs,
-        EmptyRunfilesSupplier.INSTANCE,
-        outputs,
-        env);
+  protected AbstractAction(ActionOwner owner,
+                           Iterable<Artifact> inputs,
+                           Iterable<Artifact> outputs) {
+    this(owner, ImmutableList.<Artifact>of(), inputs, EmptyRunfilesSupplier.INSTANCE, outputs);
   }
 
   /**
@@ -141,7 +137,7 @@ public abstract class AbstractAction implements Action, ActionApi {
       Iterable<Artifact> tools,
       Iterable<Artifact> inputs,
       Iterable<Artifact> outputs) {
-    this(owner, tools, inputs, EmptyRunfilesSupplier.INSTANCE, outputs, ActionEnvironment.EMPTY);
+    this(owner, tools, inputs, EmptyRunfilesSupplier.INSTANCE, outputs);
   }
 
   protected AbstractAction(
@@ -149,13 +145,7 @@ public abstract class AbstractAction implements Action, ActionApi {
       Iterable<Artifact> inputs,
       RunfilesSupplier runfilesSupplier,
       Iterable<Artifact> outputs) {
-    this(
-        owner,
-        /*tools=*/ImmutableList.of(),
-        inputs,
-        runfilesSupplier,
-        outputs,
-        ActionEnvironment.EMPTY);
+    this(owner, ImmutableList.<Artifact>of(), inputs, runfilesSupplier, outputs);
   }
 
   protected AbstractAction(
@@ -175,12 +165,14 @@ public abstract class AbstractAction implements Action, ActionApi {
       Iterable<Artifact> outputs,
       ActionEnvironment env) {
     Preconditions.checkNotNull(owner);
+    // TODO(bazel-team): Use RuleContext.actionOwner here instead
     this.owner = owner;
     this.tools = CollectionUtils.makeImmutable(tools);
     this.inputs = CollectionUtils.makeImmutable(inputs);
-    this.env = Preconditions.checkNotNull(env);
+    this.env = env;
     this.outputs = ImmutableSet.copyOf(outputs);
-    this.runfilesSupplier = Preconditions.checkNotNull(runfilesSupplier);
+    this.runfilesSupplier = Preconditions.checkNotNull(runfilesSupplier,
+        "runfilesSupplier may not be null");
     Preconditions.checkArgument(!this.outputs.isEmpty(), "action outputs may not be empty");
   }
 
@@ -310,6 +302,11 @@ public abstract class AbstractAction implements Action, ActionApi {
         + getOutputs() + "]" + ")";
   }
 
+  @SkylarkCallable(
+      name = "mnemonic",
+      structField = true,
+      doc = "The mnemonic for this action."
+  )
   @Override
   public abstract String getMnemonic();
 
@@ -583,34 +580,68 @@ public abstract class AbstractAction implements Action, ActionApi {
     return ImmutableList.of();
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "inputs",
+      doc = "A set of the input files of this action.",
+      structField = true)
   public SkylarkNestedSet getSkylarkInputs() {
     return SkylarkNestedSet.of(Artifact.class, NestedSetBuilder.wrap(
         Order.STABLE_ORDER, getInputs()));
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "outputs",
+      doc = "A set of the output files of this action.",
+      structField = true)
   public SkylarkNestedSet getSkylarkOutputs() {
     return SkylarkNestedSet.of(Artifact.class, NestedSetBuilder.wrap(
         Order.STABLE_ORDER, getOutputs()));
   }
 
-  @Override
-  public SkylarkList<String> getSkylarkArgv() throws EvalException {
+  @SkylarkCallable(
+    name = "argv",
+    doc =
+        "For actions created by <a href=\"actions.html#run\">ctx.actions.run()</a> "
+            + "or <a href=\"actions.html#run_shell\">ctx.actions.run_shell()</a>  an immutable "
+            + "list of the arguments for the command line to be executed. Note that "
+            + "for shell actions the first two arguments will be the shell path "
+            + "and <code>\"-c\"</code>.",
+    structField = true,
+    allowReturnNones = true
+  )
+  public SkylarkList<String> getSkylarkArgv() throws CommandLineExpansionException {
     return null;
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "content",
+      doc = "For actions created by <a href=\"actions.html#write\">ctx.actions.write()</a> or "
+          + "<a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a>,"
+          + " the contents of the file to be written.",
+      structField = true,
+      allowReturnNones = true)
   public String getSkylarkContent() throws IOException {
     return null;
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "substitutions",
+      doc = "For actions created by "
+          + "<a href=\"actions.html#expand_template\">ctx.actions.expand_template()</a>,"
+          + " an immutable dict holding the substitution mapping.",
+      structField = true,
+      allowReturnNones = true)
   public SkylarkDict<String, String> getSkylarkSubstitutions() {
     return null;
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "env",
+      structField = true,
+      doc = "The 'fixed' environment variables for this action. This includes only environment "
+          + "settings which are explicitly set by the action definition, and thus omits settings "
+          + "which are only pre-set in the execution environment."
+  )
   public SkylarkDict<String, String> getEnv() {
     return SkylarkDict.copyOf(null, env.getFixedEnv());
   }

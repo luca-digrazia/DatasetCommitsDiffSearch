@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ArtifactRoot;
-import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.rules.cpp.CcCommon.CoptsFilter;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
@@ -27,7 +26,6 @@ import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
 import java.util.List;
 import java.util.regex.Pattern;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -41,14 +39,6 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class CompileCommandLineTest extends BuildViewTestCase {
 
-  private RuleContext ruleContext;
-
-  @Before
-  public void initializeRuleContext() throws Exception {
-    scratch.file("foo/BUILD", "cc_library(name = 'foo')");
-    ruleContext = getRuleContext(getConfiguredTarget("//foo:foo"));
-  }
-
   private Artifact scratchArtifact(String s) {
     Path execRoot = outputBase.getRelative("exec");
     Path outputRoot = execRoot.getRelative("root");
@@ -60,18 +50,19 @@ public class CompileCommandLineTest extends BuildViewTestCase {
     }
   }
 
-  private static FeatureConfiguration getMockFeatureConfiguration(
-      RuleContext ruleContext, String... crosstool) throws Exception {
-    return CcToolchainFeaturesTest.buildFeatures(ruleContext, crosstool)
+  private static FeatureConfiguration getMockFeatureConfiguration(String... crosstool)
+      throws Exception {
+    return CcToolchainFeaturesTest.buildFeatures(crosstool)
         .getFeatureConfiguration(
             ImmutableSet.of(
-                CppActionNames.ASSEMBLE,
-                CppActionNames.PREPROCESS_ASSEMBLE,
-                CppActionNames.C_COMPILE,
-                CppActionNames.CPP_COMPILE,
-                CppActionNames.CPP_HEADER_PARSING,
-                CppActionNames.CPP_MODULE_CODEGEN,
-                CppActionNames.CPP_MODULE_COMPILE));
+                CppCompileAction.ASSEMBLE,
+                CppCompileAction.PREPROCESS_ASSEMBLE,
+                CppCompileAction.C_COMPILE,
+                CppCompileAction.CPP_COMPILE,
+                CppCompileAction.CPP_HEADER_PARSING,
+                CppCompileAction.CPP_HEADER_PREPROCESSING,
+                CppCompileAction.CPP_MODULE_CODEGEN,
+                CppCompileAction.CPP_MODULE_COMPILE));
   }
 
   @Test
@@ -80,7 +71,6 @@ public class CompileCommandLineTest extends BuildViewTestCase {
         makeCompileCommandLineBuilder()
             .setFeatureConfiguration(
                 getMockFeatureConfiguration(
-                    ruleContext,
                     "",
                     "action_config {",
                     "  config_name: 'c++-compile'",
@@ -122,7 +112,6 @@ public class CompileCommandLineTest extends BuildViewTestCase {
         makeCompileCommandLineBuilder()
             .setFeatureConfiguration(
                 getMockFeatureConfiguration(
-                    ruleContext,
                     "",
                     "action_config {",
                     "  config_name: 'c++-compile'",
