@@ -206,19 +206,18 @@ public class CToolchainSelectionUtils {
 
     if (selectedIdentifier == null) {
       HashSet<String> seenCpus = new HashSet<>();
-      StringBuilder errorMessageBuilder = new StringBuilder();
-      errorMessageBuilder
-          .append("No toolchain found for cpu '")
-          .append(config.getCpu())
-          .append("'. Valid cpus from default_toolchain entries are: [\n");
+      StringBuilder cpuBuilder = new StringBuilder();
       for (CrosstoolConfig.DefaultCpuToolchain selector : release.getDefaultToolchainList()) {
         if (seenCpus.add(selector.getCpu())) {
-          errorMessageBuilder.append("  ").append(selector.getCpu()).append(",\n");
+          cpuBuilder.append("  ").append(selector.getCpu()).append(",\n");
         }
       }
-      errorMessageBuilder.append("]. Valid toolchains are: ");
-      describeToolchainList(errorMessageBuilder, release.getToolchainList());
-      throw new InvalidConfigurationException(errorMessageBuilder.toString());
+      throw new InvalidConfigurationException(
+          "No default_toolchain found for cpu '"
+              + config.getCpu()
+              + "'. Valid cpus are: [\n"
+              + cpuBuilder
+              + "]");
     }
     checkToolchain(selectedIdentifier);
 
