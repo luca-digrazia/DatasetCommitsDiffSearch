@@ -789,12 +789,8 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
         "    exports = dp_exports,",
         "    jdeps = ctx.file.jdeps,",
         useIJar || sourceFiles ? "    actions = ctx.actions," : "",
-        useIJar || sourceFiles
-            ? "    java_toolchain = ctx.attr._toolchain[java_common.JavaToolchainInfo],"
-            : "",
-        sourceFiles
-            ? "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo],"
-            : "",
+        useIJar || sourceFiles ? "    java_toolchain = ctx.attr._toolchain," : "",
+        sourceFiles ? "    host_javabase = ctx.attr._host_javabase," : "",
         "  )",
         "  return [result(property = javaInfo)]"
       };
@@ -808,7 +804,7 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
             "  compile_jar = java_common.run_ijar(",
             "    ctx.actions,",
             "    jar = ctx.outputs.output_jar,",
-            "    java_toolchain = ctx.attr._toolchain[java_common.JavaToolchainInfo],",
+            "    java_toolchain = ctx.attr._toolchain,",
             "  )");
       } else if (stampJar) {
         lines.add(
@@ -816,7 +812,7 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
             "    ctx.actions,",
             "    jar = ctx.outputs.output_jar,",
             "    target_label = ctx.label,",
-            "    java_toolchain = ctx.attr._toolchain[java_common.JavaToolchainInfo],",
+            "    java_toolchain = ctx.attr._toolchain,",
             "  )");
       } else {
         lines.add("  compile_jar = ctx.outputs.output_jar");
@@ -828,8 +824,8 @@ public class JavaInfoSkylarkApiTest extends BuildViewTestCase {
             "    output_jar = ctx.outputs.output_jar,",
             "    sources = ctx.files.sources,",
             "    source_jars = ctx.files.source_jars,",
-            "    java_toolchain = ctx.attr._toolchain[java_common.JavaToolchainInfo],",
-            "    host_javabase = ctx.attr._host_javabase[java_common.JavaRuntimeInfo],",
+            "    java_toolchain = ctx.attr._toolchain,",
+            "    host_javabase = ctx.attr._host_javabase,",
             ")");
       } else {
         lines.add(
