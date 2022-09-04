@@ -12,9 +12,9 @@ import org.apache.http.client.HttpRequestRetryHandler;
 import org.apache.http.protocol.HttpContext;
 import org.glassfish.jersey.client.authentication.HttpAuthenticationFeature;
 import org.glassfish.jersey.logging.LoggingFeature;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.Entity;
@@ -58,18 +58,18 @@ public class JerseyClientIntegrationTest {
 
     private HttpServer httpServer;
 
-    @BeforeEach
-    void setup() throws Exception {
+    @Before
+    public void setup() throws Exception {
         httpServer = HttpServer.create(new InetSocketAddress(0), 0);
     }
 
-    @AfterEach
-    void tearDown() throws Exception {
+    @After
+    public void tearDown() throws Exception {
         httpServer.stop(0);
     }
 
     @Test
-    void testChunkedGzipPost() throws Exception {
+    public void testChunkedGzipPost() throws Exception {
         httpServer.createContext("/register", httpExchange -> {
             try {
                 Headers requestHeaders = httpExchange.getRequestHeaders();
@@ -89,7 +89,7 @@ public class JerseyClientIntegrationTest {
     }
 
     @Test
-    void testBufferedGzipPost() {
+    public void testBufferedGzipPost() {
         httpServer.createContext("/register", httpExchange -> {
             try {
                 Headers requestHeaders = httpExchange.getRequestHeaders();
@@ -113,7 +113,7 @@ public class JerseyClientIntegrationTest {
     }
 
     @Test
-    void testChunkedPost() throws Exception {
+    public void testChunkedPost() throws Exception {
         httpServer.createContext("/register", httpExchange -> {
             try {
                 Headers requestHeaders = httpExchange.getRequestHeaders();
@@ -136,7 +136,7 @@ public class JerseyClientIntegrationTest {
     }
 
     @Test
-    void testChunkedPostWithoutGzip() throws Exception {
+    public void testChunkedPostWithoutGzip() throws Exception {
         httpServer.createContext("/register", httpExchange -> {
             try {
                 Headers requestHeaders = httpExchange.getRequestHeaders();
@@ -164,7 +164,7 @@ public class JerseyClientIntegrationTest {
     }
 
     @Test
-    void testRetryHandler() throws Exception {
+    public void testRetryHandler() throws Exception {
         httpServer.createContext("/register", httpExchange -> {
             try {
                 Headers requestHeaders = httpExchange.getRequestHeaders();
@@ -247,7 +247,7 @@ public class JerseyClientIntegrationTest {
 
 
     @Test
-    void testGet() {
+    public void testGet() {
         httpServer.createContext("/player", httpExchange -> {
             try {
                 assertThat(httpExchange.getRequestURI().getQuery()).isEqualTo("id=21");
@@ -286,7 +286,7 @@ public class JerseyClientIntegrationTest {
     }
 
     @Test
-    void testSetUserAgent() {
+    public void testSetUserAgent() {
         httpServer.createContext("/test", httpExchange -> {
             try {
                 assertThat(httpExchange.getRequestHeaders().get(HttpHeaders.USER_AGENT))
@@ -322,7 +322,7 @@ public class JerseyClientIntegrationTest {
      * Test for ConnectorProvider idempotency
      */
     @Test
-    void testFilterOnAWebTarget() {
+    public void testFilterOnAWebTarget() {
         httpServer.createContext("/test", httpExchange -> {
             try {
                 httpExchange.getResponseHeaders().add(HttpHeaders.CONTENT_TYPE, TEXT_PLAIN);
@@ -360,7 +360,7 @@ public class JerseyClientIntegrationTest {
     }
 
     @Test
-    void testAsyncWithCustomized() throws Exception {
+    public void testAsyncWithCustomized() throws Exception {
         httpServer.createContext("/test", httpExchange -> {
             try {
                 httpExchange.getResponseHeaders().add(HttpHeaders.CONTENT_TYPE, TEXT_PLAIN);
