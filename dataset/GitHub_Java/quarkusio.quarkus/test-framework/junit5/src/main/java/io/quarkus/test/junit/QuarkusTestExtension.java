@@ -258,8 +258,13 @@ public class QuarkusTestExtension
                 setCCL(original);
             }
         } else {
-            throwBootFailureException();
-            return;
+            if (firstException != null) {
+                Throwable throwable = firstException;
+                firstException = null;
+                throw new RuntimeException(throwable);
+            } else {
+                throw new TestAbortedException("Boot failed");
+            }
         }
     }
 
@@ -326,16 +331,6 @@ public class QuarkusTestExtension
         return original;
     }
 
-    private void throwBootFailureException() throws Exception {
-        if (firstException != null) {
-            Throwable throwable = firstException;
-            firstException = null;
-            throw new RuntimeException(throwable);
-        } else {
-            throw new TestAbortedException("Boot failed");
-        }
-    }
-
     @Override
     public void beforeAll(ExtensionContext context) throws Exception {
         if (isNativeTest(context)) {
@@ -381,10 +376,6 @@ public class QuarkusTestExtension
             return;
         }
         ensureStarted(extensionContext);
-        if (failedBoot) {
-            throwBootFailureException();
-            return;
-        }
         runExtensionMethod(invocationContext, extensionContext);
         invocation.skip();
     }
