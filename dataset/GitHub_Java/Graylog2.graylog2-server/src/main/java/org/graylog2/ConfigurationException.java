@@ -9,8 +9,6 @@ package org.graylog2;
  */
 public class ConfigurationException extends Exception {
 
-    private static final long serialVersionUID = -4307445842675210038L;
-
     public ConfigurationException(String message) {
 
         super(message);

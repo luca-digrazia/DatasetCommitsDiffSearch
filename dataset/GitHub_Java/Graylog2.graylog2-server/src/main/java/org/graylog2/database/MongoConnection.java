@@ -34,12 +34,11 @@ import java.util.List;
 public final class MongoConnection {
     private static MongoConnection instance;
 
-    private Mongo m;
-    private DB db;
+    private Mongo m = null;
+    private DB db = null;
 
-    private DBCollection messagesCollection;
-    private DBCollection historicServerValuesCollection;
-    private DBCollection messageCountsCollection;
+    private DBCollection messagesCollection = null;
+    private DBCollection historicServerValuesCollection = null;
 
     private long messagesCollSize;
 
@@ -181,25 +180,6 @@ public final class MongoConnection {
         coll.ensureIndex(new BasicDBObject("created_at", 1));
 
         this.historicServerValuesCollection = coll;
-        return coll;
-    }
-
-    /**
-     * Get the message_counts collection. Lazily checks if correct indizes are set.
-     *
-     * @return The messages collection
-     */
-    public DBCollection getMessageCountsColl() {
-        if (this.messageCountsCollection != null) {
-            return this.messageCountsCollection;
-        }
-
-        // Collection has not been cached yet. Do it now.
-        DBCollection coll = MongoConnection.getInstance().getDatabase().getCollection("message_counts");
-
-        coll.ensureIndex(new BasicDBObject("timestamp", 1));
-
-        this.messageCountsCollection = coll;
         return coll;
     }
 
