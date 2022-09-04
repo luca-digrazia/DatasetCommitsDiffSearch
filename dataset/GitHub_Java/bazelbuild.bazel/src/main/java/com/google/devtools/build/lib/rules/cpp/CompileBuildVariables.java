@@ -22,8 +22,9 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.StringSequenceBuilder;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables.VariablesExtension;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.StringSequenceBuilder;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.VariablesExtension;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -55,19 +56,19 @@ public enum CompileBuildVariables {
   /**
    * Variable for the collection of include paths.
    *
-   * @see CcCompilationContext#getIncludeDirs().
+   * @see CcCompilationContextInfo#getIncludeDirs().
    */
   INCLUDE_PATHS("include_paths"),
   /**
    * Variable for the collection of quote include paths.
    *
-   * @see CcCompilationContext#getIncludeDirs().
+   * @see CcCompilationContextInfo#getIncludeDirs().
    */
   QUOTE_INCLUDE_PATHS("quote_include_paths"),
   /**
    * Variable for the collection of system include paths.
    *
-   * @see CcCompilationContext#getIncludeDirs().
+   * @see CcCompilationContextInfo#getIncludeDirs().
    */
   SYSTEM_INCLUDE_PATHS("system_include_paths"),
   /** Variable for the module map file name. */
@@ -103,7 +104,7 @@ public enum CompileBuildVariables {
     this.variableName = variableName;
   }
 
-  public static CcToolchainVariables setupVariablesOrReportRuleError(
+  public static Variables setupVariablesOrReportRuleError(
       RuleContext ruleContext,
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider ccToolchainProvider,
@@ -155,11 +156,11 @@ public enum CompileBuildVariables {
               || CppFileTypes.CLIF_INPUT_PROTO.matches(sourceFile));
     } catch (EvalException e) {
       ruleContext.ruleError(e.getMessage());
-      return CcToolchainVariables.EMPTY;
+      return Variables.EMPTY;
     }
   }
 
-  public static CcToolchainVariables setupVariablesOrThrowEvalException(
+  public static Variables setupVariablesOrThrowEvalException(
       FeatureConfiguration featureConfiguration,
       CcToolchainProvider ccToolchainProvider,
       String sourceFile,
@@ -190,8 +191,8 @@ public enum CompileBuildVariables {
     Preconditions.checkNotNull(quoteIncludeDirs);
     Preconditions.checkNotNull(systemIncludeDirs);
     Preconditions.checkNotNull(defines);
-    CcToolchainVariables.Builder buildVariables =
-        new CcToolchainVariables.Builder(ccToolchainProvider.getBuildVariables());
+    Variables.Builder buildVariables =
+        new Variables.Builder(ccToolchainProvider.getBuildVariables());
 
     buildVariables.addStringSequenceVariable(
         USER_COMPILE_FLAGS.getVariableName(), userCompileFlags);
