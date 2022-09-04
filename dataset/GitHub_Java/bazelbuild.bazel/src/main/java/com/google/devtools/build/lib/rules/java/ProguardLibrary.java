@@ -19,16 +19,16 @@ import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.Multimap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.BuildType;
 import java.util.Collection;
-import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * Helpers for implementing rules which export Proguard specs.
@@ -68,7 +68,7 @@ public final class ProguardLibrary {
   public NestedSet<Artifact> collectProguardSpecs(Multimap<Mode, String> attributes) {
     NestedSetBuilder<Artifact> specsBuilder = NestedSetBuilder.naiveLinkOrder();
 
-    for (Map.Entry<Mode, String> attribute : attributes.entries()) {
+    for (Entry<Mode, String> attribute : attributes.entries()) {
       specsBuilder.addTransitive(
           collectProguardSpecsFromAttribute(attribute.getValue(), attribute.getKey()));
     }
@@ -89,7 +89,7 @@ public final class ProguardLibrary {
   /**
    * Collects the unvalidated proguard specs exported by this rule.
    */
-  public ImmutableList<Artifact> collectLocalProguardSpecs() {
+  private Collection<Artifact> collectLocalProguardSpecs() {
     if (!ruleContext.attributes().has(LOCAL_SPEC_ATTRIBUTE, BuildType.LABEL_LIST)) {
       return ImmutableList.of();
     }
@@ -134,7 +134,7 @@ public final class ProguardLibrary {
             .setExecutable(proguardWhitelister)
             .setProgressMessage("Validating proguard configuration")
             .setMnemonic("ValidateProguard")
-            .addCommandLine(
+            .setCommandLine(
                 CustomCommandLine.builder()
                     .addExecPath("--path", specToValidate)
                     .addExecPath("--output", output)
