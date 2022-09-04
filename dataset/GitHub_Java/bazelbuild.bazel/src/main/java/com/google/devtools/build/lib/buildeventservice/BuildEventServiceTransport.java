@@ -19,11 +19,14 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.MoreExecutors;
+import com.google.common.util.concurrent.SettableFuture;
 import com.google.devtools.build.lib.buildeventservice.client.BuildEventServiceClient;
 import com.google.devtools.build.lib.buildeventstream.ArtifactGroupNamer;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.buildeventstream.BuildEventArtifactUploader;
 import com.google.devtools.build.lib.buildeventstream.BuildEventProtocolOptions;
+import com.google.devtools.build.lib.buildeventstream.BuildEventServiceAbruptExitCallback;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.util.JavaSleeper;
@@ -34,7 +37,6 @@ import javax.annotation.Nullable;
 /** A {@link BuildEventTransport} that streams {@link BuildEvent}s to BuildEventService. */
 public class BuildEventServiceTransport implements BuildEventTransport {
   private final BuildEventServiceUploader besUploader;
-  private final Duration besTimeout;
 
   private BuildEventServiceTransport(
       BuildEventServiceClient besClient,
@@ -42,12 +44,12 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       BuildEventProtocolOptions bepOptions,
       BuildEventServiceProtoUtil besProtoUtil,
       Clock clock,
+      BuildEventServiceAbruptExitCallback abruptExitCallback,
       boolean publishLifecycleEvents,
       ArtifactGroupNamer artifactGroupNamer,
       EventBus eventBus,
       Duration closeTimeout,
       Sleeper sleeper) {
-    this.besTimeout = closeTimeout;
     this.besUploader =
         new BuildEventServiceUploader.Builder()
             .besClient(besClient)
@@ -55,16 +57,23 @@ public class BuildEventServiceTransport implements BuildEventTransport {
             .bepOptions(bepOptions)
             .besProtoUtil(besProtoUtil)
             .clock(clock)
+            .abruptExitCallback(abruptExitCallback)
             .publishLifecycleEvents(publishLifecycleEvents)
             .sleeper(sleeper)
             .artifactGroupNamer(artifactGroupNamer)
             .eventBus(eventBus)
+            .closeTimeout(closeTimeout)
             .build();
   }
 
   @Override
   public ListenableFuture<Void> close() {
-    return besUploader.close();
+    // This future completes once the upload has finished. As
+    // per API contract it is expected to never fail.
+    SettableFuture<Void> closeFuture = SettableFuture.create();
+    ListenableFuture<Void> uploaderCloseFuture = besUploader.close();
+    uploaderCloseFuture.addListener(() -> closeFuture.set(null), MoreExecutors.directExecutor());
+    return closeFuture;
   }
 
   @Override
@@ -82,9 +91,9 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     besUploader.enqueueEvent(event);
   }
 
-  @Override
-  public Duration getTimeout() {
-    return besTimeout;
+  @VisibleForTesting
+  public BuildEventServiceUploader getBesUploader() {
+    return besUploader;
   }
 
   /** A builder for {@link BuildEventServiceTransport}. */
@@ -97,6 +106,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
     private ArtifactGroupNamer artifactGroupNamer;
     private BuildEventServiceProtoUtil besProtoUtil;
     private EventBus eventBus;
+    private BuildEventServiceAbruptExitCallback abruptExitCallback;
     private @Nullable Sleeper sleeper;
 
     public Builder besClient(BuildEventServiceClient value) {
@@ -139,6 +149,11 @@ public class BuildEventServiceTransport implements BuildEventTransport {
       return this;
     }
 
+    public Builder abruptExitCallback(BuildEventServiceAbruptExitCallback value) {
+      this.abruptExitCallback = value;
+      return this;
+    }
+
     @VisibleForTesting
     public Builder sleeper(Sleeper value) {
       this.sleeper = value;
@@ -153,6 +168,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           checkNotNull(bepOptions),
           checkNotNull(besProtoUtil),
           checkNotNull(clock),
+          checkNotNull(abruptExitCallback),
           besOptions.besLifecycleEvents,
           checkNotNull(artifactGroupNamer),
           checkNotNull(eventBus),
