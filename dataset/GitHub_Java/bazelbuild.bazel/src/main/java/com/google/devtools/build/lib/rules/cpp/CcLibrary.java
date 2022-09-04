@@ -258,8 +258,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
               ruleContext,
               ccToolchain,
               ruleContext.getConfiguration(),
-              LinkTargetType.NODEPS_DYNAMIC_LIBRARY,
-              CppHelper.getDLLHashSuffix(ruleContext, featureConfiguration)));
+              LinkTargetType.NODEPS_DYNAMIC_LIBRARY));
       if (CppHelper.useInterfaceSharedLibraries(
           cppConfiguration, ccToolchain, featureConfiguration)) {
         dynamicLibraries.add(
@@ -288,8 +287,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
               ruleContext,
               ccToolchain,
               ruleContext.getConfiguration(),
-              LinkTargetType.NODEPS_DYNAMIC_LIBRARY,
-              CppHelper.getDLLHashSuffix(ruleContext, featureConfiguration)));
+              LinkTargetType.NODEPS_DYNAMIC_LIBRARY));
       if (CppHelper.useInterfaceSharedLibraries(
           cppConfiguration, ccToolchain, featureConfiguration)) {
         dynamicLibraries.add(
@@ -437,8 +435,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         common.getInstrumentedFilesProvider(
             instrumentedObjectFiles,
             /* withBaselineCoverage= */ true,
-            /* virtualToOriginalHeaders= */ NestedSetBuilder.create(Order.STABLE_ORDER),
-            /* additionalMetadata= */ null);
+            /* virtualToOriginalHeaders= */ NestedSetBuilder.create(Order.STABLE_ORDER));
     CppHelper.maybeAddStaticLinkMarkerProvider(targetBuilder, ruleContext);
 
     Runfiles.Builder builder = new Runfiles.Builder(ruleContext.getWorkspaceName());
@@ -479,7 +476,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     CcStarlarkApiProvider.maybeAdd(ruleContext, targetBuilder);
     targetBuilder
         .setFilesToBuild(filesToBuild)
-        .addNativeDeclaredProvider(ccNativeLibraryProvider)
+        .addProvider(ccNativeLibraryProvider)
         .addNativeDeclaredProvider(
             CcInfo.builder()
                 .setCcCompilationContext(compilationInfo.getCcCompilationContext())

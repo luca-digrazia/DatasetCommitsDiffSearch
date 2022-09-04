@@ -417,8 +417,7 @@ public abstract class CcProtoAspect extends NativeAspectClass implements Configu
           ccToolchainType);
     }
 
-    private ImmutableSet<Artifact> getOutputFiles(Iterable<String> suffixes)
-        throws InterruptedException {
+    private ImmutableSet<Artifact> getOutputFiles(Iterable<String> suffixes) {
       ImmutableSet.Builder<Artifact> result = ImmutableSet.builder();
       for (String suffix : suffixes) {
         result.addAll(

@@ -911,7 +911,10 @@ public abstract class CcModule
                   .getRuleContext()
                   .getLabel()
                   .getPackageIdentifier()
-                  .getExecPath(starlarkRuleContext.getConfiguration().isSiblingRepositoryLayout())
+                  .getExecPath(
+                      starlarkRuleContext
+                          .getStarlarkSemantics()
+                          .getBool(BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT))
                   .getRelative(PathFragment.create(tool.second))
                   .getPathString();
         }
