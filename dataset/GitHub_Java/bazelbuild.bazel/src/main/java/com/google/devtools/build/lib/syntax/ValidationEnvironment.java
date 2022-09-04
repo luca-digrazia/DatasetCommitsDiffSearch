@@ -21,40 +21,28 @@ import com.google.devtools.build.lib.util.Preconditions;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Stack;
 import javax.annotation.Nullable;
 
 /**
- * A class for doing static checks on files, before evaluating them.
+ * An Environment for the semantic checking of Skylark files.
+ *
+ * @see Statement#validate
+ * @see Expression#validate
  */
-public final class ValidationEnvironment extends SyntaxTreeVisitor {
+public final class ValidationEnvironment {
 
-  private static class Scope {
+  private class Scope {
     private final Set<String> variables = new HashSet<>();
     private final Set<String> readOnlyVariables = new HashSet<>();
+    // A stack of variable-sets which are read only but can be assigned in different
+    // branches of if-else statements.
+    // TODO(laurentlb): Remove it.
+    private final Stack<Set<String>> futureReadOnlyVariables = new Stack<>();
     @Nullable private final Scope parent;
 
     Scope(@Nullable Scope parent) {
       this.parent = parent;
-    }
-  }
-
-  /**
-   * We use an unchecked exception around EvalException because the SyntaxTreeVisitor doesn't let
-   * visit methods throw checked exceptions. We might change that later.
-   */
-  private static class ValidationException extends RuntimeException {
-    EvalException exception;
-
-    ValidationException(EvalException e) {
-      exception = e;
-    }
-
-    ValidationException(Location location, String message, String url) {
-      exception = new EvalException(location, message, url);
-    }
-
-    ValidationException(Location location, String message) {
-      exception = new EvalException(location, message);
     }
   }
 
@@ -71,101 +59,31 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     semantics = env.getSemantics();
   }
 
-  @Override
-  public void visit(LoadStatement node) {
-    for (Identifier symbol : node.getSymbols()) {
-      declare(symbol.getName(), node.getLocation());
-    }
-  }
-
-  @Override
-  public void visit(Identifier node) {
-    if (!hasSymbolInEnvironment(node.getName())) {
-      throw new ValidationException(node.createInvalidIdentifierException(getAllSymbols()));
-    }
-  }
-
-  private void validateLValue(Location loc, Expression expr) {
-    if (expr instanceof Identifier) {
-      declare(((Identifier) expr).getName(), loc);
-    } else if (expr instanceof IndexExpression) {
-      visit(expr);
-    } else if (expr instanceof ListLiteral) {
-      for (Expression e : ((ListLiteral) expr).getElements()) {
-        validateLValue(loc, e);
-      }
-    } else {
-      throw new ValidationException(loc, "cannot assign to '" + expr + "'");
-    }
-  }
-
-  @Override
-  public void visit(LValue node) {
-    validateLValue(node.getLocation(), node.getExpression());
-  }
-
-  @Override
-  public void visit(ReturnStatement node) {
-    if (isTopLevel()) {
-      throw new ValidationException(
-          node.getLocation(), "Return statements must be inside a function");
-    }
-    super.visit(node);
-  }
-
-  @Override
-  public void visit(DotExpression node) {
-    visit(node.getObject());
-    // Do not visit the field.
-  }
-
-  @Override
-  public void visit(AbstractComprehension node) {
-    if (semantics.incompatibleComprehensionVariablesDoNotLeak) {
-      openScope();
-      super.visit(node);
-      closeScope();
-    } else {
-      super.visit(node);
-    }
-  }
-
-  @Override
-  public void visit(FunctionDefStatement node) {
-    for (Parameter<Expression, Expression> param : node.getParameters()) {
-      if (param.isOptional()) {
-        visit(param.getDefaultValue());
-      }
-    }
-    openScope();
-    for (Parameter<Expression, Expression> param : node.getParameters()) {
-      if (param.hasName()) {
-        declare(param.getName(), param.getLocation());
-      }
-    }
-    for (Statement stmt : node.getStatements()) {
-      visit(stmt);
-    }
-    closeScope();
-  }
-
   /** Returns true if this ValidationEnvironment is top level i.e. has no parent. */
-  private boolean isTopLevel() {
+  boolean isTopLevel() {
     return scope.parent == null;
   }
 
+  SkylarkSemanticsOptions getSemantics() {
+    return semantics;
+  }
+
   /** Declare a variable and add it to the environment. */
-  private void declare(String varname, Location location) {
+  void declare(String varname, Location location) throws EvalException {
     checkReadonly(varname, location);
-    if (scope.parent == null) {  // top-level values are immutable
+    if (scope.parent == null) { // top-level values are immutable
       scope.readOnlyVariables.add(varname);
+      if (!scope.futureReadOnlyVariables.isEmpty()) {
+        // Currently validating an if-else statement
+        scope.futureReadOnlyVariables.peek().add(varname);
+      }
     }
     scope.variables.add(varname);
   }
 
-  private void checkReadonly(String varname, Location location) {
+  private void checkReadonly(String varname, Location location) throws EvalException {
     if (scope.readOnlyVariables.contains(varname)) {
-      throw new ValidationException(
+      throw new EvalException(
           location,
           String.format("Variable %s is read only", varname),
           "https://bazel.build/versions/master/docs/skylark/errors/read-only-variable.html");
@@ -173,7 +91,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   }
 
   /** Returns true if the symbol exists in the validation environment (or a parent). */
-  private boolean hasSymbolInEnvironment(String varname) {
+  boolean hasSymbolInEnvironment(String varname) {
     for (Scope s = scope; s != null; s = s.parent) {
       if (s.variables.contains(varname)) {
         return true;
@@ -183,7 +101,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   }
 
   /** Returns the set of all accessible symbols (both local and global) */
-  private Set<String> getAllSymbols() {
+  Set<String> getAllSymbols() {
     Set<String> all = new HashSet<>();
     for (Scope s = scope; s != null; s = s.parent) {
       all.addAll(s.variables);
@@ -191,8 +109,31 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     return all;
   }
 
-  /** Throws ValidationException if a load() appears after another kind of statement. */
-  private static void checkLoadAfterStatement(List<Statement> statements) {
+  /**
+   * Starts a session with temporarily disabled readonly checking for variables between branches.
+   * This is useful to validate control flows like if-else when we know that certain parts of the
+   * code cannot both be executed.
+   */
+  void startTemporarilyDisableReadonlyCheckSession() {
+    scope.futureReadOnlyVariables.add(new HashSet<String>());
+  }
+
+  /** Finishes the session with temporarily disabled readonly checking. */
+  void finishTemporarilyDisableReadonlyCheckSession() {
+    Set<String> variables = scope.futureReadOnlyVariables.pop();
+    scope.readOnlyVariables.addAll(variables);
+    if (!scope.futureReadOnlyVariables.isEmpty()) {
+      scope.futureReadOnlyVariables.peek().addAll(variables);
+    }
+  }
+
+  /** Finishes a branch of temporarily disabled readonly checking. */
+  void finishTemporarilyDisableReadonlyCheckBranch() {
+    scope.readOnlyVariables.removeAll(scope.futureReadOnlyVariables.peek());
+  }
+
+  /** Throws EvalException if a load() appears after another kind of statement. */
+  private static void checkLoadAfterStatement(List<Statement> statements) throws EvalException {
     Location firstStatement = null;
 
     for (Statement statement : statements) {
@@ -206,7 +147,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
         if (firstStatement == null) {
           continue;
         }
-        throw new ValidationException(
+        throw new EvalException(
             statement.getLocation(),
             "load() statements must be called before any other statement. "
                 + "First non-load() statement appears at "
@@ -221,11 +162,11 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     }
   }
 
-  /** Throws ValidationException if a `if` statement appears at the top level. */
-  private static void checkToplevelIfStatement(List<Statement> statements) {
+  /** Throws EvalException if a `if` statement appears at the top level. */
+  private static void checkToplevelIfStatement(List<Statement> statements) throws EvalException {
     for (Statement statement : statements) {
       if (statement instanceof IfStatement) {
-        throw new ValidationException(
+        throw new EvalException(
             statement.getLocation(),
             "if statements are not allowed at the top level. You may move it inside a function "
                 + "or use an if expression (x if condition else y). "
@@ -236,7 +177,7 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   }
 
   /** Validates the AST and runs static checks. */
-  private void validateAst(List<Statement> statements) {
+  void validateAst(List<Statement> statements) throws EvalException {
     // Check that load() statements are on top.
     if (semantics.incompatibleBzlDisallowLoadAfterStatement) {
       checkLoadAfterStatement(statements);
@@ -258,19 +199,15 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
     }
 
     for (Statement statement : statements) {
-      this.visit(statement);
+      statement.validate(this);
     }
   }
 
   public static void validateAst(Environment env, List<Statement> statements) throws EvalException {
-    try {
-      ValidationEnvironment venv = new ValidationEnvironment(env);
-      venv.validateAst(statements);
-      // Check that no closeScope was forgotten.
-      Preconditions.checkState(venv.scope.parent == null);
-    } catch (ValidationException e) {
-      throw e.exception;
-    }
+    ValidationEnvironment venv = new ValidationEnvironment(env);
+    venv.validateAst(statements);
+    // Check that no closeScope was forgotten.
+    Preconditions.checkState(venv.scope.parent == null);
   }
 
   public static boolean validateAst(
@@ -287,12 +224,12 @@ public final class ValidationEnvironment extends SyntaxTreeVisitor {
   }
 
   /** Open a new scope that will contain the future declarations. */
-  private void openScope() {
+  public void openScope() {
     this.scope = new Scope(this.scope);
   }
 
   /** Close a scope (and lose all declarations it contained). */
-  private void closeScope() {
+  public void closeScope() {
     this.scope = Preconditions.checkNotNull(this.scope.parent);
   }
 }
