@@ -22,6 +22,7 @@ import static com.google.devtools.build.lib.rules.proto.ProtoCommon.areDepsStric
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.AbstractAction;
@@ -72,7 +73,8 @@ public class ProtoCompileActionBuilder {
   private Iterable<Artifact> inputs;
   private String langParameter;
   private String langPluginName;
-  private Supplier<String> langPluginParameter;
+  private String langPluginParameter;
+  private Supplier<String> langPluginParameterSupplier;
   private boolean hasServices;
   private Iterable<String> additionalCommandLineArguments;
   private Iterable<FilesToRunProvider> additionalTools;
@@ -98,8 +100,14 @@ public class ProtoCompileActionBuilder {
     return this;
   }
 
-  public ProtoCompileActionBuilder setLangPluginParameter(Supplier<String> langPluginParameter) {
+  public ProtoCompileActionBuilder setLangPluginParameter(String langPluginParameter) {
     this.langPluginParameter = langPluginParameter;
+    return this;
+  }
+
+  public ProtoCompileActionBuilder setLangPluginParameterSupplier(
+      Supplier<String> langPluginParameterSupplier) {
+    this.langPluginParameterSupplier = langPluginParameterSupplier;
     return this;
   }
 
@@ -198,6 +206,10 @@ public class ProtoCompileActionBuilder {
   }
 
   public Action[] build() {
+    checkState(
+        langPluginParameter == null || langPluginParameterSupplier == null,
+        "Only one of {langPluginParameter, langPluginParameterSupplier} should be set.");
+
     if (isEmpty(outputs)) {
       return NO_ACTIONS;
     }
@@ -274,13 +286,18 @@ public class ProtoCompileActionBuilder {
       }
     } else {
       FilesToRunProvider langPluginTarget = getLangPluginTarget();
+      Supplier<String> langPluginParameter1 =
+          langPluginParameter == null
+              ? langPluginParameterSupplier
+              : Suppliers.ofInstance(langPluginParameter);
+
       Preconditions.checkArgument(langParameter == null);
-      Preconditions.checkArgument(langPluginParameter != null);
+      Preconditions.checkArgument(langPluginParameter1 != null);
       // We pass a separate langPluginName as there are plugins that cannot be overridden
       // and thus we have to deal with "$xx_plugin" and "xx_plugin".
       result.addFormatted(
           "--plugin=protoc-gen-%s=%s", langPrefix, langPluginTarget.getExecutable().getExecPath());
-      result.addLazyString(new LazyLangPluginFlag(langPrefix, langPluginParameter));
+      result.addLazyString(new LazyLangPluginFlag(langPrefix, langPluginParameter1));
     }
 
     result.addAll(ruleContext.getFragment(ProtoConfiguration.class).protocOpts());
