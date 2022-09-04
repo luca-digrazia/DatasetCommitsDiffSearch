@@ -23,85 +23,45 @@ package org.graylog2.streams.matchers;
 import org.graylog2.plugin.Message;
 import org.bson.types.ObjectId;
 import com.mongodb.BasicDBObject;
-import org.graylog2.plugin.streams.StreamRule;
 import org.graylog2.streams.StreamRuleImpl;
 import org.joda.time.DateTime;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-public class ExactMatcherTest extends MatcherTest {
+public class ExactMatcherTest {
 
     @Test
     public void testSuccessfulMatch() {
-        StreamRule rule = getSampleRule();
+        BasicDBObject mongoRule = new BasicDBObject();
+        mongoRule.put("_id", new ObjectId());
+        mongoRule.put("type", StreamRuleImpl.TYPE_EXACT);
+        mongoRule.put("field", "something");
+        mongoRule.put("value", "foo");
 
-        Message msg = getSampleMessage();
+        StreamRuleMock rule = new StreamRuleMock(mongoRule);
+
+        Message msg = new Message("foo", "bar", new DateTime());
         msg.addField("something", "foo");
 
-        StreamRuleMatcher matcher = getMatcher(rule);
+        ExactMatcher matcher = new ExactMatcher();
         assertTrue(matcher.match(msg, rule));
     }
 
     @Test
     public void testMissedMatch() {
-        StreamRule rule = getSampleRule();
+        BasicDBObject mongoRule = new BasicDBObject();
+        mongoRule.put("_id", new ObjectId());
+        mongoRule.put("type", StreamRuleImpl.TYPE_EXACT);
+        mongoRule.put("field", "something");
+        mongoRule.put("value", "foo");
 
-        Message msg = getSampleMessage();
+        StreamRuleMock rule = new StreamRuleMock(mongoRule);
+
+        Message msg = new Message("foo", "bar", new DateTime());
         msg.addField("something", "nonono");
 
-        StreamRuleMatcher matcher = getMatcher(rule);
+        ExactMatcher matcher = new ExactMatcher();
         assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testInvertedMatch() {
-        StreamRule rule = getSampleRule();
-        rule.setInverted(true);
-
-        Message msg = getSampleMessage();
-        msg.addField("something", "nonono");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertTrue(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testNonExistantField() {
-        StreamRule rule = getSampleRule();
-
-        Message msg = getSampleMessage();
-        msg.addField("someother", "foo");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertFalse(matcher.match(msg, rule));
-    }
-
-    @Test
-    public void testNonExistantFieldInverted() {
-        StreamRule rule = getSampleRule();
-        rule.setInverted(true);
-
-        Message msg = getSampleMessage();
-        msg.addField("someother", "foo");
-
-        StreamRuleMatcher matcher = getMatcher(rule);
-        assertFalse(matcher.match(msg, rule));
-    }
-
-    protected StreamRule getSampleRule() {
-        StreamRule rule = super.getSampleRule();
-        rule.setType(StreamRuleImpl.TYPE_EXACT);
-        rule.setValue("foo");
-
-        return rule;
-    }
-
-    protected StreamRuleMatcher getMatcher(StreamRule rule) {
-        StreamRuleMatcher matcher = super.getMatcher(rule);
-
-        assertEquals(matcher.getClass(), ExactMatcher.class);
-
-        return matcher;
     }
 
 }

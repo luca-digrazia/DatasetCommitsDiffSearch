@@ -9,7 +9,7 @@ import org.graylog2.plugin.streams.StreamRule;
  */
 public class StreamRuleMock implements StreamRule {
     private ObjectId objectId = null;
-    private Integer type = 0;
+    private int type = 0;
     private String value = null;
     private String field = null;
     private Boolean inverted = false;
@@ -26,7 +26,7 @@ public class StreamRuleMock implements StreamRule {
         return objectId;
     }
 
-    public Integer getType() {
+    public int getType() {
         return type;
     }
 

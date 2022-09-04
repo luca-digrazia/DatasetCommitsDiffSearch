@@ -31,7 +31,7 @@ public interface StreamRule {
 
     public ObjectId getObjectId();
 
-    public Integer getType();
+    public int getType();
 
     public String getField();
     public String getValue();

@@ -20,24 +20,24 @@
 
 package org.graylog2.database;
 
+import java.util.Date;
+import java.util.List;
+import java.util.Map;
+
+import org.bson.types.ObjectId;
+import org.graylog2.Core;
+
 import com.beust.jcommander.internal.Lists;
-import com.google.common.collect.Maps;
 import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 import com.mongodb.DBObject;
-import org.bson.types.ObjectId;
-import org.graylog2.Core;
 import org.graylog2.database.validators.Validator;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -141,7 +141,13 @@ public abstract class Persisted {
 		doc.put("_id", id); // ID was created in constructor or taken from original doc already.
 
         // Do field transformations
-        fieldTransformations(doc);
+        for (Map.Entry<String, Object> x : doc.entrySet()) {
+
+            // JodaTime DateTime is not accepted by MongoDB. Convert to java.util.Date...
+            if (x.getValue() instanceof org.joda.time.DateTime) {
+                doc.put(x.getKey(), ((DateTime) x.getValue()).toDate());
+            }
+        }
 
 		/*
 		 * We are running an upsert. This means that the existing
@@ -150,7 +156,7 @@ public abstract class Persisted {
 		 */
 		BasicDBObject q = new BasicDBObject("_id", id);
 		collection().update(q, doc, true, false);
-
+		
 		return id;
 	}
 
@@ -202,10 +208,7 @@ public abstract class Persisted {
             throw new ValidationException();
         }
 
-        Map<String, Object> fields = Maps.newHashMap(o.getPersistedFields());
-        fieldTransformations(fields);
-
-        BasicDBObject dbo = new BasicDBObject(fields);
+        BasicDBObject dbo = new BasicDBObject(o.getPersistedFields());
         collection().update(new BasicDBObject("_id", id), new BasicDBObject("$push", new BasicDBObject(key, dbo)));
     }
 
@@ -229,29 +232,8 @@ public abstract class Persisted {
         collection().update(qry, update);
     }
 
-    public ObjectId getObjectId() {
+    public ObjectId getId() {
         return this.id;
-    }
-
-    public String getId() {
-        return getObjectId().toStringMongod();
-    }
-
-    private void fieldTransformations(Map<String, Object> doc) {
-        for (Map.Entry<String, Object> x : doc.entrySet()) {
-
-            // Work on embedded Maps, too.
-            if (x.getValue() instanceof Map) {
-                fieldTransformations((Map<String, Object>) x.getValue());
-                continue;
-            }
-
-            // JodaTime DateTime is not accepted by MongoDB. Convert to java.util.Date...
-            if (x.getValue() instanceof org.joda.time.DateTime) {
-                doc.put(x.getKey(), ((DateTime) x.getValue()).toDate());
-            }
-
-        }
     }
 
     public abstract String getCollectionName();
