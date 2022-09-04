@@ -62,14 +62,6 @@ import org.objectweb.asm.MethodVisitor;
  */
 public class OutputConsumer implements ClassFileConsumer {
 
-  public boolean finished() {
-    return finish;
-  }
-
-  public void setFinish(boolean finish) {
-    this.finish = finish;
-  }
-
   private static class ClassFileData implements Comparable<ClassFileData> {
     private final String fileName;
     private final byte[] data;
@@ -93,7 +85,6 @@ public class OutputConsumer implements ClassFileConsumer {
   private final DependencyCollector dependencyCollector;
   private final Path input;
   private final NavigableSet<ClassFileData> classFiles = new TreeSet<>();
-  private boolean finish = true;
 
   public OutputConsumer(Path archive, DependencyCollector dependencyCollector, Path input) {
     this.archive = archive;
@@ -111,9 +102,6 @@ public class OutputConsumer implements ClassFileConsumer {
 
   @Override
   public void finished(DiagnosticsHandler handler) {
-    if (!finished()) {
-      return;
-    }
     FilteringDependencyCollector dependencyCollector =
         new FilteringDependencyCollector(this.dependencyCollector);
     initializeInputDependencies(handler, dependencyCollector);
