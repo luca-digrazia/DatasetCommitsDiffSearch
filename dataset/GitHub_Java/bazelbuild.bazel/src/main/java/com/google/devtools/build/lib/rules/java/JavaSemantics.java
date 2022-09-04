@@ -33,7 +33,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabel;
 import com.google.devtools.build.lib.packages.Attribute.LateBoundLabelList;
@@ -278,20 +277,14 @@ public interface JavaSemantics {
   ImmutableList<Artifact> collectResources(RuleContext ruleContext);
 
   /**
-   * Constructs the command line to call SingleJar to join all artifacts from {@code classpath}
-   * (java code) and {@code resources} into {@code output}.
+   * Constructs the command line to call SingleJar to join all artifacts from
+   * {@code classpath} (java code) and {@code resources} into {@code output}.
    */
-  CustomCommandLine buildSingleJarCommandLine(
-      BuildConfiguration configuration,
-      Artifact output,
-      String mainClass,
-      ImmutableList<String> manifestLines,
-      Iterable<Artifact> buildInfoFiles,
-      ImmutableList<Artifact> resources,
-      NestedSet<Artifact> classpath,
-      boolean includeBuildData,
-      Compression compression,
-      Artifact launcher);
+  CustomCommandLine buildSingleJarCommandLine(BuildConfiguration configuration,
+      Artifact output, String mainClass, ImmutableList<String> manifestLines,
+      Iterable<Artifact> buildInfoFiles, ImmutableList<Artifact> resources,
+      Iterable<Artifact> classpath, boolean includeBuildData,
+      Compression compression, Artifact launcher);
 
   /**
    * Creates the action that writes the Java executable stub script.
@@ -307,10 +300,6 @@ public interface JavaSemantics {
    * <p>For example on Windows we use a double dispatch approach: the launcher is a batch file (and
    * is created and returned by this method) which shells out to a shell script (the {@code
    * executable} argument).
-   *
-   * <p>In Blaze, this method considers {@code javaExecutable} as a substitution that can be
-   * directly used to replace %javabin% in stub script, but in Bazel this method considers {@code
-   * javaExecutable} as a file path for the JVM binary (java).
    */
   Artifact createStubAction(
       RuleContext ruleContext,
@@ -319,12 +308,6 @@ public interface JavaSemantics {
       Artifact executable,
       String javaStartClass,
       String javaExecutable);
-
-  /**
-   * Returns true if {@code createStubAction} considers {@code javaExecutable} as a substitution.
-   * Returns false if {@code createStubAction} considers {@code javaExecutable} as a file path.
-   */
-  boolean isJavaExecutableSubstitution();
 
   /**
    * Optionally creates a file containing the relative classpaths within the runfiles tree. If
