@@ -120,7 +120,7 @@ public class TimeBasedRotationStrategy extends AbstractRotationStrategy {
             throw new IllegalArgumentException("Could not determine rotation stride length.");
         }
 
-        final DateTime anchorTime = anchorTimeFrom(lastAnchor);
+        final DateTime anchorTime = MoreObjects.firstNonNull(lastAnchor, Tools.nowUTC());
 
         final DateTimeField field = largestStrideType.getField(anchorTime.getChronology());
         // use normalized here to make sure we actually have the largestStride type available! see https://github.com/Graylog2/graylog2-server/issues/836
@@ -133,16 +133,9 @@ public class TimeBasedRotationStrategy extends AbstractRotationStrategy {
             log.warn("Determining stride length failed because of a 0 period. Defaulting back to 1 period to avoid crashing, but this is a bug!");
             periodValue = 1;
         }
-        final long difference = fieldValueInUnit % periodValue;
+        final long difference = (fieldValueInUnit % periodValue);
         final long newValue = field.add(fieldValue, -1 * difference);
         return new DateTime(newValue, DateTimeZone.UTC);
-    }
-
-    private static DateTime anchorTimeFrom(@Nullable DateTime lastAnchor) {
-        if (lastAnchor != null && !lastAnchor.getZone().equals(DateTimeZone.UTC)) {
-            return lastAnchor.withZone(DateTimeZone.UTC);
-        }
-        return MoreObjects.firstNonNull(lastAnchor, Tools.nowUTC());
     }
 
     @Nullable
@@ -160,11 +153,12 @@ public class TimeBasedRotationStrategy extends AbstractRotationStrategy {
         final DateTime now = Tools.nowUTC();
         // when first started, we might not know the last rotation time, look up the creation time of the index instead.
         if (!lastRotation.containsKey(indexSetId)) {
-            indices.indexCreationDate(index).ifPresent(creationDate -> {
+            final DateTime creationDate = indices.indexCreationDate(index);
+            if(creationDate != null) {
                 final DateTime currentAnchor = determineRotationPeriodAnchor(creationDate, rotationPeriod);
                 anchor.put(indexSetId, currentAnchor);
                 lastRotation.put(indexSetId, creationDate);
-            });
+            }
 
             // still not able to figure out the last rotation time, we'll rotate forcibly
             if (!lastRotation.containsKey(indexSetId)) {
