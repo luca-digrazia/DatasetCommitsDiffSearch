@@ -26,6 +26,7 @@ import com.codahale.metrics.Meter;
 import org.graylog2.Core;
 import org.graylog2.gelf.GELFMessage;
 import org.graylog2.gelf.GELFProcessor;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelFuture;
@@ -53,13 +54,14 @@ public class GELFHttpHandler extends SimpleChannelHandler {
 
     private final Meter receivedMessages;
     private final Meter gelfMessages;
+    private final MessageInput sourceInput;
 
     private final GELFProcessor gelfProcessor;
 
-    public GELFHttpHandler(Core server) {
+    public GELFHttpHandler(Core server, MessageInput sourceInput) {
         this.server = server;
-        gelfProcessor = new GELFProcessor(server);
-
+        this.gelfProcessor = new GELFProcessor(server);
+        this.sourceInput = sourceInput;
         this.receivedMessages = server.metrics().meter(name(GELFHttpHandler.class, "receivedMessages"));
         this.gelfMessages = server.metrics().meter(name(GELFHttpHandler.class, "gelfMessages"));
     }
@@ -90,7 +92,7 @@ public class GELFHttpHandler extends SimpleChannelHandler {
             return;
         }
 
-        gelfProcessor.messageReceived(msg);
+        gelfProcessor.messageReceived(msg, sourceInput);
         writeResponse(e.getChannel(), keepAlive, httpRequestVersion, HttpResponseStatus.ACCEPTED);
     }
 

@@ -23,10 +23,9 @@ package org.graylog2.inputs.syslog;
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import org.graylog2.Core;
-import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.MessageInputConfiguration;
-import org.graylog2.plugin.inputs.MessageInputConfigurationException;
-import org.graylog2.plugin.inputs.MessageInputConfigurationRequest;
+import org.graylog2.plugin.inputs.*;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
 import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
 import org.jboss.netty.channel.ChannelException;
 import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
@@ -35,6 +34,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -43,74 +43,33 @@ import org.graylog2.plugin.GraylogServer;
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class SyslogUDPInput implements MessageInput {
+public class SyslogUDPInput extends SyslogInputBase {
 
     private static final Logger LOG = LoggerFactory.getLogger(SyslogUDPInput.class);
 
-    private static final String NAME = "Syslog UDP";
+    public static final String NAME = "Syslog UDP";
 
     @Override
-    public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public void start() {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public void stop() {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public MessageInputConfigurationRequest getRequestedConfiguration() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public boolean isExclusive() {
-        return false;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public String getName() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    /*private Core graylogServer;
-    private InetSocketAddress socketAddress;
-
-    @Override
-    public void initialize(Map<String, String> configuration, GraylogServer graylogServer) {
-        this.graylogServer = (Core) graylogServer;
-        this.socketAddress = new InetSocketAddress(
-                configuration.get("listen_address"),
-                Integer.parseInt(configuration.get("listen_port"))
-        );
-
-        spinUp();
-    }
-
-    private void spinUp() {       
+    public void launch() throws MisfireException {
         final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
-                .setNameFormat("input-syslogudp-worker-%d")
-                .build());
-        
-        final ConnectionlessBootstrap bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
+                        .setNameFormat("input-" + inputId + "-syslogudp-worker-%d")
+                        .build());
+
+        bootstrap = new ConnectionlessBootstrap(new NioDatagramChannelFactory(workerThreadPool));
 
         bootstrap.setOption("receiveBufferSizePredictorFactory", new FixedReceiveBufferSizePredictorFactory(
-                graylogServer.getConfiguration().getUdpRecvBufferSizes())
+                core.getConfiguration().getUdpRecvBufferSizes())
         );
-        bootstrap.setPipelineFactory(new SyslogPipelineFactory(graylogServer));
+        bootstrap.setPipelineFactory(new SyslogPipelineFactory(core, config, this));
 
         try {
-            bootstrap.bind(socketAddress);
-            LOG.info("Started UDP Syslog server on {}", socketAddress);
+            channel = bootstrap.bind(socketAddress);
+            LOG.info("Started syslog UDP input server on {}", socketAddress);
         } catch (ChannelException e) {
-            LOG.error("Could not bind Syslog UDP server to address " + socketAddress, e);
+            String msg = "Could not bind UDP syslog input to address " + socketAddress;
+            LOG.error(msg, e);
+            throw new MisfireException(msg, e);
         }
     }
 
@@ -119,10 +78,5 @@ public class SyslogUDPInput implements MessageInput {
         return NAME;
     }
 
-    @Override
-    public Map<String, String> getRequestedConfiguration() {
-        // Built in input. This is just for plugin compat. No special configuration required.
-        return Maps.newHashMap();
-    }*/
-    
+
 }

@@ -34,14 +34,12 @@ import org.graylog2.cluster.Node;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.filters.*;
 import org.graylog2.initializers.*;
-import org.graylog2.inputs.gelf.tcp.GELFTCPInput;
-import org.graylog2.inputs.gelf.http.GELFHttpInput;
-import org.graylog2.inputs.gelf.udp.GELFUDPInput;
-import org.graylog2.inputs.random.FakeHttpMessageInput;
-import org.graylog2.inputs.random.generators.FakeHttpMessageGenerator;
+import org.graylog2.inputs.gelf.GELFTCPInput;
+import org.graylog2.inputs.gelf.GELFUDPInput;
+import org.graylog2.inputs.http.GELFHttpInput;
 import org.graylog2.inputs.raw.RawUDPInput;
-import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
-import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
+import org.graylog2.inputs.syslog.SyslogTCPInput;
+import org.graylog2.inputs.syslog.SyslogUDPInput;
 import org.graylog2.outputs.ElasticSearchOutput;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.initializers.InitializerConfigurationException;
@@ -214,10 +212,9 @@ public final class Main {
         server.inputs().register(SyslogUDPInput.class, SyslogUDPInput.NAME);
         server.inputs().register(SyslogTCPInput.class, SyslogTCPInput.NAME);
         server.inputs().register(RawUDPInput.class, RawUDPInput.NAME);
-        server.inputs().register(GELFUDPInput.class, GELFUDPInput.NAME);
-        server.inputs().register(GELFTCPInput.class, GELFTCPInput.NAME);
-        server.inputs().register(GELFHttpInput.class, GELFHttpInput.NAME);
-        server.inputs().register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
+        //server.inputs().register(GELFUDPInput.class, GELFUDPInput.NAME);
+        //server.inputs().register(GELFTCPInput.class, GELFTCPInput.NAME);
+        //server.inputs().register(GELFHttpInput.class, GELFHttpInput.NAME);
 
         // Register initializers.
         server.initializers().register(new DroolsInitializer());
@@ -238,6 +235,7 @@ public final class Main {
         // Register message filters. (Order is important here)
         server.registerFilter(new ExtractorFilter());
         server.registerFilter(new BlacklistFilter());
+        if (configuration.isEnableTokenizerFilter()) { server.registerFilter(new TokenizerFilter()); }
         server.registerFilter(new StreamMatcherFilter());
         server.registerFilter(new RewriteFilter());
 

@@ -22,6 +22,7 @@ package org.graylog2.inputs.syslog;
 
 import org.graylog2.Core;
 import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.buffer.ChannelBuffer;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -36,25 +37,27 @@ public class SyslogTCPPipelineFactory implements ChannelPipelineFactory {
     
     private final Core server;
     private final Configuration config;
+    private final MessageInput sourceInput;
 
-    public SyslogTCPPipelineFactory(Core server, Configuration config) {
+    public SyslogTCPPipelineFactory(Core server, Configuration config, MessageInput sourceInput) {
         this.server = server;
         this.config = config;
+        this.sourceInput = sourceInput;
     }
 
     @Override
     public ChannelPipeline getPipeline() throws Exception {
         ChannelBuffer[] delimiter;
-        // TODO re-implement with new input structure
-        //if (this.server.getConfiguration().isSyslogUseNulDelimiterEnabled()) {
-        //    delimiter = Delimiters.nulDelimiter();
-        //} else {
+
+        if (config.getBoolean(SyslogTCPInput.CK_USE_NULL_DELIMITER)) {
+            delimiter = Delimiters.nulDelimiter();
+        } else {
             delimiter = Delimiters.lineDelimiter();
-        //}
+        }
                 
         ChannelPipeline p = Channels.pipeline();
         p.addLast("framer", new DelimiterBasedFrameDecoder(2 * 1024 * 1024, delimiter));
-        p.addLast("handler", new SyslogDispatcher(server, config));
+        p.addLast("handler", new SyslogDispatcher(server, config, sourceInput));
         return p;
     }
     

@@ -23,12 +23,14 @@ package org.graylog2.buffers.processors;
 import com.codahale.metrics.Meter;
 import com.codahale.metrics.Timer;
 import com.lmax.disruptor.EventHandler;
-import org.graylog2.Core;
-import org.graylog2.plugin.Message;
-import org.graylog2.plugin.buffers.MessageEvent;
-import org.graylog2.plugin.filters.MessageFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.graylog2.Core;
+import org.graylog2.plugin.buffers.MessageEvent;
+import org.graylog2.plugin.filters.MessageFilter;
+import org.graylog2.plugin.Message;
+
+import java.util.concurrent.TimeUnit;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -94,7 +96,7 @@ public class ProcessBufferProcessor implements EventHandler<MessageEvent> {
             }
         }
 
-        LOG.debug("Finished processing message <{}>. Writing to output buffer.", msg.getId());
+        LOG.debug("Finished processing message. Writing to output buffer.");
         server.getOutputBuffer().insertCached(msg, null);
         
         outgoingMessages.mark();

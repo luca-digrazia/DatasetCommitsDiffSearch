@@ -21,7 +21,8 @@ package org.graylog2.periodical;
 
 import com.codahale.metrics.Meter;
 import org.graylog2.Core;
-import org.graylog2.inputs.Cache;
+import org.graylog2.buffers.Cache;
+import org.graylog2.buffers.ProcessBuffer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
@@ -89,7 +90,7 @@ public class MasterCacheWorkerThread implements Runnable {
             } catch(Exception e) {
                 LOG.error("Error while trying to work on MasterCache <{}>.", cacheName, e);
                 try {
-                    Thread.sleep(1000);
+                    Thread.sleep(1*1000);
                 } catch(InterruptedException ex) { /* */ }
             }
             

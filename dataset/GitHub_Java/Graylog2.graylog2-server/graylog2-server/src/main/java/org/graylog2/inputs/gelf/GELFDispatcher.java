@@ -23,6 +23,7 @@ package org.graylog2.inputs.gelf;
 import com.codahale.metrics.Meter;
 import org.graylog2.gelf.GELFProcessor;
 import org.graylog2.gelf.GELFMessage;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.graylog2.Core;
@@ -44,14 +45,16 @@ public class GELFDispatcher extends SimpleChannelHandler {
 
     private GELFProcessor processor;
     private Core server;
+    private final MessageInput sourceInput;
 
     private final Meter receivedMessages;
     private final Meter dispatchedChunkedMessages;
     private final Meter dispatchedUnchunkedMessages;
 
-    public GELFDispatcher(Core server) {
+    public GELFDispatcher(Core server, MessageInput sourceInput) {
         this.server = server;
         this.processor = new GELFProcessor(server);
+        this.sourceInput = sourceInput;
 
         this.receivedMessages = server.metrics().meter(name(GELFDispatcher.class, "receivedMessages"));
         this.dispatchedChunkedMessages = server.metrics().meter(name(GELFDispatcher.class, "dispatchedChunkedMessages"));
@@ -72,14 +75,14 @@ public class GELFDispatcher extends SimpleChannelHandler {
         switch(msg.getGELFType()) {
         case CHUNKED:
             dispatchedChunkedMessages.mark();
-            server.getGELFChunkManager().insert(msg);
+            server.getGELFChunkManager().insert(msg, sourceInput);
             break;
         case ZLIB:
         case GZIP:
         case UNCOMPRESSED:
         case UNSUPPORTED:
             dispatchedUnchunkedMessages.mark();
-            processor.messageReceived(msg);
+            processor.messageReceived(msg, sourceInput);
             break;
         }
     }

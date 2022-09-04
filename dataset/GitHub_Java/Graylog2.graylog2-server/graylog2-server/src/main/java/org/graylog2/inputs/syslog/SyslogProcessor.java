@@ -120,10 +120,7 @@ public class SyslogProcessor {
          * |°  loooooooooooooooooooooooooooooooool
          *         °L|                   L|
          *          ()                   ()
-         *
-         *
-         *  http://open.spotify.com/track/2ZtQKBB8wDTtPPqDZhy7xZ
-         *
+         * 
          */
         
         SyslogServerEventIF e;

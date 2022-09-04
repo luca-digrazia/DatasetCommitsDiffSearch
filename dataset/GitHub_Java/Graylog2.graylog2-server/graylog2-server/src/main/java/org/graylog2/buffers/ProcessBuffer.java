@@ -26,7 +26,6 @@ import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
 import org.graylog2.Core;
 import org.graylog2.buffers.processors.ProcessBufferProcessor;
-import org.graylog2.inputs.Cache;
 import org.graylog2.plugin.buffers.Buffer;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.MessageEvent;
@@ -102,7 +101,7 @@ public class ProcessBuffer extends Buffer {
     public void insertCached(Message message, MessageInput sourceInput) {
         message.setSourceInput(sourceInput);
 
-        message.addField(SOURCE_INPUT_ATTR_NAME, sourceInput.getPersistId());
+        message.addField(SOURCE_INPUT_ATTR_NAME, sourceInput.getId());
         message.addField(SOURCE_NODE_ATTR_NAME, server.getNodeId());
 
         if (!server.isProcessing()) {

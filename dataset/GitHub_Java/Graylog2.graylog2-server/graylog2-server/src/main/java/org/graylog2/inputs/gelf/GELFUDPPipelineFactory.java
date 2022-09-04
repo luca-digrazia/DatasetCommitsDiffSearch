@@ -21,6 +21,7 @@
 package org.graylog2.inputs.gelf;
 
 import org.graylog2.Core;
+import org.graylog2.plugin.inputs.MessageInput;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
 import org.jboss.netty.channel.Channels;
@@ -30,15 +31,17 @@ import org.jboss.netty.channel.Channels;
  */
 public class GELFUDPPipelineFactory implements ChannelPipelineFactory {
 
-    Core server;
+    private final Core server;
+    private final MessageInput sourceInput;
 
-    public GELFUDPPipelineFactory(Core server) {
+    public GELFUDPPipelineFactory(Core server, MessageInput sourceInput) {
         this.server = server;
+        this.sourceInput = sourceInput;
     }
 
     @Override
     public ChannelPipeline getPipeline() throws Exception {
-        return Channels.pipeline(new GELFDispatcher(server));
+        return Channels.pipeline(new GELFDispatcher(server, sourceInput));
     }
     
 }

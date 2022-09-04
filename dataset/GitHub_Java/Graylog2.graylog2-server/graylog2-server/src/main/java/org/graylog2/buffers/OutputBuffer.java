@@ -1,5 +1,5 @@
-/*
- * Copyright 2012-2014 TORCH GmbH
+/**
+ * Copyright 2012 Lennart Koopmann <lennart@socketfeed.com>
  *
  * This file is part of Graylog2.
  *
@@ -15,23 +15,19 @@
  *
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ *
  */
 
 package org.graylog2.buffers;
 
 import com.codahale.metrics.Meter;
-import com.codahale.metrics.MetricRegistry;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.google.inject.assistedinject.Assisted;
-import com.google.inject.assistedinject.AssistedInject;
 import com.lmax.disruptor.dsl.Disruptor;
 import com.lmax.disruptor.dsl.ProducerType;
-import org.graylog2.Configuration;
+import org.graylog2.Core;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
-import org.graylog2.inputs.Cache;
-import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.Buffer;
-import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
+import org.graylog2.plugin.Message;
 import org.graylog2.plugin.buffers.MessageEvent;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.slf4j.Logger;
@@ -39,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import org.graylog2.plugin.buffers.BufferOutOfCapacityException;
 
 import static com.codahale.metrics.MetricRegistry.name;
 
@@ -46,9 +43,6 @@ import static com.codahale.metrics.MetricRegistry.name;
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public class OutputBuffer extends Buffer {
-    public interface Factory {
-        public OutputBuffer create(Cache overflowCache);
-    }
 
     private static final Logger LOG = LoggerFactory.getLogger(OutputBuffer.class);
 
@@ -57,57 +51,41 @@ public class OutputBuffer extends Buffer {
                 .setNameFormat("outputbufferprocessor-%d")
                 .build()
     );
-
-    private final OutputBufferWatermark outputBufferWatermark;
-
-    private final Configuration configuration;
+    
+    private Core server;
+    
     private final Cache overflowCache;
 
     private final Meter incomingMessages;
     private final Meter rejectedMessages;
     private final Meter cachedMessages;
 
-    private final OutputBufferProcessor.Factory outputBufferProcessorFactory;
-
-    @AssistedInject
-    public OutputBuffer(OutputBufferProcessor.Factory outputBufferProcessorFactory,
-                        MetricRegistry metricRegistry,
-                        OutputBufferWatermark outputBufferWatermark,
-                        Configuration configuration,
-                        @Assisted Cache overflowCache) {
-        this.outputBufferProcessorFactory = outputBufferProcessorFactory;
-        this.outputBufferWatermark = outputBufferWatermark;
-        this.configuration = configuration;
+    public OutputBuffer(Core server, Cache overflowCache) {
+        this.server = server;
         this.overflowCache = overflowCache;
 
-        incomingMessages = metricRegistry.meter(name(OutputBuffer.class, "incomingMessages"));
-        rejectedMessages = metricRegistry.meter(name(OutputBuffer.class, "rejectedMessages"));
-        cachedMessages = metricRegistry.meter(name(OutputBuffer.class, "cachedMessages"));
-    }
-
-    public Cache getOverflowCache() {
-        return overflowCache;
+        incomingMessages = server.metrics().meter(name(OutputBuffer.class, "incomingMessages"));
+        rejectedMessages = server.metrics().meter(name(OutputBuffer.class, "rejectedMessages"));
+        cachedMessages = server.metrics().meter(name(OutputBuffer.class, "cachedMessages"));
     }
 
     public void initialize() {
         Disruptor disruptor = new Disruptor<MessageEvent>(
                 MessageEvent.EVENT_FACTORY,
-                configuration.getRingSize(),
+                server.getConfiguration().getRingSize(),
                 executor,
                 ProducerType.MULTI,
-                configuration.getProcessorWaitStrategy()
+                server.getConfiguration().getProcessorWaitStrategy()
         );
         
         LOG.info("Initialized OutputBuffer with ring size <{}> "
-                + "and wait strategy <{}>.", configuration.getRingSize(),
-                configuration.getProcessorWaitStrategy().getClass().getSimpleName());
+                + "and wait strategy <{}>.", server.getConfiguration().getRingSize(),
+                server.getConfiguration().getProcessorWaitStrategy().getClass().getSimpleName());
 
-        int outputBufferProcessorCount = configuration.getOutputBufferProcessors();
-
-        OutputBufferProcessor[] processors = new OutputBufferProcessor[outputBufferProcessorCount];
+        OutputBufferProcessor[] processors = new OutputBufferProcessor[server.getConfiguration().getOutputBufferProcessors()];
         
-        for (int i = 0; i < outputBufferProcessorCount; i++) {
-            processors[i] = outputBufferProcessorFactory.create(i, outputBufferProcessorCount);
+        for (int i = 0; i < server.getConfiguration().getOutputBufferProcessors(); i++) {
+            processors[i] = new OutputBufferProcessor(this.server, i, server.getConfiguration().getOutputBufferProcessors());
         }
         
         disruptor.handleEventsWith(processors);
@@ -144,7 +122,7 @@ public class OutputBuffer extends Buffer {
         event.setMessage(message);
         ringBuffer.publish(sequence);
 
-        outputBufferWatermark.incrementAndGet();
+        server.outputBufferWatermark().incrementAndGet();
         incomingMessages.mark();
     }
 

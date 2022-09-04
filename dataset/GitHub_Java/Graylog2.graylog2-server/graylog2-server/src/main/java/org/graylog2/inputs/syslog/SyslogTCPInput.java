@@ -22,110 +22,85 @@ package org.graylog2.inputs.syslog;
 
 import com.google.common.collect.Maps;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import org.graylog2.Core;
-import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.plugin.inputs.MessageInputConfiguration;
-import org.graylog2.plugin.inputs.MessageInputConfigurationException;
-import org.graylog2.plugin.inputs.MessageInputConfigurationRequest;
+import org.graylog2.plugin.configuration.fields.BooleanField;
+import org.graylog2.plugin.inputs.*;
+import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
+import org.graylog2.plugin.configuration.ConfigurationRequest;
+import org.jboss.netty.bootstrap.ConnectionlessBootstrap;
 import org.jboss.netty.bootstrap.ServerBootstrap;
+import org.jboss.netty.channel.Channel;
 import org.jboss.netty.channel.ChannelException;
+import org.jboss.netty.channel.FixedReceiveBufferSizePredictorFactory;
+import org.jboss.netty.channel.socket.nio.NioDatagramChannelFactory;
 import org.jboss.netty.channel.socket.nio.NioServerSocketChannelFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.InetSocketAddress;
+import org.graylog2.plugin.GraylogServer;
+
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import org.graylog2.plugin.GraylogServer;
 
 /**
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
-public class SyslogTCPInput implements MessageInput {
+public class SyslogTCPInput extends SyslogInputBase {
     
     private static final Logger LOG = LoggerFactory.getLogger(SyslogTCPInput.class);
 
-    private static final String NAME = "Syslog TCP";
+    public static final String NAME = "Syslog TCP";
+
+    public static final String CK_USE_NULL_DELIMITER = "use_null_delimiter";
 
     @Override
-    public void configure(MessageInputConfiguration config, GraylogServer graylogServer) throws MessageInputConfigurationException {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public void start() {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public void stop() {
-        //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public MessageInputConfigurationRequest getRequestedConfiguration() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public boolean isExclusive() {
-        return false;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    @Override
-    public String getName() {
-        return null;  //To change body of implemented methods use File | Settings | File Templates.
-    }
-
-    /*private Core graylogServer;
-    private InetSocketAddress socketAddress;
-    
-    @Override
-    public void initialize(Map<String, String> configuration, GraylogServer graylogServer) {
-        this.graylogServer = (Core) graylogServer;
-        this.socketAddress = new InetSocketAddress(
-                configuration.get("listen_address"),
-                Integer.parseInt(configuration.get("listen_port"))
-        );
-
-        spinUp();
-    }
-    
-    private void spinUp() {
+    public void launch() throws MisfireException {
         final ExecutorService bossThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
-                .setNameFormat("input-syslogtcp-boss-%d")
-                .build());
-        
+                        .setNameFormat("input-" + inputId + "-syslogtcp-boss-%d")
+                        .build());
+
         final ExecutorService workerThreadPool = Executors.newCachedThreadPool(
                 new ThreadFactoryBuilder()
-                .setNameFormat("input-syslogtcp-worker-%d")
-                .build());
+                        .setNameFormat("input-" + inputId + "-syslogtcp-worker-%d")
+                        .build());
 
         ServerBootstrap tcpBootstrap = new ServerBootstrap(
-            new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
+                new NioServerSocketChannelFactory(bossThreadPool, workerThreadPool)
         );
 
-        tcpBootstrap.setPipelineFactory(new SyslogTCPPipelineFactory(this.graylogServer));
+        tcpBootstrap.setPipelineFactory(new SyslogTCPPipelineFactory(core, config, this));
 
         try {
-            tcpBootstrap.bind(socketAddress);
-            LOG.info("Started TCP syslog server on {}", socketAddress);
+            channel = tcpBootstrap.bind(socketAddress);
+            LOG.info("Started syslog TCP input on {}", socketAddress);
         } catch (ChannelException e) {
-            LOG.error("Could not bind TCP syslog server to address " + socketAddress, e);
+            String msg = "Could not bind syslog TCP input to address " + socketAddress;
+            LOG.error(msg, e);
+            throw new MisfireException(msg, e);
         }
+    }
+
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        ConfigurationRequest x = super.getRequestedConfiguration();
+
+        x.addField(
+                new BooleanField(
+                        CK_USE_NULL_DELIMITER,
+                        "Null frame delimiter?",
+                        false,
+                        "Use null byte as frame delimiter? Default is newline."
+                )
+        );
+
+        return x;
     }
 
     @Override
     public String getName() {
         return NAME;
     }
-
-    @Override
-    public Map<String, String> getRequestedConfiguration() {
-        // Built in input. This is just for plugin compat. No special configuration required.
-        return Maps.newHashMap();
-    }*/
 
 }
