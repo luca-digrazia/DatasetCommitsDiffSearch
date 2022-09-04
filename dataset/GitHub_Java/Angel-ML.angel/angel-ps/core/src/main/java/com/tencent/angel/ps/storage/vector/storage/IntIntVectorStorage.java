@@ -15,6 +15,7 @@
  *
  */
 
+
 package com.tencent.angel.ps.storage.vector.storage;
 
 import com.tencent.angel.common.ByteBufSerdeUtils;
@@ -60,7 +61,7 @@ public class IntIntVectorStorage extends IntIntStorage {
   public void indexGet(KeyType keyType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func) {
     if (keyType != KeyType.INT) {
       throw new UnsupportedOperationException(
-              this.getClass().getName() + " only support int type index now");
+          this.getClass().getName() + " only support int type index now");
     }
 
     if (func != null) {
@@ -89,7 +90,7 @@ public class IntIntVectorStorage extends IntIntStorage {
 
       default: {
         throw new UnsupportedOperationException(
-                "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
+            "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
       }
     }
   }
@@ -190,8 +191,8 @@ public class IntIntVectorStorage extends IntIntStorage {
   public IntIntVectorStorage adaptiveClone() {
     if(isSparse()) {
       return new IntIntVectorStorage(VFactory
-              .sortedIntVector(vector.getDim(), vector.getStorage().getIndices(),
-                      vector.getStorage().getValues()), indexOffset);
+          .sortedIntVector(vector.getDim(), vector.getStorage().getIndices(),
+              vector.getStorage().getValues()), indexOffset);
     } else {
       return this;
     }
@@ -312,13 +313,6 @@ public class IntIntVectorStorage extends IntIntStorage {
   @Override
   public int bufferLen() {
     return super.bufferLen() + VectorStorageUtils.bufferLen(vector);
-  }
-
-  @Override
-  public long dataSize() {
-    long dataLen = super.bufferLen();
-    if (vector != null && vector.getStorage() != null) dataLen += VectorStorageUtils.bufferLen(vector);
-    return dataLen;
   }
 
   @Override

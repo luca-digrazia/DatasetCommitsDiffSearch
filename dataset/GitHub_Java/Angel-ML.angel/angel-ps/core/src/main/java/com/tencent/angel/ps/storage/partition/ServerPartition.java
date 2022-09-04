@@ -15,6 +15,7 @@
  *
  */
 
+
 package com.tencent.angel.ps.storage.partition;
 
 import com.tencent.angel.PartitionKey;
@@ -38,7 +39,7 @@ import org.apache.commons.logging.LogFactory;
 public abstract class ServerPartition implements IServerPartition {
 
   private final static Log LOG = LogFactory.getLog(
-          ServerPartition.class);
+      ServerPartition.class);
 
   /**
    * Partition key
@@ -79,7 +80,7 @@ public abstract class ServerPartition implements IServerPartition {
    * @param storage partition storage
    */
   public ServerPartition(PartitionKey partKey, RowType rowType, long estElemNum,
-                         IServerPartitionStorage storage) {
+      IServerPartitionStorage storage) {
     this.state = PartitionState.INITIALIZING;
     this.partKey = partKey;
     this.rowType = rowType;
@@ -140,12 +141,8 @@ public abstract class ServerPartition implements IServerPartition {
 
   @Override
   public int bufferLen() {
-    if(storage != null) {
-      return partKey.bufferLen() + 4 + 4 + storage.getClass().getName().getBytes().length + storage
-              .bufferLen();
-    } else {
-      return partKey.bufferLen() + 4 + 4;
-    }
+    return partKey.bufferLen() + 4 + 4 + storage.getClass().getName().getBytes().length + storage
+        .bufferLen();
   }
 
   @Override
@@ -175,16 +172,6 @@ public abstract class ServerPartition implements IServerPartition {
   @Override
   public int dataLen() {
     return bufferLen();
-  }
-
-  @Override
-  public long dataSize() {
-    if(storage != null) {
-      return partKey.bufferLen() + 4 + 4 + storage.getClass().getName().getBytes().length + storage
-              .dataSize();
-    } else {
-      return partKey.bufferLen() + 4 + 4;
-    }
   }
 
   /**

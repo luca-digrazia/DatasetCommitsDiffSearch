@@ -15,6 +15,7 @@
  *
  */
 
+
 package com.tencent.angel.ps.storage.vector.storage;
 
 import com.tencent.angel.common.ByteBufSerdeUtils;
@@ -189,8 +190,8 @@ public class LongIntVectorStorage extends LongIntStorage {
   public LongIntVectorStorage adaptiveClone() {
     if (isSparse()) {
       return new LongIntVectorStorage(VFactory.sortedLongKeyIntVector(vector.dim(),
-              vector.getStorage().getIndices(),
-              vector.getStorage().getValues()), indexOffset);
+          vector.getStorage().getIndices(),
+          vector.getStorage().getValues()), indexOffset);
     } else {
       return this;
     }
@@ -226,7 +227,7 @@ public class LongIntVectorStorage extends LongIntStorage {
 
       default: {
         throw new UnsupportedOperationException(
-                "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
+            "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
       }
     }
   }
@@ -262,12 +263,5 @@ public class LongIntVectorStorage extends LongIntStorage {
   @Override
   public int bufferLen() {
     return super.bufferLen() + VectorStorageUtils.bufferLen(vector);
-  }
-
-  @Override
-  public long dataSize() {
-    long dataLen = super.bufferLen();
-    if (vector != null && vector.getStorage() != null) dataLen += VectorStorageUtils.bufferLen(vector);
-    return dataLen;
   }
 }

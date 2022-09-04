@@ -15,6 +15,7 @@
  *
  */
 
+
 package com.tencent.angel.ps.storage.vector.storage;
 
 import com.tencent.angel.common.ByteBufSerdeUtils;
@@ -36,7 +37,7 @@ import org.apache.commons.logging.LogFactory;
  */
 public class LongFloatVectorStorage extends LongFloatStorage {
   private final static Log LOG = LogFactory.getLog(
-          LongFloatVectorStorage.class);
+      LongFloatVectorStorage.class);
   /**
    * A vector storage: it can be IntFloatVector or LongFloatVector and can use DENSE,SPARSE and
    * SORTED storage type
@@ -98,7 +99,7 @@ public class LongFloatVectorStorage extends LongFloatStorage {
 
       default: {
         throw new UnsupportedOperationException(
-                "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
+            "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
       }
     }
   }
@@ -230,7 +231,7 @@ public class LongFloatVectorStorage extends LongFloatStorage {
       case SPARSE: {
         // Attention: Only update exist element
         ObjectIterator<Long2FloatMap.Entry> iter = vector.getStorage()
-                .entryIterator();
+            .entryIterator();
         Long2FloatMap.Entry entry;
         while (iter.hasNext()) {
           entry = iter.next();
@@ -283,8 +284,8 @@ public class LongFloatVectorStorage extends LongFloatStorage {
   public LongFloatVectorStorage adaptiveClone() {
     if (isSparse()) {
       return new LongFloatVectorStorage(VFactory.sortedLongKeyFloatVector(vector.dim(),
-              vector.getStorage().getIndices(),
-              vector.getStorage().getValues()), indexOffset);
+          vector.getStorage().getIndices(),
+          vector.getStorage().getValues()), indexOffset);
     } else {
       return this;
     }
@@ -305,12 +306,5 @@ public class LongFloatVectorStorage extends LongFloatStorage {
   @Override
   public int bufferLen() {
     return super.bufferLen() + VectorStorageUtils.bufferLen(vector);
-  }
-
-  @Override
-  public long dataSize() {
-    long dataLen = super.bufferLen();
-    if (vector != null && vector.getStorage() != null) dataLen += VectorStorageUtils.bufferLen(vector);
-    return dataLen;
   }
 }
