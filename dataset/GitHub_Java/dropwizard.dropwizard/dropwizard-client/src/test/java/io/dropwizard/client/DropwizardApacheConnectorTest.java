@@ -19,7 +19,6 @@ import org.glassfish.jersey.client.JerseyClient;
 import org.junit.Before;
 import org.junit.After;
 import org.junit.ClassRule;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -41,7 +40,6 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.CoreMatchers.any;
 
-@Ignore //These tests are consistently failing on travis CI because of network timeouts
 public class DropwizardApacheConnectorTest {
 
     private static final int SLEEP_TIME_IN_MILLIS = 1000;
@@ -154,18 +152,6 @@ public class DropwizardApacheConnectorTest {
                         .get(Response.class)
                         .getStatus()
         ).isEqualTo(HttpStatus.SC_TEMPORARY_REDIRECT);
-    }
-
-    @Test
-    public void when_jersey_client_runtime_is_garbage_collected_apache_client_is_not_closed() {
-        for (int j = 0; j < 5; j++) {
-            System.gc(); // We actually want GC here
-            final String response = client.target(testUri + "/long_running")
-                    .property(ClientProperties.READ_TIMEOUT, SLEEP_TIME_IN_MILLIS * 2)
-                    .request()
-                    .get(String.class);
-            assertThat(response).isEqualTo("success");
-        }
     }
 
     @Path("/")
