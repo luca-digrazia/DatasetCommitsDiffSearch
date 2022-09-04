@@ -24,7 +24,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMultimap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
@@ -44,8 +43,6 @@ import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationOptionDetails;
 import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
-import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.CoreOptions.IncludeConfigFragmentsEnum;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.FragmentOptions.SelectRestriction;
 import com.google.devtools.build.lib.analysis.config.TransitiveOptionDetails;
@@ -63,7 +60,6 @@ import com.google.devtools.build.lib.packages.NonconfigurableAttributeMapper;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.config.ConfigRuleClasses.ConfigSettingRule;
-import com.google.devtools.build.lib.util.ClassName;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
@@ -117,15 +113,15 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
 
     TransitiveOptionDetails optionDetails =
         BuildConfigurationOptionDetails.get(ruleContext.getConfiguration());
-    ImmutableSet.Builder<String> requiredFragmentOptions = ImmutableSet.builder();
 
     boolean nativeFlagsMatch =
-        matchesConfig(
-            nativeFlagSettings.entries(), optionDetails, requiredFragmentOptions, ruleContext);
+        matchesConfig(nativeFlagSettings.entries(), optionDetails, ruleContext);
 
     UserDefinedFlagMatch userDefinedFlags =
         UserDefinedFlagMatch.fromAttributeValueAndPrerequisites(
-            userDefinedFlagSettings, optionDetails, requiredFragmentOptions, ruleContext);
+            userDefinedFlagSettings,
+            optionDetails,
+            ruleContext);
 
     boolean constraintValuesMatch = constraintValuesMatch(ruleContext);
 
@@ -133,21 +129,11 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
       return null;
     }
 
-    // For config_setting, transitive and direct are the same (it has no transitive deps).
-    boolean includeRequiredFragments =
-        ruleContext
-                .getConfiguration()
-                .getOptions()
-                .get(CoreOptions.class)
-                .includeRequiredConfigFragmentsProvider
-            != IncludeConfigFragmentsEnum.OFF;
-
     ConfigMatchingProvider configMatcher =
         new ConfigMatchingProvider(
             ruleContext.getLabel(),
             nativeFlagSettings,
             userDefinedFlags.getSpecifiedFlagValues(),
-            includeRequiredFragments ? requiredFragmentOptions.build() : ImmutableSet.<String>of(),
             nativeFlagsMatch && userDefinedFlags.matches() && constraintValuesMatch);
 
     return new RuleConfiguredTargetBuilder(ruleContext)
@@ -258,14 +244,10 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
   /**
    * Given a list of [flagName, flagValue] pairs for native Blaze flags, returns true if flagName ==
    * flagValue for every item in the list under this configuration, false otherwise.
-   *
-   * <p>This also sets {@code requiredFragmentOptions} to the {@link FragmentOptions} that options
-   * read by this {@code config_setting} belong to.
    */
   private static boolean matchesConfig(
       Collection<Map.Entry<String, String>> expectedSettings,
       TransitiveOptionDetails options,
-      ImmutableSet.Builder<String> requiredFragmentOptions,
       RuleContext ruleContext) {
     // Rather than returning fast when we find a mismatch, continue looking at the other flags
     // to check they're indeed valid flag specifications.
@@ -288,25 +270,6 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
             String.format(PARSE_ERROR_MESSAGE + "unknown option: '%s'", optionName));
         foundMismatch = true;
         continue;
-      }
-
-      if (optionName.equals("define")) {
-        // --define is more like user-defined build flags than traditional native flags. Report it
-        // like user-defined flags: the dependency is directly on the flag vs. the fragment that
-        // contains the flag. This frees a rule that depends on "--define a=1" from preserving
-        // another rule's dependency on "--define b=2". In other words, if both rules simply said
-        // "I require CoreOptions" (which is the FragmentOptions --define belongs to), that would
-        // hide the reality that they really have orthogonal dependencies: removing
-        // "--define b=2" is perfectly safe for the rule that needs "--define a=1".
-        int equalsIndex = expectedRawValue.indexOf('=');
-        requiredFragmentOptions.add(
-            "--define:"
-                + (equalsIndex > 0
-                    ? expectedRawValue.substring(0, equalsIndex)
-                    : expectedRawValue));
-      } else {
-        // For other native flags, it's reasonable to report the fragment they belong to.
-        requiredFragmentOptions.add(ClassName.getSimpleNameWithOuter(optionClass));
       }
 
       SelectRestriction selectRestriction = options.getSelectRestriction(optionName);
@@ -396,8 +359,7 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
       // The config_setting's expected value *must* be a single map entry (see method comments).
       Object expectedListValue = Iterables.getOnlyElement(expectedList);
       Map.Entry<?, ?> expectedEntry = (Map.Entry<?, ?>) expectedListValue;
-      for (Object elem : Lists.reverse(actualList)) {
-        Map.Entry<?, ?> actualEntry = (Map.Entry<?, ?>) elem;
+      for (Map.Entry<?, ?> actualEntry : Lists.reverse((List<Map.Entry<?, ?>>) actualList)) {
         if (actualEntry.getKey().equals(expectedEntry.getKey())) {
           // Found a key match!
           return actualEntry.getValue().equals(expectedEntry.getValue());
@@ -449,14 +411,11 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
      * @param attributeValue map of user-defined flag labels to their values as set in the
      *     'flag_values' attribute
      * @param optionDetails information about the configuration to match against
-     * @param requiredFragmentOptions set of config fragments this config_setting requires. This
-     *     method adds feature flag and Starlark-defined setting requirements to this set.
      * @param ruleContext this rule's RuleContext
      */
     static UserDefinedFlagMatch fromAttributeValueAndPrerequisites(
         Map<Label, String> attributeValue,
         TransitiveOptionDetails optionDetails,
-        ImmutableSet.Builder<String> requiredFragmentOptions,
         RuleContext ruleContext) {
       Map<Label, String> specifiedFlagValues = new LinkedHashMap<>();
       boolean matches = true;
@@ -478,7 +437,6 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
 
         if (target.satisfies(ConfigFeatureFlagProvider.REQUIRE_CONFIG_FEATURE_FLAG_PROVIDER)) {
           // config_feature_flag
-          requiredFragmentOptions.add(target.getLabel().toString());
           ConfigFeatureFlagProvider provider = ConfigFeatureFlagProvider.fromTarget(target);
           if (!provider.isValidValue(specifiedValue)) {
             ruleContext.attributeError(
@@ -495,7 +453,6 @@ public class ConfigSetting implements RuleConfiguredTargetFactory {
           }
         } else if (target.satisfies(BuildSettingProvider.REQUIRE_BUILD_SETTING_PROVIDER)) {
           // build setting
-          requiredFragmentOptions.add(target.getLabel().toString());
           BuildSettingProvider provider = target.getProvider(BuildSettingProvider.class);
           Object configurationValue =
               optionDetails.getOptionValue(specifiedLabel) != null
