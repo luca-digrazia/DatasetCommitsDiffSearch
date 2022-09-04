@@ -9,27 +9,23 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.jboss.jandex.AnnotationInstance;
+import org.jboss.jandex.ArrayType;
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.jboss.jandex.MethodInfo;
+import org.jboss.jandex.ParameterizedType;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.TypeVariable;
+import org.jboss.jandex.WildcardType;
 import org.jboss.logging.Logger;
 
-/**
- * 
- * @author Martin Kouba
- * @author Michal Szynkiewicz, michal.l.szynkiewicz@gmail.com
- */
 final class Methods {
     private static final Logger LOGGER = Logger.getLogger(Methods.class);
     // constructor
     public static final String INIT = "<init>";
     // static initializer
     public static final String CLINIT = "<clinit>";
-    // copied from java.lang.reflect.Modifier.SYNTHETIC
-    static final int SYNTHETIC = 0x00001000;
 
     private static final List<String> IGNORED_METHODS = initIgnoredMethods();
 
@@ -41,10 +37,6 @@ final class Methods {
     }
 
     private Methods() {
-    }
-
-    static boolean isSynthetic(MethodInfo method) {
-        return (method.flags() & SYNTHETIC) != 0;
     }
 
     static void addDelegatingMethods(IndexView index, ClassInfo classInfo, Map<Methods.MethodKey, MethodInfo> methods) {
@@ -160,6 +152,36 @@ final class Methods {
         return false;
     }
 
+    static Type resolveType(Type type, Map<TypeVariable, Type> resolvedTypeParameters) {
+        switch (type.kind()) {
+            case CLASS:
+            case PRIMITIVE:
+            case VOID:
+                return type;
+            case TYPE_VARIABLE:
+                // TODO bounds
+                return resolvedTypeParameters.getOrDefault(type.asTypeVariable(), type);
+            case PARAMETERIZED_TYPE:
+                ParameterizedType parameterizedType = type.asParameterizedType();
+                Type[] args = new Type[parameterizedType.arguments().size()];
+                for (int i = 0; i < args.length; i++) {
+                    args[i] = resolveType(parameterizedType.arguments().get(i), resolvedTypeParameters);
+                }
+                return ParameterizedType.create(parameterizedType.name(), args, null);
+            case WILDCARD_TYPE:
+                WildcardType wildcardType = type.asWildcardType();
+                return WildcardType.create(
+                        resolveType(wildcardType.superBound() != null ? wildcardType.superBound() : wildcardType.extendsBound(),
+                                resolvedTypeParameters),
+                        wildcardType.superBound() == null);
+            case ARRAY:
+                ArrayType arrayType = type.asArrayType();
+                return ArrayType.create(resolveType(arrayType.component(), resolvedTypeParameters), arrayType.dimensions());
+            default:
+                throw new IllegalArgumentException("Unsupported type to resolve: " + type);
+        }
+    }
+
     static class MethodKey {
 
         final String name;
@@ -205,60 +227,6 @@ final class Methods {
             return true;
         }
 
-    }
-
-    static boolean isOverriden(MethodInfo method, Collection<MethodInfo> previousMethods) {
-        for (MethodInfo other : previousMethods) {
-            if (Methods.matchesSignature(method, other)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    static boolean matchesSignature(MethodInfo method, MethodInfo subclassMethod) {
-        if (!method.name().equals(subclassMethod.name())) {
-            return false;
-        }
-        List<Type> parameters = method.parameters();
-        List<Type> subParameters = subclassMethod.parameters();
-
-        int paramCount = parameters.size();
-        if (paramCount != subParameters.size()) {
-            return false;
-        }
-
-        if (paramCount == 0) {
-            return true;
-        }
-
-        for (int i = 0; i < paramCount; i++) {
-            if (!Methods.isTypeEqual(parameters.get(i), subParameters.get(i))) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    static boolean isTypeEqual(Type a, Type b) {
-        return Methods.toRawType(a).equals(Methods.toRawType(b));
-    }
-
-    static DotName toRawType(Type a) {
-        switch (a.kind()) {
-            case CLASS:
-            case PRIMITIVE:
-            case ARRAY:
-                return a.name();
-            case PARAMETERIZED_TYPE:
-                return a.asParameterizedType().name();
-            case TYPE_VARIABLE:
-            case UNRESOLVED_TYPE_VARIABLE:
-            case WILDCARD_TYPE:
-            default:
-                return DotNames.OBJECT;
-        }
     }
 
 }
