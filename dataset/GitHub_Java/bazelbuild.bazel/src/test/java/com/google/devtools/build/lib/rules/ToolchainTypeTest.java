@@ -124,8 +124,8 @@ public class ToolchainTypeTest extends BuildViewTestCase {
             .setList("copts", "foobar$(TARGET_CPU)")
             .write();
     CppCompileAction compileAction =
-        (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/cclib/a.o", cclibrary));
-    assertThat(compileAction.getArguments()).contains("foobarpiii");
+        (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/cclib/cclib/a.o", cclibrary));
+    assertThat(compileAction.getArgv()).contains("foobarpiii");
 
     ConfiguredTarget ccbinary =
         ScratchAttributeWriter.fromLabelString(this, "cc_binary", "//ccbin")
@@ -133,8 +133,8 @@ public class ToolchainTypeTest extends BuildViewTestCase {
             .setList("copts", "foobar$(TARGET_CPU)")
             .write();
     compileAction =
-        (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/ccbin/a.o", ccbinary));
-    assertThat(compileAction.getArguments()).contains("foobarpiii");
+        (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/ccbin/ccbin/a.o", ccbinary));
+    assertThat(compileAction.getArgv()).contains("foobarpiii");
 
     ConfiguredTarget cctest =
         ScratchAttributeWriter.fromLabelString(this, "cc_test", "//cctest")
@@ -142,7 +142,7 @@ public class ToolchainTypeTest extends BuildViewTestCase {
             .setList("copts", "foobar$(TARGET_CPU)")
             .write();
     compileAction =
-        (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/cctest/a.o", cctest));
-    assertThat(compileAction.getArguments()).contains("foobarpiii");
+        (CppCompileAction) getGeneratingAction(getBinArtifact("_objs/cctest/cctest/a.o", cctest));
+    assertThat(compileAction.getArgv()).contains("foobarpiii");
   }
 }

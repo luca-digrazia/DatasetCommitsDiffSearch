@@ -21,7 +21,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.MakeVariableSupplier.MapBackedMakeVariableSupplier;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
+import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -256,16 +256,14 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     helper.addStaticLibraries(alwayslinkLibrariesFromSrcs);
     helper.addPicStaticLibraries(picStaticLibrariesFromSrcs);
     helper.addPicStaticLibraries(picAlwayslinkLibrariesFromSrcs);
-    Iterable<LibraryToLink> dynamicLibraries =
+    helper.addDynamicLibraries(
         Iterables.transform(
             precompiledFiles.getSharedLibraries(),
             library ->
                 LinkerInputs.solibLibraryToLink(
                     common.getDynamicLibrarySymlink(library, true),
                     library,
-                    CcLinkingOutputs.libraryIdentifierOf(library)));
-    helper.addDynamicLibraries(dynamicLibraries);
-    helper.addExecutionDynamicLibraries(dynamicLibraries);
+                    CcLinkingOutputs.libraryIdentifierOf(library))));
     CcLibraryHelper.Info info = helper.build();
 
     /*
@@ -318,7 +316,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         .addProvider(
             CppRunfilesProvider.class, new CppRunfilesProvider(staticRunfiles, sharedRunfiles))
         .addOutputGroup(
-            OutputGroupInfo.HIDDEN_TOP_LEVEL,
+            OutputGroupProvider.HIDDEN_TOP_LEVEL,
             collectHiddenTopLevelArtifacts(
                 ruleContext, ccToolchain, info.getCcCompilationOutputs()))
         .addOutputGroup(
@@ -339,11 +337,11 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     artifactsToForceBuilder.addTransitive(
         ccCompilationOutputs.getFilesToCompile(
             isLipoCollector, processHeadersInDependencies, usePic));
-    for (OutputGroupInfo dep :
+    for (OutputGroupProvider dep :
         ruleContext.getPrerequisites(
-            "deps", Mode.TARGET, OutputGroupInfo.SKYLARK_CONSTRUCTOR)) {
+            "deps", Mode.TARGET, OutputGroupProvider.SKYLARK_CONSTRUCTOR)) {
       artifactsToForceBuilder.addTransitive(
-          dep.getOutputGroup(OutputGroupInfo.HIDDEN_TOP_LEVEL));
+          dep.getOutputGroup(OutputGroupProvider.HIDDEN_TOP_LEVEL));
     }
     return artifactsToForceBuilder.build();
   }
