@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.skyframe.actiongraph;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
@@ -27,14 +28,17 @@ import com.google.devtools.build.lib.analysis.AnalysisProtos;
 import com.google.devtools.build.lib.analysis.AnalysisProtos.ActionGraphContainer;
 import com.google.devtools.build.lib.analysis.AspectValue;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.ConfiguredTargetValue;
+import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
 import com.google.devtools.build.lib.buildeventstream.BuildEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
-import com.google.devtools.build.lib.skyframe.RuleConfiguredTargetValue;
+import com.google.devtools.build.lib.query2.aquery.AqueryActionFilter;
+import com.google.devtools.build.lib.query2.aquery.AqueryUtils;
+import com.google.devtools.build.lib.skyframe.ConfiguredTargetValue;
 import com.google.devtools.build.lib.util.Pair;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,21 +53,55 @@ public class ActionGraphDump {
   private final ActionKeyContext actionKeyContext = new ActionKeyContext();
   private final Set<String> actionGraphTargets;
 
+  private final KnownRuleClassStrings knownRuleClassStrings;
   private final KnownArtifacts knownArtifacts;
   private final KnownConfigurations knownConfigurations;
   private final KnownNestedSets knownNestedSets;
   private final KnownAspectDescriptors knownAspectDescriptors;
   private final KnownTargets knownTargets;
+  private final AqueryActionFilter actionFilters;
   private final boolean includeActionCmdLine;
   private final boolean includeArtifacts;
+  private final boolean includeParamFiles;
+
+  private Map<String, Iterable<String>> paramFileNameToContentMap;
+
+  public ActionGraphDump(
+      boolean includeActionCmdLine,
+      boolean includeArtifacts,
+      AqueryActionFilter actionFilters,
+      boolean includeParamFiles) {
+    this(
+        /* actionGraphTargets= */ ImmutableList.of("..."),
+        includeActionCmdLine,
+        includeArtifacts,
+        actionFilters,
+        includeParamFiles);
+  }
 
   public ActionGraphDump(
       List<String> actionGraphTargets, boolean includeActionCmdLine, boolean includeArtifacts) {
+    this(
+        actionGraphTargets,
+        includeActionCmdLine,
+        includeArtifacts,
+        /* actionFilters= */ AqueryActionFilter.emptyInstance(),
+        /* includeParamFiles */ false);
+  }
+
+  public ActionGraphDump(
+      List<String> actionGraphTargets,
+      boolean includeActionCmdLine,
+      boolean includeArtifacts,
+      AqueryActionFilter actionFilters,
+      boolean includeParamFiles) {
     this.actionGraphTargets = ImmutableSet.copyOf(actionGraphTargets);
     this.includeActionCmdLine = includeActionCmdLine;
     this.includeArtifacts = includeArtifacts;
+    this.actionFilters = actionFilters;
+    this.includeParamFiles = includeParamFiles;
 
-    KnownRuleClassStrings knownRuleClassStrings = new KnownRuleClassStrings(actionGraphBuilder);
+    knownRuleClassStrings = new KnownRuleClassStrings(actionGraphBuilder);
     knownArtifacts = new KnownArtifacts(actionGraphBuilder);
     knownConfigurations = new KnownConfigurations(actionGraphBuilder);
     knownNestedSets = new KnownNestedSets(actionGraphBuilder, knownArtifacts);
@@ -84,7 +122,21 @@ public class ActionGraphDump {
   }
 
   private void dumpSingleAction(ConfiguredTarget configuredTarget, ActionAnalysisMetadata action)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
+
+    // Store the content of param files.
+    if (includeParamFiles && (action instanceof ParameterFileWriteAction)) {
+      ParameterFileWriteAction parameterFileWriteAction = (ParameterFileWriteAction) action;
+
+      Iterable<String> fileContent = parameterFileWriteAction.getArguments();
+      String paramFileExecPath = action.getPrimaryOutput().getExecPathString();
+      getParamFileNameToContentMap().put(paramFileExecPath, fileContent);
+    }
+
+    if (!AqueryUtils.matchesAqueryFilters(action, actionFilters)) {
+      return;
+    }
+
     // Dereference any aliases that might be present.
     configuredTarget = configuredTarget.getActual();
 
@@ -101,8 +153,7 @@ public class ActionGraphDump {
     if (action instanceof ActionExecutionMetadata) {
       ActionExecutionMetadata actionExecutionMetadata = (ActionExecutionMetadata) action;
       actionBuilder
-          .setActionKey(
-              actionExecutionMetadata.getKey(getActionKeyContext(), /*artifactExpander=*/ null))
+          .setActionKey(actionExecutionMetadata.getKey(getActionKeyContext()))
           .setDiscoversInputs(actionExecutionMetadata.discoversInputs());
     }
 
@@ -125,6 +176,23 @@ public class ActionGraphDump {
     if (includeActionCmdLine && action instanceof CommandAction) {
       CommandAction commandAction = (CommandAction) action;
       actionBuilder.addAllArguments(commandAction.getArguments());
+    }
+
+    // Include the content of param files in output.
+    if (includeParamFiles) {
+      // Assumption: if an Action takes a params file as an input, it will be used
+      // to provide params to the command.
+      for (Artifact input : action.getInputs().toList()) {
+        String inputFileExecPath = input.getExecPathString();
+        if (getParamFileNameToContentMap().containsKey(inputFileExecPath)) {
+          AnalysisProtos.ParamFile paramFile =
+              AnalysisProtos.ParamFile.newBuilder()
+                  .setExecPath(inputFileExecPath)
+                  .addAllArguments(getParamFileNameToContentMap().get(inputFileExecPath))
+                  .build();
+          actionBuilder.addParamFiles(paramFile);
+        }
+      }
     }
 
     Map<String, String> executionInfo = action.getExecutionInfo();
@@ -169,7 +237,7 @@ public class ActionGraphDump {
   }
 
   public void dumpAspect(AspectValue aspectValue, ConfiguredTargetValue configuredTargetValue)
-      throws CommandLineExpansionException, InterruptedException {
+      throws CommandLineExpansionException {
     ConfiguredTarget configuredTarget = configuredTargetValue.getConfiguredTarget();
     if (!includeInActionGraph(configuredTarget.getLabel().toString())) {
       return;
@@ -179,8 +247,8 @@ public class ActionGraphDump {
     }
   }
 
-  public void dumpConfiguredTarget(RuleConfiguredTargetValue configuredTargetValue)
-      throws CommandLineExpansionException, InterruptedException {
+  public void dumpConfiguredTarget(ConfiguredTargetValue configuredTargetValue)
+      throws CommandLineExpansionException {
     ConfiguredTarget configuredTarget = configuredTargetValue.getConfiguredTarget();
     if (!includeInActionGraph(configuredTarget.getLabel().toString())) {
       return;
@@ -192,5 +260,13 @@ public class ActionGraphDump {
 
   public ActionGraphContainer build() {
     return actionGraphBuilder.build();
+  }
+
+  /** Lazy initialization of paramFileNameToContentMap. */
+  private Map<String, Iterable<String>> getParamFileNameToContentMap() {
+    if (paramFileNameToContentMap == null) {
+      paramFileNameToContentMap = new HashMap<>();
+    }
+    return paramFileNameToContentMap;
   }
 }

@@ -98,7 +98,7 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
   }
 
   private void writeAction(ActionAnalysisMetadata action, PrintStream printStream)
-      throws IOException, CommandLineExpansionException, InterruptedException {
+      throws IOException, CommandLineExpansionException {
     if (options.includeParamFiles && action instanceof ParameterFileWriteAction) {
       ParameterFileWriteAction parameterFileWriteAction = (ParameterFileWriteAction) action;
 
@@ -143,7 +143,7 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
         stringBuilder
             .append("  AspectDescriptors: [")
             .append(
-                aspectDescriptors.stream()
+                Streams.stream(aspectDescriptors)
                     .map(
                         aspectDescriptor -> {
                           StringBuilder aspectDescription = new StringBuilder();
@@ -151,11 +151,11 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
                               .append(aspectDescriptor.getAspectClass().getName())
                               .append('(')
                               .append(
-                                  aspectDescriptor
-                                      .getParameters()
-                                      .getAttributes()
-                                      .entries()
-                                      .stream()
+                                  Streams.stream(
+                                          aspectDescriptor
+                                              .getParameters()
+                                              .getAttributes()
+                                              .entries())
                                       .map(
                                           parameter ->
                                               parameter.getKey()
@@ -175,7 +175,7 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
       ActionExecutionMetadata actionExecutionMetadata = (ActionExecutionMetadata) action;
       stringBuilder
           .append("  ActionKey: ")
-          .append(actionExecutionMetadata.getKey(actionKeyContext, /*artifactExpander=*/ null))
+          .append(actionExecutionMetadata.getKey(actionKeyContext))
           .append('\n');
     }
 
@@ -190,7 +190,7 @@ class ActionGraphTextOutputFormatterCallback extends AqueryThreadsafeCallback {
           .append("]\n")
           .append("  Outputs: [")
           .append(
-              action.getOutputs().stream()
+              Streams.stream(action.getOutputs())
                   .map(
                       output ->
                           output.isTreeArtifact()
