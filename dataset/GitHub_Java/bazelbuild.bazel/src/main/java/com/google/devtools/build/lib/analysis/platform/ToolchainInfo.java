@@ -14,89 +14,98 @@
 
 package com.google.devtools.build.lib.analysis.platform;
 
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.google.devtools.build.lib.cmdline.Label;
+import com.google.common.collect.ImmutableCollection;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.packages.ClassObjectConstructor;
-import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
-import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.FunctionSignature;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.BuiltinProvider;
+import com.google.devtools.build.lib.packages.NativeInfo;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.starlarkbuildapi.platform.ToolchainInfoApi;
 import java.util.Map;
+import net.starlark.java.eval.Dict;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Starlark;
+import net.starlark.java.eval.StarlarkThread;
+import net.starlark.java.syntax.Location;
 
 /**
- * A provider that supplied information about a specific language toolchain, including what platform
+ * A provider that supplies information about a specific language toolchain, including what platform
  * constraints are required for execution and for the target platform.
+ *
+ * <p>Unusually, ToolchainInfo exposes both its StarlarkCallable-annotated fields and a Map of
+ * additional fields to Starlark code. Also, these are not disjoint.
  */
-@SkylarkModule(
-  name = "ToolchainInfo",
-  doc = "Provides access to data about a specific toolchain.",
-  category = SkylarkModuleCategory.PROVIDER
-)
 @Immutable
-public class ToolchainInfo extends SkylarkClassObject {
+public final class ToolchainInfo extends NativeInfo implements ToolchainInfoApi {
 
-  /** Name used in Skylark for accessing this provider. */
-  public static final String SKYLARK_NAME = "ToolchainInfo";
+  /** Name used in Starlark for accessing this provider. */
+  public static final String STARLARK_NAME = "ToolchainInfo";
 
-  private static final FunctionSignature.WithValues<Object, SkylarkType> SIGNATURE =
-      FunctionSignature.WithValues.create(
-          FunctionSignature.of(
-              /*numMandatoryPositionals=*/ 0,
-              /*numOptionalPositionals=*/ 0,
-              /*numMandatoryNamedOnly*/ 1,
-              /*starArg=*/ false,
-              /*kwArg=*/ true,
-              /*names=*/ "type",
-              "data"),
-          /*defaultValues=*/ null,
-          /*types=*/ ImmutableList.<SkylarkType>of(SkylarkType.of(Label.class), SkylarkType.DICT));
+  /** Provider singleton constant. */
+  public static final BuiltinProvider<ToolchainInfo> PROVIDER = new Provider();
 
-  /** Skylark constructor and identifier for this provider. */
-  public static final ClassObjectConstructor SKYLARK_CONSTRUCTOR =
-      new NativeClassObjectConstructor(SKYLARK_NAME, SIGNATURE) {
-        @Override
-        protected ToolchainInfo createInstanceFromSkylark(Object[] args, Location loc)
-            throws EvalException {
-          // Based on SIGNATURE above, the args are label, map.
-          Label type = (Label) args[0];
-          SkylarkDict<String, Object> data =
-              SkylarkDict.castSkylarkDictOrNoneToDict(args[1], String.class, Object.class, "data");
-          return ToolchainInfo.create(type, data, loc);
-        }
-      };
+  /** Provider for {@link ToolchainInfo} objects. */
+  private static class Provider extends BuiltinProvider<ToolchainInfo>
+      implements ToolchainInfoApi.Provider {
+    private Provider() {
+      super(STARLARK_NAME, ToolchainInfo.class);
+    }
 
-  /** Identifier used to retrieve this provider from rules which export it. */
-  public static final SkylarkProviderIdentifier SKYLARK_IDENTIFIER =
-      SkylarkProviderIdentifier.forKey(SKYLARK_CONSTRUCTOR.getKey());
-
-  private final Label type;
-
-  private ToolchainInfo(Label type, Map<String, Object> toolchainData, Location loc) {
-    super(
-        SKYLARK_CONSTRUCTOR,
-        ImmutableMap.<String, Object>builder().put("type", type).putAll(toolchainData).build(),
-        loc);
-
-    this.type = type;
+    @Override
+    public ToolchainInfo toolchainInfo(Dict<String, Object> kwargs, StarlarkThread thread) {
+      return new ToolchainInfo(kwargs, thread.getCallerLocation());
+    }
   }
 
-  public Label type() {
-    return type;
+  @AutoCodec.VisibleForSerialization final ImmutableSortedMap<String, Object> values;
+  private ImmutableSet<String> fieldNames; // initialized lazily (with monitor synchronization)
+
+  /** Constructs a ToolchainInfo. The {@code values} map itself is not retained. */
+  protected ToolchainInfo(Map<String, Object> values, Location location) {
+    super(location);
+    this.values = copyValues(values);
   }
 
-  public static ToolchainInfo create(Label type, Map<String, Object> toolchainData) {
-    return create(type, toolchainData, Location.BUILTIN);
+  public ToolchainInfo(Map<String, Object> values) {
+    this.values = copyValues(values);
   }
 
-  public static ToolchainInfo create(Label type, Map<String, Object> toolchainData, Location loc) {
-    return new ToolchainInfo(type, toolchainData, loc);
+  @Override
+  public BuiltinProvider<ToolchainInfo> getProvider() {
+    return PROVIDER;
+  }
+
+  /**
+   * Preprocesses a map of field values to convert the field names and field values to
+   * Starlark-acceptable names and types.
+   *
+   * <p>Entries are ordered by key.
+   */
+  private static ImmutableSortedMap<String, Object> copyValues(Map<String, Object> values) {
+    ImmutableSortedMap.Builder<String, Object> builder = ImmutableSortedMap.naturalOrder();
+    for (Map.Entry<String, Object> e : values.entrySet()) {
+      builder.put(Attribute.getStarlarkName(e.getKey()), Starlark.fromJava(e.getValue(), null));
+    }
+    return builder.build();
+  }
+
+  @Override
+  public Object getValue(String name) throws EvalException {
+    Object x = values.get(name);
+    return x != null ? x : super.getValue(name);
+  }
+
+  @Override
+  public synchronized ImmutableCollection<String> getFieldNames() {
+    if (fieldNames == null) {
+      fieldNames =
+          ImmutableSet.<String>builder()
+              .addAll(values.keySet())
+              .addAll(super.getFieldNames())
+              .build();
+    }
+    return fieldNames;
   }
 }
