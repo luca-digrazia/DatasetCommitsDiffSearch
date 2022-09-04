@@ -155,7 +155,7 @@ public class BeanProcessor {
         BeanGenerator beanGenerator = new BeanGenerator(annotationLiterals, applicationClassPredicate);
         ClientProxyGenerator clientProxyGenerator = new ClientProxyGenerator(applicationClassPredicate);
         InterceptorGenerator interceptorGenerator = new InterceptorGenerator(annotationLiterals, applicationClassPredicate);
-        SubclassGenerator subclassGenerator = new SubclassGenerator(annotationLiterals, applicationClassPredicate);
+        SubclassGenerator subclassGenerator = new SubclassGenerator(applicationClassPredicate, annotationLiterals);
         ObserverGenerator observerGenerator = new ObserverGenerator(annotationLiterals, applicationClassPredicate);
         AnnotationLiteralGenerator annotationLiteralsGenerator = new AnnotationLiteralGenerator();
 

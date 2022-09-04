@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import static org.objectweb.asm.Opcodes.ACC_FINAL;
@@ -10,12 +26,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
-import javax.enterprise.context.spi.Context;
-import javax.enterprise.context.spi.Contextual;
-import javax.enterprise.context.spi.CreationalContext;
+import java.util.function.Predicate;
 
 import org.jboss.jandex.ClassInfo;
+import org.jboss.jandex.DotName;
 import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
@@ -25,6 +39,7 @@ import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.ClientProxy;
 import org.jboss.protean.arc.CreationalContextImpl;
 import org.jboss.protean.arc.InjectableBean;
+import org.jboss.protean.arc.InjectableContext;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.DescriptorUtils;
@@ -42,7 +57,11 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
     static final String CLIENT_PROXY_SUFFIX = "_ClientProxy";
 
-    static final String DEFAULT_PACKAGE = Arc.class.getPackage().getName() + ".proxies";
+    private final Predicate<DotName> applicationClassPredicate;
+
+    public ClientProxyGenerator(Predicate<DotName> applicationClassPredicate) {
+        this.applicationClassPredicate = applicationClassPredicate;
+    }
 
     /**
      *
@@ -52,13 +71,14 @@ public class ClientProxyGenerator extends AbstractGenerator {
      */
     Collection<Resource> generate(BeanInfo bean, String beanClassName, ReflectionRegistration reflectionRegistration) {
 
-        ResourceClassOutput classOutput = new ResourceClassOutput();
+        ResourceClassOutput classOutput = new ResourceClassOutput(applicationClassPredicate.test(bean.getBeanClass()));
 
         Type providerType = bean.getProviderType();
         ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
         String baseName = getBaseName(bean, beanClassName);
-        String generatedName = getProxyPackageName(bean).replace(".", "/") + "/" + baseName + CLIENT_PROXY_SUFFIX;
+        String targetPackage = getPackageName(bean);
+        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + CLIENT_PROXY_SUFFIX;
 
         // Foo_ClientProxy extends Foo implements ClientProxy
         List<String> interfaces = new ArrayList<>();
@@ -78,8 +98,8 @@ public class ClientProxyGenerator extends AbstractGenerator {
         FieldCreator beanField = clientProxy.getFieldCreator("bean", DescriptorUtils.extToInt(beanClassName)).setModifiers(ACC_PRIVATE | ACC_FINAL);
 
         createConstructor(clientProxy, beanClassName, superClass, beanField.getFieldDescriptor());
-        createDelegate(clientProxy, providerTypeName, beanField.getFieldDescriptor());
-        createGetContextualInstance(clientProxy, providerTypeName);
+        implementDelegate(clientProxy, providerTypeName, beanField.getFieldDescriptor());
+        implementGetContextualInstance(clientProxy, providerTypeName);
 
         for (MethodInfo method : getDelegatingMethods(bean)) {
 
@@ -101,18 +121,17 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
             if (isInterface) {
                 ret = forward.invokeInterfaceMethod(method, delegate, params);
-            } else if (Modifier.isPrivate(method.flags()) ||
-                    (Modifier.isProtected(method.flags()) &&  !getPackage(method.declaringClass().name().toString()).equals(getPackage(generatedName)))) {
-                // Reflection fallback for private methods
+            } else if (isReflectionFallbackNeeded(method, targetPackage)) {
+                // Reflection fallback
                 ResultHandle paramTypesArray = forward.newArray(Class.class, forward.load(method.parameters().size()));
                 int idx = 0;
                 for (Type param : method.parameters()) {
-                    forward.writeArrayValue(paramTypesArray, forward.load(idx++), forward.loadClass(param.name().toString()));
+                    forward.writeArrayValue(paramTypesArray, idx++, forward.loadClass(param.name().toString()));
                 }
                 ResultHandle argsArray = forward.newArray(Object.class, forward.load(params.length));
                 idx = 0;
                 for (ResultHandle argHandle : params) {
-                    forward.writeArrayValue(argsArray, forward.load(idx++), argHandle);
+                    forward.writeArrayValue(argsArray, idx++, argHandle);
                 }
                 reflectionRegistration.registerMethod(method);
                 ret = forward.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD, forward.loadClass(method.declaringClass().name().toString()),
@@ -128,14 +147,6 @@ public class ClientProxyGenerator extends AbstractGenerator {
         return classOutput.getResources();
     }
 
-    private String getPackage(String name) {
-        int index = name.lastIndexOf('.');
-        if(index == -1) {
-            return "";
-        }
-        return name.substring(0, index);
-    }
-
     void createConstructor(ClassCreator clientProxy, String beanClassName, String superClasName, FieldDescriptor beanField) {
         MethodCreator creator = clientProxy.getMethodCreator("<init>", void.class, beanClassName);
         creator.invokeSpecialMethod(MethodDescriptor.ofConstructor(superClasName), creator.getThis());
@@ -143,7 +154,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
         creator.returnValue(null);
     }
 
-    void createDelegate(ClassCreator clientProxy, String providerTypeName, FieldDescriptor beanField) {
+    void implementDelegate(ClassCreator clientProxy, String providerTypeName, FieldDescriptor beanField) {
         // Arc.container().getContext(bean.getScope()).get(bean, new CreationalContextImpl<>());
         MethodCreator creator = clientProxy.getMethodCreator("delegate", providerTypeName).setModifiers(Modifier.PRIVATE);
         // Arc.container()
@@ -152,16 +163,15 @@ public class ClientProxyGenerator extends AbstractGenerator {
         ResultHandle bean = creator.readInstanceField(beanField, creator.getThis());
         ResultHandle scope = creator.invokeInterfaceMethod(MethodDescriptor.ofMethod(InjectableBean.class, "getScope", Class.class), bean);
         // getContext()
-        ResultHandle context = creator.invokeInterfaceMethod(MethodDescriptor.ofMethod(ArcContainer.class, "getContext", Context.class, Class.class), container,
-                scope);
+        ResultHandle context = creator.invokeInterfaceMethod(MethodDescriptor.ofMethod(ArcContainer.class, "getContext", InjectableContext.class, Class.class),
+                container, scope);
         // new CreationalContextImpl<>()
         ResultHandle creationContext = creator.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
-        ResultHandle result = creator.invokeInterfaceMethod(
-                MethodDescriptor.ofMethod(Context.class, "get", Object.class, Contextual.class, CreationalContext.class), context, bean, creationContext);
+        ResultHandle result = creator.invokeInterfaceMethod(MethodDescriptors.CONTEXT_GET, context, bean, creationContext);
         creator.returnValue(result);
     }
 
-    void createGetContextualInstance(ClassCreator clientProxy, String providerTypeName) {
+    void implementGetContextualInstance(ClassCreator clientProxy, String providerTypeName) {
         MethodCreator creator = clientProxy.getMethodCreator("getContextualInstance", Object.class).setModifiers(Modifier.PUBLIC);
         creator.returnValue(
                 creator.invokeVirtualMethod(MethodDescriptor.ofMethod(clientProxy.getClassName(), "delegate", providerTypeName), creator.getThis()));
@@ -171,9 +181,9 @@ public class ClientProxyGenerator extends AbstractGenerator {
         Map<Methods.MethodKey, MethodInfo> methods = new HashMap<>();
 
         if (bean.isClassBean()) {
-            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), bean.getTarget().asClass(), Collections.emptyMap(), methods);
+            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), bean.getTarget().get().asClass(), Collections.emptyMap(), methods);
         } else if (bean.isProducerMethod()) {
-            MethodInfo producerMethod = bean.getTarget().asMethod();
+            MethodInfo producerMethod = bean.getTarget().get().asMethod();
             Map<TypeVariable, Type> resolved = Collections.emptyMap();
             ClassInfo returnTypeClass = bean.getDeployment().getIndex().getClassByName(producerMethod.returnType().name());
             if (!returnTypeClass.typeParameters().isEmpty()) {
@@ -182,7 +192,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
             }
             Methods.addDelegatingMethods(bean.getDeployment().getIndex(), returnTypeClass, resolved, methods);
         } else if (bean.isProducerField()) {
-            FieldInfo producerField = bean.getTarget().asField();
+            FieldInfo producerField = bean.getTarget().get().asField();
             Map<TypeVariable, Type> resolved = Collections.emptyMap();
             ClassInfo fieldClass = bean.getDeployment().getIndex().getClassByName(producerField.type().name());
             if (!fieldClass.typeParameters().isEmpty()) {
@@ -191,20 +201,6 @@ public class ClientProxyGenerator extends AbstractGenerator {
             Methods.addDelegatingMethods(bean.getDeployment().getIndex(), fieldClass, resolved, methods);
         }
         return methods.values();
-    }
-
-    static String getProxyPackageName(BeanInfo bean) {
-        String packageName;
-        if (bean.isProducerMethod() || bean.isProducerField()) {
-            packageName = DotNames.packageName(bean.getDeclaringBean().getProviderType().name());
-        } else {
-            packageName = DotNames.packageName(bean.getProviderType().name());
-        }
-        if (packageName.startsWith("java.")) {
-            // It is not possible to place a class in a JDK package
-            packageName = DEFAULT_PACKAGE;
-        }
-        return packageName;
     }
 
 }

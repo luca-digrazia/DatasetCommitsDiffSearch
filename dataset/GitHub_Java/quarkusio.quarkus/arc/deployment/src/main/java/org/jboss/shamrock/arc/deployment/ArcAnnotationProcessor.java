@@ -43,6 +43,7 @@ import org.jboss.jandex.IndexView;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.logging.Logger;
+import org.jboss.protean.arc.ActivateRequestContextInterceptor;
 import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.processor.AnnotationsTransformer;
 import org.jboss.protean.arc.processor.BeanProcessor;
@@ -61,7 +62,6 @@ import org.jboss.shamrock.deployment.builditem.BeanArchiveIndexBuildItem;
 import org.jboss.shamrock.deployment.builditem.BeanContainerBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedClassBuildItem;
 import org.jboss.shamrock.deployment.builditem.GeneratedResourceBuildItem;
-import org.jboss.shamrock.deployment.builditem.HotDeploymentConfigFileBuildItem;
 import org.jboss.shamrock.deployment.builditem.InjectionProviderBuildItem;
 import org.jboss.shamrock.deployment.builditem.ServiceStartBuildItem;
 import org.jboss.shamrock.deployment.builditem.ShutdownContextBuildItem;
@@ -70,11 +70,12 @@ import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveFieldBuildIte
 import org.jboss.shamrock.deployment.builditem.substrate.ReflectiveMethodBuildItem;
 import org.jboss.shamrock.deployment.cdi.AnnotationTransformerBuildItem;
 import org.jboss.shamrock.deployment.cdi.BeanContainerListenerBuildItem;
-import org.jboss.shamrock.deployment.cdi.BeanDefiningAnnotationBuildItem;
 import org.jboss.shamrock.deployment.cdi.GeneratedBeanBuildItem;
 import org.jboss.shamrock.deployment.cdi.ResourceAnnotationBuildItem;
 import org.jboss.shamrock.runtime.cdi.BeanContainer;
 import org.jboss.shamrock.undertow.ServletExtensionBuildItem;
+
+import io.smallrye.config.inject.ConfigProducer;
 
 public class ArcAnnotationProcessor {
 
@@ -112,9 +113,6 @@ public class ArcAnnotationProcessor {
     @Inject
     List<ResourceAnnotationBuildItem> resourceAnnotations;
 
-    @Inject
-    List<BeanDefiningAnnotationBuildItem> additionalBeanDefiningAnnotations;
-    
     @BuildStep(providesCapabilities = Capabilities.CDI_ARC, applicationArchiveMarkers = { "META-INF/beans.xml",
             "META-INF/services/javax.enterprise.inject.spi.Extension" })
     @Record(STATIC_INIT)
@@ -132,6 +130,13 @@ public class ArcAnnotationProcessor {
         additionalBeans.add(LifecycleEventRunner.class.getName());
 
         reflectiveClass.produce(new ReflectiveClassBuildItem(true, false, Observes.class.getName())); // graal bug
+
+        List<DotName> additionalBeanDefiningAnnotations = new ArrayList<>();
+        additionalBeanDefiningAnnotations.add(DotName.createSimple("javax.servlet.annotation.WebServlet"));
+        additionalBeanDefiningAnnotations.add(DotName.createSimple("javax.ws.rs.Path"));
+
+        // TODO MP config
+        additionalBeans.add(ConfigProducer.class.getName());
 
         // Index bean classes registered by shamrock
         Indexer indexer = new Indexer();
@@ -159,13 +164,9 @@ public class ArcAnnotationProcessor {
             }
         });
         builder.setIndex(index);
-        builder.setAdditionalBeanDefiningAnnotations(additionalBeanDefiningAnnotations.stream()
-                .map(BeanDefiningAnnotationBuildItem::getName)
-                .collect(Collectors.toList()));
+        builder.setAdditionalBeanDefiningAnnotations(additionalBeanDefiningAnnotations);
         builder.setSharedAnnotationLiterals(false);
-        builder.addResourceAnnotations(resourceAnnotations.stream()
-                .map(ResourceAnnotationBuildItem::getName)
-                .collect(Collectors.toList()));
+        builder.addResourceAnnotations(resourceAnnotations.stream().map(ResourceAnnotationBuildItem::getName).collect(Collectors.toList()));
         builder.setReflectionRegistration(new ReflectionRegistration() {
             @Override
             public void registerMethod(MethodInfo methodInfo) {
@@ -265,11 +266,6 @@ public class ArcAnnotationProcessor {
             indexBeanClass(beanInfo.superName().toString(), indexer, shamrockIndex, additionalIndex);
         }
 
-    }
-
-    @BuildStep
-    HotDeploymentConfigFileBuildItem configFile() {
-        return new HotDeploymentConfigFileBuildItem("META-INF/beans.xml");
     }
 
     private void indexBeanClass(String beanClass, Indexer indexer, IndexView shamrockIndex, Set<DotName> additionalIndex, byte[] beanData) {
