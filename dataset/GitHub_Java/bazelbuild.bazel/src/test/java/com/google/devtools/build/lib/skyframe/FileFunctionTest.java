@@ -54,7 +54,6 @@ import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
@@ -95,7 +94,7 @@ import org.junit.runners.JUnit4;
 @RunWith(JUnit4.class)
 public class FileFunctionTest {
   private CustomInMemoryFs fs;
-  private Root pkgRoot;
+  private Path pkgRoot;
   private Path outputBase;
   private PathPackageLocator pkgLocator;
   private boolean fastDigest;
@@ -111,14 +110,14 @@ public class FileFunctionTest {
 
   private void createFsAndRoot(CustomInMemoryFs fs) throws IOException {
     this.fs = fs;
-    pkgRoot = Root.fromPath(fs.getPath("/root"));
+    pkgRoot = fs.getPath("/root");
     outputBase = fs.getPath("/output_base");
     pkgLocator =
         new PathPackageLocator(
             outputBase,
             ImmutableList.of(pkgRoot),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
-    FileSystemUtils.createDirectoryAndParents(pkgRoot.asPath());
+    FileSystemUtils.createDirectoryAndParents(pkgRoot);
   }
 
   private SequentialBuildDriver makeDriver() {
@@ -129,9 +128,7 @@ public class FileFunctionTest {
     AtomicReference<PathPackageLocator> pkgLocatorRef = new AtomicReference<>(pkgLocator);
     BlazeDirectories directories =
         new BlazeDirectories(
-            new ServerDirectories(pkgRoot.asPath(), outputBase),
-            pkgRoot.asPath(),
-            TestConstants.PRODUCT_NAME);
+            new ServerDirectories(pkgRoot, outputBase), pkgRoot, TestConstants.PRODUCT_NAME);
     ExternalFilesHelper externalFilesHelper =
         new ExternalFilesHelper(pkgLocatorRef, externalFileAction, directories);
     differencer = new SequencedRecordingDifferencer();
@@ -186,11 +183,11 @@ public class FileFunctionTest {
   }
 
   private FileValue valueForPathOutsidePkgRoot(Path path) throws InterruptedException {
-    return valueForPathHelper(Root.absoluteRoot(fs), path);
+    return valueForPathHelper(fs.getRootDirectory(), path);
   }
 
-  private FileValue valueForPathHelper(Root root, Path path) throws InterruptedException {
-    PathFragment pathFragment = root.relativize(path);
+  private FileValue valueForPathHelper(Path root, Path path) throws InterruptedException {
+    PathFragment pathFragment = path.relativeTo(root);
     RootedPath rootedPath = RootedPath.toRootedPath(root, pathFragment);
     SequentialBuildDriver driver = makeDriver();
     SkyKey key = FileValue.key(rootedPath);
@@ -315,8 +312,8 @@ public class FileFunctionTest {
         .containsExactly(
             rootedPath("a"),
             rootedPath(""),
-            RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/")),
-            RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/outside")));
+            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.EMPTY_FRAGMENT),
+            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("outside")));
   }
 
   @Test
@@ -332,8 +329,8 @@ public class FileFunctionTest {
         .containsExactly(
             rootedPath("a"),
             rootedPath(""),
-            RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/")),
-            RootedPath.toRootedPath(Root.absoluteRoot(fs), PathFragment.create("/absolute")));
+            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.EMPTY_FRAGMENT),
+            RootedPath.toRootedPath(fs.getRootDirectory(), PathFragment.create("absolute")));
   }
 
   @Test
@@ -347,17 +344,17 @@ public class FileFunctionTest {
     seenFiles.addAll(getFilesSeenAndAssertValueChangesIfContentsOfFileChanges("b", false, "a"));
     seenFiles.addAll(
         getFilesSeenAndAssertValueChangesIfContentsOfFileChanges(externalPath, true, "a"));
-    Root root = Root.absoluteRoot(fs);
+    Path root = fs.getRootDirectory();
     assertThat(seenFiles)
         .containsExactly(
             rootedPath("WORKSPACE"),
             rootedPath("a"),
             rootedPath(""),
-            RootedPath.toRootedPath(root, PathFragment.create("/")),
-            RootedPath.toRootedPath(root, PathFragment.create("/output_base")),
-            RootedPath.toRootedPath(root, PathFragment.create("/output_base/external")),
-            RootedPath.toRootedPath(root, PathFragment.create("/output_base/external/a")),
-            RootedPath.toRootedPath(root, PathFragment.create("/output_base/external/a/b")));
+            RootedPath.toRootedPath(root, PathFragment.EMPTY_FRAGMENT),
+            RootedPath.toRootedPath(root, PathFragment.create("output_base")),
+            RootedPath.toRootedPath(root, PathFragment.create("output_base/external")),
+            RootedPath.toRootedPath(root, PathFragment.create("output_base/external/a")),
+            RootedPath.toRootedPath(root, PathFragment.create("output_base/external/a/b")));
   }
 
   @Test
@@ -629,7 +626,7 @@ public class FileFunctionTest {
     pkgLocator =
         new PathPackageLocator(
             outputBase,
-            ImmutableList.of(pkgRoot, Root.fromPath(otherPkgRoot)),
+            ImmutableList.of(pkgRoot, otherPkgRoot),
             BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY);
     symlink("a", "/other_root/b");
     assertValueChangesIfContentsOfFileChanges("/other_root/b", true, "a");
@@ -826,7 +823,7 @@ public class FileFunctionTest {
             return super.getDigest(path, hf);
           }
         };
-    pkgRoot = Root.fromPath(fs.getPath("/root"));
+    pkgRoot = fs.getPath("/root");
     Path file = file("file");
     FileSystemUtils.writeContentAsLatin1(file, Strings.repeat("a", 20));
     byte[] digest = file.getDigest();
@@ -1111,7 +1108,7 @@ public class FileFunctionTest {
       // InMemoryFS is not supported for serialization.
       FileSystem fs = FileSystems.getJavaIoFileSystem();
       Path.setFileSystemForSerialization(fs);
-      pkgRoot = Root.absoluteRoot(fs);
+      pkgRoot = fs.getRootDirectory();
 
       FileValue a = valueForPath(fs.getPath("/"));
 
@@ -1178,24 +1175,24 @@ public class FileFunctionTest {
   @Test
   public void testSymlinkToPackagePathBoundary() throws Exception {
     Path path = path("this/is/a/path");
-    FileSystemUtils.ensureSymbolicLink(path, pkgRoot.asPath());
+    FileSystemUtils.ensureSymbolicLink(path, pkgRoot);
     assertError("this/is/a/path");
   }
 
   private void runTestInfiniteSymlinkExpansion(boolean symlinkToAncestor, boolean absoluteSymlink)
       throws Exception {
     Path otherPath = path("other");
-    RootedPath otherRootedPath = RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(otherPath));
+    RootedPath otherRootedPath = RootedPath.toRootedPath(pkgRoot, otherPath.relativeTo(pkgRoot));
     Path ancestorPath = path("a");
     RootedPath ancestorRootedPath =
-        RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(ancestorPath));
+        RootedPath.toRootedPath(pkgRoot, ancestorPath.relativeTo(pkgRoot));
     FileSystemUtils.ensureSymbolicLink(otherPath, ancestorPath);
     Path intermediatePath = path("inter");
     RootedPath intermediateRootedPath =
-        RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(intermediatePath));
+        RootedPath.toRootedPath(pkgRoot, intermediatePath.relativeTo(pkgRoot));
     Path descendantPath = path("a/b/c/d/e");
     RootedPath descendantRootedPath =
-        RootedPath.toRootedPath(pkgRoot, pkgRoot.relativize(descendantPath));
+        RootedPath.toRootedPath(pkgRoot, descendantPath.relativeTo(pkgRoot));
     if (symlinkToAncestor) {
       FileSystemUtils.ensureSymbolicLink(descendantPath, intermediatePath);
       if (absoluteSymlink) {
@@ -1315,7 +1312,7 @@ public class FileFunctionTest {
 
   private void checkRealPath(String pathString) throws Exception {
     Path realPath = pkgRoot.getRelative(pathString).resolveSymbolicLinks();
-    assertRealPath(pathString, pkgRoot.relativize(realPath).toString());
+    assertRealPath(pathString, realPath.relativeTo(pkgRoot).toString());
   }
 
   private void assertRealPath(String pathString, String expectedRealPathString) throws Exception {
@@ -1649,12 +1646,12 @@ public class FileFunctionTest {
 
   private RootedPath rootedPath(String pathString) {
     Path path = path(pathString);
-    for (Root root : pkgLocator.getPathEntries()) {
-      if (root.contains(path)) {
+    for (Path root : pkgLocator.getPathEntries()) {
+      if (path.startsWith(root)) {
         return RootedPath.toRootedPath(root, path);
       }
     }
-    return RootedPath.toRootedPath(Root.absoluteRoot(fs), path);
+    return RootedPath.toRootedPath(fs.getRootDirectory(), path);
   }
 
   private SkyKey skyKey(String pathString) {
