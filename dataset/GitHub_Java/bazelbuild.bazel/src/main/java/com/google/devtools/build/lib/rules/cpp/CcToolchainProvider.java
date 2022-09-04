@@ -35,8 +35,8 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfig
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcToolchainProviderApi;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import javax.annotation.Nullable;
 
@@ -428,22 +428,22 @@ public final class CcToolchainProvider extends ToolchainInfo
   }
 
   @Override
-  public Depset getAllFilesForStarlark() {
-    return Depset.of(Artifact.TYPE, getAllFiles());
+  public SkylarkNestedSet getAllFilesForStarlark() {
+    return SkylarkNestedSet.of(Artifact.class, getAllFiles());
   }
 
   @Override
-  public Depset getStaticRuntimeLibForStarlark(
+  public SkylarkNestedSet getStaticRuntimeLibForStarlark(
       FeatureConfigurationForStarlark featureConfigurationForStarlark) throws EvalException {
-    return Depset.of(
+    return SkylarkNestedSet.of(
         (Artifact.class),
         getStaticRuntimeLinkInputs(featureConfigurationForStarlark.getFeatureConfiguration()));
   }
 
   @Override
-  public Depset getDynamicRuntimeLibForStarlark(
+  public SkylarkNestedSet getDynamicRuntimeLibForStarlark(
       FeatureConfigurationForStarlark featureConfigurationForStarlark) throws EvalException {
-    return Depset.of(
+    return SkylarkNestedSet.of(
         (Artifact.class),
         getDynamicRuntimeLinkInputs(featureConfigurationForStarlark.getFeatureConfiguration()));
   }

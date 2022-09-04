@@ -766,12 +766,6 @@ public final class CcCommon {
         virtualToOriginalHeaders);
   }
 
-  public String getPurpose(CppSemantics semantics) {
-    return semantics.getClass().getSimpleName()
-        + "_build_arch_"
-        + ruleContext.getConfiguration().getMnemonic();
-  }
-
   public static ImmutableList<String> getCoverageFeatures(CppConfiguration cppConfiguration) {
     ImmutableList.Builder<String> coverageFeatures = ImmutableList.builder();
     if (cppConfiguration.collectCodeCoverage()) {

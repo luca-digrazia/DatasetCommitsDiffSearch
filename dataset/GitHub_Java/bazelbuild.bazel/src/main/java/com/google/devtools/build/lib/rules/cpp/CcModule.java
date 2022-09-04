@@ -580,17 +580,21 @@ public abstract class CcModule
     if (librariesToLink != null || userLinkFlags != null) {
       CcLinkingContext.Builder ccLinkingContextBuilder = CcLinkingContext.builder();
       if (librariesToLink != null) {
-        ccLinkingContextBuilder.addLibraries(librariesToLink.getImmutableList());
+        ccLinkingContextBuilder.addLibraries(
+            NestedSetBuilder.wrap(Order.LINK_ORDER, librariesToLink.getImmutableList()));
       }
       if (userLinkFlags != null) {
         ccLinkingContextBuilder.addUserLinkFlags(
-            ImmutableList.of(
-                CcLinkingContext.LinkOptions.of(
-                    userLinkFlags.getImmutableList(),
-                    BazelStarlarkContext.from(thread).getSymbolGenerator())));
+            NestedSetBuilder.wrap(
+                Order.LINK_ORDER,
+                ImmutableList.of(
+                    CcLinkingContext.LinkOptions.of(
+                        userLinkFlags.getImmutableList(),
+                        BazelStarlarkContext.from(thread).getSymbolGenerator()))));
       }
       ccLinkingContextBuilder.addNonCodeInputs(
-          nonCodeInputs.getContents(Artifact.class, "additional_inputs"));
+          NestedSetBuilder.wrap(
+              Order.LINK_ORDER, nonCodeInputs.getContents(Artifact.class, "additional_inputs")));
       return ccLinkingContextBuilder.build();
     }
 
