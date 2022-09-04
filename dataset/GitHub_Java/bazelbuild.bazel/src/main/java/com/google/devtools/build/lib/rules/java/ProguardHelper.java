@@ -198,7 +198,6 @@ public abstract class ProguardHelper {
         /* proguardSeeds */ (Artifact) null,
         /* proguardUsage */ (Artifact) null,
         /* proguardMapping */ (Artifact) null,
-        /* proguardDictionary */ (Artifact) null,
         bootclasspath,
         deployJar,
         semantics,
@@ -364,7 +363,6 @@ public abstract class ProguardHelper {
    * @param proguard Proguard executable to use
    * @param proguardSpecs Proguard specification files to pass to Proguard
    * @param proguardMapping optional mapping file for Proguard to apply
-   * @param proguardDictionary Optional dictionary file for Proguard to apply
    * @param libraryJars any other Jar files that the {@code programJar} will run against
    * @param optimizationPasses if not null specifies to break proguard up into multiple passes with
    *     the given number of optimization passes.
@@ -378,7 +376,6 @@ public abstract class ProguardHelper {
       @Nullable Artifact proguardSeeds,
       @Nullable Artifact proguardUsage,
       @Nullable Artifact proguardMapping,
-      @Nullable Artifact proguardDictionary,
       Iterable<Artifact> libraryJars,
       Artifact proguardOutputJar,
       JavaSemantics semantics,
@@ -422,7 +419,6 @@ public abstract class ProguardHelper {
           programJar,
           proguardSpecs,
           proguardMapping,
-          proguardDictionary,
           libraryJars,
           output.getOutputJar(),
           output.getMapping(),
@@ -450,7 +446,6 @@ public abstract class ProguardHelper {
           programJar,
           proguardSpecs,
           proguardMapping,
-          proguardDictionary,
           libraryJars,
           output.getOutputJar(),
           /* proguardOutputMap */ null,
@@ -499,7 +494,6 @@ public abstract class ProguardHelper {
               programJar,
               proguardSpecs,
               proguardMapping,
-              proguardDictionary,
               libraryJars,
               output.getOutputJar(),
               /* proguardOutputMap */ null,
@@ -532,7 +526,6 @@ public abstract class ProguardHelper {
           programJar,
           proguardSpecs,
           proguardMapping,
-          proguardDictionary,
           libraryJars,
           output.getOutputJar(),
           output.getMapping(),
@@ -560,7 +553,6 @@ public abstract class ProguardHelper {
       Artifact programJar,
       ImmutableList<Artifact> proguardSpecs,
       @Nullable Artifact proguardMapping,
-      @Nullable Artifact proguardDictionary,
       Iterable<Artifact> libraryJars,
       Artifact proguardOutputJar,
       @Nullable Artifact proguardOutputMap,
@@ -595,11 +587,6 @@ public abstract class ProguardHelper {
     if (proguardMapping != null) {
       builder.addInput(proguardMapping);
       commandLine.addExecPath("-applymapping", proguardMapping);
-    }
-
-    if (proguardDictionary != null) {
-      builder.addInput(proguardDictionary);
-      commandLine.addExecPath("-obfuscationdictionary", proguardDictionary);
     }
 
     for (Artifact proguardSpec : proguardSpecs) {
