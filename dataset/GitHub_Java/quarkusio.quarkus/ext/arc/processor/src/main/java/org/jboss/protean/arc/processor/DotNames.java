@@ -40,7 +40,6 @@ import javax.enterprise.inject.spi.Extension;
 import javax.enterprise.inject.spi.InjectionPoint;
 import javax.enterprise.util.Nonbinding;
 import javax.inject.Inject;
-import javax.inject.Named;
 import javax.inject.Qualifier;
 import javax.interceptor.AroundConstruct;
 import javax.interceptor.AroundInvoke;
@@ -85,7 +84,15 @@ public final class DotNames {
     public static final DotName ENUM = create(Enum.class);
     public static final DotName EXTENSION = create(Extension.class);
     public static final DotName OPTIONAL = create(Optional.class);
-    public static final DotName NAMED = create(Named.class);
+
+    public static final DotName BOOLEAN = create(Boolean.class.getName());
+    public static final DotName BYTE = create(Byte.class.getName());
+    public static final DotName CHARACTER = create(Character.class.getName());
+    public static final DotName DOUBLE = create(Double.class.getName());
+    public static final DotName FLOAT = create(Float.class.getName());
+    public static final DotName INTEGER = create(Integer.class.getName());
+    public static final DotName LONG = create(Long.class.getName());
+    public static final DotName SHORT = create(Short.class.getName());
 
     private DotNames() {
     }

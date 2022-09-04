@@ -1,33 +1,46 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.jboss.protean.arc.processor;
 
 import static java.util.Collections.singletonList;
-import static org.jboss.jandex.Type.Kind.ARRAY;
+import static org.jboss.jandex.Type.Kind.*;
 import static org.jboss.jandex.Type.Kind.CLASS;
-import static org.jboss.jandex.Type.Kind.PARAMETERIZED_TYPE;
-import static org.jboss.jandex.Type.Kind.TYPE_VARIABLE;
-import static org.jboss.jandex.Type.Kind.WILDCARD_TYPE;
+import static org.jboss.protean.arc.processor.DotNames.*;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
-import org.jboss.jandex.ClassType;
-import org.jboss.jandex.DotName;
-import org.jboss.jandex.Type;
+import org.jboss.jandex.*;
 import org.jboss.jandex.Type.Kind;
-import org.jboss.jandex.TypeVariable;
-import org.jboss.jandex.WildcardType;
+import org.jboss.protean.arc.processor.InjectionPointInfo.TypeAndQualifiers;
 
 /**
  *
  * @author Martin Kouba
  */
-public class BeanResolver {
+class BeanResolver {
 
     private final BeanDeployment beanDeployment;
 
@@ -35,24 +48,38 @@ public class BeanResolver {
 
     private final Function<DotName, Set<DotName>> assignableFromMapFunction;
 
+    private final Map<TypeAndQualifiers, List<BeanInfo>> resolved;
+
     public BeanResolver(BeanDeployment beanDeployment) {
         this.beanDeployment = beanDeployment;
         this.assignableFromMap = new ConcurrentHashMap<>();
         this.assignableFromMapFunction = name -> {
             Set<DotName> assignables = new HashSet<>();
-            assignables.addAll(beanDeployment.getIndex().getAllKnownSubclasses(name).stream().map(c -> c.name()).collect(Collectors.toSet()));
-            assignables.addAll(beanDeployment.getIndex().getAllKnownImplementors(name).stream().map(c -> c.name()).collect(Collectors.toSet()));
+            Collection<ClassInfo> subclasses = beanDeployment.getIndex().getAllKnownSubclasses(name);
+            for (ClassInfo subclass : subclasses) {
+                assignables.add(subclass.name());
+            }
+            Collection<ClassInfo> implementors = beanDeployment.getIndex().getAllKnownImplementors(name);
+            for (ClassInfo implementor : implementors) {
+                assignables.add(implementor.name());
+            }
             return assignables;
         };
+        this.resolved = new ConcurrentHashMap<>();
     }
 
-    BeanInfo findMatchingBean(InjectionPointInfo injectionPoint) {
-        for (BeanInfo bean : beanDeployment.getBeans()) {
-            if (bean.matches(injectionPoint)) {
-                return bean;
+    List<BeanInfo> resolve(TypeAndQualifiers typeAndQualifiers) {
+        return resolved.computeIfAbsent(typeAndQualifiers, this::findMatching);
+    }
+
+    private List<BeanInfo> findMatching(TypeAndQualifiers typeAndQualifiers) {
+        List<BeanInfo> resolved = new ArrayList<>();
+        for (BeanInfo b : beanDeployment.getBeans()) {
+            if (Beans.matches(b, typeAndQualifiers)) {
+                resolved.add(b);
             }
         }
-        return null;
+        return resolved.isEmpty() ? Collections.emptyList() : resolved;
     }
 
     boolean matches(Type requiredType, Type beanType) {
@@ -107,8 +134,40 @@ public class BeanResolver {
                 }
                 return true;
             }
+        } else if (PRIMITIVE.equals(requiredType.kind())) {
+            return primitiveMatch(requiredType.asPrimitiveType().primitive(), beanType);
         }
         return false;
+    }
+
+    static boolean primitiveMatch(PrimitiveType.Primitive requiredType, Type beanType) {
+        switch (requiredType) {
+            case INT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(INTEGER))
+                    || (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.INT);
+
+            case LONG: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(LONG))
+                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.LONG);
+
+            case SHORT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(SHORT))
+                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.SHORT);
+
+            case BYTE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(BYTE))
+                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.BYTE);
+
+            case FLOAT: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(FLOAT))
+                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.FLOAT);
+
+            case DOUBLE: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(DOUBLE))
+                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.DOUBLE);
+
+            case CHAR: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(CHARACTER))
+                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.CHAR);
+
+            case BOOLEAN: return (beanType.kind() == CLASS  && beanType.asClassType().name().equals(BOOLEAN))
+                    ||  (beanType.kind() == PRIMITIVE  && beanType.asPrimitiveType().primitive() == PrimitiveType.Primitive.BOOLEAN);
+
+            default: throw new IllegalArgumentException("Not supported yet");
+        }
     }
 
     boolean parametersMatch(Type requiredParameter, Type beanParameter) {
@@ -198,6 +257,15 @@ public class BeanResolver {
     }
 
     boolean isAssignableFrom(Type type1, Type type2) {
+        // java.lang.Object is assignable from any type
+        if (type1.name().equals(DotNames.OBJECT)) {
+            return true;
+        }
+        // type1 is the same as type2
+        if (type1.name().equals(type2.name())) {
+            return true;
+        }
+        // type1 is a superclass
         return assignableFromMap.computeIfAbsent(type1.name(), assignableFromMapFunction).contains(type2.name());
     }
 
@@ -215,7 +283,7 @@ public class BeanResolver {
     }
 
     boolean upperBoundsOfWildcardMatch(WildcardType requiredParameter, Type parameter) {
-        return boundsMatch(singletonList(requiredParameter.superBound()), singletonList(parameter));
+        return boundsMatch(singletonList(requiredParameter.extendsBound()), singletonList(parameter));
     }
 
     /*
