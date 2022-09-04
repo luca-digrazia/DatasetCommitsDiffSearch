@@ -22,7 +22,6 @@ import com.google.common.base.Throwables;
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSortedMap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.MoreCollectors;
 import com.google.common.escape.Escaper;
@@ -189,16 +188,6 @@ public class OptionsParser implements OptionsParsingResult {
       return this;
     }
 
-    /** Skip all the prefixes associated with Starlark options */
-    public Builder skipStarlarkOptionPrefixes() {
-      this.implBuilder
-          .skippedPrefix("--//")
-          .skippedPrefix("--no//")
-          .skippedPrefix("--@")
-          .skippedPrefix("--no@");
-      return this;
-    }
-
     /**
      * Indicates whether or not the parser will allow a non-empty residue; that is, iff this value
      * is true then a call to one of the {@code parse} methods will throw {@link
@@ -230,7 +219,7 @@ public class OptionsParser implements OptionsParsingResult {
   private final List<String> residue = new ArrayList<>();
   private final List<String> postDoubleDashResidue = new ArrayList<>();
   private final boolean allowResidue;
-  private ImmutableSortedMap<String, Object> starlarkOptions = ImmutableSortedMap.of();
+  private final Map<String, Object> starlarkOptions = new HashMap<>();
 
   private OptionsParser(OptionsParserImpl impl, boolean allowResidue) {
     this.impl = impl;
@@ -238,12 +227,13 @@ public class OptionsParser implements OptionsParsingResult {
   }
 
   @Override
-  public ImmutableSortedMap<String, Object> getStarlarkOptions() {
-    return starlarkOptions;
+  public Map<String, Object> getStarlarkOptions() {
+    return ImmutableMap.copyOf(starlarkOptions);
   }
 
   public void setStarlarkOptions(Map<String, Object> starlarkOptions) {
-    this.starlarkOptions = ImmutableSortedMap.copyOf(starlarkOptions);
+    this.starlarkOptions.clear();
+    this.starlarkOptions.putAll(starlarkOptions);
   }
 
   public void parseAndExitUponError(String[] args) {
@@ -734,15 +724,9 @@ public class OptionsParser implements OptionsParsingResult {
     return ImmutableList.copyOf(postDoubleDashResidue);
   }
 
-  /* Sets the residue (all elements parsed as non-options) to {@code residue}, as well as the part
-   * of the residue that follows the double-dash on the command line, {@code postDoubleDashResidue}.
-   * {@code postDoubleDashResidue} must be a subset of {@code residue}. */
-  public void setResidue(List<String> residue, List<String> postDoubleDashResidue) {
-    Preconditions.checkArgument(residue.containsAll(postDoubleDashResidue));
+  public void setResidue(List<String> residue) {
     this.residue.clear();
     this.residue.addAll(residue);
-    this.postDoubleDashResidue.clear();
-    this.postDoubleDashResidue.addAll(postDoubleDashResidue);
   }
 
   /** Returns a list of warnings about problems encountered by previous parse calls. */
