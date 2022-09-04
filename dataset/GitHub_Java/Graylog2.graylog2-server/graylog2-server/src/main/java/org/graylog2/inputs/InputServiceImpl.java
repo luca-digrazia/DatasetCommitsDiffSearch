@@ -33,6 +33,7 @@ import org.graylog2.database.ValidationException;
 import org.graylog2.inputs.converters.ConverterFactory;
 import org.graylog2.inputs.extractors.ExtractorFactory;
 import org.graylog2.plugin.configuration.Configuration;
+import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
@@ -232,6 +233,7 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         MessageInput input = messageInputFactory.create(io.getType());
 
         // Add all standard fields.
+        input.initialize(new Configuration(io.getConfiguration()));
         input.setTitle(io.getTitle());
         input.setCreatorUserId(io.getCreatorUserId());
         input.setPersistId(io.getId());
@@ -248,8 +250,6 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         for (Map.Entry<String, String> field : io.getStaticFields().entrySet()) {
             input.addStaticField(field.getKey(), field.getValue());
         }
-
-        input.initialize(new Configuration(io.getConfiguration()));
 
         return input;
     }

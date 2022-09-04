@@ -42,7 +42,7 @@ public class InputState {
     }
 
     protected MessageInput messageInput;
-    protected final String id;
+    protected String id;
     protected InputStateType state;
     protected DateTime startedAt;
     protected String detailedMessage;
@@ -69,10 +69,6 @@ public class InputState {
 
     public MessageInput getMessageInput() {
         return messageInput;
-    }
-
-    public void setMessageInput(MessageInput messageInput) {
-        this.messageInput = messageInput;
     }
 
     public String getId() {
@@ -135,6 +131,7 @@ public class InputState {
 
         if (!id.equals(that.id)) return false;
         if (!messageInput.equals(that.messageInput)) return false;
+        if (state != that.state) return false;
 
         return true;
     }
@@ -143,6 +140,7 @@ public class InputState {
     public int hashCode() {
         int result = messageInput.hashCode();
         result = 31 * result + id.hashCode();
+        result = 31 * result + state.hashCode();
         return result;
     }
 }
