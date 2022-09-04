@@ -211,14 +211,17 @@ public class InMemoryNodeEntry implements NodeEntry {
 
   @Override
   public synchronized Iterable<SkyKey> getDirectDeps() {
-    return GroupedList.compressedToIterable(getCompressedDirectDepsForDoneEntry());
+    return getGroupedDirectDeps().getAllElementsAsIterable();
   }
 
-  /** Returns the compressed {@link GroupedList} of direct deps. Can only be called when done. */
-  public synchronized @GroupedList.Compressed Object getCompressedDirectDepsForDoneEntry() {
+  /**
+   * If {@code isDone()}, returns the ordered list of sets of grouped direct dependencies that were
+   * added in {@link #addTemporaryDirectDeps}.
+   */
+  public synchronized GroupedList<SkyKey> getGroupedDirectDeps() {
     assertKeepDeps();
     Preconditions.checkState(isDone(), "no deps until done. NodeEntry: %s", this);
-    return Preconditions.checkNotNull(directDeps, "deps can't be null: %s", this);
+    return GroupedList.create(directDeps);
   }
 
   public int getNumDirectDeps() {
