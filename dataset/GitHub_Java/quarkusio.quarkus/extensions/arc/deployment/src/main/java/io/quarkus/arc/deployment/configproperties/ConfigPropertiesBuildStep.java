@@ -18,7 +18,9 @@ import io.quarkus.arc.deployment.GeneratedBeanGizmoAdaptor;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationDefaultBuildItem;
 import io.quarkus.gizmo.ClassCreator;
@@ -38,11 +40,13 @@ public class ConfigPropertiesBuildStep {
 
     @BuildStep
     void setup(CombinedIndexBuildItem combinedIndex,
+            ApplicationIndexBuildItem applicationIndex,
             List<ConfigPropertiesMetadataBuildItem> configPropertiesMetadataList,
             BuildProducer<GeneratedClassBuildItem> generatedClasses,
             BuildProducer<GeneratedBeanBuildItem> generatedBeans,
             BuildProducer<RunTimeConfigurationDefaultBuildItem> defaultConfigValues,
-            BuildProducer<ConfigPropertyBuildItem> configProperties) {
+            BuildProducer<ConfigPropertyBuildItem> configProperties,
+            DeploymentClassLoaderBuildItem deploymentClassLoader) {
         if (configPropertiesMetadataList.isEmpty()) {
             return;
         }
@@ -83,9 +87,9 @@ public class ConfigPropertiesBuildStep {
                  * and call setters for value obtained from MP Config
                  */
                 boolean needsValidation = ClassConfigPropertiesUtil.addProducerMethodForClassConfigProperties(
-                        Thread.currentThread().getContextClassLoader(), classInfo, producerClassCreator,
+                        deploymentClassLoader.getClassLoader(), classInfo, producerClassCreator,
                         configPropertiesMetadata.getPrefix(), configPropertiesMetadata.getNamingStrategy(),
-                        combinedIndex.getIndex(), configProperties);
+                        applicationIndex.getIndex(), configProperties);
                 if (needsValidation) {
                     configClassesThatNeedValidation.add(classInfo.name());
                 }

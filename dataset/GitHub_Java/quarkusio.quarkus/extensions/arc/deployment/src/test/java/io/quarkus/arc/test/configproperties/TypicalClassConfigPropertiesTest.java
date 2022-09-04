@@ -20,7 +20,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.quarkus.arc.config.ConfigProperties;
 import io.quarkus.test.QuarkusUnitTest;
 
-public class ClassWithAllPublicFieldsConfigPropertiesTest {
+public class TypicalClassConfigPropertiesTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
@@ -50,38 +50,86 @@ public class ClassWithAllPublicFieldsConfigPropertiesTest {
         DummyProperties dummyProperties;
 
         String getName() {
-            return dummyProperties.name;
+            return dummyProperties.getName();
         }
 
         List<Integer> getNumbers() {
-            return dummyProperties.numbers;
+            return dummyProperties.getNumbers();
         }
 
         String getUnset() {
-            return dummyProperties.unset;
+            return dummyProperties.getUnset();
         }
 
         boolean isBoolWithDefault() {
-            return dummyProperties.boolWithDefault;
+            return dummyProperties.isBoolWithDefault();
         }
 
         Optional<Integer> getOptionalInt() {
-            return dummyProperties.optionalInt;
+            return dummyProperties.getOptionalInt();
         }
 
         Optional<String> getOptionalString() {
-            return dummyProperties.optionalString;
+            return dummyProperties.getOptionalString();
         }
     }
 
     @ConfigProperties(prefix = "dummy")
     public static class DummyProperties {
 
-        public String name;
-        public String unset = "default";
-        public boolean boolWithDefault = false;
-        public List<Integer> numbers;
-        public Optional<Integer> optionalInt;
-        public Optional<String> optionalString;
+        private String name;
+        private String unset = "default";
+        private boolean boolWithDefault = false;
+        private List<Integer> numbers;
+        private Optional<Integer> optionalInt;
+        private Optional<String> optionalString;
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getUnset() {
+            return unset;
+        }
+
+        public void setUnset(String unset) {
+            this.unset = unset;
+        }
+
+        public boolean isBoolWithDefault() {
+            return boolWithDefault;
+        }
+
+        public void setBoolWithDefault(boolean boolWithDefault) {
+            this.boolWithDefault = boolWithDefault;
+        }
+
+        public List<Integer> getNumbers() {
+            return numbers;
+        }
+
+        public void setNumbers(List<Integer> numbers) {
+            this.numbers = numbers;
+        }
+
+        public Optional<Integer> getOptionalInt() {
+            return optionalInt;
+        }
+
+        public void setOptionalInt(Optional<Integer> optionalInt) {
+            this.optionalInt = optionalInt;
+        }
+
+        public Optional<String> getOptionalString() {
+            return optionalString;
+        }
+
+        public void setOptionalString(Optional<String> optionalString) {
+            this.optionalString = optionalString;
+        }
     }
 }

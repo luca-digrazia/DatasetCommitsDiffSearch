@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.Optional;
 
 import javax.inject.Inject;
@@ -29,7 +28,7 @@ public class TypicalInterfaceConfigPropertiesTest {
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(DummyBean.class, DummyProperties.class)
                     .addAsResource(new StringAsset(
-                            "dummy.name=quarkus\ndummy.numbers=1,2,3,4\ndummy.boolWD=true\ndummy.optional-int=100\ndummy.optionalStringList=a,b"),
+                            "dummy.name=quarkus\ndummy.numbers=1,2,3,4\ndummy.boolWD=true\ndummy.optional-int=100"),
                             "application.properties"));
 
     @Inject
@@ -45,9 +44,6 @@ public class TypicalInterfaceConfigPropertiesTest {
         assertTrue(dummyBean.getOptionalInt().isPresent());
         assertEquals(100, dummyBean.getOptionalInt().get());
         assertFalse(dummyBean.getOptionalString().isPresent());
-        assertFalse(dummyBean.getIntListOptional().isPresent());
-        assertTrue(dummyBean.getStringListOptional().isPresent());
-        assertEquals(Arrays.asList("a", "b"), dummyBean.getStringListOptional().get());
     }
 
     @Singleton
@@ -80,14 +76,6 @@ public class TypicalInterfaceConfigPropertiesTest {
             return dummyProperties.stringOptional();
         }
 
-        Optional<List<String>> getStringListOptional() {
-            return dummyProperties.stringListOptional();
-        }
-
-        Optional<List<Integer>> getIntListOptional() {
-            return dummyProperties.intListOptional();
-        }
-
         String nameWithSuffix() {
             return dummyProperties.nameWithSuffix();
         }
@@ -111,12 +99,6 @@ public class TypicalInterfaceConfigPropertiesTest {
 
         @ConfigProperty(name = "optionalString")
         Optional<String> stringOptional();
-
-        @ConfigProperty(name = "optionalStringList")
-        Optional<List<String>> stringListOptional();
-
-        @ConfigProperty(name = "optionalIntList")
-        Optional<List<Integer>> intListOptional();
 
         default String nameWithSuffix() {
             return getFirstName() + "!";

@@ -219,7 +219,7 @@ public class SwaggerUiProcessor {
          * If this should be included every time. By default this is only included when the application is running
          * in dev mode.
          */
-        @ConfigItem
+        @ConfigItem(defaultValue = "false")
         boolean alwaysInclude;
 
         /**
