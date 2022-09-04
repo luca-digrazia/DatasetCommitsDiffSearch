@@ -57,6 +57,7 @@ public class RemoteRetrier extends Retrier {
           case ABORTED:
           case INTERNAL:
           case UNAVAILABLE:
+          case UNAUTHENTICATED:
           case RESOURCE_EXHAUSTED:
             return true;
           default:
@@ -121,8 +122,7 @@ public class RemoteRetrier extends Retrier {
     }
   }
 
-  /** Backoff strategy that backs off exponentially. */
-  public static class ExponentialBackoff implements Backoff {
+  static class ExponentialBackoff implements Backoff {
 
     private final long maxMillis;
     private long nextDelayMillis;
@@ -154,7 +154,7 @@ public class RemoteRetrier extends Retrier {
       this.maxAttempts = maxAttempts;
     }
 
-    public ExponentialBackoff(RemoteOptions options) {
+    ExponentialBackoff(RemoteOptions options) {
       this(
           /* initial = */ Duration.ofMillis(100),
           /* max = */ Duration.ofSeconds(5),
