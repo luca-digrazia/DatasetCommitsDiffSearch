@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 package org.graylog2.outputs;
@@ -23,16 +23,15 @@ import com.codahale.metrics.Metric;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.google.common.collect.ImmutableList;
-import com.google.inject.Inject;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.configuration.Configuration;
-import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.outputs.MessageOutput;
 import org.graylog2.plugin.streams.Stream;
 import org.graylog2.shared.journal.Journal;
 
+import javax.inject.Inject;
 import java.io.File;
 import java.util.List;
 import java.util.Locale;
@@ -62,12 +61,16 @@ public class BenchmarkOutput implements MessageOutput {
         this.journal = journal;
         this.messagesWritten = metricRegistry.meter(name(this.getClass(), "messagesWritten"));
 
+        final File directory = new File("benchmark-csv");
+        //noinspection ResultOfMethodCallIgnored
+        directory.mkdirs();
+
         csvReporter = CsvReporter.forRegistry(metricRegistry)
                 .formatFor(Locale.US)
                 .convertRatesTo(TimeUnit.SECONDS)
                 .convertDurationsTo(TimeUnit.MILLISECONDS)
                 .filter(new CsvMetricFilter(SKIPPED_METRIC_PREFIXES))
-                .build(new File("benchmark-csv"));
+                .build(directory);
 
         csvReporter.start(1, TimeUnit.SECONDS);
 
@@ -104,9 +107,9 @@ public class BenchmarkOutput implements MessageOutput {
         messagesWritten.mark(messages.size());
     }
 
-    public interface Factory extends MessageOutput.Factory<GelfOutput> {
+    public interface Factory extends MessageOutput.Factory<BenchmarkOutput> {
         @Override
-        GelfOutput create(Stream stream, Configuration configuration);
+        BenchmarkOutput create(Stream stream, Configuration configuration);
 
         @Override
         Config getConfig();
@@ -116,10 +119,6 @@ public class BenchmarkOutput implements MessageOutput {
     }
 
     public static class Config extends MessageOutput.Config {
-        @Override
-        public ConfigurationRequest getRequestedConfiguration() {
-            return new ConfigurationRequest();
-        }
     }
 
     public static class Descriptor extends MessageOutput.Descriptor {
@@ -128,7 +127,7 @@ public class BenchmarkOutput implements MessageOutput {
         }
     }
 
-    private class CsvMetricFilter implements MetricFilter {
+    private static class CsvMetricFilter implements MetricFilter {
         private final List<String> prefixes;
 
         public CsvMetricFilter(List<String> prefixes) {
