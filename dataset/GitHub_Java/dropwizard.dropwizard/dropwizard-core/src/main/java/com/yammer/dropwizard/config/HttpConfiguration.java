@@ -1,7 +1,6 @@
 package com.yammer.dropwizard.config;
 
 import com.google.common.base.Optional;
-import com.google.common.collect.ImmutableMap;
 import com.yammer.dropwizard.util.Duration;
 import com.yammer.dropwizard.util.Size;
 import com.yammer.dropwizard.validation.ValidationMethod;
@@ -27,10 +26,6 @@ public class HttpConfiguration {
     @JsonProperty
     private GzipConfiguration gzip = new GzipConfiguration();
 
-    @NotNull
-    @JsonProperty
-    private ImmutableMap<String, String> contextParameters = ImmutableMap.of();
-    
     public enum ConnectorType {
         SOCKET,
         BLOCKING_CHANNEL,
@@ -137,20 +132,9 @@ public class HttpConfiguration {
     @JsonProperty
     private String bindHost = null;
 
-    @JsonProperty
-    private String adminUsername = null;
-
-    @JsonProperty
-    private String adminPassword = null;
-
-    @ValidationMethod(message = "must have a smaller minThreads than maxThreads")
+    @ValidationMethod
     public boolean isThreadPoolSizedCorrectly() {
         return minThreads <= maxThreads;
-    }
-    
-    @ValidationMethod(message = "must have adminUsername if adminPassword is defined")
-    public boolean isAdminUsernameDefined() {
-        return (adminPassword == null) || (adminUsername != null);
     }
 
     public RequestLogConfiguration getRequestLogConfiguration() {
@@ -161,10 +145,6 @@ public class HttpConfiguration {
         return gzip;
     }
 
-    public ImmutableMap<String, String> getContextParameters() {
-        return contextParameters;
-    }
-    
     public ConnectorType getConnectorType() {
         if ("blocking".equalsIgnoreCase(connectorType)) {
             return ConnectorType.BLOCKING_CHANNEL;
@@ -271,13 +251,5 @@ public class HttpConfiguration {
 
     public String getRootPath() {
         return rootPath;
-    }
-
-    public Optional<String> getAdminUsername() {
-        return Optional.fromNullable(adminUsername);
-    }
-
-    public Optional<String> getAdminPassword() {
-        return Optional.fromNullable(adminPassword);
     }
 }
