@@ -85,6 +85,13 @@ public final class ConfigurationResolver {
           .thenComparing(
               Functions.compose(BuildConfiguration::checksum, Dependency::getConfiguration));
 
+  // Signals that a Skyframe restart is needed.
+  private static class ValueMissingException extends Exception {
+    private ValueMissingException() {
+      super();
+    }
+  }
+
   private final SkyFunction.Environment env;
   private final TargetAndConfiguration ctgValue;
   private final BuildConfiguration hostConfiguration;
@@ -137,28 +144,22 @@ public final class ConfigurationResolver {
   public OrderedSetMultimap<DependencyKind, Dependency> resolveConfigurations(
       OrderedSetMultimap<DependencyKind, DependencyKey> dependencyKeys)
       throws DependencyEvaluationException, InterruptedException {
-    OrderedSetMultimap<DependencyKind, Dependency> resolvedDeps = OrderedSetMultimap.create();
-    boolean needConfigsFromSkyframe = false;
-    for (Map.Entry<DependencyKind, DependencyKey> entry : dependencyKeys.entries()) {
-      DependencyKind dependencyKind = entry.getKey();
-      DependencyKey dependencyKey = entry.getValue();
-      ImmutableList<Dependency> depConfig = resolveConfiguration(dependencyKind, dependencyKey);
-      if (depConfig == null) {
-        // Instead of returning immediately, give the loop a chance to queue up every missing
-        // dependency, then return all at once. That prevents re-executing this code an unnecessary
-        // number of times. i.e. this is equivalent to calling env.getValues() once over all deps.
-        needConfigsFromSkyframe = true;
-      } else {
-        resolvedDeps.putAll(dependencyKind, depConfig);
+    try {
+      OrderedSetMultimap<DependencyKind, Dependency> resolvedDeps = OrderedSetMultimap.create();
+      for (Map.Entry<DependencyKind, DependencyKey> entry : dependencyKeys.entries()) {
+        DependencyKind dependencyKind = entry.getKey();
+        DependencyKey dependencyKey = entry.getValue();
+        resolvedDeps.putAll(dependencyKind, resolveConfiguration(dependencyKind, dependencyKey));
       }
+      return resolvedDeps;
+    } catch (ValueMissingException e) {
+      return null;
     }
-    return needConfigsFromSkyframe ? null : resolvedDeps;
   }
 
-  @Nullable
   private ImmutableList<Dependency> resolveConfiguration(
       DependencyKind dependencyKind, DependencyKey dependencyKey)
-      throws DependencyEvaluationException, InterruptedException {
+      throws DependencyEvaluationException, ValueMissingException, InterruptedException {
 
     Dependency.Builder dependencyBuilder = dependencyKey.getDependencyBuilder();
 
@@ -173,20 +174,15 @@ public final class ConfigurationResolver {
         getCurrentConfiguration().fragmentClasses(), dependencyBuilder, dependencyKey);
   }
 
-  @Nullable
   private Dependency resolveNullTransition(
       Dependency.Builder dependencyBuilder, DependencyKind dependencyKind)
-      throws DependencyEvaluationException, InterruptedException {
+      throws DependencyEvaluationException, ValueMissingException, InterruptedException {
     // The null configuration can be trivially computed (it's, well, null), so special-case that
     // transition here and skip the rest of the logic. A *lot* of targets have null deps, so
     // this produces real savings. Profiling tests over a simple cc_binary show this saves ~1% of
     // total analysis phase time.
     if (dependencyKind.getAttribute() != null) {
-      ImmutableList<String> transitionKeys = collectTransitionKeys(dependencyKind.getAttribute());
-      if (transitionKeys == null) {
-        return null; // Need Skyframe deps.
-      }
-      dependencyBuilder.setTransitionKeys(transitionKeys);
+      dependencyBuilder.setTransitionKeys(collectTransitionKeys(dependencyKind.getAttribute()));
     }
 
     return dependencyBuilder.withNullConfiguration().build();
@@ -200,12 +196,11 @@ public final class ConfigurationResolver {
         .build();
   }
 
-  @Nullable
   private ImmutableList<Dependency> resolveGenericTransition(
       FragmentClassSet depFragments,
       Dependency.Builder dependencyBuilder,
       DependencyKey dependencyKey)
-      throws DependencyEvaluationException, InterruptedException {
+      throws DependencyEvaluationException, InterruptedException, ValueMissingException {
     Map<String, BuildOptions> toOptions;
     try {
       toOptions =
@@ -215,7 +210,9 @@ public final class ConfigurationResolver {
               env,
               env.getListener());
       if (toOptions == null) {
-        return null; // Need more Skyframe deps for a Starlark transition.
+        // TODO(b/192000405): refactor this into a simple null return. We don't need to trigger
+        // exceptions for standard control flow.
+        throw new ValueMissingException(); // Need more Skyframe deps for a Starlark transition.
       }
     } catch (TransitionException e) {
       throw new DependencyEvaluationException(e);
@@ -240,7 +237,7 @@ public final class ConfigurationResolver {
     PlatformMappingValue platformMappingValue =
         (PlatformMappingValue) env.getValue(PlatformMappingValue.Key.create(platformMappingPath));
     if (platformMappingValue == null) {
-      return null; // Need platform mappings from Skyframe.
+      throw new ValueMissingException();
     }
 
     Map<String, BuildConfigurationValue.Key> configurationKeys = new HashMap<>();
@@ -282,7 +279,7 @@ public final class ConfigurationResolver {
         }
       }
       if (env.valuesMissing()) {
-        return null; // Need dependency configurations.
+        throw new ValueMissingException();
       }
     } catch (InvalidConfigurationException e) {
       throw new DependencyEvaluationException(e);
@@ -291,9 +288,8 @@ public final class ConfigurationResolver {
     return ImmutableList.sortedCopyOf(SPLIT_DEP_ORDERING, dependencies);
   }
 
-  @Nullable
   private ImmutableList<String> collectTransitionKeys(Attribute attribute)
-      throws DependencyEvaluationException, InterruptedException {
+      throws DependencyEvaluationException, ValueMissingException, InterruptedException {
     TransitionFactory<AttributeTransitionData> transitionFactory = attribute.getTransitionFactory();
     if (transitionFactory.isSplit()) {
       AttributeTransitionData transitionData =
@@ -311,7 +307,7 @@ public final class ConfigurationResolver {
             applyTransitionWithSkyframe(
                 getCurrentConfiguration().getOptions(), baseTransition, env, env.getListener());
         if (toOptions == null) {
-          return null; // Need more Skyframe deps for a Starlark transition.
+          throw new ValueMissingException(); // Need more Skyframe deps for a Starlark transition.
         }
       } catch (TransitionException e) {
         throw new DependencyEvaluationException(e);
