@@ -34,6 +34,7 @@ import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.testutil.TestMode;
 import java.util.List;
@@ -102,8 +103,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
     @SkylarkCallable(name = "struct_field_callable", documented = false, structField = true)
     public BuiltinCallable structFieldCallable() {
-      return CallUtils.getBuiltinCallable(
-          StarlarkSemantics.DEFAULT_SEMANTICS, SkylarkEvaluationTest.this, "foobar");
+      return CallUtils.getBuiltinCallable(SkylarkEvaluationTest.this, "foobar");
     }
 
     @SkylarkCallable(
@@ -118,7 +118,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "Mock", doc = "")
-  class Mock implements StarlarkValue {
+  class Mock implements SkylarkValue {
     @SkylarkCallable(
         name = "MockFn",
         selfCall = true,
@@ -166,8 +166,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
     @SkylarkCallable(name = "struct_field_callable", documented = false, structField = true)
     public Object structFieldCallable() {
-      return CallUtils.getBuiltinCallable(
-          StarlarkSemantics.DEFAULT_SEMANTICS, SkylarkEvaluationTest.this, "foobar");
+      return CallUtils.getBuiltinCallable(SkylarkEvaluationTest.this, "foobar");
     }
 
     @SkylarkCallable(name = "interrupted_struct_field", documented = false, structField = true)
@@ -179,22 +178,18 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     public String function() {
       return "a";
     }
-
     @SuppressWarnings("unused")
-    @SkylarkCallable(
-        name = "nullfunc_failing",
+    @SkylarkCallable(name = "nullfunc_failing",
         parameters = {
           @Param(name = "p1", type = String.class),
           @Param(name = "p2", type = Integer.class),
         },
-        documented = false,
-        allowReturnNones = false)
-    public StarlarkValue nullfuncFailing(String p1, Integer p2) {
+        documented = false, allowReturnNones = false)
+    public SkylarkValue nullfuncFailing(String p1, Integer p2) {
       return null;
     }
-
     @SkylarkCallable(name = "nullfunc_working", documented = false, allowReturnNones = true)
-    public StarlarkValue nullfuncWorking() {
+    public SkylarkValue nullfuncWorking() {
       return null;
     }
     @SkylarkCallable(name = "voidfunc", documented = false)
@@ -428,7 +423,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         useStarlarkThread = true)
     public String withArgsAndThread(
         Integer pos1, boolean pos2, boolean named, Sequence<?> args, StarlarkThread thread) {
-      String argsString = debugPrintArgs(args);
+      String argsString =
+          "args(" + args.stream().map(Printer::debugPrint).collect(joining(", ")) + ")";
       return "with_args_and_thread("
           + pos1
           + ", "
@@ -473,7 +469,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
         extraKeywords = @Param(name = "kwargs"))
     public String withArgsAndKwargs(String foo, Sequence<?> args, Dict<?, ?> kwargs)
         throws EvalException {
-      String argsString = debugPrintArgs(args);
+      String argsString =
+          "args(" + args.stream().map(Printer::debugPrint).collect(joining(", ")) + ")";
       String kwargsString =
           "kwargs("
               + kwargs
@@ -497,19 +494,8 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
     }
   }
 
-  private static String debugPrintArgs(Iterable<?> args) {
-    Printer p = Printer.getPrinter();
-    p.append("args(");
-    String sep = "";
-    for (Object arg : args) {
-      p.append(sep).debugPrint(arg);
-      sep = ", ";
-    }
-    return p.append(")").toString();
-  }
-
   @SkylarkModule(name = "MockInterface", doc = "")
-  static interface MockInterface extends StarlarkValue {
+  static interface MockInterface extends SkylarkValue {
     @SkylarkCallable(name = "is_empty_interface",
         parameters = { @Param(name = "str", type = String.class) },
         documented = false)
@@ -529,7 +515,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "MockClassObject", documented = false, doc = "")
-  static final class MockClassObject implements ClassObject, StarlarkValue {
+  static final class MockClassObject implements ClassObject, SkylarkValue {
     @Override
     public Object getValue(String name) {
       switch (name) {
@@ -552,7 +538,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   }
 
   @SkylarkModule(name = "ParamterizedMock", doc = "")
-  static interface ParameterizedApi<ObjectT> extends StarlarkValue {
+  static interface ParameterizedApi<ObjectT> extends SkylarkValue {
     @SkylarkCallable(
         name = "method",
         documented = false,
@@ -1312,10 +1298,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testCallingInterruptedFunction() throws Exception {
-    update(
-        "interrupted_function",
-        CallUtils.getBuiltinCallable(
-            StarlarkSemantics.DEFAULT_SEMANTICS, this, "interrupted_function"));
+    update("interrupted_function", CallUtils.getBuiltinCallable(this, "interrupted_function"));
     assertThrows(InterruptedException.class, () -> eval("interrupted_function()"));
   }
 
@@ -1513,11 +1496,11 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
   @Test
   public void testSetIsNotIterable() throws Exception {
     new SkylarkTest()
-        .testIfErrorContains("not iterable", "list(depset(['a', 'b']))")
+        .testIfErrorContains("not a collection", "list(depset(['a', 'b']))")
         .testIfErrorContains("not iterable", "max(depset([1, 2, 3]))")
         .testIfErrorContains("not iterable", "1 in depset([1, 2, 3])")
-        .testIfErrorContains("not iterable", "sorted(depset(['a', 'b']))")
-        .testIfErrorContains("not iterable", "tuple(depset(['a', 'b']))")
+        .testIfErrorContains("not a collection", "sorted(depset(['a', 'b']))")
+        .testIfErrorContains("not a collection", "tuple(depset(['a', 'b']))")
         .testIfErrorContains("not iterable", "[x for x in depset()]")
         .testIfErrorContains("not iterable", "len(depset(['a']))");
   }
@@ -2040,7 +2023,9 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
 
     new SkylarkTest()
         .testIfErrorContains(
-            "type 'int' is not iterable", "def bar (): return [x + y for x, y in (1, 2)]", "bar()");
+            "type 'int' is not a collection",
+            "def bar (): return [x + y for x, y in (1, 2)]",
+            "bar()");
 
     new SkylarkTest()
         .testIfErrorContains(
@@ -2049,7 +2034,7 @@ public final class SkylarkEvaluationTest extends EvaluationTest {
             "[x + y for x, y, z in [(1, 2), (3, 4)]]");
 
     new SkylarkTest()
-        .testIfErrorContains("type 'int' is not iterable", "[x2 + y2 for x2, y2 in (1, 2)]");
+        .testIfErrorContains("type 'int' is not a collection", "[x2 + y2 for x2, y2 in (1, 2)]");
 
     new SkylarkTest()
         // returns [2] in Python, it's an error in Skylark

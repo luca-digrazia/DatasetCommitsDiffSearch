@@ -23,9 +23,12 @@ import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -34,8 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkList;
 
 /**
  * Provides shared functionality for parameterized command-line launching.
@@ -79,7 +80,7 @@ public final class CommandHelper {
      */
     public Builder addHostToolDependencies(String toolAttributeName) {
       List<? extends TransitiveInfoCollection> dependencies =
-          ruleContext.getPrerequisites(toolAttributeName);
+          ruleContext.getPrerequisites(toolAttributeName, Mode.HOST);
       addToolDependencies(dependencies);
       return this;
     }
@@ -90,7 +91,7 @@ public final class CommandHelper {
      */
     public Builder addToolDependencies(String toolAttributeName) {
       List<? extends TransitiveInfoCollection> dependencies =
-          ruleContext.getPrerequisites(toolAttributeName);
+          ruleContext.getPrerequisites(toolAttributeName, Mode.TARGET);
       return addToolDependencies(dependencies);
     }
 
@@ -174,9 +175,17 @@ public final class CommandHelper {
 
     for (Iterable<? extends TransitiveInfoCollection> tools : toolsList) {
       for (TransitiveInfoCollection dep : tools) { // (Note: host configuration)
+        Label label = AliasProvider.getDependencyLabel(dep);
         MiddlemanProvider toolMiddleman = dep.getProvider(MiddlemanProvider.class);
         if (toolMiddleman != null) {
           resolvedToolsBuilder.addTransitive(toolMiddleman.getMiddlemanArtifact());
+          // It is not obviously correct to skip potentially adding getFilesToRun of the
+          // FilesToRunProvider. However, for all tools that we know of that provide a middleman,
+          // the middleman is equivalent to the list of files coming out of getFilesToRun().
+          // Just adding all the files creates a substantial performance bottleneck. E.g. a C++
+          // toolchain might consist of thousands of files and tracking them one by one for each
+          // action that uses them is inefficient.
+          continue;
         }
 
         FilesToRunProvider tool = dep.getProvider(FilesToRunProvider.class);
@@ -185,28 +194,16 @@ public final class CommandHelper {
         }
 
         NestedSet<Artifact> files = tool.getFilesToRun();
-        // It is not obviously correct to skip potentially adding getFilesToRun of the
-        // FilesToRunProvider. However, for all tools that we know of that provide a middleman, the
-        // middleman is equivalent to the list of files coming out of getFilesToRun(). Just adding
-        // all the files creates a substantial performance bottleneck. E.g. a C++ toolchain might
-        // consist of thousands of files and tracking them one by one for each action that uses them
-        // is inefficient.
-        if (toolMiddleman == null) {
-          resolvedToolsBuilder.addTransitive(files);
-        }
-
-        Label label = AliasProvider.getDependencyLabel(dep);
+        resolvedToolsBuilder.addTransitive(files);
         Artifact executableArtifact = tool.getExecutable();
         // If the label has an executable artifact add that to the multimaps.
         if (executableArtifact != null) {
           mapGet(tempLabelMap, label).add(executableArtifact);
-          if (toolMiddleman == null) {
-            // Also send the runfiles when running remotely.
-            toolsRunfilesBuilder.add(tool.getRunfilesSupplier());
-          }
+          // Also send the runfiles when running remotely.
+          toolsRunfilesBuilder.add(tool.getRunfilesSupplier());
         } else {
           // Map all depArtifacts to the respective label using the multimaps.
-          mapGet(tempLabelMap, label).addAll(files.toList());
+          Iterables.addAll(mapGet(tempLabelMap, label), files);
         }
       }
     }
@@ -247,8 +244,11 @@ public final class CommandHelper {
     return values;
   }
 
-  /** Resolves a command, and expands known locations for $(location) variables. */
-  @Deprecated // Only exists to support a legacy Starlark API.
+  /**
+   * Resolves a command, and expands known locations for $(location)
+   * variables.
+   */
+  @Deprecated // Only exists to support a legacy Skylark API.
   public String resolveCommandAndExpandLabels(
       String command, @Nullable String attribute, boolean allowDataInLabel) {
     LocationExpander expander;

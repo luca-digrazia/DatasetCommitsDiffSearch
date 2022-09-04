@@ -47,10 +47,10 @@ import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaSourceJarsProvider;
 import com.google.devtools.build.lib.rules.python.PyProviderUtils;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.testutil.TestRuleClassProvider;
@@ -59,7 +59,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -1868,8 +1867,9 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     assertThat(((StructImpl) provider).getProvider()).isEqualTo(ActionsProvider.INSTANCE);
     update("actions", provider);
 
-    Map<?, ?> mapping = (Dict<?, ?>) eval("actions.by_file");
-    assertThat(mapping).hasSize(1);
+    Object mapping = eval("actions.by_file");
+    assertThat(mapping).isInstanceOf(Dict.class);
+    assertThat((Dict) mapping).hasSize(1);
     update("file", eval("ruleContext.attr.dep.files.to_list()[0]"));
     Object actionUnchecked = eval("actions.by_file[file]");
     assertThat(actionUnchecked).isInstanceOf(ActionAnalysisMetadata.class);
@@ -1924,8 +1924,8 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     update("action1", eval("ruleContext.attr.dep[Actions].by_file[file1]"));
     update("action2", eval("ruleContext.attr.dep[Actions].by_file[file2]"));
 
-    assertThat(eval("action1.inputs")).isInstanceOf(Depset.class);
-    assertThat(eval("action1.outputs")).isInstanceOf(Depset.class);
+    assertThat(eval("action1.inputs")).isInstanceOf(SkylarkNestedSet.class);
+    assertThat(eval("action1.outputs")).isInstanceOf(SkylarkNestedSet.class);
 
     assertThat(eval("action1.argv")).isEqualTo(Starlark.NONE);
     assertThat(eval("action2.content")).isEqualTo(Starlark.NONE);
@@ -1973,7 +1973,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
 
     Object mapUnchecked = eval("ruleContext.attr.dep.v");
     assertThat(mapUnchecked).isInstanceOf(Dict.class);
-    Map<?, ?> map = (Dict) mapUnchecked;
+    Dict<?, ?> map = (Dict) mapUnchecked;
     // Should only have the first action because created_actions() was called
     // before the second action was created.
     Object file = eval("ruleContext.attr.dep.out1");
@@ -2071,7 +2071,7 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
 
     Object mapUnchecked = eval("ruleContext.attr.dep.v");
     assertThat(mapUnchecked).isInstanceOf(Dict.class);
-    Map<?, ?> map = (Dict) mapUnchecked;
+    Dict<?, ?> map = (Dict) mapUnchecked;
     Object out1 = eval("ruleContext.attr.dep.out1");
     Object out2 = eval("ruleContext.attr.dep.out2");
     Object out3 = eval("ruleContext.attr.dep.out3");
@@ -2515,116 +2515,5 @@ public class SkylarkRuleContextTest extends SkylarkTestCase {
     getConfiguredTarget("//test:my_non_build_setting");
     assertContainsEvent("attempting to access 'build_setting_value' of non-build setting "
         + "//test:my_non_build_setting");
-  }
-
-  private void createToolchains() throws Exception {
-    scratch.file(
-        "rule/test_toolchain.bzl",
-        "def _impl(ctx):",
-        "    value = ctx.attr.value",
-        "    toolchain = platform_common.ToolchainInfo(value = value)",
-        "    return [toolchain]",
-        "test_toolchain = rule(",
-        "    implementation = _impl,",
-        "    attrs = {'value': attr.string()},",
-        ")");
-    scratch.file(
-        "rule/test_rule.bzl",
-        "result = provider()",
-        "def _impl(ctx):",
-        "    toolchain = ctx.toolchains['//rule:toolchain_type']",
-        "    return [result(",
-        "        value_from_toolchain = toolchain.value,",
-        "    )]",
-        "test_rule = rule(",
-        "    implementation = _impl,",
-        "    toolchains = ['//rule:toolchain_type'],",
-        ")");
-    scratch.file(
-        "rule/BUILD",
-        "exports_files(['test_toolchain/bzl', 'test_rule.bzl'])",
-        "toolchain_type(name = 'toolchain_type')");
-    scratch.file(
-        "toolchain/BUILD",
-        "load('//rule:test_toolchain.bzl', 'test_toolchain')",
-        "test_toolchain(",
-        "    name = 'foo',",
-        "    value = 'foo',",
-        ")",
-        "toolchain(",
-        "    name = 'foo_toolchain',",
-        "    toolchain_type = '//rule:toolchain_type',",
-        "    target_compatible_with = ['//platform:constraint_1'],",
-        "    toolchain = ':foo',",
-        ")",
-        "test_toolchain(",
-        "    name = 'bar',",
-        "    value = 'bar',",
-        ")",
-        "toolchain(",
-        "    name = 'bar_toolchain',",
-        "    toolchain_type = '//rule:toolchain_type',",
-        "    target_compatible_with = ['//platform:constraint_2'],",
-        "    toolchain = ':bar',",
-        ")");
-  }
-
-  private void createPlatforms() throws Exception {
-    scratch.file(
-        "platform/BUILD",
-        "constraint_setting(name = 'setting')",
-        "constraint_value(",
-        "    name = 'constraint_1',",
-        "    constraint_setting = ':setting',",
-        ")",
-        "constraint_value(",
-        "    name = 'constraint_2',",
-        "    constraint_setting = ':setting',",
-        ")",
-        "platform(",
-        "    name = 'platform_1',",
-        "    constraint_values = [':constraint_1'],",
-        ")",
-        "platform(",
-        "    name = 'platform_2',",
-        "    constraint_values = [':constraint_2'],",
-        ")");
-  }
-
-  private String getToolchainResult(String targetName) throws Exception {
-    ConfiguredTarget myRuleTarget = getConfiguredTarget(targetName);
-    StructImpl info =
-        (StructImpl)
-            myRuleTarget.get(
-                new SkylarkKey(
-                    Label.parseAbsolute("//rule:test_rule.bzl", ImmutableMap.of()), "result"));
-
-    assertThat(info).isNotNull();
-    return (String) info.getValue("value_from_toolchain");
-  }
-
-  @Test
-  public void testToolchains() throws Exception {
-    createToolchains();
-    createPlatforms();
-    scratch.file(
-        "demo/BUILD",
-        "load('//rule:test_rule.bzl', 'test_rule')",
-        "test_rule(",
-        "    name = 'demo',",
-        ")");
-
-    useConfiguration(
-        "--extra_toolchains=//toolchain:foo_toolchain,//toolchain:bar_toolchain",
-        "--platforms=//platform:platform_1");
-    String value = getToolchainResult("//demo");
-    assertThat(value).isEqualTo("foo");
-
-    // Re-test with the other platform.
-    useConfiguration(
-        "--extra_toolchains=//toolchain:foo_toolchain,//toolchain:bar_toolchain",
-        "--platforms=//platform:platform_2");
-    value = getToolchainResult("//demo");
-    assertThat(value).isEqualTo("bar");
   }
 }

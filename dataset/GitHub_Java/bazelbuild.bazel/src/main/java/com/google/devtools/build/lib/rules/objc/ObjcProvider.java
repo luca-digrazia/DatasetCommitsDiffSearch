@@ -31,6 +31,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.NativeProvider.WithLegacySkylarkName;
@@ -38,10 +39,10 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkingContext;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
 import com.google.devtools.build.lib.skylarkbuildapi.apple.ObjcProviderApi;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
@@ -87,9 +88,8 @@ import javax.annotation.Nullable;
  * transitive nested sets returned by ObjcProvider queries. It does not materially affect other
  * operations of the ObjcProvider.
  */
-// TODO(adonovan): this is an info, not a provider; rename.
 @Immutable
-public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
+public final class ObjcProvider extends Info implements ObjcProviderApi<Artifact> {
 
   /** Skylark name for the ObjcProvider. */
   public static final String SKYLARK_NAME = "objc";
@@ -396,8 +396,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
       ImmutableSet.<Key<?>>of(HEADER, MODULE_MAP, SOURCE);
 
   @Override
-  public Depset /*<String>*/ defineForStarlark() {
-    return Depset.of(SkylarkType.STRING, define());
+  public SkylarkNestedSet /*<String>*/ defineForStarlark() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, define());
   }
 
   public NestedSet<String> define() {
@@ -405,8 +405,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<Artifact>*/ dynamicFrameworkFileForStarlark() {
-    return Depset.of(Artifact.TYPE, dynamicFrameworkFile());
+  public SkylarkNestedSet /*<Artifact>*/ dynamicFrameworkFileForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, dynamicFrameworkFile());
   }
 
   NestedSet<Artifact> dynamicFrameworkFile() {
@@ -414,23 +414,23 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<Artifact>*/ exportedDebugArtifacts() {
-    return Depset.of(Artifact.TYPE, get(EXPORTED_DEBUG_ARTIFACTS));
+  public SkylarkNestedSet /*<Artifact>*/ exportedDebugArtifacts() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(EXPORTED_DEBUG_ARTIFACTS));
   }
 
   @Override
-  public Depset frameworkSearchPathOnly() {
+  public SkylarkNestedSet frameworkSearchPathOnly() {
     return ObjcProviderSkylarkConverters.convertPathFragmentsToSkylark(get(FRAMEWORK_SEARCH_PATHS));
   }
 
   @Override
-  public Depset /*<Artifact>*/ forceLoadLibrary() {
-    return Depset.of(Artifact.TYPE, get(FORCE_LOAD_LIBRARY));
+  public SkylarkNestedSet /*<Artifact>*/ forceLoadLibrary() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(FORCE_LOAD_LIBRARY));
   }
 
   @Override
-  public Depset /*<Artifact>*/ headerForStarlark() {
-    return Depset.of(Artifact.TYPE, header());
+  public SkylarkNestedSet /*<Artifact>*/ headerForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, header());
   }
 
   NestedSet<Artifact> header() {
@@ -443,68 +443,68 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<Artifact>*/ importedLibrary() {
-    return Depset.of(Artifact.TYPE, get(IMPORTED_LIBRARY));
+  public SkylarkNestedSet /*<Artifact>*/ importedLibrary() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(IMPORTED_LIBRARY));
   }
 
   @Override
-  public Depset /*<String>*/ include() {
+  public SkylarkNestedSet /*<String>*/ include() {
     return ObjcProviderSkylarkConverters.convertPathFragmentsToSkylark(get(INCLUDE));
   }
 
   @Override
-  public Depset includeSystem() {
+  public SkylarkNestedSet includeSystem() {
     return ObjcProviderSkylarkConverters.convertPathFragmentsToSkylark(get(INCLUDE_SYSTEM));
   }
 
   @Override
-  public Depset iquote() {
+  public SkylarkNestedSet iquote() {
     return ObjcProviderSkylarkConverters.convertPathFragmentsToSkylark(get(IQUOTE));
   }
 
   @Override
-  public Depset /*<Artifact>*/ j2objcLibrary() {
-    return Depset.of(Artifact.TYPE, get(J2OBJC_LIBRARY));
+  public SkylarkNestedSet /*<Artifact>*/ j2objcLibrary() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(J2OBJC_LIBRARY));
   }
 
   @Override
-  public Depset /*<Artifact>*/ jreLibrary() {
-    return Depset.of(Artifact.TYPE, get(JRE_LIBRARY));
+  public SkylarkNestedSet /*<Artifact>*/ jreLibrary() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(JRE_LIBRARY));
   }
 
   @Override
-  public Depset /*<Artifact>*/ library() {
-    return Depset.of(Artifact.TYPE, get(LIBRARY));
+  public SkylarkNestedSet /*<Artifact>*/ library() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(LIBRARY));
   }
 
   @Override
-  public Depset /*<Artifact>*/ linkInputs() {
-    return Depset.of(Artifact.TYPE, get(LINK_INPUTS));
+  public SkylarkNestedSet /*<Artifact>*/ linkInputs() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(LINK_INPUTS));
   }
 
   @Override
-  public Depset /*<Artifact>*/ linkedBinary() {
-    return Depset.of(Artifact.TYPE, get(LINKED_BINARY));
+  public SkylarkNestedSet /*<Artifact>*/ linkedBinary() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(LINKED_BINARY));
   }
 
   @Override
-  public Depset /*<Artifact>*/ linkmapFile() {
-    return Depset.of(Artifact.TYPE, get(LINKMAP_FILE));
+  public SkylarkNestedSet /*<Artifact>*/ linkmapFile() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(LINKMAP_FILE));
   }
 
   @Override
-  public Depset /*<String>*/ linkopt() {
-    return Depset.of(SkylarkType.STRING, get(LINKOPT));
+  public SkylarkNestedSet /*<String>*/ linkopt() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, get(LINKOPT));
   }
 
   @Override
-  public Depset /*<Artifact>*/ mergeZip() {
-    return Depset.of(Artifact.TYPE, get(MERGE_ZIP));
+  public SkylarkNestedSet /*<Artifact>*/ mergeZip() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(MERGE_ZIP));
   }
 
   @Override
-  public Depset /*<Artifact>*/ moduleMap() {
-    return Depset.of(Artifact.TYPE, get(MODULE_MAP));
+  public SkylarkNestedSet /*<Artifact>*/ moduleMap() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(MODULE_MAP));
   }
 
   @Override
@@ -513,34 +513,34 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<Artifact>*/ multiArchDynamicLibraries() {
-    return Depset.of(Artifact.TYPE, get(MULTI_ARCH_DYNAMIC_LIBRARIES));
+  public SkylarkNestedSet /*<Artifact>*/ multiArchDynamicLibraries() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(MULTI_ARCH_DYNAMIC_LIBRARIES));
   }
 
   @Override
-  public Depset /*<Artifact>*/ multiArchLinkedArchives() {
-    return Depset.of(Artifact.TYPE, get(MULTI_ARCH_LINKED_ARCHIVES));
+  public SkylarkNestedSet /*<Artifact>*/ multiArchLinkedArchives() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(MULTI_ARCH_LINKED_ARCHIVES));
   }
 
   @Override
-  public Depset /*<Artifact>*/ multiArchLinkedBinaries() {
-    return Depset.of(Artifact.TYPE, get(MULTI_ARCH_LINKED_BINARIES));
+  public SkylarkNestedSet /*<Artifact>*/ multiArchLinkedBinaries() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(MULTI_ARCH_LINKED_BINARIES));
   }
 
   @Override
-  public Depset /*<String>*/ sdkDylib() {
-    return Depset.of(SkylarkType.STRING, get(SDK_DYLIB));
+  public SkylarkNestedSet /*<String>*/ sdkDylib() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, get(SDK_DYLIB));
   }
 
   @Override
-  public Depset sdkFramework() {
-    return (Depset)
-        ObjcProviderSkylarkConverters.convertToSkylark(SDK_FRAMEWORK, get(SDK_FRAMEWORK));
+  public SkylarkNestedSet sdkFramework() {
+    return (SkylarkNestedSet) ObjcProviderSkylarkConverters.convertToSkylark(SDK_FRAMEWORK,
+        get(SDK_FRAMEWORK));
   }
 
   @Override
-  public Depset /*<Artifact>*/ sourceForStarlark() {
-    return Depset.of(Artifact.TYPE, source());
+  public SkylarkNestedSet /*<Artifact>*/ sourceForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, source());
   }
 
   NestedSet<Artifact> source() {
@@ -553,8 +553,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<Artifact>*/ staticFrameworkFileForStarlark() {
-    return Depset.of(Artifact.TYPE, staticFrameworkFile());
+  public SkylarkNestedSet /*<Artifact>*/ staticFrameworkFileForStarlark() {
+    return SkylarkNestedSet.of(Artifact.TYPE, staticFrameworkFile());
   }
 
   NestedSet<Artifact> staticFrameworkFile() {
@@ -562,14 +562,14 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<Artifact>*/ umbrellaHeader() {
-    return Depset.of(Artifact.TYPE, get(UMBRELLA_HEADER));
+  public SkylarkNestedSet /*<Artifact>*/ umbrellaHeader() {
+    return SkylarkNestedSet.of(Artifact.TYPE, get(UMBRELLA_HEADER));
   }
 
   @Override
-  public Depset weakSdkFramework() {
-    return (Depset)
-        ObjcProviderSkylarkConverters.convertToSkylark(WEAK_SDK_FRAMEWORK, get(WEAK_SDK_FRAMEWORK));
+  public SkylarkNestedSet weakSdkFramework() {
+    return (SkylarkNestedSet) ObjcProviderSkylarkConverters.convertToSkylark(WEAK_SDK_FRAMEWORK,
+        get(WEAK_SDK_FRAMEWORK));
   }
 
   /**
@@ -635,16 +635,12 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
       ImmutableMap<Key<?>, NestedSet<?>> nonPropagatedItems,
       ImmutableMap<Key<?>, NestedSet<?>> strictDependencyItems,
       ImmutableListMultimap<Key<?>, ?> directItems) {
+    super(SKYLARK_CONSTRUCTOR, Location.BUILTIN);
     this.semantics = semantics;
     this.items = Preconditions.checkNotNull(items);
     this.nonPropagatedItems = Preconditions.checkNotNull(nonPropagatedItems);
     this.strictDependencyItems = Preconditions.checkNotNull(strictDependencyItems);
     this.directItems = Preconditions.checkNotNull(directItems);
-  }
-
-  @Override
-  public BuiltinProvider<ObjcProvider> getProvider() {
-    return SKYLARK_CONSTRUCTOR;
   }
 
   /**
@@ -705,7 +701,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
    * Indicates whether {@code flag} is set on this provider.
    */
   public boolean is(Flag flag) {
-    return get(FLAG).toList().contains(flag);
+    return Iterables.contains(get(FLAG), flag);
   }
 
   /** Returns the list of .a files required for linking that arise from objc libraries. */
@@ -713,9 +709,9 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     // JRE libraries must be ordered after all regular objc libraries.
     NestedSet<Artifact> jreLibs = get(JRE_LIBRARY);
     return ImmutableList.<Artifact>builder()
-        .addAll(
-            Iterables.filter(get(LIBRARY).toList(), Predicates.not(Predicates.in(jreLibs.toSet()))))
-        .addAll(jreLibs.toList())
+        .addAll(Iterables.filter(
+            get(LIBRARY), Predicates.not(Predicates.in(jreLibs.toSet()))))
+        .addAll(jreLibs)
         .build();
   }
 
@@ -734,7 +730,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
           NestedSet<Artifact> headers = header();
           NestedSetBuilder<Artifact> generatedHeadersBuilder =
               new NestedSetBuilder<>(headers.getOrder());
-          for (Artifact header : headers.toList()) {
+          for (Artifact header : headers) {
             if (!header.isSourceArtifact()) {
               generatedHeadersBuilder.add(header);
             }
@@ -752,7 +748,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
       synchronized (this) {
         if (generatedHeaderList == null) {
           ImmutableList.Builder<Artifact> generatedHeadersBuilder = ImmutableList.builder();
-          for (Artifact header : header().toList()) {
+          for (Artifact header : header()) {
             if (!header.isSourceArtifact()) {
               generatedHeadersBuilder.add(header);
             }
@@ -797,7 +793,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
       for (Artifact ccLibrary : avoidProvider.getCcLibraries()) {
         avoidLibrariesSet.add(ccLibrary.getRunfilesPath());
       }
-      for (Artifact libraryToAvoid : avoidProvider.getPropagable(LIBRARY).toList()) {
+      for (Artifact libraryToAvoid : avoidProvider.getPropagable(LIBRARY)) {
         avoidLibrariesSet.add(libraryToAvoid.getRunfilesPath());
       }
     }
@@ -897,7 +893,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     // root directory, hence only the path fragment after the root directory is compared.
     HashSet<PathFragment> avoidPathsSet = new HashSet<>();
     for (ObjcProvider avoidProvider : avoidProviders) {
-      for (Artifact artifact : avoidProvider.getPropagable(key).toList()) {
+      for (Artifact artifact : avoidProvider.getPropagable(key)) {
         avoidPathsSet.add(artifact.getRunfilesPath());
       }
     }
@@ -938,7 +934,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
    */
   private NestedSet<String> getFrameworkNames(Key<Artifact> key) {
     NestedSetBuilder<String> names = new NestedSetBuilder<>(key.order);
-    for (Artifact file : get(key).toList()) {
+    for (Artifact file : get(key)) {
       PathFragment frameworkDir = file.getExecPath().getParentDirectory();
       checkIsFrameworkDirectory(frameworkDir);
       names.add(getFrameworkName(frameworkDir));
@@ -953,7 +949,7 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
    */
   private NestedSet<String> getFrameworkPaths(Key<Artifact> key) {
     NestedSetBuilder<String> paths = new NestedSetBuilder<>(key.order);
-    for (Artifact file : get(key).toList()) {
+    for (Artifact file : get(key)) {
       PathFragment frameworkDir = file.getExecPath().getParentDirectory();
       checkIsFrameworkDirectory(frameworkDir);
       paths.add(getFrameworkPath(frameworkDir));
@@ -962,8 +958,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<String>*/ dynamicFrameworkNamesForStarlark() {
-    return Depset.of(SkylarkType.STRING, dynamicFrameworkNames());
+  public SkylarkNestedSet /*<String>*/ dynamicFrameworkNamesForStarlark() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, dynamicFrameworkNames());
   }
 
   NestedSet<String> dynamicFrameworkNames() {
@@ -971,8 +967,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<String>*/ dynamicFrameworkPathsForStarlark() {
-    return Depset.of(SkylarkType.STRING, dynamicFrameworkPaths());
+  public SkylarkNestedSet /*<String>*/ dynamicFrameworkPathsForStarlark() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, dynamicFrameworkPaths());
   }
 
   NestedSet<String> dynamicFrameworkPaths() {
@@ -980,8 +976,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<String>*/ staticFrameworkNamesForStarlark() {
-    return Depset.of(SkylarkType.STRING, staticFrameworkNames());
+  public SkylarkNestedSet /*<String>*/ staticFrameworkNamesForStarlark() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, staticFrameworkNames());
   }
 
   NestedSet<String> staticFrameworkNames() {
@@ -989,8 +985,8 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
   }
 
   @Override
-  public Depset /*<String>*/ staticFrameworkPathsForStarlark() {
-    return Depset.of(SkylarkType.STRING, staticFrameworkPaths());
+  public SkylarkNestedSet /*<String>*/ staticFrameworkPathsForStarlark() {
+    return SkylarkNestedSet.of(SkylarkType.STRING, staticFrameworkPaths());
   }
 
   NestedSet<String> staticFrameworkPaths() {
@@ -1116,13 +1112,6 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
     /**
      * Add elements in toAdd, and propagate them to any (transitive) dependers on this ObjcProvider.
      */
-    public <E> Builder addAll(Key<E> key, NestedSet<? extends E> toAdd) {
-      return addAll(key, toAdd.toList());
-    }
-
-    /**
-     * Add elements in toAdd, and propagate them to any (transitive) dependers on this ObjcProvider.
-     */
     public <E> Builder addAll(Key<E> key, Iterable<? extends E> toAdd) {
       uncheckedAddAll(key, toAdd, this.items);
       if (ObjcProvider.KEYS_FOR_DIRECT.contains(key)) {
@@ -1157,13 +1146,13 @@ public final class ObjcProvider implements Info, ObjcProviderApi<Artifact> {
 
     /**
      * Add elements in toAdd with the given key from skylark. An error is thrown if toAdd is not an
-     * appropriate Depset.
+     * appropriate SkylarkNestedSet.
      */
     void addElementsFromSkylark(Key<?> key, Object skylarkToAdd) throws EvalException {
       NestedSet<?> toAdd = ObjcProviderSkylarkConverters.convertToJava(key, skylarkToAdd);
       uncheckedAddTransitive(key, toAdd, this.items);
       if (ObjcProvider.KEYS_FOR_DIRECT.contains(key)) {
-        uncheckedAddAllDirect(key, toAdd.toList(), this.directItems);
+        uncheckedAddAllDirect(key, toAdd, this.directItems);
       }
     }
 

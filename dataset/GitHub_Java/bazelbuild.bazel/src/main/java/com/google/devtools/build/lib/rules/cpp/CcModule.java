@@ -57,12 +57,12 @@ import com.google.devtools.build.lib.rules.cpp.CppActionConfigs.CppPlatform;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkingMode;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcModuleApi;
-import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -246,13 +246,15 @@ public abstract class CcModule
         /* variablesExtensions= */ ImmutableList.of(),
         /* additionalBuildVariables= */ ImmutableMap.of(),
         /* directModuleMaps= */ ImmutableList.of(),
-        Depset.getSetFromNoneableParam(includeDirs, String.class, "framework_include_directories"),
-        Depset.getSetFromNoneableParam(quoteIncludeDirs, String.class, "quote_include_directories"),
-        Depset.getSetFromNoneableParam(
+        SkylarkNestedSet.getSetFromNoneableParam(
+            includeDirs, String.class, "framework_include_directories"),
+        SkylarkNestedSet.getSetFromNoneableParam(
+            quoteIncludeDirs, String.class, "quote_include_directories"),
+        SkylarkNestedSet.getSetFromNoneableParam(
             systemIncludeDirs, String.class, "system_include_directories"),
-        Depset.getSetFromNoneableParam(
+        SkylarkNestedSet.getSetFromNoneableParam(
             frameworkIncludeDirs, String.class, "framework_include_directories"),
-        Depset.getSetFromNoneableParam(defines, String.class, "preprocessor_defines"),
+        SkylarkNestedSet.getSetFromNoneableParam(defines, String.class, "preprocessor_defines"),
         NestedSetBuilder.emptySet(Order.STABLE_ORDER));
   }
 
@@ -295,10 +297,10 @@ public abstract class CcModule
         /* ltoOutputRootPrefix= */ null,
         convertFromNoneable(defFile, /* defaultValue= */ null),
         /* fdoContext= */ null,
-        Depset.getSetFromNoneableParam(
+        SkylarkNestedSet.getSetFromNoneableParam(
             runtimeLibrarySearchDirectories, String.class, "runtime_library_search_directories"),
         /* librariesToLink= */ null,
-        Depset.getSetFromNoneableParam(
+        SkylarkNestedSet.getSetFromNoneableParam(
             librarySearchDirectories, String.class, "library_search_directories"),
         /* addIfsoRelatedVariables= */ false);
   }
@@ -323,9 +325,10 @@ public abstract class CcModule
     return (T) obj; // totally unsafe
   }
 
-  /** Converts an object that can be ether Depset or None into NestedSet. */
-  protected NestedSet<String> asStringNestedSet(Object o) throws Depset.TypeException {
-    Depset skylarkNestedSet = convertFromNoneable(o, /* defaultValue= */ (Depset) null);
+  /** Converts an object that can be ether SkylarkNestedSet or None into NestedSet. */
+  protected NestedSet<String> asStringNestedSet(Object o) throws SkylarkNestedSet.TypeException {
+    SkylarkNestedSet skylarkNestedSet =
+        convertFromNoneable(o, /* defaultValue= */ (SkylarkNestedSet) null);
     if (skylarkNestedSet != null) {
       return skylarkNestedSet.getSet(String.class);
     } else {
@@ -553,7 +556,7 @@ public abstract class CcModule
     if (obj == Starlark.UNBOUND) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     } else {
-      return Depset.getSetFromNoneableParam(obj, Artifact.class, fieldName);
+      return SkylarkNestedSet.getSetFromNoneableParam(obj, Artifact.class, fieldName);
     }
   }
 
@@ -562,7 +565,7 @@ public abstract class CcModule
     if (obj == Starlark.UNBOUND) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     } else {
-      return Depset.getSetFromNoneableParam(obj, String.class, fieldName);
+      return SkylarkNestedSet.getSetFromNoneableParam(obj, String.class, fieldName);
     }
   }
 
@@ -578,18 +581,21 @@ public abstract class CcModule
 
     LinkOptions options =
         LinkOptions.of(
-            Depset.getSetFromNoneableParam(userLinkFlagsObject, String.class, "user_link_flags")
+            SkylarkNestedSet.getSetFromNoneableParam(
+                    userLinkFlagsObject, String.class, "user_link_flags")
                 .toList(),
             BazelStarlarkContext.from(thread).getSymbolGenerator());
 
     return CcLinkingContext.LinkerInput.builder()
         .setOwner(owner)
         .addLibraries(
-            Depset.getSetFromNoneableParam(librariesToLinkObject, LibraryToLink.class, "libraries")
+            SkylarkNestedSet.getSetFromNoneableParam(
+                    librariesToLinkObject, LibraryToLink.class, "libraries")
                 .toList())
         .addUserLinkFlags(ImmutableList.of(options))
         .addNonCodeInputs(
-            Depset.getSetFromNoneableParam(nonCodeInputs, Artifact.class, "additional_inputs")
+            SkylarkNestedSet.getSetFromNoneableParam(
+                    nonCodeInputs, Artifact.class, "additional_inputs")
                 .toList())
         .build();
   }
@@ -636,7 +642,7 @@ public abstract class CcModule
     } else {
       CcLinkingContext.Builder ccLinkingContextBuilder = CcLinkingContext.builder();
       ccLinkingContextBuilder.addTransitiveLinkerInputs(
-          Depset.getSetFromNoneableParam(
+          SkylarkNestedSet.getSetFromNoneableParam(
               linkerInputs, CcLinkingContext.LinkerInput.class, "linker_inputs"));
 
       @SuppressWarnings("unchecked")
@@ -663,12 +669,13 @@ public abstract class CcModule
     return ccToolchain.getLegacyCcFlagsMakeVariable();
   }
 
-  /** Converts an object that can be the either Depset or None into NestedSet. */
+  /** Converts an object that can be the either SkylarkNestedSet or None into NestedSet. */
   @SuppressWarnings("unchecked")
-  protected Object skylarkListToDepset(Object o) throws EvalException {
+  protected Object skylarkListToSkylarkNestedSet(Object o) throws EvalException {
     if (o instanceof Sequence) {
       Sequence<String> list = (Sequence<String>) o;
-      Depset.Builder builder = Depset.builder(Order.STABLE_ORDER);
+      SkylarkNestedSet.Builder builder =
+          SkylarkNestedSet.builder(Order.STABLE_ORDER, Location.BUILTIN);
       for (Object entry : list) {
         builder.addDirect(entry);
       }
@@ -677,15 +684,15 @@ public abstract class CcModule
     return o;
   }
 
-  /** Converts None, or a Sequence, or a Depset to a NestedSet. */
+  /** Converts None, or a Sequence, or a SkylarkNestedSet to a NestedSet. */
   @SuppressWarnings("unchecked")
   private static <T> NestedSet<T> convertToNestedSet(Object o, Class<T> type, String fieldName)
       throws EvalException {
     if (o == Starlark.NONE) {
       return NestedSetBuilder.emptySet(Order.COMPILE_ORDER);
     }
-    return o instanceof Depset
-        ? ((Depset) o).getSetFromParam(type, fieldName)
+    return o instanceof SkylarkNestedSet
+        ? ((SkylarkNestedSet) o).getSetFromParam(type, fieldName)
         : NestedSetBuilder.wrap(Order.COMPILE_ORDER, (Sequence<T>) o);
   }
 

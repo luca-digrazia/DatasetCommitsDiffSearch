@@ -14,6 +14,7 @@
 
 package com.google.devtools.build.lib.syntax;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -83,6 +84,12 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
 
   private Dict(@Nullable Mutability mutability) {
     this.mutability = mutability == null ? Mutability.IMMUTABLE : mutability;
+  }
+
+  /** @deprecated use {@code new Dict(thread.mutability())} instead. */
+  @Deprecated
+  private Dict(@Nullable StarlarkThread thread) {
+    this.mutability = thread == null ? Mutability.IMMUTABLE : thread.mutability();
   }
 
   @Override
@@ -248,10 +255,8 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
 
     // All these types and casts are lies.
     Dict<K, V> dict =
-        args instanceof Dict
-            ? (Dict<K, V>) args
-            : getDictFromArgs("update", args, loc, thread.mutability());
-    dict = Dict.plus(dict, (Dict<K, V>) kwargs, thread.mutability());
+        args instanceof Dict ? (Dict<K, V>) args : getDictFromArgs("update", args, loc, thread);
+    dict = Dict.plus(dict, (Dict<K, V>) kwargs, thread);
     putAll(dict, loc);
     return Starlark.NONE;
   }
@@ -300,7 +305,7 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
     return StarlarkList.wrap(thread.mutability(), array);
   }
 
-  private static final Dict<?, ?> EMPTY = of(Mutability.IMMUTABLE);
+  private static final Dict<?, ?> EMPTY = withMutability(Mutability.IMMUTABLE);
 
   /** Returns an immutable empty dict. */
   // Safe because the empty singleton is immutable.
@@ -309,24 +314,71 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
     return (Dict<K, V>) EMPTY;
   }
 
-  /** Returns a new empty dict with the specified mutability. */
+  /** Returns an empty dict with the given {@link Mutability}. */
+  public static <K, V> Dict<K, V> withMutability(@Nullable Mutability mutability) {
+    return new Dict<>(mutability);
+  }
+
+  /**
+   * @return a dict mutable in given environment only
+   * @deprecated use {@code of(thread.mutability())} instead.
+   */
+  @Deprecated
+  public static <K, V> Dict<K, V> of(@Nullable StarlarkThread thread) {
+    return new Dict<>(thread);
+  }
+
+  /** Returns a dict mutable in given environment only. */
   public static <K, V> Dict<K, V> of(@Nullable Mutability mu) {
     return new Dict<>(mu);
   }
 
-  /** Returns a new dict with the specified mutability and a single entry. */
+  /**
+   * Returns a dict mutable in given environment only, with given initial key and value.
+   *
+   * @deprecated use {@code of(thread.mutability(), k, v)} instead.
+   */
+  @Deprecated
+  public static <K, V> Dict<K, V> of(@Nullable StarlarkThread thread, K k, V v) {
+    return Dict.<K, V>of(thread).putUnsafe(k, v);
+  }
+
+  /**
+   * Returns a dict mutable in given environment only, with two given initial key value pairs.
+   *
+   * @deprecated use {@code of(thread.mutability(), k1, v2, k2, v2)}.
+   */
+  @Deprecated
+  public static <K, V> Dict<K, V> of(@Nullable StarlarkThread thread, K k1, V v1, K k2, V v2) {
+    return Dict.<K, V>of(thread).putUnsafe(k1, v1).putUnsafe(k2, v2);
+  }
+
+  /** Returns a dict mutable in given environment only, with given initial key and value */
   public static <K, V> Dict<K, V> of(@Nullable Mutability mu, K k, V v) {
-    return new Dict<K, V>(mu).putUnsafe(k, v);
+    return Dict.<K, V>of(mu).putUnsafe(k, v);
   }
 
-  /** Returns a new dict with the specified mutability and two entries. */
+  /** Returns a dict mutable in given environment only, with two given initial key value pairs. */
   public static <K, V> Dict<K, V> of(@Nullable Mutability mu, K k1, V v1, K k2, V v2) {
-    return new Dict<K, V>(mu).putUnsafe(k1, v1).putUnsafe(k2, v2);
+    return Dict.<K, V>of(mu).putUnsafe(k1, v1).putUnsafe(k2, v2);
   }
 
-  /** Returns a new dict with the specified mutability containing the entries of {@code m}. */
-  public static <K, V> Dict<K, V> copyOf(@Nullable Mutability mu, Map<? extends K, ? extends V> m) {
-    return new Dict<K, V>(mu).putAllUnsafe(m);
+  // TODO(bazel-team): Make other methods that take in mutabilities instead of environments, make
+  // this method public.
+  @VisibleForTesting
+  static <K, V> Dict<K, V> copyOf(
+      @Nullable Mutability mutability, Map<? extends K, ? extends V> m) {
+    return Dict.<K, V>withMutability(mutability).putAllUnsafe(m);
+  }
+
+  /**
+   * @return a dict mutable in given environment only, with contents copied from given map
+   * @deprecated use {@code copyOf(thread.mutability(), m)} when available.
+   */
+  @Deprecated
+  public static <K, V> Dict<K, V> copyOf(
+      @Nullable StarlarkThread thread, Map<? extends K, ? extends V> m) {
+    return Dict.<K, V>of(thread).putAllUnsafe(m);
   }
 
   /** Puts the given entry into the dict, without calling {@link #checkMutable}. */
@@ -365,7 +417,7 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
    */
   public void put(K key, V value, Location loc) throws EvalException {
     checkMutable(loc);
-    EvalUtils.checkHashable(key);
+    EvalUtils.checkValidDictKey(key);
     contents.put(key, value);
   }
 
@@ -381,7 +433,7 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
     checkMutable(loc);
     for (Map.Entry<KK, VV> e : map.entrySet()) {
       KK k = e.getKey();
-      EvalUtils.checkHashable(k);
+      EvalUtils.checkValidDictKey(k);
       contents.put(k, e.getValue());
     }
   }
@@ -510,16 +562,16 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
   public final boolean containsKey(Object key, Location loc, StarlarkThread thread)
       throws EvalException {
     if (thread.getSemantics().incompatibleDisallowDictLookupUnhashableKeys()) {
-      EvalUtils.checkHashable(key);
+      EvalUtils.checkValidDictKey(key);
     }
     return this.containsKey(key);
   }
 
-  static <K, V> Dict<K, V> plus(
+  public static <K, V> Dict<K, V> plus(
       Dict<? extends K, ? extends V> left,
       Dict<? extends K, ? extends V> right,
-      @Nullable Mutability mu) {
-    Dict<K, V> result = Dict.of(mu);
+      @Nullable StarlarkThread thread) {
+    Dict<K, V> result = Dict.of(thread);
     result.putAllUnsafe(left);
     result.putAllUnsafe(right);
     return result;
@@ -527,7 +579,8 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
 
   @SuppressWarnings("unchecked")
   static <K, V> Dict<K, V> getDictFromArgs(
-      String funcname, Object args, Location loc, @Nullable Mutability mu) throws EvalException {
+      String funcname, Object args, Location loc, @Nullable StarlarkThread thread)
+      throws EvalException {
     Iterable<?> seq;
     try {
       seq = EvalUtils.toIterable(args, loc);
@@ -536,7 +589,7 @@ public final class Dict<K, V> implements Map<K, V>, StarlarkMutable, SkylarkInde
           loc,
           String.format("in %s, got %s, want iterable", funcname, EvalUtils.getDataTypeName(args)));
     }
-    Dict<K, V> result = Dict.of(mu);
+    Dict<K, V> result = Dict.of(thread);
     int pos = 0;
     for (Object item : seq) {
       Iterable<?> seq2;
