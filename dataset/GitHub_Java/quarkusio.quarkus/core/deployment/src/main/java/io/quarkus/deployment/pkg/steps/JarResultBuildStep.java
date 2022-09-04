@@ -1,7 +1,5 @@
 package io.quarkus.deployment.pkg.steps;
 
-import static io.quarkus.bootstrap.util.ZipUtils.wrapForJDK8232879;
-
 import java.io.ByteArrayOutputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -370,7 +368,7 @@ public class JarResultBuildStep {
             for (TransformedClassesBuildItem.TransformedClass i : transformed) {
                 Path target = runnerZipFs.getPath(i.getFileName());
                 handleParent(runnerZipFs, i.getFileName(), seen);
-                try (final OutputStream out = wrapForJDK8232879(Files.newOutputStream(target))) {
+                try (OutputStream out = Files.newOutputStream(target)) {
                     out.write(i.getData());
                 }
                 seen.put(i.getFileName(), "Current Application");
@@ -384,7 +382,7 @@ public class JarResultBuildStep {
             if (Files.exists(target)) {
                 continue;
             }
-            try (final OutputStream os = wrapForJDK8232879(Files.newOutputStream(target))) {
+            try (OutputStream os = Files.newOutputStream(target)) {
                 os.write(i.getClassData());
             }
         }
@@ -398,7 +396,7 @@ public class JarResultBuildStep {
             if (i.getName().startsWith("META-INF/services")) {
                 services.computeIfAbsent(i.getName(), (u) -> new ArrayList<>()).add(i.getClassData());
             } else {
-                try (final OutputStream os = wrapForJDK8232879(Files.newOutputStream(target))) {
+                try (OutputStream os = Files.newOutputStream(target)) {
                     os.write(i.getClassData());
                 }
             }
@@ -407,7 +405,7 @@ public class JarResultBuildStep {
         copyFiles(appArchives.getRootArchive().getArchiveRoot(), runnerZipFs, services);
 
         for (Map.Entry<String, List<byte[]>> entry : services.entrySet()) {
-            try (final OutputStream os = wrapForJDK8232879(Files.newOutputStream(runnerZipFs.getPath(entry.getKey())))) {
+            try (OutputStream os = Files.newOutputStream(runnerZipFs.getPath(entry.getKey()))) {
                 for (byte[] i : entry.getValue()) {
                     os.write(i);
                     os.write('\n');
@@ -485,7 +483,7 @@ public class JarResultBuildStep {
             }
         }
         attributes.put(Attributes.Name.MAIN_CLASS, config.mainClass);
-        try (final OutputStream os = wrapForJDK8232879(Files.newOutputStream(manifestPath))) {
+        try (OutputStream os = Files.newOutputStream(manifestPath)) {
             manifest.write(os);
         }
     }
