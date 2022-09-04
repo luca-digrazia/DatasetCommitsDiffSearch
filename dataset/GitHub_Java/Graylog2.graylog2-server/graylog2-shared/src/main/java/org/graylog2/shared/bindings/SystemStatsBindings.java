@@ -18,9 +18,6 @@ package org.graylog2.shared.bindings;
 
 import com.google.inject.AbstractModule;
 import org.graylog2.shared.system.stats.SigarService;
-import org.graylog2.shared.system.stats.fs.FsProbe;
-import org.graylog2.shared.system.stats.fs.JmxFsProbe;
-import org.graylog2.shared.system.stats.fs.SigarFsProbe;
 import org.graylog2.shared.system.stats.jvm.JvmProbe;
 import org.graylog2.shared.system.stats.network.JmxNetworkProbe;
 import org.graylog2.shared.system.stats.network.NetworkProbe;
@@ -44,7 +41,6 @@ public class SystemStatsBindings extends AbstractModule {
             SigarService sigarService = new SigarService();
             if (sigarService.isReady()) {
                 bind(SigarService.class).toInstance(sigarService);
-                bind(FsProbe.class).to(SigarFsProbe.class).asEagerSingleton();
                 bind(NetworkProbe.class).to(SigarNetworkProbe.class).asEagerSingleton();
                 bind(OsProbe.class).to(SigarOsProbe.class).asEagerSingleton();
                 bind(ProcessProbe.class).to(SigarProcessProbe.class).asEagerSingleton();
@@ -55,7 +51,6 @@ public class SystemStatsBindings extends AbstractModule {
         }
 
         if (!sigarLoaded) {
-            bind(FsProbe.class).to(JmxFsProbe.class).asEagerSingleton();
             bind(NetworkProbe.class).to(JmxNetworkProbe.class).asEagerSingleton();
             bind(OsProbe.class).to(JmxOsProbe.class).asEagerSingleton();
             bind(ProcessProbe.class).to(JmxProcessProbe.class).asEagerSingleton();
