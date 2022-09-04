@@ -49,7 +49,7 @@ class PrometheusMetricsRegistryTest {
     }
 
     @Test
-    @Order(4)
+    @Order(3)
     void testPathParameter() {
         given()
                 .when().get("/message/item/123")
@@ -58,26 +58,7 @@ class PrometheusMetricsRegistryTest {
     }
 
     @Test
-    @Order(5)
-    void testMultipleParameters() {
-        given()
-                .when().get("/message/match/123/1")
-                .then()
-                .statusCode(200);
-
-        given()
-                .when().get("/message/match/1/123")
-                .then()
-                .statusCode(200);
-
-        given()
-                .when().get("/message/match/baloney")
-                .then()
-                .statusCode(200);
-    }
-
-    @Test
-    @Order(6)
+    @Order(4)
     void testPanacheCalls() {
         given()
                 .when().get("/fruit/create")
@@ -91,7 +72,7 @@ class PrometheusMetricsRegistryTest {
     }
 
     @Test
-    @Order(7)
+    @Order(5)
     void testPrimeEndpointCalls() {
         given()
                 .when().get("/prime/7")
@@ -101,7 +82,7 @@ class PrometheusMetricsRegistryTest {
     }
 
     @Test
-    @Order(8)
+    @Order(6)
     void testAllTheThings() {
         given()
                 .when().get("/all-the-things")
@@ -136,8 +117,6 @@ class PrometheusMetricsRegistryTest {
                 .body(containsString("uri=\"/message\""))
                 .body(containsString("uri=\"/message/item/{id}\""))
                 .body(containsString("outcome=\"SUCCESS\""))
-                .body(containsString("uri=\"/message/match/{id}/{sub}\""))
-                .body(containsString("uri=\"/message/match/{other}\""))
 
                 // Verify Hibernate Metrics
                 .body(containsString(
@@ -149,7 +128,7 @@ class PrometheusMetricsRegistryTest {
                 .body(containsString(
                         "hibernate_entities_inserts_total{entityManagerFactory=\"<default>\",env=\"test\",registry=\"prometheus\",} 3.0"))
                 .body(containsString(
-                        "hibernate_flushes_total{entityManagerFactory=\"<default>\",env=\"test\",registry=\"prometheus\",} 1.0"))
+                        "hibernate_flushes_total{entityManagerFactory=\"<default>\",env=\"test\",registry=\"prometheus\",} 2.0"))
 
                 // Annotated counters
                 .body(not(containsString("metric_none")))

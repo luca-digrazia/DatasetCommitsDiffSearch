@@ -50,7 +50,6 @@ import io.quarkus.micrometer.runtime.MicrometerTimedInterceptor;
 import io.quarkus.micrometer.runtime.config.MicrometerConfig;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.metrics.MetricsFactory;
-import io.quarkus.vertx.http.deployment.NonApplicationRootPathBuildItem;
 
 public class MicrometerProcessor {
     private static final DotName METER_REGISTRY = DotName.createSimple(MeterRegistry.class.getName());
@@ -65,7 +64,7 @@ public class MicrometerProcessor {
     private static final DotName TIMED_BINDING = DotName.createSimple(MicrometerTimed.class.getName());
     private static final DotName TIMED_INTERCEPTOR = DotName.createSimple(MicrometerTimedInterceptor.class.getName());
 
-    public static class MicrometerEnabled implements BooleanSupplier {
+    static class MicrometerEnabled implements BooleanSupplier {
         MicrometerConfig mConfig;
 
         public boolean getAsBoolean() {
@@ -87,10 +86,9 @@ public class MicrometerProcessor {
     }
 
     @BuildStep(onlyIf = { MicrometerEnabled.class, PrometheusRegistryProcessor.PrometheusEnabled.class })
-    MetricsCapabilityBuildItem metricsCapabilityPrometheusBuildItem(
-            NonApplicationRootPathBuildItem nonApplicationRootPathBuildItem) {
+    MetricsCapabilityBuildItem metricsCapabilityPrometheusBuildItem() {
         return new MetricsCapabilityBuildItem(MetricsFactory.MICROMETER::equals,
-                nonApplicationRootPathBuildItem.resolvePath(mConfig.export.prometheus.path));
+                mConfig.export.prometheus.path);
     }
 
     @BuildStep(onlyIf = MicrometerEnabled.class)
