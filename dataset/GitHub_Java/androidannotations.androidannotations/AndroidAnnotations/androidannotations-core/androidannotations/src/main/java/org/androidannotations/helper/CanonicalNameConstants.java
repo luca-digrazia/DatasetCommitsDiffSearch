@@ -77,7 +77,6 @@ public final class CanonicalNameConstants {
 	public static final String VIEW_GROUP = "android.view.ViewGroup";
 	public static final String CONTEXT = "android.content.Context";
 	public static final String KEY_EVENT = "android.view.KeyEvent";
-	public static final String KEY_EVENT_CALLBACK = "android.view.KeyEvent.Callback";
 	public static final String LAYOUT_INFLATER = "android.view.LayoutInflater";
 	public static final String FRAGMENT_ACTIVITY = "android.support.v4.app.FragmentActivity";
 	public static final String FRAGMENT = "android.app.Fragment";
@@ -123,6 +122,8 @@ public final class CanonicalNameConstants {
 	public static final String PREFERENCE_CLICK_LISTENER = "android.preference.Preference.OnPreferenceClickListener";
 	public static final String PREFERENCE_ACTIVITY_HEADER = "android.preference.PreferenceActivity.Header";
 	public static final String APP_WIDGET_MANAGER = "android.appwidget.AppWidgetManager";
+	public static final String ACTIONBAR_ACTIVITY = "android.support.v7.app.ActionBarActivity";
+	public static final String APPCOMPAT_ACTIVITY = "android.support.v7.app.AppCompatActivity";
 
 	/*
 	 * Android permission

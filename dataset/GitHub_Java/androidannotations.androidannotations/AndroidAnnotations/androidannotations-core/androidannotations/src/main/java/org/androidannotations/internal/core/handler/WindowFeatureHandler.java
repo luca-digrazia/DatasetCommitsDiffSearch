@@ -25,7 +25,7 @@ import org.androidannotations.handler.BaseAnnotationHandler;
 import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.EActivityHolder;
 
-import com.helger.jcodemodel.JExpr;
+import com.sun.codemodel.JExpr;
 
 public class WindowFeatureHandler extends BaseAnnotationHandler<EActivityHolder> {
 
@@ -54,7 +54,7 @@ public class WindowFeatureHandler extends BaseAnnotationHandler<EActivityHolder>
 			methodName = "requestWindowFeature";
 		}
 		for (int feature : features) {
-			holder.getInitBodyInjectionBlock().invoke(methodName).arg(JExpr.lit(feature));
+			holder.getInitBody().invoke(methodName).arg(JExpr.lit(feature));
 		}
 	}
 }
