@@ -17,7 +17,6 @@
 
 package org.graylog2.restclient.models.dashboards.widgets;
 
-import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.graylog2.restclient.lib.timeranges.RelativeRange;
 import org.graylog2.restclient.lib.timeranges.TimeRange;
@@ -31,11 +30,7 @@ public class StackedChartWidget extends ChartWidget {
 
     private final String renderer;
     private final String interpolation;
-    private List<Series> chartSeries;
-
-    public StackedChartWidget(Dashboard dashboard, TimeRange timerange, String description, String streamId, String renderer, String interpolation, String interval) {
-        this(dashboard, null, description, 0, timerange, streamId, renderer, interpolation, interval, null, null);
-    }
+    private final List<Series> chartSeries;
 
     public StackedChartWidget(Dashboard dashboard, TimeRange timerange, String description, String streamId, String renderer, String interpolation, String interval, List<Map<String, Object>> series) {
         this(dashboard, null, description, 0, timerange, streamId, renderer, interpolation, interval, series, null);
@@ -47,18 +42,10 @@ public class StackedChartWidget extends ChartWidget {
         this.renderer = renderer;
         this.interpolation = interpolation;
 
-        if (series != null) {
-            this.chartSeries = new ArrayList<>(series.size());
-            for (Map<String, Object> aSeries : series) {
-                this.chartSeries.add(Series.fromMap(aSeries));
-            }
-        } else {
-            this.chartSeries = Lists.newArrayList();
+        this.chartSeries = new ArrayList<>(series.size());
+        for (Map<String, Object> aSeries : series) {
+            this.chartSeries.add(Series.fromMap(aSeries));
         }
-    }
-
-    public void addSeries(Map<String, Object> fields) {
-        this.chartSeries.add(Series.fromMap(fields));
     }
 
     @Override
