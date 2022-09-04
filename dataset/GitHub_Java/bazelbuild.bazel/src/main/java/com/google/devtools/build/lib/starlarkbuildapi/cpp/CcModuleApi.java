@@ -52,8 +52,7 @@ public interface CcModuleApi<
         StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         CcToolchainConfigInfoT extends CcToolchainConfigInfoApi,
         CompilationOutputsT extends CcCompilationOutputsApi<FileT>,
-        DebugInfoT extends CcDebugInfoContextApi,
-        CppModuleMapT extends CppModuleMapApi<FileT>>
+        DebugInfoT extends CcDebugInfoContextApi>
     extends StarlarkValue {
 
   @StarlarkMethod(
@@ -847,23 +846,6 @@ public interface CcModuleApi<
       Object defines,
       Object localDefines)
       throws EvalException;
-
-  @StarlarkMethod(
-      name = "create_module_map",
-      doc = "Creates a <code>CompilationContext</code>.",
-      useStarlarkThread = true,
-      parameters = {
-        @Param(name = "file", positional = false, named = true),
-        @Param(
-            name = "umbrella_header",
-            positional = false,
-            named = true,
-            defaultValue = "None",
-            allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
-        @Param(name = "name", positional = false, named = true),
-      })
-  CppModuleMapT createCppModuleMap(
-      FileT file, Object umbrellaHeader, String name, StarlarkThread thread) throws EvalException;
 
   // TODO(b/65151735): Remove when cc_flags is entirely set from features.
   // This should only be called from the cc_flags_supplier rule.

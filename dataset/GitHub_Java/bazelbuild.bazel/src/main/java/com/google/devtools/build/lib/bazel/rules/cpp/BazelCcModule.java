@@ -29,7 +29,6 @@ import com.google.devtools.build.lib.rules.cpp.CcModule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainConfigInfo;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainVariables;
-import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
 import com.google.devtools.build.lib.rules.cpp.FeatureConfigurationForStarlark;
 import com.google.devtools.build.lib.rules.cpp.LibraryToLink;
@@ -63,8 +62,7 @@ public class BazelCcModule extends CcModule
         CcLinkingContext,
         CcToolchainVariables,
         CcToolchainConfigInfo,
-        CcDebugInfoContext,
-        CppModuleMap> {
+        CcDebugInfoContext> {
 
   @Override
   public CppSemantics getSemantics() {
@@ -93,8 +91,6 @@ public class BazelCcModule extends CcModule
       boolean disallowPicOutputs,
       boolean disallowNopicOutputs,
       Sequence<?> additionalInputs, // <Artifact> expected
-      Object moduleMap,
-      Object additionalModuleMaps,
       StarlarkThread thread)
       throws EvalException, InterruptedException {
     return compile(
@@ -121,8 +117,6 @@ public class BazelCcModule extends CcModule
         /* headersForClifDoNotUseThisParam= */ ImmutableList.of(),
         StarlarkList.immutableCopyOf(
             Sequence.cast(additionalInputs, Artifact.class, "additional_inputs")),
-        moduleMap,
-        additionalModuleMaps,
         thread);
   }
 

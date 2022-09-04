@@ -14,19 +14,20 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.cpp;
 
-import com.google.devtools.build.lib.events.Location;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
-import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Printer;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
+import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcCompilationContextApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcDebugInfoContextApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcInfoApi;
+import com.google.devtools.build.lib.starlarkbuildapi.cpp.CcLinkingContextApi;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Printer;
+import net.starlark.java.eval.StarlarkThread;
 
 /** Fake implementation of {@link CcInfoApi}. */
-public class FakeCcInfo implements CcInfoApi {
+public class FakeCcInfo implements CcInfoApi<FileApi> {
 
   @Override
-  public CcCompilationContextApi getCcCompilationContext() {
+  public CcCompilationContextApi<FileApi> getCcCompilationContext() {
     return null;
   }
 
@@ -36,12 +37,17 @@ public class FakeCcInfo implements CcInfoApi {
   }
 
   @Override
-  public String toProto(Location loc) throws EvalException {
+  public CcDebugInfoContextApi getCcDebugInfoContextFromStarlark(StarlarkThread thread) {
     return null;
   }
 
   @Override
-  public String toJson(Location loc) throws EvalException {
+  public String toProto() throws EvalException {
+    return null;
+  }
+
+  @Override
+  public String toJson() throws EvalException {
     return null;
   }
 
@@ -49,11 +55,11 @@ public class FakeCcInfo implements CcInfoApi {
   public void repr(Printer printer) {}
 
   /** Fake implementation of {@link CcInfoApi.Provider}. */
-  public static class Provider implements CcInfoApi.Provider {
+  public static class Provider implements CcInfoApi.Provider<FileApi> {
 
     @Override
-    public CcInfoApi createInfo(
-        Object ccCompilationContext, Object ccLinkingInfo, Location location, StarlarkThread thread)
+    public CcInfoApi<FileApi> createInfo(
+        Object ccCompilationContext, Object ccLinkingInfo, Object ccDebugInfoContext)
         throws EvalException {
       return new FakeCcInfo();
     }

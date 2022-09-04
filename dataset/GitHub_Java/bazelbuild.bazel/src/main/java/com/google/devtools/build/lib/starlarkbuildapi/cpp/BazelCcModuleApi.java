@@ -49,8 +49,7 @@ public interface BazelCcModuleApi<
         LinkingContextT extends CcLinkingContextApi<FileT>,
         CcToolchainVariablesT extends CcToolchainVariablesApi,
         CcToolchainConfigInfoT extends CcToolchainConfigInfoApi,
-        DebugContextT extends CcDebugInfoContextApi,
-        CppModuleMapT extends CppModuleMapApi<FileT>>
+        DebugContextT extends CcDebugInfoContextApi>
     extends CcModuleApi<
         StarlarkActionFactoryT,
         FileT,
@@ -65,8 +64,7 @@ public interface BazelCcModuleApi<
         StarlarkRuleContextT,
         CcToolchainConfigInfoT,
         CompilationOutputsT,
-        DebugContextT,
-        CppModuleMapT> {
+        DebugContextT> {
 
   @StarlarkMethod(
       name = "compile",
@@ -225,21 +223,6 @@ public interface BazelCcModuleApi<
             positional = false,
             named = true,
             defaultValue = "[]"),
-        @Param(
-            name = "module_map",
-            positional = false,
-            defaultValue = "unbound",
-            allowedTypes = {
-              @ParamType(type = CppModuleMapApi.class),
-              @ParamType(type = NoneType.class)
-            },
-            named = true),
-        @Param(
-            name = "additional_module_maps",
-            positional = false,
-            defaultValue = "unbound",
-            allowedTypes = {@ParamType(type = Sequence.class, generic1 = CppModuleMapApi.class)},
-            named = true),
       })
   Tuple compile(
       StarlarkActionFactoryT starlarkActionFactoryApi,
@@ -262,8 +245,6 @@ public interface BazelCcModuleApi<
       boolean disallowPicOutputs,
       boolean disallowNopicOutputs,
       Sequence<?> additionalInputs, // <FileT> expected
-      Object moduleMap,
-      Object additionalModuleMaps,
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 

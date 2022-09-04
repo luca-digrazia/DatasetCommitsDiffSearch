@@ -65,7 +65,7 @@ public final class CcInfo extends NativeInfo implements CcInfoApi<Artifact> {
   @Override
   public CcDebugInfoContext getCcDebugInfoContextFromStarlark(StarlarkThread thread)
       throws EvalException {
-    CcModule.checkPrivateStarlarkificationAllowlist(thread);
+    CcModule.checkCcDebugInfoRuleInAllowlist(thread);
     return getCcDebugInfoContext();
   }
 
