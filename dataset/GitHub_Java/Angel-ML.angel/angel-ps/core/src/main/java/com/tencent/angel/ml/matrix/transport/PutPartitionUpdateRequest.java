@@ -40,16 +40,15 @@ public class PutPartitionUpdateRequest extends PartitionRequest {
   /**
    * Create PutPartitionUpdateRequest.
    *
-   * @param serverId parameter server id
    * @param taskIndex task index
    * @param clock clock value
    * @param partKey matrix partition key
    * @param rowsSplit update row splits
    * @param updateClock true means update the clock value of the matrix partition
    */
-  public PutPartitionUpdateRequest(ParameterServerId serverId, int taskIndex, int clock,
+  public PutPartitionUpdateRequest(int taskIndex, int clock,
       PartitionKey partKey, List<RowUpdateSplit> rowsSplit, boolean updateClock) {
-    super(serverId, clock, partKey);
+    super(clock, partKey);
     this.setTaskIndex(taskIndex);
     this.setRowsSplit(rowsSplit);
     this.setUpdateClock(updateClock);
@@ -129,7 +128,7 @@ public class PutPartitionUpdateRequest extends PartitionRequest {
 
   @Override
   public int bufferLen() {
-    int len = 4;
+    int len = super.bufferLen();
     if(rowsSplit != null)  {
       int size = rowsSplit.size();
       for(int i = 0; i < size; i++) {
@@ -165,7 +164,7 @@ public class PutPartitionUpdateRequest extends PartitionRequest {
   @Override
   public String toString() {
     return "PutPartitionUpdateRequest [taskIndex=" + taskIndex + ", rowsSplit size="
-        + rowsSplit.size() + ", updateClock=" + updateClock + ", toString()=" + super.toString()
+        + (rowsSplit != null ? rowsSplit.size() : 0) + ", updateClock=" + updateClock + ", toString()=" + super.toString()
         + "]";
   }
 
