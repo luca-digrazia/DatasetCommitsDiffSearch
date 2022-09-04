@@ -45,6 +45,7 @@ import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.OneVersionEnforcementLevel;
+import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaPrimaryClassProvider;
@@ -300,10 +301,11 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
 
     JavaRuleOutputJarsProvider ruleOutputJarsProvider = javaRuleOutputJarsProviderBuilder.build();
 
-    JavaInfo.Builder javaInfoBuilder = JavaInfo.Builder.create();
+    javaCommon.addTransitiveInfoProviders(builder, filesToBuild, classJar);
 
-    javaCommon.addTransitiveInfoProviders(builder, javaInfoBuilder, filesToBuild, classJar);
-    javaCommon.addGenJarsProvider(builder, javaInfoBuilder, genClassJar, genSourceJar);
+    JavaGenJarsProvider javaGenJarsProvider =
+        javaCommon.createJavaGenJarsProvider(genClassJar, genSourceJar);
+    javaCommon.addJavaGenJarsProvider(builder, javaGenJarsProvider);
 
     // Just confirming that there are no aliases being used here.
     AndroidFeatureFlagSetProvider.getAndValidateFlagMapFromRuleContext(ruleContext);
@@ -315,9 +317,11 @@ public abstract class AndroidLocalTestBase implements RuleConfiguredTargetFactor
     NestedSet<Artifact> extraFilesToRun =
         NestedSetBuilder.create(Order.STABLE_ORDER, runfilesSupport.getRunfilesMiddleman());
 
-    JavaInfo javaInfo = javaInfoBuilder
+    JavaInfo javaInfo =
+        JavaInfo.Builder.create()
             .addProvider(JavaSourceJarsProvider.class, sourceJarsProvider)
             .addProvider(JavaRuleOutputJarsProvider.class, ruleOutputJarsProvider)
+            .addProvider(JavaGenJarsProvider.class, javaGenJarsProvider)
             .build();
 
     return builder

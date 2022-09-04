@@ -702,16 +702,13 @@ public class JavaCommon {
 
   public void addTransitiveInfoProviders(
       RuleConfiguredTargetBuilder builder,
-      JavaInfo.Builder javaInfoBuilder,
       NestedSet<Artifact> filesToBuild,
       @Nullable Artifact classJar) {
-    addTransitiveInfoProviders(
-        builder, javaInfoBuilder, filesToBuild, classJar, JAVA_COLLECTION_SPEC);
+    addTransitiveInfoProviders(builder, filesToBuild, classJar, JAVA_COLLECTION_SPEC);
   }
 
   public void addTransitiveInfoProviders(
       RuleConfiguredTargetBuilder builder,
-      JavaInfo.Builder javaInfoBuilder,
       NestedSet<Artifact> filesToBuild,
       @Nullable Artifact classJar,
       InstrumentationSpec instrumentationSpec) {
@@ -726,9 +723,6 @@ public class JavaCommon {
         .add(JavaExportsProvider.class, exportsProvider)
         .addOutputGroup(OutputGroupProvider.FILES_TO_COMPILE, getFilesToCompile(classJar))
         .add(JavaCompilationInfoProvider.class, compilationInfoProvider);
-
-    javaInfoBuilder.addProvider(JavaExportsProvider.class, exportsProvider);
-    javaInfoBuilder.addProvider(JavaCompilationInfoProvider.class, compilationInfoProvider);
   }
 
   private static InstrumentedFilesProvider getInstrumentationFilesProvider(RuleContext ruleContext,
@@ -743,24 +737,23 @@ public class JavaCommon {
         /*withBaselineCoverage*/!TargetUtils.isTestRule(ruleContext.getTarget()));
   }
 
-  public void addGenJarsProvider(
+  public JavaGenJarsProvider createJavaGenJarsProvider(
+      @Nullable Artifact genClassJar, @Nullable Artifact genSourceJar) {
+    return collectTransitiveGenJars(
+        javaCompilationHelper.usesAnnotationProcessing(), genClassJar, genSourceJar);
+  }
+
+  public void addJavaGenJarsProvider(
       RuleConfiguredTargetBuilder builder,
-      JavaInfo.Builder javaInfoBuilder,
-      @Nullable Artifact genClassJar,
-      @Nullable Artifact genSourceJar) {
-    JavaGenJarsProvider genJarsProvider = collectTransitiveGenJars(
-        javaCompilationHelper.usesAnnotationProcessing(),
-        genClassJar, genSourceJar);
+      JavaGenJarsProvider javaGenJarsProvider) {
 
     NestedSetBuilder<Artifact> genJarsBuilder = NestedSetBuilder.stableOrder();
-    genJarsBuilder.addTransitive(genJarsProvider.getTransitiveGenClassJars());
-    genJarsBuilder.addTransitive(genJarsProvider.getTransitiveGenSourceJars());
+    genJarsBuilder.addTransitive(javaGenJarsProvider.getTransitiveGenClassJars());
+    genJarsBuilder.addTransitive(javaGenJarsProvider.getTransitiveGenSourceJars());
 
     builder
-        .add(JavaGenJarsProvider.class, genJarsProvider)
+        .addProvider(javaGenJarsProvider)
         .addOutputGroup(JavaSemantics.GENERATED_JARS_OUTPUT_GROUP, genJarsBuilder.build());
-
-    javaInfoBuilder.addProvider(JavaGenJarsProvider.class, genJarsProvider);
   }
 
   /**
