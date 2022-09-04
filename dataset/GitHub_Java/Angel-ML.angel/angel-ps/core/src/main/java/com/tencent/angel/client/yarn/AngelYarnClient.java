@@ -26,7 +26,7 @@ package com.tencent.angel.client.yarn;
 import com.google.protobuf.ServiceException;
 import com.tencent.angel.client.AngelClient;
 import com.tencent.angel.common.Location;
-import com.tencent.angel.conf.AngelConf;
+import com.tencent.angel.conf.AngelConfiguration;
 import com.tencent.angel.exception.AngelException;
 import com.tencent.angel.ipc.TConnection;
 import com.tencent.angel.ipc.TConnectionManager;
@@ -135,13 +135,13 @@ public class AngelYarnClient extends AngelClient {
 
       conf.set("hadoop.http.filter.initializers",
           "org.apache.hadoop.yarn.server.webproxy.amfilter.AmFilterInitializer");
-      conf.set(AngelConf.ANGEL_JOB_DIR, submitJobDir.toString());
-      conf.set(AngelConf.ANGEL_JOB_ID, jobId.toString());
+      conf.set(AngelConfiguration.ANGEL_JOB_DIR, submitJobDir.toString());
+      conf.set(AngelConfiguration.ANGEL_JOB_ID, jobId.toString());
 
       setOutputDirectory();
 
-      // Credentials credentials = new Credentials();
       credentials.addAll(UserGroupInformation.getCurrentUser().getCredentials());
+      // Credentials credentials = new Credentials();
       TokenCache.obtainTokensForNamenodes(credentials, new Path[] {submitJobDir}, conf);
       checkParameters(conf);
       handleDeprecatedParameters(conf);
@@ -158,7 +158,7 @@ public class AngelYarnClient extends AngelClient {
       ApplicationSubmissionContext appContext =
           createApplicationSubmissionContext(conf, submitJobDir, credentials, appId);
 
-      conf.set(AngelConf.ANGEL_JOB_LIBJARS, "");
+      conf.set(AngelConfiguration.ANGEL_JOB_LIBJARS, "");
 
       // 7.Submit to ResourceManager
       appId = yarnClient.submitApplication(appContext);
@@ -166,7 +166,7 @@ public class AngelYarnClient extends AngelClient {
       // 8.get app master client
       updateMaster(10 * 60);
       
-      waitForAllPS(conf.getInt(AngelConf.ANGEL_PS_NUMBER, AngelConf.DEFAULT_ANGEL_PS_NUMBER));
+      waitForAllPS(conf.getInt(AngelConfiguration.ANGEL_PS_NUMBER, AngelConfiguration.DEFAULT_ANGEL_PS_NUMBER));
       LOG.info("start pss success");
     } catch (Exception x) {
       LOG.error("submit application to yarn failed.", x);
@@ -195,17 +195,16 @@ public class AngelYarnClient extends AngelClient {
       } catch (ServiceException e) {
         throw new AngelException(e);
       }
-      close();
-    } else {
-      stop();
     }
+    close();
   }
+
   private void copyAndConfigureFiles(Configuration conf, Path submitJobDir, short i)
       throws IOException {
 
-    String files = conf.get(AngelConf.ANGEL_JOB_CACHE_FILES);
-    String libjars = conf.get(AngelConf.ANGEL_JOB_LIBJARS);
-    String archives = conf.get(AngelConf.ANGEL_JOB_CACHE_ARCHIVES);
+    String files = conf.get(AngelConfiguration.ANGEL_JOB_CACHE_FILES);
+    String libjars = conf.get(AngelConfiguration.ANGEL_JOB_LIBJARS);
+    String archives = conf.get(AngelConfiguration.ANGEL_JOB_CACHE_ARCHIVES);
 
     // Create a number of filenames in the JobTracker's fs namespace
     LOG.info("default FileSystem: " + jtFs.getUri());
@@ -361,27 +360,27 @@ public class AngelYarnClient extends AngelClient {
     }
   }
 
-  private ApplicationSubmissionContext createApplicationSubmissionContext(Configuration conf,
+  public ApplicationSubmissionContext createApplicationSubmissionContext(Configuration jobConf,
       Path jobSubmitPath, Credentials ts, ApplicationId appId) throws IOException {
     ApplicationId applicationId = appId;
 
     // Setup resource requirements
     recordFactory = RecordFactoryProvider.getRecordFactory(null);
     Resource capability = recordFactory.newRecordInstance(Resource.class);
-    capability.setMemory(conf.getInt(AngelConf.ANGEL_AM_MEMORY_GB,
-        AngelConf.DEFAULT_ANGEL_AM_MEMORY_GB) * 1024);
-    capability.setVirtualCores(conf.getInt(AngelConf.ANGEL_AM_CPU_VCORES,
-        AngelConf.DEFAULT_ANGEL_AM_CPU_VCORES));
+    capability.setMemory(conf.getInt(AngelConfiguration.ANGEL_AM_MEMORY_GB,
+        AngelConfiguration.DEFAULT_ANGEL_AM_MEMORY_GB) * 1024);
+    capability.setVirtualCores(conf.getInt(AngelConfiguration.ANGEL_AM_CPU_VCORES,
+        AngelConfiguration.DEFAULT_ANGEL_AM_CPU_VCORES));
     System.out.println("AppMaster capability = " + capability);
 
     // Setup LocalResources
     Map<String, LocalResource> localResources = new HashMap<String, LocalResource>();
 
-    Path jobConfPath = new Path(jobSubmitPath, AngelConf.ANGEL_JOB_CONF_FILE);
+    Path jobConfPath = new Path(jobSubmitPath, AngelConfiguration.ANGEL_JOB_CONF_FILE);
 
     FileContext defaultFileContext = FileContext.getFileContext(this.conf);
 
-    localResources.put(AngelConf.ANGEL_JOB_CONF_FILE,
+    localResources.put(AngelConfiguration.ANGEL_JOB_CONF_FILE,
         createApplicationResource(defaultFileContext, jobConfPath, LocalResourceType.FILE));
 
     // Setup security tokens
@@ -395,18 +394,16 @@ public class AngelYarnClient extends AngelClient {
 
     long logSize = 0;
     String logLevel =
-      conf.get(AngelConf.ANGEL_AM_LOG_LEVEL,
-            AngelConf.DEFAULT_ANGEL_AM_LOG_LEVEL);
+        jobConf.get(AngelConfiguration.ANGEL_AM_LOG_LEVEL,
+            AngelConfiguration.DEFAULT_ANGEL_AM_LOG_LEVEL);
     AngelApps.addLog4jSystemProperties(logLevel, logSize, vargs);
 
     // Add AM user command opts
-    String angelAppMasterUserOptions = conf.get(AngelConf.ANGEL_AM_JAVA_OPTS);
-    if(angelAppMasterUserOptions == null) {
-      angelAppMasterUserOptions = masterJVMOptions(conf);
-    }
-
+    String angelAppMasterUserOptions =
+        conf.get(AngelConfiguration.ANGEL_AM_JAVA_OPTS,
+            AngelConfiguration.DEFAULT_ANGEL_AM_JAVA_OPTS);
     vargs.add(angelAppMasterUserOptions);
-    vargs.add(conf.get(AngelConf.ANGEL_AM_CLASS, AngelConf.DEFAULT_ANGEL_AM_CLASS));
+    vargs.add(conf.get(AngelConfiguration.ANGEL_AM_CLASS, AngelConfiguration.DEFAULT_ANGEL_AM_CLASS));
     vargs.add("1>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + Path.SEPARATOR
         + ApplicationConstants.STDOUT);
     vargs.add("2>" + ApplicationConstants.LOG_DIR_EXPANSION_VAR + Path.SEPARATOR
@@ -430,20 +427,20 @@ public class AngelYarnClient extends AngelClient {
     // Setup the environment variables for Admin first
     // Setup the environment variables (LD_LIBRARY_PATH, etc)
     AngelApps.setEnvFromInputString(environment, conf.get(
-        AngelConf.ANGEL_AM_ADMIN_USER_ENV,
-        AngelConf.DEFAULT_ANGEL_AM_ADMIN_USER_ENV));
+        AngelConfiguration.ANGEL_AM_ADMIN_USER_ENV,
+        AngelConfiguration.DEFAULT_ANGEL_AM_ADMIN_USER_ENV));
 
     AngelApps.setEnvFromInputString(environment,
-        conf.get(AngelConf.ANGEL_AM_ENV, AngelConf.DEFAULT_ANGEL_AM_ENV));
+        conf.get(AngelConfiguration.ANGEL_AM_ENV, AngelConfiguration.DEFAULT_ANGEL_AM_ENV));
 
     // Parse distributed cache
-    AngelApps.setupDistributedCache(conf, localResources);
+    AngelApps.setupDistributedCache(jobConf, localResources);
 
     Map<ApplicationAccessType, String> acls = new HashMap<ApplicationAccessType, String>(2);
-    acls.put(ApplicationAccessType.VIEW_APP, conf.get(AngelConf.JOB_ACL_VIEW_JOB,
-        AngelConf.DEFAULT_JOB_ACL_VIEW_JOB));
-    acls.put(ApplicationAccessType.MODIFY_APP, conf.get(AngelConf.JOB_ACL_MODIFY_JOB,
-        AngelConf.DEFAULT_JOB_ACL_MODIFY_JOB));
+    acls.put(ApplicationAccessType.VIEW_APP, jobConf.get(AngelConfiguration.JOB_ACL_VIEW_JOB,
+        AngelConfiguration.DEFAULT_JOB_ACL_VIEW_JOB));
+    acls.put(ApplicationAccessType.MODIFY_APP, jobConf.get(AngelConfiguration.JOB_ACL_MODIFY_JOB,
+        AngelConfiguration.DEFAULT_JOB_ACL_MODIFY_JOB));
 
     // Setup ContainerLaunchContext for AM container
     ContainerLaunchContext amContainer =
@@ -455,30 +452,19 @@ public class AngelYarnClient extends AngelClient {
         recordFactory.newRecordInstance(ApplicationSubmissionContext.class);
     appContext.setApplicationId(applicationId); // ApplicationId
 
-    String queue = conf.get(AngelConf.ANGEL_QUEUE, YarnConfiguration.DEFAULT_QUEUE_NAME);
+    String queue = conf.get(AngelConfiguration.ANGEL_QUEUE, YarnConfiguration.DEFAULT_QUEUE_NAME);
     appContext.setQueue(queue); // Queue name
     LOG.info("ApplicationSubmissionContext Queuename :  " + queue);
-    appContext.setApplicationName(conf.get(AngelConf.ANGEL_JOB_NAME,
-        AngelConf.DEFAULT_ANGEL_JOB_NAME));
+    appContext.setApplicationName(conf.get(AngelConfiguration.ANGEL_JOB_NAME,
+        AngelConfiguration.DEFAULT_ANGEL_JOB_NAME));
     appContext.setCancelTokensWhenComplete(conf.getBoolean(
-        AngelConf.JOB_CANCEL_DELEGATION_TOKEN, true));
+        AngelConfiguration.JOB_CANCEL_DELEGATION_TOKEN, true));
     appContext.setAMContainerSpec(amContainer); // AM Container
-    appContext.setMaxAppAttempts(conf.getInt(AngelConf.ANGEL_AM_MAX_ATTEMPTS,
-        AngelConf.DEFAULT_ANGEL_AM_MAX_ATTEMPTS));
+    appContext.setMaxAppAttempts(conf.getInt(AngelConfiguration.ANGEL_AM_MAX_ATTEMPTS,
+        AngelConfiguration.DEFAULT_ANGEL_AM_MAX_ATTEMPTS));
     appContext.setResource(capability);
-    appContext.setApplicationType(AngelConf.ANGEL_APPLICATION_TYPE);
+    appContext.setApplicationType(AngelConfiguration.ANGEL_APPLICATION_TYPE);
     return appContext;
-  }
-
-  private String masterJVMOptions(Configuration conf) {
-    int masterMemoryMB = conf.getInt(AngelConf.ANGEL_AM_MEMORY_GB, AngelConf.DEFAULT_ANGEL_AM_MEMORY_GB) * 1024;
-    if(masterMemoryMB < 1024) {
-      masterMemoryMB = 1024;
-    }
-
-    int heapMax = masterMemoryMB - 512;
-    return new StringBuilder().append(" -Xmx").append(heapMax).append("M").append(" -Xms")
-      .append(heapMax).append("M").append(" -XX:PermSize=100M -XX:MaxPermSize=200M").toString();
   }
 
   private LocalResource createApplicationResource(FileContext fs, Path p, LocalResourceType type)
@@ -525,7 +511,10 @@ public class AngelYarnClient extends AngelClient {
         Thread.sleep(1000);
         tryTime++;
       } else {
-        LOG.info("appMaster getTrackingUrl = " + appMaster.getTrackingUrl());
+        String httpHistory =
+            "appMaster getTrackingUrl = "
+                + appMaster.getTrackingUrl().replace("proxy", "cluster/app");
+        LOG.info(httpHistory);
         LOG.info("master host=" + host + ", port=" + port);
         try {
           masterLocation = new Location(host, port);
