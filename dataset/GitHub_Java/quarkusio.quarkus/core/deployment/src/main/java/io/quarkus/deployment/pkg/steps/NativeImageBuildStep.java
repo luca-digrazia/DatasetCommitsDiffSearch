@@ -398,8 +398,8 @@ public class NativeImageBuildStep {
     }
 
     /**
-     * @return {@link ContainerRuntime#DOCKER} if it's available, or {@link ContainerRuntime#PODMAN} if the podman
-     *         executable exists in the environment or if the docker executable is an alias to podman
+     * @return {@link ContainerRuntime#PODMAN} if the podman executable exists in the environment or if the docker executable
+     *         is an alias to podman, else returns {@link ContainerRuntime#DOCKER} if it's available
      * @throws IllegalStateException if no container runtime was found to build the image
      */
     private static ContainerRuntime detectContainerRuntime() {
@@ -447,10 +447,6 @@ public class NativeImageBuildStep {
         Path targetDirectory = outputTargetBuildItem.getOutputDirectory()
                 .resolve(outputTargetBuildItem.getBaseName() + "-native-image-source-jar");
         Path libDir = targetDirectory.resolve(JarResultBuildStep.LIB);
-        File libDirFile = libDir.toFile();
-        if (!libDirFile.exists()) {
-            libDirFile.mkdirs();
-        }
 
         final List<AppDependency> appDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
         for (AppDependency appDep : appDeps) {
