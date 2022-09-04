@@ -18,13 +18,15 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.Strategy;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.Map;
 
 /** Empty implementation of RunfilesSupplier */
+@AutoCodec(strategy = Strategy.SINGLETON)
 public class EmptyRunfilesSupplier implements RunfilesSupplier {
 
-  @AutoCodec public static final EmptyRunfilesSupplier INSTANCE = new EmptyRunfilesSupplier();
+  public static final EmptyRunfilesSupplier INSTANCE = new EmptyRunfilesSupplier();
 
   private EmptyRunfilesSupplier() {}
 

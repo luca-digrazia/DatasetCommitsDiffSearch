@@ -61,7 +61,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.LazyString;
@@ -90,8 +89,7 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
 
   private static final String GUID = "ebd6fce3-093e-45ee-adb6-bf513b602f0d";
 
-  @VisibleForSerialization
-  protected final CommandLine argv;
+  private final CommandLine argv;
 
   private final boolean executeUnconditionally;
   private final boolean isShellCommand;
@@ -328,23 +326,25 @@ public class SpawnAction extends AbstractAction implements ExecutionInfoSpecifie
   }
 
   @Override
-  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp)
+  protected String computeKey(ActionKeyContext actionKeyContext)
       throws CommandLineExpansionException {
-    fp.addString(GUID);
-    argv.addToFingerprint(actionKeyContext, fp);
-    fp.addString(getMnemonic());
+    Fingerprint f = new Fingerprint();
+    f.addString(GUID);
+    argv.addToFingerprint(actionKeyContext, f);
+    f.addString(getMnemonic());
     // We don't need the toolManifests here, because they are a subset of the inputManifests by
     // definition and the output of an action shouldn't change whether something is considered a
     // tool or not.
-    fp.addPaths(getRunfilesSupplier().getRunfilesDirs());
+    f.addPaths(getRunfilesSupplier().getRunfilesDirs());
     ImmutableList<Artifact> runfilesManifests = getRunfilesSupplier().getManifests();
-    fp.addInt(runfilesManifests.size());
+    f.addInt(runfilesManifests.size());
     for (Artifact runfilesManifest : runfilesManifests) {
-      fp.addPath(runfilesManifest.getExecPath());
+      f.addPath(runfilesManifest.getExecPath());
     }
-    fp.addStringMap(getEnvironment());
-    fp.addStrings(getClientEnvironmentVariables());
-    fp.addStringMap(getExecutionInfo());
+    f.addStringMap(getEnvironment());
+    f.addStrings(getClientEnvironmentVariables());
+    f.addStringMap(getExecutionInfo());
+    return f.hexDigestAndReset();
   }
 
   @Override

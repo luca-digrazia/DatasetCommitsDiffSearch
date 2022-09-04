@@ -60,9 +60,7 @@ public class RunfilesSupplierImpl implements RunfilesSupplier {
    *
    * @param runfilesDir the desired runfiles directory. Should be relative.
    * @param runfiles the runfiles for runilesDir.
-   * @param manifest runfiles' associated runfiles manifest artifact, if present. Important: this
-   *     parameter will be used to filter the resulting spawn's inputs to not poison downstream
-   *     caches.
+   * @param manifest runfiles' associated runfiles manifest artifact, if present.
    */
   @AutoCodec.Instantiator
   public RunfilesSupplierImpl(
