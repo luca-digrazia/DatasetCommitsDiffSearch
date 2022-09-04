@@ -1,3 +1,19 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc.processor;
 
 import java.util.Collections;
@@ -11,15 +27,12 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.jandex.Type.Kind;
-import org.jboss.logging.Logger;
 
 /**
  *
  * @author Martin Kouba
  */
-public class InterceptorInfo extends BeanInfo implements Comparable<InterceptorInfo> {
-
-    private static final Logger LOGGER = Logger.getLogger(InterceptorInfo.class);
+class InterceptorInfo extends BeanInfo implements Comparable<InterceptorInfo> {
 
     private final Set<AnnotationInstance> bindings;
 
@@ -44,7 +57,7 @@ public class InterceptorInfo extends BeanInfo implements Comparable<InterceptorI
             List<Injection> injections, int priority) {
         super(target, beanDeployment, BuiltinScope.DEPENDENT.getInfo(),
                 Collections.singleton(Type.create(target.asClass().name(), Kind.CLASS)), new HashSet<>(), injections,
-                null, null, null, Collections.emptyList(), null, false);
+                null, null, null, Collections.emptyList(), null);
         this.bindings = bindings;
         this.priority = priority;
         MethodInfo aroundInvoke = null;
@@ -80,16 +93,13 @@ public class InterceptorInfo extends BeanInfo implements Comparable<InterceptorI
         this.aroundConstruct = aroundConstruct;
         this.postConstruct = postConstruct;
         this.preDestroy = preDestroy;
-        if (aroundConstruct == null && aroundInvoke == null && preDestroy == null && postConstruct == null) {
-            LOGGER.warnf("%s declares no around-invoke method nor a lifecycle callback!", this);
-        }
     }
 
-    public Set<AnnotationInstance> getBindings() {
+    Set<AnnotationInstance> getBindings() {
         return bindings;
     }
 
-    public int getPriority() {
+    int getPriority() {
         return priority;
     }
 
@@ -109,7 +119,7 @@ public class InterceptorInfo extends BeanInfo implements Comparable<InterceptorI
         return preDestroy;
     }
 
-    public boolean intercepts(InterceptionType interceptionType) {
+    boolean intercepts(InterceptionType interceptionType) {
         switch (interceptionType) {
             case AROUND_INVOKE:
                 return aroundInvoke != null;
