@@ -1,4 +1,4 @@
-// Copyright 2014 Google Inc. All rights reserved.
+// Copyright 2014 The Bazel Authors. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,149 +13,488 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
-import com.google.common.base.Objects;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
+import com.google.common.io.BaseEncoding;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.actions.FileStateType;
 import com.google.devtools.build.lib.actions.cache.DigestUtils;
+import com.google.devtools.build.lib.actions.cache.Metadata;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.Path;
-
+import com.google.devtools.build.lib.vfs.Symlinks;
+import com.google.devtools.build.skyframe.SkyValue;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.util.Arrays;
-
+import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
- * Stores the data of an artifact corresponding to a file. This file may be an ordinary file, in
- * which case we would expect to see a digest and size; a directory, in which case we would expect
- * to see an mtime; or an empty file, where we would expect to see a size (=0), mtime, and digest
+ * Stores the actual metadata data of a file. We have the following cases:
+ *
+ * <ul>
+ * <li> an ordinary file, in which case we would expect to see a digest and size;
+ * <li> a directory, in which case we would expect to see an mtime;
+ * <li> an intentionally omitted file which the build system is aware of but doesn't actually exist,
+ *     where all access methods are unsupported;
+ * <li> a "middleman marker" object, which has a null digest, 0 size, and mtime of 0.
+ * <li> The "self data" of a TreeArtifact, where we would expect to see a digest representing the
+ *     artifact's contents, and a size of 0.
+ * </ul>
  */
-public class FileArtifactValue extends ArtifactValue {
-  /** Data for Middleman artifacts that did not have data specified. */
-  static final FileArtifactValue DEFAULT_MIDDLEMAN = new FileArtifactValue(null, 0, 0);
+// TODO(janakr): make this an interface once JDK8 allows us to have static methods on interfaces.
+@Immutable @ThreadSafe
+public abstract class FileArtifactValue implements SkyValue, Metadata {
+  private static final class SingletonMarkerValue extends FileArtifactValue implements Singleton {
+    @Override
+    public FileStateType getType() {
+      return FileStateType.NONEXISTENT;
+    }
+
+    @Nullable
+    @Override
+    public byte[] getDigest() {
+      return null;
+    }
+
+    @Override
+    public long getSize() {
+      return 0;
+    }
+
+    @Override
+    public long getModifiedTime() {
+      return 0;
+    }
+
+    @Override
+    public boolean wasModifiedSinceDigest(Path path) throws IOException {
+      return false;
+    }
+
+    @Override
+    public String toString() {
+      return "singleton marker artifact value (" + hashCode() + ")";
+    }
+  }
+
+  private static final class OmittedFileValue extends FileArtifactValue implements Singleton {
+    @Override
+    public FileStateType getType() {
+      return FileStateType.NONEXISTENT;
+    }
+
+    @Override
+    public byte[] getDigest() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public long getSize() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public long getModifiedTime() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean wasModifiedSinceDigest(Path path) throws IOException {
+      return false;
+    }
+
+    @Override
+    public String toString() {
+      return "OMITTED_FILE_MARKER";
+    }
+  }
+
+  @AutoCodec static final FileArtifactValue DEFAULT_MIDDLEMAN = new SingletonMarkerValue();
   /** Data that marks that a file is not present on the filesystem. */
-  static final FileArtifactValue MISSING_FILE_MARKER = new FileArtifactValue(null, 1, 0);
+  @VisibleForTesting @AutoCodec
+  public static final FileArtifactValue MISSING_FILE_MARKER = new SingletonMarkerValue();
 
   /**
-   * Represents an omitted file- we are aware of it but it doesn't exist. All access methods
-   * are unsupported.
+   * Represents an omitted file -- we are aware of it but it doesn't exist. All access methods are
+   * unsupported.
    */
-  static final FileArtifactValue OMITTED_FILE_MARKER = new FileArtifactValue(null, 2, 0) {
-    @Override public byte[] getDigest() { throw new UnsupportedOperationException(); }
-    @Override public long getSize() { throw new UnsupportedOperationException(); }
-    @Override public long getModifiedTime() { throw new UnsupportedOperationException(); }
-    @Override public boolean equals(Object o) { return this == o; }
-    @Override public int hashCode() { return System.identityHashCode(this); }
-    @Override public String toString() { return "OMITTED_FILE_MARKER"; }
-  };
+  @AutoCodec static final FileArtifactValue OMITTED_FILE_MARKER = new OmittedFileValue();
 
-  @Nullable private final byte[] digest;
-  private final long mtime;
-  private final long size;
+  @AutoCodec.VisibleForSerialization
+  @AutoCodec
+  static final class DirectoryArtifactValue extends FileArtifactValue {
+    private final long mtime;
 
-  private FileArtifactValue(byte[] digest, long size) {
-    Preconditions.checkState(size >= 0, "size must be non-negative: %s %s", digest, size);
-    this.digest = Preconditions.checkNotNull(digest, size);
-    this.size = size;
-    this.mtime = -1;
+    @AutoCodec.VisibleForSerialization
+    DirectoryArtifactValue(long mtime) {
+      this.mtime = mtime;
+    }
+
+    @Override
+    public FileStateType getType() {
+      return FileStateType.DIRECTORY;
+    }
+
+    @Nullable
+    @Override
+    public byte[] getDigest() {
+      return null;
+    }
+
+    @Override
+    public long getModifiedTime() {
+      return mtime;
+    }
+
+    @Override
+    public long getSize() {
+      return 0;
+    }
+
+    @Override
+    public boolean wasModifiedSinceDigest(Path path) throws IOException {
+      return false;
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this).add("mtime", mtime).toString();
+    }
   }
 
-  // Only used by empty files (non-null digest) and directories (null digest).
-  private FileArtifactValue(byte[] digest, long mtime, long size) {
-    Preconditions.checkState(mtime >= 0, "mtime must be non-negative: %s %s", mtime, size);
-    Preconditions.checkState(size == 0, "size must be zero: %s %s", mtime, size);
-    this.digest = digest;
-    this.size = size;
-    this.mtime = mtime;
+  @AutoCodec.VisibleForSerialization
+  @AutoCodec
+  static final class RegularFileArtifactValue extends FileArtifactValue {
+    private final byte[] digest;
+    @Nullable private final FileContentsProxy proxy;
+    private final long size;
+
+    @AutoCodec.VisibleForSerialization
+    RegularFileArtifactValue(byte[] digest, @Nullable FileContentsProxy proxy, long size) {
+      this.digest = Preconditions.checkNotNull(digest);
+      this.proxy = proxy;
+      this.size = size;
+    }
+
+    @Override
+    public FileStateType getType() {
+      return FileStateType.REGULAR_FILE;
+    }
+
+    @Override
+    public byte[] getDigest() {
+      return digest;
+    }
+
+    @Override
+    public long getSize() {
+      return size;
+    }
+
+    @Override
+    public boolean wasModifiedSinceDigest(Path path) throws IOException {
+      if (proxy == null) {
+        return false;
+      }
+      FileStatus stat = path.statIfFound(Symlinks.FOLLOW);
+      return stat == null || !stat.isFile() || !proxy.equals(FileContentsProxy.create(stat));
+    }
+
+    @Override
+    public long getModifiedTime() {
+      throw new UnsupportedOperationException(
+          "regular file's mtime should never be called. (" + this + ")");
+    }
+
+    @Override
+    public String toString() {
+      return MoreObjects.toStringHelper(this)
+          .add("digest", BaseEncoding.base16().lowerCase().encode(digest))
+          .add("size", size)
+          .add("proxy", proxy).toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof RegularFileArtifactValue)) {
+        return false;
+      }
+      RegularFileArtifactValue r = (RegularFileArtifactValue) o;
+      return Arrays.equals(digest, r.digest) && Objects.equals(proxy, r.proxy) && size == r.size;
+    }
+
+    @Override
+    public int hashCode() {
+      return (proxy != null ? 127 * proxy.hashCode() : 0)
+          + 37 * Long.hashCode(getSize()) + Arrays.hashCode(getDigest());
+    }
   }
 
-  static FileArtifactValue create(Artifact artifact) throws IOException {
-    Path path = artifact.getPath();
-    FileStatus stat = path.stat();
-    boolean isFile = stat.isFile();
-    return create(artifact, isFile, isFile ? stat.getSize() : 0, null);
+  static final class RemoteFileArtifactValue extends FileArtifactValue {
+    private final byte[] digest;
+    private final long size;
+    private final int locationIndex;
+
+    RemoteFileArtifactValue(byte[] digest, long size, int locationIndex) {
+      this.digest = digest;
+      this.size = size;
+      this.locationIndex = locationIndex;
+    }
+
+    @Override
+    public FileStateType getType() {
+      return FileStateType.REGULAR_FILE;
+    }
+
+    @Override
+    public byte[] getDigest() {
+      return digest;
+    }
+
+    @Override
+    public long getSize() {
+      return size;
+    }
+
+    @Override
+    public long getModifiedTime() {
+      throw new UnsupportedOperationException(
+          "RemoteFileArifactValue doesn't support getModifiedTime");
+    }
+
+    @Override
+    public int getLocationIndex() {
+      return locationIndex;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (!(o instanceof RemoteFileArtifactValue)) {
+        return false;
+      }
+      RemoteFileArtifactValue r = (RemoteFileArtifactValue) o;
+      return Arrays.equals(digest, r.digest) && size == r.size;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(Arrays.hashCode(digest), size);
+    }
+
+    @Override
+    public boolean wasModifiedSinceDigest(Path path) {
+      throw new UnsupportedOperationException();
+    }
+  }
+
+  static final class InlineFileArtifactValue extends FileArtifactValue {
+    private final byte[] data;
+    private final byte[] digest;
+
+    InlineFileArtifactValue(byte[] data, byte[] digest) {
+      this.data = Preconditions.checkNotNull(data);
+      this.digest = Preconditions.checkNotNull(digest);
+    }
+
+    public ByteArrayInputStream getInputStream() {
+      return new ByteArrayInputStream(data);
+    }
+
+    @Override
+    public FileStateType getType() {
+      return FileStateType.REGULAR_FILE;
+    }
+
+    @Override
+    public byte[] getDigest() {
+      return digest;
+    }
+
+    @Override
+    public long getSize() {
+      return data.length;
+    }
+
+    @Override
+    public long getModifiedTime() {
+      throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (o == this) {
+        return true;
+      }
+      if (!(o instanceof InlineFileArtifactValue)) {
+        return false;
+      }
+      InlineFileArtifactValue that = (InlineFileArtifactValue) o;
+      return Arrays.equals(digest, that.digest);
+    }
+
+    @Override
+    public int hashCode() {
+      return Arrays.hashCode(digest);
+    }
+
+    @Override
+    public boolean wasModifiedSinceDigest(Path path) {
+      throw new UnsupportedOperationException();
+    }
   }
 
   static FileArtifactValue create(Artifact artifact, FileValue fileValue) throws IOException {
     boolean isFile = fileValue.isFile();
-    return create(artifact, isFile, isFile ? fileValue.getSize() : 0,
+    FileContentsProxy proxy = getProxyFromFileStateValue(fileValue.realFileStateValue());
+    return create(artifact.getPath(), isFile, isFile ? fileValue.getSize() : 0, proxy,
         isFile ? fileValue.getDigest() : null);
   }
 
-  static FileArtifactValue create(Artifact artifact, boolean isFile, long size,
-      @Nullable byte[] digest) throws IOException {
-    if (isFile && digest == null) {
-      digest = DigestUtils.getDigestOrFail(artifact.getPath(), size);
+  static FileArtifactValue create(
+      Artifact artifact, FileValue fileValue, @Nullable byte[] injectedDigest) throws IOException {
+    boolean isFile = fileValue.isFile();
+    FileContentsProxy proxy = getProxyFromFileStateValue(fileValue.realFileStateValue());
+    return create(artifact.getPath(), isFile, isFile ? fileValue.getSize() : 0, proxy,
+        injectedDigest);
+  }
+
+  @VisibleForTesting
+  public static FileArtifactValue create(Artifact artifact) throws IOException {
+    return create(artifact.getPath());
+  }
+
+  @VisibleForTesting
+  public static FileArtifactValue create(Path path) throws IOException {
+    // Caution: there's a race condition between stating the file and computing the
+    // digest. We need to stat first, since we're using the stat to detect changes.
+    // We follow symlinks here to be consistent with getDigest.
+    FileStatus stat = path.stat(Symlinks.FOLLOW);
+    return create(path, stat.isFile(), stat.getSize(), FileContentsProxy.create(stat), null);
+  }
+
+  private static FileArtifactValue create(
+      Path path, boolean isFile, long size, FileContentsProxy proxy, @Nullable byte[] digest)
+          throws IOException {
+    if (!isFile) {
+      // In this case, we need to store the mtime because the action cache uses mtime for
+      // directories to determine if this artifact has changed. We want this code path to go away
+      // somehow (maybe by implementing FileSet in Skyframe).
+      return new DirectoryArtifactValue(path.getLastModifiedTime());
     }
-    if (!DigestUtils.useFileDigest(artifact, isFile, size)) {
-      // In this case, we need to store the mtime because the action cache uses mtime to determine
-      // if this artifact has changed. This is currently true for empty files and directories. We
-      // do not optimize for this code path (by storing the mtime in a FileValue) because we do not
-      // like it and may remove this special-casing for empty files in the future. We want this code
-      // path to go away somehow too for directories (maybe by implementing FileSet
-      // in Skyframe)
-      return new FileArtifactValue(digest, artifact.getPath().getLastModifiedTime(), size);
+    if (digest == null) {
+      digest = DigestUtils.getDigestOrFail(path, size);
     }
-    Preconditions.checkState(digest != null, artifact);
-    return new FileArtifactValue(digest, size);
+    Preconditions.checkState(digest != null, path);
+    return new RegularFileArtifactValue(digest, proxy, size);
   }
 
-  static FileArtifactValue createMiddleman(byte[] digest) {
-    Preconditions.checkNotNull(digest);
-    // The Middleman artifact values have size 1 because we want their digests to be used. This hack
-    // can be removed once empty files are digested.
-    return new FileArtifactValue(digest, /*size=*/1);
+  public static FileArtifactValue createForVirtualActionInput(byte[] digest, long size) {
+    return new RegularFileArtifactValue(digest, /*proxy=*/ null, size);
   }
 
-  @Nullable
-  byte[] getDigest() {
-    return digest;
+  public static FileArtifactValue createNormalFile(
+      byte[] digest, @Nullable FileContentsProxy proxy, long size) {
+    return new RegularFileArtifactValue(digest, proxy, size);
   }
 
-  /** Gets the size of the file. Directories have size 0. */
-  long getSize() {
-    return size;
+  static FileArtifactValue createNormalFile(FileValue fileValue) {
+    FileContentsProxy proxy = getProxyFromFileStateValue(fileValue.realFileStateValue());
+    return new RegularFileArtifactValue(fileValue.getDigest(), proxy, fileValue.getSize());
+  }
+
+  private static FileContentsProxy getProxyFromFileStateValue(FileStateValue value) {
+    if (value instanceof FileStateValue.RegularFileStateValue) {
+      return ((FileStateValue.RegularFileStateValue) value).getContentsProxy();
+    } else if (value instanceof FileStateValue.SpecialFileStateValue) {
+      return ((FileStateValue.SpecialFileStateValue) value).getContentsProxy();
+    }
+    return null;
+  }
+
+  @VisibleForTesting
+  public static FileArtifactValue createNormalFile(byte[] digest, long size) {
+    return createNormalFile(digest, /*proxy=*/null, size);
+  }
+
+  public static FileArtifactValue createDirectory(long mtime) {
+    return new DirectoryArtifactValue(mtime);
   }
 
   /**
-   * Gets last modified time of file. Should only be called if {@link DigestUtils#useFileDigest} was
-   * false for this artifact -- namely, either it is a directory or an empty file. Note that since
-   * we store directory sizes as 0, all files for which this method can be called have size 0.
+   * Creates a FileArtifactValue used as a 'proxy' input for other ArtifactValues.
+   * These are used in {@link com.google.devtools.build.lib.actions.ActionCacheChecker}.
    */
-  long getModifiedTime() {
-    Preconditions.checkState(size == 0, "%s %s %s", digest, mtime, size);
-    return mtime;
+  static FileArtifactValue createProxy(byte[] digest) {
+    Preconditions.checkNotNull(digest);
+    return createNormalFile(digest, /*proxy=*/ null, /*size=*/ 0);
+  }
+
+  @Override
+  public abstract FileStateType getType();
+
+  @Nullable
+  @Override
+  public abstract byte[] getDigest();
+
+  @Override
+  public abstract long getSize();
+
+  @Override
+  public abstract long getModifiedTime();
+
+  /**
+   * Provides a best-effort determination whether the file was changed since the digest was
+   * computed. This method performs file system I/O, so may be expensive. It's primarily intended to
+   * avoid storing bad cache entries in an action cache. It should return true if there is a chance
+   * that the file was modified since the digest was computed. Better not upload if we are not sure
+   * that the cache entry is reliable.
+   */
+  public abstract boolean wasModifiedSinceDigest(Path path) throws IOException;
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (!(o instanceof Metadata)) {
+      return false;
+    }
+    if ((this instanceof Singleton) || (o instanceof Singleton)) {
+      return false;
+    }
+    Metadata m = (Metadata) o;
+    if (getType() != m.getType()) {
+      return false;
+    }
+    if (getDigest() != null) {
+      return Arrays.equals(getDigest(), m.getDigest()) && getSize() == m.getSize();
+    } else {
+      return getModifiedTime() == m.getModifiedTime();
+    }
   }
 
   @Override
   public int hashCode() {
-    // Hash digest by content, not reference. Note that digest is the only array in this array.
-    return Arrays.deepHashCode(new Object[] {size, mtime, digest});
-  }
-
-  /**
-   * Two FileArtifactValues will only compare equal if they have the same content. This differs
-   * from the {@code Metadata#equivalence} method, which allows for comparison using mtime if
-   * one object does not have a digest available.
-   */
-  @Override
-  public boolean equals(Object other) {
-    if (this == other) {
-      return true;
+    if (this instanceof Singleton) {
+      return System.identityHashCode(this);
     }
-    if (!(other instanceof FileArtifactValue)) {
-      return false;
+    // Hash digest by content, not reference.
+    if (getDigest() != null) {
+      return 37 * Long.hashCode(getSize()) + Arrays.hashCode(getDigest());
+    } else {
+      return Long.hashCode(getModifiedTime());
     }
-    FileArtifactValue that = (FileArtifactValue) other;
-    return this.mtime == that.mtime && this.size == that.size
-        && Arrays.equals(this.digest, that.digest);
-  }
-
-  @Override
-  public String toString() {
-    return Objects.toStringHelper(FileArtifactValue.class)
-        .add("digest", digest)
-        .add("mtime", mtime)
-        .add("size", size).toString();
   }
 }
