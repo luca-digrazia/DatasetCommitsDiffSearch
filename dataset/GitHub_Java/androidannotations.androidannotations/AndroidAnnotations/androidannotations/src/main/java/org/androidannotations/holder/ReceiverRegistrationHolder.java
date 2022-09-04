@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,36 +15,28 @@
  */
 package org.androidannotations.holder;
 
+import com.sun.codemodel.*;
+import org.androidannotations.helper.ModelConstants;
+import org.androidannotations.process.ProcessHolder;
+
+import java.util.*;
+
 import static com.sun.codemodel.JExpr._new;
 import static com.sun.codemodel.JMod.FINAL;
 import static com.sun.codemodel.JMod.PRIVATE;
 
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+public class ReceiverRegistrationHolder {
 
-import org.androidannotations.annotations.Receiver.RegisterAt;
-import org.androidannotations.helper.ModelConstants;
-import org.androidannotations.process.ProcessHolder;
-
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JDefinedClass;
-import com.sun.codemodel.JExpression;
-import com.sun.codemodel.JFieldVar;
-
-public class ReceiverRegistrationHolder<T extends EComponentHolder & HasReceiverRegistration> {
-
-	private T holder;
+	private EComponentHolder holder;
 	private Map<IntentFilterData, JFieldVar> intentFilterFields = new HashMap<IntentFilterData, JFieldVar>();
 	private IllegalStateException illegalStateException = new IllegalStateException("This shouldn't happen unless the validation is bad");
 
-	public ReceiverRegistrationHolder(T holder) {
+	public ReceiverRegistrationHolder(EComponentHolder holder) {
 		this.holder = holder;
 	}
 
-	public JFieldVar getIntentFilterField(IntentFilterData intentFilterData) {
+	public JFieldVar getIntentFilterField(String[] actions, String[] dataSchemes) {
+		IntentFilterData intentFilterData = new IntentFilterData(actions, dataSchemes);
 		JFieldVar intentFilterField = intentFilterFields.get(intentFilterData);
 		if (intentFilterField == null) {
 			intentFilterField = createIntentFilterField(intentFilterData);
@@ -58,12 +50,12 @@ public class ReceiverRegistrationHolder<T extends EComponentHolder & HasReceiver
 		JExpression newIntentFilterExpr = _new(classes().INTENT_FILTER);
 		JFieldVar intentFilterField = getGeneratedClass().field(PRIVATE | FINAL, classes().INTENT_FILTER, intentFilterName, newIntentFilterExpr);
 
-		JBlock intentFilterTarget = holder.getIntentFilterInitializationBlock(intentFilterData);
+		JBlock initBody = holder.getInitBody();
 		for (String action : intentFilterData.getActionSet()) {
-			intentFilterTarget.invoke(intentFilterField, "addAction").arg(action);
+			initBody.invoke(intentFilterField, "addAction").arg(action);
 		}
 		for (String dataScheme : intentFilterData.getDataSchemeSet()) {
-			intentFilterTarget.invoke(intentFilterField, "addDataScheme").arg(dataScheme);
+			initBody.invoke(intentFilterField, "addDataScheme").arg(dataScheme);
 		}
 
 		return intentFilterField;
@@ -97,20 +89,14 @@ public class ReceiverRegistrationHolder<T extends EComponentHolder & HasReceiver
 		return holder.classes();
 	}
 
-	public static class IntentFilterData {
+	private static class IntentFilterData {
 
-		private final RegisterAt registerAt;
 		private final Set<String> actionSet;
 		private final Set<String> dataSchemeSet;
 
-		public IntentFilterData(String[] actions, String[] dataSchemes, RegisterAt registerAt) {
-			this.registerAt = registerAt;
+		public IntentFilterData(String[] actions, String[] dataSchemes) {
 			actionSet = new HashSet<String>(Arrays.asList(actions));
 			dataSchemeSet = new HashSet<String>(Arrays.asList(dataSchemes));
-		}
-
-		public RegisterAt getRegisterAt() {
-			return registerAt;
 		}
 
 		public Set<String> getActionSet() {
@@ -126,7 +112,6 @@ public class ReceiverRegistrationHolder<T extends EComponentHolder & HasReceiver
 			final int prime = 31;
 			int result = 1;
 			result = prime * result + (actionSet == null ? 0 : actionSet.hashCode());
-			result = prime * result + (registerAt == null ? 0 : registerAt.hashCode());
 			result = prime * result + (dataSchemeSet == null ? 0 : dataSchemeSet.hashCode());
 			return result;
 		}
@@ -148,13 +133,6 @@ public class ReceiverRegistrationHolder<T extends EComponentHolder & HasReceiver
 					return false;
 				}
 			} else if (!actionSet.equals(other.actionSet)) {
-				return false;
-			}
-			if (registerAt == null) {
-				if (other.registerAt != null) {
-					return false;
-				}
-			} else if (!registerAt.equals(other.registerAt)) {
 				return false;
 			}
 			if (dataSchemeSet == null) {
