@@ -28,7 +28,6 @@ import static com.google.devtools.build.lib.util.FileTypeSet.NO_FILE;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
@@ -36,9 +35,7 @@ import com.google.devtools.build.lib.analysis.PlatformOptions;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.analysis.config.BuildOptionsView;
 import com.google.devtools.build.lib.analysis.config.CoreOptions;
-import com.google.devtools.build.lib.analysis.config.FragmentOptions;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
 import com.google.devtools.build.lib.analysis.config.TransitionFactories;
 import com.google.devtools.build.lib.analysis.config.transitions.SplitTransition;
@@ -51,7 +48,7 @@ import com.google.devtools.build.lib.packages.AttributeMap;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SafeImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.StarlarkProviderIdentifier;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.packages.TriState;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.android.AndroidConfiguration.ConfigurationDistinguisher;
@@ -70,6 +67,7 @@ import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.util.List;
+import java.util.Map;
 
 /** Rule definitions for Android rules. */
 public final class AndroidRuleClasses {
@@ -209,8 +207,8 @@ public final class AndroidRuleClasses {
 
   public static final String NOCOMPRESS_EXTENSIONS_ATTR = "nocompress_extensions";
 
-  public static final ImmutableList<StarlarkProviderIdentifier> CONTAINS_CC_INFO_PARAMS =
-      ImmutableList.of(StarlarkProviderIdentifier.forKey(CcInfo.PROVIDER.getKey()));
+  public static final ImmutableList<SkylarkProviderIdentifier> CONTAINS_CC_INFO_PARAMS =
+      ImmutableList.of(SkylarkProviderIdentifier.forKey(CcInfo.PROVIDER.getKey()));
 
   /** The default label of android_sdk option */
   public static LabelLateBoundDefault<?> getAndroidSdkLabel(Label androidSdk) {
@@ -234,7 +232,7 @@ public final class AndroidRuleClasses {
   /** Android Split configuration transition for properly handling native dependencies */
   public static final class AndroidSplitTransition
       implements SplitTransition, AndroidSplitTransititionApi {
-    private static void setCrosstoolToAndroid(BuildOptionsView options) {
+    private static void setCrosstoolToAndroid(BuildOptions options) {
       AndroidConfiguration.Options androidOptions = options.get(AndroidConfiguration.Options.class);
 
       CppOptions cppOptions = options.get(CppOptions.class);
@@ -246,17 +244,7 @@ public final class AndroidRuleClasses {
     }
 
     @Override
-    public ImmutableSet<Class<? extends FragmentOptions>> requiresOptionFragments() {
-      return ImmutableSet.of(
-          AndroidConfiguration.Options.class,
-          CoreOptions.class,
-          CppOptions.class,
-          PlatformOptions.class);
-    }
-
-    @Override
-    public ImmutableMap<String, BuildOptions> split(
-        BuildOptionsView buildOptions, EventHandler eventHandler) {
+    public Map<String, BuildOptions> split(BuildOptions buildOptions) {
 
       AndroidConfiguration.Options androidOptions =
           buildOptions.get(AndroidConfiguration.Options.class);
@@ -268,22 +256,21 @@ public final class AndroidRuleClasses {
         if (androidOptions.cpu.isEmpty()
             || androidCrosstoolTop == null
             || androidCrosstoolTop.equals(cppOptions.crosstoolTop)) {
-          return ImmutableMap.of(
-              buildOptions.get(CoreOptions.class).cpu, buildOptions.underlying());
+          return ImmutableMap.of(buildOptions.get(CoreOptions.class).cpu, buildOptions);
 
         } else {
 
-          BuildOptionsView splitOptions = buildOptions.clone();
+          BuildOptions splitOptions = buildOptions.clone();
           splitOptions.get(CoreOptions.class).cpu = androidOptions.cpu;
           setCommonAndroidOptions(androidOptions, splitOptions);
-          return ImmutableMap.of(androidOptions.cpu, splitOptions.underlying());
+          return ImmutableMap.of(androidOptions.cpu, splitOptions);
         }
 
       } else {
 
         ImmutableMap.Builder<String, BuildOptions> result = ImmutableMap.builder();
         for (String cpu : ImmutableSortedSet.copyOf(androidOptions.fatApkCpus)) {
-          BuildOptionsView splitOptions = buildOptions.clone();
+          BuildOptions splitOptions = buildOptions.clone();
           // Disable fat APKs for the child configurations.
           splitOptions.get(AndroidConfiguration.Options.class).fatApkCpus = ImmutableList.of();
 
@@ -292,14 +279,14 @@ public final class AndroidRuleClasses {
           splitOptions.get(AndroidConfiguration.Options.class).cpu = cpu;
           splitOptions.get(CoreOptions.class).cpu = cpu;
           setCommonAndroidOptions(androidOptions, splitOptions);
-          result.put(cpu, splitOptions.underlying());
+          result.put(cpu, splitOptions);
         }
         return result.build();
       }
     }
 
     private void setCommonAndroidOptions(
-        AndroidConfiguration.Options androidOptions, BuildOptionsView newOptions) {
+        AndroidConfiguration.Options androidOptions, BuildOptions newOptions) {
       newOptions.get(CppOptions.class).cppCompiler = androidOptions.cppCompiler;
       newOptions.get(CppOptions.class).libcTopLabel = androidOptions.androidLibcTopLabel;
       newOptions.get(CppOptions.class).dynamicMode = androidOptions.dynamicMode;
@@ -479,10 +466,10 @@ public final class AndroidRuleClasses {
                   .cfg(HostTransition.createFactory())
                   .exec()
                   .value(env.getToolsLabel("//tools/android:databinding_exec")))
-          .advertiseStarlarkProvider(
-              StarlarkProviderIdentifier.forKey(AndroidResourcesInfo.PROVIDER.getKey()))
-          .advertiseStarlarkProvider(
-              StarlarkProviderIdentifier.forKey(AndroidNativeLibsInfo.PROVIDER.getKey()))
+          .advertiseSkylarkProvider(
+              SkylarkProviderIdentifier.forKey(AndroidResourcesInfo.PROVIDER.getKey()))
+          .advertiseSkylarkProvider(
+              SkylarkProviderIdentifier.forKey(AndroidNativeLibsInfo.PROVIDER.getKey()))
           .build();
     }
 
@@ -611,8 +598,8 @@ public final class AndroidRuleClasses {
                   .mandatoryProviders(CONTAINS_CC_INFO_PARAMS)
                   .mandatoryProviders(JavaRuleClasses.CONTAINS_JAVA_PROVIDER)
                   .mandatoryProviders(
-                      StarlarkProviderIdentifier.forKey(AndroidResourcesInfo.PROVIDER.getKey()),
-                      StarlarkProviderIdentifier.forKey(AndroidAssetsInfo.PROVIDER.getKey()))
+                      SkylarkProviderIdentifier.forKey(AndroidResourcesInfo.PROVIDER.getKey()),
+                      SkylarkProviderIdentifier.forKey(AndroidAssetsInfo.PROVIDER.getKey()))
                   .aspect(androidNeverlinkAspect)
                   .aspect(dexArchiveAspect, DexArchiveAspect.PARAM_EXTRACTOR))
           /* <!-- #BLAZE_RULE($android_binary_base).ATTRIBUTE(debug_key) -->
@@ -860,9 +847,9 @@ public final class AndroidRuleClasses {
                   .exec()
                   .value(env.getToolsLabel("//tools/android:dex_list_obfuscator")))
           .add(
-              attr(":bytecode_optimizer", LABEL)
+              attr(":bytecode_optimizers", LABEL_LIST)
                   .cfg(HostTransition.createFactory())
-                  .value(JavaSemantics.BYTECODE_OPTIMIZER))
+                  .value(JavaSemantics.BYTECODE_OPTIMIZERS))
           // We need the C++ toolchain for every sub-configuration to get the correct linker.
           .add(
               attr("$cc_toolchain_split", LABEL)
@@ -885,7 +872,7 @@ public final class AndroidRuleClasses {
                   .allowedFileTypes()
                   .nonconfigurable("defines an aspect of configuration")
                   .mandatoryProviders(ImmutableList.of(ConfigFeatureFlagProvider.id())))
-          .add(AndroidFeatureFlagSetProvider.getAllowlistAttribute(env))
+          .add(AndroidFeatureFlagSetProvider.getWhitelistAttribute(env))
           // The resource extractor is used at the binary level to extract java resources from the
           // deploy jar so that they can be added to the APK.
           .add(
@@ -936,8 +923,8 @@ public final class AndroidRuleClasses {
                   .value(LEGACY_MAIN_DEX_LIST_GENERATOR)
                   .exec())
           .removeAttribute("data")
-          .advertiseStarlarkProvider(StarlarkProviderIdentifier.forKey(ApkInfo.PROVIDER.getKey()))
-          .advertiseStarlarkProvider(StarlarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
+          .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(ApkInfo.PROVIDER.getKey()))
+          .advertiseSkylarkProvider(SkylarkProviderIdentifier.forKey(JavaInfo.PROVIDER.getKey()))
           .build();
     }
 
