@@ -43,7 +43,7 @@ import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
 import io.quarkus.deployment.Capabilities;
-import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
+import io.quarkus.deployment.GizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -61,7 +61,7 @@ import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.ResultHandle;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.ScheduledExecution;
-import io.quarkus.scheduler.runtime.ScheduledInvoker;
+import io.quarkus.scheduler.runtime.AbstractScheduledInvoker;
 import io.quarkus.scheduler.runtime.ScheduledMethodMetadata;
 import io.quarkus.scheduler.runtime.SchedulerConfig;
 import io.quarkus.scheduler.runtime.SchedulerRecorder;
@@ -127,10 +127,12 @@ public class SchedulerProcessor {
         AnnotationStore annotationStore = validationPhase.getContext().get(BuildExtension.Key.ANNOTATION_STORE);
 
         // We need to collect all business methods annotated with @Scheduled first
-        for (BeanInfo bean : validationPhase.getContext().beans().classBeans()) {
-            collectScheduledMethods(config, beanArchives.getIndex(), annotationStore, bean,
-                    bean.getTarget().get().asClass(),
-                    scheduledBusinessMethods, validationPhase.getContext());
+        for (BeanInfo bean : validationPhase.getContext().get(BuildExtension.Key.BEANS)) {
+            if (bean.isClassBean()) {
+                collectScheduledMethods(config, beanArchives.getIndex(), annotationStore, bean,
+                        bean.getTarget().get().asClass(),
+                        scheduledBusinessMethods, validationPhase.getContext());
+            }
         }
     }
 
@@ -213,7 +215,7 @@ public class SchedulerProcessor {
 
         feature.produce(new FeatureBuildItem(FeatureBuildItem.SCHEDULER));
         List<ScheduledMethodMetadata> scheduledMethods = new ArrayList<>();
-        ClassOutput classOutput = new GeneratedClassGizmoAdaptor(generatedClass, true);
+        ClassOutput classOutput = new GizmoAdaptor(generatedClass, true);
 
         for (ScheduledBusinessMethodItem businessMethod : scheduledBusinessMethods) {
             ScheduledMethodMetadata scheduledMethod = new ScheduledMethodMetadata();
@@ -253,11 +255,10 @@ public class SchedulerProcessor {
                 + HashUtil.sha1(sigBuilder.toString());
 
         ClassCreator invokerCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName)
-                .interfaces(ScheduledInvoker.class)
+                .superClass(AbstractScheduledInvoker.class)
                 .build();
 
-        // The descriptor is: void invokeBean(Object execution)
-        MethodCreator invoke = invokerCreator.getMethodCreator("invokeBean", void.class, Object.class);
+        MethodCreator invoke = invokerCreator.getMethodCreator("invokeBean", void.class, ScheduledExecution.class);
         // InjectableBean<Foo: bean = Arc.container().bean("1");
         // InstanceHandle<Foo> handle = Arc.container().instance(bean);
         // handle.get().ping();
