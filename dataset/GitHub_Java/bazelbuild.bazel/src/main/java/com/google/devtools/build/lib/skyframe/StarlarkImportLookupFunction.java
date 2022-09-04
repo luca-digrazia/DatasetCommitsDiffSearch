@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkThread.Extension;
 import com.google.devtools.build.lib.syntax.Statement;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.RecordingSkyFunctionEnvironment;
@@ -73,7 +72,7 @@ import javax.annotation.Nullable;
  * <p>Given a {@link Label} referencing a Starlark file, attempts to locate the file and load it.
  * The Label must be absolute, and must not reference the special {@code external} package. If
  * loading is successful, returns a {@link StarlarkImportLookupValue} that encapsulates the loaded
- * {@link Extension} and {@link StarlarkFileDependency} information. If loading is unsuccessful,
+ * {@link Extension} and {@link SkylarkFileDependency} information. If loading is unsuccessful,
  * throws a {@link StarlarkImportLookupFunctionException} that encapsulates the cause of the
  * failure.
  */
@@ -101,7 +100,6 @@ public class StarlarkImportLookupFunction implements SkyFunction {
   public static StarlarkImportLookupFunction create(
       RuleClassProvider ruleClassProvider,
       PackageFactory packageFactory,
-      DigestHashFunction digestHashFunction,
       Cache<Label, ASTFileLookupValue> astFileLookupValueCache) {
     return new StarlarkImportLookupFunction(
         ruleClassProvider,
@@ -129,8 +127,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
         // just a temporary thing for bzl execution. Retaining it forever is pure waste.
         // (b) The memory overhead of the extra Skyframe node and edge per bzl file is pure
         // waste.
-        new InliningAndCachingASTFileLookupValueManager(
-            ruleClassProvider, digestHashFunction, astFileLookupValueCache),
+        new InliningAndCachingASTFileLookupValueManager(ruleClassProvider, astFileLookupValueCache),
         /*selfInliningManager=*/ null);
   }
 
@@ -441,7 +438,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
 
     // Process the loaded imports.
     Map<String, Extension> extensionsForImports = Maps.newHashMapWithExpectedSize(loadMap.size());
-    ImmutableList.Builder<StarlarkFileDependency> fileDependencies =
+    ImmutableList.Builder<SkylarkFileDependency> fileDependencies =
         ImmutableList.builderWithExpectedSize(loadMap.size());
     for (Map.Entry<String, Label> importEntry : loadMap.entrySet()) {
       String importString = importEntry.getKey();
@@ -472,7 +469,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
             repoMapping);
     StarlarkImportLookupValue result =
         new StarlarkImportLookupValue(
-            extension, new StarlarkFileDependency(fileLabel, fileDependencies.build()));
+            extension, new SkylarkFileDependency(fileLabel, fileDependencies.build()));
     return result;
   }
 
@@ -812,15 +809,12 @@ public class StarlarkImportLookupFunction implements SkyFunction {
   private static class InliningAndCachingASTFileLookupValueManager
       implements ASTFileLookupValueManager {
     private final RuleClassProvider ruleClassProvider;
-    private final DigestHashFunction digestHashFunction;
     private final Cache<Label, ASTFileLookupValue> astFileLookupValueCache;
 
     private InliningAndCachingASTFileLookupValueManager(
         RuleClassProvider ruleClassProvider,
-        DigestHashFunction digestHashFunction,
         Cache<Label, ASTFileLookupValue> astFileLookupValueCache) {
       this.ruleClassProvider = ruleClassProvider;
-      this.digestHashFunction = digestHashFunction;
       this.astFileLookupValueCache = astFileLookupValueCache;
     }
 
@@ -833,7 +827,7 @@ public class StarlarkImportLookupFunction implements SkyFunction {
       if (value == null) {
         value =
             ASTFileLookupFunction.computeInline(
-                ASTFileLookupValue.key(fileLabel), env, ruleClassProvider, digestHashFunction);
+                ASTFileLookupValue.key(fileLabel), env, ruleClassProvider);
         if (value != null) {
           astFileLookupValueCache.put(fileLabel, value);
         }

@@ -42,13 +42,13 @@ import com.google.devtools.build.lib.analysis.test.AnalysisTestResultInfo;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.AttributeContainer;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.Provider;
-import com.google.devtools.build.lib.packages.StarlarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider;
+import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.objc.ObjcProvider;
@@ -56,7 +56,7 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.PackageFunction;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.StarlarkImportLookupFunction;
-import com.google.devtools.build.lib.syntax.NoneType;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkList;
@@ -64,7 +64,6 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.skyframe.InMemoryMemoizingEvaluator;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionName;
-import java.io.IOException;
 import java.util.List;
 import org.junit.Before;
 import org.junit.Test;
@@ -79,7 +78,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   }
 
   @Before
-  public void setupMyInfo() throws IOException {
+  public void setupMyInfo() throws Exception {
     scratch.file("myinfo/myinfo.bzl", "MyInfo = provider()");
 
     scratch.file("myinfo/BUILD");
@@ -87,7 +86,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   private StructImpl getMyInfoFromTarget(ConfiguredTarget configuredTarget) throws Exception {
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.parseAbsolute("//myinfo:myinfo.bzl", ImmutableMap.of()), "MyInfo");
     return (StructImpl) configuredTarget.get(key);
   }
@@ -180,7 +179,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     // Required since we have a new WORKSPACE file.
     invalidatePackages(true);
 
-    setStarlarkSemanticsOptions("--experimental_sibling_repository_layout");
+    setSkylarkSemanticsOptions("--experimental_sibling_repository_layout");
 
     ConfiguredTarget myTarget = getConfiguredTarget("@r//:t");
     String result = (String) getMyInfoFromTarget(myTarget).getValue("result");
@@ -632,7 +631,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testCannotSpecifyRunfilesWithDataOrDefaultRunfiles_struct() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -701,7 +700,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testInstrumentedFilesProviderWithCodeCoverageDisabled() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -727,14 +726,14 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
 
     assertThat(target.getLabel().toString()).isEqualTo("//test/skylark:cr");
-    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
+    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
     assertWithMessage("InstrumentedFilesInfo should be set.").that(provider).isNotNull();
     assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles())).isEmpty();
   }
 
   @Test
   public void testInstrumentedFilesProviderWithCodeCoverageEnabled() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -760,7 +759,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
 
     assertThat(target.getLabel().toString()).isEqualTo("//test/skylark:cr");
-    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
+    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
     assertWithMessage("InstrumentedFilesInfo should be set.").that(provider).isNotNull();
     assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles()))
         .containsExactly("a.txt", "A.java");
@@ -768,7 +767,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testInstrumentedFilesInfo_coverageDisabled() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -793,7 +792,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
 
-    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
+    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
     assertWithMessage("InstrumentedFilesInfo should be set.").that(provider).isNotNull();
     assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles())).isEmpty();
   }
@@ -824,7 +823,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     ConfiguredTarget target = getConfiguredTarget("//test/skylark:cr");
 
-    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.STARLARK_CONSTRUCTOR);
+    InstrumentedFilesInfo provider = target.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
     assertWithMessage("InstrumentedFilesInfo should be set.").that(provider).isNotNull();
     assertThat(ActionsTestUtil.baseArtifactNames(provider.getInstrumentedFiles()))
         .containsExactly("a.txt", "A.java");
@@ -1323,7 +1322,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget = getConfiguredTarget("//test:r");
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
             "my_provider");
     StructImpl declaredProvider = (StructImpl) configuredTarget.get(key);
@@ -1348,7 +1347,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget  = getConfiguredTarget("//test:r");
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
             "my_provider");
     StructImpl declaredProvider = (StructImpl) configuredTarget.get(key);
@@ -1374,7 +1373,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
     ConfiguredTarget configuredTarget  = getConfiguredTarget("//test:r");
     Provider.Key key =
-        new StarlarkProvider.Key(
+        new SkylarkProvider.SkylarkKey(
             Label.create(configuredTarget.getLabel().getPackageIdentifier(), "extension.bzl"),
             "my_provider");
     StructImpl declaredProvider = (StructImpl) configuredTarget.get(key);
@@ -1823,9 +1822,8 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "my_dep_rule(name = 'yyy', dep = ':xxx')"
     );
 
-    StarlarkProvider.Key pInfoKey =
-        new StarlarkProvider.Key(
-            Label.parseAbsolute("//test:rule.bzl", ImmutableMap.of()), "PInfo");
+    SkylarkKey pInfoKey =
+        new SkylarkKey(Label.parseAbsolute("//test:rule.bzl", ImmutableMap.of()), "PInfo");
 
     ConfiguredTarget targetXXX = getConfiguredTarget("//test:xxx");
     StructImpl structXXX = (StructImpl) targetXXX.get(pInfoKey);
@@ -2179,12 +2177,10 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "inner_rule(name = 'inner')",
         "outer_rule_test(name = 'r', dep = ':inner')");
 
-    StarlarkProvider.Key myInfoKey =
-        new StarlarkProvider.Key(
-            Label.parseAbsolute("//test:extension.bzl", ImmutableMap.of()), "MyInfo");
-    StarlarkProvider.Key myDepKey =
-        new StarlarkProvider.Key(
-            Label.parseAbsolute("//test:extension.bzl", ImmutableMap.of()), "MyDep");
+    SkylarkKey myInfoKey =
+        new SkylarkKey(Label.parseAbsolute("//test:extension.bzl", ImmutableMap.of()), "MyInfo");
+    SkylarkKey myDepKey =
+        new SkylarkKey(Label.parseAbsolute("//test:extension.bzl", ImmutableMap.of()), "MyDep");
 
     ConfiguredTarget outerTarget = getConfiguredTarget("//test:r");
     StructImpl outerInfo = (StructImpl) outerTarget.get(myInfoKey);
@@ -2227,7 +2223,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testBuildSettingRule_flag() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_build_setting_api=true");
+    setSkylarkSemanticsOptions("--experimental_build_setting_api=true");
 
     scratch.file("test/rules.bzl",
         "def _impl(ctx): return None",
@@ -2248,7 +2244,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testBuildSettingRule_settingByDefault() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_build_setting_api=true");
+    setSkylarkSemanticsOptions("--experimental_build_setting_api=true");
 
     scratch.file("test/rules.bzl",
         "def _impl(ctx): return None",
@@ -2269,7 +2265,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testBuildSettingRule_settingByFlagParameter() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_build_setting_api=true");
+    setSkylarkSemanticsOptions("--experimental_build_setting_api=true");
 
     scratch.file("test/rules.bzl",
         "def _impl(ctx): return None",
@@ -2291,7 +2287,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testBuildSettingRule_noDefault() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_build_setting_api=true");
+    setSkylarkSemanticsOptions("--experimental_build_setting_api=true");
 
     scratch.file("test/rules.bzl",
         "def _impl(ctx): return None",
@@ -2309,7 +2305,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testBuildSettingRule_errorsWithoutExperimentalFlag() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_build_setting_api=false");
+    setSkylarkSemanticsOptions("--experimental_build_setting_api=false");
 
     scratch.file(
         "test/rules.bzl",
@@ -2591,7 +2587,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "load('//test:rules.bzl', 'my_rule', 'simple_rule')",
         "my_rule(name = 'my_rule', dep = ':dep')",
         "simple_rule(name = 'dep')");
-    setStarlarkSemanticsOptions("--experimental_starlark_config_transitions");
+    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:my_rule");
@@ -2600,7 +2596,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testPrintFromTransitionImpl() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_starlark_config_transitions");
+    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
     scratch.file(
         "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
@@ -2652,7 +2648,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testTransitionEquality() throws Exception {
-    setStarlarkSemanticsOptions("--experimental_starlark_config_transitions");
+    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
     scratch.file(
         "tools/whitelists/function_transition_whitelist/BUILD",
         "package_group(",
@@ -2741,7 +2737,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
         "load('//test:rules.bzl', 'my_rule', 'simple_rule')",
         "my_rule(name = 'my_rule', dep = ':dep')",
         "simple_rule(name = 'dep')");
-    setStarlarkSemanticsOptions("--experimental_starlark_config_transitions");
+    setSkylarkSemanticsOptions("--experimental_starlark_config_transitions");
 
     reporter.removeHandler(failFastHandler);
     getConfiguredTarget("//test:my_rule");
@@ -2753,7 +2749,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     // Note that attr.license is deprecated, and thus this test is subject to imminent removal.
     // (See --incompatible_no_attr_license). However, this verifies that until the attribute
     // is removed, values of the attribute are a valid Starlark type.
-    setStarlarkSemanticsOptions("--incompatible_no_attr_license=false");
+    setSkylarkSemanticsOptions("--incompatible_no_attr_license=false");
     scratch.file(
         "test/rule.bzl",
         "def _my_rule_impl(ctx): ",
@@ -2792,7 +2788,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testDisallowStructProviderSyntax() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=true");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=true");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -2815,7 +2811,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testDisableTargetProviderFields() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disable_target_provider_fields=true");
+    setSkylarkSemanticsOptions("--incompatible_disable_target_provider_fields=true");
     scratch.file(
         "test/skylark/rule.bzl",
         "MyProvider = provider()",
@@ -2851,7 +2847,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
   // --incompatible_disable_target_provider_fields.
   @Test
   public void testDisableTargetProviderFields_actionsField() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disable_target_provider_fields=true");
+    setSkylarkSemanticsOptions("--incompatible_disable_target_provider_fields=true");
     scratch.file(
         "test/skylark/rule.bzl",
         "MyProvider = provider()",
@@ -2879,7 +2875,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testDisableTargetProviderFields_disabled() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disable_target_provider_fields=false");
+    setSkylarkSemanticsOptions("--incompatible_disable_target_provider_fields=false");
     scratch.file(
         "test/skylark/rule.bzl",
         "MyProvider = provider()",
@@ -2907,7 +2903,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testNoRuleOutputsParam() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_no_rule_outputs_param=true");
+    setSkylarkSemanticsOptions("--incompatible_no_rule_outputs_param=true");
     scratch.file(
         "test/skylark/test_rule.bzl",
         "def _impl(ctx):",
@@ -2931,7 +2927,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testExecutableNotInRunfiles() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/test_rule.bzl",
         "def _my_rule_impl(ctx):",
@@ -2953,7 +2949,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testCommandStringList() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_run_shell_command_string");
+    setSkylarkSemanticsOptions("--incompatible_run_shell_command_string");
     scratch.file(
         "test/skylark/test_rule.bzl",
         "def _my_rule_impl(ctx):",
@@ -3082,7 +3078,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testUnknownStringEscapesForbidden() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_restrict_string_escapes=true");
+    setSkylarkSemanticsOptions("--incompatible_restrict_string_escapes=true");
 
     scratch.file("test/extension.bzl", "y = \"\\z\"");
 
@@ -3095,7 +3091,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testUnknownStringEscapes() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_restrict_string_escapes=false");
+    setSkylarkSemanticsOptions("--incompatible_restrict_string_escapes=false");
 
     scratch.file("test/extension.bzl", "y = \"\\z\"");
 
@@ -3290,7 +3286,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testLegacyProvider_AddCanonicalLegacyKeyAndModernKey() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -3318,7 +3314,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testLegacyProvider_DontAutomaticallyAddKeysAlreadyPresent() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -3347,7 +3343,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
 
   @Test
   public void testLegacyProvider_FirstNoncanonicalKeyBecomesCanonical() throws Exception {
-    setStarlarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
+    setSkylarkSemanticsOptions("--incompatible_disallow_struct_provider_syntax=false");
     scratch.file(
         "test/skylark/extension.bzl",
         "def custom_rule_impl(ctx):",
@@ -3375,52 +3371,5 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
     assertThat(providerFromObjc.define().toList()).containsExactly("foo");
     assertThat(providerFromFoo.define().toList()).containsExactly("foo");
     assertThat(providerFromBar.define().toList()).containsExactly("bar");
-  }
-
-  @Test
-  public void testCustomMallocUnset() throws Exception {
-    setUpCustomMallocRule();
-    ConfiguredTarget target = getConfiguredTarget("//test/starlark:malloc");
-    StructImpl provider = getMyInfoFromTarget(target);
-    Object customMalloc = provider.getValue("malloc");
-    assertThat(customMalloc).isInstanceOf(NoneType.class);
-  }
-
-  @Test
-  public void testCustomMallocSet() throws Exception {
-    setUpCustomMallocRule();
-    useConfiguration("--custom_malloc=//base:system_malloc");
-    ConfiguredTarget target = getConfiguredTarget("//test/starlark:malloc");
-    StructImpl provider = getMyInfoFromTarget(target);
-    RuleConfiguredTarget customMalloc = provider.getValue("malloc", RuleConfiguredTarget.class);
-    assertThat(customMalloc.getLabel().getCanonicalForm()).isEqualTo("//base:system_malloc");
-  }
-
-  private void setUpCustomMallocRule() throws IOException {
-    scratch.overwriteFile("base/BUILD", "cc_library(name = 'system_malloc')");
-    scratch.file(
-        "test/starlark/extension.bzl",
-        "load('//myinfo:myinfo.bzl', 'MyInfo')",
-        "",
-        "def _malloc_rule_impl(ctx):",
-        "  return [MyInfo(malloc = ctx.attr._custom_malloc)]",
-        "",
-        "malloc_rule = rule(",
-        "    implementation = _malloc_rule_impl,",
-        "    attrs = {",
-        "        '_custom_malloc': attr.label(",
-        "            default = configuration_field(",
-        "                fragment = 'cpp',",
-        "                name = 'custom_malloc',",
-        "            ),",
-        "            providers = [CcInfo],",
-        "        ),",
-        "    }",
-        ")");
-    scratch.file(
-        "test/starlark/BUILD",
-        "load('//test/starlark:extension.bzl', 'malloc_rule')",
-        "",
-        "malloc_rule(name = 'malloc')");
   }
 }
