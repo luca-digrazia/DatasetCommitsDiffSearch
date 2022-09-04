@@ -18,6 +18,7 @@ package org.graylog.plugins.pipelineprocessor.functions.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.collect.ImmutableList;
 import com.google.inject.TypeLiteral;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
@@ -30,6 +31,7 @@ import org.graylog.plugins.pipelineprocessor.ast.functions.FunctionDescriptor;
 import org.graylog.plugins.pipelineprocessor.ast.functions.ParameterDescriptor;
 
 import javax.inject.Inject;
+import java.io.IOException;
 import java.util.Map;
 
 import static com.google.common.collect.ImmutableList.of;
@@ -54,8 +56,8 @@ public class SelectJsonPath extends AbstractFunction<Map<String, Object>> {
         // sigh generics and type erasure
         //noinspection unchecked
         pathsParam = ParameterDescriptor.type("paths",
-                                              (Class<? extends Map<String, String>>) new TypeLiteral<Map<String, String>>() {}.getRawType(),
-                                              (Class<? extends Map<String, JsonPath>>) new TypeLiteral<Map<String, JsonPath>>() {}.getRawType())
+                                              (Class<Map<String, String>>) new TypeLiteral<Map<String, String>>() {}.getRawType(),
+                                              (Class<Map<String, JsonPath>>) new TypeLiteral<Map<String, JsonPath>>() {}.getRawType())
                 .transform(inputMap -> inputMap
                         .entrySet().stream()
                         .collect(toMap(Map.Entry::getKey, e -> JsonPath.compile(e.getValue()))))
@@ -73,8 +75,39 @@ public class SelectJsonPath extends AbstractFunction<Map<String, Object>> {
                 .entrySet().stream()
                 .collect(toMap(
                         Map.Entry::getKey,
-                        e -> e.getValue().read(json, configuration)
+                        e -> unwrapJsonNode(e.getValue().read(json, configuration))
                 ));
+    }
+
+    private Object unwrapJsonNode(Object value) {
+        if (!(value instanceof JsonNode)) {
+            return value;
+        }
+        JsonNode read = ((JsonNode) value);
+        switch (read.getNodeType()) {
+            case ARRAY:
+                return ImmutableList.copyOf(read.elements());
+            case BINARY:
+                try {
+                    return read.binaryValue();
+                } catch (IOException e) {
+                    return null;
+                }
+            case BOOLEAN:
+                return read.booleanValue();
+            case MISSING:
+            case NULL:
+                return null;
+            case NUMBER:
+                return read.numberValue();
+            case OBJECT:
+                return read;
+            case POJO:
+                return read;
+            case STRING:
+                return read.textValue();
+        }
+        return read;
     }
 
     @Override
