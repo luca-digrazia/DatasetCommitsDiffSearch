@@ -436,9 +436,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
 
     Map<SkyKey, ? extends NodeEntry> missingEntries =
         evaluatorContext.getBatchValues(skyKey, Reason.DEP_REQUESTED, missingKeys);
-    int i = -1;
+    int i = 0;
     for (SkyKey key : keys) {
-      i++;
       if (result.get(i) != null) {
         continue;
       }
@@ -449,6 +448,7 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       if (valueOrNullMarker != NULL_MARKER) {
         maybeUpdateMaxChildVersion(depEntry);
       }
+      i++;
     }
     return result;
   }

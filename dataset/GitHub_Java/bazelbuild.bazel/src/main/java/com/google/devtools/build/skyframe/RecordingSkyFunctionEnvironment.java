@@ -13,9 +13,11 @@
 // limitations under the License.
 package com.google.devtools.build.skyframe;
 
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.SkyFunction.Environment;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
@@ -26,14 +28,17 @@ public class RecordingSkyFunctionEnvironment implements Environment {
   private final Environment delegate;
   private final Consumer<SkyKey> skyKeyReceiver;
   private final Consumer<Iterable<SkyKey>> skyKeysReceiver;
+  private final Consumer<Exception> exceptionReceiver;
 
   public RecordingSkyFunctionEnvironment(
       Environment delegate,
       Consumer<SkyKey> skyKeyReceiver,
-      Consumer<Iterable<SkyKey>> skyKeysReceiver) {
+      Consumer<Iterable<SkyKey>> skyKeysReceiver,
+      Consumer<Exception> exceptionReceiver) {
     this.delegate = delegate;
     this.skyKeyReceiver = skyKeyReceiver;
     this.skyKeysReceiver = skyKeysReceiver;
+    this.exceptionReceiver = exceptionReceiver;
   }
 
   private void recordDep(SkyKey key) {
@@ -43,6 +48,10 @@ public class RecordingSkyFunctionEnvironment implements Environment {
   @SuppressWarnings("unchecked") // Cast Iterable<? extends SkyKey> to Iterable<SkyKey>.
   private void recordDeps(Iterable<? extends SkyKey> keys) {
     skyKeysReceiver.accept((Iterable<SkyKey>) keys);
+  }
+
+  private void noteException(Exception e) {
+    exceptionReceiver.accept(e);
   }
 
   public Environment getDelegate() {
@@ -61,7 +70,12 @@ public class RecordingSkyFunctionEnvironment implements Environment {
   public <E extends Exception> SkyValue getValueOrThrow(SkyKey depKey, Class<E> exceptionClass)
       throws E, InterruptedException {
     recordDep(depKey);
-    return delegate.getValueOrThrow(depKey, exceptionClass);
+    try {
+      return delegate.getValueOrThrow(depKey, exceptionClass);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Nullable
@@ -70,7 +84,12 @@ public class RecordingSkyFunctionEnvironment implements Environment {
       SkyKey depKey, Class<E1> exceptionClass1, Class<E2> exceptionClass2)
       throws E1, E2, InterruptedException {
     recordDep(depKey);
-    return delegate.getValueOrThrow(depKey, exceptionClass1, exceptionClass2);
+    try {
+      return delegate.getValueOrThrow(depKey, exceptionClass1, exceptionClass2);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Nullable
@@ -83,7 +102,12 @@ public class RecordingSkyFunctionEnvironment implements Environment {
           Class<E3> exceptionClass3)
           throws E1, E2, E3, InterruptedException {
     recordDep(depKey);
-    return delegate.getValueOrThrow(depKey, exceptionClass1, exceptionClass2, exceptionClass3);
+    try {
+      return delegate.getValueOrThrow(depKey, exceptionClass1, exceptionClass2, exceptionClass3);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Nullable
@@ -97,8 +121,13 @@ public class RecordingSkyFunctionEnvironment implements Environment {
           Class<E4> exceptionClass4)
           throws E1, E2, E3, E4, InterruptedException {
     recordDep(depKey);
-    return delegate.getValueOrThrow(
-        depKey, exceptionClass1, exceptionClass2, exceptionClass3, exceptionClass4);
+    try {
+      return delegate.getValueOrThrow(
+          depKey, exceptionClass1, exceptionClass2, exceptionClass3, exceptionClass4);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Nullable
@@ -118,17 +147,23 @@ public class RecordingSkyFunctionEnvironment implements Environment {
           Class<E5> exceptionClass5)
           throws E1, E2, E3, E4, E5, InterruptedException {
     recordDep(depKey);
-    return delegate.getValueOrThrow(
-        depKey,
-        exceptionClass1,
-        exceptionClass2,
-        exceptionClass3,
-        exceptionClass4,
-        exceptionClass5);
+    try {
+      return delegate.getValueOrThrow(
+          depKey,
+          exceptionClass1,
+          exceptionClass2,
+          exceptionClass3,
+          exceptionClass4,
+          exceptionClass5);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Override
-  public Map<SkyKey, SkyValue> getValues(Iterable<SkyKey> depKeys) throws InterruptedException {
+  public Map<SkyKey, SkyValue> getValues(Iterable<? extends SkyKey> depKeys)
+      throws InterruptedException {
     recordDeps(depKeys);
     return delegate.getValues(depKeys);
   }
@@ -137,7 +172,12 @@ public class RecordingSkyFunctionEnvironment implements Environment {
   public <E extends Exception> Map<SkyKey, ValueOrException<E>> getValuesOrThrow(
       Iterable<? extends SkyKey> depKeys, Class<E> exceptionClass) throws InterruptedException {
     recordDeps(depKeys);
-    return delegate.getValuesOrThrow(depKeys, exceptionClass);
+    try {
+      return delegate.getValuesOrThrow(depKeys, exceptionClass);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Override
@@ -146,7 +186,12 @@ public class RecordingSkyFunctionEnvironment implements Environment {
           Iterable<? extends SkyKey> depKeys, Class<E1> exceptionClass1, Class<E2> exceptionClass2)
           throws InterruptedException {
     recordDeps(depKeys);
-    return delegate.getValuesOrThrow(depKeys, exceptionClass1, exceptionClass2);
+    try {
+      return delegate.getValuesOrThrow(depKeys, exceptionClass1, exceptionClass2);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Override
@@ -158,7 +203,12 @@ public class RecordingSkyFunctionEnvironment implements Environment {
           Class<E3> exceptionClass3)
           throws InterruptedException {
     recordDeps(depKeys);
-    return delegate.getValuesOrThrow(depKeys, exceptionClass1, exceptionClass2, exceptionClass3);
+    try {
+      return delegate.getValuesOrThrow(depKeys, exceptionClass1, exceptionClass2, exceptionClass3);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Override
@@ -171,8 +221,13 @@ public class RecordingSkyFunctionEnvironment implements Environment {
           Class<E4> exceptionClass4)
           throws InterruptedException {
     recordDeps(depKeys);
-    return delegate.getValuesOrThrow(
-        depKeys, exceptionClass1, exceptionClass2, exceptionClass3, exceptionClass4);
+    try {
+      return delegate.getValuesOrThrow(
+          depKeys, exceptionClass1, exceptionClass2, exceptionClass3, exceptionClass4);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Override
@@ -191,18 +246,132 @@ public class RecordingSkyFunctionEnvironment implements Environment {
           Class<E5> exceptionClass5)
           throws InterruptedException {
     recordDeps(depKeys);
-    return delegate.getValuesOrThrow(
-        depKeys,
-        exceptionClass1,
-        exceptionClass2,
-        exceptionClass3,
-        exceptionClass4,
-        exceptionClass5);
+    try {
+      return delegate.getValuesOrThrow(
+          depKeys,
+          exceptionClass1,
+          exceptionClass2,
+          exceptionClass3,
+          exceptionClass4,
+          exceptionClass5);
+    } catch (Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Override
   public boolean valuesMissing() {
     return delegate.valuesMissing();
+  }
+
+  @Override
+  public List<SkyValue> getOrderedValues(Iterable<? extends SkyKey> depKeys)
+      throws InterruptedException {
+    return delegate.getOrderedValues(depKeys);
+  }
+
+  @Override
+  public <E extends Exception> List<ValueOrException<E>> getOrderedValuesOrThrow(
+      Iterable<? extends SkyKey> depKeys, Class<E> exceptionClass) throws InterruptedException {
+    recordDeps(depKeys);
+    try {
+      return delegate.getOrderedValuesOrThrow(depKeys, exceptionClass);
+    } catch (
+        @SuppressWarnings("InterruptedExceptionSwallowed")
+        Exception e) {
+      noteException(e);
+      throw e;
+    }
+  }
+
+  @Override
+  public <E1 extends Exception, E2 extends Exception>
+      List<ValueOrException2<E1, E2>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys, Class<E1> exceptionClass1, Class<E2> exceptionClass2)
+          throws InterruptedException {
+    recordDeps(depKeys);
+    try {
+      return delegate.getOrderedValuesOrThrow(depKeys, exceptionClass1, exceptionClass2);
+    } catch (
+        @SuppressWarnings("InterruptedExceptionSwallowed")
+        Exception e) {
+      noteException(e);
+      throw e;
+    }
+  }
+
+  @Override
+  public <E1 extends Exception, E2 extends Exception, E3 extends Exception>
+      List<ValueOrException3<E1, E2, E3>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys,
+          Class<E1> exceptionClass1,
+          Class<E2> exceptionClass2,
+          Class<E3> exceptionClass3)
+          throws InterruptedException {
+    recordDeps(depKeys);
+    try {
+      return delegate.getOrderedValuesOrThrow(
+          depKeys, exceptionClass1, exceptionClass2, exceptionClass3);
+    } catch (
+        @SuppressWarnings("InterruptedExceptionSwallowed")
+        Exception e) {
+      noteException(e);
+      throw e;
+    }
+  }
+
+  @Override
+  public <E1 extends Exception, E2 extends Exception, E3 extends Exception, E4 extends Exception>
+      List<ValueOrException4<E1, E2, E3, E4>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys,
+          Class<E1> exceptionClass1,
+          Class<E2> exceptionClass2,
+          Class<E3> exceptionClass3,
+          Class<E4> exceptionClass4)
+          throws InterruptedException {
+    recordDeps(depKeys);
+    try {
+      return delegate.getOrderedValuesOrThrow(
+          depKeys, exceptionClass1, exceptionClass2, exceptionClass3, exceptionClass4);
+    } catch (
+        @SuppressWarnings("InterruptedExceptionSwallowed")
+        Exception e) {
+      noteException(e);
+      throw e;
+    }
+  }
+
+  @Override
+  public <
+          E1 extends Exception,
+          E2 extends Exception,
+          E3 extends Exception,
+          E4 extends Exception,
+          E5 extends Exception>
+      List<ValueOrException5<E1, E2, E3, E4, E5>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys,
+          Class<E1> exceptionClass1,
+          Class<E2> exceptionClass2,
+          Class<E3> exceptionClass3,
+          Class<E4> exceptionClass4,
+          Class<E5> exceptionClass5)
+          throws InterruptedException {
+    recordDeps(depKeys);
+    try {
+      return delegate.getOrderedValuesOrThrow(
+          depKeys,
+          exceptionClass1,
+          exceptionClass2,
+          exceptionClass3,
+          exceptionClass4,
+          exceptionClass5);
+    } catch (
+        @SuppressWarnings("InterruptedExceptionSwallowed")
+        Exception e) {
+      noteException(e);
+      throw e;
+    }
   }
 
   @Override
@@ -219,5 +388,20 @@ public class RecordingSkyFunctionEnvironment implements Environment {
   @Override
   public GroupedList<SkyKey> getTemporaryDirectDeps() {
     return delegate.getTemporaryDirectDeps();
+  }
+
+  @Override
+  public void injectVersionForNonHermeticFunction(Version version) {
+    delegate.injectVersionForNonHermeticFunction(version);
+  }
+
+  @Override
+  public void dependOnFuture(ListenableFuture<?> future) {
+    delegate.dependOnFuture(future);
+  }
+
+  @Override
+  public boolean restartPermitted() {
+    return delegate.restartPermitted();
   }
 }

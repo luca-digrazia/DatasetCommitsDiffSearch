@@ -14,7 +14,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.devtools.build.lib.events.Event;
+import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.util.GroupedList;
 import com.google.devtools.build.skyframe.SkyFunction;
@@ -26,6 +26,7 @@ import com.google.devtools.build.skyframe.ValueOrException3;
 import com.google.devtools.build.skyframe.ValueOrException4;
 import com.google.devtools.build.skyframe.ValueOrException5;
 import com.google.devtools.build.skyframe.Version;
+import java.util.List;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -197,6 +198,75 @@ class ProgressEventSuppressingEnvironment implements SkyFunction.Environment {
   }
 
   @Override
+  public List<SkyValue> getOrderedValues(Iterable<? extends SkyKey> depKeys)
+      throws InterruptedException {
+    return delegate.getOrderedValues(depKeys);
+  }
+
+  @Override
+  public <E extends Exception> List<ValueOrException<E>> getOrderedValuesOrThrow(
+      Iterable<? extends SkyKey> depKeys, Class<E> exceptionClass) throws InterruptedException {
+    return delegate.getOrderedValuesOrThrow(depKeys, exceptionClass);
+  }
+
+  @Override
+  public <E1 extends Exception, E2 extends Exception>
+      List<ValueOrException2<E1, E2>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys, Class<E1> exceptionClass1, Class<E2> exceptionClass2)
+          throws InterruptedException {
+    return delegate.getOrderedValuesOrThrow(depKeys, exceptionClass1, exceptionClass2);
+  }
+
+  @Override
+  public <E1 extends Exception, E2 extends Exception, E3 extends Exception>
+      List<ValueOrException3<E1, E2, E3>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys,
+          Class<E1> exceptionClass1,
+          Class<E2> exceptionClass2,
+          Class<E3> exceptionClass3)
+          throws InterruptedException {
+    return delegate.getOrderedValuesOrThrow(
+        depKeys, exceptionClass1, exceptionClass2, exceptionClass3);
+  }
+
+  @Override
+  public <E1 extends Exception, E2 extends Exception, E3 extends Exception, E4 extends Exception>
+      List<ValueOrException4<E1, E2, E3, E4>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys,
+          Class<E1> exceptionClass1,
+          Class<E2> exceptionClass2,
+          Class<E3> exceptionClass3,
+          Class<E4> exceptionClass4)
+          throws InterruptedException {
+    return delegate.getOrderedValuesOrThrow(
+        depKeys, exceptionClass1, exceptionClass2, exceptionClass3, exceptionClass4);
+  }
+
+  @Override
+  public <
+          E1 extends Exception,
+          E2 extends Exception,
+          E3 extends Exception,
+          E4 extends Exception,
+          E5 extends Exception>
+      List<ValueOrException5<E1, E2, E3, E4, E5>> getOrderedValuesOrThrow(
+          Iterable<? extends SkyKey> depKeys,
+          Class<E1> exceptionClass1,
+          Class<E2> exceptionClass2,
+          Class<E3> exceptionClass3,
+          Class<E4> exceptionClass4,
+          Class<E5> exceptionClass5)
+          throws InterruptedException {
+    return delegate.getOrderedValuesOrThrow(
+        depKeys,
+        exceptionClass1,
+        exceptionClass2,
+        exceptionClass3,
+        exceptionClass4,
+        exceptionClass5);
+  }
+
+  @Override
   @Nullable
   public GroupedList<SkyKey> getTemporaryDirectDeps() {
     return delegate.getTemporaryDirectDeps();
@@ -218,29 +288,13 @@ class ProgressEventSuppressingEnvironment implements SkyFunction.Environment {
     return delegate.inErrorBubblingForTesting();
   }
 
-  /**
-   * Suppresses {@link #post} when the provided {@link Postable} is a {@link
-   * ExtendedEventHandler.ProgressLike}, but otherwise delegates calls to its wrapped {@link
-   * ExtendedEventHandler}.
-   */
-  private static class ProgressSuppressingEventHandler implements ExtendedEventHandler {
-    private final ExtendedEventHandler delegate;
+  @Override
+  public void dependOnFuture(ListenableFuture<?> future) {
+    delegate.dependOnFuture(future);
+  }
 
-    private ProgressSuppressingEventHandler(ExtendedEventHandler listener) {
-      this.delegate = listener;
-    }
-
-    @Override
-    public void post(Postable obj) {
-      if (obj instanceof ExtendedEventHandler.ProgressLike) {
-        return;
-      }
-      delegate.post(obj);
-    }
-
-    @Override
-    public void handle(Event event) {
-      delegate.handle(event);
-    }
+  @Override
+  public boolean restartPermitted() {
+    return delegate.restartPermitted();
   }
 }
