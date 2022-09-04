@@ -19,8 +19,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.common.options.OptionDefinition;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
-import com.google.devtools.common.options.OptionsParser;
+import com.google.devtools.common.options.OptionsParser.ConstructionException;
 import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.util.Map;
 import javax.annotation.Nullable;
 
@@ -42,15 +43,20 @@ public final class TransitiveOptionDetails implements Serializable {
     ImmutableMap.Builder<String, OptionDetails> map = ImmutableMap.builder();
     try {
       for (OptionsBase options : buildOptions) {
-        ImmutableList<OptionDefinition> optionDefinitions =
-            OptionsParser.getOptionDefinitions(options.getClass());
-        for (OptionDefinition optionDefinition : optionDefinitions) {
+        for (Field field : options.getClass().getFields()) {
+          OptionDefinition optionDefinition;
+          try {
+            optionDefinition = OptionDefinition.extractOptionDefinition(field);
+          } catch (ConstructionException e) {
+            // Skip non @Option fields.
+            continue;
+          }
           if (ImmutableList.copyOf(optionDefinition.getOptionMetadataTags())
               .contains(OptionMetadataTag.INTERNAL)) {
               // ignore internal options
               continue;
             }
-          Object value = optionDefinition.getField().get(options);
+            Object value = field.get(options);
             if (value == null) {
             if (lateBoundDefaults.containsKey(optionDefinition.getOptionName())) {
               value = lateBoundDefaults.get(optionDefinition.getOptionName());

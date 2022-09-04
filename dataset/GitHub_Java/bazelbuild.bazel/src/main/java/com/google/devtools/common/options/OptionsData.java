@@ -130,12 +130,15 @@ final class OptionsData extends IsolatedOptionsData {
         ImmutableMap.<OptionDefinition, ExpansionData>builder();
     for (Map.Entry<String, OptionDefinition> entry : isolatedData.getAllNamedFields()) {
       OptionDefinition optionDefinition = entry.getValue();
-      // Determine either the hard-coded expansion, or the ExpansionFunction class. The
-      // OptionProcessor checks at compile time that these aren't used together.
+      // Determine either the hard-coded expansion, or the ExpansionFunction class.
       String[] constExpansion = optionDefinition.getOptionExpansion();
       Class<? extends ExpansionFunction> expansionFunctionClass =
           optionDefinition.getExpansionFunction();
-      if (constExpansion.length > 0) {
+      if (constExpansion.length > 0 && optionDefinition.usesExpansionFunction()) {
+        throw new AssertionError(
+            "Cannot set both expansion and expansionFunction for option --"
+                + optionDefinition.getOptionName());
+      } else if (constExpansion.length > 0) {
         expansionDataBuilder.put(
             optionDefinition, new ExpansionData(ImmutableList.copyOf(constExpansion)));
       } else if (optionDefinition.usesExpansionFunction()) {

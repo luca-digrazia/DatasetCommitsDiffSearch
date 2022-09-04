@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.truth.Correspondence;
 import com.google.devtools.common.options.OptionsParser.ConstructionException;
 import java.util.ArrayList;
 import java.util.List;
@@ -251,6 +250,53 @@ public class OptionsDataTest {
     }
   }
 
+  /** Dummy options class. */
+  public static class InvalidOptionConverter extends OptionsBase {
+    @Option(
+      name = "foo",
+      converter = StringConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "1"
+    )
+    public Integer foo;
+  }
+
+  @Test
+  public void errorForInvalidOptionConverter() throws Exception {
+    try {
+      construct(InvalidOptionConverter.class);
+    } catch (ConstructionException e) {
+      // Expected exception
+      return;
+    }
+    fail();
+  }
+
+  /** Dummy options class. */
+  public static class InvalidListOptionConverter extends OptionsBase {
+    @Option(
+      name = "foo",
+      converter = StringConverter.class,
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "1",
+      allowMultiple = true
+    )
+    public List<Integer> foo;
+  }
+
+  @Test
+  public void errorForInvalidListOptionConverter() throws Exception {
+    try {
+      construct(InvalidListOptionConverter.class);
+    } catch (ConstructionException e) {
+      // Expected exception
+      return;
+    }
+    fail();
+  }
+
   /** Dummy options class using deprecated category. */
   public static class InvalidUndocumentedCategory extends OptionsBase {
     @Option(
@@ -391,10 +437,9 @@ public class OptionsDataTest {
         "bar", "baz", "foo", "qux", "X", "Y", "A", "B", "C").inOrder();
   }
 
-  private List<String> getOptionNames(Class<? extends OptionsBase> optionsBase) {
+  private List<String> getOptionNames(Iterable<OptionDefinition> fields) {
     ArrayList<String> result = new ArrayList<>();
-    for (OptionDefinition optionDefinition :
-        OptionsData.getAllOptionDefinitionsForClass(optionsBase)) {
+    for (OptionDefinition optionDefinition : fields) {
       result.add(optionDefinition.getOptionName());
     }
     return result;
@@ -402,73 +447,51 @@ public class OptionsDataTest {
 
   @Test
   public void getFieldsForClassIsOrdered() throws Exception {
-    assertThat(getOptionNames(FieldNamesDifferOptions.class))
+    IsolatedOptionsData data = construct(
+        FieldNamesDifferOptions.class,
+        EndOfAlphabetOptions.class,
+        ReverseOrderedOptions.class);
+    assertThat(getOptionNames(data.getOptionDefinitionsFromClass(FieldNamesDifferOptions.class)))
         .containsExactly("bar", "baz", "foo", "qux")
         .inOrder();
-    assertThat(getOptionNames(EndOfAlphabetOptions.class)).containsExactly("X", "Y").inOrder();
-    assertThat(getOptionNames(ReverseOrderedOptions.class))
+    assertThat(getOptionNames(data.getOptionDefinitionsFromClass(EndOfAlphabetOptions.class)))
+        .containsExactly("X", "Y")
+        .inOrder();
+    assertThat(getOptionNames(data.getOptionDefinitionsFromClass(ReverseOrderedOptions.class)))
         .containsExactly("A", "B", "C")
         .inOrder();
   }
 
-  private static class ReferenceEqualityCorrespondence extends Correspondence<Object, Object> {
+  /** Dummy options class. */
+  public static class InvalidExpansionOptions extends OptionsBase {
+    @Option(
+      name = "foo",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "1"
+    )
+    public int foo;
 
-    @Override
-    public boolean compare(Object obj1, Object obj2) {
-      return obj1 == obj2;
-    }
-
-    @Override
-    public String toString() {
-      return "is the same object as";
-    }
+    @Option(
+      name = "bar",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.NO_OP},
+      defaultValue = "1",
+      expansion = {"--foo=42"}
+    )
+    public int bar;
   }
 
   @Test
-  public void optionsDefinitionsAreSharedBetweenOptionsBases() throws Exception {
-    Class<FieldNamesDifferOptions> class1 = FieldNamesDifferOptions.class;
-    Class<EndOfAlphabetOptions> class2 = EndOfAlphabetOptions.class;
-    Class<ReverseOrderedOptions> class3 = ReverseOrderedOptions.class;
-
-    // Construct the definitions once and accumulate them so we can test that these are not
-    // recomputed during the construction of the options data.
-    ImmutableList<OptionDefinition> optionDefinitions =
-        new ImmutableList.Builder<OptionDefinition>()
-            .addAll(OptionsData.getAllOptionDefinitionsForClass(class1))
-            .addAll(OptionsData.getAllOptionDefinitionsForClass(class2))
-            .addAll(OptionsData.getAllOptionDefinitionsForClass(class3))
-            .build();
-
-    // Construct the data all together.
-    IsolatedOptionsData data = construct(class1, class2, class3);
-    ArrayList<OptionDefinition> optionDefinitionsFromData =
-        new ArrayList<>(optionDefinitions.size());
-    data.getAllNamedFields().forEach(entry -> optionDefinitionsFromData.add(entry.getValue()));
-
-    ReferenceEqualityCorrespondence referenceEquality = new ReferenceEqualityCorrespondence();
-    assertThat(optionDefinitionsFromData)
-        .comparingElementsUsing(referenceEquality)
-        .containsAllIn(optionDefinitions);
-
-    // Construct options data for each class separately, and check again.
-    IsolatedOptionsData data1 = construct(class1);
-    IsolatedOptionsData data2 = construct(class2);
-    IsolatedOptionsData data3 = construct(class3);
-    ArrayList<OptionDefinition> optionDefinitionsFromGroupedData =
-        new ArrayList<>(optionDefinitions.size());
-    data1
-        .getAllNamedFields()
-        .forEach(entry -> optionDefinitionsFromGroupedData.add(entry.getValue()));
-    data2
-        .getAllNamedFields()
-        .forEach(entry -> optionDefinitionsFromGroupedData.add(entry.getValue()));
-    data3
-        .getAllNamedFields()
-        .forEach(entry -> optionDefinitionsFromGroupedData.add(entry.getValue()));
-
-    assertThat(optionDefinitionsFromGroupedData)
-        .comparingElementsUsing(referenceEquality)
-        .containsAllIn(optionDefinitions);
+  public void staticExpansionOptionsShouldNotHaveValues() {
+    try {
+      construct(InvalidExpansionOptions.class);
+      fail();
+    } catch (ConstructionException e) {
+      // Expected exception
+      assertThat(e).hasMessageThat().contains(
+          "Option bar is an expansion flag with a static expansion, but does not have Void type.");
+    }
   }
 
   /** Dummy options class. */

@@ -173,7 +173,7 @@ class OptionsParserImpl {
       OptionDefinition optionDefinition = mapEntry.getValue();
       OptionValueDescription entry = parsedValues.get(optionDefinition);
       if (entry == null) {
-        Object value = optionDefinition.getDefaultValue();
+        Object value = optionsData.getDefaultValue(optionDefinition);
         result.add(
             new OptionValueDescription(
                 fieldName,
@@ -327,7 +327,10 @@ class OptionsParserImpl {
     }
 
     return new OptionDescription(
-        optionDefinition,
+        name,
+        optionsData.getDefaultValue(optionDefinition),
+        optionsData.getConverter(optionDefinition),
+        optionsData.getAllowMultiple(optionDefinition),
         optionsData.getExpansionDataForField(optionDefinition),
         getImplicitDependantDescriptions(
             ImmutableList.copyOf(optionDefinition.getImplicitRequirements()), name));
@@ -356,7 +359,7 @@ class OptionsParserImpl {
               /* source */ null,
               implicitDependant,
               /* expendedFrom */ null,
-              parseResult.optionDefinition.allowsMultiple()));
+              optionsData.getAllowMultiple(parseResult.optionDefinition)));
     }
     return builder.build();
   }
@@ -387,7 +390,7 @@ class OptionsParserImpl {
               /* source */ null,
               /* implicitDependant */ null,
               flagName,
-              parseResult.optionDefinition.allowsMultiple()));
+              optionsData.getAllowMultiple(parseResult.optionDefinition)));
     }
     return builder.build();
   }
@@ -524,7 +527,7 @@ class OptionsParserImpl {
                   + Joiner.on(' ').join(unparsed));
         }
       } else {
-        Converter<?> converter = optionDefinition.getConverter();
+        Converter<?> converter = optionsData.getConverter(optionDefinition);
         Object convertedValue;
         try {
           convertedValue = converter.convert(value);
@@ -642,7 +645,7 @@ class OptionsParserImpl {
         booleanValue = false;
         if (optionDefinition != null) {
           // TODO(bazel-team): Add tests for these cases.
-          if (!optionDefinition.isBooleanField()) {
+          if (!optionsData.isBooleanField(optionDefinition)) {
             throw new OptionsParsingException(
                 "Illegal use of 'no' prefix on non-boolean option: " + arg, arg);
           }
@@ -667,7 +670,7 @@ class OptionsParserImpl {
 
     if (value == null) {
       // Special-case boolean to supply value based on presence of "no" prefix.
-      if (optionDefinition.isBooleanField()) {
+      if (optionsData.isBooleanField(optionDefinition)) {
         value = booleanValue ? "1" : "0";
       } else if (optionDefinition.getType().equals(Void.class)
           && !optionDefinition.isWrapperOption()) {
@@ -700,11 +703,11 @@ class OptionsParserImpl {
 
     // Set the fields
     for (OptionDefinition optionDefinition :
-        OptionsData.getAllOptionDefinitionsForClass(optionsClass)) {
+        optionsData.getOptionDefinitionsFromClass(optionsClass)) {
       Object value;
       OptionValueDescription entry = parsedValues.get(optionDefinition);
       if (entry == null) {
-        value = optionDefinition.getDefaultValue();
+        value = optionsData.getDefaultValue(optionDefinition);
       } else {
         value = entry.getValue();
       }

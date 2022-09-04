@@ -39,7 +39,7 @@ class OptionsUsage {
   static void getUsage(Class<? extends OptionsBase> optionsClass, StringBuilder usage) {
     OptionsData data = OptionsParser.getOptionsDataInternal(optionsClass);
     List<OptionDefinition> optionDefinitions =
-        new ArrayList<>(OptionsData.getAllOptionDefinitionsForClass(optionsClass));
+        new ArrayList<>(data.getOptionDefinitionsFromClass(optionsClass));
     optionDefinitions.sort(OptionDefinition.BY_OPTION_NAME);
     for (OptionDefinition optionDefinition : optionDefinitions) {
       getUsage(optionDefinition, usage, OptionsParser.HelpVerbosity.LONG, data);
@@ -101,8 +101,8 @@ class OptionsUsage {
       StringBuilder usage,
       OptionsParser.HelpVerbosity helpVerbosity,
       OptionsData optionsData) {
-    String flagName = getFlagName(optionDefinition);
-    String typeDescription = getTypeDescription(optionDefinition);
+    String flagName = getFlagName(optionDefinition, optionsData);
+    String typeDescription = getTypeDescription(optionDefinition, optionsData);
     usage.append("  --").append(flagName);
     if (helpVerbosity == OptionsParser.HelpVerbosity.SHORT) { // just the name
       usage.append('\n');
@@ -163,12 +163,12 @@ class OptionsUsage {
       Escaper escaper,
       OptionsData optionsData) {
     String plainFlagName = optionDefinition.getOptionName();
-    String flagName = getFlagName(optionDefinition);
+    String flagName = getFlagName(optionDefinition, optionsData);
     String valueDescription = optionDefinition.getValueTypeHelpText();
-    String typeDescription = getTypeDescription(optionDefinition);
+    String typeDescription = getTypeDescription(optionDefinition, optionsData);
     usage.append("<dt><code><a name=\"flag--").append(plainFlagName).append("\"></a>--");
     usage.append(flagName);
-    if (optionDefinition.isBooleanField() || optionDefinition.isVoidField()) {
+    if (optionsData.isBooleanField(optionDefinition) || optionDefinition.isVoidField()) {
       // Nothing for boolean, tristate, boolean_or_enum, or void options.
     } else if (!valueDescription.isEmpty()) {
       usage.append("=").append(escaper.escape(valueDescription));
@@ -279,12 +279,12 @@ class OptionsUsage {
     }
   }
 
-  private static String getTypeDescription(OptionDefinition optionsDefinition) {
-    return optionsDefinition.getConverter().getTypeDescription();
+  private static String getTypeDescription(OptionDefinition optionsField, OptionsData optionsData) {
+    return optionsData.getConverter(optionsField).getTypeDescription();
   }
 
-  static String getFlagName(OptionDefinition optionDefinition) {
+  static String getFlagName(OptionDefinition optionDefinition, OptionsData optionsData) {
     String name = optionDefinition.getOptionName();
-    return optionDefinition.isBooleanField() ? "[no]" + name : name;
+    return optionsData.isBooleanField(optionDefinition) ? "[no]" + name : name;
   }
 }
