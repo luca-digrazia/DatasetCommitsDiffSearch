@@ -2,6 +2,7 @@ package io.quarkus.maven;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.maven.model.Dependency;
@@ -22,11 +23,12 @@ import io.quarkus.cli.commands.file.BuildFile;
 import io.quarkus.cli.commands.file.GradleBuildFile;
 import io.quarkus.cli.commands.file.MavenBuildFile;
 import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.cli.commands.writer.ProjectWriter;
+import io.quarkus.platform.descriptor.CombinedQuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.resolver.json.QuarkusJsonPlatformDescriptorResolver;
 import io.quarkus.platform.tools.MessageWriter;
 import io.quarkus.platform.tools.ToolsConstants;
-import io.quarkus.platform.tools.config.QuarkusPlatformConfig;
 import io.quarkus.platform.tools.maven.MojoMessageWriter;
 
 public abstract class BuildFileMojoBase extends AbstractMojo {
@@ -69,73 +71,55 @@ public abstract class BuildFileMojoBase extends AbstractMojo {
 
         final MessageWriter log = new MojoMessageWriter(getLog());
 
+        QuarkusPlatformDescriptor platformDescr = null;
         BuildFile buildFile = null;
-        try {
+        try (FileProjectWriter fileProjectWriter = new FileProjectWriter(project.getBasedir())) {
             if (project.getFile() != null) {
                 // Maven project
-                @SuppressWarnings("resource")
-                final MavenBuildFile mvnBuild = new MavenBuildFile(new FileProjectWriter(project.getBasedir()));
+                final MavenBuildFile mvnBuild = new MavenBuildFile(fileProjectWriter);
                 buildFile = mvnBuild;
 
-                if (QuarkusPlatformConfig.hasGlobalDefault()) {
-                    getLog().warn("The Quarkus platform default configuration has already been initialized.");
-                } else {
-                    Artifact descrArtifact = null;
-                    for (Dependency dep : mvnBuild.getManagedDependencies()) {
-                        if (!dep.getScope().equals("import") && !dep.getType().equals("pom")) {
-                            continue;
-                        }
-                        // We don't know which BOM is the platform one, so we are trying every BOM here
-                        String bomVersion = dep.getVersion();
-                        if (bomVersion.startsWith("${") && bomVersion.endsWith("}")) {
-                            final String prop = bomVersion.substring(2, bomVersion.length() - 1);
-                            bomVersion = mvnBuild.getProperty(prop);
-                            if (bomVersion == null) {
-                                getLog().debug("Failed to resolve version of " + dep);
-                                continue;
-                            }
-                        }
-                        Artifact jsonArtifact = new DefaultArtifact(dep.getGroupId(), dep.getArtifactId(), dep.getClassifier(),
-                                "json", bomVersion);
-                        try {
-                            jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
-                        } catch (Exception e) {
-                            log.debug("Failed to resolve JSON descriptor as %s", jsonArtifact);
-                            jsonArtifact = new DefaultArtifact(dep.getGroupId(), dep.getArtifactId() + "-descriptor-json",
-                                    dep.getClassifier(), "json", bomVersion);
-                            try {
-                                jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
-                            } catch (Exception e1) {
-                                getLog().debug("Failed to resolve JSON descriptor as " + jsonArtifact);
-                                continue;
-                            }
-                        }
-                        descrArtifact = jsonArtifact;
-                        break;
+                final List<Artifact> descrArtifactList = new ArrayList<>(2);
+                for (Dependency dep : mvnBuild.getManagedDependencies()) {
+                    if ((dep.getScope() == null || !dep.getScope().equals("import"))
+                            && (dep.getType() == null || !dep.getType().equals("pom"))) {
+                        continue;
+                    }
+                    // We don't know which BOM is the platform one, so we are trying every BOM here
+                    final String bomVersion = resolveValue(dep.getVersion(), buildFile);
+                    final String bomGroupId = resolveValue(dep.getGroupId(), buildFile);
+                    final String bomArtifactId = resolveValue(dep.getArtifactId(), buildFile);
+                    if (bomVersion == null || bomGroupId == null || bomArtifactId == null) {
+                        continue;
                     }
 
-                    if (descrArtifact != null) {
-                        log.debug("Quarkus platform JSON descriptor resolved from %s", descrArtifact);
-                        final QuarkusPlatformDescriptor platform = QuarkusJsonPlatformDescriptorResolver.newInstance()
-                                .setArtifactResolver(new BootstrapAppModelResolver(mvn))
-                                .setMessageWriter(log)
-                                .resolveFromJson(descrArtifact.getFile().toPath());
-                        QuarkusPlatformConfig.defaultConfigBuilder()
-                                .setPlatformDescriptor(platform)
-                                .build();
+                    final Artifact jsonArtifact = resolveJsonOrNull(mvn, bomGroupId, bomArtifactId, bomVersion);
+                    if (jsonArtifact != null) {
+                        descrArtifactList.add(jsonArtifact);
+                    }
+                }
+                if (!descrArtifactList.isEmpty()) {
+                    if (descrArtifactList.size() == 1) {
+                        platformDescr = loadPlatformDescriptor(mvn, log, descrArtifactList.get(0));
+                    } else {
+                        final CombinedQuarkusPlatformDescriptor.Builder builder = CombinedQuarkusPlatformDescriptor.builder();
+                        for (Artifact descrArtifact : descrArtifactList) {
+                            builder.addPlatform(loadPlatformDescriptor(mvn, log, descrArtifact));
+                        }
+                        platformDescr = builder.build();
                     }
                 }
             } else if (new File(project.getBasedir(), "build.gradle").exists()
                     || new File(project.getBasedir(), "build.gradle.kts").exists()) {
                 // Gradle project
-                buildFile = new GradleBuildFile(new FileProjectWriter(project.getBasedir()));
+                buildFile = new GradleBuildFile(fileProjectWriter);
             }
 
-            if (!QuarkusPlatformConfig.hasGlobalDefault()) {
-                CreateUtils.setGlobalPlatformDescriptor(bomGroupId, bomArtifactId, bomVersion, mvn, getLog());
+            if (platformDescr == null) {
+                platformDescr = CreateUtils.resolvePlatformDescriptor(bomGroupId, bomArtifactId, bomVersion, mvn, getLog());
             }
 
-            doExecute(buildFile);
+            doExecute(fileProjectWriter, buildFile, platformDescr, log);
         } catch (IOException e) {
             throw new MojoExecutionException("Failed to initialize project reading tools", e);
         } finally {
@@ -149,8 +133,57 @@ public abstract class BuildFileMojoBase extends AbstractMojo {
         }
     }
 
+    private QuarkusPlatformDescriptor loadPlatformDescriptor(final MavenArtifactResolver mvn, final MessageWriter log,
+            Artifact descrArtifact) {
+        return QuarkusJsonPlatformDescriptorResolver.newInstance()
+                .setArtifactResolver(new BootstrapAppModelResolver(mvn))
+                .setMessageWriter(log)
+                .resolveFromJson(descrArtifact.getFile().toPath());
+    }
+
+    private Artifact resolveJsonOrNull(MavenArtifactResolver mvn, String bomGroupId, String bomArtifactId, String bomVersion) {
+        Artifact jsonArtifact = new DefaultArtifact(bomGroupId, bomArtifactId, null, "json", bomVersion);
+        try {
+            jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
+        } catch (Exception e) {
+            if (getLog().isDebugEnabled()) {
+                getLog().debug("Failed to resolve JSON descriptor as " + jsonArtifact);
+            }
+            jsonArtifact = new DefaultArtifact(bomGroupId, bomArtifactId + "-descriptor-json", null, "json",
+                    bomVersion);
+            try {
+                jsonArtifact = mvn.resolve(jsonArtifact).getArtifact();
+            } catch (Exception e1) {
+                if (getLog().isDebugEnabled()) {
+                    getLog().debug("Failed to resolve JSON descriptor as " + jsonArtifact);
+                }
+                return null;
+            }
+        }
+        if (getLog().isDebugEnabled()) {
+            getLog().debug("Resolve JSON descriptor " + jsonArtifact);
+        }
+        return jsonArtifact;
+    }
+
     protected void validateParameters() throws MojoExecutionException {
     }
 
-    protected abstract void doExecute(BuildFile buildFile) throws MojoExecutionException;
+    protected abstract void doExecute(ProjectWriter writer, BuildFile buildFile, QuarkusPlatformDescriptor platformDescr,
+            MessageWriter log)
+            throws MojoExecutionException;
+
+    private String resolveValue(String expr, BuildFile buildFile) throws IOException {
+        if (expr.startsWith("${") && expr.endsWith("}")) {
+            final String name = expr.substring(2, expr.length() - 1);
+            final String v = buildFile.getProperty(name);
+            if (v == null) {
+                if (getLog().isDebugEnabled()) {
+                    getLog().debug("Failed to resolve property " + name);
+                }
+            }
+            return v;
+        }
+        return expr;
+    }
 }

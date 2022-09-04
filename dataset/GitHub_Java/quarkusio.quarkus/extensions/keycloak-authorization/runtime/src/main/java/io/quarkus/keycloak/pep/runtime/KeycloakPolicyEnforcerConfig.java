@@ -40,8 +40,8 @@ public class KeycloakPolicyEnforcerConfig {
         /**
          * Specifies how policies are enforced.
          */
-        @ConfigItem(defaultValue = "ENFORCING")
-        public String enforcementMode;
+        @ConfigItem(defaultValue = "enforcing")
+        public PolicyEnforcerConfig.EnforcementMode enforcementMode;
 
         /**
          * Specifies the paths to protect.
@@ -56,7 +56,7 @@ public class KeycloakPolicyEnforcerConfig {
          * protected resources
          */
         @ConfigItem
-        public PathCacheConfig pathCache;
+        public PathCacheConfig pathCache = new PathCacheConfig();
 
         /**
          * Specifies how the adapter should fetch the server for resources associated with paths in your application. If true,
@@ -148,13 +148,13 @@ public class KeycloakPolicyEnforcerConfig {
         public static class PathCacheConfig {
 
             /**
-             * Defines the time in milliseconds when the entry should be expired
+             * Defines the limit of entries that should be kept in the cache
              */
             @ConfigItem(defaultValue = "1000")
             public int maxEntries = 1000;
 
             /**
-             * Defines the limit of entries that should be kept in the cache
+             * Defines the time in milliseconds when the entry should be expired
              */
             @ConfigItem(defaultValue = "30000")
             public long lifespan = 30000;

@@ -44,10 +44,14 @@ import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.repository.RemoteRepository;
 import org.fusesource.jansi.Ansi;
 
+import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
-import io.quarkus.devtools.commands.CreateProject;
-import io.quarkus.devtools.project.BuildTool;
-import io.quarkus.devtools.project.codegen.SourceType;
+import io.quarkus.cli.commands.AddExtensions;
+import io.quarkus.cli.commands.CreateProject;
+import io.quarkus.cli.commands.writer.FileProjectWriter;
+import io.quarkus.cli.commands.writer.ProjectWriter;
+import io.quarkus.generators.BuildTool;
+import io.quarkus.generators.SourceType;
 import io.quarkus.maven.components.MavenVersionEnforcer;
 import io.quarkus.maven.components.Prompter;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
@@ -141,7 +145,7 @@ public class CreateProjectMojo extends AbstractMojo {
                     .setRepositorySystem(repoSystem)
                     .setRepositorySystemSession(repoSession)
                     .setRemoteRepositories(repos).build();
-        } catch (Exception e1) {
+        } catch (AppModelResolverException e1) {
             throw new MojoExecutionException("Failed to initialize Maven artifact resolver", e1);
         }
         final QuarkusPlatformDescriptor platform = CreateUtils.resolvePlatformDescriptor(bomGroupId, bomArtifactId, bomVersion,
@@ -159,7 +163,19 @@ public class CreateProjectMojo extends AbstractMojo {
         File pom = new File(projectRoot, "pom.xml");
 
         if (pom.isFile()) {
-            throw new MojoExecutionException("Unable to generate the project in a directory that already contains a pom.xml");
+            // Enforce that the GAV are not set
+            if (!StringUtils.isBlank(projectGroupId) || !StringUtils.isBlank(projectArtifactId)
+                    || !StringUtils.isBlank(projectVersion)) {
+                throw new MojoExecutionException("Unable to generate the project, the `projectGroupId`, " +
+                        "`projectArtifactId` and `projectVersion` parameters are not supported when applied to an " +
+                        "existing `pom.xml` file");
+            }
+
+            // Load the GAV from the existing project
+            projectGroupId = project.getGroupId();
+            projectArtifactId = project.getArtifactId();
+            projectVersion = project.getVersion();
+
         } else {
             askTheUserForMissingValues();
             projectRoot = new File(outputDirectory, projectArtifactId);
@@ -170,7 +186,6 @@ public class CreateProjectMojo extends AbstractMojo {
         }
 
         boolean success;
-        final Path projectDirPath = projectRoot.toPath();
         try {
             sanitizeExtensions();
             final SourceType sourceType = CreateProject.determineSourceType(extensions);
@@ -184,7 +199,9 @@ public class CreateProjectMojo extends AbstractMojo {
                         Arrays.asList(BuildTool.values()).stream().map(BuildTool::toString).collect(Collectors.toList()));
                 throw new IllegalArgumentException("Choose a valid build tool. Accepted values are: " + validBuildTools);
             }
-            final CreateProject createProject = new CreateProject(projectDirPath, platform)
+
+            final FileProjectWriter projectWriter = new FileProjectWriter(projectRoot);
+            final CreateProject createProject = new CreateProject(projectWriter, platform)
                     .buildTool(buildToolEnum)
                     .groupId(projectGroupId)
                     .artifactId(projectArtifactId)
@@ -199,10 +216,14 @@ public class CreateProjectMojo extends AbstractMojo {
             success = createProject.execute().isSuccess();
 
             File createdDependenciesBuildFile = new File(projectRoot, buildToolEnum.getDependenciesFile());
+            if (success) {
+                success = new AddExtensions(projectWriter, buildToolEnum, platform).extensions(extensions).execute()
+                        .isSuccess();
+            }
             if (BuildTool.MAVEN.equals(buildToolEnum)) {
                 createMavenWrapper(createdDependenciesBuildFile, ToolsUtils.readQuarkusProperties(platform));
             } else if (BuildTool.GRADLE.equals(buildToolEnum)) {
-                createGradleWrapper(platform, projectDirPath);
+                createGradleWrapper(platform, projectWriter);
             }
         } catch (Exception e) {
             throw new MojoExecutionException("Failed to generate Quarkus project", e);
@@ -215,9 +236,10 @@ public class CreateProjectMojo extends AbstractMojo {
         }
     }
 
-    private void createGradleWrapper(QuarkusPlatformDescriptor platform, Path projectDirPath) {
+    private void createGradleWrapper(QuarkusPlatformDescriptor platform,
+            ProjectWriter writer) {
         try {
-            Files.createDirectories(projectDirPath.resolve("gradle/wrapper"));
+            writer.mkdirs("gradle/wrapper");
 
             for (String filename : CreateUtils.GRADLE_WRAPPER_FILES) {
                 byte[] fileContent = platform.loadResource(Paths.get(CreateUtils.GRADLE_WRAPPER_PATH, filename).toString(),
@@ -226,12 +248,12 @@ public class CreateProjectMojo extends AbstractMojo {
                             is.read(buffer);
                             return buffer;
                         });
-                final Path destination = projectDirPath.resolve(filename);
+                final Path destination = writer.getProjectFolder().toPath().resolve(filename);
                 Files.write(destination, fileContent);
             }
 
-            projectDirPath.resolve("gradlew").toFile().setExecutable(true);
-            projectDirPath.resolve("gradlew.bat").toFile().setExecutable(true);
+            new File(writer.getProjectFolder(), "gradlew").setExecutable(true);
+            new File(writer.getProjectFolder(), "gradlew.bat").setExecutable(true);
         } catch (IOException e) {
             getLog().error("Unable to copy Gradle wrapper from platform descriptor", e);
         }

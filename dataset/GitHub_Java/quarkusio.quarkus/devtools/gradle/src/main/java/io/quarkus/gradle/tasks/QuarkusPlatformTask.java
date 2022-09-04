@@ -1,6 +1,5 @@
 package io.quarkus.gradle.tasks;
 
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -11,9 +10,8 @@ import org.gradle.api.attributes.Category;
 import org.gradle.api.plugins.JavaPlugin;
 import org.gradle.api.tasks.Internal;
 
-import io.quarkus.devtools.project.QuarkusProject;
-import io.quarkus.devtools.project.buildfile.BuildFile;
-import io.quarkus.gradle.GradleBuildFileFromConnector;
+import io.quarkus.cli.commands.file.GradleBuildFile;
+import io.quarkus.cli.commands.writer.FileProjectWriter;
 import io.quarkus.platform.descriptor.CombinedQuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.QuarkusPlatformDescriptor;
 import io.quarkus.platform.descriptor.resolver.json.QuarkusJsonPlatformDescriptorResolver;
@@ -66,16 +64,15 @@ public abstract class QuarkusPlatformTask extends QuarkusTask {
     }
 
     @Internal
-    protected BuildFile getGradleBuildFile() {
-        final Path projectDirPath = getProject().getProjectDir().toPath();
-        final Path rootProjectPath = getProject().getParent() != null ? getProject().getRootProject().getProjectDir().toPath()
-                : null;
-        return new GradleBuildFileFromConnector(projectDirPath, platformDescriptor(),
-                rootProjectPath);
+    protected GradleBuildFile getGradleBuildFile() {
+        return getProject().getParent() == null
+                ? new GradleBuildFile(getWriter())
+                : new GradleBuildFile(getWriter(),
+                        new FileProjectWriter(getProject().getRootProject().getProjectDir()));
     }
 
     @Internal
-    protected QuarkusProject getQuarkusProject() {
-        return QuarkusProject.of(getProject().getProjectDir().toPath(), platformDescriptor(), getGradleBuildFile());
+    protected FileProjectWriter getWriter() {
+        return new FileProjectWriter(getProject().getProjectDir());
     }
 }
