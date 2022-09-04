@@ -89,16 +89,6 @@ public class TestConfiguration extends Fragment {
     public String testFilter;
 
     @Option(
-        name = "test_runner_fail_fast",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "Forwards fail fast option to the test runner. The test runner should stop execution"
-                + " upon first failure.")
-    public boolean testRunnerFailFast;
-
-    @Option(
       name = "cache_test_results",
       defaultValue = "auto",
       abbrev = 't', // it's useful to toggle this on/off quickly
@@ -139,16 +129,17 @@ public class TestConfiguration extends Fragment {
     public boolean trimTestConfiguration;
 
     @Option(
-        name = "test_arg",
-        allowMultiple = true,
-        defaultValue = "null",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.UNKNOWN},
-        help =
-            "Specifies additional options and arguments that should be passed to the test "
-                + "executable. Can be used multiple times to specify several arguments. "
-                + "If multiple tests are executed, each of them will receive identical arguments. "
-                + "Used only by the 'bazel test' command.")
+      name = "test_arg",
+      allowMultiple = true,
+      defaultValue = "",
+      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
+      effectTags = {OptionEffectTag.UNKNOWN},
+      help =
+          "Specifies additional options and arguments that should be passed to the test "
+              + "executable. Can be used multiple times to specify several arguments. "
+              + "If multiple tests are executed, each of them will receive identical arguments. "
+              + "Used only by the 'bazel test' command."
+    )
     public List<String> testArguments;
 
     @Option(
@@ -250,16 +241,6 @@ public class TestConfiguration extends Fragment {
     )
     public Label coverageReportGenerator;
 
-    @Option(
-        name = "experimental_fetch_all_coverage_outputs",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-        effectTags = {OptionEffectTag.AFFECTS_OUTPUTS, OptionEffectTag.LOADING_AND_ANALYSIS},
-        help =
-            "If true, then Bazel fetches the entire coverage data directory for each test during a "
-                + "coverage run.")
-    public boolean fetchAllCoverageOutputs;
-
     @Override
     public FragmentOptions getHost() {
       TestOptions hostOptions = (TestOptions) getDefault();
@@ -312,10 +293,6 @@ public class TestConfiguration extends Fragment {
     return options.testFilter;
   }
 
-  public boolean getTestRunnerFailFast() {
-    return options.testRunnerFailFast;
-  }
-
   public TriState cacheTestResults() {
     return options.cacheTestResults;
   }
@@ -359,10 +336,6 @@ public class TestConfiguration extends Fragment {
 
   public boolean cancelConcurrentTests() {
     return options.cancelConcurrentTests;
-  }
-
-  public boolean fetchAllCoverageOutputs() {
-    return options.fetchAllCoverageOutputs;
   }
 
   /**
