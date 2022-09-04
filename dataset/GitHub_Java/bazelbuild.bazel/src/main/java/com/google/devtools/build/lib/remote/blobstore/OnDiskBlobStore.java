@@ -13,10 +13,9 @@
 // limitations under the License.
 package com.google.devtools.build.lib.remote.blobstore;
 
-import com.google.common.io.ByteStreams;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.UUID;
 
@@ -34,26 +33,17 @@ public final class OnDiskBlobStore implements SimpleBlobStore {
   }
 
   @Override
-  public boolean get(String key, OutputStream out) throws IOException {
+  public byte[] get(String key) throws IOException {
     Path f = toPath(key);
-    if (!f.exists()) {
-      return false;
-    }
-    try (InputStream in = f.getInputStream()) {
-      ByteStreams.copy(in, out);
-    }
-    return true;
+    return f.exists() ? FileSystemUtils.readContent(f) : null;
   }
 
   @Override
-  public void put(String key, InputStream in) throws IOException {
-    // Write a temporary file first, and then rename, to avoid data corruption in case of a crash.
+  public void put(String key, byte[] value) throws IOException {
     Path temp = toPath(UUID.randomUUID().toString());
     try (OutputStream out = temp.getOutputStream()) {
-      ByteStreams.copy(in, out);
+      out.write(value);
     }
-    // TODO(ulfjack): Fsync temp here before we rename it to avoid data loss in the case of machine
-    // crashes (the OS may reorder the writes and the rename).
     Path f = toPath(key);
     temp.renameTo(f);
   }
