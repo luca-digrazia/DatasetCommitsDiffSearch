@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-package org.jboss.quarkus.arc;
+package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.HashSet;
 import java.util.Set;
-
 import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Default;
 import javax.enterprise.util.Nonbinding;
@@ -43,29 +42,10 @@ public final class Qualifiers {
     }
 
     static boolean hasQualifier(InjectableBean<?> bean, Annotation requiredQualifier) {
-
-        Class<? extends Annotation> requiredQualifierClass = requiredQualifier.annotationType();
-        Method[] members = requiredQualifierClass.getDeclaredMethods();
-
-        for (Annotation qualifier : bean.getQualifiers()) {
-            Class<? extends Annotation> qualifierClass = qualifier.annotationType();
-            if (qualifierClass.equals(requiredQualifier.annotationType())) {
-                boolean matches = true;
-                for (Method value : members) {
-                    if (!value.isAnnotationPresent(Nonbinding.class) && !invoke(value, requiredQualifier).equals(invoke(value, qualifier))) {
-                        matches = false;
-                        break;
-                    }
-                }
-                if (matches) {
-                    return true;
-                }
-            }
-        }
-        return false;
+        return hasQualifier(bean.getQualifiers(), requiredQualifier);
     }
-    
-    static boolean hasQualifier(Set<Annotation> qualifiers, Annotation requiredQualifier) {
+
+    static boolean hasQualifier(Iterable<Annotation> qualifiers, Annotation requiredQualifier) {
 
         Class<? extends Annotation> requiredQualifierClass = requiredQualifier.annotationType();
         Method[] members = requiredQualifierClass.getDeclaredMethods();
@@ -75,7 +55,8 @@ public final class Qualifiers {
             if (qualifierClass.equals(requiredQualifier.annotationType())) {
                 boolean matches = true;
                 for (Method value : members) {
-                    if (!value.isAnnotationPresent(Nonbinding.class) && !invoke(value, requiredQualifier).equals(invoke(value, qualifier))) {
+                    if (!value.isAnnotationPresent(Nonbinding.class)
+                            && !invoke(value, requiredQualifier).equals(invoke(value, qualifier))) {
                         matches = false;
                         break;
                     }
@@ -87,7 +68,7 @@ public final class Qualifiers {
         }
         return false;
     }
-    
+
     static boolean isSubset(Set<Annotation> observedQualifiers, Set<Annotation> eventQualifiers) {
         for (Annotation required : observedQualifiers) {
             if (!hasQualifier(eventQualifiers, required)) {
@@ -111,7 +92,8 @@ public final class Qualifiers {
             }
             return method.invoke(instance);
         } catch (IllegalArgumentException | IllegalAccessException | InvocationTargetException e) {
-            throw new RuntimeException("Error checking value of member method " + method.getName() + " on " + method.getDeclaringClass(), e);
+            throw new RuntimeException(
+                    "Error checking value of member method " + method.getName() + " on " + method.getDeclaringClass(), e);
         }
     }
 
