@@ -423,7 +423,7 @@ public class DevMojo extends AbstractMojo {
         }
         String path = uri.getRawPath();
         classPathManifest.append(path);
-        if (file.isDirectory() && path.charAt(path.length() - 1) != '/') {
+        if (file.isDirectory()) {
             classPathManifest.append("/");
         }
         classPathManifest.append(" ");

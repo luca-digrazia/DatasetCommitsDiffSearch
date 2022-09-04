@@ -7,13 +7,10 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.logging.Handler;
@@ -44,7 +41,6 @@ public class RuntimeRunner implements Runnable, Closeable {
     private final TransformerTarget transformerTarget;
     private Closeable closeTask;
     private final List<Path> additionalArchives;
-    private final Collection<Path> excludedFromIndexing;
     private final List<Consumer<BuildChainBuilder>> chainCustomizers;
     private final LaunchMode launchMode;
     private final LiveReloadBuildItem liveReloadState;
@@ -53,7 +49,6 @@ public class RuntimeRunner implements Runnable, Closeable {
     public RuntimeRunner(Builder builder) {
         this.target = builder.target;
         this.additionalArchives = new ArrayList<>(builder.additionalArchives);
-        this.excludedFromIndexing = builder.excludedFromIndexing;
         this.chainCustomizers = new ArrayList<>(builder.chainCustomizers);
         this.launchMode = builder.launchMode;
         this.liveReloadState = builder.liveReloadState;
@@ -97,7 +92,6 @@ public class RuntimeRunner implements Runnable, Closeable {
             for (Path i : additionalArchives) {
                 builder.addAdditionalApplicationArchive(i);
             }
-            builder.excludeFromIndexing(excludedFromIndexing);
             for (Consumer<BuildChainBuilder> i : chainCustomizers) {
                 builder.addBuildChainCustomizer(i);
             }
@@ -159,8 +153,6 @@ public class RuntimeRunner implements Runnable, Closeable {
         private Path transformerCache;
         private LaunchMode launchMode = LaunchMode.NORMAL;
         private final List<Path> additionalArchives = new ArrayList<>();
-        private Set<Path> excludedFromIndexing = Collections.emptySet();
-
         /**
          * additional classes directories that may be hot deployed
          */
@@ -221,14 +213,6 @@ public class RuntimeRunner implements Runnable, Closeable {
             return this;
         }
 
-        public Builder excludeFromIndexing(Path p) {
-            if (excludedFromIndexing.isEmpty()) {
-                excludedFromIndexing = new HashSet<>(1);
-            }
-            excludedFromIndexing.add(p);
-            return this;
-        }
-
         public Builder setLaunchMode(LaunchMode launchMode) {
             this.launchMode = launchMode;
             return this;
@@ -265,9 +249,7 @@ public class RuntimeRunner implements Runnable, Closeable {
         }
 
         public RuntimeRunner build() {
-            final RuntimeRunner runtimeRunner = new RuntimeRunner(this);
-            excludedFromIndexing = Collections.emptySet();
-            return runtimeRunner;
+            return new RuntimeRunner(this);
         }
     }
 }

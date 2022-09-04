@@ -22,13 +22,6 @@ public class DevModeContext implements Serializable {
     private final List<ModuleInfo> modules = new ArrayList<>();
     private final Map<String, String> systemProperties = new HashMap<>();
     private final Map<String, String> buildSystemProperties = new HashMap<>();
-    private String sourceEncoding;
-
-    private final List<File> classesRoots = new ArrayList<>();
-    private File frameworkClassesDir;
-    private File cacheDir;
-    private boolean test;
-    private boolean abortOnFailedStart;
 
     public List<URL> getClassPath() {
         return classPath;
@@ -44,50 +37,6 @@ public class DevModeContext implements Serializable {
 
     public Map<String, String> getBuildSystemProperties() {
         return buildSystemProperties;
-    }
-
-    public String getSourceEncoding() {
-        return sourceEncoding;
-    }
-
-    public void setSourceEncoding(String sourceEncoding) {
-        this.sourceEncoding = sourceEncoding;
-    }
-
-    public List<File> getClassesRoots() {
-        return classesRoots;
-    }
-
-    public File getFrameworkClassesDir() {
-        return frameworkClassesDir;
-    }
-
-    public void setFrameworkClassesDir(File frameworkClassesDir) {
-        this.frameworkClassesDir = frameworkClassesDir;
-    }
-
-    public File getCacheDir() {
-        return cacheDir;
-    }
-
-    public void setCacheDir(File cacheDir) {
-        this.cacheDir = cacheDir;
-    }
-
-    public boolean isTest() {
-        return test;
-    }
-
-    public void setTest(boolean test) {
-        this.test = test;
-    }
-
-    public boolean isAbortOnFailedStart() {
-        return abortOnFailedStart;
-    }
-
-    public void setAbortOnFailedStart(boolean abortOnFailedStart) {
-        this.abortOnFailedStart = abortOnFailedStart;
     }
 
     public static class ModuleInfo implements Serializable {
