@@ -85,12 +85,13 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
   }
 
   private TreeArtifactValue doTestTreeArtifacts(Iterable<PathFragment> children) throws Exception {
-    SpecialArtifact output = createTreeArtifact("output");
+    Artifact output = createTreeArtifact("output");
     return doTestTreeArtifacts(output, children);
   }
 
-  private TreeArtifactValue doTestTreeArtifacts(
-      SpecialArtifact tree, Iterable<PathFragment> children) throws Exception {
+  private TreeArtifactValue doTestTreeArtifacts(Artifact tree,
+      Iterable<PathFragment> children)
+      throws Exception {
     TreeArtifactValue value = evaluateTreeArtifact(tree, children);
     assertThat(value.getChildPaths()).containsExactlyElementsIn(ImmutableSet.copyOf(children));
     assertThat(value.getChildren()).containsExactlyElementsIn(
@@ -199,10 +200,10 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
     writeFile(path, contents);
   }
 
-  private SpecialArtifact createTreeArtifact(String path) throws IOException {
+  private Artifact createTreeArtifact(String path) throws IOException {
     PathFragment execPath = PathFragment.create("out").getRelative(path);
     Path fullPath = root.getRelative(execPath);
-    SpecialArtifact output =
+    Artifact output =
         new SpecialArtifact(
             fullPath,
             ArtifactRoot.asDerivedRoot(root, root.getRelative("out")),
@@ -253,7 +254,7 @@ public class TreeArtifactMetadataTest extends ArtifactFunctionTestCase {
       ActionLookupValue actionLookupValue =
           (ActionLookupValue) env.getValue(actionLookupData.getActionLookupNode());
       Action action = actionLookupValue.getAction(actionLookupData.getActionIndex());
-      SpecialArtifact output = (SpecialArtifact) Iterables.getOnlyElement(action.getOutputs());
+      Artifact output = Iterables.getOnlyElement(action.getOutputs());
       for (PathFragment subpath : testTreeArtifactContents) {
         try {
           TreeFileArtifact suboutput = ActionInputHelper.treeFileArtifact(output, subpath);

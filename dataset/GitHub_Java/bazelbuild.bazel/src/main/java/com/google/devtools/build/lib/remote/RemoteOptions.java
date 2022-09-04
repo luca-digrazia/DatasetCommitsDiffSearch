@@ -214,7 +214,7 @@ public final class RemoteOptions extends OptionsBase {
 
   @Option(
     name = "experimental_guard_against_concurrent_changes",
-    defaultValue = "false",
+    defaultValue = "true",
     category = "remote",
     documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
     effectTags = {OptionEffectTag.UNKNOWN},
