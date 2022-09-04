@@ -88,7 +88,7 @@ public final class ExtraAction extends SpawnAction {
         env,
         ImmutableMap.copyOf(executionInfo),
         progressMessage,
-        CompositeRunfilesSupplier.of(shadowedAction.getRunfilesSupplier(), runfilesSupplier),
+        new CompositeRunfilesSupplier(shadowedAction.getRunfilesSupplier(), runfilesSupplier),
         mnemonic,
         false,
         null);
