@@ -23,6 +23,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Printer.BasePrinter;
+import com.google.devtools.build.lib.syntax.SkylarkList.MutableList;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.StringCanonicalizer;
 import java.util.ArrayList;
@@ -30,6 +31,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.logging.Level;
 import javax.annotation.Nullable;
@@ -129,20 +131,21 @@ public abstract class Type<T> {
    * {@link #visitLabels}.
    */
   public interface LabelVisitor<C> {
-    void visit(@Nullable Label label, @Nullable C context);
+    void visit(@Nullable Label label, @Nullable C context) throws InterruptedException;
   }
 
   /**
    * Invokes {@code visitor.visit(label, context)} for each {@link Label} {@code label} associated
    * with {@code value}, which is assumed an instance of this {@link Type}.
    *
-   * <p>This is used to support reliable label visitation in {@link
-   * com.google.devtools.build.lib.packages.AbstractAttributeMapper#visitLabels}. To preserve that
-   * reliability, every type should faithfully define its own instance of this method. In other
+   * <p>This is used to support reliable label visitation in
+   * {@link com.google.devtools.build.lib.packages.AbstractAttributeMapper#visitLabels}. To preserve
+   * that reliability, every type should faithfully define its own instance of this method. In other
    * words, be careful about defining default instances in base types that get auto-inherited by
    * their children. Keep all definitions as explicit as possible.
    */
-  public abstract <C> void visitLabels(LabelVisitor<C> visitor, Object value, @Nullable C context);
+  public abstract <C> void visitLabels(LabelVisitor<C> visitor, Object value, @Nullable C context)
+      throws InterruptedException;
 
   /** Classifications of labels by their usage. */
   public enum LabelClass {
@@ -436,8 +439,9 @@ public abstract class Type<T> {
     private final LabelClass labelClass;
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
-      for (Map.Entry<KeyT, ValueT> entry : cast(value).entrySet()) {
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context)
+        throws InterruptedException {
+      for (Entry<KeyT, ValueT> entry : cast(value).entrySet()) {
         keyType.visitLabels(visitor, entry.getKey(), context);
         valueType.visitLabels(visitor, entry.getValue(), context);
       }
@@ -499,7 +503,7 @@ public abstract class Type<T> {
       // It's possible that #convert() calls transform non-equal keys into equal ones so we can't
       // just use ImmutableMap.Builder() here (that throws on collisions).
       LinkedHashMap<KeyT, ValueT> result = new LinkedHashMap<>();
-      for (Map.Entry<?, ?> elem : o.entrySet()) {
+      for (Entry<?, ?> elem : o.entrySet()) {
         result.put(
             keyType.convert(elem.getKey(), "dict key element", context),
             valueType.convert(elem.getValue(), "dict value element", context));
@@ -550,7 +554,8 @@ public abstract class Type<T> {
     }
 
     @Override
-    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context) {
+    public <T> void visitLabels(LabelVisitor<T> visitor, Object value, T context)
+        throws InterruptedException {
       List<ElemT> elems = cast(value);
       // Hot code path. Optimize for lists with O(1) access to avoid iterator garbage.
       if (elems instanceof ImmutableList || elems instanceof ArrayList) {
@@ -594,6 +599,19 @@ public abstract class Type<T> {
               new ConversionException(message));
         }
         ++index;
+      }
+      // We preserve GlobList-s so they can make it to attributes;
+      // some external code relies on attributes preserving this information.
+      // TODO(bazel-team): somehow make Skylark extensible enough that
+      // GlobList support can be wholly moved out of Skylark into an extension.
+      if (x instanceof GlobList<?>) {
+        return new GlobList<>(((GlobList<?>) x).getCriteria(), result);
+      }
+      if (x instanceof MutableList) {
+        GlobList<?> globList = ((MutableList) x).getGlobList();
+        if (globList != null) {
+          return new GlobList<>(globList.getCriteria(), result);
+        }
       }
       return result;
     }
