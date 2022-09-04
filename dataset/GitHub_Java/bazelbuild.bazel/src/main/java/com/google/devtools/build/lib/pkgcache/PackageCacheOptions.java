@@ -25,9 +25,8 @@ import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import com.google.devtools.common.options.OptionsParsingException;
 import java.util.List;
 
@@ -61,9 +60,8 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "package_path",
     defaultValue = "%workspace%",
+    category = "package loading",
     converter = Converters.ColonSeparatedOptionListConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "A colon-separated list of where to look for packages. "
             + "Elements beginning with '%workspace%' are relative to the enclosing "
@@ -75,9 +73,8 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "show_package_location",
     defaultValue = "false",
+    category = "verbosity",
     deprecationWarning = "This flag is no longer supported and will go away soon.",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "If enabled, causes Blaze to print the location on the --package_path "
             + "from which each package was loaded."
@@ -87,8 +84,7 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "show_loading_progress",
     defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    category = "verbosity",
     help = "If enabled, causes Blaze to print \"Loading package:\" messages."
   )
   public boolean showLoadingProgress;
@@ -96,9 +92,8 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "deleted_packages",
     defaultValue = "",
+    category = "package loading",
     converter = CommaSeparatedPackageNameListConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "A comma-separated list of names of packages which the "
             + "build system will consider non-existent, even if they are "
@@ -115,9 +110,8 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "default_visibility",
     defaultValue = "private",
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     converter = DefaultVisibilityConverter.class,
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     help =
         "Default visibility for packages that don't set it explicitly ('public' or " + "'private')."
   )
@@ -126,8 +120,7 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "legacy_globbing_threads",
     defaultValue = "100",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     help = "Number of threads to use for glob evaluation."
   )
   public int globbingThreads;
@@ -135,8 +128,7 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "experimental_max_directories_to_eagerly_visit_in_globbing",
     defaultValue = "-1",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     help =
         "If non-negative, the first time a glob is evaluated in a package, the subdirectories of "
             + "the package will be traversed in order to warm filesystem caches and compensate for "
@@ -147,8 +139,7 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "fetch",
     defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     help = "Allows the command to fetch external dependencies"
   )
   public boolean fetch;
@@ -156,8 +147,7 @@ public class PackageCacheOptions extends OptionsBase {
   @Option(
     name = "experimental_check_output_files",
     defaultValue = "true",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     help =
         "Check for modifications made to the output files of a build. Consider setting "
             + "this flag to false to see the effect on incremental build times."

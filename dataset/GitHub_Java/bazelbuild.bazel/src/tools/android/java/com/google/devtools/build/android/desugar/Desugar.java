@@ -14,7 +14,6 @@
 package com.google.devtools.build.android.desugar;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static java.nio.charset.StandardCharsets.ISO_8859_1;
 
@@ -43,11 +42,9 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import javax.annotation.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
-import org.objectweb.asm.tree.ClassNode;
 
 /**
  * Command-line tool to desugar Java 8 constructs that dx doesn't know what to do with, in
@@ -149,16 +146,6 @@ class Desugar {
     public int minSdkVersion;
 
     @Option(
-      name = "desugar_interface_method_bodies_if_needed",
-      defaultValue = "false",
-      category = "misc",
-      help = "Rewrites default and static methods in interfaces if --min_sdk_version < 24. This "
-          + "only works correctly if subclasses of rewritten interfaces as well as uses of static "
-          + "interface methods are run through this tool as well."
-    )
-    public boolean desugarInterfaceMethodBodiesIfNeeded;
-
-    @Option(
       name = "copy_bridges_from_classpath",
       defaultValue = "false",
       category = "misc",
@@ -180,11 +167,8 @@ class Desugar {
   private final Path dumpDirectory;
   private final CoreLibraryRewriter rewriter;
   private final LambdaClassMaker lambdas;
-  private final GeneratedClassStore store;
-  private final boolean outputJava7;
   private final boolean allowDefaultMethods;
   private final boolean allowCallsToObjectsNonNull;
-
   /** An instance of Desugar is expected to be used ONLY ONCE */
   private boolean used;
 
@@ -193,10 +177,7 @@ class Desugar {
     this.dumpDirectory = dumpDirectory;
     this.rewriter = new CoreLibraryRewriter(options.coreLibrary ? "__desugar__/" : "");
     this.lambdas = new LambdaClassMaker(dumpDirectory);
-    this.store = new GeneratedClassStore();
-    this.outputJava7 = options.minSdkVersion < 24;
-    this.allowDefaultMethods =
-        options.desugarInterfaceMethodBodiesIfNeeded || options.minSdkVersion >= 24;
+    this.allowDefaultMethods = options.minSdkVersion >= 24;
     this.allowCallsToObjectsNonNull = options.minSdkVersion >= 19;
     this.used = false;
   }
@@ -206,30 +187,28 @@ class Desugar {
     this.used = true;
 
     try (Closer closer = Closer.create()) {
-      IndexedInputs indexedBootclasspath =
-          new IndexedInputs(toRegisteredInputFileProvider(closer, options.bootclasspath));
+      IndexedInputs indexedClasspath =
+          new IndexedInputs(toRegisteredInputFileProvider(closer, options.classpath));
       // Use a classloader that as much as possible uses the provided bootclasspath instead of
       // the tool's system classloader.  Unfortunately we can't do that for java. classes.
       ClassLoader bootclassloader =
           options.bootclasspath.isEmpty()
               ? new ThrowingClassLoader()
               : new HeaderClassLoader(
-                  indexedBootclasspath,
+                  new IndexedInputs(toRegisteredInputFileProvider(closer, options.bootclasspath)),
                   rewriter,
                   new ThrowingClassLoader());
-      IndexedInputs indexedClasspath =
-          new IndexedInputs(toRegisteredInputFileProvider(closer, options.classpath));
 
       // Process each input separately
       for (InputOutputPair inputOutputPair : toInputOutputPairs(options)) {
-        desugarOneInput(inputOutputPair, indexedClasspath, bootclassloader,
-            new ClassReaderFactory(indexedBootclasspath, rewriter));
+        desugarOneInput(inputOutputPair, indexedClasspath, bootclassloader);
       }
     }
   }
 
-  private void desugarOneInput(InputOutputPair inputOutputPair, IndexedInputs indexedClasspath,
-      ClassLoader bootclassloader, ClassReaderFactory bootclasspathReader) throws Exception {
+  private void desugarOneInput(
+      InputOutputPair inputOutputPair, IndexedInputs indexedClasspath, ClassLoader bootclassloader)
+      throws Exception {
     Path inputPath = inputOutputPair.getInput();
     Path outputPath = inputOutputPair.getOutput();
     checkArgument(
@@ -248,32 +227,24 @@ class Desugar {
       ClassLoader loader =
           new HeaderClassLoader(indexedClasspathAndInputFiles, rewriter, bootclassloader);
 
-      ClassReaderFactory classpathReader = null;
-      ClassReaderFactory bridgeMethodReader = null;
-      if (outputJava7) {
-        classpathReader = new ClassReaderFactory(indexedClasspathAndInputFiles, rewriter);
-        if (options.copyBridgesFromClasspath) {
-          bridgeMethodReader = classpathReader;
-        } else {
-          bridgeMethodReader = new ClassReaderFactory(indexedInputFiles, rewriter);
-        }
-      }
+      ClassReaderFactory readerFactory =
+          new ClassReaderFactory(
+              (options.copyBridgesFromClasspath && !allowDefaultMethods)
+                  ? indexedClasspathAndInputFiles
+                  : indexedInputFiles,
+              rewriter);
 
       ImmutableSet.Builder<String> interfaceLambdaMethodCollector = ImmutableSet.builder();
 
-      desugarClassesInInput(inputFiles, outputFileProvider, loader, classpathReader,
-          bootclasspathReader, interfaceLambdaMethodCollector);
+      desugarClassesInInput(
+          inputFiles, outputFileProvider, loader, readerFactory, interfaceLambdaMethodCollector);
 
-      desugarAndWriteDumpedLambdaClassesToOutput(outputFileProvider, loader, classpathReader,
-          bootclasspathReader, interfaceLambdaMethodCollector.build(), bridgeMethodReader);
-
-      desugarAndWriteGeneratedClasses(outputFileProvider);
+      desugarAndWriteDumpedLambdaClassesToOutput(
+          outputFileProvider, loader, readerFactory, interfaceLambdaMethodCollector);
     }
 
-    ImmutableMap<Path, LambdaInfo> lambdasLeftBehind = lambdas.drain();
-    checkState(lambdasLeftBehind.isEmpty(), "Didn't process %s", lambdasLeftBehind);
-    ImmutableMap<String, ClassNode> generatedLeftBehind = store.drain();
-    checkState(generatedLeftBehind.isEmpty(), "Didn't process %s", generatedLeftBehind.keySet());
+    ImmutableMap<Path, LambdaInfo> leftBehind = lambdas.drain();
+    checkState(leftBehind.isEmpty(), "Didn't process %s", leftBehind);
   }
 
   /** Desugar the classes that are in the inputs specified in the command line arguments. */
@@ -281,8 +252,7 @@ class Desugar {
       InputFileProvider inputFiles,
       OutputFileProvider outputFileProvider,
       ClassLoader loader,
-      @Nullable ClassReaderFactory classpathReader,
-      ClassReaderFactory bootclasspathReader,
+      ClassReaderFactory readerFactory,
       Builder<String> interfaceLambdaMethodCollector)
       throws IOException {
     for (String filename : inputFiles) {
@@ -292,14 +262,11 @@ class Desugar {
         // any danger of accidentally uncompressed resources ending up in an .apk.
         if (filename.endsWith(".class")) {
           ClassReader reader = rewriter.reader(content);
-          UnprefixingClassWriter writer = rewriter.writer(ClassWriter.COMPUTE_MAXS);
+          UnprefixingClassWriter writer =
+              rewriter.writer(ClassWriter.COMPUTE_MAXS /*for bridge methods*/);
           ClassVisitor visitor =
               createClassVisitorsForClassesInInputs(
-                  loader,
-                  classpathReader,
-                  bootclasspathReader,
-                  interfaceLambdaMethodCollector,
-                  writer);
+                  loader, readerFactory, interfaceLambdaMethodCollector, writer);
           reader.accept(visitor, 0);
 
           outputFileProvider.write(filename, writer.toByteArray());
@@ -317,11 +284,10 @@ class Desugar {
   private void desugarAndWriteDumpedLambdaClassesToOutput(
       OutputFileProvider outputFileProvider,
       ClassLoader loader,
-      @Nullable ClassReaderFactory classpathReader,
-      ClassReaderFactory bootclasspathReader,
-      ImmutableSet<String> interfaceLambdaMethods,
-      @Nullable ClassReaderFactory bridgeMethodReader)
+      ClassReaderFactory readerFactory,
+      Builder<String> interfaceLambdaMethodCollector)
       throws IOException {
+    ImmutableSet<String> interfaceLambdaMethods = interfaceLambdaMethodCollector.build();
     checkState(
         !allowDefaultMethods || interfaceLambdaMethods.isEmpty(),
         "Desugaring with default methods enabled moved interface lambdas");
@@ -341,35 +307,12 @@ class Desugar {
             rewriter.writer(ClassWriter.COMPUTE_MAXS /*for invoking bridges*/);
         ClassVisitor visitor =
             createClassVisitorsForDumpedLambdaClasses(
-                loader,
-                classpathReader,
-                bootclasspathReader,
-                interfaceLambdaMethods,
-                bridgeMethodReader,
-                lambdaClass.getValue(),
-                writer);
+                loader, readerFactory, interfaceLambdaMethods, lambdaClass.getValue(), writer);
         reader.accept(visitor, 0);
         String filename =
             rewriter.unprefix(lambdaClass.getValue().desiredInternalName()) + ".class";
         outputFileProvider.write(filename, writer.toByteArray());
       }
-    }
-  }
-
-  private void desugarAndWriteGeneratedClasses(OutputFileProvider outputFileProvider)
-      throws IOException {
-    // Write out any classes we generated along the way
-    ImmutableMap<String, ClassNode> generatedClasses = store.drain();
-    checkState(generatedClasses.isEmpty() || (allowDefaultMethods && outputJava7),
-        "Didn't expect generated classes but got %s", generatedClasses.keySet());
-    for (Map.Entry<String, ClassNode> generated : generatedClasses.entrySet()) {
-      UnprefixingClassWriter writer = rewriter.writer(ClassWriter.COMPUTE_MAXS);
-      // checkState above implies that we want Java 7 .class files, so send through that visitor.
-      // Don't need a ClassReaderFactory b/c static interface methods should've been moved.
-      ClassVisitor visitor = new Java7Compatibility(writer, (ClassReaderFactory) null);
-      generated.getValue().accept(visitor);
-      String filename = rewriter.unprefix(generated.getKey()) + ".class";
-      outputFileProvider.write(filename, writer.toByteArray());
     }
   }
 
@@ -379,30 +322,20 @@ class Desugar {
    */
   private ClassVisitor createClassVisitorsForDumpedLambdaClasses(
       ClassLoader loader,
-      @Nullable ClassReaderFactory classpathReader,
-      ClassReaderFactory bootclasspathReader,
+      ClassReaderFactory readerFactory,
       ImmutableSet<String> interfaceLambdaMethods,
-      @Nullable ClassReaderFactory bridgeMethodReader,
       LambdaInfo lambdaClass,
       UnprefixingClassWriter writer) {
-    ClassVisitor visitor = checkNotNull(writer);
+    ClassVisitor visitor = writer;
 
-    if (outputJava7) {
+    if (!allowDefaultMethods) {
       // null ClassReaderFactory b/c we don't expect to need it for lambda classes
       visitor = new Java7Compatibility(visitor, (ClassReaderFactory) null);
-      if (options.desugarInterfaceMethodBodiesIfNeeded) {
-        visitor = new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader);
-        visitor = new InterfaceDesugaring(visitor, bootclasspathReader, store);
-      }
     }
+
     visitor =
         new LambdaClassFixer(
-            visitor,
-            lambdaClass,
-            bridgeMethodReader,
-            interfaceLambdaMethods,
-            allowDefaultMethods,
-            outputJava7);
+            visitor, lambdaClass, readerFactory, interfaceLambdaMethods, allowDefaultMethods);
     // Send lambda classes through desugaring to make sure there's no invokedynamic
     // instructions in generated lambda classes (checkState below will fail)
     visitor = new LambdaDesugaring(visitor, loader, lambdas, null, allowDefaultMethods);
@@ -424,20 +357,17 @@ class Desugar {
    */
   private ClassVisitor createClassVisitorsForClassesInInputs(
       ClassLoader loader,
-      @Nullable ClassReaderFactory classpathReader,
-      ClassReaderFactory bootclasspathReader,
+      ClassReaderFactory readerFactory,
       Builder<String> interfaceLambdaMethodCollector,
       UnprefixingClassWriter writer) {
-    ClassVisitor visitor = checkNotNull(writer);
+    checkArgument(writer != null, "The class writer cannot be null");
+    ClassVisitor visitor = writer;
 
     if (!options.onlyDesugarJavac9ForLint) {
-      if (outputJava7) {
-        visitor = new Java7Compatibility(visitor, classpathReader);
-        if (options.desugarInterfaceMethodBodiesIfNeeded) {
-          visitor = new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader);
-          visitor = new InterfaceDesugaring(visitor, bootclasspathReader, store);
-        }
+      if (!allowDefaultMethods) {
+        visitor = new Java7Compatibility(visitor, readerFactory);
       }
+
       visitor =
           new LambdaDesugaring(
               visitor, loader, lambdas, interfaceLambdaMethodCollector, allowDefaultMethods);

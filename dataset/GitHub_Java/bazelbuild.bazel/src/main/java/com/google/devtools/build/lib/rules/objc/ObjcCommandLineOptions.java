@@ -118,7 +118,7 @@ public class ObjcCommandLineOptions extends FragmentOptions {
 
   @Option(
     name = "experimental_enable_objc_cc_deps",
-    defaultValue = "true",
+    defaultValue = "false",
     optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     help =
         "Allows objc_* rules to depend on cc_library and causes any objc dependencies to be "
@@ -270,6 +270,14 @@ public class ObjcCommandLineOptions extends FragmentOptions {
     converter = ObjcCrosstoolUsageConverter.class
   )
   public ObjcCrosstoolMode objcCrosstoolMode;
+
+  // TODO(b/34260565): Remove in favor of --experimental_objc_crosstool
+  @Option(
+    name = "experimental_objc_library",
+    defaultValue = "false",
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED
+  )
+  public boolean experimentalObjcLibrary;
 
   @Option(
     name = "objc_use_dotd_pruning",

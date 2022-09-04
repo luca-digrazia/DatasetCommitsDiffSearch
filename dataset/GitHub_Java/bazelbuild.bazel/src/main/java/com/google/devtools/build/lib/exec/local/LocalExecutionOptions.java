@@ -15,9 +15,8 @@ package com.google.devtools.build.lib.exec.local;
 
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.Option;
-import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParser.OptionUsageRestrictions;
 import java.util.regex.Pattern;
 
 /**
@@ -29,19 +28,16 @@ public class LocalExecutionOptions extends OptionsBase {
     name = "local_termination_grace_seconds",
     oldName = "local_sigkill_grace_seconds",
     category = "remote execution",
-    documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-    effectTags = {OptionEffectTag.UNKNOWN},
     defaultValue = "15",
     help =
         "Time to wait between terminating a local process due to timeout and forcefully "
             + "shutting it down."
   )
-  public int localSigkillGraceSeconds;
+  public double localSigkillGraceSeconds;
 
   @Option(
     name = "allowed_local_actions_regex",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.UNKNOWN},
+    optionUsageRestrictions = OptionUsageRestrictions.UNDOCUMENTED,
     converter = Converters.RegexPatternConverter.class,
     defaultValue = "null",
     help =
@@ -49,15 +45,4 @@ public class LocalExecutionOptions extends OptionsBase {
             + "all actions are allowed to execute locally"
   )
   public Pattern allowedLocalAction;
-
-  @Option(
-    name = "experimental_collect_local_action_metrics",
-    defaultValue = "false",
-    documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-    effectTags = {OptionEffectTag.EXECUTION},
-    help =
-        "When enabled, execution statistics (such as user and system time) are recorded for "
-            + "locally executed actions which don't use sandboxing"
-  )
-  public boolean collectLocalExecutionStatistics;
 }

@@ -81,7 +81,7 @@ public class LateBoundSplitUtil {
   /**
    * The {@link BuildConfiguration.Fragment} that contains the options.
    */
-  static class TestFragment extends BuildConfiguration.Fragment {
+  private static class TestFragment extends BuildConfiguration.Fragment {
   }
 
   /**

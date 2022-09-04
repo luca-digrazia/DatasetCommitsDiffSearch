@@ -14,6 +14,9 @@
 package com.google.devtools.build.lib.rules.config;
 
 import static com.google.common.truth.Truth.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -148,19 +151,19 @@ public class ConfigSettingTest extends BuildViewTestCase {
 
     // First flag mismatches:
     useConfiguration("-c", "opt", "--stamp");
-    assertThat(getConfigMatchingProvider("//pkg:foo").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//pkg:foo").matches());
 
     // Second flag mismatches:
     useConfiguration("-c", "dbg", "--nostamp");
-    assertThat(getConfigMatchingProvider("//pkg:foo").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//pkg:foo").matches());
 
     // Both flags mismatch:
     useConfiguration("-c", "opt", "--nostamp");
-    assertThat(getConfigMatchingProvider("//pkg:foo").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//pkg:foo").matches());
 
     // Both flags match:
     useConfiguration("-c", "dbg", "--stamp");
-    assertThat(getConfigMatchingProvider("//pkg:foo").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//pkg:foo").matches());
   }
 
   /**
@@ -169,8 +172,9 @@ public class ConfigSettingTest extends BuildViewTestCase {
   @Test
   public void labelGetter() throws Exception {
     writeSimpleExample();
-    assertThat(getConfigMatchingProvider("//pkg:foo").label())
-        .isEqualTo(Label.parseAbsolute("//pkg:foo"));
+    assertEquals(
+        Label.parseAbsolute("//pkg:foo"),
+        getConfigMatchingProvider("//pkg:foo").label());
   }
 
   /**
@@ -250,7 +254,7 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    name = 'match',",
         "    values = { 'opt_with_default': 'overridden' }",
         ")");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//test:match").matches());
   }
 
   /**
@@ -266,17 +270,17 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    })");
 
     useConfiguration("");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--define", "foo=bar");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--define", "foo=baz");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--define", "foo=bar", "--define", "bar=baz");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--define", "foo=bar", "--define", "bar=baz", "--define", "foo=nope");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--define", "foo=nope", "--define", "bar=baz", "--define", "foo=bar");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//test:match").matches());
   }
 
   /**
@@ -292,15 +296,15 @@ public class ConfigSettingTest extends BuildViewTestCase {
         "    })");
 
     useConfiguration("");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--copt", "-Dfoo");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--copt", "-Dbar");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isFalse();
+    assertFalse(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--copt", "-Dfoo", "--copt", "-Dbar");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//test:match").matches());
     useConfiguration("--copt", "-Dbar", "--copt", "-Dfoo");
-    assertThat(getConfigMatchingProvider("//test:match").matches()).isTrue();
+    assertTrue(getConfigMatchingProvider("//test:match").matches());
   }
 
   @Test

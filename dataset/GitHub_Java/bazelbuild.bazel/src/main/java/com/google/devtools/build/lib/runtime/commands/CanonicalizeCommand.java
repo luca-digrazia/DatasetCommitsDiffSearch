@@ -70,8 +70,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
       help =
           "Output the canonical policy, after expansion and filtering. To keep the output "
               + "clean, the canonicalized command arguments will NOT be shown when this option is "
-              + "set to true. Note that the command specified by --for_command affects the "
-              + "filtered policy, and if none is specified, the default command is 'build'."
+              + "set to true."
     )
     public boolean canonicalizePolicy;
 
@@ -149,7 +148,7 @@ public final class CanonicalizeCommand implements BlazeCommand {
       // Print out the canonical invocation policy if requested.
       if (canonicalizeOptions.canonicalizePolicy) {
         List<FlagPolicy> effectiveFlagPolicies =
-            InvocationPolicyEnforcer.getEffectivePolicy(policy, parser, commandName);
+            InvocationPolicyEnforcer.getEffectivePolicy(policy, parser);
         InvocationPolicy effectivePolicy =
             InvocationPolicy.newBuilder().addAllFlagPolicies(effectiveFlagPolicies).build();
         env.getReporter().getOutErr().printOutLn(effectivePolicy.toString());
@@ -169,5 +168,5 @@ public final class CanonicalizeCommand implements BlazeCommand {
   }
 
   @Override
-  public void editOptions(OptionsParser optionsParser) {}
+  public void editOptions(CommandEnvironment env, OptionsParser optionsParser) {}
 }
