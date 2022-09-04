@@ -96,7 +96,7 @@ public class RuntimeDeploymentManager {
                 });
         RuntimeResourceDeployment runtimeResourceDeployment = new RuntimeResourceDeployment(info, executorSupplier,
                 blockingInputHandlerSupplier,
-                interceptorDeployment, dynamicEntityWriter, resourceLocatorHandler, requestContextFactory.isDefaultBlocking());
+                interceptorDeployment, dynamicEntityWriter, resourceLocatorHandler);
         List<ResourceClass> possibleSubResource = new ArrayList<>(locatableResourceClasses);
         possibleSubResource.addAll(resourceClasses); //the TCK uses normal resources also as sub resources
         for (ResourceClass clazz : possibleSubResource) {
