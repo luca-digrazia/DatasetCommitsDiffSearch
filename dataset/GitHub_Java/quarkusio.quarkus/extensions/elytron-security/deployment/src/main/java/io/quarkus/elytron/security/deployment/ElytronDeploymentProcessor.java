@@ -12,13 +12,12 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 import io.quarkus.elytron.security.runtime.DefaultRoleDecoder;
 import io.quarkus.elytron.security.runtime.ElytronPasswordIdentityProvider;
 import io.quarkus.elytron.security.runtime.ElytronRecorder;
 import io.quarkus.elytron.security.runtime.ElytronSecurityDomainManager;
 import io.quarkus.elytron.security.runtime.ElytronTokenIdentityProvider;
-import io.quarkus.elytron.security.runtime.ElytronTrustedIdentityProvider;
 import io.quarkus.runtime.RuntimeValue;
 
 /**
@@ -57,12 +56,12 @@ class ElytronDeploymentProcessor {
             List<ElytronTokenMarkerBuildItem> token) {
         beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronSecurityDomainManager.class));
         beans.produce(AdditionalBeanBuildItem.unremovableOf(DefaultRoleDecoder.class));
+
         if (!token.isEmpty()) {
             beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronTokenIdentityProvider.class));
         }
         if (!pw.isEmpty()) {
             beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronPasswordIdentityProvider.class));
-            beans.produce(AdditionalBeanBuildItem.unremovableOf(ElytronTrustedIdentityProvider.class));
         }
     }
 
@@ -96,12 +95,6 @@ class ElytronDeploymentProcessor {
             return new SecurityDomainBuildItem(securityDomain);
         }
         return null;
-    }
-
-    @BuildStep
-    @Record(ExecutionTime.RUNTIME_INIT)
-    public void registerPasswordProvider(ElytronRecorder recorder) {
-        recorder.registerPasswordProvider();
     }
 
     @BuildStep

@@ -8,12 +8,10 @@ import org.wildfly.security.auth.server.SecurityRealm;
 
 import io.quarkus.arc.deployment.AdditionalBeanBuildItem;
 import io.quarkus.arc.deployment.RuntimeBeanBuildItem;
-import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.CapabilityBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.elytron.security.deployment.ElytronTokenMarkerBuildItem;
@@ -35,12 +33,7 @@ class OAuth2DeploymentProcessor {
 
     OAuth2Config oauth2;
 
-    @BuildStep
-    CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capabilities.SECURITY_ELYTRON_OAUTH2);
-    }
-
-    @BuildStep
+    @BuildStep(providesCapabilities = "io.quarkus.elytron.security.oauth2")
     FeatureBuildItem feature() {
         return new FeatureBuildItem(FeatureBuildItem.SECURITY_OAUTH2);
     }
