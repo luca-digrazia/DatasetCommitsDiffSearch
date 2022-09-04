@@ -1,5 +1,6 @@
 package io.quarkus.rest.data.panache.deployment;
 
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 import java.util.List;
 
@@ -32,20 +33,24 @@ class JaxRsResourceImplementor {
 
     private static final Logger LOGGER = Logger.getLogger(JaxRsResourceImplementor.class);
 
-    private final List<MethodImplementor> METHOD_IMPLEMENTORS = Arrays.asList(
-            new GetMethodImplementor(),
-            new GetHalMethodImplementor(),
-            new ListMethodImplementor(),
-            new ListHalMethodImplementor(),
-            new AddMethodImplementor(),
-            new AddHalMethodImplementor(),
-            new UpdateMethodImplementor(),
-            new UpdateHalMethodImplementor(),
-            new DeleteMethodImplementor());
+    private final List<MethodImplementor> methodImplementors;
+
+    JaxRsResourceImplementor(boolean withValidation) {
+        this.methodImplementors = Arrays.asList(
+                new GetMethodImplementor(),
+                new GetHalMethodImplementor(),
+                new ListMethodImplementor(),
+                new ListHalMethodImplementor(),
+                new AddMethodImplementor(withValidation),
+                new AddHalMethodImplementor(withValidation),
+                new UpdateMethodImplementor(withValidation),
+                new UpdateHalMethodImplementor(withValidation),
+                new DeleteMethodImplementor());
+    }
 
     /**
      * Implement a JAX-RS resource with a following structure.
-     * 
+     *
      * <pre>
      * {@code
      *      &#64;Path("/my-entities')
@@ -80,13 +85,14 @@ class JaxRsResourceImplementor {
 
     private FieldDescriptor implementResourceField(ClassCreator classCreator, ResourceMetadata resourceMetadata) {
         FieldCreator resourceFieldCreator = classCreator.getFieldCreator("resource", resourceMetadata.getResourceClass());
-        resourceFieldCreator.addAnnotation(Inject.class);
+        resourceFieldCreator.setModifiers(resourceFieldCreator.getModifiers() & ~Modifier.PRIVATE)
+                .addAnnotation(Inject.class);
         return resourceFieldCreator.getFieldDescriptor();
     }
 
     private void implementMethods(ClassCreator classCreator, ResourceMetadata resourceMetadata,
             ResourceProperties resourceProperties, FieldDescriptor resourceField) {
-        for (MethodImplementor methodImplementor : METHOD_IMPLEMENTORS) {
+        for (MethodImplementor methodImplementor : methodImplementors) {
             methodImplementor.implement(classCreator, resourceMetadata, resourceProperties, resourceField);
         }
     }
