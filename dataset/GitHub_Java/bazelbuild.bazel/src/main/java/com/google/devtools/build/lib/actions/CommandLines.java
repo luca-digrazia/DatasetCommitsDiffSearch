@@ -246,11 +246,6 @@ public class CommandLines {
     }
 
     @Override
-    public boolean isSymlink() {
-      return false;
-    }
-
-    @Override
     public void writeTo(OutputStream out) throws IOException {
       ParameterFile.writeParameterFile(out, arguments, type, charset);
     }
@@ -274,6 +269,7 @@ public class CommandLines {
   }
 
   // Helper function to unpack the optimized storage format into a list
+  @SuppressWarnings("unchecked")
   public List<CommandLineAndParamFileInfo> getCommandLines() {
     if (commandLines instanceof CommandLine) {
       return ImmutableList.of(new CommandLineAndParamFileInfo((CommandLine) commandLines, null));
