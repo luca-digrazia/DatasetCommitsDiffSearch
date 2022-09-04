@@ -31,15 +31,15 @@ public class ErrorInfoSubject extends Subject<ErrorInfoSubject, ErrorInfo> {
 
   public ThrowableSubject hasExceptionThat() {
     return check("getException()")
-        .withMessage("Exception in " + actualAsString())
-        .that(getSubject().getException());
+        .that(getSubject().getException())
+        .named("Exception in " + actualAsString());
   }
 
   public IterableSubject hasCycleInfoThat() {
     isNotNull();
     return check("getCycleInfo()")
-        .withMessage("CycleInfo in " + actualAsString())
-        .that(getSubject().getCycleInfo());
+        .that(getSubject().getCycleInfo())
+        .named("CycleInfo in " + actualAsString());
   }
 
   public void rootCauseOfExceptionIs(SkyKey key) {
