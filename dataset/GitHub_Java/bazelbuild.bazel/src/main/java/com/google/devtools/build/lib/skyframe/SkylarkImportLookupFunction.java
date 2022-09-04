@@ -51,7 +51,7 @@ import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.SkylarkImport;
 import com.google.devtools.build.lib.syntax.SkylarkImports;
 import com.google.devtools.build.lib.syntax.SkylarkImports.SkylarkImportSyntaxException;
-import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.SkylarkSemantics;
 import com.google.devtools.build.lib.syntax.Statement;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.RootedPath;
@@ -225,12 +225,12 @@ public class SkylarkImportLookupFunction implements SkyFunction {
       throws InconsistentFilesystemException, SkylarkImportFailedException, InterruptedException {
     PathFragment filePath = fileLabel.toPathFragment();
 
-    StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
-    if (starlarkSemantics == null) {
+    SkylarkSemantics skylarkSemantics = PrecomputedValue.SKYLARK_SEMANTICS.get(env);
+    if (skylarkSemantics == null) {
       return null;
     }
 
-    if (starlarkSemantics.incompatibleDisallowLoadLabelsToCrossPackageBoundaries()) {
+    if (skylarkSemantics.incompatibleDisallowLoadLabelsToCrossPackageBoundaries()) {
       PathFragment dir = Label.getContainingDirectory(fileLabel);
       PackageIdentifier dirId =
           PackageIdentifier.create(fileLabel.getPackageIdentifier().getRepository(), dir);
@@ -385,7 +385,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
             ast,
             fileLabel,
             extensionsForImports,
-            starlarkSemantics,
+            skylarkSemantics,
             env,
             inWorkspace,
             repositoryMapping);
@@ -503,7 +503,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
       BuildFileAST ast,
       Label extensionLabel,
       Map<String, Extension> importMap,
-      StarlarkSemantics starlarkSemantics,
+      SkylarkSemantics skylarkSemantics,
       Environment env,
       boolean inWorkspace,
       ImmutableMap<RepositoryName, RepositoryName> repositoryMapping)
@@ -519,7 +519,7 @@ public class SkylarkImportLookupFunction implements SkyFunction {
           ruleClassProvider.createSkylarkRuleClassEnvironment(
               extensionLabel,
               mutability,
-              starlarkSemantics,
+              skylarkSemantics,
               eventHandler,
               ast.getContentHashCode(),
               importMap,
