@@ -81,8 +81,8 @@ public class ConfigurationStateUpdater {
         this.scheduler = scheduler;
         this.serverEventBus = serverEventBus;
         this.stateFactory = stateFactory;
-        // ignore global config, never allow generating code
-        setAllowCodeGeneration(false);
+        // from global config
+        setAllowCodeGeneration(allowCodeGeneration);
 
         // listens to cluster wide Rule, Pipeline and pipeline stream connection changes
         serverEventBus.register(this);

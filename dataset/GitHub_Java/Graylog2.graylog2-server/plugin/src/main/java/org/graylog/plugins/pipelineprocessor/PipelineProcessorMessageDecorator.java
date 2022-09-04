@@ -20,8 +20,10 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableMultimap;
 import com.google.common.collect.ImmutableSet;
 import com.google.inject.assistedinject.Assisted;
+
 import org.graylog.plugins.pipelineprocessor.db.PipelineDao;
 import org.graylog.plugins.pipelineprocessor.db.PipelineService;
+import org.graylog.plugins.pipelineprocessor.processors.ConfigurationStateUpdater;
 import org.graylog.plugins.pipelineprocessor.processors.PipelineInterpreter;
 import org.graylog.plugins.pipelineprocessor.processors.listeners.NoopInterpreterListener;
 import org.graylog2.decorators.Decorator;
@@ -33,16 +35,18 @@ import org.graylog2.plugin.decorators.SearchResponseDecorator;
 import org.graylog2.rest.models.messages.responses.ResultMessageSummary;
 import org.graylog2.rest.resources.search.responses.SearchResponse;
 
-import javax.inject.Inject;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import javax.inject.Inject;
+
 public class PipelineProcessorMessageDecorator implements SearchResponseDecorator {
     private static final String CONFIG_FIELD_PIPELINE = "pipeline";
 
     private final PipelineInterpreter pipelineInterpreter;
+    private final ConfigurationStateUpdater pipelineStateUpdater;
     private final ImmutableSet<String> pipelines;
 
     public interface Factory extends SearchResponseDecorator.Factory {
@@ -88,8 +92,10 @@ public class PipelineProcessorMessageDecorator implements SearchResponseDecorato
 
     @Inject
     public PipelineProcessorMessageDecorator(PipelineInterpreter pipelineInterpreter,
+                                             ConfigurationStateUpdater pipelineStateUpdater,
                                              @Assisted Decorator decorator) {
         this.pipelineInterpreter = pipelineInterpreter;
+        this.pipelineStateUpdater = pipelineStateUpdater;
         final String pipelineId = (String)decorator.config().get(CONFIG_FIELD_PIPELINE);
         if (Strings.isNullOrEmpty(pipelineId)) {
             this.pipelines = ImmutableSet.of();
@@ -107,9 +113,9 @@ public class PipelineProcessorMessageDecorator implements SearchResponseDecorato
         searchResponse.messages().forEach((inMessage) -> {
             final Message message = new Message(inMessage.message());
             final List<Message> additionalCreatedMessages = pipelineInterpreter.processForPipelines(message,
-                    message.getId(),
                     pipelines,
-                    new NoopInterpreterListener());
+                    new NoopInterpreterListener(),
+                    pipelineStateUpdater.getLatestState());
 
             results.add(ResultMessageSummary.create(inMessage.highlightRanges(), message.getFields(), inMessage.index()));
             additionalCreatedMessages.forEach((additionalMessage) -> {
@@ -121,8 +127,6 @@ public class PipelineProcessorMessageDecorator implements SearchResponseDecorato
                 ));
             });
         });
-
-        pipelineInterpreter.stop();
 
         return searchResponse.toBuilder().messages(results).build();
     }
