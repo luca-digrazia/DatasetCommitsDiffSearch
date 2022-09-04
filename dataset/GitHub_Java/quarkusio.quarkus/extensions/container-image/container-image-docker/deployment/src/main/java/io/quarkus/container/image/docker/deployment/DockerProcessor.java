@@ -18,10 +18,12 @@ import java.util.function.Function;
 import org.jboss.logging.Logger;
 
 import io.quarkus.container.image.deployment.ContainerImageConfig;
+import io.quarkus.container.image.deployment.util.ImageUtil;
 import io.quarkus.container.image.deployment.util.NativeBinaryUtil;
 import io.quarkus.container.spi.ContainerImageBuildRequestBuildItem;
 import io.quarkus.container.spi.ContainerImageInfoBuildItem;
 import io.quarkus.container.spi.ContainerImagePushRequestBuildItem;
+import io.quarkus.container.spi.ContainerImageResultBuildItem;
 import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.IsNormal;
 import io.quarkus.deployment.annotations.BuildProducer;
@@ -56,6 +58,7 @@ public class DockerProcessor {
             Optional<ContainerImageBuildRequestBuildItem> buildRequest,
             Optional<ContainerImagePushRequestBuildItem> pushRequest,
             BuildProducer<ArtifactResultBuildItem> artifactResultProducer,
+            BuildProducer<ContainerImageResultBuildItem> containerImageResultProducer,
             // used to ensure that the jar has been built
             JarBuildItem jar) {
 
@@ -76,6 +79,8 @@ public class DockerProcessor {
         createContainerImage(containerImageConfig, dockerConfig, image, out, reader, false, pushRequest.isPresent());
 
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "jar-container", Collections.emptyMap()));
+        containerImageResultProducer.produce(new ContainerImageResultBuildItem(DOCKER, reader.getImageId(),
+                ImageUtil.getRepository(image), ImageUtil.getTag(image)));
     }
 
     @BuildStep(onlyIf = { IsNormal.class, NativeBuild.class })
@@ -86,6 +91,7 @@ public class DockerProcessor {
             Optional<ContainerImagePushRequestBuildItem> pushRequest,
             OutputTargetBuildItem out,
             BuildProducer<ArtifactResultBuildItem> artifactResultProducer,
+            BuildProducer<ContainerImageResultBuildItem> containerImageResultProducer,
             // used to ensure that the native binary has been built
             NativeImageBuildItem nativeImage) {
 
@@ -110,6 +116,9 @@ public class DockerProcessor {
         ImageIdReader reader = new ImageIdReader();
         createContainerImage(containerImageConfig, dockerConfig, image, out, reader, true, pushRequest.isPresent());
         artifactResultProducer.produce(new ArtifactResultBuildItem(null, "native-container", Collections.emptyMap()));
+        containerImageResultProducer
+                .produce(new ContainerImageResultBuildItem(DOCKER, reader.getImageId(), ImageUtil.getRepository(image),
+                        ImageUtil.getTag(image)));
     }
 
     private void createContainerImage(ContainerImageConfig containerImageConfig, DockerConfig dockerConfig, String image,
