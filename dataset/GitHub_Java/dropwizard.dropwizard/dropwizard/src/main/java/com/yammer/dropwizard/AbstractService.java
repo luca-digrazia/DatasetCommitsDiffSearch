@@ -33,6 +33,7 @@ public abstract class AbstractService<T extends Configuration> {
     private final List<Module> modules;
     private final List<ConfiguredModule<? super T>> configuredModules;
     private final SortedMap<String, Command> commands;
+    private String banner = null;
 
     /**
      * Creates a new service with the given name.
@@ -116,14 +117,41 @@ public abstract class AbstractService<T extends Configuration> {
     }
 
     /**
+     * Returns {@code true} if the service has a banner.
+     *
+     * @return whether or not the service has a banner
+     */
+    public final boolean hasBanner() {
+        return banner != null;
+    }
+
+    /**
+     * Returns the service's banner, if any. The banner will be printed out when the service starts
+     * up.
+     *
+     * @return the service's banner
+     */
+    public final String getBanner() {
+        return banner;
+    }
+
+    /**
+     * Sets the service's banner. The banner will be printed out when the service starts up.
+     *
+     * @param banner    a banner
+     */
+    protected final void setBanner(String banner) {
+        this.banner = banner;
+    }
+
+    /**
      * When the service runs, this is called after the {@link Module}s are run. Override it to add
      * providers, resources, etc. for your service.
      *
      * @param configuration    the parsed {@link Configuration} object
      * @param environment      the service's {@link Environment}
-     * @throws Exception if something goes wrong
      */
-    protected abstract void initialize(T configuration, Environment environment) throws Exception;
+    protected abstract void initialize(T configuration, Environment environment);
 
     /**
      * Initializes the given {@link Environment} given a {@link Configuration} instances. First the
@@ -132,9 +160,8 @@ public abstract class AbstractService<T extends Configuration> {
      *
      * @param configuration    the parsed {@link Configuration} object
      * @param environment      the service's {@link Environment}
-     * @throws Exception if something goes wrong
      */
-    public final void initializeWithModules(T configuration, Environment environment) throws Exception {
+    public final void initializeWithModules(T configuration, Environment environment) {
         for (Module module : modules) {
             module.initialize(environment);
         }

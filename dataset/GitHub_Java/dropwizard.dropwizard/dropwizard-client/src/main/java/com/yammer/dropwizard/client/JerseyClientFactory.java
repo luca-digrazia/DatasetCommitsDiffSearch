@@ -29,11 +29,8 @@ public class JerseyClientFactory {
         config.getSingletons().add(new JacksonMessageBodyProvider());
 
         final JerseyClient jerseyClient = new JerseyClient(handler, config);
-        jerseyClient.setExecutorService(environment.managedExecutorService("jersey-client-%d",
-                                                                           configuration.getMinThreads(),
-                                                                           configuration.getMaxThreads(),
-                                                                           60,
-                                                                           TimeUnit.SECONDS));
+        jerseyClient.setExecutorService(buildThreadPool());
+        environment.manage(jerseyClient);
 
         if (configuration.isGzipEnabled()) {
             jerseyClient.addFilter(new GZIPContentEncodingFilter());
