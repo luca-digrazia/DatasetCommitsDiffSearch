@@ -35,11 +35,7 @@ public abstract class Roles {
     }
 
     public static RoleToNameFunction roleToNameFunction() {
-        return new RoleToNameFunction(false);
-    }
-
-    public static RoleToNameFunction roleToNameFunction(boolean lowerCase) {
-        return new RoleToNameFunction(lowerCase);
+        return new RoleToNameFunction();
     }
 
     private static class RoleIdToNameFunction implements Function<String, String> {
@@ -82,20 +78,10 @@ public abstract class Roles {
     }
 
     private static class RoleToNameFunction implements Function<Role, String> {
-        private final boolean lowerCase;
-
-        public RoleToNameFunction(boolean lowerCase) {
-            this.lowerCase = lowerCase;
-        }
-
         @Nullable
         @Override
         public String apply(@Nullable Role input) {
-            if (input != null) {
-                final String name = input.getName();
-                return lowerCase ? name.toLowerCase() : name;
-            }
-            else return null;
+            return input != null ? input.getName() : null;
         }
     }
 }
