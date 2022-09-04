@@ -1,23 +1,21 @@
 /*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.stetho.common.android;
 
 import android.app.Activity;
-import android.os.Build;
+
 import com.facebook.stetho.common.ReflectionUtil;
-import com.facebook.stetho.common.Util;
+
+import java.lang.reflect.Field;
+import java.util.List;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.NotThreadSafe;
-import java.lang.reflect.Field;
-import java.util.List;
 
 /**
  * Compatibility abstraction which allows us to generalize access to both the
@@ -29,12 +27,14 @@ import java.util.List;
  * as opaque from the outside.
  *
  * @param <FRAGMENT>
+ * @param <DIALOG_FRAGMENT>
  * @param <FRAGMENT_MANAGER>
  * @param <FRAGMENT_ACTIVITY>
  */
 @NotThreadSafe
 public abstract class FragmentCompat<
     FRAGMENT,
+    DIALOG_FRAGMENT,
     FRAGMENT_MANAGER,
     FRAGMENT_ACTIVITY extends Activity> {
   private static FragmentCompat sFrameworkInstance;
@@ -44,13 +44,12 @@ public abstract class FragmentCompat<
 
   static {
     sHasSupportFragment = ReflectionUtil.tryGetClassForName(
-        "android.support.v4.app.Fragment") != null;
+        "androidx.fragment.app.Fragment") != null;
   }
 
   @Nullable
   public static FragmentCompat getFrameworkInstance() {
-    if (sFrameworkInstance == null &&
-        Build.VERSION.SDK_INT >= Build.VERSION_CODES.HONEYCOMB) {
+    if (sFrameworkInstance == null) {
       sFrameworkInstance = new FragmentCompatFramework();
     }
     return sFrameworkInstance;
@@ -69,31 +68,39 @@ public abstract class FragmentCompat<
   }
 
   public abstract Class<FRAGMENT> getFragmentClass();
+  public abstract Class<DIALOG_FRAGMENT> getDialogFragmentClass();
+  public abstract Class<FRAGMENT_ACTIVITY> getFragmentActivityClass();
+
   public abstract FragmentAccessor<FRAGMENT, FRAGMENT_MANAGER> forFragment();
+  public abstract DialogFragmentAccessor<DIALOG_FRAGMENT, FRAGMENT, FRAGMENT_MANAGER>
+      forDialogFragment();
   public abstract FragmentManagerAccessor<FRAGMENT_MANAGER, FRAGMENT> forFragmentManager();
   public abstract FragmentActivityAccessor<FRAGMENT_ACTIVITY, FRAGMENT_MANAGER> forFragmentActivity();
 
   static class FragmentManagerAccessorViaReflection<FRAGMENT_MANAGER, FRAGMENT>
       implements FragmentManagerAccessor<FRAGMENT_MANAGER, FRAGMENT> {
     @Nullable
-    private final Field mFieldMAdded;
-
-    public FragmentManagerAccessorViaReflection(Class<?> fragmentManagerClass) {
-      Util.throwIfNull(fragmentManagerClass);
-      mFieldMAdded = ReflectionUtil.tryGetDeclaredField(fragmentManagerClass, "mAdded");
-      if (mFieldMAdded != null) {
-        mFieldMAdded.setAccessible(true);
-      }
-    }
+    private Field mFieldMAdded;
 
     @SuppressWarnings("unchecked")
     @Nullable
     @Override
     public List<FRAGMENT> getAddedFragments(FRAGMENT_MANAGER fragmentManager) {
+      // This field is actually sitting on FragmentManagerImpl, which derives from FragmentManager.
+      if (mFieldMAdded == null) {
+        Field fieldMAdded = ReflectionUtil.tryGetDeclaredField(
+            fragmentManager.getClass(),
+            "mAdded");
+
+        if (fieldMAdded != null) {
+          fieldMAdded.setAccessible(true);
+          mFieldMAdded = fieldMAdded;
+        }
+      }
+
       return (mFieldMAdded != null)
           ? (List<FRAGMENT>)ReflectionUtil.getFieldValue(mFieldMAdded, fragmentManager)
           : null;
     }
   }
-
 }

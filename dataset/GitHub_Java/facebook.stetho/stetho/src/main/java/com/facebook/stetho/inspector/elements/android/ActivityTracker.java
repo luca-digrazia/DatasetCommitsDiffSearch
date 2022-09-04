@@ -1,10 +1,8 @@
 /*
- * Copyright (c) 2014-present, Facebook, Inc.
- * All rights reserved.
+ * Copyright (c) Facebook, Inc. and its affiliates.
  *
- * This source code is licensed under the BSD-style license found in the
- * LICENSE file in the root directory of this source tree. An additional grant
- * of patent rights can be found in the PATENTS file in the same directory.
+ * This source code is licensed under the MIT license found in the
+ * LICENSE file in the root directory of this source tree.
  */
 
 package com.facebook.stetho.inspector.elements.android;
@@ -12,20 +10,23 @@ package com.facebook.stetho.inspector.elements.android;
 import android.annotation.TargetApi;
 import android.app.Activity;
 import android.app.Application;
-import android.database.Observable;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
+
+import androidx.annotation.NonNull;
+
 import com.facebook.stetho.common.Util;
+
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import javax.annotation.Nullable;
 import javax.annotation.concurrent.GuardedBy;
 import javax.annotation.concurrent.NotThreadSafe;
-import java.lang.ref.WeakReference;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.List;
 
 /**
  * Tracks which {@link Activity} instances have been created and not yet destroyed in creation
@@ -38,15 +39,19 @@ import java.util.List;
  * Activity tracking pre-ICS.
  */
 @NotThreadSafe
-public class ActivityTracker {
+public final class ActivityTracker {
   private static final ActivityTracker sInstance = new ActivityTracker();
 
+  /**
+   * Use {@link WeakReference} here to silence a false positive from LeakCanary:
+   *   https://github.com/facebook/stetho/issues/319#issuecomment-285699813
+   */
   @GuardedBy("Looper.getMainLooper()")
-  private final ArrayList<Activity> mActivities = new ArrayList<>();
-  private final List<Activity> mActivitiesUnmodifiable = Collections.unmodifiableList(mActivities);
+  private final ArrayList<WeakReference<Activity>> mActivities = new ArrayList<>();
+  private final List<WeakReference<Activity>> mActivitiesUnmodifiable =
+      Collections.unmodifiableList(mActivities);
 
-  @GuardedBy("ActivityTrackerObservable.mObservers")
-  private final ActivityTrackerObservable mObservable = new ActivityTrackerObservable();
+  private final List<Listener> mListeners = new CopyOnWriteArrayList<>();
 
   @Nullable
   private AutomaticTracker mAutomaticTracker;
@@ -56,11 +61,11 @@ public class ActivityTracker {
   }
 
   public void registerListener(Listener listener) {
-    mObservable.registerObserver(listener);
+    mListeners.add(listener);
   }
 
   public void unregisterListener(Listener listener) {
-    mObservable.unregisterObserver(listener);
+    mListeners.remove(listener);
   }
 
   /**
@@ -73,11 +78,9 @@ public class ActivityTracker {
     if (mAutomaticTracker == null) {
       AutomaticTracker automaticTracker =
           AutomaticTracker.newInstance(application, this /* tracker */);
-      if (automaticTracker != null) {
         automaticTracker.register();
         mAutomaticTracker = automaticTracker;
         return true;
-      }
     }
     return false;
   }
@@ -85,6 +88,7 @@ public class ActivityTracker {
   public boolean endTracking() {
     if (mAutomaticTracker != null) {
       mAutomaticTracker.unregister();
+      mAutomaticTracker = null;
       return true;
     }
     return false;
@@ -93,42 +97,49 @@ public class ActivityTracker {
   public void add(Activity activity) {
     Util.throwIfNull(activity);
     Util.throwIfNot(Looper.myLooper() == Looper.getMainLooper());
-    mActivities.add(activity);
-    mObservable.notifyActivityAdded(activity);
+    mActivities.add(new WeakReference<>(activity));
+    for (Listener listener : mListeners) {
+      listener.onActivityAdded(activity);
+    }
   }
 
   public void remove(Activity activity) {
     Util.throwIfNull(activity);
     Util.throwIfNot(Looper.myLooper() == Looper.getMainLooper());
-    if (mActivities.remove(activity)) {
-      mObservable.notifyActivityRemoved(activity);
+    if (removeFromWeakList(mActivities, activity)) {
+      for (Listener listener : mListeners) {
+        listener.onActivityRemoved(activity);
+      }
     }
   }
 
-  public List<Activity> getActivitiesView() {
+  private static <T> boolean removeFromWeakList(ArrayList<WeakReference<T>> haystack, T needle) {
+    for (int i = 0, N = haystack.size(); i < N; i++) {
+      T hay = haystack.get(i).get();
+      if (hay == needle) {
+        haystack.remove(i);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  public List<WeakReference<Activity>> getActivitiesView() {
     return mActivitiesUnmodifiable;
   }
 
-  private static class ActivityTrackerObservable extends Observable<Listener> {
-    public void notifyActivityAdded(Activity activity) {
-      synchronized (mObservers) {
-        int N = mObservers.size();
-        for (int i = 0; i < N; i++) {
-          Listener listener = mObservers.get(i);
-          listener.onActivityAdded(activity);
-        }
+  @Nullable
+  public Activity tryGetTopActivity() {
+    if (mActivitiesUnmodifiable.isEmpty()) {
+      return null;
+    }
+    for (int i = mActivitiesUnmodifiable.size() - 1; i >= 0; i--) {
+      Activity activity = mActivitiesUnmodifiable.get(i).get();
+      if (activity != null) {
+        return activity;
       }
     }
-
-    public void notifyActivityRemoved(Activity activity) {
-      synchronized (mObservers) {
-        int N = mObservers.size();
-        for (int i = 0; i < N; i++) {
-          Listener listener = mObservers.get(i);
-          listener.onActivityRemoved(activity);
-        }
-      }
-    }
+    return null;
   }
 
   public interface Listener {
@@ -137,13 +148,11 @@ public class ActivityTracker {
   }
 
   private static abstract class AutomaticTracker {
-    @Nullable
-    public static AutomaticTracker newInstance(Application application, ActivityTracker tracker) {
-      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
-        return new AutomaticTrackerICSAndBeyond(application, tracker);
-      } else {
-        return null;
-      }
+    @NonNull
+    public static AutomaticTracker newInstance(
+            Application application,
+            ActivityTracker tracker) {
+      return new AutomaticTrackerICSAndBeyond(application, tracker);
     }
 
     public abstract void register();
