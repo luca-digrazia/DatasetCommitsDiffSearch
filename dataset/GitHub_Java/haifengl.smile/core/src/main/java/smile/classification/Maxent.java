@@ -1,31 +1,30 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.classification;
 
+import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Properties;
-import java.util.stream.IntStream;
-
-import smile.data.DataFrame;
-import smile.data.formula.Formula;
-import smile.math.BFGS;
-import smile.math.MathEx;
+import java.util.List;
+import java.util.concurrent.Callable;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import smile.math.Math;
 import smile.math.DifferentiableMultivariateFunction;
+import smile.util.MulticoreExecutor;
 
 /**
  * Maximum Entropy Classifier. Maximum entropy is a technique for learning
@@ -52,8 +51,8 @@ import smile.math.DifferentiableMultivariateFunction;
  * @author Haifeng Li
  */
 public class Maxent implements SoftClassifier<int[]> {
-    private static final long serialVersionUID = 2L;
-    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(Maxent.class);
+    private static final long serialVersionUID = 1L;
+    private static final Logger logger = LoggerFactory.getLogger(Maxent.class);
 
     /**
      * The dimension of input space.
@@ -81,57 +80,108 @@ public class Maxent implements SoftClassifier<int[]> {
     private double[][] W;
 
     /**
-     * Constructor of binary logistic regression.
-     * @param L the log-likelihood of learned model.
-     * @param w the weights.
+     * Trainer for maximum entropy classifier.
      */
-    public Maxent(double L, double[] w) {
-        this.p = w.length - 1;
-        this.k = 2;
-        this.L = L;
-        this.w = w;
-    }
+    public static class Trainer extends ClassifierTrainer<int[]> {
 
-    /**
-     * Constructor of multi-class logistic regression.
-     * @param L the log-likelihood of learned model.
-     * @param W the weights.
-     */
-    public Maxent(double L, double[][] W) {
-        this.p = W[0].length - 1;
-        this.k = W.length;
-        this.L = L;
-        this.W = W;
+        /**
+         * The dimension of feature space.
+         */
+        private int p;
+        /**
+         * Regularization factor. &lambda; > 0 gives a "regularized" estimate
+         * of linear weights which often has superior generalization
+         * performance, especially when the dimensionality is high.
+         */
+        private double lambda = 0.0;
+        /**
+         * The tolerance for BFGS stopping iterations.
+         */
+        private double tol = 1E-5;
+        /**
+         * The maximum number of BFGS iterations.
+         */
+        private int maxIter = 500;
+
+        /**
+         * Constructor.
+         * @param p the dimension of feature space.
+         */
+        public Trainer(int p) {
+            if (p < 0) {
+                throw new IllegalArgumentException("Invalid dimension: " + p);
+            }
+
+            this.p = p;
+        }
+        
+        /**
+         * Sets the regularization factor. &lambda; &gt; 0 gives a "regularized"
+         * estimate of linear weights which often has superior generalization
+         * performance, especially when the dimensionality is high.
+         * 
+         * @param lambda regularization factor.
+         */
+        public Trainer setRegularizationFactor(double lambda) {
+            this.lambda = lambda;
+            return this;
+        }
+        
+        /**
+         * Sets the tolerance for BFGS stopping iterations.
+         * 
+         * @param tol tolerance for stopping iterations.
+         */
+        public Trainer setTolerance(double tol) {
+            this.tol = tol;
+            return this;
+        }
+        
+        /**
+         * Sets the maximum number of BFGS stopping iterations.
+         * 
+         * @param maxIter maximum number of iterations.
+         */
+        public Trainer setMaxNumIteration(int maxIter) {
+            this.maxIter = maxIter;
+            return this;
+        }
+        
+        @Override
+        public Maxent train(int[][] x, int[] y) {
+            return new Maxent(p, x, y, lambda, tol, maxIter);
+        }
     }
+    
     /**
-     * Learn maximum entropy classifier.
+     * Learn maximum entropy classifier from samples of binary sparse features.
      * @param p the dimension of feature space.
      * @param x training samples. Each sample is represented by a set of sparse
      * binary features. The features are stored in an integer array, of which
      * are the indices of nonzero features.
      * @param y training labels in [0, k), where k is the number of classes.
      */
-    public static Maxent fit(int p, int[][] x, int[] y) {
-        return fit(p, x, y, new Properties());
+    public Maxent(int p, int[][] x, int[] y) {
+        this(p, x, y, 0.1);
     }
 
     /**
-     * Learn maximum entropy classifier.
+     * Learn maximum entropy classifier from samples of binary sparse features.
      * @param p the dimension of feature space.
      * @param x training samples. Each sample is represented by a set of sparse
      * binary features. The features are stored in an integer array, of which
      * are the indices of nonzero features.
      * @param y training labels in [0, k), where k is the number of classes.
+     * @param lambda &lambda; &gt; 0 gives a "regularized" estimate of linear
+     * weights which often has superior generalization performance, especially
+     * when the dimensionality is high.
      */
-    public static Maxent fit(int p, int[][] x, int[] y, Properties prop) {
-        double lambda = Double.valueOf(prop.getProperty("smile.maxent.lambda", "0.1"));
-        double tol = Double.valueOf(prop.getProperty("smile.maxent.tolerance", "1E-5"));
-        int maxIter = Integer.valueOf(prop.getProperty("smile.maxent.max.iterations", "500"));
-        return fit(p, x, y, lambda, tol, maxIter);
+    public Maxent(int p, int[][] x, int[] y, double lambda) {
+        this(p, x, y, lambda, 1E-5, 500);
     }
 
     /**
-     * Learn maximum entropy classifier.
+     * Learn maximum entropy classifier from samples of binary sparse features.
      * @param p the dimension of feature space.
      * @param x training samples. Each sample is represented by a set of sparse
      * binary features. The features are stored in an integer array, of which
@@ -143,7 +193,7 @@ public class Maxent implements SoftClassifier<int[]> {
      * @param tol tolerance for stopping iterations.
      * @param maxIter maximum number of iterations.
      */
-    public static Maxent fit(int p, int[][] x, int[] y, double lambda, double tol, int maxIter) {
+    public Maxent(int p, int[][] x, int[] y, double lambda, double tol, int maxIter) {
         if (x.length != y.length) {
             throw new IllegalArgumentException(String.format("The sizes of X and Y don't match: %d != %d", x.length, y.length));
         }
@@ -164,27 +214,58 @@ public class Maxent implements SoftClassifier<int[]> {
             throw new IllegalArgumentException("Invalid maximum number of iterations: " + maxIter);            
         }
         
-        int k = Classifier.classes(y).length;
+        this.p = p;
+        
+        // class label set.
+        int[] labels = Math.unique(y);
+        Arrays.sort(labels);
+        
+        for (int i = 0; i < labels.length; i++) {
+            if (labels[i] < 0) {
+                throw new IllegalArgumentException("Negative class label: " + labels[i]); 
+            }
+            
+            if (i > 0 && labels[i] - labels[i-1] > 1) {
+                throw new IllegalArgumentException("Missing class: " + (labels[i-1]+1));
+            }
+        }
 
-        BFGS bfgs = new BFGS(tol, maxIter);
+        k = labels.length;
+        if (k < 2) {
+            throw new IllegalArgumentException("Only one class.");            
+        }
+
         if (k == 2) {
             BinaryObjectiveFunction func = new BinaryObjectiveFunction(x, y, lambda);
-            double[] w = new double[p + 1];
-            double L = -bfgs.minimize(func, 5, w);
-            return new Maxent(L, w);
+
+            w = new double[p + 1];
+
+            L = 0.0;
+            try {
+                L = -Math.min(func, 5, w, tol, maxIter);
+            } catch (Exception ex) {
+                logger.error("Failed to minimize binary objective function of Maximum Entropy Classifier", ex);
+            }
         } else {
             MultiClassObjectiveFunction func = new MultiClassObjectiveFunction(x, y, k, p, lambda);
-            double[] w = new double[k * (p + 1)];
-            double L = -bfgs.minimize(func, 5, w);
 
-            double[][] W = new double[k][p+1];
+            w = new double[k * (p + 1)];
+
+            L = 0.0;
+            try {
+                L = -Math.min(func, 5, w, tol, maxIter);
+            } catch (Exception ex) {
+                logger.error("Failed to minimize multi-class objective function of Maximum Entropy Classifier", ex);
+            }
+
+            W = new double[k][p+1];
             for (int i = 0, m = 0; i < k; i++) {
                 for (int j = 0; j <= p; j++, m++) {
                     W[i][j] = w[m];
                 }
             }
 
-            return new Maxent(L, W);
+            w = null;
         }
     }
 
@@ -192,8 +273,8 @@ public class Maxent implements SoftClassifier<int[]> {
      * Returns the dimension of input space.
      * @return the dimension of input space.
      */
-    public int dimension() {
-        return p;
+    public int getDimension() {
+    	return p;
     }
     
     /**
@@ -236,48 +317,205 @@ public class Maxent implements SoftClassifier<int[]> {
             this.y = y;
             this.lambda = lambda;
         }
+
+        /**
+         * Task to calculate the objective function.
+         */
+        class FTask implements Callable<Double> {
+
+            /**
+             * The parameter vector.
+             */
+            double[] w;
+            /**
+             * The start index of data portion for this task.
+             */
+            int start;
+            /**
+             * The end index of data portion for this task.
+             */
+            int end;
+
+            FTask(double[] w, int start, int end) {
+                this.w = w;
+                this.start = start;
+                this.end = end;
+            }
+
+            @Override
+            public Double call() {
+                double f = 0.0;
+                for (int i = start; i < end; i++) {
+                    double wx = dot(x[i], w);
+                    f += log1pe(wx) - y[i] * wx;
+                }
+                return f;
+            }
+        }
         
         @Override
         public double f(double[] w) {
-            int n = x.length;
-            int p = x[0].length;
-            double f = IntStream.range(0, n).parallel().mapToDouble(i -> {
-                double wx = dot(x[i], w);
-                return log1pe(wx) - y[i] * wx;
-            }).sum();
+            double f = 0.0;
+            int p = w.length - 1;
 
-            if (lambda > 0.0) {
+            int n = x.length;
+            int m = MulticoreExecutor.getThreadPoolSize();
+            if (n < 1000 || m < 2) {
+                for (int i = 0; i < n; i++) {
+                    double wx = dot(x[i], w);
+                    f += log1pe(wx) - y[i] * wx;
+                }
+            } else {
+                List<FTask> tasks = new ArrayList<>(m + 1);
+                int step = n / m;
+                if (step < 100) step = 100;
+                
+                int start = 0;
+                int end = step;
+                for (int i = 0; i < m - 1 && start < n; i++) {
+                    if (end > n) end = n;
+                    tasks.add(new FTask(w, start, end));
+                    start += step;
+                    end += step;
+                }
+                if (start < n) tasks.add(new FTask(w, start, n));
+                
+                try {
+                    for (double fi : MulticoreExecutor.run(tasks)) {
+                        f += fi;
+                    }
+                } catch (Exception ex) {
+                    for (int i = 0; i < n; i++) {
+                        double wx = dot(x[i], w);
+                        f += log1pe(wx) - y[i] * wx;
+                    }
+                }
+            }
+
+            if (lambda != 0.0) {
                 double wnorm = 0.0;
-                for (int i = 0; i < p; i++) wnorm += w[i] * w[i];
+                for (int i = 0; i < p; i++) {
+                    wnorm += w[i] * w[i];
+                }
+
                 f += 0.5 * lambda * wnorm;
             }
 
             return f;
         }
+
+        /**
+         * Task to calculate the objective function and gradient.
+         */
+        class GTask implements Callable<double[]> {
+
+            /**
+             * The parameter vector.
+             */
+            double[] w;
+            /**
+             * The start index of data portion for this task.
+             */
+            int start;
+            /**
+             * The end index of data portion for this task.
+             */
+            int end;
+
+            GTask(double[] w, int start, int end) {
+                this.w = w;
+                this.start = start;
+                this.end = end;
+            }
+
+            @Override
+            public double[] call() {
+                double f = 0.0;
+                int p = w.length - 1;
+                double[] g = new double[w.length + 1];
+                
+                for (int i = start; i < end; i++) {
+                    double wx = dot(x[i], w);
+                    f += log1pe(wx) - y[i] * wx;
+
+                    double yi = y[i] - Math.logistic(wx);
+                    for (int j : x[i]) {
+                        g[j] -= yi * j;
+                    }
+                    g[p] -= yi;
+                }
+                
+                g[w.length] = f;
+                return g;
+            }
+        }
         
         @Override
-        public double g(double[] w, double[] g) {
-            final int p = w.length - 1;
+        public double f(double[] w, double[] g) {
+            double f = 0.0;
+            int p = w.length - 1;
             Arrays.fill(g, 0.0);
-            double f = IntStream.range(0, x.length).sequential().mapToDouble(i -> {
-                double wx = dot(x[i], w);
 
-                double yi = y[i] - MathEx.logistic(wx);
-                for (int j : x[i]) {
-                    g[j] -= yi * j;
+            int n = x.length;
+            int m = MulticoreExecutor.getThreadPoolSize();
+            if (n < 1000 || m < 2) {
+                for (int i = 0; i < n; i++) {
+                    double wx = dot(x[i], w);
+                    f += log1pe(wx) - y[i] * wx;
+
+                    double yi = y[i] - Math.logistic(wx);
+                    for (int j : x[i]) {
+                        g[j] -= yi * j;
+                    }
+                    g[p] -= yi;
                 }
-                g[p] -= yi;
+            } else {
+                List<GTask> tasks = new ArrayList<>(m + 1);
+                int step = n / m;
+                if (step < 100) step = 100;
+                
+                int start = 0;
+                int end = step;
+                for (int i = 0; i < m - 1 && start < n; i++) {
+                    if (end > n) end = n;
+                    tasks.add(new GTask(w, start, end));
+                    start += step;
+                    end += step;
+                }
+                if (start < n) tasks.add(new GTask(w, start, n));
 
-                return log1pe(wx) - y[i] * wx;
-            }).sum();
+                try {
+                    for (double[] gi : MulticoreExecutor.run(tasks)) {
+                        f += gi[w.length];
+                        for (int i = 0; i < w.length; i++) {
+                            g[i] += gi[i];
+                        }
+                    }
+                } catch (Exception ex) {
+                    for (int i = 0; i < n; i++) {
+                        double wx = dot(x[i], w);
+                        f += log1pe(wx) - y[i] * wx;
 
-            if (lambda > 0.0) {
+                        double yi = y[i] - Math.logistic(wx);
+                        for (int j : x[i]) {
+                            g[j] -= yi * j;
+                        }
+                        g[p] -= yi;
+                    }
+                }
+            }
+
+            if (lambda != 0.0) {
                 double wnorm = 0.0;
                 for (int i = 0; i < p; i++) {
                     wnorm += w[i] * w[i];
-                    g[i] += lambda * w[i];
                 }
+
                 f += 0.5 * lambda * wnorm;
+
+                for (int j = 0; j < p; j++) {
+                    g[j] += lambda * w[j];
+                }
             }
 
             return f;
@@ -333,54 +571,245 @@ public class Maxent implements SoftClassifier<int[]> {
             this.p = p;
             this.lambda = lambda;
         }
+
+        /**
+         * Task to calculate the objective function.
+         */
+        class FTask implements Callable<Double> {
+
+            /**
+             * The parameter vector.
+             */
+            double[] w;
+            /**
+             * The start index of data portion for this task.
+             */
+            int start;
+            /**
+             * The end index of data portion for this task.
+             */
+            int end;
+
+            FTask(double[] w, int start, int end) {
+                this.w = w;
+                this.start = start;
+                this.end = end;
+            }
+
+            @Override
+            public Double call() {
+                double f = 0.0;
+                double[] prob = new double[k];
+
+                for (int i = start; i < end; i++) {
+                    for (int j = 0; j < k; j++) {
+                        prob[j] = dot(x[i], w, j, p);
+                    }
+
+                    softmax(prob);
+
+                    f -= log(prob[y[i]]);
+                }
+                return f;
+            }
+        }
         
         @Override
         public double f(double[] w) {
-            double f = IntStream.range(0, x.length).sequential().mapToDouble(i -> {
-                double[] prob = new double[k];
-                for (int j = 0; j < k; j++) {
-                    prob[j] = dot(x[i], w, j, p);
+            double f = 0.0;
+            double[] prob = new double[k];
+
+            int n = x.length;
+            int m = MulticoreExecutor.getThreadPoolSize();
+            if (n < 1000 || m < 2) {
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < k; j++) {
+                        prob[j] = dot(x[i], w, j, p);
+                    }
+
+                    softmax(prob);
+
+                    f -= log(prob[y[i]]);
+                }
+            } else {
+                List<FTask> tasks = new ArrayList<>(m + 1);
+                int step = n / m;
+                if (step < 100) step = 100;
+
+                int start = 0;
+                int end = step;
+                for (int i = 0; i < m - 1 && start < n; i++) {
+                    if (end > n) end = n;
+                    tasks.add(new FTask(w, start, end));
+                    start += step;
+                    end += step;
+                }
+                if (start < n) tasks.add(new FTask(w, start, n));
+                
+                try {
+                    for (double fi : MulticoreExecutor.run(tasks)) {
+                        f += fi;
+                    }
+                } catch (Exception ex) {
+                    for (int i = 0; i < n; i++) {
+                        for (int j = 0; j < k; j++) {
+                            prob[j] = dot(x[i], w, j, p);
+                        }
+
+                        softmax(prob);
+
+                        f -= log(prob[y[i]]);
+                    }
+                }
+            }
+
+            if (lambda != 0.0) {
+                double wnorm = 0.0;
+                for (int i = 0; i < k; i++) {
+                    for (int j = 0; j < p; j++) {
+                        wnorm += Math.sqr(w[i*(p+1) + j]);
+                    }
                 }
 
-                softmax(prob);
-
-                return -log(prob[y[i]]);
-            }).sum();
-
-            if (lambda > 0.0) {
-                double wnorm = 0.0;
-                for (int i = 0; i < p; i++) wnorm += w[i] * w[i];
                 f += 0.5 * lambda * wnorm;
             }
 
             return f;
         }
 
+        /**
+         * Task to calculate the objective function and gradient.
+         */
+        class GTask implements Callable<double[]> {
+
+            /**
+             * The parameter vector.
+             */
+            double[] w;
+            /**
+             * The start index of data portion for this task.
+             */
+            int start;
+            /**
+             * The end index of data portion for this task.
+             */
+            int end;
+
+            GTask(double[] w, int start, int end) {
+                this.w = w;
+                this.start = start;
+                this.end = end;
+            }
+
+            @Override
+            public double[] call() {
+                double f = 0.0;
+                double[] prob = new double[k];
+                double[] g = new double[w.length+1];
+
+                for (int i = start; i < end; i++) {
+                    for (int j = 0; j < k; j++) {
+                        prob[j] = dot(x[i], w, j, p);
+                    }
+
+                    softmax(prob);
+
+                    f -= log(prob[y[i]]);
+
+                    double yi = 0.0;
+                    for (int j = 0; j < k; j++) {
+                        yi = (y[i] == j ? 1.0 : 0.0) - prob[j];
+
+                        int pos = j * (p + 1);
+                        for (int l : x[i]) {
+                            g[pos + l] -= yi;
+                        }
+                        g[pos + p] -= yi;
+                    }
+                }
+                
+                g[w.length] = f;
+                return g;
+            }
+        }
+        
         @Override
-        public double g(double[] w, double[] g) {
+        public double f(double[] w, double[] g) {
+            double f = 0.0;
+            double[] prob = new double[k];
             Arrays.fill(g, 0.0);
 
-            double f = IntStream.range(0, x.length).sequential().mapToDouble(i -> {
-                double[] prob = new double[k];
-                for (int j = 0; j < k; j++) {
-                    prob[j] = dot(x[i], w, j, p);
-                }
-
-                softmax(prob);
-
-                double yi = 0.0;
-                for (int j = 0; j < k; j++) {
-                    yi = (y[i] == j ? 1.0 : 0.0) - prob[j];
-
-                    int pos = j * (p + 1);
-                    for (int l : x[i]) {
-                        g[pos + l] -= yi;
+            int n = x.length;
+            int m = MulticoreExecutor.getThreadPoolSize();
+            if (n < 1000 || m < 2) {
+                for (int i = 0; i < n; i++) {
+                    for (int j = 0; j < k; j++) {
+                        prob[j] = dot(x[i], w, j, p);
                     }
-                    g[pos + p] -= yi;
-                }
 
-                return -log(prob[y[i]]);
-            }).sum();
+                    softmax(prob);
+
+                    f -= log(prob[y[i]]);
+
+                    double yi = 0.0;
+                    for (int j = 0; j < k; j++) {
+                        yi = (y[i] == j ? 1.0 : 0.0) - prob[j];
+
+                        int pos = j * (p + 1);
+                        for (int l : x[i]) {
+                            g[pos + l] -= yi;
+                        }
+                        g[pos + p] -= yi;
+                    }
+                }
+            } else {
+                List<GTask> tasks = new ArrayList<>(m + 1);
+                int step = n / m;
+                if (step < 100) {
+                    step = 100;
+                }
+                
+                int start = 0;
+                int end = step;
+                for (int i = 0; i < m - 1 && start < n; i++) {
+                    if (end > n) end = n;
+                    tasks.add(new GTask(w, start, end));
+                    start += step;
+                    end += step;
+                }
+                if (start < n) tasks.add(new GTask(w, start, n));
+
+                try {
+                    for (double[] gi : MulticoreExecutor.run(tasks)) {
+                        f += gi[w.length];
+                        for (int i = 0; i < w.length; i++) {
+                            g[i] += gi[i];
+                        }
+                    }
+                } catch (Exception ex) {
+                    for (int i = 0; i < n; i++) {
+                        for (int j = 0; j < k; j++) {
+                            prob[j] = dot(x[i], w, j, p);
+                        }
+
+                        softmax(prob);
+
+                        f -= log(prob[y[i]]);
+
+                        double yi = 0.0;
+                        for (int j = 0; j < k; j++) {
+                            yi = (y[i] == j ? 1.0 : 0.0) - prob[j];
+
+                            int pos = j * (p + 1);
+                            for (int l : x[i]) {
+                                g[pos + l] -= yi;
+                            }
+                            g[pos + p] -= yi;
+                        }
+                    }
+                }
+            }
+
 
             if (lambda != 0.0) {
                 double wnorm = 0.0;
