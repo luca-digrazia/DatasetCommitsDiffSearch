@@ -434,11 +434,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         .put(SkyFunctions.WORKSPACE_AST, new WorkspaceASTFunction(ruleClassProvider))
         .put(
             SkyFunctions.WORKSPACE_FILE,
-            new WorkspaceFileFunction(
-                ruleClassProvider,
-                pkgFactory,
-                directories,
-                /*skylarkImportLookupFunctionForInlining=*/ null))
+            new WorkspaceFileFunction(ruleClassProvider, pkgFactory, directories))
         .put(SkyFunctions.EXTERNAL_PACKAGE, new ExternalPackageFunction())
         .put(SkyFunctions.REPOSITORY_MAPPING, new RepositoryMappingFunction())
         .put(

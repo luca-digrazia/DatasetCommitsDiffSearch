@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.skyframe.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.testutil.MoreAsserts.assertNoEvents;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
@@ -58,7 +58,7 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
     fetchExternalRepo(RepositoryName.create("@bazel_tools"));
   }
 
-  private static void mockEmbeddedTools(Path embeddedBinaries) throws IOException {
+  private void mockEmbeddedTools(Path embeddedBinaries) throws IOException {
     Path tools = embeddedBinaries.getRelative("embedded_tools");
     tools.getRelative("tools/cpp").createDirectoryAndParents();
     tools.getRelative("tools/osx").createDirectoryAndParents();
@@ -86,11 +86,6 @@ public final class BazelPackageLoaderTest extends AbstractPackageLoaderTest {
         "",
         "def http_file(**kwargs):",
         "  pass");
-    FileSystemUtils.writeIsoLatin1(
-        tools.getRelative("tools/build_defs/repo/utils.bzl"),
-        "def maybe(repo_rule, name, **kwargs):",
-        "  if name not in native.existing_rules():",
-        "    repo_rule(name = name, **kwargs)");
   }
 
   private void fetchExternalRepo(RepositoryName externalRepo) {
