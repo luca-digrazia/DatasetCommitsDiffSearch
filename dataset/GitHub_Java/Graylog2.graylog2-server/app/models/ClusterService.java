@@ -28,12 +28,11 @@ import models.api.requests.SystemJobTriggerRequest;
 import models.api.responses.system.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import play.libs.F;
 import play.mvc.Http;
 
 import java.io.IOException;
+import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 
 public class ClusterService {
     private static final Logger log = LoggerFactory.getLogger(ClusterService.class);
@@ -122,32 +121,24 @@ public class ClusterService {
         return null;
     }
 
-    public List<NodeJVMStats> getClusterJvmStats() {
-        List<NodeJVMStats> result = Lists.newArrayList();
-        Map<Node, ClusterEntityJVMStatsResponse> rs = api.get(ClusterEntityJVMStatsResponse.class).fromAllNodes().path("/system/jvm").executeOnAll();
+    public List<ServerJVMStats> getClusterJvmStats() {
+        List<ServerJVMStats> result = Lists.newArrayList();
+        Collection<ServerJVMStatsResponse> rs = api.get(ServerJVMStatsResponse.class).fromAllNodes().path("/system/jvm").executeOnAll();
 
-        for (Map.Entry<Node, ClusterEntityJVMStatsResponse> entry : rs.entrySet()) {
-            if (entry.getValue() == null) {
-                log.warn("Skipping failed jvm stats request for node {}", entry.getKey());
-                continue;
-            }
-            result.add(new NodeJVMStats(entry.getValue()));
+        for (ServerJVMStatsResponse r : rs) {
+            result.add(new ServerJVMStats(r));
         }
 
         return result;
     }
 
-    public F.Tuple<Integer, Integer> getClusterThroughput() {
-        final Map<Node, NodeThroughputResponse> responses =
-                api.get(NodeThroughputResponse.class).fromAllNodes().path("/system/throughput").executeOnAll();
+    public int getClusterThroughput() {
+        final Collection<ServerThroughputResponse> responses =
+                api.get(ServerThroughputResponse.class).fromAllNodes().path("/system/throughput").executeOnAll();
         int t = 0;
-        for (Map.Entry<Node, NodeThroughputResponse> entry : responses.entrySet()) {
-            if (entry.getValue() == null) {
-                log.warn("Skipping failed throughput request for node {}", entry.getKey());
-                continue;
-            }
-            t += entry.getValue().throughput;
+        for (ServerThroughputResponse r : responses) {
+            t += r.throughput;
         }
-        return F.Tuple(t, responses.size());
+        return t;
     }
 }
