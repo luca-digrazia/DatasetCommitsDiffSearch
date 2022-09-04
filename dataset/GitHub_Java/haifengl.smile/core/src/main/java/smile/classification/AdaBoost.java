@@ -123,7 +123,7 @@ public class AdaBoost implements SoftClassifier<Tuple>, DataFrameClassifier, Tre
      * @param alpha the weight of each decision tree.
      * @param error the weighted error of each decision tree during training.
      * @param importance variable importance
-     * @param labels the class label encoder.
+     * @param labels class labels
      */
     public AdaBoost(Formula formula, int k, DecisionTree[] trees, double[] alpha, double[] error, double[] importance, IntSet labels) {
         this.formula = formula;

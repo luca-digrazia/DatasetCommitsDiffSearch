@@ -22,6 +22,7 @@ import java.util.Arrays;
 import smile.math.blas.UPLO;
 import smile.math.matrix.Matrix;
 import smile.sort.QuickSort;
+import smile.util.Strings;
 import static java.lang.Math.abs;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
@@ -80,7 +81,7 @@ import static smile.math.MathEx.norm;
 public class BFGS {
     private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(BFGS.class);
     /** A number close to zero, between machine epsilon and its square root. */
-    private static final double EPSILON = Double.parseDouble(System.getProperty("smile.bfgs.epsilon", "1E-8"));
+    private static final double EPSILON = Double.parseDouble(System.getProperty("smile.bfgs.epsilon", "1E-10"));
     /** The convergence criterion on x values. */
     private static final double TOLX = 4 * EPSILON;
     /** The convergence criterion on function value. */
@@ -90,6 +91,7 @@ public class BFGS {
 
     /**
      * This method solves the unconstrained minimization problem
+     * <p>
      * <pre>
      *     min f(x),    x = (x1,x2,...,x_n),
      * </pre>
@@ -240,6 +242,7 @@ public class BFGS {
 
     /**
      * This method solves the unconstrained minimization problem
+     * <p>
      * <pre>
      *     min f(x),    x = (x1,x2,...,x_n),
      * </pre>
@@ -738,7 +741,7 @@ public class BFGS {
                 M = M.inverse();
             }
 
-            logger.debug("L-BFGS-B iteration {} moves from {} to {} where f(x) = {}", iter, Arrays.toString(x_old), Arrays.toString(x), f);
+            logger.debug("L-BFGS-B iteration {} moves from {} to {} where f(x) = {}", iter, Strings.toString(x_old), Strings.toString(x), f);
 
             if (abs(f_old - f) < TOLF) {
                 logger.info(String.format("L-BFGS-B converges on f(x) after %d iterations: %.5f", iter, f));
@@ -861,7 +864,7 @@ public class BFGS {
         double[] v  = M.mv(WZ.tv(r));
         Matrix N = WZ.ata().mul(-thetaInverse);
         N = M.mm(N);
-        int n1 = N.nrow();
+        int n1 = N.nrows();
         for (int i = 0; i < n1; i++) {
             N.add(i, i, 1.0);
         }

@@ -1,5 +1,5 @@
-/*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+/*
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- *******************************************************************************/
+ */
 
 package smile.base.cart;
 
@@ -22,9 +22,14 @@ import java.util.Comparator;
 import java.util.function.IntPredicate;
 import java.util.stream.Collectors;
 
-/** The data about of a potential split for a leaf node. */
+/**
+ * The data about of a potential split for a leaf node.
+ *
+ * @author Haifeng Li
+ */
 public abstract class Split {
-    public static Comparator<Split> comparator = (x, y) -> Double.compare(x.score, y.score);
+    /** The comparator on the split score. */
+    public static Comparator<Split> comparator = Comparator.comparingDouble(x -> x.score);
 
     /** The node associated with this split. */
     final LeafNode leaf;
@@ -59,20 +64,37 @@ public abstract class Split {
     InternalNode parent;
 
     /**
-     * insplitable[j] is true if
+     * unsplittable[j] is true if
      * <ul>
      * <li>The column j in the node is constant</li>
      * <li>The column j is almost constant, i.e. but after the split,
      * the size of one or two children is less than nodeSize.</li>
      * <li>The column j is not (almost) constant, but the impurity of
-     * node doesn't decrease after the split.</li>
+     * node doesn't decrease after the split. Therefore, the mutual
+     * information between y and column j is very low.</li>
      * </ul>
-     * No matter which case, the column j in the children nodes
-     * (split on another column) are still insplitable.
+     * For the first two cases, the column j in the children nodes
+     * (split on another column) are still unsplittable. In last case,
+     * column j may become splittable later after the node splits on
+     * another column. However, we still would like to ignore it
+     * because of the low mutual information. It likely introduces
+     * more noise than information.
      */
     boolean[] unsplittable;
 
-    /** Constructor. */
+    /** The depth of node in the tree. */
+    int depth = 1;
+
+    /**
+     * Constructor.
+     * @param leaf the node to split.
+     * @param feature the index of feature column.
+     * @param score the split score.
+     * @param lo the lower bound of sample index in the node.
+     * @param hi the upper bound of sample index in the node.
+     * @param trueCount the number of samples in true branch child.
+     * @param falseCount the number of samples false branch child.
+     */
     public Split(LeafNode leaf, int feature, double score, int lo, int hi, int trueCount, int falseCount) {
         this.leaf = leaf;
         this.feature = feature;
@@ -91,7 +113,10 @@ public abstract class Split {
      */
     public abstract InternalNode toNode(Node trueChild, Node falseChild);
 
-    /** Returns the lambda that tests on the split feature. */
+    /**
+     * Returns the lambda that tests on the split feature.
+     * @return the lambda that tests on the split feature.
+     */
     public abstract IntPredicate predicate();
 
     @Override
@@ -102,7 +127,8 @@ public abstract class Split {
                 "lo: " + lo,
                 "hi: " + hi,
                 "true: " + trueCount,
-                "false: " + falseCount
+                "false: " + falseCount,
+                "depth: " + depth
         };
 
         return Arrays.stream(fields).collect(Collectors.joining(",\n", "{\n", "\n}"));

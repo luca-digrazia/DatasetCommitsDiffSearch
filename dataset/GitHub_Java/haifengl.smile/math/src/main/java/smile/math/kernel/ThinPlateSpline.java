@@ -54,17 +54,14 @@ public class ThinPlateSpline implements IsotropicKernel {
         this.hi = hi;
     }
 
-    /**
-     * Returns the length scale of kernel.
-     * @return the length scale of kernel.
-     */
+    /** Returns the length scale of kernel. */
     public double scale() {
         return sigma;
     }
 
     @Override
     public String toString() {
-        return String.format("TpsKernel(%.4f)", sigma);
+        return String.format("ThinPlateSplineKernel(%.4f)", sigma);
     }
 
     @Override

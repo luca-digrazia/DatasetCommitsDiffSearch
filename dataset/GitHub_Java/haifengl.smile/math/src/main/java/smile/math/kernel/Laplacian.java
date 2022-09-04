@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,38 +13,43 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.math.kernel;
 
 /**
- * Laplacian Kernel, also referred as exponential kernel.
+ * Laplacian kernel, also referred as exponential kernel.
  * <p>
- * <pre>
- *     k(u, v) = e<sup>-||u-v|| / &sigma;</sup>
- * </pre>
- * where <code>&sigma; &gt; 0</code> is the scale parameter of the kernel.
+ *     k(u, v) = exp(-||u-v|| / &sigma;)
+ * <p>
+ * where &sigma; {@code > 0} is the scale parameter of the kernel.
  *
  * @author Haifeng Li
  */
 public class Laplacian implements IsotropicKernel {
     private static final long serialVersionUID = 2L;
 
-    /**
-     * The length scale of the kernel.
-     */
-    private final double sigma;
+    /** The length scale of the kernel. */
+    final double sigma;
+    /** The lower bound of length scale for hyperparameter tuning. */
+    final double lo;
+    /** The upper bound of length scale for hyperparameter tuning. */
+    final double hi;
 
     /**
      * Constructor.
      * @param sigma The length scale of kernel.
+     * @param lo The lower bound of length scale for hyperparameter tuning.
+     * @param hi The upper bound of length scale for hyperparameter tuning.
      */
-    public Laplacian(double sigma) {
+    public Laplacian(double sigma, double lo, double hi) {
         if (sigma <= 0) {
             throw new IllegalArgumentException("sigma is not positive: " + sigma);
         }
 
         this.sigma = sigma;
+        this.lo = lo;
+        this.hi = hi;
     }
 
     /** Returns the length scale of kernel. */
@@ -54,11 +59,21 @@ public class Laplacian implements IsotropicKernel {
 
     @Override
     public String toString() {
-        return String.format("Laplacian(%.4f)", sigma);
+        return String.format("LaplacianKernel(%.4f)", sigma);
     }
 
     @Override
     public double k(double dist) {
         return Math.exp(-dist / sigma);
+    }
+
+    @Override
+    public double[] kg(double dist) {
+        double[] g = new double[2];
+        double d = dist / sigma;
+        double k = Math.exp(-d);
+        g[0] = k;
+        g[1] = k * d / sigma;
+        return g;
     }
 }
