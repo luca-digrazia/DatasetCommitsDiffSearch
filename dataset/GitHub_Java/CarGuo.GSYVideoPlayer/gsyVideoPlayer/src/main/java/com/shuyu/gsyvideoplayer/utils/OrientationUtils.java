@@ -7,15 +7,17 @@ import android.view.OrientationEventListener;
 
 import com.shuyu.gsyvideoplayer.GSYVideoPlayer;
 import com.shuyu.gsyvideoplayer.R;
+import com.shuyu.gsyvideoplayer.video.GSYBaseVideoPlayer;
 
 /**
+ * 处理屏幕旋转的的逻辑
  * Created by shuyu on 2016/11/11.
  */
 
 public class OrientationUtils {
 
     private Activity activity;
-    private GSYVideoPlayer gsyVideoPlayer;
+    private GSYBaseVideoPlayer gsyVideoPlayer;
 
     private int screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
     private OrientationEventListener orientationEventListener;
@@ -23,7 +25,11 @@ public class OrientationUtils {
     private int mIsLand;
     private boolean mEnable = true;
 
-    public OrientationUtils(Activity activity, GSYVideoPlayer gsyVideoPlayer) {
+    /**
+     * @param activity
+     * @param gsyVideoPlayer
+     */
+    public OrientationUtils(Activity activity, GSYBaseVideoPlayer gsyVideoPlayer) {
         this.activity = activity;
         this.gsyVideoPlayer = gsyVideoPlayer;
         init();
@@ -35,9 +41,9 @@ public class OrientationUtils {
             public void onOrientationChanged(int rotation) {
                 boolean autoRotateOn = (android.provider.Settings.System.getInt(activity.getContentResolver(), Settings.System.ACCELEROMETER_ROTATION, 0) == 1);
                 if (!autoRotateOn) {
-                    if (mIsLand == 0) {
+                    //if (mIsLand == 0) {
                         return;
-                    }
+                    //}
                 }
                 // 设置竖屏
                 if (((rotation >= 0) && (rotation <= 30)) || (rotation >= 330)) {
@@ -53,7 +59,11 @@ public class OrientationUtils {
                         if (mIsLand > 0) {
                             screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
                             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-                            gsyVideoPlayer.fullscreenButton.setImageResource(R.drawable.video_enlarge);
+                            if (gsyVideoPlayer.isIfCurrentIsFullscreen()) {
+                                gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getShrinkImageRes());
+                            } else {
+                                gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getEnlargeImageRes());
+                            }
                             mIsLand = 0;
                             mClick = false;
                         }
@@ -73,7 +83,7 @@ public class OrientationUtils {
                         if (!(mIsLand == 1)) {
                             screenType = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
                             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-                            gsyVideoPlayer.fullscreenButton.setImageResource(R.drawable.video_shrink);
+                            gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getShrinkImageRes());
                             mIsLand = 1;
                             mClick = false;
                         }
@@ -92,7 +102,7 @@ public class OrientationUtils {
                     } else if (!(mIsLand == 2)) {
                         screenType = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
                         activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE);
-                        gsyVideoPlayer.fullscreenButton.setImageResource(R.drawable.video_shrink);
+                        gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getShrinkImageRes());
                         mIsLand = 2;
                         mClick = false;
                     }
@@ -102,22 +112,47 @@ public class OrientationUtils {
         orientationEventListener.enable();
     }
 
+    /**
+     * 点击切换的逻辑，比如竖屏的时候点击了就是切换到横屏不会受屏幕的影响
+     */
     public void resolveByClick() {
+        mClick = true;
         if (mIsLand == 0) {
             screenType = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
-            gsyVideoPlayer.fullscreenButton.setImageResource(R.drawable.video_shrink);
+            gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getShrinkImageRes());
             mIsLand = 1;
             mClickLand = false;
         } else {
             screenType = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT;
             activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
-            gsyVideoPlayer.fullscreenButton.setImageResource(R.drawable.video_enlarge);
+            if (gsyVideoPlayer.isIfCurrentIsFullscreen()) {
+                gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getShrinkImageRes());
+            } else {
+                gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getEnlargeImageRes());
+            }
             mIsLand = 0;
             mClickPort = false;
         }
 
     }
+
+    /**
+     * 列表返回的样式判断。因为立即旋转会导致界面跳动的问题
+     */
+    public int backToProtVideo() {
+        if (mIsLand > 0) {
+            mClick = true;
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            if (gsyVideoPlayer != null)
+                gsyVideoPlayer.getFullscreenButton().setImageResource(gsyVideoPlayer.getEnlargeImageRes());
+            mIsLand = 0;
+            mClickPort = false;
+            return 500;
+        }
+        return 0;
+    }
+
 
     public boolean isEnable() {
         return mEnable;
@@ -128,6 +163,12 @@ public class OrientationUtils {
         if (mEnable) {
             orientationEventListener.enable();
         } else {
+            orientationEventListener.disable();
+        }
+    }
+
+    public void releaseListener() {
+        if (orientationEventListener != null) {
             orientationEventListener.disable();
         }
     }
