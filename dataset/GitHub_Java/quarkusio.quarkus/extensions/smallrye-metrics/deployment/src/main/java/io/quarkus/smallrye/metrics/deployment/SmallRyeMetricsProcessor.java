@@ -53,8 +53,7 @@ import io.quarkus.arc.processor.AnnotationsTransformer;
 import io.quarkus.arc.processor.BuildExtension;
 import io.quarkus.arc.processor.BuiltinScope;
 import io.quarkus.arc.processor.DotNames;
-import io.quarkus.deployment.Capability;
-import io.quarkus.deployment.Feature;
+import io.quarkus.deployment.Capabilities;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
@@ -263,12 +262,12 @@ public class SmallRyeMetricsProcessor {
 
     @BuildStep
     public CapabilityBuildItem capability() {
-        return new CapabilityBuildItem(Capability.METRICS);
+        return new CapabilityBuildItem(Capabilities.METRICS);
     }
 
     @BuildStep
     public FeatureBuildItem feature() {
-        return new FeatureBuildItem(Feature.SMALLRYE_METRICS);
+        return new FeatureBuildItem(FeatureBuildItem.SMALLRYE_METRICS);
     }
 
     @BuildStep
@@ -370,22 +369,17 @@ public class SmallRyeMetricsProcessor {
         for (ClassInfo clazz : collectedMetricsClasses.values()) {
             BeanInfo beanInfo = beanInfoAdapter.convert(clazz);
             ClassInfo superclass = clazz;
-            Set<String> alreadyRegisteredNames = new HashSet<>();
             // register metrics for all inherited methods as well
             while (superclass != null && superclass.superName() != null) {
                 for (MethodInfo method : superclass.methods()) {
-                    if (!Modifier.isPrivate(method.flags()) && !alreadyRegisteredNames.contains(method.name())) {
-                        metrics.registerMetrics(beanInfo, memberInfoAdapter.convert(method));
-                        alreadyRegisteredNames.add(method.name());
+                    // if we're looking at a superclass, skip methods that are overridden by the subclass
+                    if (superclass != clazz) {
+                        if (clazz.method(method.name(), method.parameters().toArray(new Type[] {})) != null) {
+                            continue;
+                        }
                     }
-                }
-                // find inherited default methods which are not overridden by the original bean
-                for (Type interfaceType : superclass.interfaceTypes()) {
-                    ClassInfo ifaceInfo = beanArchiveIndex.getIndex().getClassByName(interfaceType.name());
-                    if (ifaceInfo != null) {
-                        findNonOverriddenDefaultMethods(ifaceInfo, alreadyRegisteredNames, metrics, beanArchiveIndex,
-                                memberInfoAdapter,
-                                beanInfo);
+                    if (!Modifier.isPrivate(method.flags())) {
+                        metrics.registerMetrics(beanInfo, memberInfoAdapter.convert(method));
                     }
                 }
                 superclass = index.getClassByName(superclass.superName());
@@ -397,30 +391,6 @@ public class SmallRyeMetricsProcessor {
             if (!collectedMetricsClasses.containsKey(declaringClazz.name())) {
                 BeanInfo beanInfo = beanInfoAdapter.convert(declaringClazz);
                 metrics.registerMetrics(beanInfo, memberInfoAdapter.convert(method));
-            }
-        }
-    }
-
-    private void findNonOverriddenDefaultMethods(ClassInfo interfaceInfo, Set<String> alreadyRegisteredNames,
-            SmallRyeMetricsRecorder recorder,
-            BeanArchiveIndexBuildItem beanArchiveIndex, JandexMemberInfoAdapter memberInfoAdapter, BeanInfo beanInfo) {
-        // Check for default methods which are NOT overridden by the bean that we are registering metrics for
-        // or any of its superclasses. Register a metric for each of them.
-        for (MethodInfo method : interfaceInfo.methods()) {
-            if (!Modifier.isAbstract(method.flags())) { // only take default methods
-                if (!alreadyRegisteredNames.contains(method.name())) {
-                    recorder.registerMetrics(beanInfo, memberInfoAdapter.convert(method));
-                    alreadyRegisteredNames.add(method.name());
-                }
-            }
-        }
-        // recursively repeat the same for interfaces which this interface extends
-        for (Type extendedInterface : interfaceInfo.interfaceTypes()) {
-            ClassInfo extendedInterfaceInfo = beanArchiveIndex.getIndex().getClassByName(extendedInterface.name());
-            if (extendedInterfaceInfo != null) {
-                findNonOverriddenDefaultMethods(extendedInterfaceInfo, alreadyRegisteredNames, recorder, beanArchiveIndex,
-                        memberInfoAdapter,
-                        beanInfo);
             }
         }
     }
