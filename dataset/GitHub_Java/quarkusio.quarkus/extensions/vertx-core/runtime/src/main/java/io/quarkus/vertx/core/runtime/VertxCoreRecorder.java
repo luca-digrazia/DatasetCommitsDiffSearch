@@ -12,8 +12,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import org.wildfly.common.cpu.ProcessorInfo;
-
 import io.netty.channel.EventLoopGroup;
 import io.quarkus.arc.runtime.BeanContainer;
 import io.quarkus.runtime.IOThreadDetector;
@@ -21,16 +19,13 @@ import io.quarkus.runtime.LaunchMode;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
 import io.quarkus.runtime.annotations.Recorder;
-import io.quarkus.vertx.core.runtime.config.ClusterConfiguration;
-import io.quarkus.vertx.core.runtime.config.EventBusConfiguration;
-import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
-import io.vertx.core.Context;
 import io.vertx.core.Vertx;
 import io.vertx.core.VertxOptions;
 import io.vertx.core.eventbus.EventBusOptions;
 import io.vertx.core.file.FileSystemOptions;
 import io.vertx.core.http.ClientAuth;
 import io.vertx.core.impl.VertxImpl;
+import io.vertx.core.impl.VertxThread;
 import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.PemKeyCertOptions;
 import io.vertx.core.net.PemTrustOptions;
@@ -65,7 +60,7 @@ public class VertxCoreRecorder {
         return new IOThreadDetector() {
             @Override
             public boolean isInIOThread() {
-                return Context.isOnEventLoopThread();
+                return Thread.currentThread() instanceof VertxThread;
             }
         };
     }
@@ -145,8 +140,6 @@ public class VertxCoreRecorder {
         options.setInternalBlockingPoolSize(conf.internalBlockingPoolSize);
         if (conf.eventLoopsPoolSize.isPresent()) {
             options.setEventLoopPoolSize(conf.eventLoopsPoolSize.getAsInt());
-        } else {
-            options.setEventLoopPoolSize(calculateDefaultIOThreads());
         }
         // TODO - Add the ability to configure these times in ns when long will be supported
         //  options.setMaxEventLoopExecuteTime(conf.maxEventLoopExecuteTime)
@@ -154,19 +147,6 @@ public class VertxCoreRecorder {
         options.setWarningExceptionTime(conf.warningExceptionTime.toNanos());
 
         return options;
-    }
-
-    private static int calculateDefaultIOThreads() {
-        //we only allow one event loop per 10mb of ram at the most
-        //its hard to say what this number should be, but it is also obvious
-        //that for constrained environments we don't want a lot of event loops
-        //lets start with 10mb and adjust as needed
-        int recommended = ProcessorInfo.availableProcessors() * 2;
-        long mem = Runtime.getRuntime().maxMemory();
-        long memInMb = mem / (1024 * 1024);
-        long maxAllowed = memInMb / 10;
-
-        return (int) Math.max(2, Math.min(maxAllowed, recommended));
     }
 
     void destroy() {
@@ -321,21 +301,6 @@ public class VertxCoreRecorder {
             @Override
             public EventLoopGroup get() {
                 return vertx.get().nettyEventLoopGroup();
-            }
-        };
-    }
-
-    public Supplier<Integer> calculateEventLoopThreads(VertxConfiguration conf) {
-        int threads;
-        if (conf.eventLoopsPoolSize.isPresent()) {
-            threads = conf.eventLoopsPoolSize.getAsInt();
-        } else {
-            threads = calculateDefaultIOThreads();
-        }
-        return new Supplier<Integer>() {
-            @Override
-            public Integer get() {
-                return threads;
             }
         };
     }
