@@ -303,6 +303,9 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
       if (!options.containsExplicitOption("experimental_profile_cpu_usage")) {
         commonOptions.enableCpuUsageProfiling = true;
       }
+      if (!options.containsExplicitOption("experimental_post_profile_started_event")) {
+        commonOptions.postProfileStartedEvent = true;
+      }
     }
     // TODO(ulfjack): Move the profiler initialization as early in the startup sequence as possible.
     // Profiler setup and shutdown must always happen in pairs. Shutdown is currently performed in
@@ -316,7 +319,9 @@ public class BlazeCommandDispatcher implements CommandDispatcher {
             env,
             execStartTimeNanos,
             waitTimeInMs);
-    storedEventHandler.post(profilerStartedEvent);
+    if (commonOptions.postProfileStartedEvent) {
+      storedEventHandler.post(profilerStartedEvent);
+    }
 
     // Enable Starlark CPU profiling (--starlark_cpu_profile=/tmp/foo.pprof.gz)
     if (!commonOptions.starlarkCpuProfile.isEmpty()) {
