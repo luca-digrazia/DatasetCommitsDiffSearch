@@ -232,12 +232,12 @@ public final class DocstringUtils {
     private boolean blankLineBefore = false;
     /** Whether we've seen a special section, e.g. 'Args:', already. */
     private boolean specialSectionsStarted = false;
-    /** List of all parsed lines in the docstring so far, including all indentation. */
-    private ArrayList<String> originalLines = new ArrayList<>();
+    /** The complete current line in the docstring, including all indentation. */
+    private String originalLine = "";
     /**
      * The current line in the docstring with the baseline indentation removed.
      *
-     * <p>If the indentation of a docstring line is less than the expected {@link
+     * <p>If the indentation of {@link #originalLine} is less than the expected {@link
      * #baselineIndentation}, only the existing indentation is stripped; none of the remaining
      * characters are cut off.
      */
@@ -257,23 +257,22 @@ public final class DocstringUtils {
      *
      * @return whether there are lines remaining to be parsed
      */
-    private boolean nextLine() {
+    boolean nextLine() {
       if (startOfLineOffset >= docstring.length()) {
         return false;
       }
       blankLineBefore = line.isEmpty();
+      lineNumber++;
       startOfLineOffset = endOfLineOffset + 1;
       if (startOfLineOffset >= docstring.length()) {
         line = "";
         return false;
       }
-      lineNumber++;
       endOfLineOffset = docstring.indexOf('\n', startOfLineOffset);
       if (endOfLineOffset < 0) {
         endOfLineOffset = docstring.length();
       }
-      String originalLine = docstring.substring(startOfLineOffset, endOfLineOffset);
-      originalLines.add(originalLine);
+      originalLine = docstring.substring(startOfLineOffset, endOfLineOffset);
       line = originalLine;
       int indentation = getIndentation(line);
       if (!line.isEmpty()) {
@@ -305,12 +304,8 @@ public final class DocstringUtils {
       return index;
     }
 
-    private void error(String message) {
-      error(this.lineNumber, message);
-    }
-
-    private void error(int lineNumber, String message) {
-      errors.add(new DocstringParseError(message, lineNumber, originalLines.get(lineNumber - 1)));
+    void error(String message) {
+      errors.add(new DocstringParseError(message, lineNumber, originalLine));
     }
 
     DocstringInfo parse() {
@@ -394,7 +389,6 @@ public final class DocstringUtils {
     private static final Pattern attributesSeparator = Pattern.compile("\\s*,\\s*");
 
     private List<ParameterDoc> parseParameters() {
-      int sectionLineNumber = lineNumber;
       nextLine();
       List<ParameterDoc> params = new ArrayList<>();
       int expectedParamLineIndentation = -1;
@@ -422,7 +416,6 @@ public final class DocstringUtils {
                   + actualIndentation
                   + " spaces)");
         }
-        int paramLineNumber = lineNumber;
         trimmedLine = line.substring(actualIndentation);
         Matcher matcher = paramLineMatcher.matcher(trimmedLine);
         if (!matcher.matches()) {
@@ -438,14 +431,7 @@ public final class DocstringUtils {
                 ? Collections.emptyList()
                 : Arrays.asList(attributesSeparator.split(attributesString));
         parseContinuedParamDescription(actualIndentation, description);
-        String parameterDescription = description.toString().trim();
-        if (parameterDescription.isEmpty()) {
-          error(paramLineNumber, "empty parameter description for '" + parameterName + "'");
-        }
-        params.add(new ParameterDoc(parameterName, attributes, parameterDescription));
-      }
-      if (params.isEmpty()) {
-        error(sectionLineNumber, "section is empty");
+        params.add(new ParameterDoc(parameterName, attributes, description.toString().trim()));
       }
       return params;
     }
@@ -468,9 +454,8 @@ public final class DocstringUtils {
     }
 
     private String parseSectionAfterHeading() {
-      int sectionLineNumber = lineNumber;
       nextLine();
-      StringBuilder contents = new StringBuilder();
+      StringBuilder returns = new StringBuilder();
       boolean firstLine = true;
       while (!eof()) {
         String trimmedLine;
@@ -492,17 +477,13 @@ public final class DocstringUtils {
           }
         }
         if (!firstLine) {
-          contents.append('\n');
+          returns.append('\n');
         }
-        contents.append(trimmedLine);
+        returns.append(trimmedLine);
         nextLine();
         firstLine = false;
       }
-      String result = contents.toString().trim();
-      if (result.isEmpty()) {
-        error(sectionLineNumber, "section is empty");
-      }
-      return result;
+      return returns.toString().trim();
     }
   }
 
