@@ -20,7 +20,6 @@ import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.auto.value.AutoValue;
 
-import javax.annotation.Nullable;
 import java.util.List;
 
 /**
@@ -39,22 +38,18 @@ public abstract class BuildInfo {
     public abstract String sysInfo();
 
     @JsonProperty
-    @Nullable
     public abstract String loaderFlags();
 
     @JsonProperty
-    @Nullable
     public abstract String compilerFlags();
 
     @JsonProperty
-    @Nullable
     public abstract String allocator();
 
     @JsonProperty
     public abstract List<Integer> versionArray();
 
     @JsonProperty
-    @Nullable
     public abstract String javascriptEngine();
 
     @JsonProperty
@@ -69,11 +64,11 @@ public abstract class BuildInfo {
     public static BuildInfo create(String version,
                                    String gitVersion,
                                    String sysInfo,
-                                   @Nullable String loaderFlags,
-                                   @Nullable String compilerFlags,
-                                   @Nullable String allocator,
+                                   String loaderFlags,
+                                   String compilerFlags,
+                                   String allocator,
                                    List<Integer> versionArray,
-                                   @Nullable String javascriptEngine,
+                                   String javascriptEngine,
                                    int bits,
                                    boolean debug,
                                    long maxBsonObjectSize) {

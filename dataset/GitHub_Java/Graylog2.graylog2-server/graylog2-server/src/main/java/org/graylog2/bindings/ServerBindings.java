@@ -62,8 +62,8 @@ import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.indexer.rotation.RotationStrategy;
 import org.graylog2.rest.NotFoundExceptionMapper;
 import org.graylog2.rest.RestAccessLogFilter;
-import org.graylog2.rest.ScrollChunkWriter;
 import org.graylog2.rest.ValidationExceptionMapper;
+import org.graylog2.shared.security.ShiroSecurityBinding;
 import org.graylog2.security.ShiroSecurityContextFactory;
 import org.graylog2.security.ldap.LdapConnector;
 import org.graylog2.security.ldap.LdapSettingsImpl;
@@ -75,7 +75,6 @@ import org.graylog2.shared.journal.JournalReaderModule;
 import org.graylog2.shared.journal.KafkaJournalModule;
 import org.graylog2.shared.journal.NoopJournalModule;
 import org.graylog2.shared.metrics.jersey2.MetricsDynamicBinding;
-import org.graylog2.shared.security.ShiroSecurityBinding;
 import org.graylog2.shared.system.activities.ActivityWriter;
 import org.graylog2.streams.StreamRouter;
 import org.graylog2.streams.StreamRouterEngine;
@@ -88,15 +87,12 @@ import org.graylog2.system.stats.ClusterStatsModule;
 import javax.ws.rs.container.ContainerResponseFilter;
 import javax.ws.rs.container.DynamicFeature;
 import javax.ws.rs.ext.ExceptionMapper;
-import java.util.Set;
 
 public class ServerBindings extends AbstractModule {
     private final Configuration configuration;
-    private final Set<ServerStatus.Capability> capabilities;
 
-    public ServerBindings(Configuration configuration, Set<ServerStatus.Capability> capabilities) {
+    public ServerBindings(Configuration configuration) {
         this.configuration = configuration;
-        this.capabilities = capabilities;
     }
 
     @Override
@@ -108,7 +104,6 @@ public class ServerBindings extends AbstractModule {
         bindDynamicFeatures();
         bindContainerResponseFilters();
         bindExceptionMappers();
-        bindAdditionalJerseyComponents();
         bindPluginMetaData();
         bindEventBusListeners();
     }
@@ -135,11 +130,11 @@ public class ServerBindings extends AbstractModule {
 
         bind(MongoConnection.class).toProvider(MongoConnectionProvider.class);
 
-        Multibinder<ServerStatus.Capability> capabilityBinder = Multibinder.newSetBinder(binder(), ServerStatus.Capability.class);
-        for (ServerStatus.Capability capability : capabilities) {
-            capabilityBinder.addBinding().toInstance(capability);
-        }
-
+        Multibinder<ServerStatus.Capability> capabilityBinder =
+                Multibinder.newSetBinder(binder(), ServerStatus.Capability.class);
+        capabilityBinder.addBinding().toInstance(ServerStatus.Capability.SERVER);
+        if (configuration.isMaster())
+            capabilityBinder.addBinding().toInstance(ServerStatus.Capability.MASTER);
         bind(ServerStatus.class).in(Scopes.SINGLETON);
 
         if (configuration.isMessageJournalEnabled()) {
@@ -181,31 +176,23 @@ public class ServerBindings extends AbstractModule {
     }
 
     private void bindDynamicFeatures() {
-        TypeLiteral<Class<? extends DynamicFeature>> type = new TypeLiteral<Class<? extends DynamicFeature>>() {
-        };
+        TypeLiteral<Class<? extends DynamicFeature>> type = new TypeLiteral<Class<? extends DynamicFeature>>(){};
         Multibinder<Class<? extends DynamicFeature>> setBinder = Multibinder.newSetBinder(binder(), type);
         setBinder.addBinding().toInstance(ShiroSecurityBinding.class);
         setBinder.addBinding().toInstance(MetricsDynamicBinding.class);
     }
 
     private void bindContainerResponseFilters() {
-        TypeLiteral<Class<? extends ContainerResponseFilter>> type = new TypeLiteral<Class<? extends ContainerResponseFilter>>() {
-        };
+        TypeLiteral<Class<? extends ContainerResponseFilter>> type = new TypeLiteral<Class<? extends ContainerResponseFilter>>(){};
         Multibinder<Class<? extends ContainerResponseFilter>> setBinder = Multibinder.newSetBinder(binder(), type);
         setBinder.addBinding().toInstance(RestAccessLogFilter.class);
     }
 
     private void bindExceptionMappers() {
-        TypeLiteral<Class<? extends ExceptionMapper>> type = new TypeLiteral<Class<? extends ExceptionMapper>>() {
-        };
+        TypeLiteral<Class<? extends ExceptionMapper>> type = new TypeLiteral<Class<? extends ExceptionMapper>>(){};
         Multibinder<Class<? extends ExceptionMapper>> setBinder = Multibinder.newSetBinder(binder(), type);
         setBinder.addBinding().toInstance(NotFoundExceptionMapper.class);
         setBinder.addBinding().toInstance(ValidationExceptionMapper.class);
-    }
-
-    private void bindAdditionalJerseyComponents() {
-        Multibinder<Class> componentBinder = Multibinder.newSetBinder(binder(), Class.class, Names.named("additionalJerseyComponents"));
-        componentBinder.addBinding().toInstance(ScrollChunkWriter.class);
     }
 
     private void bindPluginMetaData() {

@@ -16,13 +16,6 @@
  */
 package org.graylog2.system.stats;
 
-import org.graylog2.bundles.BundleService;
-import org.graylog2.dashboards.DashboardService;
-import org.graylog2.inputs.InputService;
-import org.graylog2.shared.users.UserService;
-import org.graylog2.streams.OutputService;
-import org.graylog2.streams.StreamRuleService;
-import org.graylog2.streams.StreamService;
 import org.graylog2.system.stats.elasticsearch.ElasticsearchProbe;
 import org.graylog2.system.stats.elasticsearch.ElasticsearchStats;
 import org.graylog2.system.stats.mongo.MongoProbe;
@@ -35,52 +28,16 @@ import javax.inject.Singleton;
 public class ClusterStatsService {
     private final ElasticsearchProbe elasticsearchProbe;
     private final MongoProbe mongoProbe;
-    private final UserService userService;
-    private final InputService inputService;
-    private final StreamService streamService;
-    private final StreamRuleService streamRuleService;
-    private final OutputService outputService;
-    private final DashboardService dashboardService;
-    private final BundleService bundleService;
 
     @Inject
     public ClusterStatsService(ElasticsearchProbe elasticsearchProbe,
-                               MongoProbe mongoProbe,
-                               UserService userService,
-                               InputService inputService,
-                               StreamService streamService,
-                               StreamRuleService streamRuleService,
-                               OutputService outputService,
-                               DashboardService dashboardService,
-                               BundleService bundleService) {
+                               MongoProbe mongoProbe) {
         this.elasticsearchProbe = elasticsearchProbe;
         this.mongoProbe = mongoProbe;
-        this.userService = userService;
-        this.inputService = inputService;
-        this.streamService = streamService;
-        this.streamRuleService = streamRuleService;
-        this.outputService = outputService;
-        this.dashboardService = dashboardService;
-        this.bundleService = bundleService;
     }
 
     public ClusterStats clusterStats() {
-        return ClusterStats.create(
-                elasticsearchStats(),
-                mongoStats(),
-                streamService.streamCount(),
-                streamRuleService.totalStreamRuleCount(),
-                streamRuleService.streamRuleCountByStream(),
-                userService.userCount(),
-                outputService.outputCount(),
-                outputService.outputCountByType(),
-                dashboardService.dashboardCount(),
-                inputService.totalInputCount(),
-                inputService.globalInputCount(),
-                inputService.totalExtractorCount(),
-                inputService.totalExtractorCountByType(),
-                bundleService.bundleCount()
-        );
+        return ClusterStats.create(elasticsearchStats(), mongoStats());
     }
 
     public ElasticsearchStats elasticsearchStats() {
