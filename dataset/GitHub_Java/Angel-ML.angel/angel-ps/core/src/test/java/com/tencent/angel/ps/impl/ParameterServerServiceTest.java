@@ -47,8 +47,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
-
 import static org.junit.Assert.assertNotNull;
 
 
@@ -71,8 +69,9 @@ public class ParameterServerServiceTest {
   private static Configuration conf;
 
   static {
-    PropertyConfigurator.configure("../conf/log4j.properties");
+    PropertyConfigurator.configure("../conf/log4j.propertiess");
   }
+
 
   @Before
   public void setup() throws Exception {
@@ -137,6 +136,19 @@ public class ParameterServerServiceTest {
 
   }
 
+  @After
+  public void tearDown() throws Exception {
+    LOG.info("stop local cluster");
+    angelClient.stop();
+  }
+
+  @Test
+  public void testGetHostAddress() throws Exception {}
+
+  @Test
+  public void testGetPort() throws Exception {}
+
+
   @Test
   public void testPsThreadStack() throws Exception {
     LOG.info(psAttempt0Id.toString());
@@ -147,11 +159,5 @@ public class ParameterServerServiceTest {
     MasterPSServiceProtos.GetThreadStackResponse getThreadStackResponse =
         parameterServerService.psThreadStack(null, request);
     assertNotNull(getThreadStackResponse.getStack());
-  }
-
-  @After
-  public void stop() throws IOException {
-    LOG.info("stop local cluster");
-    angelClient.stop();
   }
 }
