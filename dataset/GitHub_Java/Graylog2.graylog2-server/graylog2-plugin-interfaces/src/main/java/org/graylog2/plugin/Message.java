@@ -66,7 +66,7 @@ public class Message implements Messages {
     public static final String FIELD_LEVEL = "level";
     public static final String FIELD_STREAMS = "streams";
 
-    private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\-@]*$");
+    private static final Pattern VALID_KEY_CHARS = Pattern.compile("^[\\w\\.\\-@]*$");
 
     public static final ImmutableSet<String> RESERVED_FIELDS = ImmutableSet.of(
             // ElasticSearch fields.
@@ -84,14 +84,13 @@ public class Message implements Messages {
             FIELD_TIMESTAMP,
             "gl2_source_node",
             "gl2_source_input",
+            "gl2_source_radio",
+            "gl2_source_radio_input",
             "gl2_source_collector",
             "gl2_source_collector_input",
             "gl2_remote_ip",
             "gl2_remote_port",
-            "gl2_remote_hostname",
-            // TODO Due to be removed in Graylog 3.x
-            "gl2_source_radio",
-            "gl2_source_radio_input"
+            "gl2_remote_hostname"
     );
 
     public static final ImmutableSet<String> RESERVED_SETTABLE_FIELDS = ImmutableSet.of(
@@ -256,9 +255,6 @@ public class Message implements Messages {
         if (RESERVED_FIELDS.contains(key) && !RESERVED_SETTABLE_FIELDS.contains(key) || !validKey(key)) {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Ignoring invalid or reserved key {} for message {}", key, getId());
-            }
-            if (key != null && key.contains(".")) {
-                LOG.warn("Keys must not contain a \".\" character! Ignoring field \"{}\"=\"{}\" in message [{}].", key, value, getId());
             }
             return;
         }
