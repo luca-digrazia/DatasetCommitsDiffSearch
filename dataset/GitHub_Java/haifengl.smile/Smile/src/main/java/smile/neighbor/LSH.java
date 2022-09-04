@@ -15,11 +15,7 @@
  *******************************************************************************/
 package smile.neighbor;
 
-import java.util.ArrayList;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Set;
-import java.util.LinkedHashSet;
+import java.util.*;
 import smile.math.IntArrayList;
 import smile.math.Math;
 import smile.sort.HeapSelect;
@@ -563,7 +559,7 @@ public class LSH <E> implements NearestNeighborSearch<double[], E>, KNNSearch<do
      * @return Indices of Candidates
      */
     private Set<Integer> obtainCandidates(double[] q) {
-        Set<Integer> candidates = new LinkedHashSet<Integer>();
+        Set<Integer> candidates = new HashSet<Integer>();
         for (Hash h : hash) {
             BucketEntry bucket = h.get(q);
             if (bucket != null) {
