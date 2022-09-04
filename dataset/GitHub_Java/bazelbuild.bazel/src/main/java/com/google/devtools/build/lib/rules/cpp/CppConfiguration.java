@@ -92,18 +92,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   /** String constant for CC_FLAGS make variable name */
   public static final String CC_FLAGS_MAKE_VARIABLE_NAME = "CC_FLAGS";
 
-  public boolean disableLegacyCrosstoolFields() {
-    return cppOptions.disableLegacyCrosstoolFields;
-  }
-
-  public boolean disableCompilationModeFlags() {
-    return cppOptions.disableCompilationModeFlags;
-  }
-
-  public boolean disableLinkingModeFlags() {
-    return cppOptions.disableLinkingModeFlags;
-  }
-
   /**
    * An enumeration of all the tools that comprise a toolchain.
    */
@@ -235,12 +223,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
         params.crosstoolTop.getPackageIdentifier().getPathUnderExecRoot();
     CppToolchainInfo cppToolchainInfo =
         CppToolchainInfo.create(
-            crosstoolTopPathFragment,
-            params.ccToolchainLabel,
-            params.crosstoolInfo,
-            cppOptions.disableLegacyCrosstoolFields,
-            cppOptions.disableCompilationModeFlags,
-            cppOptions.disableLinkingModeFlags);
+            crosstoolTopPathFragment, params.ccToolchainLabel, params.crosstoolInfo);
 
     CompilationMode compilationMode = params.commonOptions.compilationMode;
 
@@ -572,7 +555,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public ImmutableList<String> getCompilerOptions(Iterable<String> featuresNotUsedAnymore)
     throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyCompilationApiAvailability();
     return compilerFlags;
   }
 
@@ -585,7 +567,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   @Deprecated
   public ImmutableList<String> getCOptionsForSkylark() throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyCompilationApiAvailability();
     return getCOptions();
   }
 
@@ -605,7 +586,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public ImmutableList<String> getCxxOptions(Iterable<String> featuresNotUsedAnymore)
     throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyCompilationApiAvailability();
     return cxxFlags;
   }
 
@@ -623,7 +603,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public ImmutableList<String> getUnfilteredCompilerOptionsWithLegacySysroot(
       Iterable<String> featuresNotUsedAnymore) throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyCompilationApiAvailability();
     return getUnfilteredCompilerOptionsDoNotUse(nonConfiguredSysroot);
   }
 
@@ -658,7 +637,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   @Override
   public ImmutableList<String> getLinkOptionsWithLegacySysroot() throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyLinkingApiAvailability();
     return getLinkOptionsDoNotUse(nonConfiguredSysroot);
   }
 
@@ -716,7 +694,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public ImmutableList<String> getFullyStaticLinkOptions(
       Iterable<String> featuresNotUsedAnymore, Boolean sharedLib) throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyLinkingApiAvailability();
     if (!sharedLib) {
       throw new EvalException(
           Location.BUILTIN, "fully_static_link_options is deprecated, new uses are not allowed.");
@@ -739,7 +716,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public ImmutableList<String> getMostlyStaticLinkOptions(
       Iterable<String> featuresNotUsedAnymore, Boolean sharedLib) throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyLinkingApiAvailability();
     if (sharedLib) {
       return getSharedLibraryLinkOptions(
           cppToolchainInfo.supportsEmbeddedRuntimes()
@@ -765,7 +741,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
   public ImmutableList<String> getDynamicLinkOptions(
       Iterable<String> featuresNotUsedAnymore, Boolean sharedLib) throws EvalException {
     checkForToolchainSkylarkApiAvailability();
-    checkForLegacyLinkingApiAvailability();
     if (sharedLib) {
       return getSharedLibraryLinkOptions(dynamicLinkFlags);
     } else {
@@ -1195,23 +1170,6 @@ public final class CppConfiguration extends BuildConfiguration.Fragment
     if (!cppOptions.enableLegacyToolchainSkylarkApi) {
       throw new EvalException(null, "Information about the C++ toolchain API is not accessible "
           + "anymore through ctx.fragments.cpp . Use CcToolchainInfo instead.");
-    }
-  }
-
-  public void checkForLegacyCompilationApiAvailability() throws EvalException {
-    if (cppOptions.disableLegacyCompilationApi) {
-      throw new EvalException(
-          null,
-          "Skylark APIs accessing compilation flags has been removed. "
-              + "Use the new API on cc_common.");
-    }
-  }
-
-  public void checkForLegacyLinkingApiAvailability() throws EvalException {
-    if (cppOptions.disableLegacyLinkingApi) {
-      throw new EvalException(
-          null,
-          "Skylark APIs accessing linking flags has been removed. Use the new API on cc_common.");
     }
   }
 
