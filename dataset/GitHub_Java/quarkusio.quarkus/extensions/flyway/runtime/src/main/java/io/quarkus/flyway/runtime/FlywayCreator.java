@@ -32,7 +32,6 @@ class FlywayCreator {
         configure.outOfOrder(flywayRuntimeConfig.outOfOrder);
         flywayRuntimeConfig.baselineVersion.ifPresent(configure::baselineVersion);
         flywayRuntimeConfig.baselineDescription.ifPresent(configure::baselineDescription);
-        configure.placeholders(flywayRuntimeConfig.placeholders);
         return configure.load();
     }
 }
