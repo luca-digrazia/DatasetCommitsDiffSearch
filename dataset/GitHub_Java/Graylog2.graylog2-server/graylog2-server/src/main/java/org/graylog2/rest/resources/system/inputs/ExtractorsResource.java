@@ -18,8 +18,6 @@ package org.graylog2.rest.resources.system.inputs;
 
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.annotation.Timed;
-import com.google.common.base.Function;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import org.apache.shiro.authz.annotation.RequiresAuthentication;
@@ -35,7 +33,11 @@ import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.Converter;
 import org.graylog2.plugin.inputs.Extractor;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.graylog2.rest.documentation.annotations.*;
+import org.graylog2.rest.documentation.annotations.Api;
+import org.graylog2.rest.documentation.annotations.ApiOperation;
+import org.graylog2.rest.documentation.annotations.ApiParam;
+import org.graylog2.rest.documentation.annotations.ApiResponse;
+import org.graylog2.rest.documentation.annotations.ApiResponses;
 import org.graylog2.rest.resources.RestResource;
 import org.graylog2.rest.resources.system.inputs.requests.CreateExtractorRequest;
 import org.graylog2.rest.resources.system.inputs.requests.OrderExtractorsRequest;
@@ -47,7 +49,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.ws.rs.*;
+import javax.ws.rs.BadRequestException;
+import javax.ws.rs.Consumes;
+import javax.ws.rs.DELETE;
+import javax.ws.rs.GET;
+import javax.ws.rs.POST;
+import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.Produces;
+import javax.ws.rs.WebApplicationException;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import java.io.IOException;
@@ -133,7 +143,7 @@ public class ExtractorsResource extends RestResource {
                     cer.sourceField,
                     cer.targetField,
                     cer.extractorConfig,
-                    getCurrentUser().getName(),
+                    cer.creatorUserId,
                     loadConverters(cer.converters),
                     Extractor.ConditionType.valueOf(cer.conditionType.toUpperCase()),
                     cer.conditionValue
@@ -148,6 +158,8 @@ public class ExtractorsResource extends RestResource {
             LOG.error("Cannot create extractor. Missing configuration.", e);
             throw new WebApplicationException(e, Response.Status.BAD_REQUEST);
         }
+
+        input.addExtractor(id, extractor);
 
         Input mongoInput = inputService.find(input.getPersistId());
         try {
@@ -231,24 +243,19 @@ public class ExtractorsResource extends RestResource {
             throw new javax.ws.rs.NotFoundException("Couldn't find input " + inputId);
         }
 
-        // Remove from Mongo.
-        final Input mongoInput = inputService.find(input.getPersistId());
-        final List<Extractor> extractorList = inputService.getExtractors(mongoInput);
-        final ImmutableMap<String, Extractor> idMap =
-                Maps.uniqueIndex(extractorList, new Function<Extractor, String>() {
-                    @Override
-                    public String apply(
-                            Extractor input) {
-                        return input.getId();
-                    }
-                });
-        if (!idMap.containsKey(extractorId)) {
+        if (input.getExtractors().get(extractorId) == null) {
             LOG.error("Extractor <{}> not found.", extractorId);
             throw new javax.ws.rs.NotFoundException("Couldn't find extractor " + extractorId);
         }
+
+        // Remove from Mongo.
+        final Input mongoInput = inputService.find(input.getPersistId());
         inputService.removeExtractor(mongoInput, extractorId);
 
-        final String msg = "Deleted extractor <" + extractorId + "> of type [" + idMap.get(extractorId).getType() + "] " +
+        final Extractor extractor = input.getExtractors().get(extractorId);
+        input.getExtractors().remove(extractorId);
+
+        final String msg = "Deleted extractor <" + extractorId + "> of type [" + extractor.getType() + "] " +
                 "from input <" + inputId + ">.";
         LOG.info(msg);
         activityWriter.write(new Activity(msg, InputsResource.class));
