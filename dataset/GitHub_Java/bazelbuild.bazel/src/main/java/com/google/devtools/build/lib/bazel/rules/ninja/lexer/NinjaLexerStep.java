@@ -46,7 +46,7 @@ import java.util.function.Predicate;
 public class NinjaLexerStep {
   private static final ImmutableSortedSet<Byte> IDENTIFIER_SYMBOLS =
       createByteSet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-");
-  private static final ImmutableSortedSet<Byte> TEXT_STOPPERS = createByteSet("\n\r \t#$:\u0000");
+  private static final ImmutableSortedSet<Byte> TEXT_STOPPERS = createByteSet("\n\r \t#$=:|\u0000");
 
   private static ImmutableSortedSet<Byte> createByteSet(String variants) {
     ImmutableSortedSet.Builder<Byte> builder = ImmutableSortedSet.naturalOrder();
@@ -62,6 +62,8 @@ public class NinjaLexerStep {
 
   private boolean seenZero;
   private String error;
+  // Used to cut the starting escape symbol from the resulting text fragment.
+  private int skipStart = 0;
   private int end;
 
   /**
@@ -100,7 +102,7 @@ public class NinjaLexerStep {
 
   /** Return step bytes, taking into account possible escaped symbol offset. */
   public byte[] getBytes() {
-    return fragment.getBytes(position, end);
+    return fragment.getBytes(position + skipStart, end);
   }
 
   public int getPosition() {
@@ -116,7 +118,7 @@ public class NinjaLexerStep {
   }
 
   public int getStart() {
-    return position;
+    return position + skipStart;
   }
 
   public int getEnd() {
@@ -211,6 +213,7 @@ public class NinjaLexerStep {
   public boolean tryReadEscapedLiteral() {
     if (checkForward(1, '$', ':', ' ')) {
       // Escaped literal.
+      skipStart = 1;
       end = position + 2;
       return true;
     }
