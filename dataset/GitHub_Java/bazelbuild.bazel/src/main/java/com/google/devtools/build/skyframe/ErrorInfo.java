@@ -14,15 +14,14 @@
 package com.google.devtools.build.skyframe;
 
 import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.skyframe.SkyFunctionException.ReifiedSkyFunctionException;
 import java.util.Collection;
-import java.util.Objects;
 import javax.annotation.Nullable;
 
 /**
@@ -124,66 +123,6 @@ public class ErrorInfo {
     this.isDirectlyTransient = isDirectlyTransient;
     this.isTransitivelyTransient = isTransitivelyTransient;
     this.isCatastrophic = isCatostrophic;
-  }
-
-  @Override
-  public boolean equals(Object obj) {
-    if (this == obj) {
-      return true;
-    }
-    if (!(obj instanceof ErrorInfo)) {
-      return false;
-    }
-
-    ErrorInfo other = (ErrorInfo) obj;
-    if (rootCauses != other.rootCauses) {
-      if (rootCauses == null || other.rootCauses == null) {
-        return false;
-      }
-      if (!rootCauses.shallowEquals(other.rootCauses)) {
-        return false;
-      }
-    }
-
-    if (!Objects.equals(cycles, other.cycles)) {
-      return false;
-    }
-
-    // Don't check the specific exception as most exceptions don't implement equality but at least
-    // check their types and messages are the same.
-    if (exception != other.exception) {
-      if (exception == null || other.exception == null) {
-        return false;
-      }
-      // Class objects are singletons with a single class loader.
-      if (exception.getClass() != other.exception.getClass()) {
-        return false;
-      }
-      if (!Objects.equals(exception.getMessage(), other.exception.getMessage())) {
-        return false;
-      }
-    }
-
-    if (!Objects.equals(rootCauseOfException, other.rootCauseOfException)) {
-      return false;
-    }
-
-    return isDirectlyTransient == other.isDirectlyTransient
-        && isTransitivelyTransient == other.isTransitivelyTransient
-        && isCatastrophic == other.isCatastrophic;
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hash(
-        exception == null ? null : exception.getClass(),
-        exception == null ? "" : exception.getMessage(),
-        rootCauseOfException,
-        cycles,
-        isDirectlyTransient,
-        isTransitivelyTransient,
-        isCatastrophic,
-        rootCauses == null ? 0 : rootCauses.shallowHashCode());
   }
 
   @Override
