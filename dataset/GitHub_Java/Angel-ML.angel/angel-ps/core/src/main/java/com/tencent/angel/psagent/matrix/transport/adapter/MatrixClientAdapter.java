@@ -19,7 +19,11 @@ package com.tencent.angel.psagent.matrix.transport.adapter;
 import com.tencent.angel.PartitionKey;
 import com.tencent.angel.ml.math.TVector;
 import com.tencent.angel.ml.matrix.MatrixMeta;
-import com.tencent.angel.ml.matrix.psf.get.base.*;
+import com.tencent.angel.ml.matrix.psf.get.base.GetFunc;
+import com.tencent.angel.ml.matrix.psf.get.base.GetParam;
+import com.tencent.angel.ml.matrix.psf.get.base.GetResult;
+import com.tencent.angel.ml.matrix.psf.get.base.PartitionGetParam;
+import com.tencent.angel.ml.matrix.psf.get.base.PartitionGetResult;
 import com.tencent.angel.ml.matrix.psf.update.enhance.PartitionUpdateParam;
 import com.tencent.angel.ml.matrix.psf.update.enhance.UpdateFunc;
 import com.tencent.angel.ml.matrix.psf.update.enhance.UpdateParam;
@@ -37,16 +41,22 @@ import com.tencent.angel.psagent.matrix.storage.MatrixStorage;
 import com.tencent.angel.psagent.matrix.transport.FutureResult;
 import com.tencent.angel.psagent.matrix.transport.MatrixTransportClient;
 import com.tencent.angel.psagent.task.TaskContext;
+
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.ints.IntIterator;
 import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
 import java.util.*;
 import java.util.Map.Entry;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -140,13 +150,9 @@ public class MatrixClientAdapter {
    */
   public TVector getRow(int matrixId, int rowIndex, int clock) throws InterruptedException,
       ExecutionException {
-    LOG.debug("start to getRow request, matrix=" + matrixId + ", rowIndex=" + rowIndex + ", clock=" + clock);
-    long startTs = System.currentTimeMillis();
     // Wait until the clock value of this row is greater than or equal to the value
     waitForClock(matrixId, rowIndex, clock);
-    LOG.debug("getRow wait clock time=" + (System.currentTimeMillis() - startTs));
 
-    startTs = System.currentTimeMillis();
     // Get partitions for this row
     List<PartitionKey> partList =
         PSAgentContext.get().getMatrixPartitionRouter().getPartitionKeyList(matrixId, rowIndex);
@@ -191,7 +197,7 @@ public class MatrixClientAdapter {
 
       // Wait the final result
       row = responseCache.getMergedResult().get();
-      LOG.debug("get row use time=" + (System.currentTimeMillis() - startTs));
+
       // Put it to the matrix cache
       matrixStorage.addRow(rowIndex, row);
       return row;
@@ -247,13 +253,10 @@ public class MatrixClientAdapter {
         new FlushRequest(taskContext.getMatrixClock(matrixId), taskContext.getIndex(), matrixId,
             matrixOpLog, updateClock);
 
-    LOG.debug("start to flush update for matrix=" + matrixId + ", taskIndex=" + taskContext.getIndex());
-    long startTs = System.currentTimeMillis();
     // Split the matrix oplog according to the matrix partitions
     if (matrixOpLog != null) {
       matrixOpLog.split(psUpdateData);
     }
-    LOG.debug("split use time=" + (System.currentTimeMillis() - startTs));
 
     // If need update clock, we should send requests to all partitions
     if (updateClock) {
@@ -376,6 +379,7 @@ public class MatrixClientAdapter {
     List<PartitionGetParam> partParams = param.split();
     int size = partParams.size();
 
+    LOG.debug("get psf request " + func + " start, rpc request number=" + size);
     List<Future<PartitionGetResult>> futureResultList =
         new ArrayList<Future<PartitionGetResult>>(size);
     List<PartitionGetResult> resultList = new ArrayList<PartitionGetResult>(size);
@@ -383,6 +387,7 @@ public class MatrixClientAdapter {
     for (int i = 0; i < size; i++) {
       futureResultList.add(matrixClient.get(func, partParams.get(i)));
     }
+
     for (int i = 0; i < size; i++) {
       resultList.add(futureResultList.get(i).get());
     }
@@ -413,20 +418,12 @@ public class MatrixClientAdapter {
   class MergeDispatcher extends Thread {
     @Override
     public void run() {
-      int checkTime = 0;
       try {
         while (!stopped.get() && !Thread.interrupted()) {
           Iterator<Entry<UserRequest, PartitionResponseCache>> iter =
               requestToResponseMap.entrySet().iterator();
           while (iter.hasNext()) {
             Entry<UserRequest, PartitionResponseCache> entry = iter.next();
-
-            if(LOG.isDebugEnabled()) {
-              if(checkTime % 100 == 0) {
-                LOG.debug("waiting user request=" + entry.getKey() + ", result cache=" + entry.getValue());
-              }
-            }
-
             switch (entry.getKey().type) {
               case GET_ROW: {
                 GetRowPipelineCache cache = (GetRowPipelineCache) entry.getValue();
@@ -488,7 +485,6 @@ public class MatrixClientAdapter {
           }
 
           Thread.sleep(10);
-          checkTime++;
         }
       } catch (InterruptedException ie) {
         LOG.info("interupted");
