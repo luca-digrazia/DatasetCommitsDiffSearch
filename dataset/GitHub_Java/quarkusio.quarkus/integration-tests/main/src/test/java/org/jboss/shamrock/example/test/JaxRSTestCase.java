@@ -18,16 +18,13 @@ package org.jboss.shamrock.example.test;
 
 import static org.hamcrest.Matchers.is;
 
-import java.util.Collections;
-
-import org.jboss.shamrock.test.ShamrockTest;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.jboss.shamrock.test.junit.ShamrockTest;
+import org.junit.jupiter.api.Test;
 
 import io.restassured.RestAssured;
 import io.restassured.parsing.Parser;
 
-@RunWith(ShamrockTest.class)
+@ShamrockTest
 public class JaxRSTestCase {
 
     @Test
@@ -103,5 +100,26 @@ public class JaxRSTestCase {
                         "[0].collectionTypes[0].value", is("collection type"),
                         "[0].subComponent.data.size()", is(1),
                         "[0].subComponent.data[0]", is("sub component list value"));
+    }
+
+    @Test
+    public void testSubclass() {
+        RestAssured.when().get("/test/subclass").then()
+                .body("name", is("my name"),
+                        "value", is("my value"));
+    }
+
+    @Test
+    public void testImplementor() {
+        RestAssured.when().get("/test/implementor").then()
+                .body("name", is("my name"),
+                        "value", is("my value"));
+    }
+
+    @Test
+    public void testResponse() {
+        RestAssured.when().get("/test/response").then()
+                .body("name", is("my entity name"),
+                        "value", is("my entity value"));
     }
 }
