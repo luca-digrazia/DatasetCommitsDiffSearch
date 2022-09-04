@@ -37,7 +37,7 @@ public class StreamCache extends SimpleObjectCache<List<Stream>> {
 
     private StreamCache() { }
 
-    public static synchronized StreamCache getInstance() {
+    public synchronized static StreamCache getInstance() {
         if (instance == null) {
             instance = new StreamCache();
         }
