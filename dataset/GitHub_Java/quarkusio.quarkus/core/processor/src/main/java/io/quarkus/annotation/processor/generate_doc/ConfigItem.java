@@ -1,80 +1,112 @@
 package io.quarkus.annotation.processor.generate_doc;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
 import java.util.Objects;
+import java.util.regex.Matcher;
 
-public class ConfigItem implements Comparable<ConfigItem> {
-    private static final Map<String, String> PRIMITIVE_DEFAULT_VALUES = new HashMap<>();
+import io.quarkus.annotation.processor.Constants;
 
-    static {
-        PRIMITIVE_DEFAULT_VALUES.put("int", "0");
-        PRIMITIVE_DEFAULT_VALUES.put("long", "0l");
-        PRIMITIVE_DEFAULT_VALUES.put("float", "0f");
-        PRIMITIVE_DEFAULT_VALUES.put("double", "0d");
-        PRIMITIVE_DEFAULT_VALUES.put("boolean", "false");
-    }
+final public class ConfigItem implements Comparable<ConfigItem> {
+    private String type;
+    private List<String> acceptedValues;
+    private String key;
+    private String configDoc;
+    private boolean withinAMap;
+    private String defaultValue;
+    private ConfigPhase configPhase;
+    private String javaDocSiteLink;
 
-    private final String type;
-    private final String javaDocKey;
-    private final String propertyName;
-    private final String defaultValue;
-    private final ConfigVisibility visibility;
-
-    public ConfigItem(String propertyName, String javaDocKey, String type, String defaultValue,
-            ConfigVisibility visibility) {
-        this.type = type;
-        this.javaDocKey = javaDocKey;
-        this.propertyName = propertyName;
-        this.defaultValue = defaultValue;
-        this.visibility = visibility;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        ConfigItem that = (ConfigItem) o;
-        return Objects.equals(type, that.type) &&
-                Objects.equals(javaDocKey, that.javaDocKey) &&
-                Objects.equals(propertyName, that.propertyName) &&
-                Objects.equals(defaultValue, that.defaultValue) &&
-                Objects.equals(visibility, that.visibility);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(type, javaDocKey, propertyName, defaultValue, visibility);
+    public ConfigItem() {
     }
 
     @Override
     public String toString() {
         return "ConfigItem{" +
                 "type='" + type + '\'' +
-                ", javaDocKey='" + javaDocKey + '\'' +
-                ", propertyName='" + propertyName + '\'' +
+                ", acceptedValues=" + acceptedValues +
+                ", key='" + key + '\'' +
+                ", configDoc='" + configDoc + '\'' +
+                ", withinAMap=" + withinAMap +
                 ", defaultValue='" + defaultValue + '\'' +
-                ", visibility='" + visibility + '\'' +
+                ", configPhase=" + configPhase +
+                ", javaDocSiteLink='" + javaDocSiteLink + '\'' +
                 '}';
     }
 
     @Override
-    public int compareTo(ConfigItem o) {
-        return propertyName.compareTo(o.propertyName);
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        ConfigItem that = (ConfigItem) o;
+        return withinAMap == that.withinAMap &&
+                Objects.equals(type, that.type) &&
+                Objects.equals(acceptedValues, that.acceptedValues) &&
+                Objects.equals(key, that.key) &&
+                Objects.equals(configDoc, that.configDoc) &&
+                Objects.equals(defaultValue, that.defaultValue) &&
+                configPhase == that.configPhase &&
+                Objects.equals(javaDocSiteLink, that.javaDocSiteLink);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(type, acceptedValues, key, configDoc, withinAMap, defaultValue, configPhase, javaDocSiteLink);
+    }
+
+    public boolean hasType() {
+        return type != null && !type.isEmpty();
     }
 
     public String getType() {
         return type;
     }
 
-    public String getJavaDocKey() {
-        return javaDocKey;
+    public void setType(String type) {
+        this.type = type;
     }
 
-    public String getPropertyName() {
-        return propertyName;
+    public boolean hasAcceptedValues() {
+        return acceptedValues != null && !acceptedValues.isEmpty();
+    }
+
+    public List<String> getAcceptedValues() {
+        return acceptedValues;
+    }
+
+    public void setAcceptedValues(List<String> acceptedValues) {
+        this.acceptedValues = acceptedValues;
+    }
+
+    public String getKey() {
+        return key;
+    }
+
+    public void setKey(String key) {
+        this.key = key;
+    }
+
+    public String getConfigDoc() {
+        return configDoc;
+    }
+
+    public void setConfigDoc(String configDoc) {
+        this.configDoc = configDoc;
+    }
+
+    public String getJavaDocSiteLink() {
+        if (javaDocSiteLink == null) {
+            return Constants.EMPTY;
+        }
+
+        return javaDocSiteLink;
+    }
+
+    public void setJavaDocSiteLink(String javaDocSiteLink) {
+        this.javaDocSiteLink = javaDocSiteLink;
     }
 
     public String getDefaultValue() {
@@ -82,10 +114,69 @@ public class ConfigItem implements Comparable<ConfigItem> {
             return defaultValue;
         }
 
-        return PRIMITIVE_DEFAULT_VALUES.containsKey(type) ? PRIMITIVE_DEFAULT_VALUES.get(type) : "";
+        final String defaultValue = DocGeneratorUtil.getPrimitiveDefaultValue(type);
+
+        if (defaultValue == null) {
+            return Constants.EMPTY;
+        }
+
+        return defaultValue;
     }
 
-    public ConfigVisibility getVisibility() {
-        return visibility;
+    public void setDefaultValue(String defaultValue) {
+        this.defaultValue = defaultValue;
+    }
+
+    public ConfigPhase getConfigPhase() {
+        return configPhase;
+    }
+
+    public void setConfigPhase(ConfigPhase configPhase) {
+        this.configPhase = configPhase;
+    }
+
+    public void setWithinAMap(boolean withinAMap) {
+        this.withinAMap = withinAMap;
+    }
+
+    @SuppressWarnings("unused")
+    public boolean isWithinAMap() {
+        return withinAMap;
+    }
+
+    String computeTypeSimpleName() {
+        String unwrappedType = DocGeneratorUtil.unbox(type);
+
+        Matcher matcher = Constants.CLASS_NAME_PATTERN.matcher(unwrappedType);
+        if (matcher.find()) {
+            return matcher.group(1);
+        }
+
+        return unwrappedType;
+    }
+
+    /**
+     *
+     * Map config will be at the end of generated doc.
+     * Order build time config first
+     * Otherwise maintain source code order.
+     */
+    @Override
+    public int compareTo(ConfigItem item) {
+        if (withinAMap) {
+            if (item.withinAMap) {
+                return 0;
+            }
+            return 1;
+        } else if (item.withinAMap) {
+            return -1;
+        }
+
+        int phaseComparison = ConfigPhase.COMPARATOR.compare(this.configPhase, item.configPhase);
+        if (phaseComparison == 0) {
+            return 0;
+        }
+
+        return phaseComparison;
     }
 }

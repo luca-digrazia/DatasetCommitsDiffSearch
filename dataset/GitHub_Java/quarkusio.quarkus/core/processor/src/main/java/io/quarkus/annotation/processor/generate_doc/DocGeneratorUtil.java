@@ -1,6 +1,5 @@
 package io.quarkus.annotation.processor.generate_doc;
 
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -235,15 +234,5 @@ class DocGeneratorUtil {
         }
 
         return acceptedValues.stream().collect(Collectors.joining("`, `", "`", "`"));
-    }
-
-    static String getTypeFormatInformationNote(ConfigItem configItem) {
-        if (configItem.getType().equals(Duration.class.getName())) {
-            return Constants.DURATION_INFORMATION;
-        } else if (configItem.getType().equals(Constants.MEMORY_SIZE_TYPE)) {
-            return Constants.MEMORY_SIZE_INFORMATION;
-        }
-
-        return Constants.EMPTY;
     }
 }
