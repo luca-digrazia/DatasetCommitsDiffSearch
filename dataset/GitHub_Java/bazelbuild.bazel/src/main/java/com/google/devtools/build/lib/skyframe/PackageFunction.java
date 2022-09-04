@@ -41,18 +41,16 @@ import com.google.devtools.build.lib.packages.BuildFileNotFoundException;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
 import com.google.devtools.build.lib.packages.Globber;
 import com.google.devtools.build.lib.packages.InvalidPackageNameException;
-import com.google.devtools.build.lib.packages.LegacyGlobber;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
-import com.google.devtools.build.lib.packages.PackageValidator.InvalidPackageException;
+import com.google.devtools.build.lib.packages.PackageFactory.LegacyGlobber;
 import com.google.devtools.build.lib.packages.RuleVisibility;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.WorkspaceFileValue;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.repository.ExternalPackageUtil;
 import com.google.devtools.build.lib.rules.repository.WorkspaceFileHelper;
 import com.google.devtools.build.lib.skyframe.GlobValue.InvalidGlobPatternException;
 import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction.SkylarkImportFailedException;
@@ -294,14 +292,26 @@ public class PackageFunction implements SkyFunction {
    * @throws PackageFunctionException if there is an error computing the workspace file or adding
    *     its rules to the //external package.
    */
-  private SkyValue getExternalPackage(Environment env)
+  private SkyValue getExternalPackage(Environment env, Root packageLookupPath)
       throws PackageFunctionException, InterruptedException {
     StarlarkSemantics starlarkSemantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
-    RootedPath workspacePath = ExternalPackageUtil.findWorkspaceFile(env);
-    if (env.valuesMissing()) {
+    if (starlarkSemantics == null) {
       return null;
     }
-
+    RootedPath workspacePath;
+    try {
+      workspacePath = WorkspaceFileHelper.getWorkspaceRootedFile(packageLookupPath, env);
+      if (workspacePath == null) {
+        return null;
+      }
+    } catch (IOException e) {
+      throw new PackageFunctionException(
+          new NoSuchPackageException(
+              LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER,
+              "Could not determine workspace file (\"WORKSPACE.bazel\" or \"WORKSPACE\"): "
+                  + e.getMessage()),
+          Transience.PERSISTENT);
+    }
     SkyKey workspaceKey = ExternalPackageFunction.key(workspacePath);
     PackageValue workspace = null;
     try {
@@ -332,15 +342,11 @@ public class PackageFunction implements SkyFunction {
     }
 
     if (packageFactory != null) {
-      try {
-        packageFactory.afterDoneLoadingPackage(
-            pkg,
-            starlarkSemantics,
-            // This is a lie.
-            /*loadTimeNanos=*/ 0L);
-      } catch (InvalidPackageException e) {
-        throw new PackageFunctionException(e, Transience.PERSISTENT);
-      }
+      packageFactory.afterDoneLoadingPackage(
+          pkg,
+          starlarkSemantics,
+          // This is a lie.
+          /*loadTimeNanos=*/ 0L);
     }
     return new PackageValue(pkg);
   }
@@ -349,9 +355,6 @@ public class PackageFunction implements SkyFunction {
   public SkyValue compute(SkyKey key, Environment env) throws PackageFunctionException,
       InterruptedException {
     PackageIdentifier packageId = (PackageIdentifier) key.argument();
-    if (packageId.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
-      return getExternalPackage(env);
-    }
 
     SkyKey packageLookupKey = PackageLookupValue.key(packageId);
     PackageLookupValue packageLookupValue;
@@ -391,6 +394,9 @@ public class PackageFunction implements SkyFunction {
       }
     }
 
+    if (packageId.equals(LabelConstants.EXTERNAL_PACKAGE_IDENTIFIER)) {
+      return getExternalPackage(env, packageLookupValue.getRoot());
+    }
     WorkspaceNameValue workspaceNameValue =
         (WorkspaceNameValue) env.getValue(WorkspaceNameValue.key());
 
@@ -537,13 +543,7 @@ public class PackageFunction implements SkyFunction {
       env.getListener().post(post);
     }
 
-    try {
-      packageFactory.afterDoneLoadingPackage(
-          pkg, starlarkSemantics, packageCacheEntry.loadTimeNanos);
-    } catch (InvalidPackageException e) {
-      throw new PackageFunctionException(e, Transience.PERSISTENT);
-    }
-
+    packageFactory.afterDoneLoadingPackage(pkg, starlarkSemantics, packageCacheEntry.loadTimeNanos);
     return new PackageValue(pkg);
   }
 
@@ -907,23 +907,23 @@ public class PackageFunction implements SkyFunction {
   }
 
   /**
-   * A {@link Globber} implemented on top of skyframe that falls back to a {@link LegacyGlobber} on
-   * a skyframe cache-miss. This way we don't require a skyframe restart after a call to {@link
-   * Globber#runAsync} and before/during a call to {@link Globber#fetch}.
+   * A {@link Globber} implemented on top of skyframe that falls back to a
+   * {@link PackageFactory.LegacyGlobber} on a skyframe cache-miss. This way we don't require a
+   * skyframe restart after a call to {@link Globber#runAsync} and before/during a call to
+   * {@link Globber#fetch}.
    *
    * <p>There are three advantages to this hybrid approach over the more obvious approach of solely
-   * using a {@link LegacyGlobber}:
-   *
+   * using a {@link PackageFactory.LegacyGlobber}:
    * <ul>
-   *   <li>We trivially have the proper Skyframe {@link GlobValue} deps, whereas we would need to
-   *       request them after-the-fact if we solely used a {@link LegacyGlobber}.
-   *   <li>We don't need to re-evaluate globs whose expression hasn't changed (e.g. in the common
-   *       case of a BUILD file edit that doesn't change a glob expression), whereas legacy package
-   *       loading with a {@link LegacyGlobber} would naively re-evaluate globs when re-evaluating
-   *       the BUILD file.
-   *   <li>We don't need to re-evaluate invalidated globs *twice* (the single re-evaluation via our
-   *       GlobValue deps is sufficient and optimal). See above for why the second evaluation would
-   *       happen.
+   * <li>We trivially have the proper Skyframe {@link GlobValue} deps, whereas we would need to
+   * request them after-the-fact if we solely used a {@link PackageFactory.LegacyGlobber}.
+   * <li>We don't need to re-evaluate globs whose expression hasn't changed (e.g. in the common case
+   * of a BUILD file edit that doesn't change a glob expression), whereas legacy package loading
+   * with a {@link PackageFactory.LegacyGlobber} would naively re-evaluate globs when re-evaluating
+   * the BUILD file.
+   * <li>We don't need to re-evaluate invalidated globs *twice* (the single re-evaluation via our
+   * GlobValue deps is sufficient and optimal). See above for why the second evaluation would
+   * happen.
    * </ul>
    */
   private static class SkyframeHybridGlobber implements GlobberWithSkyframeGlobDeps {
@@ -1034,8 +1034,8 @@ public class PackageFunction implements SkyFunction {
     /**
      * A {@link Globber.Token} that encapsulates the result of a single {@link Globber#runAsync}
      * call via the fetching of some globs from skyframe, and some other globs via a{@link
-     * LegacyGlobber}. 'exclude' patterns are evaluated using {@link UnixGlob#removeExcludes} after
-     * merging legacy and skyframe glob results in {@link #resolve}.
+     * PackageFactory.LegacyGlobber}. 'exclude' patterns are evaluated using {@link
+     * UnixGlob#removeExcludes} after merging legacy and skyframe glob results in {@link #resolve}.
      */
     private static class HybridToken extends Globber.Token {
       // The result of the Skyframe lookup for all the needed glob patterns.
@@ -1084,11 +1084,7 @@ public class PackageFunction implements SkyFunction {
         if (legacyIncludesToken != null) {
           matches.addAll(delegate.fetchUnsorted(legacyIncludesToken));
         }
-        try {
-          UnixGlob.removeExcludes(matches, excludes);
-        } catch (UnixGlob.BadPattern ex) {
-          throw new BadGlobException(ex.getMessage());
-        }
+        UnixGlob.removeExcludes(matches, excludes);
         List<String> result = new ArrayList<>(matches);
 
         if (!allowEmpty && result.isEmpty()) {
