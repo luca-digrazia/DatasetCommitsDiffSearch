@@ -25,13 +25,9 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.eventbus.Subscribe;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
-import com.google.devtools.build.lib.actions.ActionExecutedEvent;
-import com.google.devtools.build.lib.actions.ActionExecutedEvent.ErrorTiming;
-import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ArtifactRoot;
 import com.google.devtools.build.lib.actions.EventReportingArtifacts;
-import com.google.devtools.build.lib.actions.util.ActionsTestUtil;
+import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.BlazeDirectories;
 import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
@@ -51,7 +47,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventWithOrderConstra
 import com.google.devtools.build.lib.buildeventstream.GenericBuildEvent;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.buildeventstream.ProgressEvent;
-import com.google.devtools.build.lib.buildeventstream.transports.BuildEventStreamOptions;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.buildevent.BuildCompleteEvent;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -60,7 +55,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetView;
 import com.google.devtools.build.lib.testutil.FoundationTestCase;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import com.google.devtools.build.lib.vfs.Root;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -79,14 +73,6 @@ import org.mockito.MockitoAnnotations;
 /** Tests {@link BuildEventStreamer}. */
 @RunWith(JUnit4.class)
 public class BuildEventStreamerTest extends FoundationTestCase {
-
-  private static final ActionExecutedEvent SUCCESSFUL_ACTION_EXECUTED_EVENT =
-      new ActionExecutedEvent(
-          new ActionsTestUtil.NullAction(),
-          /* exception= */ null,
-          /* stdout= */ null,
-          /* stderr= */ null,
-          ErrorTiming.NO_ERROR);
 
   private static class RecordingBuildEventTransport implements BuildEventTransport {
     private final List<BuildEvent> events = new ArrayList<>();
@@ -534,7 +520,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
 
   private Artifact makeArtifact(String pathString) {
     Path path = outputBase.getRelative(PathFragment.create(pathString));
-    return new Artifact(path, ArtifactRoot.asSourceRoot(Root.fromPath(outputBase)));
+    return new Artifact(path, Root.asSourceRoot(outputBase));
   }
 
   @Test
@@ -633,9 +619,6 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     BuildEventStreamer streamer =
         new BuildEventStreamer(ImmutableSet.<BuildEventTransport>of(transport), reporter);
 
-    BuildOptions defaultBuildOptions =
-        BuildOptions.of(
-            ImmutableList.<Class<? extends FragmentOptions>>of(BuildConfiguration.Options.class));
     BuildEvent startEvent =
         new GenericBuildEvent(
             testId("Initial"),
@@ -643,19 +626,17 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     BuildConfiguration configuration =
         new BuildConfiguration(
             new BlazeDirectories(
-                new ServerDirectories(outputBase, outputBase, outputBase),
-                rootDirectory,
-                "productName"),
-            /* fragmentsMap= */ ImmutableMap
+                new ServerDirectories(outputBase, outputBase), rootDirectory, "productName"),
+            ImmutableMap
                 .<Class<? extends BuildConfiguration.Fragment>, BuildConfiguration.Fragment>of(),
-            defaultBuildOptions,
-            BuildOptions.diffForReconstruction(defaultBuildOptions, defaultBuildOptions),
-            /* reservedActionMnemonics= */ ImmutableSet.of(),
+            BuildOptions.of(
+                ImmutableList.<Class<? extends FragmentOptions>>of(
+                    BuildConfiguration.Options.class)),
             "workspace");
     BuildEvent firstWithConfiguration =
-        new GenericConfigurationEvent(testId("first"), configuration.toBuildEvent());
+        new GenericConfigurationEvent(testId("first"), configuration);
     BuildEvent secondWithConfiguration =
-        new GenericConfigurationEvent(testId("second"), configuration.toBuildEvent());
+        new GenericConfigurationEvent(testId("second"), configuration);
 
     streamer.buildEvent(startEvent);
     streamer.buildEvent(firstWithConfiguration);
@@ -666,7 +647,7 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     assertThat(allEventsSeen).hasSize(7);
     assertThat(allEventsSeen.get(0).getEventId()).isEqualTo(startEvent.getEventId());
     assertThat(allEventsSeen.get(1).getEventId()).isEqualTo(ProgressEvent.INITIAL_PROGRESS_UPDATE);
-    assertThat(allEventsSeen.get(2)).isEqualTo(configuration.toBuildEvent());
+    assertThat(allEventsSeen.get(2)).isEqualTo(configuration);
     assertThat(allEventsSeen.get(3).getEventId()).isEqualTo(BuildEventId.progressId(1));
     assertThat(allEventsSeen.get(4)).isEqualTo(firstWithConfiguration);
     assertThat(allEventsSeen.get(5).getEventId()).isEqualTo(BuildEventId.progressId(2));
@@ -885,62 +866,5 @@ public class BuildEventStreamerTest extends FoundationTestCase {
     assertThat(eventsSeen.get(1).getEventId()).isEqualTo(BuildEventId.buildFinished());
     assertThat(ImmutableSet.of(eventsSeen.get(2).getEventId(), eventsSeen.get(3).getEventId()))
         .isEqualTo(ImmutableSet.of(lateId, ProgressEvent.INITIAL_PROGRESS_UPDATE));
-  }
-
-  @Test
-  public void testSuccessfulActionsAreNotPublishedByDefault() {
-    EventBusHandler handler = new EventBusHandler();
-    eventBus.register(handler);
-
-    BuildEventStreamOptions options = new BuildEventStreamOptions();
-
-    RecordingBuildEventTransport transport = new RecordingBuildEventTransport();
-    BuildEventStreamer streamer =
-        new BuildEventStreamer(ImmutableSet.<BuildEventTransport>of(transport), reporter, options);
-
-    ActionExecutedEvent failedActionExecutedEvent =
-        new ActionExecutedEvent(
-            new ActionsTestUtil.NullAction(),
-            new ActionExecutionException("Exception", /* action= */ null, /* catastrophe= */ false),
-            /* stdout= */ null,
-            /* stderr= */ null,
-            ErrorTiming.BEFORE_EXECUTION);
-
-    streamer.buildEvent(SUCCESSFUL_ACTION_EXECUTED_EVENT);
-    streamer.buildEvent(failedActionExecutedEvent);
-
-    List<BuildEvent> transportedEvents = transport.getEvents();
-
-    assertThat(transportedEvents).doesNotContain(SUCCESSFUL_ACTION_EXECUTED_EVENT);
-    assertThat(transportedEvents).contains(failedActionExecutedEvent);
-  }
-
-  @Test
-  public void testSuccessfulActionsCanBePublished() {
-    EventBusHandler handler = new EventBusHandler();
-    eventBus.register(handler);
-
-    BuildEventStreamOptions options = new BuildEventStreamOptions();
-    options.publishAllActions = true;
-
-    RecordingBuildEventTransport transport = new RecordingBuildEventTransport();
-    BuildEventStreamer streamer =
-        new BuildEventStreamer(ImmutableSet.<BuildEventTransport>of(transport), reporter, options);
-
-    ActionExecutedEvent failedActionExecutedEvent =
-        new ActionExecutedEvent(
-            new ActionsTestUtil.NullAction(),
-            new ActionExecutionException("Exception", /* action= */ null, /* catastrophe= */ false),
-            /* stdout= */ null,
-            /* stderr= */ null,
-            ErrorTiming.BEFORE_EXECUTION);
-
-    streamer.buildEvent(SUCCESSFUL_ACTION_EXECUTED_EVENT);
-    streamer.buildEvent(failedActionExecutedEvent);
-
-    List<BuildEvent> transportedEvents = transport.getEvents();
-
-    assertThat(transportedEvents).contains(SUCCESSFUL_ACTION_EXECUTED_EVENT);
-    assertThat(transportedEvents).contains(failedActionExecutedEvent);
   }
 }
