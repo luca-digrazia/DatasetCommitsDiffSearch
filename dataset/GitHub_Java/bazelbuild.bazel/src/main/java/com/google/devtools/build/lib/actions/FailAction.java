@@ -14,14 +14,22 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.common.collect.ImmutableList;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
+import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
+import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.server.FailureDetails;
+import com.google.devtools.build.lib.server.FailureDetails.FailAction.Code;
+import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
+import com.google.devtools.build.lib.util.DetailedExitCode;
+import com.google.devtools.build.lib.util.Fingerprint;
+import javax.annotation.Nullable;
 
 /**
- * FailAction is an Action that always fails to execute.  (Used as scaffolding
- * for rules we haven't yet implemented.  Also useful for testing.)
+ * FailAction is an Action that always fails to execute. (Used as scaffolding for rules we haven't
+ * yet implemented. Also useful for testing.)
  */
-@ThreadSafe
+@Immutable
 public final class FailAction extends AbstractAction {
 
   private static final String GUID = "626cb78a-810f-4af3-979c-ee194955f04c";
@@ -29,7 +37,7 @@ public final class FailAction extends AbstractAction {
   private final String errorMessage;
 
   public FailAction(ActionOwner owner, Iterable<Artifact> outputs, String errorMessage) {
-    super(owner, ImmutableList.<Artifact>of(), outputs);
+    super(owner, NestedSetBuilder.emptySet(Order.STABLE_ORDER), outputs);
     this.errorMessage = errorMessage;
   }
 
@@ -38,32 +46,45 @@ public final class FailAction extends AbstractAction {
     return null;
   }
 
-  @Override
-  public void execute(
-      ActionExecutionContext actionExecutionContext)
-  throws ActionExecutionException {
-    throw new ActionExecutionException(errorMessage, this, false);
+  public String getErrorMessage() {
+    return errorMessage;
   }
 
   @Override
-  public ResourceSet estimateResourceConsumption(Executor executor) {
-    return ResourceSet.ZERO;
+  public ActionResult execute(ActionExecutionContext actionExecutionContext)
+      throws ActionExecutionException {
+    throw new ActionExecutionException(
+        errorMessage,
+        this,
+        false,
+        DetailedExitCode.of(
+            FailureDetail.newBuilder()
+                .setMessage(
+                    "FailAction intentional failure: "
+                        + errorMessage
+                        + " caused by "
+                        + getOwner().getLabel())
+                .setFailAction(
+                    FailureDetails.FailAction.newBuilder().setCode(Code.INTENTIONAL_FAILURE))
+                .build()));
   }
 
   @Override
-  protected String computeKey() {
-    return GUID;
+  protected void computeKey(
+      ActionKeyContext actionKeyContext,
+      @Nullable ArtifactExpander artifactExpander,
+      Fingerprint fp) {
+    fp.addString(GUID);
+    // Should never be cached, but just be safe.
+    fp.addString(getErrorMessage());
   }
 
   @Override
   protected String getRawProgressMessage() {
-    return "Building unsupported rule " + getOwner().getLabel()
-        + " located at " + getOwner().getLocation();
-  }
-
-  @Override
-  public String describeStrategy(Executor executor) {
-    return "";
+    return "Reporting failed target "
+        + getOwner().getLabel()
+        + " located at "
+        + getOwner().getLocation();
   }
 
   @Override

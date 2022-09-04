@@ -35,7 +35,6 @@ import com.google.devtools.build.lib.analysis.configuredtargets.InputFileConfigu
 import com.google.devtools.build.lib.analysis.configuredtargets.OutputFileConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.PackageGroupConfiguredTarget;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget;
-import com.google.devtools.build.lib.analysis.constraints.RuleContextConstraintSemantics;
 import com.google.devtools.build.lib.analysis.starlark.StarlarkRuleConfiguredTargetUtil;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailure;
 import com.google.devtools.build.lib.analysis.test.AnalysisFailureInfo;
@@ -68,7 +67,6 @@ import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions;
 import com.google.devtools.build.lib.profiler.memory.CurrentRuleTracker;
 import com.google.devtools.build.lib.rules.cpp.DeniedImplicitOutputMarkerProvider;
-import com.google.devtools.build.lib.server.FailureDetails.FailAction.Code;
 import com.google.devtools.build.lib.skyframe.AspectValueKey;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndData;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
@@ -322,12 +320,6 @@ public final class ConfiguredTargetFactory {
                     configConditions,
                     prerequisiteMap.values()))
             .build();
-
-    ConfiguredTarget incompatibleTarget =
-        RuleContextConstraintSemantics.incompatibleConfiguredTarget(ruleContext, prerequisiteMap);
-    if (incompatibleTarget != null) {
-      return incompatibleTarget;
-    }
 
     List<NestedSet<AnalysisFailure>> analysisFailures = depAnalysisFailures(ruleContext);
     if (!analysisFailures.isEmpty()) {
@@ -595,7 +587,7 @@ public final class ConfiguredTargetFactory {
     if (advertisedProviders.canHaveAnyProvider()) {
       return;
     }
-    for (Class<?> aClass : advertisedProviders.getBuiltinProviders()) {
+    for (Class<?> aClass : advertisedProviders.getNativeProviders()) {
       if (configuredAspect.getProvider(aClass.asSubclass(TransitiveInfoProvider.class)) == null) {
         eventHandler.handle(
             Event.error(
@@ -632,8 +624,7 @@ public final class ConfiguredTargetFactory {
           new FailAction(
               ruleContext.getActionOwner(),
               ruleContext.getOutputArtifacts(),
-              "Missing fragment class: " + missingFragmentClass.getName(),
-              Code.FRAGMENT_CLASS_MISSING));
+              "Missing fragment class: " + missingFragmentClass.getName()));
     }
     builder.add(RunfilesProvider.class, RunfilesProvider.simple(Runfiles.EMPTY));
     try {
