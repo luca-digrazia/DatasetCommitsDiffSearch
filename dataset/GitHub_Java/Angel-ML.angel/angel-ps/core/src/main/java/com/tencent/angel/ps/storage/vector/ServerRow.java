@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
  * compliance with the License. You may obtain a copy of the License at
  *
  * https://opensource.org/licenses/Apache-2.0
@@ -30,11 +30,12 @@ import com.tencent.angel.ps.server.data.request.InitFunc;
 import com.tencent.angel.ps.server.data.request.UpdateOp;
 import com.tencent.angel.utils.StringUtils;
 import io.netty.buffer.ByteBuf;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
+
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 
 /**
  * ServerRow is the storage unit at PS Server when using RowBlock as storage format. Each Row from
@@ -42,7 +43,6 @@ import org.apache.commons.logging.LogFactory;
  * position of this ServerRow.
  */
 public abstract class ServerRow implements Serialize {
-
   private static final Log LOG = LogFactory.getLog(ServerRow.class);
   protected int clock;
   protected int rowId;
@@ -72,10 +72,10 @@ public abstract class ServerRow implements Serialize {
   /**
    * Create a new Server row.
    *
-   * @param rowId the row id
-   * @param rowType row type
-   * @param startCol the start col
-   * @param endCol the end col
+   * @param rowId      the row id
+   * @param rowType    row type
+   * @param startCol   the start col
+   * @param endCol     the end col
    * @param estElemNum the estimated element number, use for sparse vector
    */
   public ServerRow(int rowId, RowType rowType, long startCol, long endCol, long estElemNum) {
@@ -85,14 +85,14 @@ public abstract class ServerRow implements Serialize {
   /**
    * Create a new Server row.
    *
-   * @param rowId the row id
-   * @param rowType row type
-   * @param startCol the start col
-   * @param endCol the end col
+   * @param rowId      the row id
+   * @param rowType    row type
+   * @param startCol   the start col
+   * @param endCol     the end col
    * @param estElemNum the estimated element number, use for sparse vector
    */
   public ServerRow(int rowId, RowType rowType, long startCol, long endCol, long estElemNum,
-      Vector row) {
+    Vector row) {
     this.rowId = rowId;
     this.rowType = rowType;
     this.startCol = startCol;
@@ -248,7 +248,7 @@ public abstract class ServerRow implements Serialize {
    * Update row data
    *
    * @param rowType the row type
-   * @param buf the buf
+   * @param buf     the buf
    */
   public abstract void update(RowType rowType, ByteBuf buf, UpdateOp op);
 
@@ -288,16 +288,6 @@ public abstract class ServerRow implements Serialize {
   public abstract ServerRow clone();
 
   /**
-   * Clone this ServerRow if need. For dense vector storage or sorted storage, just return a view;
-   * for sparse storage, just return a <indices, values> array pair which are packaged in sorted
-   * vector storage. It can only be used in scenes that traverse the entire vector.
-   *
-   * @return the cloned ServerRow
-   */
-  public abstract ServerRow
-adaptiveClone();
-
-  /**
    * Try to get write lock
    *
    * @param milliseconds maximum wait time in milliseconds
@@ -308,7 +298,7 @@ adaptiveClone();
       ret = lock.writeLock().tryLock(milliseconds, TimeUnit.MILLISECONDS);
     } catch (Throwable e) {
       throw new WaitLockTimeOutException(
-          "wait write lock timeout " + StringUtils.stringifyException(e), milliseconds);
+        "wait write lock timeout " + StringUtils.stringifyException(e), milliseconds);
     }
 
     if (!ret) {
@@ -341,7 +331,7 @@ adaptiveClone();
       ret = lock.readLock().tryLock(milliseconds, TimeUnit.MILLISECONDS);
     } catch (Throwable e) {
       throw new WaitLockTimeOutException(
-          "wait read lock timeout " + StringUtils.stringifyException(e), milliseconds);
+        "wait read lock timeout " + StringUtils.stringifyException(e), milliseconds);
     }
 
     if (!ret) {
@@ -364,13 +354,12 @@ adaptiveClone();
   }
 
   public abstract void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out,
-      InitFunc func) throws IOException;
+    InitFunc func) throws IOException;
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
   //////// network io method, for model transform
   /////////////////////////////////////////////////////////////////////////////////////////////////
-  @Override
-  public void serialize(ByteBuf buf) {
+  @Override public void serialize(ByteBuf buf) {
     startRead();
     try {
       serializeHead(buf);
@@ -391,8 +380,7 @@ adaptiveClone();
     buf.writeInt(useIntKey ? 0 : 1);
   }
 
-  @Override
-  public void deserialize(ByteBuf buf) {
+  @Override public void deserialize(ByteBuf buf) {
     startWrite();
     try {
       deserializeHead(buf);
@@ -428,15 +416,13 @@ adaptiveClone();
     return serializeKeyType == 0;
   }
 
-  @Override
-  public int bufferLen() {
+  @Override public int bufferLen() {
     return 4 * 6 + 2 * 8 + getRowSpace();
   }
 
-  @Override
-  public String toString() {
+  @Override public String toString() {
     return "ServerRow [rowId=" + rowId + ", clock=" + clock + ", endCol=" + endCol + ", startCol="
-        + startCol + ", rowVersion=" + rowVersion + "]";
+      + startCol + ", rowVersion=" + rowVersion + "]";
   }
 
   protected boolean useIntKey() {
@@ -584,7 +570,7 @@ adaptiveClone();
 
       default:
         throw new UnsupportedOperationException(
-            "can not support " + rowType + " type row for ServerIntDoubleRow");
+          "can not support " + rowType + " type row for ServerIntDoubleRow");
     }
     useIntKey = ret instanceof IntKeyVector;
     return ret;

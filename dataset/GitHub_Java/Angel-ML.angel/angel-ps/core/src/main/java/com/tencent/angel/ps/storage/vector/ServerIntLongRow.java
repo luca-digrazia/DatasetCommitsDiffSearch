@@ -197,22 +197,12 @@ public class ServerIntLongRow extends ServerLongRow {
       switch (updateType) {
         case T_LONG_SPARSE:
         case T_LONG_SPARSE_COMPONENT:
-          updateUseIntLongSparse(buf, op);
-          break;
-
-        case T_INT_SPARSE:
-        case T_INT_SPARSE_COMPONENT:
-          updateUseIntIntSparse(buf, op);
+          updateUseSparse(buf, op);
           break;
 
         case T_LONG_DENSE:
         case T_LONG_DENSE_COMPONENT:
-          updateUseIntLongDense(buf, op);
-          break;
-
-        case T_INT_DENSE:
-        case T_INT_DENSE_COMPONENT:
-          updateUseIntIntDense(buf, op);
+          updateUseDense(buf, op);
           break;
 
         default: {
@@ -227,7 +217,7 @@ public class ServerIntLongRow extends ServerLongRow {
     }
   }
 
-  private void updateUseIntLongDense(ByteBuf buf, UpdateOp op) {
+  private void updateUseDense(ByteBuf buf, UpdateOp op) {
     int size = buf.readInt();
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
@@ -240,20 +230,7 @@ public class ServerIntLongRow extends ServerLongRow {
     }
   }
 
-  private void updateUseIntIntDense(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
-    if (op == UpdateOp.PLUS) {
-      for (int i = 0; i < size; i++) {
-        intLongRow.set(i, intLongRow.get(i) + buf.readInt());
-      }
-    } else {
-      for (int i = 0; i < size; i++) {
-        intLongRow.set(i, buf.readInt());
-      }
-    }
-  }
-
-  private void updateUseIntLongSparse(ByteBuf buf, UpdateOp op) {
+  private void updateUseSparse(ByteBuf buf, UpdateOp op) {
     int size = buf.readInt();
     if (op == UpdateOp.PLUS) {
       for (int i = 0; i < size; i++) {
@@ -263,21 +240,6 @@ public class ServerIntLongRow extends ServerLongRow {
     } else {
       for (int i = 0; i < size; i++) {
         intLongRow.set(buf.readInt(), buf.readLong());
-      }
-    }
-  }
-
-
-  private void updateUseIntIntSparse(ByteBuf buf, UpdateOp op) {
-    int size = buf.readInt();
-    if (op == UpdateOp.PLUS) {
-      for (int i = 0; i < size; i++) {
-        int index = buf.readInt();
-        intLongRow.set(index, intLongRow.get(index) + buf.readInt());
-      }
-    } else {
-      for (int i = 0; i < size; i++) {
-        intLongRow.set(buf.readInt(), buf.readInt());
       }
     }
   }

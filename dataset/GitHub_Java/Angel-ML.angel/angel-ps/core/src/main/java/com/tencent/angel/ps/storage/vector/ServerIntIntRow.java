@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
  * compliance with the License. You may obtain a copy of the License at
  *
  * https://opensource.org/licenses/Apache-2.0
@@ -18,7 +18,6 @@
 
 package com.tencent.angel.ps.storage.vector;
 
-import com.tencent.angel.ml.math2.VFactory;
 import com.tencent.angel.ml.math2.vector.IntIntVector;
 import com.tencent.angel.ml.math2.vector.Vector;
 import com.tencent.angel.ml.matrix.RowType;
@@ -29,13 +28,15 @@ import com.tencent.angel.ps.storage.vector.func.IntElemUpdateFunc;
 import io.netty.buffer.ByteBuf;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 
 /**
  * The row with "int" index type and "int" value type in PS
  */
 public class ServerIntIntRow extends ServerIntRow {
-
   /**
    * Just a view of "row" in ServerRow
    */
@@ -53,15 +54,15 @@ public class ServerIntIntRow extends ServerIntRow {
   /**
    * Create a new ServerIntDoubleRow
    *
-   * @param rowId row index
-   * @param rowType row type
-   * @param startCol start position
-   * @param endCol end position
+   * @param rowId      row index
+   * @param rowType    row type
+   * @param startCol   start position
+   * @param endCol     end position
    * @param estElemNum the estimate element number
-   * @param innerRow inner row
+   * @param innerRow   inner row
    */
   public ServerIntIntRow(int rowId, RowType rowType, int startCol, int endCol, int estElemNum,
-      IntIntVector innerRow) {
+    IntIntVector innerRow) {
     super(rowId, rowType, startCol, endCol, estElemNum, innerRow);
     this.startColInt = startCol;
     this.endColInt = endCol;
@@ -71,10 +72,10 @@ public class ServerIntIntRow extends ServerIntRow {
   /**
    * Create a new ServerIntDoubleRow
    *
-   * @param rowId row index
-   * @param rowType row type
-   * @param startCol start position
-   * @param endCol end position
+   * @param rowId      row index
+   * @param rowType    row type
+   * @param startCol   start position
+   * @param endCol     end position
    * @param estElemNum the estimate element number
    */
   public ServerIntIntRow(int rowId, RowType rowType, int startCol, int endCol, int estElemNum) {
@@ -133,7 +134,7 @@ public class ServerIntIntRow extends ServerIntRow {
    * Set a batch elements values without lock
    *
    * @param indices elements indices
-   * @param values elements values
+   * @param values  elements values
    */
   public void set(int[] indices, int[] values) {
     assert indices.length == values.length;
@@ -156,7 +157,7 @@ public class ServerIntIntRow extends ServerIntRow {
    * Add a batch elements values without lock
    *
    * @param indices elements indices
-   * @param values elements plus values
+   * @param values  elements plus values
    */
   public void addTo(int[] indices, int[] values) {
     assert indices.length == values.length;
@@ -175,8 +176,8 @@ public class ServerIntIntRow extends ServerIntRow {
   }
 
   /**
-   * Get all element indices and values without lock, you must check the storage is sparse first use
-   * "isSparse"; if you want use original indices, you must plus with "startCol" first
+   * Get all element indices and values without lock, you must check the storage is sparse first use "isSparse";
+   * if you want use original indices, you must plus with "startCol" first
    *
    * @return all element values
    */
@@ -184,8 +185,7 @@ public class ServerIntIntRow extends ServerIntRow {
     return intIntRow.getStorage().entryIterator();
   }
 
-  @Override
-  public void update(RowType updateType, ByteBuf buf, UpdateOp op) {
+  @Override public void update(RowType updateType, ByteBuf buf, UpdateOp op) {
     startWrite();
     try {
       switch (updateType) {
@@ -201,7 +201,7 @@ public class ServerIntIntRow extends ServerIntRow {
 
         default: {
           throw new UnsupportedOperationException(
-              "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
+            "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
         }
       }
 
@@ -238,8 +238,7 @@ public class ServerIntIntRow extends ServerIntRow {
     }
   }
 
-  @Override
-  public int size() {
+  @Override public int size() {
     return intIntRow.size();
   }
 
@@ -264,8 +263,7 @@ public class ServerIntIntRow extends ServerIntRow {
     }
   }
 
-  @Override
-  protected void serializeRow(ByteBuf buf) {
+  @Override protected void serializeRow(ByteBuf buf) {
     if (useDenseSerialize()) {
       int[] values = getValues();
       for (int i = 0; i < values.length; i++) {
@@ -282,8 +280,7 @@ public class ServerIntIntRow extends ServerIntRow {
     }
   }
 
-  @Override
-  protected void deserializeRow(ByteBuf buf) {
+  @Override protected void deserializeRow(ByteBuf buf) {
     startColInt = (int) startCol;
     endColInt = (int) endCol;
     intIntRow = (IntIntVector) row;
@@ -298,8 +295,7 @@ public class ServerIntIntRow extends ServerIntRow {
     }
   }
 
-  @Override
-  public int getRowSpace() {
+  @Override public int getRowSpace() {
     if (useDenseSerialize()) {
       return 4 * size();
     } else {
@@ -307,31 +303,11 @@ public class ServerIntIntRow extends ServerIntRow {
     }
   }
 
-  @Override
-  public ServerRow clone() {
+  @Override public ServerRow clone() {
     startRead();
     try {
       return new ServerIntIntRow(rowId, rowType, startColInt, endColInt, (int) estElemNum,
-          intIntRow.clone());
-    } finally {
-      endRead();
-    }
-  }
-
-
-  @Override
-  public ServerRow
-adaptiveClone() {
-    startRead();
-    try {
-      if (intIntRow.isSparse()) {
-        return new ServerIntIntRow(rowId, rowType, startColInt, endColInt, (int) estElemNum,
-            VFactory.sortedIntVector(endColInt - startColInt, intIntRow.getStorage().getIndices(),
-                intIntRow.getStorage().getValues()));
-      } else {
-        return new ServerIntIntRow(rowId, rowType, startColInt, endColInt, (int) estElemNum,
-            intIntRow);
-      }
+        intIntRow.clone());
     } finally {
       endRead();
     }
@@ -363,7 +339,7 @@ adaptiveClone() {
 
   @Override
   public void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func)
-      throws IOException {
+    throws IOException {
     if (func != null) {
       if (indexType == IndexType.INT) {
         for (int i = 0; i < indexSize; i++) {
@@ -383,14 +359,12 @@ adaptiveClone() {
     }
   }
 
-  @Override
-  public void setSplit(Vector row) {
+  @Override public void setSplit(Vector row) {
     super.setSplit(row);
     intIntRow = (IntIntVector) row;
   }
 
-  @Override
-  public void elemUpdate(IntElemUpdateFunc func) {
+  @Override public void elemUpdate(IntElemUpdateFunc func) {
     if (isDense()) {
       int[] values = getValues();
       for (int i = 0; i < values.length; i++) {

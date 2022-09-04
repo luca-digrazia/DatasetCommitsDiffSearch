@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2017-2018 THL A29 Limited, a Tencent company. All rights reserved.
  *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in 
  * compliance with the License. You may obtain a copy of the License at
  *
  * https://opensource.org/licenses/Apache-2.0
@@ -18,6 +18,7 @@
 
 package com.tencent.angel.ps.storage.vector;
 
+import com.tencent.angel.ml.math2.vector.IntDoubleVector;
 import com.tencent.angel.ml.math2.vector.IntIntVector;
 import com.tencent.angel.ml.math2.vector.Vector;
 import com.tencent.angel.ml.matrix.RowType;
@@ -27,13 +28,15 @@ import com.tencent.angel.ps.server.data.request.UpdateOp;
 import io.netty.buffer.ByteBuf;
 import it.unimi.dsi.fastutil.ints.Int2IntMap;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 
 /**
  * The row with "long" index type and "int" value type in PS
  */
 public class ServerCompDenseLongIntRow extends ServerRow {
-
   /**
    * Just a view of "row" in ServerRow
    */
@@ -43,14 +46,14 @@ public class ServerCompDenseLongIntRow extends ServerRow {
   /**
    * Create a new ServerCompDenseLongIntRow
    *
-   * @param rowId row index
-   * @param rowType row type
-   * @param startCol start position
-   * @param endCol end position
+   * @param rowId      row index
+   * @param rowType    row type
+   * @param startCol   start position
+   * @param endCol     end position
    * @param estElemNum the estimate element number
    */
   public ServerCompDenseLongIntRow(int rowId, RowType rowType, long startCol, long endCol,
-      int estElemNum, IntIntVector innerRow) {
+    int estElemNum, IntIntVector innerRow) {
     super(rowId, rowType, startCol, endCol, estElemNum, innerRow);
     this.intIntRow = (IntIntVector) row;
   }
@@ -58,14 +61,14 @@ public class ServerCompDenseLongIntRow extends ServerRow {
   /**
    * Create a new ServerCompDenseLongIntRow
    *
-   * @param rowId row index
-   * @param rowType row type
-   * @param startCol start position
-   * @param endCol end position
+   * @param rowId      row index
+   * @param rowType    row type
+   * @param startCol   start position
+   * @param endCol     end position
    * @param estElemNum the estimate element number
    */
   public ServerCompDenseLongIntRow(int rowId, RowType rowType, long startCol, long endCol,
-      int estElemNum) {
+    int estElemNum) {
     this(rowId, rowType, startCol, endCol, estElemNum, null);
   }
 
@@ -121,7 +124,7 @@ public class ServerCompDenseLongIntRow extends ServerRow {
    * Set a batch elements values without lock
    *
    * @param indices elements indices
-   * @param values elements values
+   * @param values  elements values
    */
   public void set(long[] indices, int[] values) {
     assert indices.length == values.length;
@@ -144,7 +147,7 @@ public class ServerCompDenseLongIntRow extends ServerRow {
    * Add a batch elements values without lock
    *
    * @param indices elements indices
-   * @param values elements plus values
+   * @param values  elements plus values
    */
   public void addTo(long[] indices, int[] values) {
     assert indices.length == values.length;
@@ -163,8 +166,8 @@ public class ServerCompDenseLongIntRow extends ServerRow {
   }
 
   /**
-   * Get all element indices and values without lock, you must check the storage is sparse first use
-   * "isSparse"; if you want use original indices, you must plus with "startCol" first
+   * Get all element indices and values without lock, you must check the storage is sparse first use "isSparse";
+   * if you want use original indices, you must plus with "startCol" first
    *
    * @return all element values
    */
@@ -172,8 +175,7 @@ public class ServerCompDenseLongIntRow extends ServerRow {
     return intIntRow.getStorage().entryIterator();
   }
 
-  @Override
-  public void update(RowType updateType, ByteBuf buf, UpdateOp op) {
+  @Override public void update(RowType updateType, ByteBuf buf, UpdateOp op) {
     startWrite();
 
     try {
@@ -189,7 +191,7 @@ public class ServerCompDenseLongIntRow extends ServerRow {
 
         default: {
           throw new UnsupportedOperationException(
-              "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
+            "Unsupport operation: update " + updateType + " to " + this.getClass().getName());
         }
       }
 
@@ -227,21 +229,18 @@ public class ServerCompDenseLongIntRow extends ServerRow {
   }
 
 
-  @Override
-  public int size() {
+  @Override public int size() {
     return intIntRow.size();
   }
 
-  @Override
-  protected void serializeRow(ByteBuf buf) {
+  @Override protected void serializeRow(ByteBuf buf) {
     int[] values = getValues();
     for (int i = 0; i < values.length; i++) {
       buf.writeInt(values[i]);
     }
   }
 
-  @Override
-  protected void deserializeRow(ByteBuf buf) {
+  @Override protected void deserializeRow(ByteBuf buf) {
     intIntRow = (IntIntVector) row;
     int[] values = getValues();
     for (int i = 0; i < size; i++) {
@@ -249,29 +248,15 @@ public class ServerCompDenseLongIntRow extends ServerRow {
     }
   }
 
-  @Override
-  protected int getRowSpace() {
+  @Override protected int getRowSpace() {
     return size() * 4;
   }
 
-  @Override
-  public ServerRow clone() {
+  @Override public ServerRow clone() {
     startRead();
     try {
       return new ServerCompDenseLongIntRow(rowId, rowType, startCol, endCol, (int) estElemNum,
-          intIntRow.clone());
-    } finally {
-      endRead();
-    }
-  }
-
-  @Override
-  public ServerRow
-adaptiveClone() {
-    startRead();
-    try {
-      return new ServerCompDenseLongIntRow(rowId, rowType, startCol, endCol, (int) estElemNum,
-          intIntRow);
+        intIntRow.clone());
     } finally {
       endRead();
     }
@@ -300,7 +285,7 @@ adaptiveClone() {
 
   @Override
   public void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out, InitFunc func)
-      throws IOException {
+    throws IOException {
     if (func != null) {
       if (indexType == IndexType.INT) {
         for (int i = 0; i < indexSize; i++) {
@@ -324,8 +309,7 @@ adaptiveClone() {
     }
   }
 
-  @Override
-  public void setSplit(Vector row) {
+  @Override public void setSplit(Vector row) {
     super.setSplit(row);
     intIntRow = (IntIntVector) row;
   }
