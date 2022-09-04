@@ -9,7 +9,7 @@ import io.dropwizard.setup.Environment;
  *
  * @param <T>    the required configuration interface
  */
-public interface ConfiguredBundle<T extends Configuration> {
+public interface ConfiguredBundle<T> {
     /**
      * Initializes the environment.
      *
@@ -17,12 +17,16 @@ public interface ConfiguredBundle<T extends Configuration> {
      * @param environment      the application's {@link Environment}
      * @throws Exception if something goes wrong
      */
-    void run(T configuration, Environment environment) throws Exception;
+    default void run(T configuration, Environment environment) throws Exception {
+        // Do nothing
+    }
 
     /**
      * Initializes the application bootstrap.
      *
      * @param bootstrap the application bootstrap
      */
-    void initialize(Bootstrap<? extends T> bootstrap);
+    default void initialize(Bootstrap<?> bootstrap) {
+        // Do nothing
+    }
 }
