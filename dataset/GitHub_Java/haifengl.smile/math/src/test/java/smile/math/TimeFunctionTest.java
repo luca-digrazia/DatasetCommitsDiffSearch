@@ -222,7 +222,6 @@ public class TimeFunctionTest {
     public void testParse() {
         System.out.println("parse");
         TimeFunction.of("0.01");
-        TimeFunction.of("piecewise([5, 10], [0.1, 0.01, 0.001])");
         TimeFunction.of("linear(0.1, 9, 0.01)");
         TimeFunction.of("polynomial(0.5, 0.1, 9, 0.01)");
         TimeFunction.of("polynomial(0.5, 0.1, 9, 0.01, true)");
@@ -235,11 +234,7 @@ public class TimeFunctionTest {
     @Test(expected = Test.None.class)
     public void testParseToString() {
         System.out.println("parse");
-        int[] boundaries = {5, 10};
-        double[] values = {0.1, 0.01, 0.001};
-
         TimeFunction.of(TimeFunction.constant(0.01).toString());
-        TimeFunction.of(TimeFunction.piecewise(boundaries, values).toString());
         TimeFunction.of(TimeFunction.linear(0.1, 9, 0.01).toString());
         TimeFunction.of(TimeFunction.polynomial(2, 0.1, 9, 0.01).toString());
         TimeFunction.of(TimeFunction.polynomial(2, 0.1, 9, 0.01, true).toString());
