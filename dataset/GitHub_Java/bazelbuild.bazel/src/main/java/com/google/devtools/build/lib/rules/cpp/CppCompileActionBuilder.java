@@ -50,7 +50,6 @@ public class CppCompileActionBuilder {
   public static final UUID GUID = UUID.fromString("97493805-894f-493a-be66-9a698f45c31d");
 
   private final ActionOwner owner;
-  private boolean shareable;
   private final BuildConfiguration configuration;
   private CcToolchainFeatures.FeatureConfiguration featureConfiguration;
   private CcToolchainVariables variables = CcToolchainVariables.EMPTY;
@@ -67,6 +66,7 @@ public class CppCompileActionBuilder {
   private CoptsFilter coptsFilter = CoptsFilter.alwaysPasses();
   private ImmutableList<PathFragment> extraSystemIncludePrefixes = ImmutableList.of();
   private boolean usePic;
+  private boolean allowUsingHeaderModules;
   private UUID actionClassId = GUID;
   private CppConfiguration cppConfiguration;
   private final ArrayList<Artifact> additionalIncludeScanningRoots;
@@ -113,11 +113,11 @@ public class CppCompileActionBuilder {
       CcToolchainProvider ccToolchain,
       @Nullable Artifact grepIncludes) {
     this.owner = actionOwner;
-    this.shareable = false;
     this.configuration = configuration;
     this.cppConfiguration = configuration.getFragment(CppConfiguration.class);
     this.mandatoryInputsBuilder = NestedSetBuilder.stableOrder();
     this.additionalIncludeScanningRoots = new ArrayList<>();
+    this.allowUsingHeaderModules = true;
     this.env = configuration.getActionEnvironment();
     this.codeCoverageEnabled = configuration.isCodeCoverageEnabled();
     this.ccToolchain = ccToolchain;
@@ -130,7 +130,6 @@ public class CppCompileActionBuilder {
    */
   public CppCompileActionBuilder(CppCompileActionBuilder other) {
     this.owner = other.owner;
-    this.shareable = other.shareable;
     this.featureConfiguration = other.featureConfiguration;
     this.sourceFile = other.sourceFile;
     this.mandatoryInputsBuilder = NestedSetBuilder.<Artifact>stableOrder()
@@ -152,6 +151,7 @@ public class CppCompileActionBuilder {
     this.cppConfiguration = other.cppConfiguration;
     this.configuration = other.configuration;
     this.usePic = other.usePic;
+    this.allowUsingHeaderModules = other.allowUsingHeaderModules;
     this.shouldScanIncludes = other.shouldScanIncludes;
     this.executionInfo = new LinkedHashMap<>(other.executionInfo);
     this.env = other.env;
@@ -292,9 +292,6 @@ public class CppCompileActionBuilder {
             .addAll(additionalPrunableHeaders)
             .build();
 
-    configuration.modifyExecutionInfo(
-        executionInfo, CppCompileAction.actionNameToMnemonic(getActionName()));
-
     // Copying the collections is needed to make the builder reusable.
     CppCompileAction action;
     boolean fake = tempOutputFile != null;
@@ -307,7 +304,6 @@ public class CppCompileActionBuilder {
               variables,
               sourceFile,
               cppConfiguration,
-              shareable,
               shouldScanIncludes,
               shouldPruneModules(),
               usePic,
@@ -335,7 +331,6 @@ public class CppCompileActionBuilder {
               variables,
               sourceFile,
               cppConfiguration,
-              shareable,
               shouldScanIncludes,
               shouldPruneModules(),
               usePic,
@@ -403,9 +398,8 @@ public class CppCompileActionBuilder {
   }
 
   private boolean useHeaderModules() {
-    Preconditions.checkNotNull(featureConfiguration);
-    Preconditions.checkNotNull(sourceFile);
-    return featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)
+    return allowUsingHeaderModules
+        && featureConfiguration.isEnabled(CppRuleClasses.USE_HEADER_MODULES)
         && (sourceFile.isFileType(CppFileTypes.CPP_SOURCE)
             || sourceFile.isFileType(CppFileTypes.CPP_HEADER)
             || sourceFile.isFileType(CppFileTypes.CPP_MODULE_MAP));
@@ -523,7 +517,7 @@ public class CppCompileActionBuilder {
         ruleContext,
         CppHelper.getArtifactNameForCategory(ruleContext, ccToolchain, outputCategory, outputName),
         configuration);
-    if (generateDotd && !(cppConfiguration.getNoDotdScanningWithModules() && useHeaderModules())) {
+    if (generateDotd) {
       String dotdFileName =
           CppHelper.getDotdFileName(ruleContext, ccToolchain, outputCategory, outputName);
       if (cppConfiguration.getInmemoryDotdFiles()) {
@@ -596,14 +590,15 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  /** Sets the CppSemantics for this compile. */
-  public CppCompileActionBuilder setSemantics(CppSemantics semantics) {
-    this.cppSemantics = semantics;
+  /** Sets whether the CompileAction should use header modules. */
+  public CppCompileActionBuilder setAllowUsingHeaderModules(boolean allowUsingHeaderModules) {
+    this.allowUsingHeaderModules = allowUsingHeaderModules;
     return this;
   }
 
-  public CppCompileActionBuilder setShareable(boolean shareable) {
-    this.shareable = shareable;
+  /** Sets the CppSemantics for this compile. */
+  public CppCompileActionBuilder setSemantics(CppSemantics semantics) {
+    this.cppSemantics = semantics;
     return this;
   }
 
