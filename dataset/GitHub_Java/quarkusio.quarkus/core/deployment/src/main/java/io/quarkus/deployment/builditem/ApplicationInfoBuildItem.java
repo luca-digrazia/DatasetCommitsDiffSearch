@@ -1,10 +1,8 @@
 package io.quarkus.deployment.builditem;
 
-import io.quarkus.builder.item.SimpleBuildItem;
+import org.jboss.builder.item.SimpleBuildItem;
 
 public final class ApplicationInfoBuildItem extends SimpleBuildItem {
-
-    public static final String UNSET_VALUE = "<<unset>>";
 
     private final String name;
     private final String version;
@@ -15,10 +13,10 @@ public final class ApplicationInfoBuildItem extends SimpleBuildItem {
     }
 
     public String getName() {
-        return name == null ? UNSET_VALUE : name;
+        return name;
     }
 
     public String getVersion() {
-        return version == null ? UNSET_VALUE : version;
+        return version;
     }
 }
