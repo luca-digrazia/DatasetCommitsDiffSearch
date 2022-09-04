@@ -38,7 +38,6 @@ import org.graylog2.periodical.ChunkedGELFClientManagerThread;
 import org.graylog2.periodical.HostCounterCacheWriterThread;
 import org.graylog2.periodical.ServerValueWriterThread;
 import org.graylog2.periodical.ThroughputWriterThread;
-import org.graylog2.streams.ReIndexer;
 
 /**
  * Main class of Graylog2.
