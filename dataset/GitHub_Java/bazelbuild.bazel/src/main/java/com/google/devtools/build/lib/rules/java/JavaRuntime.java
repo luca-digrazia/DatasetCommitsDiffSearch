@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.java;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Actions;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.MutableActionGraph.ActionConflictException;
 import com.google.devtools.build.lib.analysis.CompilationHelper;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.PrerequisiteArtifacts;
@@ -41,7 +40,7 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
 
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
-      throws InterruptedException, RuleErrorException, ActionConflictException {
+      throws InterruptedException, RuleErrorException {
     NestedSet<Artifact> filesToBuild =
         PrerequisiteArtifacts.nestedSet(ruleContext, "srcs", Mode.TARGET);
     PathFragment javaHome = defaultJavaHome(ruleContext.getLabel());
@@ -76,11 +75,9 @@ public class JavaRuntime implements RuleConfiguredTargetFactory {
         JavaRuntimeInfo.create(
             filesToBuild, middleman, javaHome, javaBinaryExecPath, javaBinaryRunfilesPath);
 
-    TemplateVariableInfo templateVariableInfo = new TemplateVariableInfo(
-        ImmutableMap.of(
-            "JAVA", javaBinaryExecPath.getPathString(),
-            "JAVABASE", javaHome.getPathString()),
-        ruleContext.getRule().getLocation());
+    TemplateVariableInfo templateVariableInfo = new TemplateVariableInfo(ImmutableMap.of(
+        "JAVA", javaBinaryExecPath.getPathString(),
+        "JAVABASE", javaHome.getPathString()));
 
     return new RuleConfiguredTargetBuilder(ruleContext)
         .addProvider(RunfilesProvider.class, RunfilesProvider.simple(runfiles))

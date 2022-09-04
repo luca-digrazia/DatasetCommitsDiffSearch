@@ -72,7 +72,6 @@ import com.google.devtools.build.lib.rules.proto.ProtoSourceFileBlacklist;
 import com.google.devtools.build.lib.rules.proto.ProtoSourcesProvider;
 import com.google.devtools.build.lib.rules.proto.ProtoSupportDataProvider;
 import com.google.devtools.build.lib.rules.proto.SupportData;
-import com.google.devtools.build.lib.skyframe.ConfiguredTargetAndTarget;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
@@ -224,9 +223,8 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
 
   @Override
   public ConfiguredAspect create(
-      ConfiguredTargetAndTarget ctatBase, RuleContext ruleContext, AspectParameters parameters)
+      ConfiguredTarget base, RuleContext ruleContext, AspectParameters parameters)
       throws InterruptedException {
-    ConfiguredTarget base = ctatBase.getConfiguredTarget();
     if (isProtoRule(base)) {
       if (shouldAttachToProtoRule(ruleContext)) {
         return proto(base, ruleContext, parameters);

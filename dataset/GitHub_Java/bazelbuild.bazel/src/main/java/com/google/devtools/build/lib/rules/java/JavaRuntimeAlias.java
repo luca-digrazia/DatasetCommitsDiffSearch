@@ -20,19 +20,16 @@ import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.MiddlemanProvider;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
+import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.rules.MakeVariableProvider;
-import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 
 /**
  * Implementation of the {@code java_runtime_alias} rule.
@@ -42,29 +39,17 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException {
-    TransitiveInfoCollection runtime = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
     // Sadly, we can't use an AliasConfiguredTarget here because we need to be prepared for the case
     // when --javabase is not a label. For the time being.
-    RuleConfiguredTargetBuilder builder = new RuleConfiguredTargetBuilder(ruleContext);
-
-    if (runtime != null) {
-      MakeVariableProvider makeVariableProvider = runtime.getProvider(MakeVariableProvider.class);
-      JavaRuntimeProvider javaRuntimeProvider = runtime.getProvider(JavaRuntimeProvider.class);
-      builder
-          .addProvider(javaRuntimeProvider)
-          .addNativeDeclaredProvider(javaRuntimeProvider)
-          .addProvider(makeVariableProvider)
-          .addNativeDeclaredProvider(makeVariableProvider)
-          .addProvider(RunfilesProvider.class, runtime.getProvider(RunfilesProvider.class))
-          .addProvider(MiddlemanProvider.class, runtime.getProvider(MiddlemanProvider.class))
-          .setFilesToBuild(runtime.getProvider(FileProvider.class).getFilesToBuild());
-    } else {
-      builder
-          .setFilesToBuild(NestedSetBuilder.emptySet(Order.STABLE_ORDER))
-          .addProvider(RunfilesProvider.class, RunfilesProvider.EMPTY);
-    }
-
-    return builder.build();
+    TransitiveInfoCollection runtime = ruleContext.getPrerequisite(":jvm", Mode.TARGET);
+    JavaRuntimeInfo javaRuntimeInfo = JavaRuntimeInfo.from(runtime, ruleContext);
+    return new RuleConfiguredTargetBuilder(ruleContext)
+        .addNativeDeclaredProvider(javaRuntimeInfo)
+        .addNativeDeclaredProvider(new JavaRuntimeToolchainInfo(javaRuntimeInfo))
+        .addNativeDeclaredProvider(runtime.get(TemplateVariableInfo.PROVIDER))
+        .addProvider(RunfilesProvider.class, runtime.getProvider(RunfilesProvider.class))
+        .setFilesToBuild(runtime.getProvider(FileProvider.class).getFilesToBuild())
+        .build();
   }
 
   /**
@@ -78,7 +63,9 @@ public class JavaRuntimeAlias implements RuleConfiguredTargetFactory {
           .requiresConfigurationFragments(JavaConfiguration.class)
           .removeAttribute("licenses")
           .removeAttribute("distribs")
-          .add(attr(":jvm", LABEL).value(JavaSemantics.jvmAttribute(environment)))
+          .add(attr(":jvm", LABEL)
+              .value(JavaSemantics.jvmAttribute(environment))
+              .mandatoryProviders(JavaRuntimeInfo.PROVIDER.id()))
           .build();
     }
 
