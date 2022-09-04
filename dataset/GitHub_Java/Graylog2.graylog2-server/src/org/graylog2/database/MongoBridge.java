@@ -32,37 +32,14 @@ import org.graylog2.Log;
 
 import java.util.Iterator;
 import java.util.List;
+import org.graylog2.Main;
+import org.graylog2.messagehandlers.gelf.GELFMessage;
 
 import org.productivity.java.syslog4j.server.SyslogServerEventIF;
 
 public class MongoBridge {
     // TODO: make configurable
-    public static final int MAX_MESSAGE_SIZE = 500000000;
     public static final int STANDARD_PORT = 27017;
-    
-    private String username = null;
-    private String password = null;
-    private String hostname = null;
-    private String database = null;
-    private int    port = 27017;
-
-    public MongoBridge(String username, String password, String hostname, String database, int port) throws Exception {
-        this.username = username;
-        this.password = password;
-        this.hostname = hostname;
-        this.database = database;
-        if (port == 0) {
-            this.port = MongoBridge.STANDARD_PORT;
-        } else {
-            this.port = port;
-        }
-    }
-
-
-    public void dropCollection(String collectionName) throws Exception {
-        System.out.println("PAPA");
-        MongoConnection.getInstance().getDatabase().getCollection(collectionName).drop();
-    }
 
     public DBCollection getMessagesColl() {
         DBCollection coll = null;
@@ -71,7 +48,8 @@ public class MongoBridge {
         if(MongoConnection.getInstance().getDatabase().getCollectionNames().contains("messages")) {
             coll = MongoConnection.getInstance().getDatabase().getCollection("messages");
         } else {
-            coll = MongoConnection.getInstance().getDatabase().createCollection("messages", BasicDBObjectBuilder.start().add("capped", true).add("size", MongoBridge.MAX_MESSAGE_SIZE).get());
+            int messagesCollSize = Integer.parseInt(Main.masterConfig.getProperty("messages_collection_size").trim());
+            coll = MongoConnection.getInstance().getDatabase().createCollection("messages", BasicDBObjectBuilder.start().add("capped", true).add("size", messagesCollSize).get());
         }
 
         coll.ensureIndex(new BasicDBObject("created_at", 1));
@@ -94,19 +72,26 @@ public class MongoBridge {
 
         coll.insert(dbObj);
     }
-    
-    public void insertSystemStatisticValue(String key, long value) throws Exception {       
-        DBCollection coll = null;
 
-        // Create a capped collection if the collection does not yet exist.
-        if(MongoConnection.getInstance().getDatabase().getCollectionNames().contains("systemstatistics")) {
-            coll = MongoConnection.getInstance().getDatabase().getCollection("systemstatistics");
-        } else {
-            coll = MongoConnection.getInstance().getDatabase().createCollection("systemstatistics", BasicDBObjectBuilder.start().add("capped", true).add("size", 5242880).get());
+    public void insertGelfMessage(GELFMessage message) throws Exception {
+        // Check if all required parameters are set.
+        if (message.shortMessage == null || message.shortMessage.length() == 0 || message.host == null || message.host.length() == 0) {
+            throw new Exception("Missing GELF message parameters. short_message and host are required.");
         }
-        
+        DBCollection coll = this.getMessagesColl();
+
         BasicDBObject dbObj = new BasicDBObject();
-        dbObj.put(key, value);
+
+        dbObj.put("gelf", true);
+        dbObj.put("message", message.shortMessage);
+        dbObj.put("full_message", message.fullMessage);
+        dbObj.put("type", message.type);
+        dbObj.put("file", message.file);
+        dbObj.put("line", message.line);
+        dbObj.put("host", message.host);
+        dbObj.put("facility", null);
+        dbObj.put("level", message.level);
+        dbObj.put("created_at", (int) (System.currentTimeMillis()/1000));
 
         coll.insert(dbObj);
     }
@@ -135,20 +120,24 @@ public class MongoBridge {
             try {
                 String host = i.next();
 
-                // Get message count of this host.
-                BasicDBObject countQuery = new BasicDBObject();
-                countQuery.put("host", host);
-                long messageCount = messages.getCount(countQuery);
+                // Skip hosts with no name.
+                if (host != null && host.length() > 0) {
+                    // Get message count of this host.
+                    BasicDBObject countQuery = new BasicDBObject();
+                    countQuery.put("host", host);
+                    long messageCount = messages.getCount(countQuery);
 
-                // Build document.
-                BasicDBObject doc = new BasicDBObject();
-                doc.put("host", host);
-                doc.put("message_count", messageCount);
+                    // Build document.
+                    BasicDBObject doc = new BasicDBObject();
+                    doc.put("host", host);
+                    doc.put("message_count", messageCount);
 
-                // Store document.
-                coll.insert(doc);
+                    // Store document.
+                    coll.insert(doc);
+                }
             } catch (Exception e) {
                 Log.crit("Could not insert distinct host: " + e.toString());
+                e.printStackTrace();
                 continue;
             }
         }
