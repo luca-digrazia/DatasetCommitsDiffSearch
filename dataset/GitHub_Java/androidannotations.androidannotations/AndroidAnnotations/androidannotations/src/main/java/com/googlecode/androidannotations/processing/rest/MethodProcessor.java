@@ -15,16 +15,17 @@
  */
 package com.googlecode.androidannotations.processing.rest;
 
+import java.lang.annotation.Annotation;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
 import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
-
-import org.apache.http.HttpEntity;
 
 import com.googlecode.androidannotations.annotations.rest.Accept;
 import com.googlecode.androidannotations.helper.CanonicalNameConstants;
@@ -46,19 +47,17 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 	protected final RestImplementationsHolder restImplementationsHolder;
 	protected final RestAnnotationHelper restAnnotationHelper;
 
-	public MethodProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationsHolder) {
-		this.restImplementationsHolder = restImplementationsHolder;
+	public MethodProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
+		restImplementationsHolder = restImplementationHolder;
 		restAnnotationHelper = new RestAnnotationHelper(processingEnv, getTarget());
 	}
 
 	protected void generateRestTemplateCallBlock(MethodProcessorHolder methodHolder) {
 		RestImplementationHolder holder = restImplementationsHolder.getEnclosingHolder(methodHolder.getElement());
 		ExecutableElement executableElement = (ExecutableElement) methodHolder.getElement();
-		EBeanHolder eBeanHolder = methodHolder.getHolder();
 		JClass expectedClass = methodHolder.getExpectedClass();
 		JClass generatedReturnType = methodHolder.getGeneratedReturnType();
 
-		// Creating method signature
 		JMethod method;
 		String methodName = executableElement.getSimpleName().toString();
 		boolean methodReturnVoid = generatedReturnType == null && expectedClass == null;
@@ -68,73 +67,55 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 			method = holder.restImplementationClass.method(JMod.PUBLIC, methodHolder.getGeneratedReturnType(), methodName);
 		}
 		method.annotate(Override.class);
-		if (expectedClass != generatedReturnType && !generatedReturnType.fullName().startsWith(CanonicalNameConstants.RESPONSE_ENTITY)) {
-			method.annotate(SuppressWarnings.class).param("value", "unchecked");
-		}
 
-		// Keep a reference on method's body
 		JBlock body = method.body();
-		methodHolder.setBody(body);
 
-		// Keep a reference on method's parameters
-		TreeMap<String, JVar> methodParams = extractMethodParamsVar(eBeanHolder, method, executableElement, holder);
-		methodHolder.setMethodParams(methodParams);
-
-		// RestTemplate exchange() method call
+		// exchange method call
 		JInvocation restCall = JExpr.invoke(holder.restTemplateField, "exchange");
 
-		// RestTemplate exchange() 1st arg : concat root url + suffix
+		// concat root url + suffix
 		JInvocation concatCall = JExpr.invoke(holder.rootUrlField, "concat");
 
-		// RestTemplate exchange() 2nd arg : add url param
+		// add url param
 		restCall.arg(concatCall.arg(JExpr.lit(methodHolder.getUrlSuffix())));
 
-		// RestTemplate exchange() 3rd arg : add HttpMethod type param
+		EBeanHolder eBeanHolder = methodHolder.getHolder();
 		JClass httpMethod = eBeanHolder.refClass(CanonicalNameConstants.HTTP_METHOD);
-		String restMethodInCapitalLetters = getTarget().getSimpleName().toUpperCase();
+		// add method type param
+		String restMethodInCapitalLetters = getTarget().getSimpleName().toUpperCase(Locale.ENGLISH);
 		restCall.arg(httpMethod.staticRef(restMethodInCapitalLetters));
+
+		TreeMap<String, JVar> methodParams = (TreeMap<String, JVar>) generateMethodParamsVar(eBeanHolder, method, executableElement, holder);
+
+		// update method holder
+		methodHolder.setBody(body);
+		methodHolder.setMethodParams(methodParams);
+
+		JVar hashMapVar = generateHashMapVar(methodHolder);
 
 		restCall = addHttpEntityVar(restCall, methodHolder);
 		restCall = addResponseEntityArg(restCall, methodHolder);
 
-		JVar hashMapVar = generateHashMapVar(methodHolder);
-		if (hashMapVar != null) {
+		boolean hasParametersInUrl = hashMapVar != null;
+		if (hasParametersInUrl) {
 			restCall.arg(hashMapVar);
 		}
 
-		insertRestCallInBody(body, restCall, methodHolder, methodReturnVoid);
+		restCall = addResultCallMethod(restCall, methodHolder);
+
+		insertRestCallInBody(body, restCall, methodReturnVoid);
 	}
 
-	/**
-	 * Add the {@link HttpEntity} attribute to restTemplate.exchange() method.
-	 * By default, the value will be <code>null</code> (for DELETE, HEAD and
-	 * OPTIONS method type)
-	 */
-	protected JInvocation addHttpEntityVar(JInvocation restCall, MethodProcessorHolder methodHolder) {
-		return restCall.arg(JExpr._null());
-	}
+	protected abstract JInvocation addHttpEntityVar(JInvocation restCall, MethodProcessorHolder methodHolder);
 
-	/**
-	 * Add the response type to restTemplate.exchange() method. This is used to
-	 * bind the response into a specific Java object.
-	 */
-	protected JInvocation addResponseEntityArg(JInvocation restCall, MethodProcessorHolder methodHolder) {
-		return restCall.arg(JExpr._null());
-	}
+	protected abstract JInvocation addResponseEntityArg(JInvocation restCall, MethodProcessorHolder methodHolder);
 
-	/**
-	 * Add an extra method calls on the result of restTemplate.exchange(). By
-	 * default, just return the result
-	 */
-	protected JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder) {
-		return restCall;
-	}
+	protected abstract JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder);
 
-	private void insertRestCallInBody(JBlock body, JInvocation restCall, MethodProcessorHolder methodHolder, boolean methodReturnVoid) {
+	private void insertRestCallInBody(JBlock body, JInvocation restCall, boolean methodReturnVoid) {
 		if (methodReturnVoid) {
 			body.add(restCall);
 		} else {
-			restCall = addResultCallMethod(restCall, methodHolder);
 			body._return(restCall);
 		}
 	}
@@ -143,7 +124,7 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 		ExecutableElement element = (ExecutableElement) methodHolder.getElement();
 		JCodeModel codeModel = methodHolder.getCodeModel();
 		JBlock body = methodHolder.getBody();
-		Map<String, JVar> methodParams = methodHolder.getMethodParams();
+		TreeMap<String, JVar> methodParams = methodHolder.getMethodParams();
 		JVar hashMapVar = null;
 
 		List<String> urlVariables = restAnnotationHelper.extractUrlVariableNames(element);
@@ -236,7 +217,7 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 		}
 	}
 
-	private TreeMap<String, JVar> extractMethodParamsVar(EBeanHolder eBeanHolder, JMethod method, ExecutableElement executableElement, RestImplementationHolder holder) {
+	private Map<String, JVar> generateMethodParamsVar(EBeanHolder eBeanHolder, JMethod method, ExecutableElement executableElement, RestImplementationHolder holder) {
 		List<? extends VariableElement> params = executableElement.getParameters();
 		TreeMap<String, JVar> methodParams = new TreeMap<String, JVar>();
 		for (VariableElement parameter : params) {
@@ -251,5 +232,13 @@ public abstract class MethodProcessor implements DecoratingElementProcessor {
 
 		return methodParams;
 	}
+
+	protected abstract JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement);
+
+	@Override
+	public abstract Class<? extends Annotation> getTarget();
+
+	@Override
+	public abstract void process(Element element, JCodeModel codeModel, EBeanHolder eBeanHolder) throws Exception;
 
 }
