@@ -47,6 +47,8 @@ public final class OptionsParser {
 
   private final Map<String, JarOwner> jarsToTargets = new HashMap<>();
   private final Set<String> directJars = new HashSet<>();
+  private final Map<String, JarOwner> directJarsToTargets = new HashMap<>();
+  private final Map<String, JarOwner> indirectJarsToTargets = new HashMap<>();
 
   private String strictJavaDeps;
 
@@ -125,8 +127,7 @@ public final class OptionsParser {
             // TODO(b/72379900): Remove this
             String jar = getArgument(argQueue, arg);
             JarOwner owner = parseJarOwnerLegacy(getArgument(argQueue, arg));
-            directJars.add(jar);
-            jarsToTargets.put(jar, owner);
+            directJarsToTargets.put(jar, owner);
             foundLegacyDependencyArgument = true;
             break;
           }
@@ -135,7 +136,7 @@ public final class OptionsParser {
             // TODO(b/72379900): Remove this
             String jar = getArgument(argQueue, arg);
             JarOwner owner = parseJarOwnerLegacy(getArgument(argQueue, arg));
-            jarsToTargets.put(jar, owner);
+            indirectJarsToTargets.put(jar, owner);
             foundLegacyDependencyArgument = true;
             break;
           }
@@ -234,6 +235,15 @@ public final class OptionsParser {
               + "(--dependencies, --direct_dependencies) and "
               + "(--direct_dependency, --indirect_dependency, --classpath) "
               + "at the same time.");
+    }
+    for (Map.Entry<String, JarOwner> entry : jarsToTargets.entrySet()) {
+      String jar = entry.getKey();
+      JarOwner jarOwner = entry.getValue();
+      if (directJars.contains(jar)) {
+        directJarsToTargets.put(jar, jarOwner);
+      } else {
+        indirectJarsToTargets.put(jar, jarOwner);
+      }
     }
   }
 
@@ -420,12 +430,12 @@ public final class OptionsParser {
     return javacOpts;
   }
 
-  public Set<String> directJars() {
-    return directJars;
+  public Map<String, JarOwner> getDirectMappings() {
+    return directJarsToTargets;
   }
 
-  public Map<String, JarOwner> jarsToTargets() {
-    return jarsToTargets;
+  public Map<String, JarOwner> getIndirectMappings() {
+    return indirectJarsToTargets;
   }
 
   public String getStrictJavaDeps() {
