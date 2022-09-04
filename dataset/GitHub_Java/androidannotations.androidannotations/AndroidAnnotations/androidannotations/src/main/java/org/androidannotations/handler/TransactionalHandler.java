@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -21,7 +21,6 @@ import javax.lang.model.element.ExecutableElement;
 
 import org.androidannotations.annotations.Transactional;
 import org.androidannotations.helper.APTCodeModelHelper;
-import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.holder.EComponentHolder;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
@@ -56,10 +55,7 @@ public class TransactionalHandler extends BaseAnnotationHandler<EComponentHolder
 
 		validatorHelper.isNotFinal(element, valid);
 
-		validatorHelper.param.inOrder() //
-				.type(CanonicalNameConstants.SQLITE_DATABASE) //
-				.anyType().multiple().optional() //
-				.validate(executableElement, valid);
+		validatorHelper.param.hasOneOrTwoParametersAndFirstIsDb(executableElement, valid);
 	}
 
 	@Override

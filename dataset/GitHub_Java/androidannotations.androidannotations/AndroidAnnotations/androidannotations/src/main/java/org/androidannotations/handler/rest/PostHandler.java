@@ -34,18 +34,12 @@ public class PostHandler extends RestMethodHandler {
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
-
-		if (!super.validate(element, validatedElements)) {
-			valid.invalidate();
-		}
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+		super.validate(element, validatedElements, valid);
 
 		validatorHelper.doesNotReturnPrimitive((ExecutableElement) element, valid);
 
 		restAnnotationHelper.urlVariableNamesExistInParametersAndHasOnlyOneMoreParameter((ExecutableElement) element, valid);
-
-		return valid.isValid();
 	}
 
 	@Override
@@ -55,13 +49,13 @@ public class PostHandler extends RestMethodHandler {
 	}
 
 	@Override
-	protected JExpression getRequestEntity(Element element, RestHolder holder, JBlock methodBody, TreeMap<String, JVar> methodParams) {
+	protected JExpression getRequestEntity(Element element, JBlock methodBody, TreeMap<String, JVar> methodParams) {
 		String mediaType = restAnnotationHelper.acceptedHeaders((ExecutableElement) element);
 		JVar httpRestHeaders = null;
 		if (mediaType != null) {
-			httpRestHeaders = restAnnotationHelper.declareAcceptedHttpHeaders(holder, methodBody, mediaType);
+			httpRestHeaders = restAnnotationHelper.declareAcceptedHttpHeaders(processHolder, methodBody, mediaType);
 		}
-		return restAnnotationHelper.declareHttpEntity(holder, methodBody, methodParams, httpRestHeaders);
+		return restAnnotationHelper.declareHttpEntity(processHolder, methodBody, methodParams, httpRestHeaders);
 	}
 
 	protected JExpression getResponseClass(Element element, RestHolder holder) {

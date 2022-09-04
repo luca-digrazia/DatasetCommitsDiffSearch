@@ -20,9 +20,6 @@ import static com.sun.codemodel.JMod.PUBLIC;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.TypeElement;
-import javax.lang.model.element.TypeParameterElement;
-import javax.lang.model.util.Elements;
-import javax.lang.model.util.Types;
 
 import org.androidannotations.helper.ModelConstants;
 import org.androidannotations.process.ProcessHolder;
@@ -46,13 +43,9 @@ public abstract class BaseGeneratedClassHolder implements GeneratedClassHolder {
 
 	protected void setGeneratedClass() throws Exception {
 		String annotatedComponentQualifiedName = annotatedElement.getQualifiedName().toString();
-        String subComponentQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
-        JClass annotatedComponent = codeModel().directClass(annotatedElement.asType().toString());
-
+		String subComponentQualifiedName = annotatedComponentQualifiedName + ModelConstants.GENERATION_SUFFIX;
+		JClass annotatedComponent = codeModel().directClass(annotatedComponentQualifiedName);
 		generatedClass = codeModel()._class(PUBLIC | FINAL, subComponentQualifiedName, ClassType.CLASS);
-        for (TypeParameterElement typeParam : annotatedElement.getTypeParameters()) {
-            generatedClass.generify(typeParam.getSimpleName().toString());
-        }
 		generatedClass._extends(annotatedComponent);
 	}
 

@@ -29,15 +29,11 @@ import org.androidannotations.helper.APTCodeModelHelper;
 import org.androidannotations.holder.EComponentHolder;
 
 import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
-import com.sun.codemodel.JStatement;
-import com.sun.codemodel.JTryBlock;
-import com.sun.codemodel.JVar;
 
 public class BackgroundHandler extends AbstractRunnableHandler {
 
@@ -62,17 +58,8 @@ public class BackgroundHandler extends AbstractRunnableHandler {
 		JMethod executeMethod = anonymousTaskClass.method(JMod.PUBLIC, codeModel().VOID, "execute");
 		executeMethod.annotate(Override.class);
 
-		// Catch exception in user code
-		JTryBlock tryBlock = executeMethod.body()._try();
-		tryBlock.body().add(previousMethodBody);
-		JCatchBlock catchBlock = tryBlock._catch(holder.classes().THROWABLE);
-		JVar caughtException = catchBlock.param("e");
-		JStatement uncaughtExceptionCall = holder.classes().THREAD
-				.staticInvoke("getDefaultUncaughtExceptionHandler")
-				.invoke("uncaughtException")
-				.arg(holder.classes().THREAD.staticInvoke("currentThread"))
-				.arg(caughtException);
-		catchBlock.body().add(uncaughtExceptionCall);
+		JBlock runMethodBody = executeMethod.body();
+		codeModelHelper.surroundWithTryCatch(holder, runMethodBody, previousMethodBody, "A runtime exception was thrown while executing code in a background task");
 
 		Background annotation = element.getAnnotation(Background.class);
 		String id = annotation.id();

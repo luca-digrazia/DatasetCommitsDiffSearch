@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -23,7 +23,6 @@ import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.VariableElement;
 
 import org.androidannotations.helper.AndroidManifest;
-import org.androidannotations.helper.CanonicalNameConstants;
 import org.androidannotations.helper.IdAnnotationHelper;
 import org.androidannotations.helper.IdValidatorHelper;
 import org.androidannotations.holder.EComponentWithViewSupportHolder;
@@ -66,8 +65,6 @@ public abstract class AbstractSeekBarTouchHandler extends BaseAnnotationHandler<
 		validatorHelper.returnTypeIsVoid((ExecutableElement) element, valid);
 
 		validatorHelper.hasSeekBarTouchTrackingMethodParameters((ExecutableElement) element, valid);
-
-		validatorHelper.param.oneparam().type(CanonicalNameConstants.SEEKBAR).optional().validate((ExecutableElement) element, valid);
 	}
 
 	@Override

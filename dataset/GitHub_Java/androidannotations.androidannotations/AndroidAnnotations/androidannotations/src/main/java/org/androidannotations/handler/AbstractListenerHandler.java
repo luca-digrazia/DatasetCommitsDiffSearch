@@ -35,10 +35,12 @@ import org.androidannotations.holder.EComponentWithViewSupportHolder;
 import org.androidannotations.model.AndroidSystemServices;
 import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
+import org.androidannotations.process.ProcessHolder;
 import org.androidannotations.rclass.IRClass;
 
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
+import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
@@ -50,7 +52,6 @@ import com.sun.codemodel.JVar;
 public abstract class AbstractListenerHandler extends BaseAnnotationHandler<EComponentWithViewSupportHolder> {
 
 	private IdAnnotationHelper helper;
-	private EComponentWithViewSupportHolder holder;
 	private String methodName;
 
 	public AbstractListenerHandler(Class<?> targetClass, ProcessingEnvironment processingEnvironment) {
@@ -82,7 +83,6 @@ public abstract class AbstractListenerHandler extends BaseAnnotationHandler<ECom
 
 	@Override
 	public void process(Element element, EComponentWithViewSupportHolder holder) {
-		this.holder = holder;
 		this.methodName = element.getSimpleName().toString();
 
 		ExecutableElement executableElement = (ExecutableElement) element;
@@ -105,17 +105,15 @@ public abstract class AbstractListenerHandler extends BaseAnnotationHandler<ECom
 		processParameters(listenerMethod, call, parameters);
 
 		for (JFieldRef idRef : idsRefs) {
-            if (idRef != null) {
-                JBlock block = holder.getOnViewChangedBody().block();
+			JBlock block = holder.getOnViewChangedBody().block();
 
-                JExpression findViewExpression = holder.findViewById(idRef);
-                if (!getViewClass().equals(classes().VIEW)) {
-                    findViewExpression = cast(getViewClass(), findViewExpression);
-                }
+			JExpression findViewExpression = holder.findViewById(idRef);
+			if (!getViewClass().equals(classes().VIEW)) {
+				findViewExpression = cast(getViewClass(), findViewExpression);
+			}
 
-                JVar view = block.decl(getViewClass(), "view", findViewExpression);
-                block._if(view.ne(_null()))._then().invoke(view, getSetterName()).arg(_new(listenerAnonymousClass));
-            }
+			JVar view = block.decl(getViewClass(), "view", findViewExpression);
+			block._if(view.ne(_null()))._then().invoke(view, getSetterName()).arg(_new(listenerAnonymousClass));
 		}
 	}
 
@@ -135,9 +133,5 @@ public abstract class AbstractListenerHandler extends BaseAnnotationHandler<ECom
 
 	protected String getMethodName() {
 		return methodName;
-	}
-
-	protected final EComponentWithViewSupportHolder getHolder() {
-		return holder;
 	}
 }

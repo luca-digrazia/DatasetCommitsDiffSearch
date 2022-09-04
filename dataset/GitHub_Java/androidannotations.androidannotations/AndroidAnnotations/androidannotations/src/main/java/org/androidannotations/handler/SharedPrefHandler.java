@@ -36,10 +36,20 @@ import org.androidannotations.annotations.sharedpreferences.DefaultLong;
 import org.androidannotations.annotations.sharedpreferences.DefaultRes;
 import org.androidannotations.annotations.sharedpreferences.DefaultString;
 import org.androidannotations.annotations.sharedpreferences.SharedPref;
+import org.androidannotations.api.sharedpreferences.AbstractPrefEditorField;
+import org.androidannotations.api.sharedpreferences.AbstractPrefField;
+import org.androidannotations.api.sharedpreferences.BooleanPrefEditorField;
 import org.androidannotations.api.sharedpreferences.BooleanPrefField;
+import org.androidannotations.api.sharedpreferences.EditorHelper;
+import org.androidannotations.api.sharedpreferences.FloatPrefEditorField;
 import org.androidannotations.api.sharedpreferences.FloatPrefField;
+import org.androidannotations.api.sharedpreferences.IntPrefEditorField;
 import org.androidannotations.api.sharedpreferences.IntPrefField;
+import org.androidannotations.api.sharedpreferences.LongPrefEditorField;
 import org.androidannotations.api.sharedpreferences.LongPrefField;
+import org.androidannotations.api.sharedpreferences.SharedPreferencesCompat;
+import org.androidannotations.api.sharedpreferences.SharedPreferencesHelper;
+import org.androidannotations.api.sharedpreferences.StringPrefEditorField;
 import org.androidannotations.api.sharedpreferences.StringPrefField;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.CanonicalNameConstants;
@@ -98,8 +108,27 @@ public class SharedPrefHandler extends BaseAnnotationHandler<SharedPrefHolder> i
 
 	@Override
 	public void process(Element element, SharedPrefHolder holder) {
+		generateApiClasses(element);
 		generateConstructor(element, holder);
 		generateFieldMethodAndEditorFieldMethod(element, holder);
+	}
+
+	private void generateApiClasses(Element originatingElement) {
+		generateApiClass(originatingElement, AbstractPrefEditorField.class);
+		generateApiClass(originatingElement, AbstractPrefField.class);
+		generateApiClass(originatingElement, BooleanPrefEditorField.class);
+		generateApiClass(originatingElement, BooleanPrefField.class);
+		generateApiClass(originatingElement, EditorHelper.class);
+		generateApiClass(originatingElement, FloatPrefEditorField.class);
+		generateApiClass(originatingElement, FloatPrefField.class);
+		generateApiClass(originatingElement, IntPrefEditorField.class);
+		generateApiClass(originatingElement, IntPrefField.class);
+		generateApiClass(originatingElement, LongPrefEditorField.class);
+		generateApiClass(originatingElement, LongPrefField.class);
+		generateApiClass(originatingElement, SharedPreferencesCompat.class);
+		generateApiClass(originatingElement, SharedPreferencesHelper.class);
+		generateApiClass(originatingElement, StringPrefEditorField.class);
+		generateApiClass(originatingElement, StringPrefField.class);
 	}
 
 	private void generateConstructor(Element element, SharedPrefHolder holder) {

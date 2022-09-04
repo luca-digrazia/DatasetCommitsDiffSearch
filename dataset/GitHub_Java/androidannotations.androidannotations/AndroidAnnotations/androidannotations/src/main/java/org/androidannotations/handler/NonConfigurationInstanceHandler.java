@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -18,7 +18,7 @@ package org.androidannotations.handler;
 import static com.sun.codemodel.JExpr._this;
 import static com.sun.codemodel.JExpr.cast;
 import static com.sun.codemodel.JExpr.ref;
-import static org.androidannotations.helper.ModelConstants.classSuffix;
+import static org.androidannotations.helper.ModelConstants.GENERATION_SUFFIX;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
@@ -91,7 +91,7 @@ public class NonConfigurationInstanceHandler extends BaseAnnotationHandler<EActi
 				elementType = element.asType();
 			}
 			String typeQualifiedName = elementType.toString();
-			JClass fieldGeneratedBeanClass = refClass(typeQualifiedName + classSuffix());
+			JClass fieldGeneratedBeanClass = refClass(typeQualifiedName + GENERATION_SUFFIX);
 
 			initIfNonConfigurationNotNullBlock.invoke(cast(fieldGeneratedBeanClass, field), "rebind").arg(_this());
 		}

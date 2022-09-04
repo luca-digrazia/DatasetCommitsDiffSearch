@@ -36,18 +36,12 @@ public class PutHandler extends RestMethodHandler {
 	}
 
 	@Override
-	public boolean validate(Element element, AnnotationElements validatedElements) {
-		IsValid valid = new IsValid();
-
-		if (!super.validate(element, validatedElements)) {
-			valid.invalidate();
-		}
+	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
+		super.validate(element, validatedElements, valid);
 
 		validatorHelper.returnTypeIsVoid((ExecutableElement) element, valid);
 
 		restAnnotationHelper.urlVariableNamesExistInParametersAndHasOnlyOneMoreParameter((ExecutableElement) element, valid);
-
-		return valid.isValid();
 	}
 
 	@Override
@@ -57,7 +51,7 @@ public class PutHandler extends RestMethodHandler {
 	}
 
 	@Override
-	protected JExpression getRequestEntity(Element element, RestHolder holder, JBlock methodBody, TreeMap<String, JVar> methodParams) {
-		return restAnnotationHelper.declareHttpEntity(holder, methodBody, methodParams);
+	protected JExpression getRequestEntity(Element element, JBlock methodBody, TreeMap<String, JVar> methodParams) {
+		return restAnnotationHelper.declareHttpEntity(processHolder, methodBody, methodParams);
 	}
 }

@@ -15,9 +15,12 @@
  */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JMethod;
+import java.util.List;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+
 import org.androidannotations.annotations.EActivity;
 import org.androidannotations.helper.AnnotationHelper;
 import org.androidannotations.helper.IdValidatorHelper;
@@ -27,12 +30,11 @@ import org.androidannotations.process.IsValid;
 import org.androidannotations.process.ProcessHolder;
 import org.androidannotations.rclass.IRClass;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
-import java.util.List;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JMethod;
 
-public class EActivityHandler extends BaseGeneratingAnnotationHandler<EActivityHolder> {
+public class EActivityHandler extends BaseAnnotationHandler<EActivityHolder> implements GeneratingAnnotationHandler<EActivityHolder> {
 
 	private AnnotationHelper annotationHelper;
 
@@ -43,16 +45,16 @@ public class EActivityHandler extends BaseGeneratingAnnotationHandler<EActivityH
 
 	@Override
 	public EActivityHolder createGeneratedClassHolder(ProcessHolder processHolder, TypeElement annotatedElement) throws Exception {
-		return new EActivityHolder(processHolder, annotatedElement, androidManifest);
+		return new EActivityHolder(processHolder, annotatedElement);
 	}
 
 	@Override
 	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
-
 		validatorHelper.extendsActivity(element, valid);
 
 		validatorHelper.resIdsExist(element, IRClass.Res.LAYOUT, IdValidatorHelper.FallbackStrategy.ALLOW_NO_RES_ID, valid);
+
+		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.componentRegistered(element, androidManifest, valid);
 	}

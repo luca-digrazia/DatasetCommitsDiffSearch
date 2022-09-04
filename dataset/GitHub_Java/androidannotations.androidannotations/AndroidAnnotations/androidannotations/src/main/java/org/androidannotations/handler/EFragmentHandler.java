@@ -15,10 +15,13 @@
  */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.JBlock;
-import com.sun.codemodel.JFieldRef;
-import com.sun.codemodel.JFieldVar;
-import com.sun.codemodel.JVar;
+import static com.sun.codemodel.JExpr.FALSE;
+import static com.sun.codemodel.JExpr._null;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.element.TypeElement;
+
 import org.androidannotations.annotations.EFragment;
 import org.androidannotations.helper.IdAnnotationHelper;
 import org.androidannotations.helper.IdValidatorHelper;
@@ -28,14 +31,12 @@ import org.androidannotations.process.IsValid;
 import org.androidannotations.process.ProcessHolder;
 import org.androidannotations.rclass.IRClass;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.element.TypeElement;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JFieldRef;
+import com.sun.codemodel.JFieldVar;
+import com.sun.codemodel.JVar;
 
-import static com.sun.codemodel.JExpr.FALSE;
-import static com.sun.codemodel.JExpr._null;
-
-public class EFragmentHandler extends BaseGeneratingAnnotationHandler<EFragmentHolder> {
+public class EFragmentHandler extends BaseAnnotationHandler<EFragmentHolder> implements GeneratingAnnotationHandler<EFragmentHolder> {
 
 	public EFragmentHandler(ProcessingEnvironment processingEnvironment) {
 		super(EFragment.class, processingEnvironment);
@@ -48,7 +49,7 @@ public class EFragmentHandler extends BaseGeneratingAnnotationHandler<EFragmentH
 
 	@Override
 	public void validate(Element element, AnnotationElements validatedElements, IsValid valid) {
-		super.validate(element, validatedElements, valid);
+		validatorHelper.isNotFinal(element, valid);
 
 		validatorHelper.resIdsExist(element, IRClass.Res.LAYOUT, IdValidatorHelper.FallbackStrategy.ALLOW_NO_RES_ID, valid);
 

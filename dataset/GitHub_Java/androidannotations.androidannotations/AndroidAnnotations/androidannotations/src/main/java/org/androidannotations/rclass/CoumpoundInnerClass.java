@@ -15,9 +15,8 @@
  */
 package org.androidannotations.rclass;
 
-import org.androidannotations.process.ProcessHolder;
-
 import com.sun.codemodel.JFieldRef;
+import org.androidannotations.process.ProcessHolder;
 
 public class CoumpoundInnerClass implements IRInnerClass {
 

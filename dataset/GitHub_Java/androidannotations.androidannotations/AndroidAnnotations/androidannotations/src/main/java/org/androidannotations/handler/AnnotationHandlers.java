@@ -55,7 +55,6 @@ public class AnnotationHandlers {
 		add(new EProviderHandler(processingEnvironment));
 		add(new EReceiverHandler(processingEnvironment));
 		add(new EServiceHandler(processingEnvironment));
-        add(new EIntentServiceHandler(processingEnvironment));
 		add(new EFragmentHandler(processingEnvironment));
 		add(new EBeanHandler(processingEnvironment));
 		add(new EViewGroupHandler(processingEnvironment));
@@ -107,9 +106,10 @@ public class AnnotationHandlers {
 		add(new SeekBarProgressChangeHandler(processingEnvironment));
 		add(new SeekBarTouchStartHandler(processingEnvironment));
 		add(new SeekBarTouchStopHandler(processingEnvironment));
-        add(new ServiceActionHandler(processingEnvironment));
 		add(new SubscribeHandler(processingEnvironment));
 		add(new ProduceHandler(processingEnvironment));
+		add(new UiThreadHandler(processingEnvironment));
+		add(new BackgroundHandler(processingEnvironment));
 		add(new InstanceStateHandler(processingEnvironment));
 		add(new HttpsClientHandler(processingEnvironment));
 		add(new OnActivityResultHandler(processingEnvironment));
@@ -120,12 +120,9 @@ public class AnnotationHandlers {
 		add(new AfterInjectHandler(processingEnvironment));
 		add(new AfterViewsHandler(processingEnvironment));
 
-        if (traceActivated(processingEnvironment)) {
-            add(new TraceHandler(processingEnvironment));
-        }
-        /* UIThreadHandler and BackgroundHandler must be after TraceHandler */
-        add(new UiThreadHandler(processingEnvironment));
-        add(new BackgroundHandler(processingEnvironment));
+		if (traceActivated(processingEnvironment)) {
+			add(new TraceHandler(processingEnvironment));
+		}
 	}
 
 	private void add(AnnotationHandler<? extends GeneratedClassHolder> annotationHandler) {

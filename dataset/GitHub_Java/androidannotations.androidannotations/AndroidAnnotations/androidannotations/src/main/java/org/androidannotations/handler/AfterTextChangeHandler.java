@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2015 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -68,8 +68,6 @@ public class AfterTextChangeHandler extends BaseAnnotationHandler<EComponentWith
 		validatorHelper.returnTypeIsVoid((ExecutableElement) element, valid);
 
 		validatorHelper.hasAfterTextChangedMethodParameters((ExecutableElement) element, valid);
-
-		validatorHelper.param.anyorder().type(CanonicalNameConstants.TEXT_VIEW).optional().type(CanonicalNameConstants.EDITABLE).optional().validate((ExecutableElement) element, valid);
 	}
 
 	@Override

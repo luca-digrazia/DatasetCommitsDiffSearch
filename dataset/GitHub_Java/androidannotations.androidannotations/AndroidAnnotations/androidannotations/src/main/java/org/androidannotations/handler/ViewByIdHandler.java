@@ -15,8 +15,13 @@
  */
 package org.androidannotations.handler;
 
-import com.sun.codemodel.JClass;
-import com.sun.codemodel.JFieldRef;
+import static com.sun.codemodel.JExpr.cast;
+import static com.sun.codemodel.JExpr.ref;
+
+import javax.annotation.processing.ProcessingEnvironment;
+import javax.lang.model.element.Element;
+import javax.lang.model.type.TypeMirror;
+
 import org.androidannotations.annotations.ViewById;
 import org.androidannotations.helper.AndroidManifest;
 import org.androidannotations.helper.IdAnnotationHelper;
@@ -27,11 +32,8 @@ import org.androidannotations.model.AnnotationElements;
 import org.androidannotations.process.IsValid;
 import org.androidannotations.rclass.IRClass;
 
-import javax.annotation.processing.ProcessingEnvironment;
-import javax.lang.model.element.Element;
-import javax.lang.model.type.TypeMirror;
-
-import static com.sun.codemodel.JExpr.ref;
+import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JFieldRef;
 
 public class ViewByIdHandler extends BaseAnnotationHandler<EComponentWithViewSupportHolder> {
 
@@ -68,9 +70,8 @@ public class ViewByIdHandler extends BaseAnnotationHandler<EComponentWithViewSup
 		String typeQualifiedName = uiFieldTypeMirror.toString();
 
 		JFieldRef idRef = annotationHelper.extractOneAnnotationFieldRef(processHolder, element, IRClass.Res.ID, true);
-		JClass viewClass = refClass(typeQualifiedName);
-		JFieldRef fieldRef = ref(fieldName);
 
-		holder.assignFindViewById(idRef, viewClass, fieldRef);
+		JBlock methodBody = holder.getOnViewChangedBody();
+		methodBody.assign(ref(fieldName), cast(refClass(typeQualifiedName), holder.findViewById(idRef)));
 	}
 }
