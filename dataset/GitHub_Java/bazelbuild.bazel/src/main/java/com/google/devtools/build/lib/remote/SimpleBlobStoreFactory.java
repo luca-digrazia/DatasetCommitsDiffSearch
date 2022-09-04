@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.remote;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import com.google.auth.Credentials;
-import com.google.devtools.build.lib.remote.blobstore.CombinedDiskHttpBlobStore;
 import com.google.devtools.build.lib.remote.blobstore.OnDiskBlobStore;
 import com.google.devtools.build.lib.remote.blobstore.SimpleBlobStore;
 import com.google.devtools.build.lib.remote.blobstore.http.HttpBlobStore;
@@ -69,23 +68,9 @@ public final class SimpleBlobStoreFactory {
     return new OnDiskBlobStore(cacheDir);
   }
 
-  public static SimpleBlobStore createCombinedCache(
-      Path workingDirectory, PathFragment diskCachePath, RemoteOptions options, Credentials cred)
-      throws IOException {
-    Path cacheDir = workingDirectory.getRelative(checkNotNull(diskCachePath));
-    if (!cacheDir.exists()) {
-      cacheDir.createDirectoryAndParents();
-    }
-    return new CombinedDiskHttpBlobStore(cacheDir, createRest(options, cred));
-  }
-
   public static SimpleBlobStore create(
       RemoteOptions options, @Nullable Credentials creds, @Nullable Path workingDirectory)
       throws IOException {
-
-    if (isRestUrlOptions(options) && isDiskCache(options)) {
-      return createCombinedCache(workingDirectory, options.diskCache, options, creds);
-    }
     if (isRestUrlOptions(options)) {
       return createRest(options, creds);
     }
@@ -106,6 +91,6 @@ public final class SimpleBlobStoreFactory {
   }
 
   static boolean isRestUrlOptions(RemoteOptions options) {
-    return options.remoteHttpCache != null && !options.remoteHttpCache.isEmpty();
+    return options.remoteHttpCache != null;
   }
 }
