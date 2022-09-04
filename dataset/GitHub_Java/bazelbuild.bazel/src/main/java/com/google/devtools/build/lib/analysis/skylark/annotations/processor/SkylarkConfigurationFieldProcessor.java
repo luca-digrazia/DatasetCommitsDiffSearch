@@ -15,6 +15,7 @@
 package com.google.devtools.build.lib.analysis.skylark.annotations.processor;
 
 import com.google.devtools.build.lib.analysis.skylark.annotations.SkylarkConfigurationField;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import java.util.Set;
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Messager;
@@ -27,6 +28,7 @@ import javax.lang.model.element.ElementKind;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeMirror;
 import javax.lang.model.util.Elements;
 import javax.lang.model.util.Types;
 import javax.tools.Diagnostic;
@@ -36,7 +38,7 @@ import javax.tools.Diagnostic;
  *
  * <p>Checks the following invariants about {@link SkylarkConfigurationField}-annotated methods:
  * <ul>
- * <li>The annotated method must be on a configuration fragment.</li>
+ * <li>The annotated method must be on a configuration fragment exposed to skylark.</li>
  * <li>The method must have return type Label.</li>
  * <li>The method must be public.</li>
  * <li>The method must have zero arguments.</li>
@@ -50,9 +52,8 @@ public final class SkylarkConfigurationFieldProcessor extends AbstractProcessor 
 
   private Messager messager;
   private Types typeUtils;
-  private Elements elementUtils;
-  private TypeElement labelType;
-  private TypeElement configurationFragmentType;
+  private TypeMirror labelType;
+  private TypeMirror configurationFragmentType;
 
   @Override
   public SourceVersion getSupportedSourceVersion() {
@@ -64,12 +65,12 @@ public final class SkylarkConfigurationFieldProcessor extends AbstractProcessor 
     super.init(processingEnv);
     messager = processingEnv.getMessager();
     typeUtils = processingEnv.getTypeUtils();
-    elementUtils = processingEnv.getElementUtils();
+    Elements elementUtils = processingEnv.getElementUtils();
     labelType =
-        elementUtils.getTypeElement("com.google.devtools.build.lib.cmdline.Label");
+        elementUtils.getTypeElement("com.google.devtools.build.lib.cmdline.Label").asType();
     configurationFragmentType =
         elementUtils.getTypeElement(
-            "com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment");
+            "com.google.devtools.build.lib.analysis.config.BuildConfiguration.Fragment").asType();
   }
 
   @Override
@@ -81,12 +82,9 @@ public final class SkylarkConfigurationFieldProcessor extends AbstractProcessor 
 
       if (!isMethodOfSkylarkExposedConfigurationFragment(methodElement)) {
         error(methodElement, "@SkylarkConfigurationField annotated methods must be methods "
-            + "of configuration fragments.");
+            + "of configuration fragments with the @SkylarkModule annotation.");
       }
-      // If labelType is null, then Label isn't even included
-      // in the current build, so the method clearly does not return it.
-      if (labelType == null
-          || !typeUtils.isSameType(methodElement.getReturnType(), labelType.asType())) {
+      if (!typeUtils.isSameType(methodElement.getReturnType(), labelType)) {
         error(methodElement, "@SkylarkConfigurationField annotated methods must return Label.");
       }
       if (!methodElement.getModifiers().contains(Modifier.PUBLIC)) {
@@ -106,18 +104,16 @@ public final class SkylarkConfigurationFieldProcessor extends AbstractProcessor 
 
   private boolean isMethodOfSkylarkExposedConfigurationFragment(
       ExecutableElement methodElement) {
-
     if (methodElement.getEnclosingElement().getKind() != ElementKind.CLASS) {
       return false;
     }
     Element classElement = methodElement.getEnclosingElement();
-    // If configurationFragmentType is null, then BuildConfiguration.Fragment isn't even included
-    // in the current build, so the class clearly does not depend on it.
-    if (configurationFragmentType == null
-        || !typeUtils.isAssignable(classElement.asType(), configurationFragmentType.asType())) {
+    if (!typeUtils.isAssignable(classElement.asType(), configurationFragmentType)) {
       return false;
     }
-
+    if (classElement.getAnnotation(SkylarkModule.class) == null) {
+      return false;
+    }
     return true;
   }
 

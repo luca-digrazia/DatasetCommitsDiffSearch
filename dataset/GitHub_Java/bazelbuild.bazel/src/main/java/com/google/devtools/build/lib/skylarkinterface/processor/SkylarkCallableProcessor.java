@@ -52,9 +52,6 @@ import javax.tools.Diagnostic;
  *   Each parameter, if explicitly typed, may only use either 'type' or 'allowedTypes',
  *   not both.
  * </li>
- * <li>
- *   Either the doc string is non-empty, or documented is false.
- * </li>
  * </ul>
  *
  * <p>These properties can be relied upon at runtime without additional checks.
@@ -94,7 +91,6 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       }
 
       try {
-        verifyDocumented(methodElement, annotation);
         verifyNotStructFieldWithInvalidExtraParams(methodElement, annotation);
         verifyParamSemantics(methodElement, annotation);
         verifyNumberOfParameters(methodElement, annotation);
@@ -105,15 +101,6 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     }
 
     return true;
-  }
-
-  private void verifyDocumented(ExecutableElement methodElement, SkylarkCallable annotation)
-      throws SkylarkCallableProcessorException {
-    if (annotation.documented() && annotation.doc().isEmpty()) {
-      throw new SkylarkCallableProcessorException(
-            methodElement,
-            "The 'doc' string must be non-empty if 'documented' is true.");
-    }
   }
 
   private void verifyNotStructFieldWithInvalidExtraParams(
