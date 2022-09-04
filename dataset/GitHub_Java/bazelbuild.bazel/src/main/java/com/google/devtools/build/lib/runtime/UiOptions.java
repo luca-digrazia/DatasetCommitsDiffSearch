@@ -13,13 +13,21 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.devtools.build.lib.runtime.ExperimentalStateTracker.ProgressMode;
+import com.google.devtools.build.lib.events.EventKind;
+import com.google.devtools.build.lib.runtime.UiStateTracker.ProgressMode;
+import com.google.devtools.common.options.Converter;
+import com.google.devtools.common.options.Converters.CommaSeparatedOptionListConverter;
+import com.google.devtools.common.options.Converters.RangeConverter;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
 import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
+import com.google.devtools.common.options.OptionsParsingException;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 
 /** Command-line UI options. */
 public class UiOptions extends OptionsBase {
@@ -36,6 +44,59 @@ public class UiOptions extends OptionsBase {
     YES,
     NO,
     AUTO
+  }
+
+  /** Converter for {@link EventKind} filters * */
+  public static class EventFiltersConverter implements Converter<List<EventKind>> {
+
+    /** A converter for event kinds. */
+    public static class EventKindConverter extends EnumConverter<EventKind> {
+
+      public EventKindConverter(String typeName) {
+        super(EventKind.class, typeName);
+      }
+    }
+
+    private final CommaSeparatedOptionListConverter delegate;
+
+    public EventFiltersConverter() {
+      this.delegate = new CommaSeparatedOptionListConverter();
+    }
+
+    @Override
+    public List<EventKind> convert(String input) throws OptionsParsingException {
+      if (input.isEmpty()) {
+        // This method is not called to convert the default value
+        // Empty list means that the user wants to filter all events
+        return new ArrayList<>(EventKind.ALL_EVENTS);
+      }
+      List<String> filters = this.delegate.convert(input);
+      EnumConverter<EventKind> eventKindConverter = new EventKindConverter(input);
+
+      HashSet<EventKind> filteredEvents = new HashSet<>();
+      for (String filter : filters) {
+        if (!filter.startsWith("+") && !filter.startsWith("-")) {
+          filteredEvents.addAll(EventKind.ALL_EVENTS);
+          break;
+        }
+      }
+
+      for (String filter : filters) {
+        if (filter.startsWith("+")) {
+          filteredEvents.remove(eventKindConverter.convert(filter.substring(1)));
+        } else if (filter.startsWith("-")) {
+          filteredEvents.add(eventKindConverter.convert(filter.substring(1)));
+        } else {
+          filteredEvents.remove(eventKindConverter.convert(filter));
+        }
+      }
+      return new ArrayList<>(filteredEvents);
+    }
+
+    @Override
+    public String getTypeDescription() {
+      return "Convert list of comma separated event kind to list of filters";
+    }
   }
 
   /** Converter for {@link UseColor}. */
@@ -112,9 +173,6 @@ public class UiOptions extends OptionsBase {
 
   @Option(
       name = "isatty",
-      // TODO(b/137881511): Old name should be removed after 2020-01-01, or whenever is
-      // reasonable.
-      oldName = "is_stderr_atty",
       defaultValue = "false",
       metadataTags = {OptionMetadataTag.HIDDEN},
       documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
@@ -179,6 +237,20 @@ public class UiOptions extends OptionsBase {
   public boolean experimentalUiDebugAllEvents;
 
   @Option(
+      name = "ui_event_filters",
+      converter = EventFiltersConverter.class,
+      defaultValue = "null",
+      documentationCategory = OptionDocumentationCategory.LOGGING,
+      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
+      help =
+          "Specifies which events to show in the UI. It is possible to add or remove events "
+              + "to the default ones using leading +/-, or override the default "
+              + "set completely with direct assignment. The set of supported event kinds "
+              + "include INFO, DEBUG, ERROR and more.",
+      allowMultiple = true)
+  public List<EventKind> eventFilters;
+
+  @Option(
       name = "experimental_ui_mode",
       defaultValue = "oldest_actions",
       converter = ProgressModeConverter.class,
@@ -205,24 +277,15 @@ public class UiOptions extends OptionsBase {
   public int uiSamplesShown;
 
   @Option(
-      name = "experimental_ui_limit_console_output",
-      defaultValue = "0",
-      documentationCategory = OptionDocumentationCategory.UNCATEGORIZED,
-      effectTags = {OptionEffectTag.UNKNOWN},
+      name = "experimental_ui_max_stdouterr_bytes",
+      documentationCategory = OptionDocumentationCategory.EXECUTION_STRATEGY,
+      effectTags = {OptionEffectTag.EXECUTION},
+      defaultValue = "1048576",
+      converter = MaxStdoutErrBytesConverter.class,
       help =
-          "Number of bytes to which the UI will limit its output (non-positive "
-              + "values indicate unlimited). Once the limit is approaching, the UI "
-              + "will try hard to limit in a meaningful way, but will ultimately just drop all "
-              + "output.")
-  public int experimentalUiLimitConsoleOutput;
-
-  @Option(
-      name = "experimental_ui_deduplicate",
-      defaultValue = "false",
-      documentationCategory = OptionDocumentationCategory.LOGGING,
-      effectTags = {OptionEffectTag.TERMINAL_OUTPUT},
-      help = "Make the UI deduplicate messages to have a cleaner scroll-back log.")
-  public boolean experimentalUiDeduplicate;
+          "The maximum size of the stdout / stderr files that will be printed to the console. "
+              + "-1 implies no limit.")
+  public int maxStdoutErrBytes;
 
   public boolean useColor() {
     return useColorEnum == UseColor.YES || (useColorEnum == UseColor.AUTO && isATty);
@@ -230,5 +293,27 @@ public class UiOptions extends OptionsBase {
 
   public boolean useCursorControl() {
     return useCursesEnum == UseCurses.YES || (useCursesEnum == UseCurses.AUTO && isATty);
+  }
+
+  /** A converter for --experimental_ui_max_stdouterr_bytes. */
+  public static class MaxStdoutErrBytesConverter extends RangeConverter {
+
+    /**
+     * The maximum value of the flag must be limited to ensure conversions to UTF-8 do not trigger
+     * integer overflows. In JDK9+, if the message buffer contains a byte whose high bit is set, a
+     * UTF-8 decoding path is taken that allocates a new byte[] buffer twice as large as the message
+     * byte[] buffer.
+     */
+    private static final int MAX_VALUE = (Integer.MAX_VALUE - 8) >> 1;
+
+    public MaxStdoutErrBytesConverter() {
+      super(-1, (Integer.MAX_VALUE - 8) >> 1);
+    }
+
+    @Override
+    public Integer convert(String input) throws OptionsParsingException {
+      Integer value = super.convert(input);
+      return value >= 0 ? value : MAX_VALUE;
+    }
   }
 }
