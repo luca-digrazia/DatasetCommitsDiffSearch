@@ -39,7 +39,6 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
-import com.google.devtools.build.lib.analysis.stringtemplate.TemplateContext;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -138,9 +137,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
           + "<pre class=language-python>list(ctx.attr.&lt;ATTR&gt;.files)[0]</pre>";
   public static final String ATTR_DOC =
       "A struct to access the values of the attributes. The values are provided by "
-          + "the user (if not, a default value is used). The attributes of the struct and the "
-          + "types of their values correspond to the keys and values of the <code>attrs</code> "
-          + "dict provided to the <code>rule</code> function.";
+          + "the user (if not, a default value is used).";
   public static final String SPLIT_ATTR_DOC =
       "A struct to access the values of attributes with split configurations. If the attribute is "
           + "a label list, the value of split_attr is a dict of the keys of the split (as strings) "
@@ -1118,30 +1115,27 @@ public final class SkylarkRuleContext implements SkylarkValue {
       + "Additional variables may come from other places, such as configurations. Note that "
       + "this function is experimental.")
   public String expandMakeVariables(String attributeName, String command,
-      Map<String, String> additionalSubstitutions) throws EvalException {
+      final Map<String, String> additionalSubstitutions) throws EvalException {
     checkMutable("expand_make_variables");
-    TemplateContext templateContext = getConfigurationMakeVariableContext(additionalSubstitutions);
-    return ruleContext.getExpander(templateContext).expand(attributeName, command);
+    ConfigurationMakeVariableContext makeVariableContext =
+        new ConfigurationMakeVariableContext(
+            // TODO(lberki): This should be removed. But only after either verifying that no one
+            // uses it or providing an alternative.
+            ruleContext.getMakeVariables(ImmutableList.of(":cc_toolchain")),
+            ruleContext.getRule().getPackage(),
+            ruleContext.getConfiguration()) {
+          @Override
+          public String lookupVariable(String variableName) throws ExpansionException {
+            if (additionalSubstitutions.containsKey(variableName)) {
+              return additionalSubstitutions.get(variableName);
+            } else {
+              return super.lookupVariable(variableName);
+            }
+          }
+        };
+    return ruleContext.getExpander(makeVariableContext).expand(attributeName, command);
   }
 
-  TemplateContext getConfigurationMakeVariableContext(
-      final Map<String, String> additionalSubstitutions) {
-    return new ConfigurationMakeVariableContext(
-        // TODO(lberki): This should be removed. But only after either verifying that no one
-        // uses it or providing an alternative.
-        ruleContext.getMakeVariables(ImmutableList.of(":cc_toolchain")),
-        ruleContext.getRule().getPackage(),
-        ruleContext.getConfiguration()) {
-      @Override
-      public String lookupVariable(String variableName) throws ExpansionException {
-        if (additionalSubstitutions.containsKey(variableName)) {
-          return additionalSubstitutions.get(variableName);
-        } else {
-          return super.lookupVariable(variableName);
-        }
-      }
-    };
-  }
 
   FilesToRunProvider getExecutableRunfiles(Artifact executable) {
     return attributesCollection.getExecutableRunfilesMap().get(executable);
