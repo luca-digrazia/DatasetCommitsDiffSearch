@@ -17,7 +17,6 @@ import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.JavaLibraryPathAdditionalPathBuildItem;
 import io.quarkus.deployment.builditem.JniBuildItem;
-import io.quarkus.deployment.builditem.NativeEnableAllCharsetsBuildItem;
 import io.quarkus.deployment.builditem.SslNativeConfigBuildItem;
 import io.quarkus.deployment.builditem.SslTrustStoreSystemPropertyBuildItem;
 import io.quarkus.deployment.builditem.SystemPropertyBuildItem;
@@ -27,7 +26,7 @@ import io.quarkus.deployment.builditem.substrate.SubstrateConfigBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateProxyDefinitionBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateResourceBundleBuildItem;
 import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
-import io.quarkus.runtime.ssl.SslContextConfigurationRecorder;
+import io.quarkus.runtime.ssl.SslContextConfigurationTemplate;
 
 //TODO: this should go away, once we decide on which one of the API's we want
 class SubstrateConfigBuildStep {
@@ -38,11 +37,10 @@ class SubstrateConfigBuildStep {
 
     @BuildStep
     @Record(ExecutionTime.STATIC_INIT)
-    void build(SslContextConfigurationRecorder sslContextConfigurationRecorder,
+    void build(SslContextConfigurationTemplate sslContextConfigurationTemplate,
             List<SubstrateConfigBuildItem> substrateConfigBuildItems,
             SslNativeConfigBuildItem sslNativeConfig,
             List<JniBuildItem> jniBuildItems,
-            List<NativeEnableAllCharsetsBuildItem> nativeEnableAllCharsetsBuildItems,
             List<ExtensionSslNativeSupportBuildItem> extensionSslNativeSupport,
             BuildProducer<SubstrateProxyDefinitionBuildItem> proxy,
             BuildProducer<SubstrateResourceBundleBuildItem> resourceBundle,
@@ -74,7 +72,7 @@ class SubstrateConfigBuildStep {
 
         // For now, we enable SSL native if it hasn't been explicitly disabled
         // it's probably overly conservative but it's a first step in the right direction
-        sslContextConfigurationRecorder.setSslNativeEnabled(!sslNativeConfig.isExplicitlyDisabled());
+        sslContextConfigurationTemplate.setSslNativeEnabled(!sslNativeConfig.isExplicitlyDisabled());
 
         if (sslNativeEnabled) {
             // This is an ugly hack but for now it's the only way to make the SunEC library
@@ -127,10 +125,6 @@ class SubstrateConfigBuildStep {
                 }
             }
             nativeImage.produce(new SubstrateSystemPropertyBuildItem("quarkus.jni.enable", "true"));
-        }
-
-        if (!nativeEnableAllCharsetsBuildItems.isEmpty()) {
-            nativeImage.produce(new SubstrateSystemPropertyBuildItem("quarkus.native.enable-all-charsets", "true"));
         }
     }
 

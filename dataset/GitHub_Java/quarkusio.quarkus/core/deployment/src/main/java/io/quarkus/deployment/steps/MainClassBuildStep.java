@@ -39,7 +39,6 @@ import io.quarkus.gizmo.TryBlock;
 import io.quarkus.runtime.Application;
 import io.quarkus.runtime.StartupContext;
 import io.quarkus.runtime.StartupTask;
-import io.quarkus.runtime.SubstrateRuntimePropertiesRecorder;
 import io.quarkus.runtime.Timing;
 
 class MainClassBuildStep {
@@ -124,7 +123,6 @@ class MainClassBuildStep {
             mv.invokeStaticMethod(ofMethod(System.class, "setProperty", String.class, String.class, String.class),
                     mv.load(i.getKey()), mv.load(i.getValue()));
         }
-        mv.invokeStaticMethod(ofMethod(SubstrateRuntimePropertiesRecorder.class, "doRuntime", void.class));
 
         // Set the SSL system properties
         if (!javaLibraryPathAdditionalPaths.isEmpty()) {
