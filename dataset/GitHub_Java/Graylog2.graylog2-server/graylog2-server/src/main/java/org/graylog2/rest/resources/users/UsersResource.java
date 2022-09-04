@@ -471,7 +471,9 @@ public class UsersResource extends RestResource {
 
             for (String roleId : roleIds) {
                 final Set<String> rolePerms = inMemoryRolePermissionResolver.resolveStringPermission(roleId);
-                permSet.addAll(rolePerms);
+                if (rolePerms != null) {
+                    permSet.addAll(rolePerms);
+                }
             }
             permissions = Lists.newArrayList(permSet);
         }
