@@ -122,7 +122,7 @@ public class BundleService {
         return bundleExporter.export(exportBundle);
     }
 
-    public long count() {
+    public long bundleCount() {
         return dbCollection.count();
     }
 }
