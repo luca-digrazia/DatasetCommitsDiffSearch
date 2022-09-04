@@ -44,10 +44,9 @@ import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
-import com.sun.codemodel.JSwitch;
 import com.sun.codemodel.JVar;
 
-public abstract class EComponentWithViewSupportHolder extends EComponentHolder implements HasKeyEventCallbackMethods {
+public abstract class EComponentWithViewSupportHolder extends EComponentHolder {
 
 	protected ViewNotifierHelper viewNotifierHelper;
 	private JMethod onViewChanged;
@@ -61,12 +60,10 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	protected JMethod findSupportFragmentByTag;
 	private Map<String, TextWatcherHolder> textWatcherHolders = new HashMap<>();
 	private Map<String, OnSeekBarChangeListenerHolder> onSeekBarChangeListenerHolders = new HashMap<>();
-	private KeyEventCallbackMethodsDelegate<EComponentWithViewSupportHolder> keyEventCallbackMethodsDelegate;
 
 	public EComponentWithViewSupportHolder(AndroidAnnotationsEnvironment environment, TypeElement annotatedElement) throws Exception {
 		super(environment, annotatedElement);
 		viewNotifierHelper = new ViewNotifierHelper(this);
-		keyEventCallbackMethodsDelegate = new KeyEventCallbackMethodsDelegate<>(this);
 	}
 
 	public JBlock getOnViewChangedBody() {
@@ -278,57 +275,10 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 		JDefinedClass onSeekbarChangeListenerClass = getCodeModel().anonymousClass(getClasses().ON_SEEKBAR_CHANGE_LISTENER);
 		JClass viewClass = getClasses().SEEKBAR;
 
-		JBlock onViewChangedBody = getOnViewChangedBody().block();
-		JVar viewVariable = onViewChangedBody.decl(FINAL, viewClass, "view", cast(viewClass, findViewById(idRef)));
-		onViewChangedBody._if(viewVariable.ne(JExpr._null()))._then() //
-		.invoke(viewVariable, "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
+		FoundViewHolder foundViewHolder = getFoundViewHolder(idRef, viewClass);
+		foundViewHolder.getIfNotNullBlock().invoke(foundViewHolder.getRef(), "setOnSeekBarChangeListener").arg(_new(onSeekbarChangeListenerClass));
 
 		return new OnSeekBarChangeListenerHolder(this, onSeekbarChangeListenerClass);
-	}
-
-	@Override
-	public JSwitch getOnKeyDownSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyDownSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyDownKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyDownKeyEventParam();
-	}
-
-	@Override
-	public JSwitch getOnKeyLongPressSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyLongPressSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyLongPressKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyLongPressKeyEventParam();
-	}
-
-	@Override
-	public JSwitch getOnKeyMultipleSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyMultipleSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyMultipleKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyMultipleKeyEventParam();
-	}
-
-	@Override
-	public JVar getOnKeyMultipleCountParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyMultipleCountParam();
-	}
-
-	@Override
-	public JSwitch getOnKeyUpSwitchBody() {
-		return keyEventCallbackMethodsDelegate.getOnKeyUpSwitchBody();
-	}
-
-	@Override
-	public JVar getOnKeyUpKeyEventParam() {
-		return keyEventCallbackMethodsDelegate.getOnKeyUpKeyEventParam();
 	}
 
 }
