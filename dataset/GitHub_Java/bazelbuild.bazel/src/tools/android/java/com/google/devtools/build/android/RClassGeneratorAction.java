@@ -30,7 +30,6 @@ import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.ShellQuotedParamsFilePreProcessor;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,11 +55,14 @@ import java.util.logging.Logger;
  */
 public class RClassGeneratorAction {
 
-  private static final StdLogger STD_LOGGER = new StdLogger(StdLogger.Level.WARNING);
+  private static final StdLogger STD_LOGGER =
+      new StdLogger(StdLogger.Level.WARNING);
 
   private static final Logger logger = Logger.getLogger(RClassGeneratorAction.class.getName());
 
-  /** Flag specifications for this action. */
+  /**
+   * Flag specifications for this action.
+   */
   public static final class Options extends OptionsBase {
 
     @Option(
@@ -142,8 +144,7 @@ public class RClassGeneratorAction {
   public static void main(String[] args) throws Exception {
     final Stopwatch timer = Stopwatch.createStarted();
     OptionsParser optionsParser = OptionsParser.newOptionsParser(Options.class);
-    optionsParser.enableParamsFileSupport(
-        new ShellQuotedParamsFilePreProcessor(FileSystems.getDefault()));
+    optionsParser.enableParamsFileSupport(FileSystems.getDefault());
     optionsParser.parseAndExitUponError(args);
     Options options = optionsParser.getOptions(Options.class);
     Preconditions.checkNotNull(options.classJarOutput);
@@ -161,8 +162,8 @@ public class RClassGeneratorAction {
       if (options.primaryRTxt != null) {
         String appPackageName = options.packageForR;
         if (appPackageName == null) {
-          appPackageName =
-              VariantConfiguration.getManifestPackage(options.primaryManifest.toFile());
+          appPackageName = VariantConfiguration
+              .getManifestPackage(options.primaryManifest.toFile());
         }
         Multimap<String, ResourceSymbols> libSymbolMap = ArrayListMultimap.create();
         ResourceSymbols fullSymbolValues =

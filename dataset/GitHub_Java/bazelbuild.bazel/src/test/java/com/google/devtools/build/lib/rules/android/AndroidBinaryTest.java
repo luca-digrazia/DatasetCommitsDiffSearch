@@ -115,7 +115,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(ct)),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
-    List<String> args = getGeneratingSpawnActionArgs(intermediateJar);
+    List<String> args = getGeneratingSpawnAction(intermediateJar).getArguments();
     MoreAsserts.assertContainsSublist(args, "-include", "java/a/a.spec");
     assertThat(Joiner.on(" ").join(args)).doesNotContain("mainDexClasses.rules");
   }
@@ -718,12 +718,12 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     SpawnAction zipalignAction = (SpawnAction) actionsTestUtil()
         .getActionForArtifactEndingWith(artifacts, "zipaligned_hello.apk");
     assertThat(zipalignAction.getCommandFilename()).endsWith("sdk/zipalign");
-    Artifact a = ActionsTestUtil.getFirstArtifactEndingWith(artifacts, "hello.apk");
-    assertThat(getGeneratingSpawnAction(a).getCommandFilename()).endsWith("sdk/apksigner");
-    List<String> args = getGeneratingSpawnActionArgs(a);
+    SpawnAction apkAction = (SpawnAction) actionsTestUtil()
+        .getActionForArtifactEndingWith(artifacts, "hello.apk");
+    assertThat(apkAction.getCommandFilename()).endsWith("sdk/apksigner");
 
-    assertThat(flagValue("--v1-signing-enabled", args)).isEqualTo(signV1);
-    assertThat(flagValue("--v2-signing-enabled", args)).isEqualTo(signV2);
+    assertThat(flagValue("--v1-signing-enabled", apkAction.getArguments())).isEqualTo(signV1);
+    assertThat(flagValue("--v2-signing-enabled", apkAction.getArguments())).isEqualTo(signV2);
   }
 
   @Test
@@ -746,20 +746,25 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         getFirstArtifactEndingWith(artifacts, "proguard.jar"),
         getFirstArtifactEndingWith(artifacts, "shrunk.ap_"));
 
-    List<String> processingArgs =
-        getGeneratingSpawnActionArgs(getFirstArtifactEndingWith(artifacts, "resource_files.zip"));
+    final SpawnAction resourceProcessing =
+        getGeneratingSpawnAction(getFirstArtifactEndingWith(artifacts, "resource_files.zip"));
+    List<String> processingArgs = resourceProcessing.getArguments();
 
     assertThat(flagValue("--resourcesOutput", processingArgs))
         .endsWith("hello_files/resource_files.zip");
 
-    List<String> proguardArgs =
-        getGeneratingSpawnActionArgs(getFirstArtifactEndingWith(artifacts, "proguard.jar"));
+    final SpawnAction proguard =
+        getGeneratingSpawnAction(getFirstArtifactEndingWith(artifacts, "proguard.jar"));
+    assertThat(proguard).isNotNull();
+    List<String> proguardArgs = proguard.getArguments();
 
     assertThat(flagValue("-outjars", proguardArgs)).endsWith("hello_proguard.jar");
 
-    List<String> shrinkingArgs =
-        getGeneratingSpawnActionArgs(getFirstArtifactEndingWith(artifacts, "shrunk.ap_"));
+    final SpawnAction resourceShrinking =
+        getGeneratingSpawnAction(getFirstArtifactEndingWith(artifacts, "shrunk.ap_"));
+    assertThat(resourceShrinking).isNotNull();
 
+    List<String> shrinkingArgs = resourceShrinking.getArguments();
     assertThat(flagValue("--resources", shrinkingArgs))
         .isEqualTo(flagValue("--resourcesOutput", processingArgs));
     assertThat(flagValue("--shrunkJar", shrinkingArgs))
@@ -802,15 +807,16 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget output = getConfiguredTarget("//java/com/google/android/hello:b");
 
     // Checks that ProGuard is called with the appropriate options.
-    Artifact a = getFirstArtifactEndingWith(getFilesToBuild(output), "_proguard.jar");
-    SpawnAction action = getGeneratingSpawnAction(a);
-    List<String> args = getGeneratingSpawnActionArgs(a);
+    SpawnAction action =
+        (SpawnAction)
+            actionsTestUtil()
+                .getActionForArtifactEndingWith(getFilesToBuild(output), "_proguard.jar");
 
     // Assert that the ProGuard executable set in the android_sdk rule appeared in the command-line
     // of the SpawnAction that generated the _proguard.jar.
     assertThat(
             Iterables.any(
-                args,
+                action.getArguments(),
                 new Predicate<String>() {
                   @Override
                   public boolean apply(String s) {
@@ -818,7 +824,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
                   }
                 }))
         .isTrue();
-    assertThat(args)
+    assertThat(action.getArguments())
         .containsAllOf(
             "-injars",
             execPathEndingWith(action.getInputs(), "b_deploy.jar"),
@@ -961,10 +967,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     // Ensure that the args that immediately follow "--dex" match the expectation.
     ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android:b");
-    List<String> args =
-        getGeneratingSpawnActionArgs(
-            ActionsTestUtil.getFirstArtifactEndingWith(
-                actionsTestUtil().artifactClosureOf(getFilesToBuild(binary)), "classes.dex"));
+    SpawnAction dexAction = (SpawnAction) actionsTestUtil().getActionForArtifactEndingWith(
+        actionsTestUtil().artifactClosureOf(getFilesToBuild(binary)), "classes.dex");
+    List<String> args = dexAction.getArguments();
     int start = args.indexOf("--dex") + 1;
     assertThat(start).isNotEqualTo(0);
     int end = Math.min(args.size(), start + expectedArgs.size());
@@ -998,11 +1003,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     // Ensure that the args that immediately follow the main class in the shell command
     // match the expectation.
     ConfiguredTarget binary = getConfiguredTarget("//java/com/google/android:b");
-    List<String> args =
-        getGeneratingSpawnActionArgs(
-            ActionsTestUtil.getFirstArtifactEndingWith(
-                actionsTestUtil().artifactClosureOf(getFilesToBuild(binary)), "main_dex_list.txt"));
-
+    SpawnAction mainDexListAction = (SpawnAction) actionsTestUtil().getActionForArtifactEndingWith(
+        actionsTestUtil().artifactClosureOf(getFilesToBuild(binary)), "main_dex_list.txt");
+    List<String> args = mainDexListAction.getArguments();
     // args: [ "bash", "-c", "java -cp dx.jar main opts other" ]
     MoreAsserts.assertContainsSublist(args, expectedArgs);
   }
@@ -1081,8 +1084,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
     // Validate that the filters are correctly passed to the resource processing action
     // This includes trimming whitespace and ignoring empty filters.
-    assertThat(resourceArguments(directResources)).contains("en,es");
-    assertThat(resourceArguments(directResources)).contains("hdpi,xhdpi");
+    assertThat(resourceGeneratingAction(directResources).getArguments()).contains("en,es");
+    assertThat(resourceGeneratingAction(directResources).getArguments()).contains("hdpi,xhdpi");
   }
 
   @Test
@@ -1469,9 +1472,10 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     }
 
     // Validate resource filters are not passed to execution, since they were applied in analysis
-    assertThat(resourceArguments(directResources))
+    assertThat(resourceGeneratingAction(directResources).getArguments())
         .doesNotContain(ResourceFilter.RESOURCE_CONFIGURATION_FILTERS_NAME);
-    assertThat(resourceArguments(directResources)).doesNotContain(ResourceFilter.DENSITIES_NAME);
+    assertThat(resourceGeneratingAction(directResources).getArguments())
+        .doesNotContain(ResourceFilter.DENSITIES_NAME);
   }
 
   @Test
@@ -1559,7 +1563,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
             "  ])");
 
     List<String> resourceProcessingArgs =
-        getGeneratingSpawnActionArgs(getResourceContainer(binary).getRTxt());
+        getGeneratingSpawnAction(getResourceContainer(binary).getRTxt()).getArguments();
 
     assertThat(
             Iterables.filter(
@@ -1590,7 +1594,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     useConfiguration("--experimental_android_throw_on_resource_conflict");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
 
-    List<String> resourceProcessingArgs = resourceArguments(getResourceContainer(binary));
+    List<String> resourceProcessingArgs =
+        resourceGeneratingAction(getResourceContainer(binary)).getArguments();
+
     assertThat(resourceProcessingArgs).contains("--throwOnResourceConflict");
   }
 
@@ -1799,9 +1805,11 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "<resources><string name = 'lib_string'>Libs!</string></resources>");
     scratch.file("java/r/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
-    Artifact jar = getResourceClassJar(getConfiguredTarget("//java/r/android:r"));
-    assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
-    assertThat(getGeneratingSpawnActionArgs(jar))
+    ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
+    SpawnAction compilerAction = ((SpawnAction) getResourceClassJarAction(binary));
+    assertThat(compilerAction.getMnemonic()).isEqualTo("RClassGenerator");
+    List<String> args = compilerAction.getArguments();
+    assertThat(args)
         .containsAllOf("--primaryRTxt", "--primaryManifest", "--library", "--classJarOutput");
   }
 
@@ -1814,9 +1822,10 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               )");
     scratch.file("java/r/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
-    Artifact jar = getResourceClassJar(getConfiguredTarget("//java/r/android:r"));
-    assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
-    List<String> args = getGeneratingSpawnActionArgs(jar);
+    ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
+    SpawnAction compilerAction = ((SpawnAction) getResourceClassJarAction(binary));
+    assertThat(compilerAction.getMnemonic()).isEqualTo("RClassGenerator");
+    List<String> args = compilerAction.getArguments();
     assertThat(args).containsAllOf("--primaryRTxt", "--primaryManifest", "--classJarOutput");
     assertThat(args).doesNotContain("--libraries");
   }
@@ -1840,9 +1849,9 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     scratch.file("java/r/android/res/values/strings.xml",
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
-    Artifact jar = getResourceClassJar(binary);
-    assertThat(getGeneratingAction(jar).getMnemonic()).isEqualTo("RClassGenerator");
-    List<String> args = getGeneratingSpawnActionArgs(jar);
+    SpawnAction compilerAction = ((SpawnAction) getResourceClassJarAction(binary));
+    assertThat(compilerAction.getMnemonic()).isEqualTo("RClassGenerator");
+    List<String> args = compilerAction.getArguments();
     assertThat(args)
         .containsAllOf("--primaryRTxt", "--primaryManifest", "--library", "--classJarOutput",
             "--packageForR", "com.binary.custom");
@@ -1859,7 +1868,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               crunch_png = 0,",
         "               )");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(binary));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(binary)).getArguments();
     assertThat(args).contains("--useAaptCruncher=no");
   }
 
@@ -1874,7 +1883,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               crunch_png = 1,",
         "               )");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(binary));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(binary)).getArguments();
     assertThat(args).doesNotContain("--useAaptCruncher=no");
   }
 
@@ -1888,7 +1897,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "                                 'res/drawable-hdpi-v4/bar.9.png'],",
         "               )");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(binary));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(binary)).getArguments();
     assertThat(args).doesNotContain("--useAaptCruncher=no");
   }
 
@@ -1908,7 +1917,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               crunch_png = 0,",
         "               )");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(binary));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(binary)).getArguments();
     assertThat(args).contains("--useAaptCruncher=no");
   }
 
@@ -1929,21 +1938,18 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               crunch_png = 0,",
         "               )");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(binary));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(binary)).getArguments();
     assertThat(args).contains("--useAaptCruncher=no");
   }
 
   @Test
   public void testZipaligned() throws Exception {
     ConfiguredTarget binary = getConfiguredTarget("//java/android:app");
-    Artifact a =
-        ActionsTestUtil.getFirstArtifactEndingWith(
-            actionsTestUtil().artifactClosureOf(getFilesToBuild(binary)), "zipaligned_app.apk");
-    SpawnAction action = getGeneratingSpawnAction(a);
-
+    SpawnAction action = (SpawnAction) actionsTestUtil().getActionForArtifactEndingWith(
+        actionsTestUtil().artifactClosureOf(getFilesToBuild(binary)), "zipaligned_app.apk");
     assertThat(action.getMnemonic()).isEqualTo("AndroidZipAlign");
 
-    List<String> arguments = getGeneratingSpawnActionArgs(a);
+    List<String> arguments = action.getArguments();
     assertThat(Iterables.frequency(arguments, "4")).isEqualTo(1);
 
     Artifact zipAlignTool =
@@ -2264,8 +2270,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
     Artifact mainDexList = ActionsTestUtil.getFirstArtifactEndingWith(
         actionsTestUtil().artifactClosureOf(getFilesToBuild(a)), "main_dex_list.txt");
-    List<String> args = getGeneratingSpawnActionArgs(mainDexList);
-    assertThat(args).containsAllOf("--hello", "--world");
+    SpawnAction spawnAction = getGeneratingSpawnAction(mainDexList);
+    assertThat(spawnAction.getArguments()).containsAllOf("--hello", "--world");
   }
 
   @Test
@@ -2300,7 +2306,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
     Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(a)),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
-    List<String> args = getGeneratingSpawnActionArgs(intermediateJar);
+    List<String> args = getGeneratingSpawnAction(intermediateJar).getArguments();
     assertContainsSublist(
         args,
         ImmutableList.of(
@@ -2321,7 +2327,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget a = getConfiguredTarget("//java/foo:abin");
     Artifact intermediateJar = artifactByPath(ImmutableList.of(getCompressedUnsignedApk(a)),
         ".apk", ".dex.zip", ".dex.zip", "main_dex_list.txt", "_intermediate.jar");
-    List<String> args = getGeneratingSpawnActionArgs(intermediateJar);
+    List<String> args = getGeneratingSpawnAction(intermediateJar).getArguments();
     MoreAsserts.assertDoesNotContainSublist(
         args,
         "-previousobfuscationmap");
@@ -2378,7 +2384,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "<resources><string name = 'hello'>Hello Android!</string></resources>");
     ConfiguredTarget resource = getConfiguredTarget("//java/android/resources:r");
 
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(resource));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(resource)).getArguments();
 
     assertPrimaryResourceDirs(ImmutableList.of("java/android/resources/res"), args);
   }
@@ -2394,7 +2400,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "exports_files(['res/values/strings.xml'])");
     ConfiguredTarget resource = getConfiguredTarget("//java/android/resources:r");
 
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(resource));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(resource)).getArguments();
     assertPrimaryResourceDirs(ImmutableList.of("java/resources/other/res"), args);
     assertNoEvents();
   }
@@ -2412,7 +2418,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         ")");
     ConfiguredTarget resource = getConfiguredTarget("//java/android/resources:r");
 
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(resource));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(resource)).getArguments();
     assertPrimaryResourceDirs(ImmutableList.of("java/other/resources/res"), args);
     assertNoEvents();
   }
@@ -2431,7 +2437,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "exports_files(['res/values/strings.xml'])");
     ConfiguredTarget resource = getConfiguredTarget("//java/android/resources:r");
 
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(resource));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(resource)).getArguments();
     assertPrimaryResourceDirs(ImmutableList.of("java/other/resources/res"), args);
     assertNoEvents();
   }
@@ -2458,7 +2464,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "               ])");
     ConfiguredTarget resource = getConfiguredTarget("//java/android/resources:r");
 
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(resource));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(resource)).getArguments();
     assertPrimaryResourceDirs(ImmutableList.of("java/android/resources/bin-res"), args);
     assertThat(getDirectDependentResourceDirs(args))
         .containsAllOf("java/android/resources/d1/d1-res", "java/android/resources/d2/d2-res");
@@ -2481,7 +2487,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         ")");
     ConfiguredTarget resource = getConfiguredTarget("//java/android/resources:r");
 
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(resource));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(resource)).getArguments();
     assertPrimaryResourceDirs(ImmutableList.of("java/other/resources/res"), args);
     assertNoEvents();
   }
@@ -2594,7 +2600,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
       "               )");
     ConfiguredTarget r = getConfiguredTarget("//a/r:r");
     assertNoEvents();
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(r));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(r)).getArguments();
     assertContainsSublist(args, ImmutableList.of("--packageForR", "com.google.android.bar"));
   }
 
@@ -2639,7 +2645,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
       "               )");
     ConfiguredTarget r = getConfiguredTarget("//java/a/r:r");
     assertNoEvents();
-    List<String> args = getGeneratingSpawnActionArgs(getResourceApk(r));
+    List<String> args = getGeneratingSpawnAction(getResourceApk(r)).getArguments();
     Truth.assertThat(args).doesNotContain("--applicationId");
   }
 
@@ -2669,10 +2675,11 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         ")");
 
     ConfiguredTarget ct = getConfiguredTarget("//java/com/google/android:foo");
+    SpawnAction proguardAction =
+        getGeneratingSpawnAction(artifactByPath(getFilesToBuild(ct), "_proguard.jar"));
     MoreAsserts.assertContainsSublist(
-        getGeneratingSpawnActionArgs(artifactByPath(getFilesToBuild(ct), "_proguard.jar")),
-        "-applymapping",
-        "java/com/google/android/proguard.map");
+        proguardAction.getArguments(),
+        "-applymapping", "java/com/google/android/proguard.map");
   }
 
   @Test
@@ -2971,10 +2978,10 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         ")");
     useConfiguration("--experimental_android_use_nocompress_extensions_on_apk");
     ConfiguredTarget binary = getConfiguredTarget("//java/r/android:r");
-    assertThat(getGeneratingSpawnActionArgs(getCompressedUnsignedApk(binary)))
+    assertThat(getCompressedUnsignedApkAction(binary).getArguments())
         .containsAllOf("--nocompress_suffixes", ".apk", ".so")
         .inOrder();
-    assertThat(getGeneratingSpawnActionArgs(getFinalUnsignedApk(binary)))
+    assertThat(getFinalUnsignedApkAction(binary).getArguments())
         .containsAllOf("--nocompress_suffixes", ".apk", ".so")
         .inOrder();
   }
@@ -3174,7 +3181,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     ConfiguredTarget a = getConfiguredTarget("//java/a:a");
     Artifact apk = getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_RESOURCES_APK);
 
-    assertThat(getGeneratingSpawnActionArgs(apk))
+    SpawnAction apkAction = getGeneratingSpawnAction(apk);
+    assertThat(apkAction.getArguments())
         .containsAllOf("--aapt2", "sdk/aapt2", "--tool", "AAPT2_PACKAGE");
   }
 
@@ -3230,7 +3238,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     Artifact apk = getImplicitOutputArtifact(a, AndroidRuleClasses.ANDROID_RESOURCES_APK);
 
     SpawnAction apkAction = getGeneratingSpawnAction(apk);
-    assertThat(getGeneratingSpawnActionArgs(apk))
+    assertThat(apkAction.getArguments())
         .containsAllOf("--aapt2", "sdk/aapt2", "--tool", "AAPT2_PACKAGE");
 
     assertThat(apkAction.getInputs())

@@ -13,6 +13,8 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
 import android.databinding.AndroidDataBinding;
 import android.databinding.cli.ProcessXmlOptions;
 import com.android.annotations.NonNull;
@@ -305,15 +307,8 @@ public class AndroidResourceProcessor {
       @Nullable Path dataBindingInfoOut)
       throws IOException, InterruptedException, LoggedErrorException, UnrecognizedSplitsException {
     Path androidManifest = primaryData.getManifest();
-    final Path resourceDir =
-        processDataBindings(
-            primaryData.getResourceDir().resolveSibling("res_no_binding"),
-            primaryData.getResourceDir(),
-            dataBindingInfoOut,
-            variantType,
-            customPackageForR,
-            androidManifest,
-            true /* shouldZipDataBindingInfo */);
+    final Path resourceDir = processDataBindings(primaryData.getResourceDir(), dataBindingInfoOut,
+        variantType, customPackageForR, androidManifest);
 
     final Path assetsDir = primaryData.getAssetDir();
     if (publicResourcesOut != null) {
@@ -500,19 +495,13 @@ public class AndroidResourceProcessor {
   /**
    * If resources exist and a data binding layout info file is requested: processes data binding
    * declarations over those resources, populates the output file, and creates a new resources
-   * directory with data binding expressions stripped out (so aapt, which doesn't understand data
-   * binding, can properly read them).
+   * directory with data binding expressions stripped out (so aapt, which doesn't understand
+   * data binding, can properly read them).
    *
    * <p>Returns the resources directory that aapt should read.
    */
-  static Path processDataBindings(
-      Path workingDirectory,
-      Path resourceDir,
-      Path dataBindingInfoOut,
-      VariantType variantType,
-      String packagePath,
-      Path androidManifest,
-      boolean shouldZipDataBindingInfo)
+  static Path processDataBindings(Path resourceDir, Path dataBindingInfoOut,
+      VariantType variantType, String packagePath, Path androidManifest)
       throws IOException {
 
     if (dataBindingInfoOut == null) {
@@ -525,20 +514,15 @@ public class AndroidResourceProcessor {
 
     // Strip the file name (the data binding library automatically adds it back in).
     // ** The data binding library assumes this file is called "layout-info.zip". **
-    if (shouldZipDataBindingInfo) {
-      dataBindingInfoOut = dataBindingInfoOut.getParent();
-      if (Files.notExists(dataBindingInfoOut)) {
-        Files.createDirectory(dataBindingInfoOut);
-      }
+    dataBindingInfoOut = dataBindingInfoOut.getParent();
+    if (Files.notExists(dataBindingInfoOut)) {
+      Files.createDirectory(dataBindingInfoOut);
     }
 
-    // Create a directory for the resources, namespaced with the old resource path
-    Path processedResourceDir =
-        Files.createDirectories(
-            workingDirectory.resolve(
-                resourceDir.isAbsolute()
-                    ? resourceDir.getRoot().relativize(resourceDir)
-                    : resourceDir));
+    Path processedResourceDir = resourceDir.resolveSibling("res_without_databindings");
+    if (Files.notExists(processedResourceDir)) {
+      Files.createDirectory(processedResourceDir);
+    }
 
     ProcessXmlOptions options = new ProcessXmlOptions();
     options.setAppId(packagePath);
@@ -546,8 +530,7 @@ public class AndroidResourceProcessor {
     options.setResInput(resourceDir.toFile());
     options.setResOutput(processedResourceDir.toFile());
     options.setLayoutInfoOutput(dataBindingInfoOut.toFile());
-    // Whether or not to aggregate data-bound .xml files into a single .zip.
-    options.setZipLayoutInfo(shouldZipDataBindingInfo);
+    options.setZipLayoutInfo(true); // Aggregate data-bound .xml files into a single .zip.
 
     try {
       Object minSdk = AndroidManifest.getMinSdkVersion(new FileWrapper(androidManifest.toFile()));
@@ -687,8 +670,13 @@ public class AndroidResourceProcessor {
     }
   }
 
-  public static void writeDummyManifestForAapt(Path dummyManifest, String packageForR) {
-    AndroidManifestProcessor.writeDummyManifestForAapt(dummyManifest, packageForR);
+  public void writeDummyManifestForAapt(Path dummyManifest, String packageForR) throws IOException {
+    Files.createDirectories(dummyManifest.getParent());
+    Files.write(dummyManifest, String.format(
+        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
+            + "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\""
+            + " package=\"%s\">"
+            + "</manifest>", packageForR).getBytes(UTF_8));
   }
 
   /**

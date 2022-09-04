@@ -125,7 +125,7 @@ public class ResourceSymbols {
    * @throws InterruptedException when there is an error loading the symbols.
    */
   public static Multimap<String, ListenableFuture<ResourceSymbols>> loadFrom(
-      Iterable<? extends SymbolFileProvider> dependencies,
+      Iterable<SymbolFileProvider> dependencies,
       ListeningExecutorService executor,
       @Nullable String packageToExclude)
       throws InterruptedException, ExecutionException {

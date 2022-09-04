@@ -86,7 +86,7 @@ public final class ConvertersTest {
   public void testPathListConverter() throws Exception {
     PathListConverter converter = new PathListConverter();
     assertThat(converter.convert("foo:bar::baz:"))
-        .containsAtLeast(Paths.get("foo"), Paths.get("bar"), Paths.get("baz"))
+        .containsAllOf(Paths.get("foo"), Paths.get("bar"), Paths.get("baz"))
         .inOrder();
   }
 
