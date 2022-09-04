@@ -1,9 +1,26 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.plugins.map.geoip.filter;
 
-import com.beust.jcommander.internal.Maps;
 import com.codahale.metrics.MetricFilter;
 import com.codahale.metrics.MetricRegistry;
 import com.eaio.uuid.UUID;
+import com.google.common.collect.Maps;
+import org.graylog.plugins.map.config.GeoIpResolverConfig;
 import org.graylog2.plugin.Message;
 import org.testng.annotations.AfterMethod;
 import org.testng.annotations.BeforeMethod;
@@ -22,9 +39,11 @@ import static org.testng.Assert.assertNull;
 public class GeoIpResolverFilterTest {
 
     private MetricRegistry metricRegistry;
+    private GeoIpResolverConfig config;
 
     @BeforeMethod
     public void setUp() {
+        config = GeoIpResolverConfig.defaultConfig().toBuilder().enabled(true).dbPath(this.getTestDatabasePath()).build();
         metricRegistry = new MetricRegistry();
     }
 
@@ -48,12 +67,7 @@ public class GeoIpResolverFilterTest {
 
     @Test
     public void getIpFromFieldValue() throws Exception {
-        final GeoIpResolverFilter resolver = new GeoIpResolverFilter(
-                this.getTestDatabasePath(),
-                false,
-                true,
-                metricRegistry);
-
+        final GeoIpResolverFilter.FilterEngine resolver = new GeoIpResolverFilter.FilterEngine(config, metricRegistry);
         final String ip = "127.0.0.1";
 
         assertEquals(resolver.getIpFromFieldValue(ip), ip);
@@ -63,11 +77,7 @@ public class GeoIpResolverFilterTest {
 
     @Test
     public void extractGeoLocationInformation() throws Exception {
-        final GeoIpResolverFilter resolver = new GeoIpResolverFilter(
-                this.getTestDatabasePath(),
-                false,
-                true,
-                metricRegistry);
+        final GeoIpResolverFilter.FilterEngine resolver = new GeoIpResolverFilter.FilterEngine(config, metricRegistry);
 
         List<Double> coordinates = resolver.extractGeoLocationInformation("1.2.3.4");
         assertEquals(coordinates.size(), 2, "Should extract geo location information from public addresses");
@@ -77,11 +87,7 @@ public class GeoIpResolverFilterTest {
 
     @Test
     public void disabledFilterTest() throws Exception {
-        final GeoIpResolverFilter resolver = new GeoIpResolverFilter(
-                this.getTestDatabasePath(),
-                false,
-                false,
-                metricRegistry);
+        final GeoIpResolverFilter.FilterEngine resolver = new GeoIpResolverFilter.FilterEngine(config.toBuilder().enabled(false).build(), metricRegistry);
 
         final Map<String, Object> messageFields = Maps.newHashMap();
         messageFields.put("_id", (new UUID()).toString());
@@ -98,11 +104,7 @@ public class GeoIpResolverFilterTest {
 
     @Test
     public void filterResolvesIpGeoLocation() throws Exception {
-        final GeoIpResolverFilter resolver = new GeoIpResolverFilter(
-                this.getTestDatabasePath(),
-                false,
-                true,
-                metricRegistry);
+        final GeoIpResolverFilter.FilterEngine resolver = new GeoIpResolverFilter.FilterEngine(config, metricRegistry);
 
         final Map<String, Object> messageFields = Maps.newHashMap();
         messageFields.put("_id", (new UUID()).toString());
