@@ -1,10 +1,8 @@
 package com.yammer.dropwizard.testing;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
-import com.google.common.collect.Maps;
 import com.yammer.dropwizard.jersey.DropwizardResourceConfig;
 import org.codehaus.jackson.map.Module;
 import org.junit.After;
@@ -27,7 +25,6 @@ public abstract class ResourceTest {
     private final Set<Object> singletons = Sets.newHashSet();
     private final Set<Class<?>> providers = Sets.newHashSet();
     private final List<Module> modules = Lists.newArrayList();
-    private final Map<String, Boolean> features = Maps.newHashMap();
 
     private JerseyTest test;
 
@@ -43,10 +40,6 @@ public abstract class ResourceTest {
 
     protected void addJacksonModule(Module module) {
         modules.add(module);
-    }
-
-    protected void addFeature(String feature, Boolean value) {
-        features.put(feature, value);
     }
 
     protected Json getJson() {
@@ -73,9 +66,6 @@ public abstract class ResourceTest {
                 Json json = getJson();
                 for (Module module : modules) {
                     json.registerModule(module);
-                }
-                for (Map.Entry<String, Boolean> feature : features.entrySet()) {
-                    config.getFeatures().put(feature.getKey(), feature.getValue());
                 }
                 config.getSingletons().add(new JacksonMessageBodyProvider(json));
                 config.getSingletons().addAll(singletons);
