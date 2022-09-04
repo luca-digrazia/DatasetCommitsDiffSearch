@@ -19,10 +19,8 @@
 
 package org.graylog2.bindings;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.AbstractModule;
 import com.google.inject.assistedinject.FactoryModuleBuilder;
-import com.google.inject.name.Names;
 import org.graylog2.Configuration;
 import org.graylog2.buffers.OutputBuffer;
 import org.graylog2.buffers.processors.OutputBufferProcessor;
@@ -31,16 +29,12 @@ import org.graylog2.database.MongoConnection;
 import org.graylog2.outputs.OutputRegistry;
 import org.graylog2.shared.ServerStatus;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
 public class ServerBindings extends AbstractModule {
     private final Configuration configuration;
     private final MongoConnection mongoConnection;
-    private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
 
     public ServerBindings(Configuration configuration) {
         this.configuration = configuration;
@@ -62,7 +56,6 @@ public class ServerBindings extends AbstractModule {
     protected void configure() {
         bindSingletons();
         bindFactoryModules();
-        bindSchedulers();
     }
 
     private void bindFactoryModules() {
@@ -81,25 +74,5 @@ public class ServerBindings extends AbstractModule {
 
     private MongoConnection getMongoConnection() {
         return this.mongoConnection;
-    }
-
-    private void bindSchedulers() {
-        final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
-                new ThreadFactoryBuilder()
-                        .setNameFormat("scheduled-%d")
-                        .setDaemon(false)
-                        .build()
-        );
-
-        bind(ScheduledExecutorService.class).annotatedWith(Names.named("scheduler")).toInstance(scheduler);
-
-        final ScheduledExecutorService daemonScheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
-                new ThreadFactoryBuilder()
-                        .setNameFormat("scheduled-%d")
-                        .setDaemon(true)
-                        .build()
-        );
-
-        bind(ScheduledExecutorService.class).annotatedWith(Names.named("daemonScheduler")).toInstance(daemonScheduler);
     }
 }

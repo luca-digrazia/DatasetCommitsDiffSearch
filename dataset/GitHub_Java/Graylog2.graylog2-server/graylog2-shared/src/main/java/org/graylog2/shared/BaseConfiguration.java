@@ -49,15 +49,6 @@ public abstract class BaseConfiguration {
     @Parameter(value = "rest_enable_gzip", required = false)
     private boolean restEnableGzip = false;
 
-    @Parameter(value = "groovy_shell_enable", required = false)
-    private boolean groovyShellEnable = false;
-
-    @Parameter(value = "groovy_shell_port", required = false)
-    private int groovyShellPort = 6789;
-
-    @Parameter(value = "plugin_dir", required = false)
-    private String pluginDir = "plugin";
-
     public URI getRestTransportUri() {
         if (restTransportUri == null || restTransportUri.isEmpty()) {
             return null;
@@ -68,28 +59,6 @@ public abstract class BaseConfiguration {
 
     public void setRestTransportUri(String restTransportUri) {
         this.restTransportUri = restTransportUri;
-    }
-
-    public URI getDefaultRestTransportUri() {
-        URI transportUri;
-        URI listenUri = getRestListenUri();
-
-        if (listenUri.getHost().equals("0.0.0.0")) {
-            String guessedIf;
-            try {
-                guessedIf = Tools.guessPrimaryNetworkAddress().getHostAddress();
-            } catch (Exception e) {
-                LOG.error("Could not guess primary network address for rest_transport_uri. Please configure it in your graylog2.conf.", e);
-                throw new RuntimeException("No rest_transport_uri.");
-            }
-
-            String transportStr = "http://" + guessedIf + ":" + listenUri.getPort();
-            transportUri = Tools.getUriStandard(transportStr);
-        } else {
-            transportUri = listenUri;
-        }
-
-        return transportUri;
     }
 
     public int getProcessBufferProcessors() {
@@ -124,18 +93,6 @@ public abstract class BaseConfiguration {
 
     public boolean isRestEnableGzip() {
         return restEnableGzip;
-    }
-
-    public boolean isGroovyShellEnable() {
-        return groovyShellEnable;
-    }
-
-    public int getGroovyShellPort() {
-        return groovyShellPort;
-    }
-
-    public String getPluginDir() {
-        return pluginDir;
     }
 
     public abstract String getNodeIdFile();

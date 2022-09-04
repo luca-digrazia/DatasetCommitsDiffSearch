@@ -23,9 +23,6 @@ import com.google.inject.Inject;
 import org.graylog2.cluster.NodeNotFoundException;
 import org.graylog2.notifications.Notification;
 import org.graylog2.notifications.NotificationService;
-import org.graylog2.plugin.periodical.Periodical;
-import org.graylog2.plugin.system.NodeId;
-import org.graylog2.shared.inputs.InputRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,22 +32,16 @@ import org.slf4j.LoggerFactory;
 public class ClusterHealthCheckThread extends Periodical {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterHealthCheckThread.class);
     private NotificationService notificationService;
-    private final InputRegistry inputRegistry;
-    private final NodeId nodeId;
 
     @Inject
-    public ClusterHealthCheckThread(NotificationService notificationService,
-                                    InputRegistry inputRegistry,
-                                    NodeId nodeId) {
+    public ClusterHealthCheckThread(NotificationService notificationService) {
         this.notificationService = notificationService;
-        this.inputRegistry = inputRegistry;
-        this.nodeId = nodeId;
     }
 
     @Override
-    public void doRun() {
+    public void run() {
         try {
-            if (inputRegistry.runningCount() == 0) {
+            if (core.inputs().runningCount() == 0) {
                 LOG.debug("No input running in cluster!");
                 notificationService.publishIfFirst(getNotification());
             } else {
@@ -62,16 +53,11 @@ public class ClusterHealthCheckThread extends Periodical {
         }
     }
 
-    @Override
-    protected Logger getLogger() {
-        return LOG;
-    }
-
     protected Notification getNotification() throws NodeNotFoundException {
         Notification notification = notificationService.buildNow();
         notification.addType(Notification.Type.NO_INPUT_RUNNING);
         notification.addSeverity(Notification.Severity.URGENT);
-        notification.addNode(nodeId.toString());
+        notification.addNode(core.getNodeId());
 
         return notification;
     }

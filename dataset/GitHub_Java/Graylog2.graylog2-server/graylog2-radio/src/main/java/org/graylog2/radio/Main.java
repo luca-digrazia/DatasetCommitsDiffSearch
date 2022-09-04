@@ -16,7 +16,6 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.radio;
 
 import com.beust.jcommander.JCommander;
@@ -45,11 +44,8 @@ import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.radio.bindings.RadioBindings;
-import org.graylog2.radio.inputs.RadioInputRegistry;
 import org.graylog2.shared.NodeRunner;
-import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.GuiceInstantiationService;
-import org.graylog2.shared.inputs.InputRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
@@ -138,10 +134,8 @@ public class Main extends NodeRunner {
             savePidFile(commandLineArguments.getPidFile());
         }
 
-        ServerStatus serverStatus = injector.getInstance(ServerStatus.class);
-
         Radio radio = injector.getInstance(Radio.class);
-        serverStatus.setLifecycle(Lifecycle.STARTING);
+        radio.setLifecycle(Lifecycle.STARTING);
         radio.initialize();
 
         // Register in Graylog2 cluster.
@@ -152,29 +146,28 @@ public class Main extends NodeRunner {
 
         // Start REST API.
         try {
-            radio.startRestApi(injector);
+            radio.startRestApi();
         } catch(Exception e) {
             LOG.error("Could not start REST API on <{}>. Terminating.", configuration.getRestListenUri(), e);
             System.exit(1);
         }
 
         // Register inputs. (find an automatic way here (annotations?) and do the same in graylog2-server.Main
-        final InputRegistry inputRegistry = injector.getInstance(RadioInputRegistry.class);
-        inputRegistry.register(SyslogUDPInput.class, SyslogUDPInput.NAME);
-        inputRegistry.register(SyslogTCPInput.class, SyslogTCPInput.NAME);
-        inputRegistry.register(RawUDPInput.class, RawUDPInput.NAME);
-        inputRegistry.register(RawTCPInput.class, RawTCPInput.NAME);
-        inputRegistry.register(GELFUDPInput.class, GELFUDPInput.NAME);
-        inputRegistry.register(GELFTCPInput.class, GELFTCPInput.NAME);
-        inputRegistry.register(GELFHttpInput.class, GELFHttpInput.NAME);
-        inputRegistry.register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
-        inputRegistry.register(LocalMetricsInput.class, LocalMetricsInput.NAME);
-        inputRegistry.register(JsonPathInput.class, JsonPathInput.NAME);
+        radio.inputs().register(SyslogUDPInput.class, SyslogUDPInput.NAME);
+        radio.inputs().register(SyslogTCPInput.class, SyslogTCPInput.NAME);
+        radio.inputs().register(RawUDPInput.class, RawUDPInput.NAME);
+        radio.inputs().register(RawTCPInput.class, RawTCPInput.NAME);
+        radio.inputs().register(GELFUDPInput.class, GELFUDPInput.NAME);
+        radio.inputs().register(GELFTCPInput.class, GELFTCPInput.NAME);
+        radio.inputs().register(GELFHttpInput.class, GELFHttpInput.NAME);
+        radio.inputs().register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
+        radio.inputs().register(LocalMetricsInput.class, LocalMetricsInput.NAME);
+        radio.inputs().register(JsonPathInput.class, JsonPathInput.NAME);
 
         // Try loading persisted inputs. Retry until server connection succeeds.
         while(true) {
             try {
-                inputRegistry.launchAllPersisted();
+                radio.launchPersistedInputs();
                 break;
             } catch(Exception e) {
                 LOG.error("Could not load persisted inputs. Trying again in one second.", e);
@@ -186,7 +179,7 @@ public class Main extends NodeRunner {
             }
         }
 
-        serverStatus.setLifecycle(Lifecycle.RUNNING);
+        radio.setLifecycle(Lifecycle.RUNNING);
         LOG.info("Graylog2 Radio up and running.");
 
         while (true) {

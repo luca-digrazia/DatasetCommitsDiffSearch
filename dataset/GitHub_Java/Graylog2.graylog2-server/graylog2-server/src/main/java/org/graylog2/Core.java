@@ -24,7 +24,6 @@ import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.inject.Inject;
-import com.google.inject.name.Named;
 import org.apache.shiro.mgt.DefaultSecurityManager;
 import org.cliffc.high_scale_lib.Counter;
 import org.glassfish.hk2.utilities.binding.AbstractBinder;
@@ -150,12 +149,8 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
     private RulesEngineImpl rulesEngine;
     private GELFChunkManager gelfChunkManager;
 
-    @Inject
-    @Named("scheduler")
+    private static final int SCHEDULED_THREADS_POOL_SIZE = 30;
     private ScheduledExecutorService scheduler;
-
-    @Inject
-    @Named("daemonScheduler")
     private ScheduledExecutorService daemonScheduler;
 
     public static final Version GRAYLOG2_VERSION = ServerVersion.VERSION;
@@ -245,7 +240,7 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
 
         initializers = new Initializers(this);
         inputs = new ServerInputRegistry(this);
-        periodicals = new Periodicals(this, scheduler, daemonScheduler);
+        periodicals = new Periodicals(this);
 
         if (isMaster()) {
             dashboardRegistry.loadPersisted(this);
@@ -292,7 +287,7 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
         });
     }
 
-    private void registerTransport(Transport transport) {
+    public void registerTransport(Transport transport) {
         this.transports.add(transport);
     }
     
@@ -310,6 +305,20 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
         LOG.info("Setting up deflector.");
         deflector = new Deflector(this);
         deflector.setUp();
+
+        scheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
+                new ThreadFactoryBuilder()
+                        .setNameFormat("scheduled-%d")
+                        .setDaemon(false)
+                        .build()
+        );
+
+        daemonScheduler = Executors.newScheduledThreadPool(SCHEDULED_THREADS_POOL_SIZE,
+                new ThreadFactoryBuilder()
+                        .setNameFormat("scheduled-%d")
+                        .setDaemon(true)
+                        .build()
+        );
 
         // Load and register plugins.
         registerPlugins(MessageInput.class, "inputs");
@@ -494,6 +503,14 @@ public class Core implements GraylogServer, InputHost, ProcessingHost {
         return mongoConnection;
     }
 
+    public ScheduledExecutorService getScheduler() {
+        return scheduler;
+    }
+
+    public ScheduledExecutorService getDaemonScheduler() {
+        return daemonScheduler;
+    }
+    
     public void setConfiguration(Configuration configuration) {
         this.configuration = configuration;
     }

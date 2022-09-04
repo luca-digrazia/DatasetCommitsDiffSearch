@@ -16,14 +16,12 @@
  * You should have received a copy of the GNU General Public License
  * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
  */
-
 package org.graylog2.initializers;
 
 import com.google.common.collect.Maps;
 import com.google.inject.Inject;
 import org.graylog2.Core;
 import org.graylog2.periodical.Periodical;
-import org.graylog2.periodical.Periodicals;
 import org.graylog2.plugin.GraylogServer;
 import org.graylog2.plugin.initializers.Initializer;
 import org.graylog2.plugin.initializers.InitializerConfigurationException;
@@ -43,12 +41,10 @@ public class PeriodicalsInitializer implements Initializer {
 
     public static final String NAME = "Periodicals initializer";
     private final InstantiationService instantiationService;
-    private final Periodicals periodicals;
 
     @Inject
-    public PeriodicalsInitializer(InstantiationService instantiationService, Periodicals periodicals) {
+    public PeriodicalsInitializer(InstantiationService instantiationService) {
         this.instantiationService = instantiationService;
-        this.periodicals = periodicals;
     }
 
     @Override
@@ -73,7 +69,7 @@ public class PeriodicalsInitializer implements Initializer {
                 }
 
                 // Register and start.
-                periodicals.registerAndStart(periodical);
+                core.periodicals().registerAndStart(periodical);
             } catch (Exception e) {
                 LOG.error("Could not initialize periodical.", e);
             }

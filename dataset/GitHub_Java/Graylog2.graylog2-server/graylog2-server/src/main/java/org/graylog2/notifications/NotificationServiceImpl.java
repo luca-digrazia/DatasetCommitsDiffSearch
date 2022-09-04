@@ -92,6 +92,7 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
 
     @Override
     public boolean publishIfFirst(Notification notification) {
+
         // node id should never be empty
         if (notification.getNodeId() == null) {
             addThisNode(notification);
@@ -103,7 +104,7 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
         }
 
         // Write only if there is no such warning yet.
-        if (!isFirst(notification.getType())) {
+        if (isFirst(notification.getType())) {
             return false;
         }
         try {
@@ -123,7 +124,7 @@ public class NotificationServiceImpl extends PersistedServiceImpl implements Not
 
     @Override
     public boolean fixed(Notification notification) {
-        return fixed(notification.getType(), null);
+        return destroy(notification) > 0;
     }
 
     @Override
