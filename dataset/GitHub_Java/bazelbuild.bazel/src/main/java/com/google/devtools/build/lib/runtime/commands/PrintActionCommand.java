@@ -38,7 +38,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ConfiguredAttributeMapper;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.Rule;
@@ -393,9 +392,8 @@ public final class PrintActionCommand implements BlazeCommand {
       if (!rule.isAttrDefined("hdrs", BuildType.LABEL_LIST)) {
         return false;
       }
-      List<Label> hdrs =
-          ConfiguredAttributeMapper.of(rule, ruleConfiguredTarget.getConfigConditions())
-              .get("hdrs", BuildType.LABEL_LIST);
+      List<Label> hdrs = ruleConfiguredTarget.getAttributeMapper()
+          .get("hdrs", BuildType.LABEL_LIST);
       if (hdrs != null) {
         for (Label hdrLabel : hdrs) {
           if (filesDesired.remove(hdrLabel.toPathFragment().getPathString())) {
