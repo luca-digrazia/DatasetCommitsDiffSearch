@@ -4,7 +4,6 @@ import com.google.common.collect.ImmutableList;
 import com.yammer.dropwizard.util.Duration;
 import com.yammer.dropwizard.validation.MaxDuration;
 import com.yammer.dropwizard.validation.MinDuration;
-import com.yammer.dropwizard.validation.DurationRange;
 import com.yammer.dropwizard.validation.Validator;
 import org.junit.Test;
 
@@ -22,18 +21,12 @@ public class DurationValidatorTest {
 
         @MinDuration(value = 30, unit = TimeUnit.SECONDS)
         private Duration tooSmall = Duration.milliseconds(100);
-        
-        @DurationRange(min = 10, max = 30, unit = TimeUnit.MINUTES)
-        private Duration outOfRange = Duration.minutes(60);
 
         public void setTooBig(Duration tooBig) {
             this.tooBig = tooBig;
         }
         public void setTooSmall(Duration tooSmall) {
             this.tooSmall = tooSmall;
-        }
-        public void setOutOfRange(Duration outOfRange) {
-            this.outOfRange = outOfRange;
         }
     }
 
@@ -44,7 +37,6 @@ public class DurationValidatorTest {
         if ("en".equals(Locale.getDefault().getLanguage())) {
             assertThat(validator.validate(new Example()),
                     is(ImmutableList.of(
-                            "outOfRange must be between 10 MINUTES and 30 MINUTES (was 60 minutes)",
                             "tooBig must be less than or equal to 30 SECONDS (was 10 minutes)",
                             "tooSmall must be greater than or equal to 30 SECONDS (was 100 milliseconds)")));
         }
@@ -55,7 +47,6 @@ public class DurationValidatorTest {
         final Example example = new Example();
         example.setTooBig(Duration.seconds(10));
         example.setTooSmall(Duration.seconds(100));
-        example.setOutOfRange(Duration.minutes(15));
 
         assertThat(validator.validate(example),
                 is(ImmutableList.<String>of()));
