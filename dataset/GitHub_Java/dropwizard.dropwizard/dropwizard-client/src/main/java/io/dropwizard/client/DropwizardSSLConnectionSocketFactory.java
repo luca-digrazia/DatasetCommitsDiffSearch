@@ -19,15 +19,9 @@ import java.util.List;
 public class DropwizardSSLConnectionSocketFactory {
 
     private final TlsConfiguration configuration;
-    private final HostnameVerifier verifier;
 
     public DropwizardSSLConnectionSocketFactory(TlsConfiguration configuration) {
-        this(configuration, null);
-    }
-
-    public DropwizardSSLConnectionSocketFactory(TlsConfiguration configuration, HostnameVerifier verifier) {
         this.configuration = configuration;
-        this.verifier = verifier;
     }
 
     public SSLConnectionSocketFactory getSocketFactory() throws SSLInitializationException {
@@ -52,11 +46,13 @@ public class DropwizardSSLConnectionSocketFactory {
     }
 
     private HostnameVerifier chooseHostnameVerifier() {
+        HostnameVerifier hostnameVerifier;
         if (configuration.isVerifyHostname()) {
-            return verifier != null ? verifier : SSLConnectionSocketFactory.getDefaultHostnameVerifier();
+            hostnameVerifier = SSLConnectionSocketFactory.getDefaultHostnameVerifier();
         } else {
-            return new NoopHostnameVerifier();
+            hostnameVerifier = new NoopHostnameVerifier();
         }
+        return hostnameVerifier;
     }
 
     private SSLContext buildSslContext() throws SSLInitializationException {

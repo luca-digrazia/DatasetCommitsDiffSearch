@@ -1,11 +1,12 @@
 package io.dropwizard.cli;
 
+import io.dropwizard.configuration.ConfigurationException;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.util.JarLocation;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.impl.Arguments;
-import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.ArgumentAction;
+import net.sourceforge.argparse4j.inf.Argument;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
@@ -82,9 +83,8 @@ public class Cli {
             stdErr.println(e.getMessage());
             e.getParser().printHelp(stdErr);
             return false;
-        } catch (Throwable t) {
-            // Unexpected exceptions should result in non-zero exit status of the process
-            stdErr.println(t.getMessage());
+        } catch (ConfigurationException e) {
+            stdErr.println(e.getMessage());
             return false;
         }
     }
@@ -101,21 +101,21 @@ public class Cli {
     private ArgumentParser buildParser(JarLocation location) {
         final String usage = "java -jar " + location;
         final ArgumentParser p = ArgumentParsers.newArgumentParser(usage, false);
-        p.version(location.getVersion().orElse(
+        p.version(location.getVersion().or(
                 "No application version detected. Add a Implementation-Version " +
                         "entry to your JAR's manifest to enable this."));
         addHelp(p);
         p.addArgument("-v", "--version")
-            .action(Arguments.help()) // never gets called; intercepted in #run
-            .help("show the application version and exit");
+         .action(Arguments.help()) // never gets called; intercepted in #run
+         .help("show the application version and exit");
         return p;
     }
 
     private void addHelp(ArgumentParser p) {
         p.addArgument("-h", "--help")
-            .action(new SafeHelpAction(stdOut))
-            .help("show this help message and exit")
-            .setDefault(Arguments.SUPPRESS);
+         .action(new SafeHelpAction(stdOut))
+         .help("show this help message and exit")
+         .setDefault(Arguments.SUPPRESS);
     }
 
     private void addCommand(Command command) {

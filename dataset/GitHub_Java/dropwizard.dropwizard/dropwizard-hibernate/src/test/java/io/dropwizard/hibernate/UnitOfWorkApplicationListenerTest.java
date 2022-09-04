@@ -88,10 +88,13 @@ public class UnitOfWorkApplicationListenerTest {
 
     @Test
     public void bindsAndUnbindsTheSessionToTheManagedContext() throws Exception {
-        doAnswer(invocation -> {
-            assertThat(ManagedSessionContext.hasBind(sessionFactory))
-                    .isTrue();
-            return null;
+        doAnswer(new Answer<Object>() {
+            @Override
+            public Object answer(InvocationOnMock invocation) throws Throwable {
+                assertThat(ManagedSessionContext.hasBind(sessionFactory))
+                        .isTrue();
+                return null;
+            }
         }).when(session).beginTransaction();
 
         execute();
