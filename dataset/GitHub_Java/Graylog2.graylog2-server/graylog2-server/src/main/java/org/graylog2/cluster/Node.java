@@ -30,7 +30,6 @@ import org.graylog2.database.ValidationException;
 import org.graylog2.database.validators.Validator;
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -178,7 +177,7 @@ public class Node extends Persisted {
     }
 
     public DateTime getLastSeen() {
-        return new DateTime(((Integer) fields.get("last_seen"))*1000L, DateTimeZone.UTC);
+        return new DateTime(((Integer) fields.get("last_seen"))*1000L);
     }
 
     @Override
