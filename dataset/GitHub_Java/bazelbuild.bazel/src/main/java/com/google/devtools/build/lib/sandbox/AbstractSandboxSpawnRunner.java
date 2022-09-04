@@ -35,10 +35,6 @@ import com.google.devtools.build.lib.exec.TreeDeleter;
 import com.google.devtools.build.lib.profiler.Profiler;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Sandbox;
-import com.google.devtools.build.lib.server.FailureDetails.Sandbox.Code;
 import com.google.devtools.build.lib.shell.ExecutionStatistics;
 import com.google.devtools.build.lib.shell.Subprocess;
 import com.google.devtools.build.lib.shell.SubprocessBuilder;
@@ -78,7 +74,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
 
   @Override
   public final SpawnResult exec(Spawn spawn, SpawnExecutionContext context)
-      throws ExecException, InterruptedException {
+      throws ExecException, IOException, InterruptedException {
     ActionExecutionMetadata owner = spawn.getResourceOwner();
     context.report(ProgressStatus.SCHEDULING, getName());
     try (ResourceHandle ignored =
@@ -87,10 +83,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
       SandboxedSpawn sandbox = prepareSpawn(spawn, context);
       return runSpawn(spawn, sandbox, context);
     } catch (IOException e) {
-      FailureDetail failureDetail =
-          createFailureDetail(
-              "I/O exception during sandboxed execution", Code.EXECUTION_IO_EXCEPTION);
-      throw new UserExecException(e, failureDetail);
+      throw new UserExecException("I/O exception during sandboxed execution", e);
     }
   }
 
@@ -99,13 +92,8 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     return Spawns.mayBeSandboxed(spawn);
   }
 
-  @Override
-  public boolean handlesCaching() {
-    return false;
-  }
-
   protected abstract SandboxedSpawn prepareSpawn(Spawn spawn, SpawnExecutionContext context)
-      throws IOException, ExecException, InterruptedException;
+      throws IOException, ExecException;
 
   private SpawnResult runSpawn(
       Spawn originalSpawn, SandboxedSpawn sandbox, SpawnExecutionContext context)
@@ -182,7 +170,7 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
         subprocess.waitFor();
         terminationStatus = new TerminationStatus(subprocess.exitValue(), subprocess.timedout());
       } catch (InterruptedException e) {
-        subprocess.destroyAndWait();
+        subprocess.destroy();
         throw e;
       }
     } catch (IOException e) {
@@ -191,13 +179,11 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
           .getErrorStream()
           .write(("Action failed to execute: java.io.IOException: " + msg + "\n").getBytes(UTF_8));
       outErr.getErrorStream().flush();
-      String message = makeFailureMessage(originalSpawn, sandbox);
       return new SpawnResult.Builder()
           .setRunnerName(getName())
           .setStatus(Status.EXECUTION_FAILED)
           .setExitCode(LOCAL_EXEC_ERROR)
-          .setFailureMessage(message)
-          .setFailureDetail(createFailureDetail(message, Code.SUBPROCESS_START_FAILED))
+          .setFailureMessage(makeFailureMessage(originalSpawn, sandbox))
           .build();
     }
 
@@ -206,40 +192,12 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
     boolean wasTimeout =
         (useSubprocessTimeout && terminationStatus.timedOut())
             || (!useSubprocessTimeout && wasTimeout(timeout, wallTime));
-
-    int exitCode;
-    Status status;
-    String failureMessage;
-    FailureDetail failureDetail;
-    if (wasTimeout) {
-      exitCode = SpawnResult.POSIX_TIMEOUT_EXIT_CODE;
-      status = Status.TIMEOUT;
-      failureMessage = makeFailureMessage(originalSpawn, sandbox);
-      failureDetail =
-          FailureDetail.newBuilder()
-              .setMessage(failureMessage)
-              .setSpawn(
-                  FailureDetails.Spawn.newBuilder().setCode(FailureDetails.Spawn.Code.TIMEOUT))
-              .build();
-    } else {
-      exitCode = terminationStatus.getRawExitCode();
-      if (exitCode == 0) {
-        status = Status.SUCCESS;
-        failureMessage = "";
-        failureDetail = null;
-      } else {
-        status = Status.NON_ZERO_EXIT;
-        failureMessage = makeFailureMessage(originalSpawn, sandbox);
-        failureDetail =
-            FailureDetail.newBuilder()
-                .setMessage(failureMessage)
-                .setSpawn(
-                    FailureDetails.Spawn.newBuilder()
-                        .setCode(FailureDetails.Spawn.Code.NON_ZERO_EXIT)
-                        .setSpawnExitCode(exitCode))
-                .build();
-      }
-    }
+    int exitCode =
+        wasTimeout ? SpawnResult.POSIX_TIMEOUT_EXIT_CODE : terminationStatus.getRawExitCode();
+    Status status =
+        wasTimeout
+            ? Status.TIMEOUT
+            : (exitCode == 0) ? Status.SUCCESS : Status.NON_ZERO_EXIT;
 
     SpawnResult.Builder spawnResultBuilder =
         new SpawnResult.Builder()
@@ -247,11 +205,10 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
             .setStatus(status)
             .setExitCode(exitCode)
             .setWallTime(wallTime)
-            .setFailureMessage(failureMessage);
-
-    if (failureDetail != null) {
-      spawnResultBuilder.setFailureDetail(failureDetail);
-    }
+            .setFailureMessage(
+                status != Status.SUCCESS || exitCode != 0
+                    ? makeFailureMessage(originalSpawn, sandbox)
+                    : "");
 
     Path statisticsPath = sandbox.getStatisticsPath();
     if (statisticsPath != null) {
@@ -266,8 +223,6 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
                     resourceUsage.getBlockInputOperations());
                 spawnResultBuilder.setNumInvoluntaryContextSwitches(
                     resourceUsage.getInvoluntaryContextSwitches());
-                // The memory usage of the largest child process
-                spawnResultBuilder.setMemoryInKb(resourceUsage.getMaximumResidentSetSize());
               });
     }
 
@@ -383,12 +338,5 @@ abstract class AbstractSandboxSpawnRunner implements SpawnRunner {
         treeDeleter.deleteTree(child);
       }
     }
-  }
-
-  static FailureDetail createFailureDetail(String message, Code detailedCode) {
-    return FailureDetail.newBuilder()
-        .setMessage(message)
-        .setSandbox(Sandbox.newBuilder().setCode(detailedCode))
-        .build();
   }
 }

@@ -18,9 +18,6 @@ import static com.google.common.truth.Truth8.assertThat;
 
 import com.google.devtools.build.lib.actions.SpawnResult.MetadataLog;
 import com.google.devtools.build.lib.actions.SpawnResult.Status;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.util.FileSystems;
 import com.google.protobuf.ByteString;
@@ -42,13 +39,9 @@ public final class SpawnResultTest {
             .setStatus(SpawnResult.Status.TIMEOUT)
             .setWallTime(Duration.ofSeconds(5))
             .setExitCode(SpawnResult.POSIX_TIMEOUT_EXIT_CODE)
-            .setFailureDetail(
-                FailureDetail.newBuilder()
-                    .setSpawn(FailureDetails.Spawn.newBuilder().setCode(Code.TIMEOUT))
-                    .build())
             .setRunnerName("test")
             .build();
-    assertThat(r.getDetailMessage("", false, false))
+    assertThat(r.getDetailMessage("", "", false, false, false))
         .contains("(failed due to timeout after 5.00 seconds.)");
   }
 
@@ -58,13 +51,10 @@ public final class SpawnResultTest {
         new SpawnResult.Builder()
             .setStatus(SpawnResult.Status.TIMEOUT)
             .setExitCode(SpawnResult.POSIX_TIMEOUT_EXIT_CODE)
-            .setFailureDetail(
-                FailureDetail.newBuilder()
-                    .setSpawn(FailureDetails.Spawn.newBuilder().setCode(Code.TIMEOUT))
-                    .build())
             .setRunnerName("test")
             .build();
-    assertThat(r.getDetailMessage("", false, false)).contains("(failed due to timeout.)");
+    assertThat(r.getDetailMessage("", "", false, false, false))
+        .contains("(failed due to timeout.)");
   }
 
   @Test
@@ -86,7 +76,7 @@ public final class SpawnResultTest {
   }
 
   @Test
-  public void getSpawnResultLogs() {
+  public void getSpawnResultLogs() throws Exception {
     SpawnResult.Builder builder =
         new SpawnResult.Builder().setStatus(Status.SUCCESS).setExitCode(0).setRunnerName("test");
 
