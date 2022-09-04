@@ -975,7 +975,7 @@ public class RemoteSpawnRunnerTest {
   @Test
   public void accountingAddsDurationsForStages() {
     SpawnMetrics.Builder builder =
-        SpawnMetrics.Builder.forRemoteExec()
+        new SpawnMetrics.Builder()
             .setQueueTime(Duration.ofSeconds(1))
             .setSetupTime(Duration.ofSeconds(2))
             .setExecutionWallTime(Duration.ofSeconds(2))
@@ -1026,7 +1026,10 @@ public class RemoteSpawnRunnerTest {
   }
 
   private RemoteSpawnRunner newSpawnRunner() {
-    return newSpawnRunner(executor, /* reporter= */ null, /* topLevelOutputs= */ ImmutableSet.of());
+    return newSpawnRunner(
+        executor,
+        /* reporter= */ null,
+        /* topLevelOutputs= */ ImmutableSet.of());
   }
 
   private RemoteSpawnRunner newSpawnRunner(Reporter reporter) {
