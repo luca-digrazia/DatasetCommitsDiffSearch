@@ -1,9 +1,25 @@
+/*
+ * Copyright 2018 Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package io.quarkus.arc;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Type;
 import java.util.Set;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Supplier;
 import javax.enterprise.context.ContextNotActiveException;
 import javax.enterprise.inject.spi.BeanManager;
@@ -120,7 +136,29 @@ public interface ArcContainer {
     BeanManager beanManager();
 
     /**
-     * @return the default executor service
+     * Indicates if there is a current request, and it has been turned asynchronous.
+     * This uses the information provided by the currently registered
+     * {@link AsyncRequestStatusProvider}.
+     * 
+     * @return true if there is a current request, and it has been turned asynchronous.
      */
-    ExecutorService getExecutorService();
+    boolean isCurrentRequestAsync();
+
+    /**
+     * <p>
+     * Returns a {@link CompletionStage} that represents completion of the current
+     * asynchronous request. This uses the information provided by all currently registered
+     * {@link AsyncRequestNotifierProvider}. The returned {@link CompletionStage} will notify
+     * failure if any provider fails, or notify completion when all providers complete. This
+     * allows us to get notified of exceptions in any part of the async request, even if other
+     * parts are not aware of those failures.
+     * </p>
+     * <p>
+     * If there is no current asynchronous request, this returns a completed {@link CompletionStage},
+     * which will not reflect any eventual synchronous previously raised exception.
+     * </p>
+     * 
+     * @return a {@link CompletionStage} to notify failure or completion of the current asynchronous request.
+     */
+    CompletionStage<Void> getAsyncRequestNotifier();
 }

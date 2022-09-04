@@ -3,8 +3,7 @@ package io.quarkus.smallrye.context.runtime.context.provider;
 import java.util.Collection;
 import java.util.Map;
 
-import javax.enterprise.inject.spi.CDI;
-
+import org.eclipse.microprofile.context.ThreadContext;
 import org.eclipse.microprofile.context.spi.ThreadContextController;
 import org.eclipse.microprofile.context.spi.ThreadContextProvider;
 import org.eclipse.microprofile.context.spi.ThreadContextSnapshot;
@@ -25,12 +24,12 @@ public class ArcContextProvider implements ThreadContextProvider {
 
     @Override
     public ThreadContextSnapshot currentContext(Map<String, String> map) {
-        if (!isCdiAvailable()) {
+        ArcContainer arc = Arc.container();
+        if (!arc.isRunning()) {
             //return null as per docs to state that propagation of this context is not supported
             return null;
         }
 
-        ArcContainer arc = Arc.container();
         if (!isContextActiveOnThisThread(arc)) {
             // request context not active, nothing to propagate, return no-op
             return NOOP_SNAPSHOT;
@@ -66,12 +65,12 @@ public class ArcContextProvider implements ThreadContextProvider {
     @Override
     public ThreadContextSnapshot clearedContext(Map<String, String> map) {
         // note that by cleared we mean that we still activate context if need be, just leave the contents blank
-        if (!isCdiAvailable()) {
+        ArcContainer arc = Arc.container();
+        if (!arc.isRunning()) {
             //return null as per docs to state that propagation of this context is not supported
             return null;
         }
 
-        ArcContainer arc = Arc.container();
         if (!isContextActiveOnThisThread(arc)) {
             // request context not active, nothing to propagate, return no-op
             return NOOP_SNAPSHOT;
@@ -104,22 +103,7 @@ public class ArcContextProvider implements ThreadContextProvider {
 
     @Override
     public String getThreadContextType() {
-        return "CDI";
-    }
-
-    /**
-     * Checks if CDI is available within the application by using {@code CDI.current()}.
-     * If an exception is thrown, it is suppressed and false is returns, otherwise true is returned.
-     *
-     * @return true if CDI can be used, false otherwise
-     */
-    private boolean isCdiAvailable() {
-        try {
-            return CDI.current() != null;
-        } catch (IllegalStateException e) {
-            // no CDI provider found, CDI isn't available
-            return false;
-        }
+        return ThreadContext.CDI;
     }
 
     private boolean isContextActiveOnThisThread(ArcContainer arc) {
