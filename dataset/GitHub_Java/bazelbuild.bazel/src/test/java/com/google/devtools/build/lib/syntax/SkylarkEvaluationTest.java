@@ -1496,7 +1496,7 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testUnionSet() throws Exception {
-    new SkylarkTest("--incompatible_depset_union=false")
+    new SkylarkTest()
         .testStatement("str(depset([1, 3]) | depset([1, 2]))", "depset([1, 2, 3])")
         .testStatement("str(depset([1, 2]) | [1, 3])", "depset([1, 2, 3])")
         .testIfExactError("unsupported operand type(s) for |: 'int' and 'int'", "2 | 4");
@@ -1998,10 +1998,9 @@ public class SkylarkEvaluationTest extends EvaluationTest {
 
   @Test
   public void testPrintBadKwargs() throws Exception {
-    new SkylarkTest()
-        .testIfErrorContains(
-            "unexpected keywords 'end', 'other', for call to function print(sep = \" \", *args)",
-            "print(end='x', other='y')");
+    new SkylarkTest().testIfExactError(
+        "unexpected keywords 'end', 'other' in call to print(*args, sep: string = \" \")",
+        "print(end='x', other='y')");
   }
 
   // Override tests in EvaluationTest incompatible with Skylark
