@@ -15,12 +15,13 @@
  */
 package org.androidannotations.api;
 
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.os.SystemClock;
 
 /**
  * This class provide operations for
@@ -28,8 +29,20 @@ import android.os.Handler;
  */
 public class UiThreadExecutor {
 
-	private static final Map<String, List<Runnable>> TASKS = new HashMap<String, List<Runnable>>();
-	private static final Map<Runnable, Handler> HANDLERS = new HashMap<Runnable, Handler>();
+	private static final Handler HANDLER = new Handler(Looper.getMainLooper()) {
+		@Override
+		public void handleMessage(Message msg) {
+			Runnable callback = msg.getCallback();
+			if (callback != null) {
+				callback.run();
+				decrementToken((Token) msg.obj);
+			} else {
+				super.handleMessage(msg);
+			}
+		}
+	};
+
+	private static final Map<String, Token> TOKENS = new HashMap<String, Token>();
 
 	private UiThreadExecutor() {
 		// should not be instantiated
@@ -43,17 +56,42 @@ public class UiThreadExecutor {
 	 *            the identifier of the task
 	 * @param task
 	 *            the task itself
-	 * @param handler
-	 *            the {@link Handler} which runs the task
+	 * @param delay
+	 *            the delay or zero to run immediately
 	 */
-	public static synchronized void addTask(String id, Runnable task, Handler handler) {
-		List<Runnable> runnables = TASKS.get(id);
-		if (runnables == null) {
-			runnables = new ArrayList<Runnable>();
-			TASKS.put(id, runnables);
+	public static void runTask(String id, Runnable task, long delay) {
+		if ("".equals(id)) {
+			HANDLER.postDelayed(task, delay);
+			return;
 		}
-		runnables.add(task);
-		HANDLERS.put(task, handler);
+		long time = SystemClock.uptimeMillis() + delay;
+		HANDLER.postAtTime(task, nextToken(id), time);
+	}
+
+	private static Token nextToken(String id) {
+		synchronized (TOKENS) {
+			Token token = TOKENS.get(id);
+			if (token == null) {
+				token = new Token(id);
+				TOKENS.put(id, token);
+			}
+			token.runnablesCount++;
+			return token;
+		}
+	}
+
+	private static void decrementToken(Token token) {
+		synchronized (TOKENS) {
+			if (--token.runnablesCount == 0) {
+				String id = token.id;
+				Token old = TOKENS.remove(id);
+				if (old != token) {
+					// a runnable finished after cancelling, we just removed a
+					// wrong token, lets put it back
+					TOKENS.put(id, old);
+				}
+			}
+		}
 	}
 
 	/**
@@ -62,24 +100,24 @@ public class UiThreadExecutor {
 	 * @param id
 	 *            the cancellation identifier
 	 */
-	public static synchronized void cancelAll(String id) {
-		List<Runnable> runnables = TASKS.remove(id);
-		if (runnables != null) {
-			for (Runnable runnable : runnables) {
-				HANDLERS.remove(runnable).removeCallbacks(runnable);
-			}
+	public static void cancelAll(String id) {
+		Token token;
+		synchronized (TOKENS) {
+			token = TOKENS.remove(id);
 		}
+		if (token == null) {
+			// nothing to cancel
+			return;
+		}
+		HANDLER.removeCallbacksAndMessages(token);
 	}
 
-	public static synchronized void done(String id, Runnable runnable) {
-		Handler handler = HANDLERS.remove(runnable);
-		if (handler != null) {
-			List<Runnable> runnables = TASKS.get(id);
-			runnables.remove(runnable);
-			// potentially empty array stays in map for reducing garbage
-			// collecting -
-			// it is highly possible, that array will be reused at the next
-			// addTask call
+	private static class Token {
+		int runnablesCount = 0;
+		final String id;
+
+		private Token(String id) {
+			this.id = id;
 		}
 	}
 
