@@ -1,11 +1,11 @@
 package io.dropwizard.http2;
 
 import com.codahale.metrics.MetricRegistry;
-import com.codahale.metrics.jetty9.InstrumentedConnectionFactory;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
+import com.google.common.collect.ImmutableList;
 import io.dropwizard.jetty.HttpsConnectorFactory;
-import io.dropwizard.jetty.SslReload;
+import io.dropwizard.jetty.Jetty93InstrumentedConnectionFactory;
 import org.eclipse.jetty.alpn.server.ALPNServerConnectionFactory;
 import org.eclipse.jetty.http2.server.HTTP2ServerConnectionFactory;
 import org.eclipse.jetty.server.Connector;
@@ -18,11 +18,8 @@ import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.util.thread.ScheduledExecutorScheduler;
 import org.eclipse.jetty.util.thread.ThreadPool;
 
-import javax.annotation.Nullable;
 import javax.validation.constraints.Max;
 import javax.validation.constraints.Min;
-import java.util.Arrays;
-import java.util.Collections;
 
 /**
  * Builds HTTP/2 over TLS (h2) connectors.
@@ -36,7 +33,7 @@ import java.util.Collections;
  *     </tr>
  *     <tr>
  *         <td>{@code maxConcurrentStreams}</td>
- *         <td>1024</td>
+ *         <td><1024</td>
  *         <td>
  *             The maximum number of concurrently open streams allowed on a single HTTP/2 connection.
  *             Larger values increase parallelism, but cost a memory commitment.
@@ -58,7 +55,13 @@ import java.util.Collections;
  */
 @JsonTypeName("h2")
 public class Http2ConnectorFactory extends HttpsConnectorFactory {
-    private static final String HTTP2_DEFAULT_CIPHER = "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256";
+
+    /**
+     * Supported protocols
+     */
+    private static final String H2 = "h2";
+    private static final String H2_17 = "h2-17";
+    private static final String HTTP_1_1 = "http/1.1";
 
     @Min(100)
     @Max(Integer.MAX_VALUE)
@@ -89,11 +92,11 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
     }
 
     @Override
-    public Connector build(Server server, MetricRegistry metrics, String name, @Nullable ThreadPool threadPool) {
-        // HTTP/2 requires that a server MUST support TLSv1.2 or higher and TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 cipher
-        // See https://datatracker.ietf.org/doc/html/rfc7540#section-9.2
-        setSupportedProtocols(Arrays.asList("TLSv1.3", "TLSv1.2"));
-        checkSupportedCipherSuites();
+    public Connector build(Server server, MetricRegistry metrics, String name, ThreadPool threadPool) {
+        // HTTP/2 requires that a server MUST support TLSv1.2 and TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256 cipher
+        // See http://http2.github.io/http2-spec/index.html#rfc.section.9.2.2
+        setSupportedProtocols(ImmutableList.of("TLSv1.2"));
+        setSupportedCipherSuites(ImmutableList.of("TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256"));
 
         // Setup connection factories
         final HttpConfiguration httpConfig = buildHttpConfiguration();
@@ -102,13 +105,12 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
         http2.setMaxConcurrentStreams(maxConcurrentStreams);
         http2.setInitialStreamRecvWindow(initialStreamRecvWindow);
 
-        final NegotiatingServerConnectionFactory alpn = new ALPNServerConnectionFactory();
-        alpn.setDefaultProtocol("http/1.1"); // Speak HTTP 1.1 over TLS if negotiation fails
+        final NegotiatingServerConnectionFactory alpn = new ALPNServerConnectionFactory(H2, H2_17);
+        alpn.setDefaultProtocol(HTTP_1_1); // Speak HTTP 1.1 over TLS if negotiation fails
 
-        final SslContextFactory sslContextFactory = configureSslContextFactory(new SslContextFactory.Server());
+        final SslContextFactory sslContextFactory = buildSslContextFactory();
         sslContextFactory.addLifeCycleListener(logSslInfoOnStart(sslContextFactory));
         server.addBean(sslContextFactory);
-        server.addBean(new SslReload(sslContextFactory, this::configureSslContextFactory));
 
         // We should use ALPN as a negotiation protocol. Old clients that don't support it will be served
         // via HTTPS. New clients, however, that want to use HTTP/2 will use TLS with ALPN extension.
@@ -116,15 +118,7 @@ public class Http2ConnectorFactory extends HttpsConnectorFactory {
         final SslConnectionFactory sslConnectionFactory = new SslConnectionFactory(sslContextFactory, "alpn");
 
         return buildConnector(server, new ScheduledExecutorScheduler(), buildBufferPool(), name, threadPool,
-            new InstrumentedConnectionFactory(sslConnectionFactory, metrics.timer(httpConnections())),
-            alpn, http2, http1);
-    }
-
-    void checkSupportedCipherSuites() {
-        if (getSupportedCipherSuites() == null) {
-            setSupportedCipherSuites(Collections.singletonList(HTTP2_DEFAULT_CIPHER));
-        } else if (!getSupportedCipherSuites().contains(HTTP2_DEFAULT_CIPHER)) {
-            throw new IllegalArgumentException("HTTP/2 server configuration must include cipher: " + HTTP2_DEFAULT_CIPHER);
-        }
+                new Jetty93InstrumentedConnectionFactory(sslConnectionFactory, metrics.timer(httpConnections())),
+                alpn, http2, http1);
     }
 }
