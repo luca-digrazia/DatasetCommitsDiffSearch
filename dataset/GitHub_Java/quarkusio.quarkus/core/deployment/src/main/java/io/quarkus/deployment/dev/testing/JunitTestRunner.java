@@ -133,12 +133,6 @@ public class JunitTestRunner {
         long start = System.currentTimeMillis();
         ClassLoader old = Thread.currentThread().getContextClassLoader();
         try (QuarkusClassLoader tcl = testApplication.createDeploymentClassLoader()) {
-            synchronized (this) {
-                if (aborted) {
-                    return;
-                }
-                testsRunning = true;
-            }
             Thread.currentThread().setContextClassLoader(tcl);
             Consumer currentTestAppConsumer = (Consumer) tcl.loadClass(CurrentTestApplication.class.getName()).newInstance();
             currentTestAppConsumer.accept(testApplication);
@@ -414,18 +408,9 @@ public class JunitTestRunner {
         } catch (Exception e) {
             throw new RuntimeException(e);
         } finally {
-            try {
-                TracingHandler.setTracingHandler(null);
-                QuarkusConsole.INSTANCE.setOutputFilter(null);
-                Thread.currentThread().setContextClassLoader(old);
-            } finally {
-                synchronized (this) {
-                    testsRunning = false;
-                    if (aborted) {
-                        notifyAll();
-                    }
-                }
-            }
+            TracingHandler.setTracingHandler(null);
+            QuarkusConsole.INSTANCE.setOutputFilter(null);
+            Thread.currentThread().setContextClassLoader(old);
         }
     }
 
@@ -439,13 +424,6 @@ public class JunitTestRunner {
         }
         aborted = true;
         notifyAll();
-        while (testsRunning) {
-            try {
-                wait();
-            } catch (InterruptedException e) {
-                //ignore
-            }
-        }
     }
 
     public synchronized void pause() {
