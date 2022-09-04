@@ -18,7 +18,6 @@ package org.graylog2.indexer.indices;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -75,14 +74,11 @@ import org.elasticsearch.search.aggregations.metrics.max.Max;
 import org.elasticsearch.search.aggregations.metrics.min.Min;
 import org.elasticsearch.search.sort.SortBuilders;
 import org.elasticsearch.search.sort.SortParseElement;
-import org.graylog2.audit.AuditActor;
-import org.graylog2.audit.AuditEventSender;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.indexer.IndexMapping;
 import org.graylog2.indexer.IndexNotFoundException;
 import org.graylog2.indexer.messages.Messages;
 import org.graylog2.indexer.searches.TimestampStats;
-import org.graylog2.plugin.system.NodeId;
 import org.joda.time.DateTime;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
@@ -103,7 +99,6 @@ import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toSet;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
-import static org.graylog2.audit.AuditEventTypes.ES_INDEX_CREATE;
 
 @Singleton
 public class Indices {
@@ -114,17 +109,13 @@ public class Indices {
     private final ElasticsearchConfiguration configuration;
     private final IndexMapping indexMapping;
     private final Messages messages;
-    private final NodeId nodeId;
-    private final AuditEventSender auditEventSender;
 
     @Inject
-    public Indices(Client client, ElasticsearchConfiguration configuration, IndexMapping indexMapping, Messages messages, NodeId nodeId, AuditEventSender auditEventSender) {
+    public Indices(Client client, ElasticsearchConfiguration configuration, IndexMapping indexMapping, Messages messages) {
         this.c = client;
         this.configuration = configuration;
         this.indexMapping = indexMapping;
         this.messages = messages;
-        this.nodeId = nodeId;
-        this.auditEventSender = auditEventSender;
     }
 
     public void move(String source, String target) {
@@ -307,13 +298,7 @@ public class Indices {
                 .setSettings(settings)
                 .request();
 
-        final boolean acknowledged = c.admin().indices().create(cir).actionGet().isAcknowledged();
-        if (acknowledged) {
-            auditEventSender.success(AuditActor.system(nodeId), ES_INDEX_CREATE, ImmutableMap.of("indexName", indexName));
-        } else {
-            auditEventSender.failure(AuditActor.system(nodeId), ES_INDEX_CREATE, ImmutableMap.of("indexName", indexName));
-        }
-        return acknowledged;
+        return c.admin().indices().create(cir).actionGet().isAcknowledged();
     }
 
     public Set<String> getAllMessageFields() {
