@@ -605,20 +605,10 @@ public final class CustomCommandLine extends CommandLine {
     public CustomCommandLine build() {
       return new CustomCommandLine(arguments);
     }
-
-    public boolean isEmpty() {
-      return arguments.isEmpty();
-    }
   }
 
   public static Builder builder() {
     return new Builder();
-  }
-
-  public static Builder builder(Builder other) {
-    Builder builder = new Builder();
-    builder.arguments.addAll(other.arguments);
-    return builder;
   }
 
   private final ImmutableList<Object> arguments;
