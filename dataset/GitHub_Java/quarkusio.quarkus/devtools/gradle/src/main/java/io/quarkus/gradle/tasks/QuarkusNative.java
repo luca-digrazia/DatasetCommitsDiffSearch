@@ -212,7 +212,6 @@ public class QuarkusNative extends QuarkusTask {
     }
 
     /**
-     * @param enableJni true to enable JNI
      * @deprecated JNI is always enabled starting from GraalVM 19.3.1.
      */
     @Option(description = "Enable jni (deprecated)", option = "enable-jni")
@@ -358,7 +357,7 @@ public class QuarkusNative extends QuarkusTask {
         getLogger().lifecycle("building native image");
 
         final AppArtifact appArtifact = extension().getAppArtifact();
-        final AppModelResolver modelResolver = extension().getAppModelResolver();
+        final AppModelResolver modelResolver = extension().resolveAppModel();
         try {
             modelResolver.resolveModel(appArtifact);
         } catch (AppModelResolverException e) {
@@ -380,7 +379,8 @@ public class QuarkusNative extends QuarkusTask {
                 .setLocalProjectDiscovery(false)
                 .setBuildSystemProperties(realProperties)
                 .setIsolateDeployment(true)
-                .setAppArtifact(appArtifact)
+                //.setConfigDir(extension().outputConfigDirectory().toPath())
+                //.setTargetDirectory(extension().outputDirectory().toPath())
                 .build().bootstrap()) {
             appCreationContext.createAugmentor().createProductionApplication();
 
