@@ -12,10 +12,8 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 import javax.net.ssl.SSLHandshakeException;
 
@@ -39,31 +37,21 @@ import io.quarkus.kubernetes.spi.KubernetesDeploymentTargetBuildItem;
 public class KubernetesDeployer {
 
     private static final Logger log = Logger.getLogger(KubernetesDeployer.class);
-    private static final String[] CONTAINER_IMAGE_EXTENSIONS = { "quarkus-container-image-jib",
-            "quarkus-container-image-docker", "quarkus-container-image-s2i" };
-    private static final String CONTAINER_IMAGE_EXTENSIONS_STR = Arrays.stream(CONTAINER_IMAGE_EXTENSIONS)
-            .map(s -> "\"" + s + "\"").collect(Collectors.joining(", "));
 
     @BuildStep(onlyIf = { IsNormal.class, KubernetesDeploy.class })
     public void deploy(KubernetesClientBuildItem kubernetesClient,
-            List<ContainerImageResultBuildItem> containerImageResults,
+            Optional<ContainerImageResultBuildItem> containerImage,
             List<KubernetesDeploymentTargetBuildItem> kubernetesDeploymentTargetBuildItems,
             OutputTargetBuildItem outputTarget,
             BuildProducer<DeploymentResultBuildItem> deploymentResult) {
 
-        if (containerImageResults.isEmpty()) {
+        if (!containerImage.isPresent()) {
             throw new RuntimeException(
-                    "A Kubernetes deployment was requested but no extension was found to build a container image. Consider adding one of following extensions: "
-                            + CONTAINER_IMAGE_EXTENSIONS_STR + ".");
-        }
-        if (containerImageResults.size() > 1) {
-            throw new RuntimeException(
-                    "Using multiple extensions for building a container image is currently not supported. Please select one of: "
-                            + CONTAINER_IMAGE_EXTENSIONS_STR + ".");
+                    "A Kubernetes deployment was requested but no extension was found to build a container image. Consider adding one of following extensions: \"quarkus-container-image-jib\", \"quarkus-container-image-docker\" or \"quarkus-container-image-s2i\".");
         }
 
-        ContainerImageResultBuildItem containerImageResult = containerImageResults.get(0);
-        if (!hasRegistry(containerImageResult.getImageId()) && !S2I.equals(containerImageResult.getProvider())) {
+        ContainerImageResultBuildItem image = containerImage.get();
+        if (!hasRegistry(image.getImageId()) && !S2I.equals(image.getProvider())) {
             log.warn(
                     "A Kubernetes deployment was requested, but the container image to be built will not be pushed to any registry"
                             + " because \"quarkus.container-image.registry\" has not been set. The Kubernetes deployment will only work properly"
@@ -73,7 +61,7 @@ public class KubernetesDeployer {
         //Get any build item but if the build was s2i, use openshift
         KubernetesDeploymentTargetBuildItem deploymentTarget = kubernetesDeploymentTargetBuildItems
                 .stream()
-                .filter(d -> !"s2i".equals(containerImageResult.getProvider()) || OPENSHIFT.equals(d.getName()))
+                .filter(d -> !"s2i".equals(containerImage.get().getProvider()) || OPENSHIFT.equals(d.getName()))
                 .findFirst()
                 .orElse(new KubernetesDeploymentTargetBuildItem(KUBERNETES, DEPLOYMENT));
 
