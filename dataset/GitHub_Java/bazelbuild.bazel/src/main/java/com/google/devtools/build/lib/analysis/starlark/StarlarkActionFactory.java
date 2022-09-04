@@ -13,7 +13,6 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.starlark;
 
-import static com.google.devtools.build.lib.packages.semantics.BuildLanguageOptions.EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
@@ -122,10 +121,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     if (Starlark.NONE.equals(sibling)) {
       fragment = ruleContext.getPackageDirectory().getRelative(PathFragment.create(filename));
     } else {
-      PathFragment original =
-          ((Artifact) sibling)
-              .getOutputDirRelativePath(
-                  starlarkSemantics.getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+      PathFragment original = ((Artifact) sibling).getOutputDirRelativePath();
       fragment = original.replaceName(filename);
     }
 
@@ -145,10 +141,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     if (Starlark.NONE.equals(sibling)) {
       fragment = ruleContext.getPackageDirectory().getRelative(PathFragment.create(filename));
     } else {
-      PathFragment original =
-          ((Artifact) sibling)
-              .getOutputDirRelativePath(
-                  starlarkSemantics.getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+      PathFragment original = ((Artifact) sibling).getOutputDirRelativePath();
       fragment = original.replaceName(filename);
     }
 
@@ -181,10 +174,7 @@ public class StarlarkActionFactory implements StarlarkActionFactoryApi {
     if (Starlark.NONE.equals(sibling)) {
       rootRelativePath = ruleContext.getPackageDirectory().getRelative(filename);
     } else {
-      PathFragment original =
-          ((Artifact) sibling)
-              .getOutputDirRelativePath(
-                  starlarkSemantics.getBool(EXPERIMENTAL_SIBLING_REPOSITORY_LAYOUT));
+      PathFragment original = ((Artifact) sibling).getOutputDirRelativePath();
       rootRelativePath = original.replaceName(filename);
     }
 
