@@ -115,7 +115,9 @@ public final class CollectionUtils {
    * <p>Note that if this method returns false, that does not mean that the iterable is mutable.
    */
   public static boolean isImmutable(Iterable<?> iterable) {
-    return iterable instanceof ImmutableCollection || iterable instanceof IterablesChain;
+    return iterable instanceof ImmutableCollection
+        || iterable instanceof IterablesChain
+        || iterable instanceof ImmutableIterable;
   }
 
   /** Throws a runtime exception if the given iterable can not be verified to be immutable. */
