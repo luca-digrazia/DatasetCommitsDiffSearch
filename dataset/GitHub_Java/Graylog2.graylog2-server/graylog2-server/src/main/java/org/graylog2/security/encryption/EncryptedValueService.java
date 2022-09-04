@@ -43,8 +43,6 @@ public class EncryptedValueService {
         return EncryptedValue.builder()
                 .value(AESTools.encrypt(plainValue, encryptionKey, salt))
                 .salt(salt)
-                .isKeepValue(false)
-                .isDeleteValue(false)
                 .build();
     }
 

@@ -40,8 +40,6 @@ class EncryptedValueSerializerTest {
         final EncryptedValue value = EncryptedValue.builder()
                 .value("2d043f9a7d5a5a7537d3e93c93c5dc40")
                 .salt("c93c0263bfc3713d")
-                .isDeleteValue(false)
-                .isKeepValue(false)
                 .build();
 
         final String jsonString = objectMapper.writeValueAsString(value);
@@ -71,8 +69,6 @@ class EncryptedValueSerializerTest {
         final EncryptedValue value = EncryptedValue.builder()
                 .value("2d043f9a7d5a5a7537d3e93c93c5dc40")
                 .salt("c93c0263bfc3713d")
-                .isDeleteValue(false)
-                .isKeepValue(false)
                 .build();
 
         final String jsonString = objectMapper.writeValueAsString(value);
