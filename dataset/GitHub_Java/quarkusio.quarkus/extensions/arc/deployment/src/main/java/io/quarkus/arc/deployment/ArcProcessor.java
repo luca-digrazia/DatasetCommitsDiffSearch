@@ -1,6 +1,5 @@
 package io.quarkus.arc.deployment;
 
-import static io.quarkus.deployment.annotations.ExecutionTime.RUNTIME_INIT;
 import static io.quarkus.deployment.annotations.ExecutionTime.STATIC_INIT;
 
 import java.util.Collection;
@@ -47,7 +46,6 @@ import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationClassPredicateBuildItem;
-import io.quarkus.deployment.builditem.ExecutorBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
@@ -85,7 +83,6 @@ public class ArcProcessor {
             ApplicationArchivesBuildItem applicationArchivesBuildItem,
             List<AnnotationsTransformerBuildItem> annotationTransformers,
             List<InjectionPointTransformerBuildItem> injectionPointTransformers,
-            List<InterceptorBindingRegistrarBuildItem> interceptorBindingRegistrarBuildItems,
             List<AdditionalStereotypeBuildItem> additionalStereotypeBuildItems,
             List<ApplicationClassPredicateBuildItem> applicationClassPredicates,
             List<AdditionalBeanBuildItem> additionalBeans,
@@ -166,10 +163,6 @@ public class ArcProcessor {
         // register all injection point transformers
         for (InjectionPointTransformerBuildItem transformerItem : injectionPointTransformers) {
             builder.addInjectionPointTransformer(transformerItem.getInjectionPointsTransformer());
-        }
-        // register additional interceptor bindings
-        for (InterceptorBindingRegistrarBuildItem bindingRegistrar : interceptorBindingRegistrarBuildItems) {
-            builder.addInterceptorbindingRegistrar(bindingRegistrar.getInterceptorBindingRegistrar());
         }
         for (BeanRegistrarBuildItem item : beanRegistrars) {
             builder.addBeanRegistrar(item.getBeanRegistrar());
@@ -320,12 +313,6 @@ public class ArcProcessor {
 
         return new BeanContainerBuildItem(beanContainer);
 
-    }
-
-    @BuildStep
-    @Record(value = RUNTIME_INIT)
-    void setupExecutor(ExecutorBuildItem executor, ArcRecorder recorder) {
-        recorder.initExecutor(executor.getExecutorProxy());
     }
 
     private abstract static class AbstractCompositeApplicationClassesPredicate<T> implements Predicate<T> {

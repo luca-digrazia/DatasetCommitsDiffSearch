@@ -27,11 +27,11 @@ import io.quarkus.arc.processor.DotNames;
 import io.quarkus.arc.processor.InjectionPointInfo;
 import io.quarkus.arc.runtime.ConfigBeanCreator;
 import io.quarkus.arc.runtime.ConfigRecorder;
+import io.quarkus.arc.runtime.QuarkusConfigProducer;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.annotations.Record;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.smallrye.config.inject.ConfigProducer;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
 
 /**
  * MicroProfile Config related build steps.
@@ -44,7 +44,7 @@ public class ConfigBuildStep {
 
     @BuildStep
     AdditionalBeanBuildItem bean() {
-        return new AdditionalBeanBuildItem(ConfigProducer.class);
+        return new AdditionalBeanBuildItem(QuarkusConfigProducer.class);
     }
 
     @BuildStep
@@ -96,8 +96,11 @@ public class ConfigBuildStep {
                     // No need to validate properties with default values
                     continue;
                 }
-
-                configProperties.produce(new ConfigPropertyBuildItem(propertyName, requiredType));
+                String propertyType = requiredType.name().toString();
+                if (requiredType.kind() != Kind.ARRAY && requiredType.kind() != Kind.PRIMITIVE) {
+                    reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, propertyType));
+                }
+                configProperties.produce(new ConfigPropertyBuildItem(propertyName, propertyType));
             }
         }
 
@@ -124,21 +127,12 @@ public class ConfigBuildStep {
     @BuildStep
     @Record(RUNTIME_INIT)
     void validateConfigProperties(ConfigRecorder recorder, List<ConfigPropertyBuildItem> configProperties,
-            BeanContainerBuildItem beanContainer, BuildProducer<ReflectiveClassBuildItem> reflectiveClass) {
+            BeanContainerBuildItem beanContainer) {
         // IMPL NOTE: we do depend on BeanContainerBuildItem to make sure that the BeanDeploymentValidator finished its processing
-
-        // the non-primitive types need to be registered for reflection since Class.forName is used at runtime to load the class
-        for (ConfigPropertyBuildItem item : configProperties) {
-            Type requiredType = item.getPropertyType();
-            String propertyType = requiredType.name().toString();
-            if (requiredType.kind() != Kind.PRIMITIVE) {
-                reflectiveClass.produce(new ReflectiveClassBuildItem(false, false, propertyType));
-            }
-        }
 
         Map<String, Set<String>> propNamesToClasses = configProperties.stream().collect(
                 groupingBy(ConfigPropertyBuildItem::getPropertyName,
-                        mapping(c -> c.getPropertyType().name().toString(), toSet())));
+                        mapping(ConfigPropertyBuildItem::getPropertyType, toSet())));
         recorder.validateConfigProperties(propNamesToClasses);
     }
 

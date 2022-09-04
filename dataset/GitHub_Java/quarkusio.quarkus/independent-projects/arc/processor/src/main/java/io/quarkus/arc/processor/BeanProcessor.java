@@ -32,7 +32,7 @@ import org.jboss.logging.Logger;
  * <li>{@link #initialize()}</li>
  * <li>{@link #validate()}</li>
  * <li>{@link #processValidationErrors(io.quarkus.arc.processor.BeanDeploymentValidator.ValidationContext)}</li>
- * <li>{@link #generateResources(ReflectionRegistration)}</li>
+ * <li>{@link #generateResources()}</li>
  * </ol>
  */
 public class BeanProcessor {
@@ -72,8 +72,7 @@ public class BeanProcessor {
             List<ContextRegistrar> contextRegistrars,
             List<BeanDeploymentValidator> beanDeploymentValidators, Predicate<DotName> applicationClassPredicate,
             boolean unusedBeansRemovalEnabled,
-            List<Predicate<BeanInfo>> unusedExclusions, Map<DotName, Collection<AnnotationInstance>> additionalStereotypes,
-            List<InterceptorBindingRegistrar> interceptorBindingRegistrars) {
+            List<Predicate<BeanInfo>> unusedExclusions, Map<DotName, Collection<AnnotationInstance>> additionalStereotypes) {
         this.reflectionRegistration = reflectionRegistration;
         this.applicationClassPredicate = applicationClassPredicate;
         this.name = name;
@@ -91,7 +90,7 @@ public class BeanProcessor {
                 initAndSort(annotationTransformers, buildContext),
                 initAndSort(injectionPointsTransformers, buildContext), resourceAnnotations, buildContext,
                 unusedBeansRemovalEnabled, unusedExclusions,
-                additionalStereotypes, interceptorBindingRegistrars);
+                additionalStereotypes);
     }
 
     public ContextRegistrar.RegistrationContext registerCustomContexts() {
@@ -229,7 +228,6 @@ public class BeanProcessor {
         private final List<InjectionPointsTransformer> injectionPointTransformers = new ArrayList<>();
         private final List<BeanRegistrar> beanRegistrars = new ArrayList<>();
         private final List<ContextRegistrar> contextRegistrars = new ArrayList<>();
-        private final List<InterceptorBindingRegistrar> additionalInterceptorBindingRegistrars = new ArrayList<>();
         private final List<BeanDeploymentValidator> beanDeploymentValidators = new ArrayList<>();
 
         private boolean removeUnusedBeans = false;
@@ -262,11 +260,6 @@ public class BeanProcessor {
         public Builder setAdditionalStereotypes(Map<DotName, Collection<AnnotationInstance>> additionalStereotypes) {
             Objects.requireNonNull(additionalStereotypes);
             this.additionalStereotypes = additionalStereotypes;
-            return this;
-        }
-
-        public Builder addInterceptorbindingRegistrar(InterceptorBindingRegistrar bindingRegistrar) {
-            this.additionalInterceptorBindingRegistrars.add(bindingRegistrar);
             return this;
         }
 
@@ -357,8 +350,7 @@ public class BeanProcessor {
             return new BeanProcessor(name, index, additionalBeanDefiningAnnotations, output, sharedAnnotationLiterals,
                     reflectionRegistration, annotationTransformers, injectionPointTransformers, resourceAnnotations,
                     beanRegistrars, contextRegistrars, beanDeploymentValidators,
-                    applicationClassPredicate, removeUnusedBeans, removalExclusions, additionalStereotypes,
-                    additionalInterceptorBindingRegistrars);
+                    applicationClassPredicate, removeUnusedBeans, removalExclusions, additionalStereotypes);
         }
 
     }
