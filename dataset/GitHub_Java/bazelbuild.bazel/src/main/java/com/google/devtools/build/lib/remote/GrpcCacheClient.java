@@ -38,6 +38,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.hash.HashCode;
+import com.google.common.hash.HashingOutputStream;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
@@ -49,7 +50,6 @@ import com.google.devtools.build.lib.remote.common.CacheNotFoundException;
 import com.google.devtools.build.lib.remote.common.MissingDigestsFinder;
 import com.google.devtools.build.lib.remote.common.RemoteCacheClient;
 import com.google.devtools.build.lib.remote.options.RemoteOptions;
-import com.google.devtools.build.lib.remote.util.DigestOutputStream;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.remote.util.Utils;
@@ -281,18 +281,20 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
       return Futures.immediateFuture(null);
     }
 
-    @Nullable Supplier<Digest> digestSupplier = null;
+    @Nullable Supplier<HashCode> hashSupplier = null;
     if (options.remoteVerifyDownloads) {
-      DigestOutputStream digestOut = digestUtil.newDigestOutputStream(out);
-      digestSupplier = digestOut::digest;
-      out = digestOut;
+      HashingOutputStream hashOut = digestUtil.newHashingOutputStream(out);
+      hashSupplier = hashOut::hash;
+      out = hashOut;
     }
 
-    return downloadBlob(digest, out, digestSupplier);
+    return downloadBlob(digest, out, hashSupplier);
   }
 
   private ListenableFuture<Void> downloadBlob(
-      Digest digest, OutputStream out, @Nullable Supplier<Digest> digestSupplier) {
+      Digest digest,
+      OutputStream out,
+      @Nullable Supplier<HashCode> hashSupplier) {
     Context ctx = Context.current();
     AtomicLong offset = new AtomicLong(0);
     ProgressiveBackoff progressiveBackoff = new ProgressiveBackoff(retrier::newBackoff);
@@ -303,8 +305,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
                     () ->
                         ctx.call(
                             () ->
-                                requestRead(
-                                    offset, progressiveBackoff, digest, out, digestSupplier)),
+                                requestRead(offset, progressiveBackoff, digest, out, hashSupplier)),
                     progressiveBackoff),
             callCredentialsProvider);
 
@@ -328,7 +329,7 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
       ProgressiveBackoff progressiveBackoff,
       Digest digest,
       OutputStream out,
-      @Nullable Supplier<Digest> digestSupplier) {
+      @Nullable Supplier<HashCode> hashSupplier) {
     String resourceName = getResourceName(options.remoteInstanceName, digest);
     SettableFuture<Void> future = SettableFuture.create();
     bsAsyncStub()
@@ -366,8 +367,9 @@ public class GrpcCacheClient implements RemoteCacheClient, MissingDigestsFinder 
               @Override
               public void onCompleted() {
                 try {
-                  if (digestSupplier != null) {
-                    Utils.verifyBlobContents(digest, digestSupplier.get());
+                  if (hashSupplier != null) {
+                    Utils.verifyBlobContents(
+                        digest.getHash(), DigestUtil.hashCodeToString(hashSupplier.get()));
                   }
                   out.flush();
                   future.set(null);
