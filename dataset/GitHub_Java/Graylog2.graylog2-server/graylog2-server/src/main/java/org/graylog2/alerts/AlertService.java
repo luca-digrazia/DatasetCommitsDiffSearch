@@ -47,7 +47,6 @@ public interface AlertService {
     AlertCondition updateFromRequest(AlertCondition alertCondition, CreateConditionRequest ccr) throws ConfigurationException;
 
     boolean inGracePeriod(AlertCondition alertCondition);
-    boolean shouldRepeatNotifications(AlertCondition alertCondition, Alert alert);
 
     List<Alert> listForStreamId(String streamId, int skip, int limit);
     List<Alert> listForStreamIds(List<String> streamIds, AlertState state, int skip, int limit);

@@ -18,8 +18,6 @@ package org.graylog2.alerts;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
-import com.mongodb.BasicDBObject;
 import com.mongodb.DBCollection;
 import org.graylog2.alerts.Alert.AlertState;
 import org.graylog2.bindings.providers.MongoJackObjectMapperProvider;
@@ -60,12 +58,6 @@ public class AlertServiceImpl implements AlertService {
         this.alertConditionFactory = alertConditionFactory;
         final String collectionName = AlertImpl.class.getAnnotation(CollectionName.class).value();
         final DBCollection dbCollection = mongoConnection.getDatabase().getCollection(collectionName);
-
-        dbCollection.createIndex(new BasicDBObject(ImmutableMap.of(
-            AlertImpl.FIELD_TRIGGERED_AT, -1,
-            AlertImpl.FIELD_STREAM_ID, 1
-        )));
-
         this.coll = JacksonDBCollection.wrap(dbCollection, AlertImpl.class, String.class, mapperProvider.get());
     }
 
@@ -107,11 +99,10 @@ public class AlertServiceImpl implements AlertService {
 
         final Alert mostRecentAlert = lastTriggeredAlert.get();
 
-        final DateTime resolvedAt = mostRecentAlert.getResolvedAt();
-        if (resolvedAt == null || !isResolved(mostRecentAlert)) {
+        if (!isResolved(mostRecentAlert)) {
             return -1;
         }
-        return Seconds.secondsBetween(resolvedAt, Tools.nowUTC()).getSeconds();
+        return Seconds.secondsBetween(mostRecentAlert.getResolvedAt(), Tools.nowUTC()).getSeconds();
     }
 
     @Override
