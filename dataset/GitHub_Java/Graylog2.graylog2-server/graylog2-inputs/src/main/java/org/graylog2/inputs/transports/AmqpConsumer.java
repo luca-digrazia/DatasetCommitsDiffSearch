@@ -33,10 +33,8 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
-import java.util.Locale;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.google.common.base.Strings.isNullOrEmpty;
@@ -107,7 +105,7 @@ public class AmqpConsumer {
         }
 
         for (int i = 0; i < parallelQueues; i++) {
-            final String queueName = String.format(Locale.ENGLISH, queue, i);
+            final String queueName = String.format(queue, i);
             channel.queueDeclare(queueName, true, false, false, null);
             channel.basicConsume(queueName, false, new DefaultConsumer(channel) {
                 @Override
@@ -162,20 +160,15 @@ public class AmqpConsumer {
         }
 
         // Authenticate?
-        if (!isNullOrEmpty(username) && !isNullOrEmpty(password)) {
+        if(!isNullOrEmpty(username) && !isNullOrEmpty(password)) {
             factory.setUsername(username);
             factory.setPassword(password);
         }
 
-        try {
-            connection = factory.newConnection();
-        } catch (TimeoutException e) {
-            throw new IOException("Timeout while opening new AMQP connection", e);
-        }
-
+        connection = factory.newConnection();
         channel = connection.createChannel();
 
-        if (null == channel) {
+        if(null == channel) {
             LOG.error("No channel descriptor available!");
         }
 
@@ -206,7 +199,7 @@ public class AmqpConsumer {
 
                         LOG.info("Consumer running.");
                         break;
-                    } catch (IOException e) {
+                    } catch(IOException e) {
                         LOG.error("Could not re-connect to AMQP broker.", e);
                     }
                 }
@@ -217,12 +210,7 @@ public class AmqpConsumer {
 
     public void stop() throws IOException {
         if (channel != null && channel.isOpen()) {
-            try {
-                channel.close();
-            } catch (TimeoutException e) {
-                LOG.error("Timeout when closing AMQP channel", e);
-                channel.abort();
-            }
+            channel.close();
         }
 
         if (connection != null && connection.isOpen()) {
