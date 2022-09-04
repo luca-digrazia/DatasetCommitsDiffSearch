@@ -1,7 +1,5 @@
 package io.quarkus.qute.runtime;
 
-import java.util.Optional;
-
 import io.quarkus.qute.TemplateException;
 import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
@@ -15,12 +13,9 @@ public class QuteRuntimeConfig {
      * <p>
      * This strategy is not used when evaluating an expression that is used in a section parameter, e.g.
      * <code>{#if foo.name}</code>. In such case, it's the responsibility of the section to handle this situation appropriately.
-     * <p>
-     * By default, the {@code NOT_FOUND} constant is written to the output. However, in the development mode the
-     * {@link PropertyNotFoundStrategy#THROW_EXCEPTION} is used by default, i.e. when the strategy is not specified.
      */
-    @ConfigItem
-    public Optional<PropertyNotFoundStrategy> propertyNotFoundStrategy;
+    @ConfigItem(defaultValue = "default")
+    public PropertyNotFoundStrategy propertyNotFoundStrategy;
     /**
      * Specify whether the parser should remove standalone lines from the output. A standalone line is a line that contains at
      * least one section tag, parameter declaration, or comment but no expression and no non-whitespace character.

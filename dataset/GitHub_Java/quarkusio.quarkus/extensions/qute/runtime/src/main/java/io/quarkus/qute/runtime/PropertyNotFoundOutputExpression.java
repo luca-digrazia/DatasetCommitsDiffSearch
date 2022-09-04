@@ -5,7 +5,7 @@ import io.quarkus.qute.ResultMapper;
 import io.quarkus.qute.Results.Result;
 import io.quarkus.qute.TemplateNode.Origin;
 
-class PropertyNotFoundOutputOriginal implements ResultMapper {
+class PropertyNotFoundOutputExpression implements ResultMapper {
 
     @Override
     public int getPriority() {

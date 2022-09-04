@@ -85,7 +85,7 @@ public class EngineProducer {
                 builder.addResultMapper(new PropertyNotFoundNoop());
                 break;
             case OUTPUT_ORIGINAL:
-                builder.addResultMapper(new PropertyNotFoundOutputOriginal());
+                builder.addResultMapper(new PropertyNotFoundOutputExpression());
                 break;
             default:
                 // Use the default strategy

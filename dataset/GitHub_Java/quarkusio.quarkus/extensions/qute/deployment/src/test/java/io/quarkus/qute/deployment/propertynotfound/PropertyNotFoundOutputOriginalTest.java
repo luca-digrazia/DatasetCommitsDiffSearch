@@ -19,8 +19,7 @@ public class PropertyNotFoundOutputOriginalTest {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addAsResource(new StringAsset("foos:{foos}"), "templates/test.html")
-                    .addAsResource(new StringAsset("quarkus.qute.property-not-found-strategy=output-original"
-                            + "\nquarkus.qute.strict-rendering=false"),
+                    .addAsResource(new StringAsset("quarkus.qute.property-not-found-strategy=output-original"),
                             "application.properties"));
 
     @Inject
