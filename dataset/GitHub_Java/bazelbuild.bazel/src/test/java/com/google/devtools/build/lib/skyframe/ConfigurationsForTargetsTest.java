@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.VerifyException;
@@ -232,7 +232,6 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
     Object evalResult = SkyframeExecutorTestUtils.evaluate(
         skyframeExecutor, key, /*keepGoing=*/false, reporter);
     skyframeExecutor.getSkyframeBuildView().enableAnalysis(false);
-    @SuppressWarnings("unchecked")
     SkyValue value = ((EvaluationResult<ComputeDependenciesFunction.Value>) evalResult).get(key);
     return ((ComputeDependenciesFunction.Value) value).depMap;
   }
@@ -284,7 +283,7 @@ public class ConfigurationsForTargetsTest extends AnalysisTestCase {
     internalTestPutOnlyEntry(ArrayListMultimap.<String, String>create());
   }
 
-  private static void internalTestPutOnlyEntry(Multimap<String, String> map) throws Exception {
+  private void internalTestPutOnlyEntry(Multimap<String, String> map) throws Exception {
     ConfigurationResolver.putOnlyEntry(map, "foo", "bar");
     ConfigurationResolver.putOnlyEntry(map, "baz", "bar");
     VerifyException e =

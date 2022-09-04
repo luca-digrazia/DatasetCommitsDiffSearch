@@ -30,7 +30,9 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.Runtime;
+import com.google.devtools.build.lib.syntax.SkylarkType;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Objects;
@@ -88,7 +90,8 @@ public class StarlarkRuleTransitionProvider implements TransitionFactory<Rule> {
           continue;
         }
         attributes.put(
-            Attribute.getSkylarkName(attribute.getPublicName()), Starlark.fromJava(val, null));
+            Attribute.getSkylarkName(attribute.getPublicName()),
+            val == null ? Runtime.NONE : SkylarkType.convertToSkylark(val, (StarlarkThread) null));
       }
       attrObject =
           StructProvider.STRUCT.create(
