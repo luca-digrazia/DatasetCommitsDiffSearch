@@ -13,7 +13,7 @@ import android.view.View;
 
 import javax.annotation.Nullable;
 
-interface HighlightableDescriptor<E> {
+interface HighlightableDescriptor {
   @Nullable
-  View getViewForHighlighting(E element);
+  View getViewForHighlighting(Object element);
 }

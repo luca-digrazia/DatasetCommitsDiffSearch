@@ -10,7 +10,6 @@
 package com.facebook.stetho.inspector.elements.android;
 
 import android.view.View;
-import android.graphics.Rect;
 
 import com.facebook.stetho.inspector.elements.Descriptor;
 
@@ -18,5 +17,5 @@ import javax.annotation.Nullable;
 
 interface AndroidDescriptorHost extends Descriptor.Host {
   @Nullable
-  View getHighlightingView(@Nullable Object element, Rect bounds);
+  View getHighlightingView(@Nullable Object element);
 }

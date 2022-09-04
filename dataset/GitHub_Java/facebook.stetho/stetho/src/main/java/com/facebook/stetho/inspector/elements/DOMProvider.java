@@ -1,4 +1,11 @@
-// Copyright 2004-present Facebook. All Rights Reserved.
+/*
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
+ */
 
 package com.facebook.stetho.inspector.elements;
 
@@ -7,46 +14,41 @@ import com.facebook.stetho.common.ThreadBound;
 import javax.annotation.Nullable;
 
 public interface DOMProvider extends ThreadBound {
-  public void setListener(Listener listener);
+  void setListener(Listener listener);
 
-  public void dispose();
-
-  @Nullable
-  public Object getRootElement();
+  void dispose();
 
   @Nullable
-  public NodeDescriptor getNodeDescriptor(@Nullable Object element);
+  Object getRootElement();
 
-  public void highlightElement(Object element, int color);
+  @Nullable
+  NodeDescriptor getNodeDescriptor(@Nullable Object element);
 
-  public void hideHighlight();
+  void highlightElement(Object element, int color);
 
-  public void setInspectModeEnabled(boolean enabled);
+  void hideHighlight();
 
-  public static interface Factory {
+  void setInspectModeEnabled(boolean enabled);
+
+  void setAttributesAsText(Object element, String text);
+
+  interface Factory {
     DOMProvider create();
   }
 
-  public static interface Listener {
-    public void onAttributeModified(
+  interface Listener {
+    void onPossiblyChanged();
+
+    void onAttributeModified(
         Object element,
         String name,
         String value);
 
-    public void onAttributeRemoved(
+    void onAttributeRemoved(
         Object element,
         String name);
 
-    public void onChildInserted(
-        Object parentElement,
-        @Nullable Object previousElement,
-        Object childElement);
-
-    public void onChildRemoved(
-        Object parentElement,
-        Object childElement);
-
-    public void onInspectRequested(
+    void onInspectRequested(
         Object element);
   }
 }
