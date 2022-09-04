@@ -40,8 +40,7 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.TargetUtils;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
-import com.google.devtools.build.lib.rules.java.JavaPluginInfo.JavaPluginData;
-import com.google.devtools.build.lib.rules.java.JavaToolchainProvider.JspecifyInfo;
+import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -201,23 +200,8 @@ public final class JavaCompilationHelper {
     }
 
     JavaTargetAttributes attributes = getAttributes();
-
-    JspecifyInfo jspecifyInfo = javaToolchain.jspecifyInfo();
-    boolean jspecify =
-        getJavaConfiguration().experimentalEnableJspecify()
-            && jspecifyInfo != null
-            && jspecifyInfo.matches(ruleContext.getLabel());
-    if (jspecify) {
-      // JSpecify requires these on the compile-time classpath; see b/187113128
-      // Add them as non-direct deps (for the purposes of Strict Java Deps) to still require an
-      // explicit dep if they're directly used by the compiled source.
-      attributes =
-          attributes.appendAdditionalTransitiveClassPathEntries(
-              jspecifyInfo.jspecifyImplicitDeps());
-    }
-
     ImmutableList<Artifact> sourceJars = attributes.getSourceJars();
-    JavaPluginData plugins = attributes.plugins().plugins();
+    JavaPluginInfo plugins = attributes.plugins().plugins();
     List<Artifact> resourceJars = new ArrayList<>();
 
     boolean turbineAnnotationProcessing =
@@ -266,19 +250,6 @@ public final class JavaCompilationHelper {
       createResourceJarAction(originalOutput, ImmutableList.copyOf(resourceJars));
     }
 
-    ImmutableList<String> javacopts = customJavacOpts;
-    if (jspecify) {
-      plugins =
-          JavaPluginInfo.JavaPluginData.merge(
-              ImmutableList.of(plugins, jspecifyInfo.jspecifyProcessor()));
-      javacopts =
-          ImmutableList.<String>builder()
-              .addAll(javacopts)
-              // Add JSpecify options last to discourage overridding them, at least for now.
-              .addAll(jspecifyInfo.jspecifyJavacopts())
-              .build();
-    }
-
     JavaCompileActionBuilder builder = new JavaCompileActionBuilder(ruleContext, javaToolchain);
 
     JavaClasspathMode classpathMode = getJavaConfiguration().getReduceJavaClasspath();
@@ -317,7 +288,7 @@ public final class JavaCompilationHelper {
       // Don't do annotation processing, but pass the processorpath through to allow service-loading
       // Error Prone plugins.
       builder.setPlugins(
-          JavaPluginData.create(
+          JavaPluginInfo.create(
               /* processorClasses= */ NestedSetBuilder.emptySet(Order.STABLE_ORDER),
               plugins.processorClasspath(),
               plugins.data()));
@@ -327,7 +298,7 @@ public final class JavaCompilationHelper {
     ImmutableSet<Artifact> sourceFiles = attributes.getSourceFiles();
     builder.setSourceFiles(sourceFiles);
     builder.setSourceJars(sourceJars);
-    builder.setJavacOpts(javacopts);
+    builder.setJavacOpts(customJavacOpts);
     builder.setJavacExecutionInfo(getExecutionInfo());
     builder.setCompressJar(true);
     builder.setBuiltinProcessorNames(javaToolchain.getHeaderCompilerBuiltinProcessors());
@@ -493,7 +464,7 @@ public final class JavaCompilationHelper {
     JavaTargetAttributes attributes = getAttributes();
 
     // only run API-generating annotation processors during header compilation
-    JavaPluginData plugins = attributes.plugins().apiGeneratingPlugins();
+    JavaPluginInfo plugins = attributes.plugins().apiGeneratingPlugins();
 
     JavaHeaderCompileActionBuilder builder = getJavaHeaderCompileActionBuilder();
     builder.setOutputJar(headerJar);

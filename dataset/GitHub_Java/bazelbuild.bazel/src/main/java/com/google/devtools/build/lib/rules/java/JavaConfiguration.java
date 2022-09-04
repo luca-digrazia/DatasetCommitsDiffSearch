@@ -85,6 +85,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   private final boolean generateJavaDeps;
   private final boolean strictDepsJavaProtos;
   private final boolean isDisallowStrictDepsForJpl;
+  private final boolean isDisallowStrictDepsForJlpl;
   private final OneVersionEnforcementLevel enforceOneVersion;
   private final boolean enforceOneVersionOnJavaTests;
   private final ImportDepsCheckingLevel importDepsCheckingLevel;
@@ -108,6 +109,7 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
   private final boolean explicitJavaTestDeps;
   private final boolean jplPropagateCcLinkParamsStore;
   private final boolean addTestSupportToCompileTimeDeps;
+  private final boolean isJlplStrictDepsEnforced;
   private final ImmutableList<Label> pluginList;
   private final boolean disallowResourceJars;
   private final boolean disallowLegacyJavaToolchainFlags;
@@ -141,12 +143,14 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     this.useLegacyBazelJavaTest = javaOptions.legacyBazelJavaTest;
     this.strictDepsJavaProtos = javaOptions.strictDepsJavaProtos;
     this.isDisallowStrictDepsForJpl = javaOptions.isDisallowStrictDepsForJpl;
+    this.isDisallowStrictDepsForJlpl = javaOptions.isDisallowStrictDepsForJlpl;
     this.enforceOneVersion = javaOptions.enforceOneVersion;
     this.enforceOneVersionOnJavaTests = javaOptions.enforceOneVersionOnJavaTests;
     this.importDepsCheckingLevel = javaOptions.importDepsCheckingLevel;
     this.allowRuntimeDepsOnNeverLink = javaOptions.allowRuntimeDepsOnNeverLink;
     this.explicitJavaTestDeps = javaOptions.explicitJavaTestDeps;
     this.jplPropagateCcLinkParamsStore = javaOptions.jplPropagateCcLinkParamsStore;
+    this.isJlplStrictDepsEnforced = javaOptions.isJlplStrictDepsEnforced;
     this.disallowResourceJars = javaOptions.disallowResourceJars;
     this.addTestSupportToCompileTimeDeps = javaOptions.addTestSupportToCompileTimeDeps;
     this.runAndroidLint = javaOptions.runAndroidLint;
@@ -411,12 +415,20 @@ public final class JavaConfiguration extends Fragment implements JavaConfigurati
     return isDisallowStrictDepsForJpl;
   }
 
+  public boolean isDisallowStrictDepsForJlpl() {
+    return isDisallowStrictDepsForJlpl;
+  }
+
   public boolean jplPropagateCcLinkParamsStore() {
     return jplPropagateCcLinkParamsStore;
   }
 
   public boolean addTestSupportToCompileTimeDeps() {
     return addTestSupportToCompileTimeDeps;
+  }
+
+  public boolean isJlplStrictDepsEnforced() {
+    return isJlplStrictDepsEnforced;
   }
 
   public boolean runAndroidLint() {
