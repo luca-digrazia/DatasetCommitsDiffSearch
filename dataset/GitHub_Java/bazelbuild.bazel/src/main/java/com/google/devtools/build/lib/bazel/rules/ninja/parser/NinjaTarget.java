@@ -165,8 +165,7 @@ public final class NinjaTarget {
   public enum InputKind implements InputOutputKind {
     EXPLICIT,
     IMPLICIT,
-    ORDER_ONLY,
-    VALIDATION,
+    ORDER_ONLY
   }
 
   /** Enum with possible kinds of outputs. */
@@ -241,10 +240,6 @@ public final class NinjaTarget {
 
   public Collection<PathFragment> getOrderOnlyInputs() {
     return inputs.get(InputKind.ORDER_ONLY);
-  }
-
-  public Collection<PathFragment> getValidationInputs() {
-    return inputs.get(InputKind.VALIDATION);
   }
 
   public long getOffset() {

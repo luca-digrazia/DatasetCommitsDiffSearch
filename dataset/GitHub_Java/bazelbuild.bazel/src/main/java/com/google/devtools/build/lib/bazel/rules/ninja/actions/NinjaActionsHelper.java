@@ -26,8 +26,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Artifact.DerivedArtifact;
 import com.google.devtools.build.lib.actions.CommandLines;
 import com.google.devtools.build.lib.actions.EmptyRunfilesSupplier;
-import com.google.devtools.build.lib.analysis.OutputGroupInfo;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.ShToolchain;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
@@ -54,9 +52,7 @@ import javax.annotation.Nullable;
  * {@link NinjaGraphRule}.
  */
 public class NinjaActionsHelper {
-
   private final RuleContext ruleContext;
-  private final RuleConfiguredTargetBuilder ruleConfiguredTargetBuilder;
   private final ImmutableSortedMap<PathFragment, NinjaTarget> targetsMap;
   private final ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargets;
 
@@ -81,7 +77,6 @@ public class NinjaActionsHelper {
    */
   NinjaActionsHelper(
       RuleContext ruleContext,
-      RuleConfiguredTargetBuilder ruleConfiguredTargetBuilder,
       NinjaGraphArtifactsHelper artifactsHelper,
       ImmutableSortedMap<PathFragment, NinjaTarget> targetsMap,
       ImmutableSortedMap<PathFragment, PhonyTarget> phonyTargets,
@@ -97,7 +92,6 @@ public class NinjaActionsHelper {
     this.phonyTargetArtifacts = phonyTargetArtifacts;
     this.pathsToBuild = pathsToBuild;
     this.outputRootInputsSymlinks = outputRootInputsSymlinks;
-    this.ruleConfiguredTargetBuilder = ruleConfiguredTargetBuilder;
   }
 
   void createNinjaActions() throws GenericParsingException {
@@ -128,7 +122,7 @@ public class NinjaActionsHelper {
           }
           enqueuer.accept(target.getAllInputs());
         } else {
-          // Verify that the Ninja action we're skipping (because its outputs are already
+          // Sanity check that the Ninja action we're skipping (because its outputs are already
           // being symlinked using output_root_inputs) has only symlink outputs specified in
           // output_root_inputs. Otherwise we might skip some other outputs.
           List<PathFragment> outputsInOutputRootInputsSymlinks = new ArrayList<>();
@@ -166,11 +160,9 @@ public class NinjaActionsHelper {
   private void createNinjaAction(NinjaTarget target) throws GenericParsingException {
     NestedSetBuilder<Artifact> inputsBuilder = NestedSetBuilder.stableOrder();
     NestedSetBuilder<Artifact> orderOnlyInputsBuilder = NestedSetBuilder.stableOrder();
-    NestedSetBuilder<Artifact> validationInputs = NestedSetBuilder.stableOrder();
     ImmutableList.Builder<Artifact> outputsBuilder = ImmutableList.builder();
     boolean isAlwaysDirty =
-        fillArtifacts(
-            target, inputsBuilder, orderOnlyInputsBuilder, validationInputs, outputsBuilder);
+        fillArtifacts(target, inputsBuilder, orderOnlyInputsBuilder, outputsBuilder);
 
     ImmutableSortedMap<NinjaRuleVariable, String> resolvedMap = target.computeRuleVariables();
     String command = resolvedMap.get(NinjaRuleVariable.COMMAND);
@@ -187,11 +179,6 @@ public class NinjaActionsHelper {
     }
 
     List<Artifact> outputs = outputsBuilder.build();
-
-    if (!validationInputs.isEmpty()) {
-      ruleConfiguredTargetBuilder.addOutputGroup(
-          OutputGroupInfo.VALIDATION, validationInputs.build());
-    }
 
     ruleContext.registerAction(
         new NinjaAction(
@@ -247,7 +234,6 @@ public class NinjaActionsHelper {
       NinjaTarget target,
       NestedSetBuilder<Artifact> inputsBuilder,
       NestedSetBuilder<Artifact> orderOnlyInputsBuilder,
-      NestedSetBuilder<Artifact> validationInputsBuilder,
       ImmutableList.Builder<Artifact> outputsBuilder)
       throws GenericParsingException {
 
@@ -255,21 +241,14 @@ public class NinjaActionsHelper {
     for (Map.Entry<InputKind, PathFragment> entry : target.getAllInputsAndKind()) {
 
       InputKind kind = entry.getKey();
-      NestedSetBuilder<Artifact> builder;
-      if (kind == InputKind.ORDER_ONLY) {
-        builder = orderOnlyInputsBuilder;
-      } else if (kind == InputKind.VALIDATION) {
-        // Note that validation inputs are specific to AOSP's Ninja implementation.
-        builder = validationInputsBuilder;
-      } else {
-        builder = inputsBuilder;
-      }
+      boolean isOrderOnly = (kind == InputKind.ORDER_ONLY);
+      NestedSetBuilder<Artifact> builder = isOrderOnly ? orderOnlyInputsBuilder : inputsBuilder;
 
       PathFragment input = entry.getValue();
       PhonyTarget phonyTarget = this.phonyTargets.get(input);
       if (phonyTarget != null) {
         builder.addTransitive(phonyTargetArtifacts.getPhonyTargetArtifacts(input));
-        isAlwaysDirty |= (phonyTarget.isAlwaysDirty() && kind != InputKind.ORDER_ONLY);
+        isAlwaysDirty |= (phonyTarget.isAlwaysDirty() && !isOrderOnly);
       } else {
         Artifact artifact = artifactsHelper.getInputArtifact(input);
         builder.add(artifact);
