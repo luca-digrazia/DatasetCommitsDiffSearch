@@ -10,7 +10,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.io.UncheckedIOException;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileVisitOption;
@@ -31,7 +30,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.BiPredicate;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.jar.Attributes;
@@ -61,7 +59,6 @@ import io.quarkus.deployment.builditem.GeneratedResourceBuildItem;
 import io.quarkus.deployment.builditem.TransformedClassesBuildItem;
 import io.quarkus.deployment.pkg.PackageConfig;
 import io.quarkus.deployment.pkg.builditem.ArtifactResultBuildItem;
-import io.quarkus.deployment.pkg.builditem.BuildSystemTargetBuildItem;
 import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
 import io.quarkus.deployment.pkg.builditem.JarBuildItem;
 import io.quarkus.deployment.pkg.builditem.NativeImageSourceJarBuildItem;
@@ -115,15 +112,6 @@ public class JarResultBuildStep {
     // we shouldn't have to specify these flags when opening a ZipFS (since they are the default ones), but failure to do so
     // makes a subsequent uberJar creation fail in java 8 (but works fine in Java 11)
     private static final OpenOption[] DEFAULT_OPEN_OPTIONS = { TRUNCATE_EXISTING, WRITE, CREATE };
-
-    @BuildStep
-    OutputTargetBuildItem outputTarget(BuildSystemTargetBuildItem bst, PackageConfig packageConfig) {
-        String name = packageConfig.outputName.isPresent() ? packageConfig.outputName.get() : bst.getBaseName();
-        Path path = packageConfig.outputDirectory.isPresent()
-                ? bst.getOutputDirectory().resolve(packageConfig.outputDirectory.get())
-                : bst.getOutputDirectory();
-        return new OutputTargetBuildItem(path, name);
-    }
 
     @BuildStep(onlyIf = JarRequired.class)
     ArtifactResultBuildItem jarOutput(JarBuildItem jarBuildItem) {
@@ -190,7 +178,7 @@ public class JarResultBuildStep {
             final StringBuilder classPath = new StringBuilder();
             final Map<String, List<byte[]>> services = new HashMap<>();
             Set<String> finalIgnoredEntries = new HashSet<>(IGNORED_ENTRIES);
-            packageConfig.userConfiguredIgnoredEntries.ifPresent(finalIgnoredEntries::addAll);
+            finalIgnoredEntries.addAll(packageConfig.userConfiguredIgnoredEntries);
 
             final List<AppDependency> appDeps = curateOutcomeBuildItem.getEffectiveModel().getUserDependencies();
 
@@ -349,7 +337,6 @@ public class JarResultBuildStep {
                 .resolve(outputTargetBuildItem.getBaseName() + "-native-image-source-jar");
         IoUtils.recursiveDelete(thinJarDirectory);
         Files.createDirectories(thinJarDirectory);
-        copyJsonConfigFiles(applicationArchivesBuildItem, thinJarDirectory);
 
         Path runnerJar = thinJarDirectory
                 .resolve(outputTargetBuildItem.getBaseName() + packageConfig.runnerSuffix + ".jar");
@@ -369,35 +356,6 @@ public class JarResultBuildStep {
         }
         runnerJar.toFile().setReadable(true, false);
         return new NativeImageSourceJarBuildItem(runnerJar, libDir);
-    }
-
-    /**
-     * This is done in order to make application specific native image configuration files available to the native-image tool
-     * without the user needing to know any specific paths.
-     * The files that are copied don't end up in the native image unless the user specifies they are needed, all this method
-     * does is copy them to a convenient location
-     */
-    private void copyJsonConfigFiles(ApplicationArchivesBuildItem applicationArchivesBuildItem, Path thinJarDirectory)
-            throws IOException {
-        // this will contain all the resources in both maven and gradle cases - the latter is true because we copy them in AugmentTask
-        Path classesLocation = applicationArchivesBuildItem.getRootArchive().getArchiveLocation();
-        Files.find(classesLocation, 1, new BiPredicate<Path, BasicFileAttributes>() {
-            @Override
-            public boolean test(Path path, BasicFileAttributes basicFileAttributes) {
-                return basicFileAttributes.isRegularFile() && path.toString().endsWith(".json");
-            }
-        }).forEach(new Consumer<Path>() {
-            @Override
-            public void accept(Path jsonPath) {
-                try {
-                    Files.copy(jsonPath, thinJarDirectory.resolve(jsonPath.getFileName()));
-                } catch (IOException e) {
-                    throw new UncheckedIOException(
-                            "Unable to copy json config file from " + jsonPath + " to " + thinJarDirectory,
-                            e);
-                }
-            }
-        });
     }
 
     private void doThinJarGeneration(CurateOutcomeBuildItem curateOutcomeBuildItem,
@@ -577,7 +535,6 @@ public class JarResultBuildStep {
         } else {
             Files.createDirectories(runnerZipFs.getPath("META-INF"));
         }
-        Files.createDirectories(manifestPath.getParent());
         Attributes attributes = manifest.getMainAttributes();
         attributes.put(Attributes.Name.MANIFEST_VERSION, "1.0");
         if (attributes.containsKey(Attributes.Name.CLASS_PATH)) {
