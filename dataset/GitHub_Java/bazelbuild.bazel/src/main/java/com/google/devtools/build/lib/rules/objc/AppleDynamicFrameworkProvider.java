@@ -22,7 +22,6 @@ import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.vfs.PathFragment;
-import javax.annotation.Nullable;
 
 /**
  * Provider containing information about an Apple dynamic framework. This provider contains:
@@ -58,35 +57,22 @@ public final class AppleDynamicFrameworkProvider extends SkylarkClassObject
 
   private final NestedSet<PathFragment> dynamicFrameworkDirs;
   private final NestedSet<Artifact> dynamicFrameworkFiles;
-  private final @Nullable Artifact dylibBinary;
+  private final Artifact dylibBinary;
   private final ObjcProvider depsObjcProvider;
 
-  public AppleDynamicFrameworkProvider(@Nullable Artifact dylibBinary,
+  public AppleDynamicFrameworkProvider(Artifact dylibBinary,
       ObjcProvider depsObjcProvider,
       NestedSet<PathFragment> dynamicFrameworkDirs,
       NestedSet<Artifact> dynamicFrameworkFiles) {
-    super(SKYLARK_CONSTRUCTOR,
-        skylarkValueMap(dylibBinary, depsObjcProvider, dynamicFrameworkDirs,
-            dynamicFrameworkFiles));
+    super(SKYLARK_CONSTRUCTOR, ImmutableMap.<String, Object>of(
+        DYLIB_BINARY_FIELD_NAME, dylibBinary,
+        FRAMEWORK_DIRS_FIELD_NAME, dynamicFrameworkDirs,
+        FRAMEWORK_FILES_FIELD_NAME, dynamicFrameworkFiles,
+        OBJC_PROVIDER_FIELD_NAME, depsObjcProvider));
     this.dylibBinary = dylibBinary;
     this.depsObjcProvider = depsObjcProvider;
     this.dynamicFrameworkDirs = dynamicFrameworkDirs;
     this.dynamicFrameworkFiles = dynamicFrameworkFiles;
-  }
-
-  private static ImmutableMap<String, Object> skylarkValueMap(
-      @Nullable Artifact dylibBinary,
-      ObjcProvider depsObjcProvider,
-      NestedSet<PathFragment> dynamicFrameworkDirs,
-      NestedSet<Artifact> dynamicFrameworkFiles) {
-    ImmutableMap.Builder<String, Object> mapBuilder = ImmutableMap.<String, Object>builder()
-        .put(FRAMEWORK_DIRS_FIELD_NAME, dynamicFrameworkDirs)
-        .put(FRAMEWORK_FILES_FIELD_NAME, dynamicFrameworkFiles)
-        .put(OBJC_PROVIDER_FIELD_NAME, depsObjcProvider);
-    if (dylibBinary != null) {
-      mapBuilder.put(DYLIB_BINARY_FIELD_NAME, dylibBinary);
-    }
-    return mapBuilder.build();
   }
 
   /**
@@ -106,10 +92,8 @@ public final class AppleDynamicFrameworkProvider extends SkylarkClassObject
   }
 
   /**
-   * Returns the multi-architecture dylib binary of the dynamic framework. May return null if
-   * the rule providing the framework only specified framework imports.
+   * Returns the multi-architecture dylib binary of the dynamic framework.
    */
-  @Nullable
   public Artifact getAppleDylibBinary() {
     return dylibBinary;
   }
