@@ -89,6 +89,9 @@ public class BeatsCodec extends AbstractCodec {
             case "topbeat":
                 gelfMessage = parseTopbeat(event);
                 break;
+            case "metricbeat":
+                gelfMessage = parseMetricbeat(event);
+                break;
             case "packetbeat":
                 gelfMessage = parsePacketbeat(event);
                 break;
@@ -126,6 +129,12 @@ public class BeatsCodec extends AbstractCodec {
         result.addField("type", type);
         result.addField("tags", tags);
 
+        @SuppressWarnings("unchecked")
+        final Map<String, Object> fields = (Map<String, Object>) event.get("fields");
+        if (fields != null) {
+            result.addFields(fields);
+        }
+
         return result;
     }
 
@@ -138,11 +147,9 @@ public class BeatsCodec extends AbstractCodec {
         gelfMessage.addField("facility", "filebeat");
         gelfMessage.addField("file", event.get("source"));
         gelfMessage.addField("input_type", event.get("input_type"));
-        @SuppressWarnings("unchecked")
-        final Map<String, Object> fields = (Map<String, Object>) event.get("fields");
-        if (fields != null) {
-            gelfMessage.addFields(fields);
-        }
+        gelfMessage.addField("count", event.get("count"));
+        gelfMessage.addField("offset", event.get("offset"));
+
         return gelfMessage;
     }
 
@@ -153,6 +160,20 @@ public class BeatsCodec extends AbstractCodec {
         final Message gelfMessage = createMessage("-", event);
         gelfMessage.addField("facility", "topbeat");
         final Map<String, Object> flattened = flatten(event, "topbeat", MAP_KEY_SEPARATOR);
+
+        // Fix field names containing dots, like "cpu.name"
+        final Map<String, Object> withoutDots = MapUtils.replaceKeyCharacter(flattened, '.', MAP_KEY_SEPARATOR.charAt(0));
+        gelfMessage.addFields(withoutDots);
+        return gelfMessage;
+    }
+
+    /**
+     * @see <a href="https://www.elastic.co/guide/en/beats/metricbeat/5.1/exported-fields.html">Metricbeat Exported Fields</a>
+     */
+    private Message parseMetricbeat(Map<String, Object> event) {
+        final Message gelfMessage = createMessage("-", event);
+        gelfMessage.addField("facility", "metricbeat");
+        final Map<String, Object> flattened = flatten(event, "metricbeat", MAP_KEY_SEPARATOR);
 
         // Fix field names containing dots, like "cpu.name"
         final Map<String, Object> withoutDots = MapUtils.replaceKeyCharacter(flattened, '.', MAP_KEY_SEPARATOR.charAt(0));
@@ -210,9 +231,20 @@ public class BeatsCodec extends AbstractCodec {
 
         @Override
         Config getConfig();
+
+        @Override
+        Descriptor getDescriptor();
     }
 
     @ConfigClass
     public static class Config extends AbstractCodec.Config {
+    }
+
+
+    public static class Descriptor extends AbstractCodec.Descriptor {
+        @Inject
+        public Descriptor() {
+            super(BeatsCodec.class.getAnnotation(Codec.class).displayName());
+        }
     }
 }
