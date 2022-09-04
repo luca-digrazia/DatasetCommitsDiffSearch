@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.stat;
 
@@ -26,23 +26,6 @@ import smile.stat.hypothesis.*;
  * @author Haifeng Li
  */
 public interface Hypothesis {
-    /**
-     * Returns the significance code of p-value.
-     * Significance codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
-     */
-    static String significance(double pvalue) {
-        if (pvalue < 0.001)
-            return "***";
-        else if (pvalue < 0.01)
-            return "**";
-        else if (pvalue < 0.05)
-            return "*";
-        else if (pvalue < 0.1)
-            return ".";
-        else
-            return "";
-    }
-
     /** t-test. */
     interface t {
         /**

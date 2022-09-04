@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math.matrix;
 
@@ -36,29 +36,29 @@ public interface PageRank {
     org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(PageRank.class);
 
     /**
-     * Calculates the page rank vector.
+     * Calculate the page rank vector.
      * @param A the matrix supporting matrix vector multiplication operation.
      * @return the page rank vector.
      */
-    static double[] of(Matrix A) {
+    static double[] apply(Matrix A) {
         int n = A.nrows();
         double[] v = new double[n];
         Arrays.fill(v, 1.0 / n);
-        return of(A, v);
+        return apply(A, v);
     }
 
     /**
-     * Calculates the page rank vector.
+     * Calculate the page rank vector.
      * @param A the matrix supporting matrix vector multiplication operation.
      * @param v the teleportation vector.
      * @return the page rank vector.
      */
-    static double[] of(Matrix A, double[] v) {
-        return of(A, v, 0.85, 1E-7, 57);
+    static double[] apply(Matrix A, double[] v) {
+        return apply(A, v, 0.85, 1E-7, 57);
     }
 
     /**
-     * Calculates the page rank vector.
+     * Calculate the page rank vector.
      * @param A the matrix supporting matrix vector multiplication operation.
      * @param v the teleportation vector.
      * @param damping the damper factor.
@@ -67,7 +67,7 @@ public interface PageRank {
      *                algorithm does not converge.
      * @return the page rank vector.
      */
-    static double[] of(Matrix A, double[] v, double damping, double tol, int maxIter) {
+    static double[] apply(Matrix A, double[] v, double damping, double tol, int maxIter) {
         if (A.nrows() != A.ncols()) {
             throw new IllegalArgumentException("Matrix is not square.");
         }
