@@ -60,14 +60,14 @@ public class SessionsController extends BaseController {
             if (destination != null && !destination.isEmpty()) {
                 return redirect(destination);
             } else {
-                return redirect(routes.StartpageController.redirect());
+                return redirect("/");
             }
         }
         if (session("username") != null && !session("username").isEmpty()) {
             if (destination != null && !destination.isEmpty()) {
                 return redirect(destination);
             } else {
-                return redirect(routes.StartpageController.redirect());
+                return redirect("/");
             }
         }
         checkServerConnections();
@@ -140,7 +140,7 @@ public class SessionsController extends BaseController {
         }
         SecurityUtils.getSubject().logout();
 		session().clear();
-		return redirect(routes.StartpageController.redirect());
+		return redirect("/login");
 	}
 
     private class SessionResponse {
