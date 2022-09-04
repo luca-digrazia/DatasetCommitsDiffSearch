@@ -1,11 +1,8 @@
 package io.quarkus.cli.commands;
 
-import io.quarkus.cli.commands.file.BuildFile;
-import io.quarkus.cli.commands.file.GradleBuildFile;
-import io.quarkus.cli.commands.legacy.LegacyQuarkusCommandInvocation;
-import io.quarkus.dependencies.Extension;
-import io.quarkus.platform.tools.ToolsConstants;
-import io.quarkus.platform.tools.ToolsUtils;
+import static io.quarkus.maven.utilities.MojoUtils.getPluginVersion;
+import static io.quarkus.maven.utilities.MojoUtils.loadExtensions;
+
 import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
@@ -15,15 +12,14 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
 import org.apache.maven.model.Dependency;
 
-public class ListExtensions implements QuarkusCommand {
-    public static final String NAME = "list-extensions";
-    private static final String PARAM_PREFIX = ToolsUtils.dotJoin(ToolsConstants.QUARKUS, NAME);
-    public static final String ALL = ToolsUtils.dotJoin(PARAM_PREFIX, "all");
-    public static final String FORMAT = ToolsUtils.dotJoin(PARAM_PREFIX, "format");
-    public static final String SEARCH = ToolsUtils.dotJoin(PARAM_PREFIX, "search");
+import io.quarkus.cli.commands.file.BuildFile;
+import io.quarkus.cli.commands.file.GradleBuildFile;
+import io.quarkus.dependencies.Extension;
 
+public class ListExtensions {
     private static final String FULL_FORMAT = "%-8s %-50s %-50s %-25s%n%s";
     private static final String CONCISE_FORMAT = "%-50s %-50s";
     private static final String NAME_FORMAT = "%-50s";
@@ -36,31 +32,9 @@ public class ListExtensions implements QuarkusCommand {
     }
 
     public void listExtensions(boolean all, String format, String search) throws IOException {
-        try {
-            execute(new LegacyQuarkusCommandInvocation()
-                    .setValue(ALL, all)
-                    .setValue(FORMAT, format)
-                    .setValue(SEARCH, search));
-        } catch (QuarkusCommandException e) {
-            throw new IOException("Failed to list extensions", e);
-        }
-    }
+        final Map<String, Dependency> installed = findInstalled();
 
-    @Override
-    public QuarkusCommandOutcome execute(QuarkusCommandInvocation invocation) throws QuarkusCommandException {
-
-        final boolean all = invocation.getValue(ALL, true);
-        final String format = invocation.getValue(FORMAT, "concise");
-        final String search = invocation.getValue(SEARCH, "*");
-
-        Map<String, Dependency> installed;
-        try {
-            installed = findInstalled();
-        } catch (IOException e) {
-            throw new QuarkusCommandException("Failed to determine the list of installed extensions", e);
-        }
-
-        Stream<Extension> extensionsStream = invocation.getPlatformDescriptor().getExtensions().stream();
+        Stream<Extension> extensionsStream = loadExtensions().stream();
         extensionsStream = extensionsStream.filter(e -> filterUnlisted(e));
         if (search != null && !"*".equalsIgnoreCase(search)) {
             final Pattern searchPattern = Pattern.compile(".*" + search + ".*", Pattern.CASE_INSENSITIVE);
@@ -91,24 +65,23 @@ public class ListExtensions implements QuarkusCommand {
             loadedExtensions.forEach(extension -> display(extension, installed, all, currentFormatter));
 
             if ("concise".equalsIgnoreCase(format)) {
-                if (this.buildFile instanceof GradleBuildFile) {
-                    System.out.println("\nTo get more information, append --format=full to your command line.");
-                } else {
-                    System.out
-                            .println("\nTo get more information, append -Dquarkus.extension.format=full to your command line.");
-                }
+            	if (this.buildFile instanceof GradleBuildFile) {
+            		System.out.println("\nTo get more information, append --format=full to your command line.");
+            	}
+            	else {
+            		System.out.println("\nTo get more information, append -Dquarkus.extension.format=full to your command line.");
+            	}
             }
 
             if (this.buildFile instanceof GradleBuildFile) {
-                System.out.println("\nAdd an extension to your project by adding the dependency to your " +
+            	System.out.println("\nAdd an extension to your project by adding the dependency to your " +
                         "build.gradle or use `./gradlew addExtension --extensions=\"artifactId\"`");
-            } else {
-                System.out.println("\nAdd an extension to your project by adding the dependency to your " +
+            }
+            else {
+            	System.out.println("\nAdd an extension to your project by adding the dependency to your " +
                         "pom.xml or use `./mvnw quarkus:add-extension -Dextensions=\"artifactId\"`");
             }
         }
-
-        return QuarkusCommandOutcome.success();
     }
 
     private boolean filterUnlisted(Extension e) {
@@ -141,31 +114,31 @@ public class ListExtensions implements QuarkusCommand {
 
     private void display(Extension extension, final Map<String, Dependency> installed, boolean all,
             Consumer<String[]> formatter) {
-        final Dependency dependency = installed.get(extension.getGroupId() + ":" + extension.getArtifactId());
-        if (!all && dependency != null) {
+        if (!all && installed.containsKey(String.format("%s:%s", extension.getGroupId(), extension.getArtifactId()))) {
             return;
         }
+        final Dependency dependency = installed.get(String.format("%s:%s", extension.getGroupId(), extension.getArtifactId()));
 
         String label = "";
         String version = "";
 
         final String extracted = extractVersion(dependency);
         if (extracted != null) {
-            if (extracted.equalsIgnoreCase(extension.getVersion())) {
+            if (getPluginVersion().equalsIgnoreCase(extracted)) {
                 label = "current";
                 version = String.format("%s", extracted);
             } else {
                 label = "update";
-                version = String.format("%s <> %s", extracted, extension.getVersion());
+                version = String.format("%s <> %s", extracted, getPluginVersion());
             }
         }
 
         String[] result = new String[] { label, extension.getName(), extension.getArtifactId(), version, extension.getGuide() };
-
-        for (int i = 0; i < result.length; i++) {
+        
+        for(int i=0;i<result.length;i++) {
             result[i] = Objects.toString(result[i], "");
         }
-
+        
         formatter.accept(result);
     }
 
@@ -188,4 +161,5 @@ public class ListExtensions implements QuarkusCommand {
     private String propertyName(final String variable) {
         return variable.substring(2, variable.length() - 1);
     }
+
 }
