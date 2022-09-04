@@ -1,28 +1,25 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010 Haifeng Li
+ *   
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *  
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
- *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *******************************************************************************/
 
 package smile.neighbor;
 
-import smile.util.Strings;
-
 /**
- * The immutable object encapsulates the results of nearest neighbor search.
- * A returned neighbor for nearest neighbor search contains the key of object
- * (e.g. the weight vector of a neuron) and the object itself (e.g. a neuron,
+ * The object encapsulates the results of nearest neighbor search. A returned
+ * neighbor for nearest neighbor search contains the key of object (say weight
+ * vector of a neuron) and the object itself (say a neuron in neural network,
  * which also contains other information beyond weight vector), an index of
  * object in the dataset, which is often useful, and the distance between
  * the query key to the object key.
@@ -36,24 +33,23 @@ public class Neighbor<K, V> implements Comparable<Neighbor<K,V>> {
     /**
      * The key of neighbor.
      */
-    public final K key;
+    public K key;
     /**
      * The data object of neighbor. It may be same as the key object.
      */
-    public final V value;
+    public V value;
     /**
      * The index of neighbor object in the dataset.
      */
-    public final int index;
+    public int index;
     /**
      * The distance between the query and the neighbor.
      */
-    public final double distance;
+    public double distance;
 
     /**
      * Constructor.
-     * @param key the key of neighbor.
-     * @param object the value of neighbor.
+     * @param object the neighbor object.
      * @param index the index of neighbor object in the dataset.
      * @param distance the distance between the query and the neighbor.
      */
@@ -66,19 +62,12 @@ public class Neighbor<K, V> implements Comparable<Neighbor<K,V>> {
 
     @Override
     public int compareTo(Neighbor<K,V> o) {
-        int d = Double.compare(distance, o.distance);
+        int d = (int) Math.signum(distance - o.distance);
         // Sometime, the dataset contains duplicate samples.
         // If the distances are same, we sort by the sample index.
-        return d == 0 ? Integer.compare(index, o.index) : d;
-    }
-
-    @Override
-    public String toString() {
-        return String.format("%s(%d):%s", key, index, Strings.format(distance));
-    }
-
-    /** Creates a neighbor object, of which key and object are the same. */
-    public static <T> Neighbor<T, T> of(T key, int index, double distance) {
-        return new Neighbor<>(key, key, index, distance);
+        if (d == 0)
+            return index - o.index;
+        else
+            return d;
     }
 }
