@@ -22,12 +22,8 @@ public class MultiNdjsonSupport {
     private static void initialize(HttpServerResponse response, RoutingContext rc) {
         if (response.bytesWritten() == 0) {
             MultiMap headers = response.headers();
-            if (headers.get(HttpHeaders.CONTENT_TYPE) == null) {
-                if (rc.getAcceptableContentType() == null) {
-                    headers.set(HttpHeaders.CONTENT_TYPE, "application/x-ndjson");
-                } else {
-                    headers.set(HttpHeaders.CONTENT_TYPE, rc.getAcceptableContentType());
-                }
+            if (rc.getAcceptableContentType() == null) {
+                headers.set(HttpHeaders.CONTENT_TYPE, "application/x-ndjson");
             }
             response.setChunked(true);
         }
@@ -81,12 +77,8 @@ public class MultiNdjsonSupport {
     private static void endOfStream(HttpServerResponse response, RoutingContext rc) {
         if (response.bytesWritten() == 0) { // No item
             MultiMap headers = response.headers();
-            if (headers.get(HttpHeaders.CONTENT_TYPE) == null) {
-                if (rc.getAcceptableContentType() == null) {
-                    headers.set(HttpHeaders.CONTENT_TYPE, "application/x-ndjson");
-                } else {
-                    headers.set(HttpHeaders.CONTENT_TYPE, rc.getAcceptableContentType());
-                }
+            if (rc.getAcceptableContentType() == null) {
+                headers.set(HttpHeaders.CONTENT_TYPE, "application/x-ndjson");
             }
         }
         response.end();
