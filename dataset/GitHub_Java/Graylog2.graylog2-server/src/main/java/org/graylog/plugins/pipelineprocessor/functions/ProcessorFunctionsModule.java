@@ -49,7 +49,6 @@ import org.graylog.plugins.pipelineprocessor.functions.messages.SetField;
 import org.graylog.plugins.pipelineprocessor.functions.messages.SetFields;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Abbreviate;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Capitalize;
-import org.graylog.plugins.pipelineprocessor.functions.strings.Concat;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Contains;
 import org.graylog.plugins.pipelineprocessor.functions.strings.GrokMatch;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Lowercase;
@@ -58,10 +57,6 @@ import org.graylog.plugins.pipelineprocessor.functions.strings.Substring;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Swapcase;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Uncapitalize;
 import org.graylog.plugins.pipelineprocessor.functions.strings.Uppercase;
-import org.graylog.plugins.pipelineprocessor.functions.syslog.SyslogFacilityConversion;
-import org.graylog.plugins.pipelineprocessor.functions.syslog.SyslogLevelConversion;
-import org.graylog.plugins.pipelineprocessor.functions.syslog.SyslogPriorityConversion;
-import org.graylog.plugins.pipelineprocessor.functions.syslog.SyslogPriorityToStringConversion;
 import org.graylog.plugins.pipelineprocessor.functions.urls.UrlConversion;
 import org.graylog2.plugin.PluginModule;
 
@@ -100,7 +95,6 @@ public class ProcessorFunctionsModule extends PluginModule {
         addMessageProcessorFunction(Swapcase.NAME, Swapcase.class);
         addMessageProcessorFunction(Uncapitalize.NAME, Uncapitalize.class);
         addMessageProcessorFunction(Uppercase.NAME, Uppercase.class);
-        addMessageProcessorFunction(Concat.NAME, Concat.class);
 
         // json
         addMessageProcessorFunction(JsonParse.NAME, JsonParse.class);
@@ -132,12 +126,6 @@ public class ProcessorFunctionsModule extends PluginModule {
 
         // URL parsing
         addMessageProcessorFunction(UrlConversion.NAME, UrlConversion.class);
-
-        // Syslog support
-        addMessageProcessorFunction(SyslogFacilityConversion.NAME, SyslogFacilityConversion.class);
-        addMessageProcessorFunction(SyslogLevelConversion.NAME, SyslogLevelConversion.class);
-        addMessageProcessorFunction(SyslogPriorityConversion.NAME, SyslogPriorityConversion.class);
-        addMessageProcessorFunction(SyslogPriorityToStringConversion.NAME, SyslogPriorityToStringConversion.class);
     }
 
     protected void addMessageProcessorFunction(String name, Class<? extends Function<?>> functionClass) {
