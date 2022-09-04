@@ -42,11 +42,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.annotation.Nullable;
 import org.objectweb.asm.ClassReader;
@@ -205,7 +203,6 @@ class Desugar {
   private final CoreLibraryRewriter rewriter;
   private final LambdaClassMaker lambdas;
   private final GeneratedClassStore store;
-  private final Set<String> visitedExceptionTypes = new HashSet<>();
   /** The counter to record the times of try-with-resources desugaring is invoked. */
   private final AtomicInteger numOfTryWithResourcesInvoked = new AtomicInteger();
 
@@ -456,9 +453,7 @@ class Desugar {
       // null ClassReaderFactory b/c we don't expect to need it for lambda classes
       visitor = new Java7Compatibility(visitor, (ClassReaderFactory) null);
       if (options.desugarTryWithResourcesIfNeeded) {
-        visitor =
-            new TryWithResourcesRewriter(
-                visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
+        visitor = new TryWithResourcesRewriter(visitor, loader, numOfTryWithResourcesInvoked);
       }
       if (options.desugarInterfaceMethodBodiesIfNeeded) {
         visitor = new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader);
@@ -504,9 +499,7 @@ class Desugar {
       if (outputJava7) {
         visitor = new Java7Compatibility(visitor, classpathReader);
         if (options.desugarTryWithResourcesIfNeeded) {
-          visitor =
-              new TryWithResourcesRewriter(
-                  visitor, loader, visitedExceptionTypes, numOfTryWithResourcesInvoked);
+          visitor = new TryWithResourcesRewriter(visitor, loader, numOfTryWithResourcesInvoked);
         }
         if (options.desugarInterfaceMethodBodiesIfNeeded) {
           visitor = new DefaultMethodClassFixer(visitor, classpathReader, bootclasspathReader);
