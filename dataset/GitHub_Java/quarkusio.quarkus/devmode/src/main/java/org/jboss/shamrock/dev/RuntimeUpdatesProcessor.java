@@ -17,12 +17,11 @@
 package org.jboss.shamrock.dev;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
@@ -38,7 +37,6 @@ import org.jboss.logging.Logger;
 
 import io.undertow.server.HttpHandler;
 import io.undertow.server.HttpServerExchange;
-import io.undertow.util.FileUtils;
 
 public class RuntimeUpdatesProcessor {
 
@@ -155,7 +153,7 @@ public class RuntimeUpdatesProcessor {
                             p -> CopyUtils.readFileContentNoIOExceptions(p))
                     );
         }
-        if (changedClasses.isEmpty() && !checkForConfigFileChange()) {
+        if (changedClasses.isEmpty() && !configFilesChanged()) {
             return null;
         }
 
@@ -163,13 +161,11 @@ public class RuntimeUpdatesProcessor {
         return changedClasses;
     }
 
-    private boolean checkForConfigFileChange() {
-        boolean ret = false;
-        boolean doCopy = true;
+    private boolean configFilesChanged() {
+
         Path root = resourcesDir;
         if (root == null) {
             root = classesDir;
-            doCopy = false;
         }
         for (String i : configFilePaths) {
             Path config = root.resolve(i);
@@ -178,21 +174,14 @@ public class RuntimeUpdatesProcessor {
                     long value = Files.getLastModifiedTime(config).toMillis();
                     Long existing = configFileTimestamps.get(i);
                     if (value > existing) {
-                        ret = true;
-                        if(doCopy) {
-                            Path target = classesDir.resolve(i);
-                            byte[] data = CopyUtils.readFileContent(config);
-                            try(FileOutputStream out = new FileOutputStream(target.toFile())) {
-                                out.write(data);
-                            }
-                        }
+                        return true;
                     }
                 } catch (IOException e) {
                     throw new RuntimeException(e);
                 }
             }
         }
-        return ret;
+        return false;
     }
 
     private boolean wasRecentlyModified(final Path p) {

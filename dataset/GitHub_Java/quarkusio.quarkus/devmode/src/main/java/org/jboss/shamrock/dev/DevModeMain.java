@@ -26,7 +26,6 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import org.eclipse.microprofile.config.Config;
-import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 import org.jboss.shamrock.runtime.Timing;
 
@@ -140,7 +139,6 @@ public class DevModeMain {
                 Thread.currentThread().setContextClassLoader(old);
             }
         }
-        SmallRyeConfigProviderResolver.instance().releaseConfig(SmallRyeConfigProviderResolver.instance().getConfig());
         closeable = null;
         Timing.restart();
         doStart();
