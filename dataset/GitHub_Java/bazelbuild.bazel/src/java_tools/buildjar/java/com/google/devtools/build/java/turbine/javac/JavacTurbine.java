@@ -127,9 +127,7 @@ public class JavacTurbine implements AutoCloseable {
   @VisibleForTesting
   static ImmutableList<String> processJavacopts(TurbineOptions turbineOptions) {
     ImmutableList<String> javacopts =
-        JavacOptions.removeBazelSpecificFlags(
-            JavacOptions.normalizeOptionsWithNormalizers(
-                turbineOptions.javacOpts(), new JavacOptions.ReleaseOptionNormalizer()));
+        JavacOptions.removeBazelSpecificFlags(turbineOptions.javacOpts());
 
     ImmutableList.Builder<String> builder = ImmutableList.builder();
     builder.addAll(javacopts);
