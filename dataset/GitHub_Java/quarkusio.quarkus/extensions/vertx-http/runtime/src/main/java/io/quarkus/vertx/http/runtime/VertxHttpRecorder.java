@@ -86,8 +86,9 @@ import io.vertx.core.impl.ContextInternal;
 import io.vertx.core.impl.VertxInternal;
 import io.vertx.core.json.JsonObject;
 import io.vertx.core.net.JdkSSLEngineOptions;
-import io.vertx.core.net.KeyStoreOptions;
+import io.vertx.core.net.JksOptions;
 import io.vertx.core.net.PemKeyCertOptions;
+import io.vertx.core.net.PfxOptions;
 import io.vertx.core.net.SocketAddress;
 import io.vertx.core.net.impl.ConnectionBase;
 import io.vertx.core.net.impl.VertxHandler;
@@ -603,13 +604,26 @@ public class VertxHttpRecorder {
             }
 
             byte[] data = getFileContent(keyStorePath);
-            final Optional<String> keyStoreProvider = sslConfig.certificate.keyStoreProvider;
-            KeyStoreOptions options = new KeyStoreOptions()
-                    .setPassword(keystorePassword)
-                    .setValue(Buffer.buffer(data))
-                    .setType(type.toUpperCase())
-                    .setProvider(keyStoreProvider.orElse(null));
-            serverOptions.setKeyCertOptions(options);
+            switch (type) {
+                case "pkcs12": {
+                    PfxOptions options = new PfxOptions()
+                            .setPassword(keystorePassword)
+                            .setValue(Buffer.buffer(data));
+                    serverOptions.setPfxKeyCertOptions(options);
+                    break;
+                }
+                case "jks": {
+                    JksOptions options = new JksOptions()
+                            .setPassword(keystorePassword)
+                            .setValue(Buffer.buffer(data));
+                    serverOptions.setKeyStoreOptions(options);
+                    break;
+                }
+                default:
+                    throw new IllegalArgumentException(
+                            "Unknown keystore type: " + type + " valid types are jks or pkcs12");
+            }
+
         } else {
             return null;
         }
@@ -627,7 +641,7 @@ public class VertxHttpRecorder {
                 type = findKeystoreFileType(trustStoreFilePath);
             }
             createTrustStoreOptions(trustStoreFilePath, trustStorePassword.get(), type,
-                    sslConfig.certificate.trustStoreProvider.orElse(null), serverOptions);
+                    serverOptions);
         }
 
         for (String cipher : sslConfig.cipherSuites.orElse(Collections.emptyList())) {
@@ -678,14 +692,27 @@ public class VertxHttpRecorder {
     }
 
     private static void createTrustStoreOptions(Path trustStoreFile, String trustStorePassword,
-            String trustStoreFileType, String trustStoreProvider, HttpServerOptions serverOptions) throws IOException {
+            String trustStoreFileType, HttpServerOptions serverOptions) throws IOException {
         byte[] data = getFileContent(trustStoreFile);
-        KeyStoreOptions options = new KeyStoreOptions()
-                .setPassword(trustStorePassword)
-                .setValue(Buffer.buffer(data))
-                .setType(trustStoreFileType.toUpperCase())
-                .setProvider(trustStoreProvider);
-        serverOptions.setTrustOptions(options);
+        switch (trustStoreFileType) {
+            case "pkcs12": {
+                PfxOptions options = new PfxOptions()
+                        .setPassword(trustStorePassword)
+                        .setValue(Buffer.buffer(data));
+                serverOptions.setPfxTrustOptions(options);
+                break;
+            }
+            case "jks": {
+                JksOptions options = new JksOptions()
+                        .setPassword(trustStorePassword)
+                        .setValue(Buffer.buffer(data));
+                serverOptions.setTrustStoreOptions(options);
+                break;
+            }
+            default:
+                throw new IllegalArgumentException(
+                        "Unknown truststore type: " + trustStoreFileType + " valid types are jks or pkcs12");
+        }
     }
 
     private static String findKeystoreFileType(Path storePath) {
@@ -773,15 +800,12 @@ public class VertxHttpRecorder {
         }
     }
 
-    public void setNonApplicationRedirectHandler(String nonApplicationPath, String rootPath) {
+    public void setNonApplicationRedirectHandler(String nonApplicationPath) {
         nonApplicationRedirectHandler = new Handler<RoutingContext>() {
             @Override
             public void handle(RoutingContext context) {
                 String absoluteURI = context.request().absoluteURI();
                 int pathStart = absoluteURI.indexOf(context.request().path());
-                if (absoluteURI.contains(rootPath)) {
-                    pathStart = pathStart + rootPath.length();
-                }
                 String redirectTo = absoluteURI.substring(0, pathStart) + nonApplicationPath
                         + absoluteURI.substring(pathStart);
 
