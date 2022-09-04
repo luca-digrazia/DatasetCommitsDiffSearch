@@ -44,7 +44,10 @@ public class RuleFormatter {
     if (isSkylark) {
       builder.setSkylarkEnvironmentHashCode(
           Preconditions.checkNotNull(
-              rule.getRuleClassObject().getRuleDefinitionEnvironmentHashCode(), rule));
+              rule.getRuleClassObject()
+                  .getRuleDefinitionEnvironment()
+                  .getTransitiveContentHashCode(),
+              rule));
     }
     for (Attribute attr : rule.getAttributes()) {
       Object rawAttributeValue = rawAttributeMapper.getRawAttributeValue(rule, attr);
@@ -113,3 +116,4 @@ public class RuleFormatter {
     return null;
   }
 }
+
