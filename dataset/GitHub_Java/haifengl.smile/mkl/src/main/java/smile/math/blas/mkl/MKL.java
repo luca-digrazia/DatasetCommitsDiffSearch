@@ -22,7 +22,6 @@ import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 import smile.math.blas.*;
 import static org.bytedeco.mkl.global.mkl_rt.*;
-import static org.bytedeco.openblas.global.openblas.LAPACKE_sorgqr;
 
 /**
  * Intel MKL library wrapper.
@@ -1008,16 +1007,6 @@ public class MKL implements BLAS, LAPACK {
     @Override
     public int orgqr(Layout layout, int m, int n, int k, DoubleBuffer A, int lda, DoubleBuffer tau) {
         return LAPACKE_dorgqr(layout.lapack(), m, n, k, A, lda, tau);
-    }
-
-    @Override
-    public int orgqr(Layout layout, int m, int n, int k, float[] A, int lda, float[] tau) {
-        return LAPACKE_sorgqr(layout.lapack(), m, n, k, A, lda, tau);
-    }
-
-    @Override
-    public int orgqr(Layout layout, int m, int n, int k, FloatBuffer A, int lda, FloatBuffer tau) {
-        return LAPACKE_sorgqr(layout.lapack(), m, n, k, A, lda, tau);
     }
 
     @Override
