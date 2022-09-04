@@ -70,7 +70,7 @@ public class RegressionMetrics implements Serializable {
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("{\n");
-        if (!Double.isNaN(fitTime)) sb.append(String.format("  fit time: %.3f ms,\n", fitTime));
+        sb.append(String.format("  fit time: %.3f ms,\n", fitTime));
         sb.append(String.format("  score time: %.3f ms,\n", scoreTime));
         sb.append(String.format("  validation data size:: %d,\n", size));
         sb.append(String.format("  RSS: %.4f,\n", rss));
@@ -87,7 +87,6 @@ public class RegressionMetrics implements Serializable {
      * @param scoreTime the time in milliseconds of scoring the validation data.
      * @param truth the ground truth.
      * @param prediction the predictions.
-     * @return the validation metrics.
      */
     public static RegressionMetrics of(double fitTime, double scoreTime, double[] truth, double[] prediction) {
         return new RegressionMetrics(
