@@ -26,15 +26,13 @@ import javax.lang.model.element.TypeElement;
 import javax.tools.Diagnostic;
 
 import com.googlecode.androidannotations.annotations.Background;
-import com.googlecode.androidannotations.annotations.BeforeCreate;
 import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.Extra;
 import com.googlecode.androidannotations.annotations.ItemClick;
 import com.googlecode.androidannotations.annotations.ItemLongClick;
 import com.googlecode.androidannotations.annotations.ItemSelect;
-import com.googlecode.androidannotations.annotations.Enhance;
+import com.googlecode.androidannotations.annotations.Layout;
 import com.googlecode.androidannotations.annotations.LongClick;
-import com.googlecode.androidannotations.annotations.RoboGuice;
 import com.googlecode.androidannotations.annotations.SystemService;
 import com.googlecode.androidannotations.annotations.Touch;
 import com.googlecode.androidannotations.annotations.Transactional;
@@ -66,49 +64,43 @@ import com.googlecode.androidannotations.model.EmptyAnnotationElements;
 import com.googlecode.androidannotations.model.MetaModel;
 import com.googlecode.androidannotations.model.ModelExtractor;
 import com.googlecode.androidannotations.processing.BackgroundProcessor;
-import com.googlecode.androidannotations.processing.BeforeCreateProcessor;
 import com.googlecode.androidannotations.processing.ClickProcessor;
 import com.googlecode.androidannotations.processing.ExtraProcessor;
 import com.googlecode.androidannotations.processing.ItemClickProcessor;
 import com.googlecode.androidannotations.processing.ItemLongClickProcessor;
 import com.googlecode.androidannotations.processing.ItemSelectedProcessor;
-import com.googlecode.androidannotations.processing.EnhanceProcessor;
+import com.googlecode.androidannotations.processing.LayoutProcessor;
 import com.googlecode.androidannotations.processing.LongClickProcessor;
 import com.googlecode.androidannotations.processing.ModelProcessor;
 import com.googlecode.androidannotations.processing.ResProcessor;
-import com.googlecode.androidannotations.processing.RoboGuiceProcessor;
 import com.googlecode.androidannotations.processing.SystemServiceProcessor;
 import com.googlecode.androidannotations.processing.TouchProcessor;
 import com.googlecode.androidannotations.processing.TransactionalProcessor;
 import com.googlecode.androidannotations.processing.UiThreadDelayedProcessor;
 import com.googlecode.androidannotations.processing.UiThreadProcessor;
-import com.googlecode.androidannotations.processing.ViewByIdProcessor;
-import com.googlecode.androidannotations.processor.AnnotatedAbstractProcessor;
+import com.googlecode.androidannotations.processing.ViewProcessor;
+import com.googlecode.androidannotations.processor.ExtendedAbstractProcessor;
 import com.googlecode.androidannotations.processor.SupportedAnnotationClasses;
 import com.googlecode.androidannotations.rclass.AndroidRClassFinder;
 import com.googlecode.androidannotations.rclass.CoumpoundRClass;
 import com.googlecode.androidannotations.rclass.IRClass;
 import com.googlecode.androidannotations.rclass.RClassFinder;
-import com.googlecode.androidannotations.validation.BeforeCreateValidator;
 import com.googlecode.androidannotations.validation.ClickValidator;
 import com.googlecode.androidannotations.validation.ExtraValidator;
 import com.googlecode.androidannotations.validation.ItemClickValidator;
 import com.googlecode.androidannotations.validation.ItemLongClickValidator;
 import com.googlecode.androidannotations.validation.ItemSelectedValidator;
-import com.googlecode.androidannotations.validation.EnhanceValidator;
+import com.googlecode.androidannotations.validation.LayoutValidator;
 import com.googlecode.androidannotations.validation.LongClickValidator;
 import com.googlecode.androidannotations.validation.ModelValidator;
 import com.googlecode.androidannotations.validation.ResValidator;
-import com.googlecode.androidannotations.validation.RoboGuiceValidator;
 import com.googlecode.androidannotations.validation.RunnableValidator;
 import com.googlecode.androidannotations.validation.SystemServiceValidator;
 import com.googlecode.androidannotations.validation.TouchValidator;
 import com.googlecode.androidannotations.validation.TransactionalValidator;
-import com.googlecode.androidannotations.validation.ViewByIdValidator;
+import com.googlecode.androidannotations.validation.ViewValidator;
 
-@SupportedAnnotationClasses({ Enhance.class, //
-		BeforeCreate.class, //
-		RoboGuice.class, //
+@SupportedAnnotationClasses({ Layout.class, //
 		ViewById.class, //
 		Click.class, //
 		LongClick.class, //
@@ -131,7 +123,7 @@ import com.googlecode.androidannotations.validation.ViewByIdValidator;
 		DimensionPixelOffsetRes.class, //
 		DimensionPixelSizeRes.class, //
 		DrawableRes.class, //
-		IntArrayRes.class, //
+		IntArrayRes.class, // ;
 		IntegerRes.class, //
 		LayoutRes.class, //
 		MovieRes.class, //
@@ -139,35 +131,21 @@ import com.googlecode.androidannotations.validation.ViewByIdValidator;
 		TextArrayRes.class, //
 		StringArrayRes.class })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
-public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
+public class AndroidAnnotationProcessor extends ExtendedAbstractProcessor {
 
 	@Override
 	public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
 		try {
 			processThrowing(annotations, roundEnv);
 		} catch (Exception e) {
-
-			Throwable rootCause = e;
-			while (rootCause.getCause() != null) {
-				rootCause = rootCause.getCause();
-			}
-
 			StackTraceElement firstElement = e.getStackTrace()[0];
-			StackTraceElement rootFirstElement = rootCause.getStackTrace()[0];
-			String errorMessage = e.toString() + " " + firstElement.toString() + " root: " + rootCause.toString() + " "
-					+ rootFirstElement.toString();
+			String errorMessage = e.toString() + " " + firstElement.toString();
 
-			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
-					"Unexpected annotation processing exception: " + errorMessage);
+			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unexpected annotation processing exception: " + errorMessage);
 			e.printStackTrace();
 
 			Element element = roundEnv.getElementsAnnotatedWith(annotations.iterator().next()).iterator().next();
-			processingEnv
-					.getMessager()
-					.printMessage(
-							Diagnostic.Kind.ERROR,
-							"Unexpected annotation processing exception (not related to this element, but otherwise it wouldn't show up in eclipse) : "
-									+ errorMessage, element);
+			processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR, "Unexpected annotation processing exception (not related to this element, but otherwise it wouldn't show up in eclipse) : " + errorMessage, element);
 		}
 
 		return false;
@@ -187,8 +165,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		generateSources(model);
 	}
 
-	private AnnotationElementsHolder extractAnnotations(Set<? extends TypeElement> annotations,
-			RoundEnvironment roundEnv) {
+	private AnnotationElementsHolder extractAnnotations(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
 		ModelExtractor modelExtractor = new ModelExtractor();
 		AnnotationElementsHolder extractedModel = modelExtractor.extract(annotations, roundEnv);
 		return extractedModel;
@@ -205,8 +182,7 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		return new CoumpoundRClass(rClass, androidRClass);
 	}
 
-	private AnnotationElements validateAnnotations(AnnotationElementsHolder extractedModel, IRClass rClass,
-			AndroidSystemServices androidSystemServices) {
+	private AnnotationElements validateAnnotations(AnnotationElementsHolder extractedModel, IRClass rClass, AndroidSystemServices androidSystemServices) {
 		if (rClass != null) {
 			ModelValidator modelValidator = buildModelValidator(rClass, androidSystemServices);
 			return modelValidator.validate(extractedModel);
@@ -217,9 +193,8 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 
 	private ModelValidator buildModelValidator(IRClass rClass, AndroidSystemServices androidSystemServices) {
 		ModelValidator modelValidator = new ModelValidator();
-		modelValidator.register(new EnhanceValidator(processingEnv, rClass));
-		modelValidator.register(new RoboGuiceValidator(processingEnv));
-		modelValidator.register(new ViewByIdValidator(processingEnv, rClass));
+		modelValidator.register(new LayoutValidator(processingEnv, rClass));
+		modelValidator.register(new ViewValidator(processingEnv, rClass));
 		modelValidator.register(new ClickValidator(processingEnv, rClass));
 		modelValidator.register(new LongClickValidator(processingEnv, rClass));
 		modelValidator.register(new TouchValidator(processingEnv, rClass));
@@ -235,22 +210,18 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelValidator.register(new TransactionalValidator(processingEnv));
 		modelValidator.register(new ExtraValidator(processingEnv));
 		modelValidator.register(new SystemServiceValidator(processingEnv, androidSystemServices));
-		modelValidator.register(new BeforeCreateValidator(processingEnv));
-
 		return modelValidator;
 	}
 
-	private MetaModel processAnnotations(AnnotationElements validatedModel, IRClass rClass,
-			AndroidSystemServices androidSystemServices) {
+	private MetaModel processAnnotations(AnnotationElements validatedModel, IRClass rClass, AndroidSystemServices androidSystemServices) {
 		ModelProcessor modelProcessor = buildModelProcessor(rClass, androidSystemServices);
 		return modelProcessor.process(validatedModel);
 	}
 
 	private ModelProcessor buildModelProcessor(IRClass rClass, AndroidSystemServices androidSystemServices) {
 		ModelProcessor modelProcessor = new ModelProcessor();
-		modelProcessor.register(new EnhanceProcessor(processingEnv, rClass));
-		modelProcessor.register(new RoboGuiceProcessor(processingEnv.getElementUtils()));
-		modelProcessor.register(new ViewByIdProcessor(rClass));
+		modelProcessor.register(new LayoutProcessor(processingEnv, rClass));
+		modelProcessor.register(new ViewProcessor(rClass));
 		modelProcessor.register(new ClickProcessor(rClass));
 		modelProcessor.register(new LongClickProcessor(rClass));
 		modelProcessor.register(new TouchProcessor(rClass));
@@ -266,7 +237,6 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		modelProcessor.register(new TransactionalProcessor());
 		modelProcessor.register(new ExtraProcessor());
 		modelProcessor.register(new SystemServiceProcessor(androidSystemServices));
-		modelProcessor.register(new BeforeCreateProcessor());
 		return modelProcessor;
 	}
 
@@ -274,4 +244,25 @@ public class AndroidAnnotationProcessor extends AnnotatedAbstractProcessor {
 		ModelGenerator modelGenerator = new ModelGenerator(processingEnv.getFiler());
 		modelGenerator.generate(model);
 	}
+
+	/*
+	 * This code should be moved elsewhere. It is kept here as a pastebin code :
+	 * we may want to extract class informations from annotations, which can
+	 * easily be done with the following code.
+	 */
+	// private TypeElement extractRClassElement(Element rLocationElement) {
+	// RClass rLocationAnnotation =
+	// rLocationElement.getAnnotation(RClass.class);
+	// try {
+	// rLocationAnnotation.value();
+	// } catch (MirroredTypeException mte) {
+	// DeclaredType typeMirror = (DeclaredType) mte.getTypeMirror();
+	// return (TypeElement) typeMirror.asElement();
+	// }
+	// processingEnv.getMessager().printMessage(Diagnostic.Kind.ERROR,
+	// "Annotation processing error : could not extract MirrorType from class value",
+	// rLocationElement);
+	// throw new IllegalArgumentException();
+	// }
+
 }

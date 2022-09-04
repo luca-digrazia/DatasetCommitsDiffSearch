@@ -17,7 +17,9 @@ package com.googlecode.androidannotations.generation;
 
 import java.util.List;
 
-public class TransactionalInstruction extends AbstractInstruction {
+import com.googlecode.androidannotations.model.Instruction;
+
+public class TransactionalInstruction implements Instruction {
 
 	private static final String FORMAT = //
 	"" + //
@@ -29,7 +31,7 @@ public class TransactionalInstruction extends AbstractInstruction {
 			"            %s.setTransactionSuccessful();\n" + //
 			"            return%s;\n" + //
 			"        } catch (RuntimeException e) {\n" + //
-			"        	Log.e(\"%s\", \"Error in transaction\", e);\n" + //
+			"        	android.util.Log.e(\"%s\", \"Error in transaction\", e);\n" + //
 			"        	throw e;\n" + //
 			"        } finally {\n" + //
 			"        	%s.endTransaction();\n" + //
@@ -53,7 +55,6 @@ public class TransactionalInstruction extends AbstractInstruction {
 		this.methodArguments = methodArguments;
 		this.methodParameters = methodParameters;
 		this.returnType = returnType;
-		addImports("android.util.Log");
 	}
 
 	@Override

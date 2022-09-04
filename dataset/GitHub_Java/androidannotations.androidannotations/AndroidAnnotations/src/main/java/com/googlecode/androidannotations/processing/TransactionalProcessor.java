@@ -18,7 +18,6 @@ package com.googlecode.androidannotations.processing;
 import java.lang.annotation.Annotation;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
@@ -29,7 +28,6 @@ import com.googlecode.androidannotations.generation.TransactionalInstruction;
 import com.googlecode.androidannotations.model.Instruction;
 import com.googlecode.androidannotations.model.MetaActivity;
 import com.googlecode.androidannotations.model.MetaModel;
-import com.sun.codemodel.JCodeModel;
 
 public class TransactionalProcessor implements ElementProcessor {
 
@@ -64,12 +62,6 @@ public class TransactionalProcessor implements ElementProcessor {
 
 		Instruction instruction = new TransactionalInstruction(methodName, className, methodArguments, methodParameters, returnType);
 		memberInstructions.add(instruction);
-	}
-
-	@Override
-	public void process(Element element, JCodeModel codeModel, Map<Element, ActivityHolder> activityHolders) {
-		// TODO Auto-generated method stub
-		
 	}
 
 }

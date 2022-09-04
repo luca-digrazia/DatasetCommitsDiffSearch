@@ -16,23 +16,23 @@
 package com.googlecode.androidannotations.validation;
 
 import java.lang.annotation.Annotation;
+import java.util.List;
 
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.VariableElement;
 
 import com.googlecode.androidannotations.annotations.Transactional;
-import com.googlecode.androidannotations.helper.TargetAnnotationHelper;
 import com.googlecode.androidannotations.helper.ValidatorHelper;
 import com.googlecode.androidannotations.model.AnnotationElements;
 
-public class TransactionalValidator implements ElementValidator {
+public class TransactionalValidator extends ValidatorHelper implements ElementValidator {
 
-	private ValidatorHelper validatorHelper;
+	private static final String ANDROID_SQLITE_DB_QUALIFIED_NAME = "android.database.sqlite.SQLiteDatabase";
 
 	public TransactionalValidator(ProcessingEnvironment processingEnv) {
-		TargetAnnotationHelper annotationHelper = new TargetAnnotationHelper(processingEnv, getTarget());
-		validatorHelper = new ValidatorHelper(annotationHelper);
+		super(processingEnv);
 	}
 
 	@Override
@@ -45,19 +45,34 @@ public class TransactionalValidator implements ElementValidator {
 
 		IsValid valid = new IsValid();
 
-		validatorHelper.enclosingElementHasEnhance(element, validatedElements, valid);
+		validateHasLayout(element, validatedElements, valid);
 
-		validatorHelper.isNotPrivate(element, valid);
+		validateIsNotPrivate(element, valid);
 
-		validatorHelper.doesntThrowException(element, valid);
+		validateDoesntThrowException(element, valid);
 
-		validatorHelper.isNotFinal(element, valid);
+		validateIsNotFinal(element, valid);
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
-		validatorHelper.hasOneOrTwoParametersAndFirstIsDb(executableElement, valid);
-		
+		validateParameters(element, valid, executableElement);
+
 		return valid.isValid();
 	}
 
+	private void validateParameters(Element element, IsValid valid, ExecutableElement executableElement) {
+		List<? extends VariableElement> parameters = executableElement.getParameters();
+
+		if (parameters.size() < 1) {
+			valid.invalidate();
+			printAnnotationError(element, "There should be at least 1 parameter: a " + ANDROID_SQLITE_DB_QUALIFIED_NAME);
+		} else {
+			VariableElement firstParameter = parameters.get(0);
+			String firstParameterType = firstParameter.asType().toString();
+			if (!firstParameterType.equals(ANDROID_SQLITE_DB_QUALIFIED_NAME)) {
+				valid.invalidate();
+				printAnnotationError(element, "the first parameter must be a " + ANDROID_SQLITE_DB_QUALIFIED_NAME + ", not a " + firstParameterType);
+			}
+		}
+	}
 }
