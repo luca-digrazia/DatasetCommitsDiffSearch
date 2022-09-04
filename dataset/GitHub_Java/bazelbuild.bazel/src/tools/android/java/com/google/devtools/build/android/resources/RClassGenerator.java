@@ -13,31 +13,26 @@
 // limitations under the License.
 package com.google.devtools.build.android.resources;
 
-import com.google.common.base.Preconditions;
-import com.google.common.base.Splitter;
-import com.google.common.collect.HashBasedTable;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.Table;
-import com.google.common.io.Files;
+import static java.nio.file.StandardOpenOption.CREATE_NEW;
 
 import com.android.SdkConstants;
-import com.android.builder.internal.SymbolLoader;
-import com.android.builder.internal.SymbolLoader.SymbolEntry;
-
+import com.android.resources.ResourceType;
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Splitter;
+import com.google.common.collect.Iterables;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import org.objectweb.asm.AnnotationVisitor;
 import org.objectweb.asm.ClassWriter;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
 import org.objectweb.asm.commons.InstructionAdapter;
-
-import java.io.File;
-import java.io.IOException;
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * Writes out bytecode for an R.class directly, rather than go through an R.java and compile. This
@@ -46,250 +41,182 @@ import java.util.Set;
  * information. Also, the order of the constant pool tends to be different.
  */
 public class RClassGenerator {
-
   private static final int JAVA_VERSION = Opcodes.V1_7;
   private static final String SUPER_CLASS = "java/lang/Object";
-  private final File outFolder;
-  private final String packageName;
-  private final List<SymbolLoader> symbolTables = new ArrayList<>();
-  private final SymbolLoader symbolValues;
+
+  static final String PROVENANCE_ANNOTATION_CLASS_DESCRIPTOR =
+      "Lcom/google/devtools/build/android/resources/Provenance;";
+  static final String PROVENANCE_ANNOTATION_LABEL_KEY = "label";
+
+  private final String label;
+  private final Path outFolder;
+  private final FieldInitializers initializers;
   private final boolean finalFields;
+  private final boolean annotateTransitiveFields;
+  private static final Splitter PACKAGE_SPLITTER = Splitter.on('.');
 
-  public RClassGenerator(
-      File outFolder,
-      String packageName,
-      SymbolLoader values,
-      boolean finalFields) {
+  /**
+   * Create an RClassGenerator given a collection of initializers.
+   *
+   * @param label Bazel target which owns the generated R class
+   * @param outFolder base folder to place the output R class files.
+   * @param initializers the list of initializers to use for each inner class
+   * @param finalFields true if the fields should be marked final
+   * @param annotateTransitiveFields whether the R class and fields from transitive dependencies
+   *     should be annotated.
+   */
+  public static RClassGenerator with(
+      String label,
+      Path outFolder,
+      FieldInitializers initializers,
+      boolean finalFields,
+      boolean annotateTransitiveFields) {
+    return new RClassGenerator(
+        label, outFolder, initializers, finalFields, annotateTransitiveFields);
+  }
+
+  @VisibleForTesting
+  static RClassGenerator with(Path outFolder, FieldInitializers initializers, boolean finalFields) {
+    return new RClassGenerator(
+        /* label= */ null,
+        outFolder,
+        initializers,
+        finalFields,
+        /*annotateTransitiveFields=*/ false);
+  }
+
+  private RClassGenerator(
+      String label,
+      Path outFolder,
+      FieldInitializers initializers,
+      boolean finalFields,
+      boolean annotateTransitiveFields) {
+    this.label = label;
     this.outFolder = outFolder;
-    this.packageName = packageName;
-    this.symbolValues = values;
+    this.initializers = initializers;
     this.finalFields = finalFields;
-  }
-
-  public void addSymbolsToWrite(SymbolLoader symbols) {
-    symbolTables.add(symbols);
-  }
-
-  private Table<String, String, SymbolEntry> getAllSymbols() throws IOException {
-    Table<String, String, SymbolEntry> symbols = HashBasedTable.create();
-    for (SymbolLoader symbolLoader : symbolTables) {
-      symbols.putAll(getSymbols(symbolLoader));
-    }
-    return symbols;
-  }
-
-  private Method symbolsMethod;
-
-  private Table<String, String, SymbolEntry> getSymbols(SymbolLoader symbolLoader)
-      throws IOException {
-    // TODO(bazel-team): upstream a patch to change the visibility instead of hacking it.
-    try {
-      if (symbolsMethod == null) {
-        Method getSymbols = SymbolLoader.class.getDeclaredMethod("getSymbols");
-        getSymbols.setAccessible(true);
-        symbolsMethod = getSymbols;
-      }
-      @SuppressWarnings("unchecked")
-      Table<String, String, SymbolEntry> result = (Table<String, String, SymbolEntry>)
-          symbolsMethod.invoke(symbolLoader);
-      return result;
-    } catch (ReflectiveOperationException e) {
-      throw new IOException(e);
-    }
+    this.annotateTransitiveFields = annotateTransitiveFields;
   }
 
   /**
-   * Builds the bytecode and writes out the R.class file, and R$inner.class files.
+   * Builds bytecode and writes out R.class file, and R$inner.class files for provided package and
+   * symbols.
    */
-  public void write() throws IOException {
-    Splitter splitter = Splitter.on('.');
-    Iterable<String> folders = splitter.split(packageName);
-    File packageDir = outFolder;
+  public void write(String packageName, FieldInitializers symbolsToWrite) throws IOException {
+    writeClasses(packageName, initializers.filter(symbolsToWrite));
+  }
+
+  /** Builds bytecode and writes out R.class file, and R$inner.class files for provided package. */
+  public void write(String packageName) throws IOException {
+    writeClasses(packageName, initializers);
+  }
+
+  private void writeClasses(
+      String packageName,
+      Iterable<Map.Entry<ResourceType, Collection<FieldInitializer>>> initializersToWrite)
+      throws IOException {
+
+    Iterable<String> folders = PACKAGE_SPLITTER.split(packageName);
+    Path packageDir = outFolder;
     for (String folder : folders) {
-      packageDir = new File(packageDir, folder);
+      packageDir = packageDir.resolve(folder);
     }
-    File rClassFile = new File(packageDir, SdkConstants.FN_COMPILED_RESOURCE_CLASS);
-    Files.createParentDirs(rClassFile);
+    // At least create the outFolder that was requested. However, if there are no symbols, don't
+    // create the R.class and inner class files (no need to have an empty class).
+    Files.createDirectories(packageDir);
+
+    if (Iterables.isEmpty(initializersToWrite)) {
+      return;
+    }
+
+    Path rClassFile = packageDir.resolve(SdkConstants.FN_COMPILED_RESOURCE_CLASS);
+
     String packageWithSlashes = packageName.replaceAll("\\.", "/");
-    String rClassName = packageWithSlashes + "/R";
+    String rClassName = packageWithSlashes.isEmpty() ? "R" : (packageWithSlashes + "/R");
     ClassWriter classWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-    classWriter
-        .visit(JAVA_VERSION, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER,
-            rClassName, null, SUPER_CLASS, null);
+    classWriter.visit(
+        JAVA_VERSION,
+        Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER,
+        rClassName,
+        null, /* signature */
+        SUPER_CLASS,
+        null /* interfaces */);
+    if (annotateTransitiveFields) {
+      AnnotationVisitor av =
+          classWriter.visitAnnotation(PROVENANCE_ANNOTATION_CLASS_DESCRIPTOR, /*visible=*/ true);
+      av.visit(PROVENANCE_ANNOTATION_LABEL_KEY, label);
+      av.visitEnd();
+    }
     classWriter.visitSource(SdkConstants.FN_RESOURCE_CLASS, null);
     writeConstructor(classWriter);
-
-    Table<String, String, SymbolEntry> symbols = getAllSymbols();
-    Table<String, String, SymbolEntry> values = getSymbols(symbolValues);
-
-    Set<String> rowSet = symbols.rowKeySet();
-    List<String> rowList = new ArrayList<>(rowSet);
-    Collections.sort(rowList);
-
     // Build the R.class w/ the inner classes, then later build the individual R$inner.class.
-    for (String row : rowList) {
-      String innerClassName = rClassName + "$" + row;
-      classWriter.visitInnerClass(innerClassName, rClassName, row,
+    for (Map.Entry<ResourceType, Collection<FieldInitializer>> entry : initializersToWrite) {
+      String innerClassName = rClassName + "$" + entry.getKey().toString();
+      classWriter.visitInnerClass(
+          innerClassName,
+          rClassName,
+          entry.getKey().toString(),
           Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_STATIC);
     }
     classWriter.visitEnd();
-    Files.write(classWriter.toByteArray(), rClassFile);
-
+    Files.write(rClassFile, classWriter.toByteArray(), CREATE_NEW);
     // Now generate the R$inner.class files.
-    for (String row : rowList) {
-      writeInnerClass(symbols, values, packageDir, rClassName, row);
-    }
-  }
-
-  /**
-   * Represents an int or int[] field and its initializer (where initialization is done via code in
-   * the static clinit function).
-   */
-  private interface DeferredInitializer {
-
-    /**
-     * Write the code for the initializer via insts.
-     *
-     * @return the number of stack slots needed for the code.
-     */
-    int writeCLInit(String className, InstructionAdapter insts);
-  }
-
-  private static final class IntArrayDeferredInitializer implements DeferredInitializer {
-
-    private final String fieldName;
-    private final ImmutableList<Integer> values;
-
-    IntArrayDeferredInitializer(String fieldName, ImmutableList<Integer> values) {
-      this.fieldName = fieldName;
-      this.values = values;
-    }
-
-    public static DeferredInitializer of(String name, String value) {
-      Preconditions.checkArgument(value.startsWith("{ "), "Expected list starting with { ");
-      Preconditions.checkArgument(value.endsWith(" }"), "Expected list ending with } ");
-      // Check for an empty list, which is "{ }".
-      if (value.length() < 4) {
-        return new IntArrayDeferredInitializer(name, ImmutableList.<Integer>of());
-      }
-      ImmutableList.Builder<Integer> intValues = ImmutableList.builder();
-      String trimmedValue = value.substring(2, value.length() - 2);
-      Iterable<String> valueStrings = Splitter.on(',')
-          .trimResults()
-          .omitEmptyStrings()
-          .split(trimmedValue);
-      for (String valueString : valueStrings) {
-        intValues.add(Integer.decode(valueString));
-      }
-      return new IntArrayDeferredInitializer(name, intValues.build());
-    }
-
-    @Override
-    public int writeCLInit(String className, InstructionAdapter insts) {
-      insts.iconst(values.size());
-      insts.newarray(Type.INT_TYPE);
-      int curIndex = 0;
-      for (Integer value : values) {
-        insts.dup();
-        insts.iconst(curIndex);
-        insts.iconst(value);
-        insts.astore(Type.INT_TYPE);
-        ++curIndex;
-      }
-      insts.putstatic(className, fieldName, "[I");
-      // Needs up to 4 stack slots for: the array ref for the putstatic, the dup of the array ref
-      // for the store, the index, and the value to store.
-      return 4;
-    }
-  }
-
-  private static final class IntDeferredInitializer implements DeferredInitializer {
-
-    private final String fieldName;
-    private final Integer value;
-
-    IntDeferredInitializer(String fieldName, Integer value) {
-      this.fieldName = fieldName;
-      this.value = value;
-    }
-
-    public static DeferredInitializer of(String name, String value) {
-      return new IntDeferredInitializer(name, Integer.decode(value));
-    }
-
-    @Override
-    public int writeCLInit(String className, InstructionAdapter insts) {
-      insts.iconst(value);
-      insts.putstatic(className, fieldName, "I");
-      // Just needs one stack slot for the iconst.
-      return 1;
+    for (Map.Entry<ResourceType, Collection<FieldInitializer>> entry : initializersToWrite) {
+      writeInnerClass(entry.getValue(), packageDir, rClassName, entry.getKey().toString());
     }
   }
 
   private void writeInnerClass(
-      Table<String, String, SymbolEntry> symbols,
-      Table<String, String, SymbolEntry> values,
-      File packageDir,
+      Collection<FieldInitializer> initializers,
+      Path packageDir,
       String fullyQualifiedOuterClass,
-      String innerClass) throws IOException {
+      String innerClass)
+      throws IOException {
     ClassWriter innerClassWriter = new ClassWriter(ClassWriter.COMPUTE_MAXS);
-    String fullyQualifiedInnerClass = fullyQualifiedOuterClass + "$" + innerClass;
-    innerClassWriter
-        .visit(JAVA_VERSION, Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER,
-            fullyQualifiedInnerClass, null, SUPER_CLASS, null);
-    innerClassWriter.visitSource("R.java", null);
-    writeConstructor(innerClassWriter);
-    innerClassWriter.visitInnerClass(
-        fullyQualifiedInnerClass, fullyQualifiedOuterClass, innerClass,
-        Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_STATIC);
+    String fullyQualifiedInnerClass =
+        writeInnerClassHeader(fullyQualifiedOuterClass, innerClass, innerClassWriter);
 
-    Map<String, SymbolEntry> rowMap = symbols.row(innerClass);
-    Set<String> symbolSet = rowMap.keySet();
-    List<String> symbolList = new ArrayList<>(symbolSet);
-    Collections.sort(symbolList);
-    List<DeferredInitializer> deferredInitializers = new ArrayList<>();
-    int fieldAccessLevel = Opcodes.ACC_PUBLIC | Opcodes.ACC_STATIC;
-    if (finalFields) {
-      fieldAccessLevel |= Opcodes.ACC_FINAL;
-    }
-    for (String symbolName : symbolList) {
-      // get the matching SymbolEntry from the values Table.
-      SymbolEntry value = values.get(innerClass, symbolName);
-      if (value != null) {
-        String desc;
-        Object initializer = null;
-        if (value.getType().equals("int")) {
-          desc = "I";
-          if (finalFields) {
-            initializer = Integer.decode(value.getValue());
-          } else {
-            deferredInitializers.add(IntDeferredInitializer.of(value.getName(), value.getValue()));
-          }
-        } else {
-          Preconditions.checkArgument(value.getType().equals("int[]"));
-          desc = "[I";
-          deferredInitializers
-              .add(IntArrayDeferredInitializer.of(value.getName(), value.getValue()));
-        }
-        innerClassWriter
-            .visitField(fieldAccessLevel, value.getName(), desc, null, initializer)
-            .visitEnd();
+    List<FieldInitializer> deferredInitializers = new ArrayList<>();
+    for (FieldInitializer init : initializers) {
+      JavaIdentifierValidator.validate(
+          init.getFieldName(), "in class:", fullyQualifiedInnerClass, "and package:", packageDir);
+      if (init.writeFieldDefinition(innerClassWriter, finalFields, annotateTransitiveFields)) {
+        deferredInitializers.add(init);
       }
     }
-
     if (!deferredInitializers.isEmpty()) {
-      // build the <clinit> method.
       writeStaticClassInit(innerClassWriter, fullyQualifiedInnerClass, deferredInitializers);
     }
 
     innerClassWriter.visitEnd();
-    File innerFile = new File(packageDir, "R$" + innerClass + ".class");
-    Files.write(innerClassWriter.toByteArray(), innerFile);
+    Path innerFile = packageDir.resolve("R$" + innerClass + ".class");
+    Files.write(innerFile, innerClassWriter.toByteArray(), CREATE_NEW);
+  }
+
+  private String writeInnerClassHeader(
+      String fullyQualifiedOuterClass, String innerClass, ClassWriter innerClassWriter) {
+    String fullyQualifiedInnerClass = fullyQualifiedOuterClass + "$" + innerClass;
+    innerClassWriter.visit(
+        JAVA_VERSION,
+        Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_SUPER,
+        fullyQualifiedInnerClass,
+        null, /* signature */
+        SUPER_CLASS,
+        null /* interfaces */);
+    innerClassWriter.visitSource(SdkConstants.FN_RESOURCE_CLASS, null);
+    writeConstructor(innerClassWriter);
+    innerClassWriter.visitInnerClass(
+        fullyQualifiedInnerClass,
+        fullyQualifiedOuterClass,
+        innerClass,
+        Opcodes.ACC_PUBLIC | Opcodes.ACC_FINAL | Opcodes.ACC_STATIC);
+    return fullyQualifiedInnerClass;
   }
 
   private static void writeConstructor(ClassWriter classWriter) {
-    MethodVisitor constructor = classWriter.visitMethod(Opcodes.ACC_PUBLIC, "<init>", "()V",
-        null, null);
+    MethodVisitor constructor =
+        classWriter.visitMethod(
+            Opcodes.ACC_PUBLIC, "<init>", "()V", null, /* signature */ null /* exceptions */);
     constructor.visitCode();
     constructor.visitVarInsn(Opcodes.ALOAD, 0);
     constructor.visitMethodInsn(Opcodes.INVOKESPECIAL, SUPER_CLASS, "<init>", "()V", false);
@@ -301,18 +228,18 @@ public class RClassGenerator {
   private static void writeStaticClassInit(
       ClassWriter classWriter,
       String className,
-      List<DeferredInitializer> deferredInitializers) {
-    MethodVisitor visitor = classWriter.visitMethod(Opcodes.ACC_STATIC, "<clinit>", "()V",
-        null, null);
+      Collection<FieldInitializer> deferredInitializers) {
+    MethodVisitor visitor =
+        classWriter.visitMethod(
+            Opcodes.ACC_STATIC, "<clinit>", "()V", null, /* signature */ null /* exceptions */);
     visitor.visitCode();
     int stackSlotsNeeded = 0;
     InstructionAdapter insts = new InstructionAdapter(visitor);
-    for (DeferredInitializer fieldInit : deferredInitializers) {
-      stackSlotsNeeded = Math.max(stackSlotsNeeded, fieldInit.writeCLInit(className, insts));
+    for (FieldInitializer fieldInit : deferredInitializers) {
+      stackSlotsNeeded = Math.max(stackSlotsNeeded, fieldInit.writeCLInit(insts, className));
     }
     insts.areturn(Type.VOID_TYPE);
     visitor.visitMaxs(stackSlotsNeeded, 0);
     visitor.visitEnd();
   }
-
 }
