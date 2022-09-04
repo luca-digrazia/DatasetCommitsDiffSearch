@@ -321,14 +321,12 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       if (cppConfiguration.getFdoPath() != null) {
         fdoZip = cppConfiguration.getFdoPath();
       } else if (cppConfiguration.getFdoOptimizeLabel() != null) {
-        Artifact fdoArtifact =
-            ruleContext.getPrerequisiteArtifact(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET);
+        Artifact fdoArtifact = ruleContext.getPrerequisiteArtifact(":fdo_optimize", Mode.TARGET);
         if (!fdoArtifact.isSourceArtifact()) {
           ruleContext.ruleError("--fdo_optimize points to a target that is not an input file");
           return null;
         }
-        Label fdoLabel =
-            ruleContext.getPrerequisite(CcToolchainRule.FDO_OPTIMIZE_ATTR, Mode.TARGET).getLabel();
+        Label fdoLabel = ruleContext.getPrerequisite(":fdo_optimize", Mode.TARGET).getLabel();
         if (!fdoLabel
             .getPackageIdentifier()
             .getPathUnderExecRoot()
@@ -340,8 +338,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
         fdoZip = fdoArtifact.getPath().asFragment();
       } else if (cppConfiguration.getFdoProfileLabel() != null) {
         FdoProfileProvider fdoProvider =
-            ruleContext.getPrerequisite(
-                CcToolchainRule.FDO_PROFILE_ATTR, Mode.TARGET, FdoProfileProvider.PROVIDER);
+            ruleContext.getPrerequisite(":fdo_profile", Mode.TARGET, FdoProfileProvider.PROVIDER);
         fdoZip =
             fdoProvider.getFdoPath() != null
                 ? fdoProvider.getFdoPath()
@@ -749,8 +746,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
   }
 
   private NestedSet<Artifact> inputsForLibc(RuleContext ruleContext) {
-    TransitiveInfoCollection libc =
-        ruleContext.getPrerequisite(CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
+    TransitiveInfoCollection libc = ruleContext.getPrerequisite(":libc_top", Mode.TARGET);
     return libc != null
         ? libc.getProvider(FileProvider.class).getFilesToBuild()
         : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER);
@@ -760,8 +756,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       NestedSet<Artifact> crosstoolMiddleman) {
     return NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(crosstoolMiddleman)
-        .addTransitive(
-            AnalysisUtils.getMiddlemanFor(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET))
+        .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top", Mode.TARGET))
         .build();
   }
 
@@ -773,8 +768,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
       RuleContext ruleContext, NestedSet<Artifact> link) {
     return NestedSetBuilder.<Artifact>stableOrder()
         .addTransitive(link)
-        .addTransitive(
-            AnalysisUtils.getMiddlemanFor(ruleContext, CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET))
+        .addTransitive(AnalysisUtils.getMiddlemanFor(ruleContext, ":libc_top", Mode.TARGET))
         .add(ruleContext.getPrerequisiteArtifact("$interface_library_builder", Mode.HOST))
         .add(ruleContext.getPrerequisiteArtifact("$link_dynamic_library_tool", Mode.HOST))
         .build();
@@ -880,8 +874,7 @@ public class CcToolchain implements RuleConfiguredTargetFactory {
 
   private PathFragment calculateSysroot(RuleContext ruleContext, PathFragment defaultSysroot) {
 
-    TransitiveInfoCollection sysrootTarget =
-        ruleContext.getPrerequisite(CcToolchainRule.LIBC_TOP_ATTR, Mode.TARGET);
+    TransitiveInfoCollection sysrootTarget = ruleContext.getPrerequisite(":libc_top", Mode.TARGET);
     if (sysrootTarget == null) {
       return defaultSysroot;
     }
