@@ -1,10 +1,9 @@
 package io.dropwizard.testing.junit;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.google.common.base.Optional;
 import io.dropwizard.Application;
 import io.dropwizard.Configuration;
-import io.dropwizard.cli.Command;
-import io.dropwizard.cli.ServerCommand;
 import io.dropwizard.lifecycle.Managed;
 import io.dropwizard.setup.Environment;
 import io.dropwizard.testing.ConfigOverride;
@@ -12,9 +11,7 @@ import io.dropwizard.testing.DropwizardTestSupport;
 import org.junit.rules.ExternalResource;
 
 import javax.annotation.Nullable;
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Function;
 
 
 /**
@@ -77,18 +74,12 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
                              @Nullable String configPath,
                              ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, Optional.empty(), configOverrides);
+        this(applicationClass, configPath, Optional.<String>absent(), configOverrides);
     }
 
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass, String configPath,
-                             Optional<String> customPropertyPrefix, ConfigOverride... configOverrides) {
-        this(applicationClass, configPath, customPropertyPrefix, ServerCommand::new, configOverrides);
-    }
-
-    public DropwizardAppRule(Class<? extends Application<C>> applicationClass, String configPath,
-                             Optional<String> customPropertyPrefix, Function<Application<C>,
-                             Command> commandInstantiator, ConfigOverride... configOverrides) {
-        this(new DropwizardTestSupport<>(applicationClass, configPath, customPropertyPrefix, commandInstantiator,
+                                 Optional<String> customPropertyPrefix, ConfigOverride... configOverrides) {
+        this(new DropwizardTestSupport<>(applicationClass, configPath, customPropertyPrefix,
                 configOverrides));
     }
 
@@ -99,18 +90,8 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
      * @since 0.9
      */
     public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
-                             C configuration) {
+            C configuration) {
         this(new DropwizardTestSupport<>(applicationClass, configuration));
-    }
-
-    /**
-     * Alternate constructor that allows specifying the command the Dropwizard application is started with.
-     *
-     * @since 1.1.0
-     */
-    public DropwizardAppRule(Class<? extends Application<C>> applicationClass,
-                             C configuration, Function<Application<C>, Command> commandInstantiator) {
-        this(new DropwizardTestSupport<>(applicationClass, configuration, commandInstantiator));
     }
 
     public DropwizardAppRule(DropwizardTestSupport<C> testSupport) {
@@ -164,7 +145,7 @@ public class DropwizardAppRule<C extends Configuration> extends ExternalResource
     }
 
     public int getPort(int connectorIndex) {
-        return testSupport.getPort(connectorIndex);
+       return testSupport.getPort(connectorIndex);
     }
 
     public int getAdminPort() {
