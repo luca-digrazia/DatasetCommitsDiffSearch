@@ -91,11 +91,7 @@ public final class AspectResolver {
 
         // Validate that aspect is applicable to "bare" configured target.
         ConfiguredTargetAndData associatedTarget =
-            configuredTargetMap.get(
-                ConfiguredTargetKey.builder()
-                    .setLabel(dep.getLabel())
-                    .setConfiguration(dep.getConfiguration())
-                    .build());
+            configuredTargetMap.get(ConfiguredTargetKey.of(dep.getLabel(), dep.getConfiguration()));
         if (!aspectMatchesConfiguredTarget(associatedTarget, aspectValue.getAspect())) {
           continue;
         }
@@ -128,11 +124,7 @@ public final class AspectResolver {
 
     for (Map.Entry<DependencyKind, Dependency> entry : depValueNames.entries()) {
       Dependency dep = entry.getValue();
-      SkyKey depKey =
-          ConfiguredTargetKey.builder()
-              .setLabel(dep.getLabel())
-              .setConfiguration(dep.getConfiguration())
-              .build();
+      SkyKey depKey = ConfiguredTargetKey.of(dep.getLabel(), dep.getConfiguration());
       ConfiguredTargetAndData depConfiguredTarget = depConfiguredTargetMap.get(depKey);
 
       result.put(

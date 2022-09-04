@@ -15,14 +15,12 @@
 package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Sets;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.PackageRoots;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
-import com.google.devtools.build.lib.skyframe.AspectValueKey.AspectKey;
 import java.util.Collection;
 import javax.annotation.Nullable;
 
@@ -40,7 +38,7 @@ public final class AnalysisResult {
   private final ImmutableSet<ConfiguredTarget> parallelTests;
   private final ImmutableSet<ConfiguredTarget> exclusiveTests;
   @Nullable private final TopLevelArtifactContext topLevelContext;
-  private final ImmutableMap<AspectKey, ConfiguredAspect> aspects;
+  private final ImmutableSet<AspectValue> aspects;
   private final PackageRoots packageRoots;
   private final String workspaceName;
   private final Collection<TargetAndConfiguration> topLevelTargetsWithConfigs;
@@ -49,7 +47,7 @@ public final class AnalysisResult {
   AnalysisResult(
       BuildConfigurationCollection configurations,
       ImmutableSet<ConfiguredTarget> targetsToBuild,
-      ImmutableMap<AspectKey, ConfiguredAspect> aspects,
+      ImmutableSet<AspectValue> aspects,
       @Nullable ImmutableList<ConfiguredTarget> targetsToTest,
       ImmutableSet<ConfiguredTarget> targetsToSkip,
       @Nullable String error,
@@ -95,8 +93,13 @@ public final class AnalysisResult {
     return packageRoots;
   }
 
-  /** Returns aspects to build. */
-  public ImmutableMap<AspectKey, ConfiguredAspect> getAspectsMap() {
+  /**
+   * Returns aspects of configured targets to build.
+   *
+   * <p>If this list is empty, build the targets returned by {@code getTargetsToBuild()}.
+   * Otherwise, only build these aspects of the targets returned by {@code getTargetsToBuild()}.
+   */
+  public ImmutableSet<AspectValue> getAspects() {
     return aspects;
   }
 
