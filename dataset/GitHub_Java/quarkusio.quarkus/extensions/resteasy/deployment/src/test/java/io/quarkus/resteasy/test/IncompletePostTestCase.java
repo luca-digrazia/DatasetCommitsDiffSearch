@@ -30,7 +30,6 @@ public class IncompletePostTestCase {
 
     @Test
     public void testIncompleteWrite() throws Exception {
-        PostEndpoint.invoked = false;
 
         //make sure incomplete writes do not block threads
         //and that incoplete data is not delivered to the endpoint

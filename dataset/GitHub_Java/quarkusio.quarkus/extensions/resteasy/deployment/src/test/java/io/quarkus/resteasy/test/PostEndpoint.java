@@ -7,7 +7,7 @@ import javax.ws.rs.Path;
 @Path("/post")
 public class PostEndpoint {
 
-    public static volatile boolean invoked = false;
+    public static boolean invoked = false;
 
     @GET
     public String get() {
