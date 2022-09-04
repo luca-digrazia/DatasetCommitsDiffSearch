@@ -48,7 +48,6 @@ import java.util.Set;
 
 import static com.google.common.base.MoreObjects.firstNonNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
-import static java.util.Objects.requireNonNull;
 
 public class FormattedEmailAlertSender implements AlertSender {
     private static final Logger LOG = LoggerFactory.getLogger(FormattedEmailAlertSender.class);
@@ -74,7 +73,7 @@ public class FormattedEmailAlertSender implements AlertSender {
             "${end}" +
             "\n";
 
-    private final Engine templateEngine;
+    private final Engine engine = new Engine();
     private final NotificationService notificationService;
     private final NodeId nodeId;
     private Configuration pluginConfig;
@@ -82,17 +81,12 @@ public class FormattedEmailAlertSender implements AlertSender {
     private final EmailConfiguration configuration;
 
     @Inject
-    public FormattedEmailAlertSender(EmailConfiguration configuration,
-                                     NotificationService notificationService,
-                                     NodeId nodeId,
-                                     Engine templateEngine) {
-        this.configuration = requireNonNull(configuration, "configuration");
-        this.notificationService = requireNonNull(notificationService, "notificationService");
-        this.nodeId = requireNonNull(nodeId, "nodeId");
-        this.templateEngine = requireNonNull(templateEngine, "templateEngine");
+    public FormattedEmailAlertSender(EmailConfiguration configuration, NotificationService notificationService, NodeId nodeId) {
+        this.configuration = configuration;
+        this.notificationService = notificationService;
+        this.nodeId = nodeId;
     }
 
-    @Override
     public void initialize(Configuration configuration) {
         this.pluginConfig = configuration;
     }
@@ -107,8 +101,9 @@ public class FormattedEmailAlertSender implements AlertSender {
         }
 
         Map<String, Object> model = getModel(stream, checkResult, backlog);
+        Engine engine = new Engine();
 
-        return templateEngine.transform(template, model);
+        return engine.transform(template, model);
     }
 
     @VisibleForTesting
@@ -121,7 +116,7 @@ public class FormattedEmailAlertSender implements AlertSender {
         }
         Map<String, Object> model = getModel(stream, checkResult, backlog);
 
-        return this.templateEngine.transform(template, model);
+        return engine.transform(template, model);
     }
 
     private Map<String, Object> getModel(Stream stream, AlertCondition.CheckResult checkResult, List<Message> backlog) {
@@ -157,7 +152,6 @@ public class FormattedEmailAlertSender implements AlertSender {
         return baseUri + "/streams/" + stream.getId() + "/messages?rangetype=absolute&from=" + alertStart + "&to=" + alertEnd + "&q=*";
     }
 
-    @Override
     public void sendEmails(Stream stream, EmailRecipients recipients, AlertCondition.CheckResult checkResult) throws TransportConfigurationException, EmailException {
         sendEmails(stream, recipients, checkResult, null);
     }
@@ -171,7 +165,7 @@ public class FormattedEmailAlertSender implements AlertSender {
         final Email email = new SimpleEmail();
         email.setCharset(EmailConstants.UTF_8);
 
-        if (isNullOrEmpty(configuration.getHostname())) {
+        if (Strings.isNullOrEmpty(configuration.getHostname())) {
             throw new TransportConfigurationException("No hostname configured for email transport while trying to send alert email!");
         } else {
             email.setHostName(configuration.getHostname());
@@ -190,7 +184,7 @@ public class FormattedEmailAlertSender implements AlertSender {
 
         email.setSSLOnConnect(configuration.isUseSsl());
         email.setStartTLSEnabled(configuration.isUseTls());
-        if (pluginConfig != null && !isNullOrEmpty(pluginConfig.getString("sender"))) {
+        if (pluginConfig != null && !Strings.isNullOrEmpty(pluginConfig.getString("sender"))) {
             email.setFrom(pluginConfig.getString("sender"));
         } else {
             email.setFrom(configuration.getFromEmail());
