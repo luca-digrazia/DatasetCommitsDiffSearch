@@ -37,6 +37,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
 
 /**
  * Action used by LTOBackendArtifacts to create an LTOBackendAction. Similar to {@link SpawnAction},
@@ -53,6 +54,10 @@ import javax.annotation.Nullable;
  * http://blog.llvm.org/2016/06/thinlto-scalable-and-incremental-lto.html.
  */
 public final class LTOBackendAction extends SpawnAction {
+  // This can be read/written from multiple threads, and so accesses should be synchronized.
+  @GuardedBy("this")
+  private boolean inputsKnown;
+
   private Collection<Artifact> mandatoryInputs;
   private Map<PathFragment, Artifact> bitcodeFiles;
   private Artifact imports;
@@ -87,6 +92,8 @@ public final class LTOBackendAction extends SpawnAction {
         mnemonic,
         false,
         null);
+
+    inputsKnown = false;
     mandatoryInputs = inputs;
     bitcodeFiles = allBitcodeFiles;
     imports = importsFile;
@@ -143,6 +150,11 @@ public final class LTOBackendAction extends SpawnAction {
   }
 
   @Override
+  public synchronized boolean inputsKnown() {
+    return inputsKnown;
+  }
+
+  @Override
   public Collection<Artifact> getMandatoryInputs() {
     return mandatoryInputs;
   }
@@ -155,6 +167,12 @@ public final class LTOBackendAction extends SpawnAction {
   }
 
   @Override
+  public synchronized void updateInputs(Iterable<Artifact> discoveredInputs) {
+    setInputs(discoveredInputs);
+    inputsKnown = true;
+  }
+
+  @Override
   public Iterable<Artifact> getAllowedDerivedInputs() {
     return bitcodeFiles.values();
   }
@@ -163,6 +181,10 @@ public final class LTOBackendAction extends SpawnAction {
   public void execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
     super.execute(actionExecutionContext);
+
+    synchronized (this) {
+      inputsKnown = true;
+    }
   }
 
   @Override
