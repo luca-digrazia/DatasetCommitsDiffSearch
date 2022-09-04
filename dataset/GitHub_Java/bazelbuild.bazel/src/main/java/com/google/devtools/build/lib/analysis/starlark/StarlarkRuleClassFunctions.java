@@ -34,7 +34,8 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
-import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
+import com.google.devtools.build.lib.analysis.ExecGroupCollection;
+import com.google.devtools.build.lib.analysis.RuleDefinitionContext;
 import com.google.devtools.build.lib.analysis.TemplateVariableInfo;
 import com.google.devtools.build.lib.analysis.config.ConfigAwareRuleClassBuilder;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -46,6 +47,7 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
 import com.google.devtools.build.lib.cmdline.LabelValidator;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
+import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
@@ -56,7 +58,6 @@ import com.google.devtools.build.lib.packages.BazelModuleContext;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
 import com.google.devtools.build.lib.packages.BuildSetting;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.BuildType.LabelConversionContext;
 import com.google.devtools.build.lib.packages.ConfigurationFragmentPolicy.MissingFragmentPolicy;
 import com.google.devtools.build.lib.packages.ExecGroup;
 import com.google.devtools.build.lib.packages.FunctionSplitTransitionAllowlist;
@@ -164,7 +165,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
           .build();
 
   /** Parent rule class for test Starlark rules. */
-  public static final RuleClass getTestBaseRule(RuleDefinitionEnvironment env) {
+  public static final RuleClass getTestBaseRule(RuleDefinitionContext env) {
     String toolsRepository = env.getToolsRepository();
     return new RuleClass.Builder("$test_base_rule", RuleClassType.ABSTRACT, true, baseRule)
         .requiresConfigurationFragments(TestConfiguration.class)
@@ -390,7 +391,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
           Dict.cast(execGroups, String.class, ExecGroup.class, "exec_group");
       for (String group : execGroupDict.keySet()) {
         // TODO(b/151742236): document this in the param documentation.
-        if (!StarlarkExecGroupCollection.isValidGroupName(group)) {
+        if (!ExecGroupCollection.isValidGroupName(group)) {
           throw Starlark.errorf("Exec group name '%s' is not a valid name.", group);
         }
       }
@@ -477,22 +478,19 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
    * Parses a sequence of label strings with a repo mapping.
    *
    * @param inputs sequence of input strings
-   * @param thread repository mapping
+   * @param mapping repository mapping
    * @param adjective describes the purpose of the label; used for errors
    * @throws EvalException if the label can't be parsed
    */
   private static ImmutableList<Label> parseLabels(
-      Iterable<String> inputs, StarlarkThread thread, String adjective) throws EvalException {
+      Iterable<String> inputs,
+      ImmutableMap<RepositoryName, RepositoryName> mapping,
+      String adjective)
+      throws EvalException {
     ImmutableList.Builder<Label> parsedLabels = new ImmutableList.Builder<>();
-    BazelStarlarkContext bazelStarlarkContext = BazelStarlarkContext.from(thread);
-    LabelConversionContext context =
-        new LabelConversionContext(
-            BazelModuleContext.of(Module.ofInnermostEnclosingStarlarkFunction(thread)).label(),
-            bazelStarlarkContext.getRepoMapping(),
-            bazelStarlarkContext.getConvertedLabelsInPackage());
     for (String input : inputs) {
       try {
-        Label label = context.convert(input);
+        Label label = Label.parseAbsolute(input, mapping);
         parsedLabels.add(label);
       } catch (LabelSyntaxException e) {
         throw Starlark.errorf(
@@ -504,13 +502,18 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
 
   private static ImmutableList<Label> parseToolchains(Sequence<?> inputs, StarlarkThread thread)
       throws EvalException {
-    return parseLabels(Sequence.cast(inputs, String.class, "toolchains"), thread, "toolchain");
+    return parseLabels(
+        Sequence.cast(inputs, String.class, "toolchains"),
+        BazelStarlarkContext.from(thread).getRepoMapping(),
+        "toolchain");
   }
 
   private static ImmutableList<Label> parseExecCompatibleWith(
       Sequence<?> inputs, StarlarkThread thread) throws EvalException {
     return parseLabels(
-        Sequence.cast(inputs, String.class, "exec_compatible_with"), thread, "constraint");
+        Sequence.cast(inputs, String.class, "exec_compatible_with"),
+        BazelStarlarkContext.from(thread).getRepoMapping(),
+        "constraint");
   }
 
   @Override
@@ -792,8 +795,7 @@ public class StarlarkRuleClassFunctions implements StarlarkRuleFunctionsApi<Arti
       }
       // TODO(b/121385274): remove when we stop allowlisting starlark transitions
       if (hasStarlarkDefinedTransition) {
-        if (!starlarkLabel.getRepository().getName().equals("@_builtins")
-            && !hasFunctionTransitionAllowlist) {
+        if (!hasFunctionTransitionAllowlist) {
           errorf(
               handler,
               "Use of Starlark transition without allowlist attribute"
