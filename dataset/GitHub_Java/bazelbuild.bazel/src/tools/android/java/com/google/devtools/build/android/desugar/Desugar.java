@@ -17,6 +17,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Preconditions.checkState;
 import static com.google.devtools.build.android.desugar.LambdaClassMaker.LAMBDA_METAFACTORY_DUMPER_PROPERTY;
+import static com.google.devtools.build.android.desugar.io.FileBasedTypeReferenceClosure.findReachableReferencedTypes;
 import static com.google.devtools.build.android.desugar.strconcat.IndyStringConcatDesugaring.INVOKE_JDK11_STRING_CONCAT;
 
 import com.google.auto.value.AutoValue;
@@ -26,7 +27,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.flogger.GoogleLogger;
 import com.google.common.io.ByteStreams;
 import com.google.common.io.Closer;
 import com.google.common.io.Resources;
@@ -40,14 +40,11 @@ import com.google.devtools.build.android.desugar.corelibadapter.ShadowedApiInvoc
 import com.google.devtools.build.android.desugar.covariantreturn.NioBufferRefConverter;
 import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter;
 import com.google.devtools.build.android.desugar.io.CoreLibraryRewriter.UnprefixingClassWriter;
-import com.google.devtools.build.android.desugar.io.FileBasedTypeReferenceClosure;
 import com.google.devtools.build.android.desugar.io.FileContentProvider;
 import com.google.devtools.build.android.desugar.io.HeaderClassLoader;
 import com.google.devtools.build.android.desugar.io.IndexedInputs;
 import com.google.devtools.build.android.desugar.io.InputFileProvider;
-import com.google.devtools.build.android.desugar.io.JarDigest;
 import com.google.devtools.build.android.desugar.io.OutputFileProvider;
-import com.google.devtools.build.android.desugar.io.ResourceBasedClassFiles;
 import com.google.devtools.build.android.desugar.io.ThrowingClassLoader;
 import com.google.devtools.build.android.desugar.langmodel.ClassMemberUseCounter;
 import com.google.devtools.build.android.desugar.langmodel.ClassName;
@@ -84,7 +81,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
@@ -390,11 +386,6 @@ public class Desugar {
     public boolean persistentWorker;
   }
 
-  // It is important that this method is called first. See its javadoc.
-  private static final Path DUMP_DIRECTORY = createAndRegisterLambdaDumpDirectory();
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
-  private static final ResourceBasedClassFiles resourceBasedClassFiles =
-      new ResourceBasedClassFiles();
   private static final String RUNTIME_LIB_PACKAGE =
       "com/google/devtools/build/android/desugar/runtime/";
 
@@ -409,11 +400,6 @@ public class Desugar {
   private final AtomicInteger numOfTryWithResourcesInvoked = new AtomicInteger();
   /** The counter to record the times of UnsignedLongs desugaring is invoked. */
   private final AtomicInteger numOfUnsignedLongsInvoked = new AtomicInteger();
-  /**
-   * The counter to record the times of desugar runtime library's hashcode implementation is
-   * invoked.
-   */
-  private final AtomicInteger numOfPrimitiveHashCodeInvoked = new AtomicInteger();
 
   private final boolean outputJava7;
   private final boolean allowDefaultMethods;
@@ -444,17 +430,6 @@ public class Desugar {
   private void desugar() throws Exception {
     checkState(!this.used, "This Desugar instance has been used. Please create another one.");
     this.used = true;
-
-    List<Path> platformJars =
-        options.classpath.stream()
-            .filter(path -> path.toString().endsWith(".jar"))
-            .filter(path -> JarDigest.fromPath(path).isPlatformJar())
-            .collect(Collectors.toList());
-    if (!platformJars.isEmpty()) {
-      logger.atInfo().log("Platform Jars in class path added to boot class path: %s", platformJars);
-      options.bootclasspath =
-          ImmutableList.<Path>builder().addAll(options.bootclasspath).addAll(platformJars).build();
-    }
 
     try (Closer closer = Closer.create()) {
       IndexedInputs indexedBootclasspath =
@@ -594,13 +569,17 @@ public class Desugar {
   }
 
   private static void copyTypeConverterClasses(
-      OutputFileProvider outputFileProvider, ImmutableSet<ClassName> initialTypes) {
-    FileBasedTypeReferenceClosure typeReferenceClosure =
-        new FileBasedTypeReferenceClosure(
-            ClassName::isInDesugarRuntimeLibrary, resourceBasedClassFiles);
-    typeReferenceClosure.findReachableReferencedTypes(initialTypes).stream()
-        .map(resourceBasedClassFiles::getContent)
-        .forEach(fileContent -> fileContent.sink(outputFileProvider));
+      OutputFileProvider outputFileProvider, ImmutableSet<ClassName> converterClasses) {
+    ImmutableSet<ClassName> reachableReferencedTypes =
+        findReachableReferencedTypes(converterClasses, ClassName::isInDesugarRuntimeLibrary);
+    for (ClassName className : reachableReferencedTypes) {
+      String resourceName = className.classFilePathName();
+      try (InputStream stream = Resources.getResource(resourceName).openStream()) {
+        outputFileProvider.write(resourceName, ByteStreams.toByteArray(stream));
+      } catch (IOException e) {
+        throw new IOError(e);
+      }
+    }
   }
 
   /**
@@ -651,7 +630,7 @@ public class Desugar {
               });
     }
 
-    // 2. See if we rewrote Long.unsigned*
+    // 2. See if we rewrote Long.unsigned* methods
     if (numOfUnsignedLongsInvoked.get() > 0) {
       try (InputStream stream =
           Desugar.class
@@ -666,16 +645,7 @@ public class Desugar {
       }
     }
 
-    // 3. See if we rewrote <primitive>.hashcode
-    if (numOfPrimitiveHashCodeInvoked.get() > 0) {
-      resourceBasedClassFiles
-          .getContent(
-              ClassName.create(
-                  "com/google/devtools/build/android/desugar/runtime/PrimitiveHashcode"))
-          .sink(outputFileProvider);
-    }
-
-    // 4. See if we need to copy StringConcats methods for Indify string desugaring.
+    // 3. See if we need to copy StringConcats methods for Indify string desugaring.
     if (classMemberUseCounter.getMemberUseCount(INVOKE_JDK11_STRING_CONCAT) > 0) {
       String resourceName = "com/google/devtools/build/android/desugar/runtime/StringConcats.class";
       try (InputStream stream = Resources.getResource(resourceName).openStream()) {
@@ -685,7 +655,7 @@ public class Desugar {
       }
     }
 
-    // 5. See if we need to copy try-with-resources runtime library
+    // 4. See if we need to copy try-with-resources runtime library
     if (allowTryWithResources || options.desugarTryWithResourcesOmitRuntimeClasses) {
       // try-with-resources statements are okay in the output jar.
       return;
@@ -917,7 +887,7 @@ public class Desugar {
         visitor = new LongCompareMethodRewriter(visitor, rewriter);
       }
       if (!allowCallsToPrimitiveWrappers) {
-        visitor = new PrimitiveWrapperRewriter(visitor, numOfPrimitiveHashCodeInvoked);
+        visitor = new PrimitiveWrapperRewriter(visitor, rewriter);
       }
 
       visitor = new Java7Compatibility(visitor, (ClassReaderFactory) null, bootclasspathReader);
@@ -992,7 +962,7 @@ public class Desugar {
       visitor = new LongCompareMethodRewriter(visitor, rewriter);
     }
     if (!allowCallsToPrimitiveWrappers) {
-      visitor = new PrimitiveWrapperRewriter(visitor, numOfPrimitiveHashCodeInvoked);
+      visitor = new PrimitiveWrapperRewriter(visitor, rewriter);
     }
     if (outputJava7) {
       // null ClassReaderFactory b/c we don't expect to need it for lambda classes
@@ -1087,7 +1057,7 @@ public class Desugar {
       visitor = new LongCompareMethodRewriter(visitor, rewriter);
     }
     if (!allowCallsToPrimitiveWrappers) {
-      visitor = new PrimitiveWrapperRewriter(visitor, numOfPrimitiveHashCodeInvoked);
+      visitor = new PrimitiveWrapperRewriter(visitor, rewriter);
     }
     if (!options.onlyDesugarJavac9ForLint) {
       if (outputJava7) {
@@ -1151,13 +1121,15 @@ public class Desugar {
   }
 
   public static void main(String[] args) throws Exception {
-    verifyLambdaDumpDirectoryRegistered(DUMP_DIRECTORY);
+    // It is important that this method is called first. See its javadoc.
+    Path dumpDirectory = createAndRegisterLambdaDumpDirectory();
+    verifyLambdaDumpDirectoryRegistered(dumpDirectory);
 
     DesugarOptions options = parseCommandLineOptions(args);
     if (options.persistentWorker) {
-      runPersistentWorker(DUMP_DIRECTORY);
+      runPersistentWorker(dumpDirectory);
     } else {
-      processRequest(options, DUMP_DIRECTORY);
+      processRequest(options, dumpDirectory);
     }
   }
 
@@ -1176,13 +1148,16 @@ public class Desugar {
 
       try {
         processRequest(options, dumpDirectory);
-        logger.atInfo().log(
-            "Processing Request success: %s", WorkResponse.newBuilder().setExitCode(0).build());
+        WorkResponse.newBuilder().setExitCode(0).build().writeDelimitedTo(System.out);
       } catch (Exception e) {
-        logger.atWarning().withCause(e).log(
-            "Processing Request exception: %s",
-            WorkResponse.newBuilder().setExitCode(1).setOutput(e.getMessage()).build());
+        e.printStackTrace();
+        WorkResponse.newBuilder()
+            .setExitCode(1)
+            .setOutput(e.getMessage())
+            .build()
+            .writeDelimitedTo(System.out);
       }
+      System.out.flush();
     }
   }
 
@@ -1206,13 +1181,14 @@ public class Desugar {
         "--desugar_supported_core_libs requires specifying renamed and/or emulated core libraries");
 
     if (options.verbose) {
-      logger.atInfo().log("Lambda classes will be written under %s%n", dumpDirectory);
+      System.out.printf("Lambda classes will be written under %s%n", dumpDirectory);
     }
     new Desugar(options, dumpDirectory).desugar();
 
     return 0;
   }
 
+  @SuppressWarnings("CatchAndPrintStackTrace")
   static void verifyLambdaDumpDirectoryRegistered(Path dumpDirectory) throws IOException {
     try {
       Class<?> klass = Class.forName("java.lang.invoke.InnerClassLambdaMetafactory");
@@ -1232,9 +1208,7 @@ public class Desugar {
     } catch (ReflectiveOperationException e) {
       // We do not want to crash Desugar, if we cannot load or access these classes or fields.
       // We aim to provide better diagnostics. If we cannot, just let it go.
-      logger.atWarning().withCause(e).log(
-          "Failed to verify lambda dump directory due to unavailable class/field access. \n"
-              + "Continue desugaring...");
+      e.printStackTrace(System.err);
     }
   }
 
@@ -1246,7 +1220,7 @@ public class Desugar {
    * that case the specified directory is used as a temporary dir. Otherwise, it will be set here,
    * before doing anything else since the property is read in the static initializer.
    */
-  static Path createAndRegisterLambdaDumpDirectory() {
+  static Path createAndRegisterLambdaDumpDirectory() throws IOException {
     String propertyValue = System.getProperty(LAMBDA_METAFACTORY_DUMPER_PROPERTY);
     if (propertyValue != null) {
       Path path = Paths.get(propertyValue);
@@ -1258,12 +1232,7 @@ public class Desugar {
       return path;
     }
 
-    Path dumpDirectory;
-    try {
-      dumpDirectory = Files.createTempDirectory("lambdas");
-    } catch (IOException e) {
-      throw new IOError(e);
-    }
+    Path dumpDirectory = Files.createTempDirectory("lambdas");
     System.setProperty(LAMBDA_METAFACTORY_DUMPER_PROPERTY, dumpDirectory.toString());
     deleteTreeOnExit(dumpDirectory);
     return dumpDirectory;
