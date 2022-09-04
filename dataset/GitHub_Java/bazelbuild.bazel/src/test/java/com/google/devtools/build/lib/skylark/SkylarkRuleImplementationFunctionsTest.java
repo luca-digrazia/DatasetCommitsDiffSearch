@@ -264,7 +264,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
         ruleContext,
-        "ruleContext.actions.run(",
+        "ruleContext.action(",
         "  inputs = ruleContext.files.srcs,",
         "  outputs = ruleContext.files.srcs,",
         "  arguments = ['--a','--b'],",
@@ -284,7 +284,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
         ruleContext,
-        "ruleContext.actions.run(",
+        "ruleContext.action(",
         "  inputs = depset(ruleContext.files.srcs),",
         "  outputs = ruleContext.files.srcs,",
         "  arguments = ['--a','--b'],",
@@ -303,7 +303,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     checkErrorContains(
         createRuleContext("//foo:foo"),
         "expected file or PathFragment for executable but got string instead",
-        "ruleContext.actions.run(",
+        "ruleContext.action(",
         "  inputs = ruleContext.files.srcs,",
         "  outputs = ruleContext.files.srcs,",
         "  arguments = ['--a','--b'],",
@@ -315,7 +315,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
         ruleContext,
-        "ruleContext.actions.run_shell(",
+        "ruleContext.action(",
         "  inputs = ruleContext.files.srcs,",
         "  outputs = ruleContext.files.srcs,",
         "  mnemonic = 'DummyMnemonic',",
@@ -336,7 +336,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     evalRuleContextCode(
         ruleContext,
         "env = {'a' : 'b'}",
-        "ruleContext.actions.run_shell(",
+        "ruleContext.action(",
         "  inputs = ruleContext.files.srcs,",
         "  outputs = ruleContext.files.srcs,",
         "  env = env,",
@@ -357,10 +357,8 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
         ruleContext,
-        "unexpected keyword 'bad_param', in method run("
-            + "list outputs, string bad_param, File executable) of 'actions'",
-        "f = ruleContext.actions.declare_file('foo.sh')",
-        "ruleContext.actions.run(outputs=[], bad_param = 'some text', executable = f)");
+        "unexpected keyword 'bad_param' in call to action(self: ctx, *, ",
+        "ruleContext.action(outputs=[], bad_param = 'some text')");
   }
 
   @Test
@@ -375,7 +373,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
   private Object createTestSpawnAction(SkylarkRuleContext ruleContext) throws Exception {
     return evalRuleContextCode(
         ruleContext,
-        "ruleContext.actions.run_shell(",
+        "ruleContext.action(",
         "  inputs = ruleContext.files.srcs,",
         "  outputs = ruleContext.files.srcs,",
         "  arguments = ['--a','--b'],",
@@ -391,7 +389,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         createRuleContext("//foo:foo"),
         "expected type 'File' for 'outputs' element but got type 'string' instead",
         "l = ['a', 'b']",
-        "ruleContext.actions.run_shell(",
+        "ruleContext.action(",
         "  outputs = l,",
         "  command = 'dummy_command')");
   }
@@ -401,7 +399,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     checkErrorContains(
         createRuleContext("//foo:foo"),
         "'command' list has to be of size at least 3",
-        "ruleContext.actions.run_shell(",
+        "ruleContext.action(",
         "  outputs = ruleContext.files.srcs,",
         "  command = ['dummy_command', '--arg'])");
   }
@@ -411,10 +409,10 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     evalRuleContextCode(
         ruleContext,
-        "ruleContext.actions.write(",
+        "ruleContext.file_action(",
         "  output = ruleContext.files.srcs[0],",
         "  content = 'hello world',",
-        "  is_executable = False)");
+        "  executable = False)");
     FileWriteAction action =
         (FileWriteAction)
             Iterables.getOnlyElement(
@@ -623,27 +621,26 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
     checkErrorContains(
         ruleContext,
-        "Cannot convert parameter 'content' to type string, in method "
-            + "write(File output, int content, bool is_executable) of 'actions'",
-        "ruleContext.actions.write(",
+        "method ctx.file_action(output: File, content: string, executable: bool) is not applicable "
+            + "for arguments (File, int, bool): 'content' is 'int', but should be 'string'",
+        "ruleContext.file_action(",
         "  output = ruleContext.files.srcs[0],",
         "  content = 1,",
-        "  is_executable = False)");
+        "  executable = False)");
   }
 
   @Test
   public void testCreateTemplateAction() throws Exception {
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
-    evalRuleContextCode(
-        ruleContext,
-        "ruleContext.actions.expand_template(",
-        "  template = ruleContext.files.srcs[0],",
-        "  output = ruleContext.files.srcs[1],",
-        "  substitutions = {'a': 'b'},",
-        "  executable = False)");
-
-    TemplateExpansionAction action = (TemplateExpansionAction) Iterables.getOnlyElement(
-        ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
+    TemplateExpansionAction action =
+        (TemplateExpansionAction)
+            evalRuleContextCode(
+                ruleContext,
+                "ruleContext.template_action(",
+                "  template = ruleContext.files.srcs[0],",
+                "  output = ruleContext.files.srcs[1],",
+                "  substitutions = {'a': 'b'},",
+                "  executable = False)");
     assertThat(Iterables.getOnlyElement(action.getInputs()).getExecPathString())
         .isEqualTo("foo/a.txt");
     assertThat(Iterables.getOnlyElement(action.getOutputs()).getExecPathString())
@@ -670,15 +667,16 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
     Charset latin1 = StandardCharsets.ISO_8859_1;
     Charset utf8 = StandardCharsets.UTF_8;
     SkylarkRuleContext ruleContext = createRuleContext("//foo:foo");
-    evalRuleContextCode(
-        ruleContext,
-        "ruleContext.actions.expand_template(",
-        "  template = ruleContext.files.srcs[0],",
-        "  output = ruleContext.files.srcs[1],",
-        "  substitutions = {'a': '" + new String(bytesToDecode, latin1) + "'},",
-        "  executable = False)");
-    TemplateExpansionAction action = (TemplateExpansionAction) Iterables.getOnlyElement(
-        ruleContext.getRuleContext().getAnalysisEnvironment().getRegisteredActions());
+    TemplateExpansionAction action =
+        (TemplateExpansionAction)
+            evalRuleContextCode(
+                ruleContext,
+                "ruleContext.template_action(",
+                "  template = ruleContext.files.srcs[0],",
+                "  output = ruleContext.files.srcs[1],",
+                "  substitutions = {'a': '" + new String(bytesToDecode, latin1) + "'},",
+                "  executable = False)");
+
     List<Substitution> substitutions = action.getSubstitutions();
     assertThat(substitutions).hasSize(1);
     assertThat(substitutions.get(0).getValue()).isEqualTo(new String(bytesToDecode, utf8));
@@ -1535,7 +1533,7 @@ public class SkylarkRuleImplementationFunctionsTest extends SkylarkTestCase {
         "  outs = ctx.outputs",
         "  for i in ctx.attr.srcs:",
         "    o = getattr(outs, 'foo_' + i.label.name)",
-        "    ctx.actions.write(",
+        "    ctx.file_action(",
         "      output = o,",
         "      content = 'hoho')",
         "",

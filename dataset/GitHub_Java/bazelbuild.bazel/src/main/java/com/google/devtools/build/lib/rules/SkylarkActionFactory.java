@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
 import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skylarkinterface.Param;
@@ -28,9 +27,9 @@ import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
@@ -193,38 +192,6 @@ public class SkylarkActionFactory implements SkylarkValue {
   }
 
 
-  @SkylarkCallable(
-      name = "write",
-      doc = "Creates a file write action.",
-      parameters = {
-          @Param(
-              name = "output",
-              type = Artifact.class,
-              doc = "the output file.",
-              named = true
-          ),
-          @Param(
-              name = "content",
-              type = String.class,
-              doc = "the contents of the file.",
-              named = true
-          ),
-          @Param(
-              name = "is_executable",
-              type = Boolean.class,
-              defaultValue = "False",
-              doc = "whether the output file should be executable (default is False).",
-              named = true
-          )
-      }
-  )
-  public void write(Artifact output, String content, Boolean isExecutable)
-            throws EvalException {
-    context.checkMutable("actions.write");
-    FileWriteAction action =
-        FileWriteAction.create(ruleContext, output, content, isExecutable);
-    ruleContext.registerAction(action);
-  }
 
   @Override
   public boolean isImmutable() {
@@ -232,9 +199,9 @@ public class SkylarkActionFactory implements SkylarkValue {
   }
 
   @Override
-  public void repr(SkylarkPrinter printer) {
-    printer.append("actions for");
-    context.repr(printer);
+  public void write(Appendable buffer, char quotationMark) {
+    Printer.append(buffer, "actions for");
+    context.write(buffer, quotationMark);
   }
 
   void nullify() {
