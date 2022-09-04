@@ -699,7 +699,7 @@ public class GrpcRemoteExecutionClientTest {
       fail("Expected an exception");
     } catch (SpawnExecException expected) {
       assertThat(expected.getSpawnResult().status())
-          .isEqualTo(SpawnResult.Status.EXECUTION_FAILED_CATASTROPHICALLY);
+          .isEqualTo(SpawnResult.Status.CONNECTION_FAILED);
       // Ensure we also got back the stack trace.
       assertThat(expected).hasMessageThat()
           .contains("GrpcRemoteExecutionClientTest.passUnavailableErrorWithStackTrace");
