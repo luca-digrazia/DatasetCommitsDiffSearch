@@ -1,12 +1,7 @@
 package io.dropwizard.db;
 
 import com.codahale.metrics.MetricRegistry;
-import com.google.common.base.Optional;
-import io.dropwizard.configuration.ConfigurationFactory;
-import io.dropwizard.configuration.ResourceConfigurationSourceProvider;
-import io.dropwizard.jackson.Jackson;
 import io.dropwizard.util.Duration;
-import io.dropwizard.validation.BaseValidator;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,7 +22,8 @@ public class DataSourceFactoryTest {
     @Before
     public void setUp() {
         factory = new DataSourceFactory();
-        factory.setUrl("jdbc:h2:mem:DbTest-" + System.currentTimeMillis() + ";user=sa");
+        factory.setUrl("jdbc:h2:mem:DbTest-" + System.currentTimeMillis());
+        factory.setUser("sa");
         factory.setDriverClass("org.h2.Driver");
         factory.setValidationQuery("SELECT 1");
     }
@@ -84,33 +80,5 @@ public class DataSourceFactoryTest {
         factory.setDriverClass("org.example.no.driver.here");
 
         factory.build(metricRegistry, "test").getConnection();
-    }
-
-    @Test
-    public void testCustomValidator() throws Exception {
-        factory.setValidatorClassName(Optional.of(CustomConnectionValidator.class.getName()));
-        try (Connection connection = dataSource().getConnection()) {
-            try (PreparedStatement statement = connection.prepareStatement("select 1")) {
-                try (ResultSet rs = statement.executeQuery()) {
-                    assertThat(rs.next());
-                    assertThat(rs.getInt(1)).isEqualTo(1);
-                }
-            }
-        }
-        assertThat(CustomConnectionValidator.loaded).isTrue();
-    }
-
-    @Test
-    public void createDefaultFactory() throws Exception {
-        final DataSourceFactory factory = new ConfigurationFactory<>(DataSourceFactory.class,
-            BaseValidator.newValidator(), Jackson.newObjectMapper(), "dw")
-            .build(new ResourceConfigurationSourceProvider(), "yaml/minimal_db_pool.yml");
-
-        assertThat(factory.getDriverClass()).isEqualTo("org.postgresql.Driver");
-        assertThat(factory.getUser()).isEqualTo("pg-user");
-        assertThat(factory.getPassword()).isEqualTo("iAMs00perSecrEET");
-        assertThat(factory.getUrl()).isEqualTo("jdbc:postgresql://db.example.com/db-prod");
-        assertThat(factory.getValidationQuery()).isEqualTo("/* Health Check */ SELECT 1");
-        assertThat(factory.getValidationQueryTimeout()).isEqualTo(Optional.absent());
     }
 }
