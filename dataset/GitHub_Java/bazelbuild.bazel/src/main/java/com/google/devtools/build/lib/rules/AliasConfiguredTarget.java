@@ -13,42 +13,81 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules;
 
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableCollection;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.SkylarkProviders;
+import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
-import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
+import com.google.devtools.build.lib.analysis.config.ConfigMatchingProvider;
 import com.google.devtools.build.lib.cmdline.Label;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.syntax.ClassObject;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
-import com.google.devtools.build.lib.util.Preconditions;
+import com.google.devtools.build.lib.packages.Info;
+import com.google.devtools.build.lib.packages.Provider;
+import com.google.devtools.build.lib.skyframe.BuildConfigurationValue;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
+import javax.annotation.Nullable;
+import net.starlark.java.eval.EvalException;
+import net.starlark.java.eval.Printer;
+import net.starlark.java.eval.StarlarkSemantics;
+import net.starlark.java.eval.Structure;
 
 /**
- * This configured target pretends to be whatever type of target "actual" is, returning its
- * transitive info providers and target, but returning its own label.
+ * This configured target pretends to be whatever type of target "actual" is, returning its label,
+ * transitive info providers and target.
  *
  * <p>Transitive info providers can also be overridden.
  */
+@AutoCodec
 @Immutable
-public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObject {
-  private final BuildConfiguration configuration;
+public final class AliasConfiguredTarget implements ConfiguredTarget, Structure {
+  private final Label label;
+  private final BuildConfigurationValue.Key configurationKey;
   private final ConfiguredTarget actual;
   private final ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider>
       overrides;
+  private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
 
-  public AliasConfiguredTarget(BuildConfiguration configuration, ConfiguredTarget actual,
+  public AliasConfiguredTarget(
+      RuleContext ruleContext,
+      ConfiguredTarget actual,
       ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> overrides) {
-    this.configuration = Preconditions.checkNotNull(configuration);
-    this.actual = Preconditions.checkNotNull(actual);
-    this.overrides = Preconditions.checkNotNull(overrides);
+    this(
+        ruleContext.getLabel(),
+        Preconditions.checkNotNull(ruleContext.getConfigurationKey()),
+        Preconditions.checkNotNull(actual),
+        Preconditions.checkNotNull(overrides),
+        ruleContext.getConfigConditions());
+  }
+
+  @AutoCodec.Instantiator
+  @VisibleForSerialization
+  AliasConfiguredTarget(
+      Label label,
+      BuildConfigurationValue.Key configurationKey,
+      ConfiguredTarget actual,
+      ImmutableMap<Class<? extends TransitiveInfoProvider>, TransitiveInfoProvider> overrides,
+      ImmutableMap<Label, ConfigMatchingProvider> configConditions) {
+    this.label = label;
+    this.configurationKey = configurationKey;
+    this.actual = actual;
+    this.overrides = overrides;
+    this.configConditions = configConditions;
+  }
+
+  @Override
+  public boolean isImmutable() {
+    return true; // immutable and Starlark-hashable
+  }
+
+  @Override
+  public ImmutableMap<Label, ConfigMatchingProvider> getConfigConditions() {
+    return configConditions;
   }
 
   @Override
@@ -57,7 +96,7 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
       return provider.cast(overrides.get(provider));
     }
 
-    return actual == null ? null : actual.getProvider(provider);
+    return actual.getProvider(provider);
   }
 
   @Override
@@ -67,51 +106,83 @@ public final class AliasConfiguredTarget implements ConfiguredTarget, ClassObjec
 
   @Override
   public Object get(String providerKey) {
-    return actual == null ? null : actual.get(providerKey);
+    return actual.get(providerKey);
+  }
+
+  @Nullable
+  @Override
+  public Info get(Provider.Key providerKey) {
+    return actual.get(providerKey);
   }
 
   @Override
-  public Target getTarget() {
-    return actual == null ? null : actual.getTarget();
+  public Object getIndex(StarlarkSemantics semantics, Object key) throws EvalException {
+    return actual.getIndex(semantics, key);
   }
 
   @Override
-  public BuildConfiguration getConfiguration() {
-    // This does not return actual.getConfiguration() because actual might be an input file, in
-    // which case its configuration is null and we don't want to have rules that have a null
-    // configuration.
-    return configuration;
+  public boolean containsKey(StarlarkSemantics semantics, Object key) throws EvalException {
+    return actual.containsKey(semantics, key);
   }
 
-  /* ClassObject methods */
+  @Override
+  public BuildConfigurationValue.Key getConfigurationKey() {
+    // This does not return actual.getConfigurationKey() because actual might be an input file, in
+    // which case its configurationKey is null and we don't want to have rules that have a null
+    // configurationKey.
+    return configurationKey;
+  }
+
+  /* Structure methods */
 
   @Override
   public Object getValue(String name) {
-    if (name.equals("label")) {
+    if (name.equals(LABEL_FIELD)) {
       return getLabel();
-    } else if (name.equals("files")) {
-      // A shortcut for files to build in Skylark. FileConfiguredTarget and RunleConfiguredTarget
+    } else if (name.equals(FILES_FIELD)) {
+      // A shortcut for files to build in Starlark. FileConfiguredTarget and RuleConfiguredTarget
       // always has FileProvider and Error- and PackageGroupConfiguredTarget-s shouldn't be
-      // accessible in Skylark.
-      return SkylarkNestedSet.of(Artifact.class, actual == null
-          ? NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER)
-          : getProvider(FileProvider.class).getFilesToBuild());
+      // accessible in Starlark.
+      return Depset.of(Artifact.TYPE, getProvider(FileProvider.class).getFilesToBuild());
     }
-    return actual == null ? null : actual.get(name);
+    return actual.getValue(name);
   }
 
   @Override
-  public ImmutableCollection<String> getKeys() {
-    ImmutableList.Builder<String> result = ImmutableList.<String>builder().add("label", "files");
-    if (actual != null) {
-        result.addAll(actual.getProvider(SkylarkProviders.class).getKeys());
-    }
-    return result.build();
+  public ImmutableCollection<String> getFieldNames() {
+    return actual.getFieldNames();
   }
 
   @Override
-  public String errorMessage(String name) {
+  public String getErrorMessageForUnknownField(String name) {
     // Use the default error message.
     return null;
+  }
+
+  @Override
+  public ConfiguredTarget getActual() {
+    // This will either dereference an alias chain, or return the final ConfiguredTarget.
+    return actual.getActual();
+  }
+
+  @Override
+  public Label getOriginalLabel() {
+    return label;
+  }
+
+  @Override
+  public void repr(Printer printer) {
+    printer.append("<alias target " + label + " of " + actual.getLabel() + ">");
+  }
+
+  @Override
+  public String toString() {
+    return MoreObjects.toStringHelper(this)
+        .add("label", label)
+        .add("configurationKey", configurationKey)
+        .add("actual", actual)
+        .add("overrides", overrides)
+        .add("configConditions", configConditions)
+        .toString();
   }
 }
