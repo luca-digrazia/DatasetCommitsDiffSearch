@@ -23,8 +23,6 @@ import java.util.regex.Pattern;
 
 import io.smallrye.config.SmallRyeConfig;
 import io.smallrye.config.SmallRyeConfigBuilder;
-import io.smallrye.config.SmallRyeConfigProviderResolver;
-
 import org.eclipse.microprofile.config.Config;
 import org.eclipse.microprofile.config.spi.ConfigBuilder;
 import org.eclipse.microprofile.config.spi.ConfigProviderResolver;
@@ -154,7 +152,6 @@ public class ConfigurationSetup {
         for (Class<?> clazz : ServiceUtil.classesNamedIn(extensionClassLoaderBuildItem.getExtensionClassLoader(), "META-INF/shamrock-config-roots.list")) {
             configDefinition.registerConfigRoot(clazz);
         }
-        SmallRyeConfigProviderResolver.instance().registerConfig(src, Thread.currentThread().getContextClassLoader());
         configDefinition.loadConfiguration(src);
         return new ConfigurationBuildItem(configDefinition);
     }
@@ -380,12 +377,6 @@ public class ConfigurationSetup {
             public ResultHandle load(final BytecodeCreator body, final Object obj) {
                 final ConfigDefinition.RootInfo rootInfo = configDefinition.getInstanceInfo(obj);
                 if (rootInfo == null) return null;
-
-                if (!rootInfo.getConfigPhase().isAvailableAtRun()) {
-                    String msg = String.format("You are trying to use a ConfigRoot[%s] at runtime whose phase[%s] does not allow this",
-                                               rootInfo.getRootClass().getName(), rootInfo.getConfigPhase());
-                    throw new IllegalStateException(msg);
-                }
                 final FieldDescriptor fieldDescriptor = rootInfo.getFieldDescriptor();
                 final ResultHandle configRoot = body.invokeStaticMethod(GET_ROOT_METHOD);
                 return body.readInstanceField(fieldDescriptor, configRoot);
@@ -453,7 +444,7 @@ public class ConfigurationSetup {
             // branches for each next-string
             final Iterable<String> names = keyMap.childNames();
             for (String name : names) {
-                if (name.equals(ConfigPatternMap.WILD_CARD)) {
+                if (name.equals(ConfigPatternMap.WC_SINGLE) || name.equals(ConfigPatternMap.WC_MULTI)) {
                     // skip
                 } else {
                     // TODO: string switch
