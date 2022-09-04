@@ -13,20 +13,20 @@
 // limitations under the License.
 package com.google.devtools.build.lib.rules.java;
 
-import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.actions.ParameterFile.ParameterFileType;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.actions.CommandLine;
 import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine.VectorArg;
 import com.google.devtools.build.lib.analysis.actions.ParamFileInfo;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.vfs.PathFragment;
+import java.util.Map;
 
 /**
  * Helper class to create singlejar actions - singlejar can merge multiple zip files without
@@ -51,8 +51,7 @@ public final class SingleJarActionBuilder {
    */
   public static void createSourceJarAction(
       RuleContext ruleContext,
-      JavaSemantics semantics,
-      ImmutableCollection<Artifact> resources,
+      Map<PathFragment, Artifact> resources,
       NestedSet<Artifact> resourceJars,
       Artifact outputJar) {
     Artifact singleJar = getSingleJar(ruleContext);
@@ -73,10 +72,10 @@ public final class SingleJarActionBuilder {
     }
     builder
         .addOutput(outputJar)
-        .addInputs(resources)
+        .addInputs(resources.values())
         .addTransitiveInputs(resourceJars)
         .addCommandLine(
-            sourceJarCommandLine(outputJar, semantics, resources, resourceJars),
+            sourceJarCommandLine(outputJar, resources, resourceJars),
             ParamFileInfo.builder(ParameterFileType.SHELL_QUOTED).setUseAlways(true).build())
         .setProgressMessage("Building source jar %s", outputJar.prettyPrint())
         .setMnemonic("JavaSourceJar");
@@ -92,26 +91,18 @@ public final class SingleJarActionBuilder {
     return ruleContext.getPrerequisiteArtifact("$singlejar", Mode.HOST);
   }
 
-  private static CommandLine sourceJarCommandLine(
-      Artifact outputJar,
-      JavaSemantics semantics,
-      ImmutableCollection<Artifact> resources,
-      NestedSet<Artifact> resourceJars) {
+  private static CommandLine sourceJarCommandLine(Artifact outputJar,
+      Map<PathFragment, Artifact> resources, NestedSet<Artifact> resourceJars) {
     CustomCommandLine.Builder args = CustomCommandLine.builder();
     args.addExecPath("--output", outputJar);
     args.addAll(SOURCE_JAR_COMMAND_LINE_ARGS);
     args.addExecPaths("--sources", resourceJars);
     if (!resources.isEmpty()) {
       args.add("--resources");
-      args.addAll(VectorArg.of(resources).mapped(resource -> getResourceArg(semantics, resource)));
+      for (Map.Entry<PathFragment, Artifact> resource : resources.entrySet()) {
+        args.addFormatted("%s:%s", resource.getValue().getExecPath(), resource.getKey());
+      }
     }
     return args.build();
-  }
-
-  private static String getResourceArg(JavaSemantics semantics, Artifact resource) {
-    return String.format(
-        "%s:%s",
-        resource.getExecPathString(),
-        semantics.getDefaultJavaResourcePath(resource.getRootRelativePath()));
   }
 }
