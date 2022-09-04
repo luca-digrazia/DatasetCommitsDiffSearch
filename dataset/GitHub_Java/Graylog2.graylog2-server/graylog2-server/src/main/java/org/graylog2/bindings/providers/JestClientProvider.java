@@ -16,7 +16,6 @@
  */
 package org.graylog2.bindings.providers;
 
-import com.github.joschi.jadconfig.util.Duration;
 import com.google.common.base.Splitter;
 import com.google.common.base.Strings;
 import com.google.gson.Gson;
@@ -35,6 +34,7 @@ import javax.inject.Named;
 import javax.inject.Provider;
 import javax.inject.Singleton;
 import java.net.URI;
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
@@ -87,15 +87,15 @@ public class JestClientProvider implements Provider<JestClient> {
         final HttpClientConfig.Builder httpClientConfigBuilder = new HttpClientConfig
                 .Builder(hosts)
                 .credentialsProvider(credentialsProvider)
-                .connTimeout(Math.toIntExact(elasticsearchConnectTimeout.toMilliseconds()))
-                .readTimeout(Math.toIntExact(elasticsearchSocketTimeout.toMilliseconds()))
-                .maxConnectionIdleTime(elasticsearchIdleTimeout.toSeconds(), TimeUnit.SECONDS)
+                .connTimeout(Math.toIntExact(elasticsearchConnectTimeout.toMillis()))
+                .readTimeout(Math.toIntExact(elasticsearchSocketTimeout.toMillis()))
+                .maxConnectionIdleTime(elasticsearchIdleTimeout.getSeconds(), TimeUnit.SECONDS)
                 .maxTotalConnection(elasticsearchMaxTotalConnections)
                 .defaultMaxTotalConnectionPerRoute(elasticsearchMaxTotalConnectionsPerRoute)
                 .multiThreaded(true)
                 .discoveryEnabled(discoveryEnabled)
                 .discoveryFilter(discoveryFilter)
-                .discoveryFrequency(discoveryFrequency.toSeconds(), TimeUnit.SECONDS)
+                .discoveryFrequency(discoveryFrequency.getSeconds(), TimeUnit.SECONDS)
                 .preemptiveAuthTargetHosts(preemptiveAuthHosts)
                 .gson(gson);
 
