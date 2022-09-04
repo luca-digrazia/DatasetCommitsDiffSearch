@@ -22,6 +22,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.devtools.build.lib.actions.AbstractAction;
 import com.google.devtools.build.lib.actions.Action;
@@ -54,9 +55,9 @@ import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SingleStringArgFormatter;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
-import com.google.devtools.build.lib.actions.SpawnStrategy;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
@@ -67,6 +68,8 @@ import com.google.devtools.build.lib.analysis.skylark.Args;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.events.Location;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkbuildapi.CommandLineArgsApi;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
@@ -89,6 +92,7 @@ import javax.annotation.CheckReturnValue;
 import javax.annotation.Nullable;
 
 /** An Action representing an arbitrary subprocess to be forked and exec'd. */
+@AutoCodec
 public class SpawnAction extends AbstractAction implements CommandAction {
 
   /** Sets extensions on {@link ExtraActionInfo}. */
@@ -98,8 +102,8 @@ public class SpawnAction extends AbstractAction implements CommandAction {
 
   private static final String GUID = "ebd6fce3-093e-45ee-adb6-bf513b602f0d";
 
-  private final CommandLines commandLines;
-  private final CommandLineLimits commandLineLimits;
+  @VisibleForSerialization protected final CommandLines commandLines;
+  @VisibleForSerialization protected final CommandLineLimits commandLineLimits;
 
   private final boolean executeUnconditionally;
   private final boolean isShellCommand;
@@ -134,6 +138,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
    * @param progressMessage the message printed during the progression of the build.
    * @param mnemonic the mnemonic that is reported in the master log.
    */
+  @AutoCodec.Instantiator
   public SpawnAction(
       ActionOwner owner,
       NestedSet<Artifact> tools,
@@ -242,7 +247,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
   public Sequence<CommandLineArgsApi> getStarlarkArgs() throws EvalException {
     ImmutableList.Builder<CommandLineArgsApi> result = ImmutableList.builder();
     ImmutableSet<Artifact> directoryInputs =
-        getInputs().toList().stream()
+        Streams.stream(getInputs())
             .filter(artifact -> artifact.isDirectory())
             .collect(ImmutableSet.toImmutableSet());
 
@@ -322,7 +327,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     }
     SpawnContinuation spawnContinuation =
         actionExecutionContext
-            .getContext(SpawnStrategy.class)
+            .getContext(SpawnActionContext.class)
             .beginExecution(spawn, actionExecutionContext);
     return new SpawnActionContinuation(actionExecutionContext, spawnContinuation);
   }
@@ -378,7 +383,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     return getSpawn(getInputs());
   }
 
-  final Spawn getSpawn(NestedSet<Artifact> inputs) throws CommandLineExpansionException {
+  final Spawn getSpawn(Iterable<Artifact> inputs) throws CommandLineExpansionException {
     return new ActionSpawn(
         commandLines.allArguments(),
         ImmutableMap.of(),
@@ -512,7 +517,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
               .setValue(variable.getValue())
               .build());
     }
-    for (ActionInput input : spawn.getInputFiles().toList()) {
+    for (ActionInput input : spawn.getInputFiles()) {
       // Explicitly ignore middleman artifacts here.
       if (!(input instanceof Artifact) || !((Artifact) input).isMiddlemanArtifact()) {
         info.addInputFile(input.getExecPathString());
@@ -542,7 +547,8 @@ public class SpawnAction extends AbstractAction implements CommandAction {
 
   /** A spawn instance that is tied to a specific SpawnAction. */
   private class ActionSpawn extends BaseSpawn {
-    private final NestedSet<ActionInput> inputs;
+
+    private final ImmutableList<ActionInput> inputs;
     private final Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings;
     private final ImmutableMap<String, String> effectiveEnvironment;
 
@@ -555,7 +561,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     private ActionSpawn(
         ImmutableList<String> arguments,
         Map<String, String> clientEnv,
-        NestedSet<Artifact> inputs,
+        Iterable<Artifact> inputs,
         Iterable<? extends ActionInput> additionalInputs,
         Map<Artifact, ImmutableList<FilesetOutputSymlink>> filesetMappings) {
       super(
@@ -565,9 +571,9 @@ public class SpawnAction extends AbstractAction implements CommandAction {
           SpawnAction.this.getRunfilesSupplier(),
           SpawnAction.this,
           resourceSet);
-      NestedSetBuilder<ActionInput> inputsBuilder = NestedSetBuilder.stableOrder();
+      ImmutableList.Builder<ActionInput> inputsBuilder = ImmutableList.builder();
       ImmutableList<Artifact> manifests = getRunfilesSupplier().getManifests();
-      for (Artifact input : inputs.toList()) {
+      for (Artifact input : inputs) {
         if (!input.isFileset() && !manifests.contains(input)) {
           inputsBuilder.add(input);
         }
@@ -591,7 +597,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
     }
 
     @Override
-    public NestedSet<? extends ActionInput> getInputFiles() {
+    public Iterable<? extends ActionInput> getInputFiles() {
       return inputs;
     }
   }
@@ -1300,6 +1306,7 @@ public class SpawnAction extends AbstractAction implements CommandAction {
    * Command line implementation that optimises for containing executable args, command lines, and
    * command lines spilled to param files.
    */
+  @AutoCodec
   static class SpawnActionCommandLine extends CommandLine {
     private final Object[] values;
 

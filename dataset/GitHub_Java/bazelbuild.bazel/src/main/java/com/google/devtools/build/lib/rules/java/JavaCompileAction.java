@@ -47,6 +47,7 @@ import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.Spawn;
+import com.google.devtools.build.lib.actions.SpawnActionContext;
 import com.google.devtools.build.lib.actions.SpawnContinuation;
 import com.google.devtools.build.lib.actions.SpawnResult;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
@@ -57,12 +58,11 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadCompatible;
-import com.google.devtools.build.lib.exec.SpawnStrategyResolver;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.rules.java.JavaConfiguration.JavaClasspathMode;
 import com.google.devtools.build.lib.rules.java.JavaPluginInfoProvider.JavaPluginInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -339,7 +339,7 @@ public class JavaCompileAction extends AbstractAction implements CommandAction {
     }
     SpawnContinuation spawnContinuation =
         actionExecutionContext
-            .getContext(SpawnStrategyResolver.class)
+            .getContext(SpawnActionContext.class)
             .beginExecution(spawn, actionExecutionContext);
     return new JavaActionContinuation(actionExecutionContext, reducedClasspath, spawnContinuation);
   }
@@ -439,13 +439,13 @@ public class JavaCompileAction extends AbstractAction implements CommandAction {
   }
 
   private final class JavaSpawn extends BaseSpawn {
-    final NestedSet<ActionInput> inputs;
+    final Iterable<ActionInput> inputs;
 
     public JavaSpawn(
         CommandLines.ExpandedCommandLines expandedCommandLines,
         Map<String, String> environment,
         Map<String, String> executionInfo,
-        NestedSet<Artifact> inputs) {
+        Iterable<Artifact> inputs) {
       super(
           ImmutableList.copyOf(expandedCommandLines.arguments()),
           environment,
@@ -453,14 +453,11 @@ public class JavaCompileAction extends AbstractAction implements CommandAction {
           EmptyRunfilesSupplier.INSTANCE,
           JavaCompileAction.this,
           LOCAL_RESOURCES);
-      this.inputs =
-          NestedSetBuilder.<ActionInput>fromNestedSet(inputs)
-              .addAll(expandedCommandLines.getParamFiles())
-              .build();
+      this.inputs = Iterables.concat(inputs, expandedCommandLines.getParamFiles());
     }
 
     @Override
-    public NestedSet<? extends ActionInput> getInputFiles() {
+    public Iterable<? extends ActionInput> getInputFiles() {
       return inputs;
     }
   }
@@ -604,7 +601,7 @@ public class JavaCompileAction extends AbstractAction implements CommandAction {
         }
         SpawnContinuation fallbackContinuation =
             actionExecutionContext
-                .getContext(SpawnStrategyResolver.class)
+                .getContext(SpawnActionContext.class)
                 .beginExecution(spawn, actionExecutionContext);
         return new JavaFallbackActionContinuation(
             actionExecutionContext, results, fallbackContinuation);
