@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.skyframe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.FileValue;
@@ -34,6 +33,7 @@ import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.skyframe.SkyFunction;
 import com.google.devtools.build.skyframe.SkyFunctionException;
 import com.google.devtools.build.skyframe.SkyKey;
+import com.google.devtools.build.skyframe.SkyValue;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.Collection;
@@ -54,63 +54,56 @@ public class PlatformMappingFunction implements SkyFunction {
 
   @Nullable
   @Override
-  public PlatformMappingValue compute(SkyKey skyKey, Environment env)
+  public SkyValue compute(SkyKey skyKey, Environment env)
       throws PlatformMappingException, InterruptedException {
     PlatformMappingValue.Key platformMappingKey = (PlatformMappingValue.Key) skyKey.argument();
     PathFragment workspaceRelativeMappingPath =
         platformMappingKey.getWorkspaceRelativeMappingPath();
 
     PathPackageLocator pkgLocator = PrecomputedValue.PATH_PACKAGE_LOCATOR.get(env);
-    if (pkgLocator == null) {
+    Root workspaceRoot = Root.fromPath(pkgLocator.getWorkspaceFile().getParentDirectory());
+    RootedPath rootedMappingPath =
+        RootedPath.toRootedPath(workspaceRoot, workspaceRelativeMappingPath);
+    FileValue fileValue = (FileValue) env.getValue(FileValue.key(rootedMappingPath));
+    if (fileValue == null) {
       return null;
     }
 
-    ImmutableList<Root> pathEntries = pkgLocator.getPathEntries();
-    for (Root root : pathEntries) {
-      RootedPath rootedMappingPath = RootedPath.toRootedPath(root, workspaceRelativeMappingPath);
-      FileValue fileValue = (FileValue) env.getValue(FileValue.key(rootedMappingPath));
-      if (fileValue == null) {
-        return null;
+    if (!fileValue.exists()) {
+      if (!platformMappingKey.wasExplicitlySetByUser()) {
+        // If no flag was passed and the default mapping file does not exist treat this as if the
+        // mapping file was empty rather than an error.
+        return PlatformMappingValue.EMPTY;
       }
-
-      if (!fileValue.exists()) {
-        continue;
-      }
-      if (fileValue.isDirectory()) {
-        throw new PlatformMappingException(
-            new MissingInputFileException(
-                String.format(
-                    "--platform_mappings was set to '%s' relative to the top-level workspace '%s'"
-                        + " but that path refers to a directory, not a file",
-                    workspaceRelativeMappingPath, root),
-                Location.BUILTIN),
-            SkyFunctionException.Transience.PERSISTENT);
-      }
-
-      Iterable<String> lines;
-      try {
-        lines =
-            FileSystemUtils.readLines(fileValue.realRootedPath().asPath(), StandardCharsets.UTF_8);
-      } catch (IOException e) {
-        throw new PlatformMappingException(e, SkyFunctionException.Transience.TRANSIENT);
-      }
-
-      return new Parser(lines.iterator()).parse().toPlatformMappingValue();
+      throw new PlatformMappingException(
+          new MissingInputFileException(
+              String.format(
+                  "--platform_mappings was set to '%s' but no such file exists relative to the "
+                      + "top-level workspace, '%s'",
+                  workspaceRelativeMappingPath, workspaceRoot),
+              Location.BUILTIN),
+          SkyFunctionException.Transience.PERSISTENT);
+    }
+    if (fileValue.isDirectory()) {
+      throw new PlatformMappingException(
+          new MissingInputFileException(
+              String.format(
+                  "--platform_mappings was set to '%s' relative to the top-level workspace '%s' but"
+                      + "that path refers to a directory, not a file",
+                  workspaceRelativeMappingPath, workspaceRoot),
+              Location.BUILTIN),
+          SkyFunctionException.Transience.PERSISTENT);
     }
 
-    if (!platformMappingKey.wasExplicitlySetByUser()) {
-      // If no flag was passed and the default mapping file does not exist treat this as if the
-      // mapping file was empty rather than an error.
-      return PlatformMappingValue.EMPTY;
+    Iterable<String> lines;
+    try {
+      lines =
+          FileSystemUtils.readLines(fileValue.realRootedPath().asPath(), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new PlatformMappingException(e, SkyFunctionException.Transience.PERSISTENT);
     }
-    throw new PlatformMappingException(
-        new MissingInputFileException(
-            String.format(
-                "--platform_mappings was set to '%s' but no such file exists relative to the "
-                    + "package path roots, '%s'",
-                workspaceRelativeMappingPath, pathEntries),
-            Location.BUILTIN),
-        SkyFunctionException.Transience.PERSISTENT);
+
+    return new Parser(lines.iterator()).parse().toPlatformMappingValue();
   }
 
   @Nullable
