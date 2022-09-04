@@ -62,8 +62,7 @@ public class ExtractorFilter implements MessageFilter {
                 extractor.runExtractor(msg);
             } catch (Exception e) {
                 extractor.incrementExceptions();
-                LOG.error("Could not apply extractor \"" + extractor.getTitle() + "\" (id=" + extractor.getId() + ") "
-                        + "to message " + msg.getId(), e);
+                LOG.error("Could not apply extractor " + extractor.getTitle() + " (id=" + extractor.getId() + ")", e);
             }
         }
 
