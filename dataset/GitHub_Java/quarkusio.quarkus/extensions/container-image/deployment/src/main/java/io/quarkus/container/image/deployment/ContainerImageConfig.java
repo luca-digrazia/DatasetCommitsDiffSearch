@@ -33,13 +33,13 @@ public class ContainerImageConfig {
     public Optional<String> registry;
 
     /**
-     * The username to use to authenticate with the registry where the built image will be pushed
+     * The username to use to authenticate with the registry
      */
     @ConfigItem
     public Optional<String> username;
 
     /**
-     * The password to use to authenticate with the registry where the built image will be pushed
+     * The password to use to authenticate with the registry
      */
     @ConfigItem
     public Optional<String> password;
