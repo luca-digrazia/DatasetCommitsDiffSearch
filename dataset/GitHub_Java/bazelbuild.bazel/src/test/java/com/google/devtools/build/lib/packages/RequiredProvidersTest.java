@@ -16,40 +16,57 @@ package com.google.devtools.build.lib.packages;
 
 import static com.google.common.truth.Truth.assertThat;
 
-import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
-import com.google.devtools.build.lib.packages.RequiredProviders.Builder;
+import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.cmdline.LabelSyntaxException;
+import net.starlark.java.syntax.Location;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-/**
- * Test for {@link RequiredProviders} class
- */
+/** Test for {@link com.google.devtools.build.lib.packages.RequiredProviders} class */
 @RunWith(JUnit4.class)
 public class RequiredProvidersTest {
-  private static boolean satisfies(final AdvertisedProviderSet providers,
+
+  private static final String NO_PROVIDERS_REQUIRED = "no providers required";
+
+  private static final class P1 implements TransitiveInfoProvider {}
+
+  private static final class P2 implements TransitiveInfoProvider {}
+
+  private static final class P3 implements TransitiveInfoProvider {}
+
+  private static final Provider P_NATIVE =
+      new BuiltinProvider<StructImpl>("p_native", StructImpl.class) {};
+
+  private static final StarlarkProvider P_STARLARK =
+      StarlarkProvider.createUnexportedSchemaless(Location.BUILTIN);
+
+  static {
+    try {
+      P_STARLARK.export(ev -> {}, Label.create("foo/bar", "x.bzl"), "p_starlark");
+    } catch (LabelSyntaxException e) {
+      throw new AssertionError(e);
+    }
+  }
+
+  private static final StarlarkProviderIdentifier ID_NATIVE =
+      StarlarkProviderIdentifier.forKey(P_NATIVE.getKey());
+  private static final StarlarkProviderIdentifier ID_STARLARK =
+      StarlarkProviderIdentifier.forKey(P_STARLARK.getKey());
+  private static final StarlarkProviderIdentifier ID_LEGACY =
+      StarlarkProviderIdentifier.forLegacy("p_legacy");
+
+  private static boolean satisfies(AdvertisedProviderSet providers,
       RequiredProviders requiredProviders) {
     boolean result = requiredProviders.isSatisfiedBy(providers);
 
-    assertThat(requiredProviders.isSatisfiedBy(
-        new Predicate<Class<?>>() {
-          @Override
-          public boolean apply(Class<?> aClass) {
-            return providers.getNativeProviders().contains(aClass);
-          }
-        },
-        new Predicate<SkylarkProviderIdentifier>() {
-          @Override
-          public boolean apply(SkylarkProviderIdentifier skylarkProviderIdentifier) {
-            if (!skylarkProviderIdentifier.isLegacy()) {
-              return false;
-            }
-            return providers.getSkylarkProviders()
-                .contains(skylarkProviderIdentifier.getLegacyId());
-          }
-        }
-    )).isEqualTo(result);
+    assertThat(
+            requiredProviders.isSatisfiedBy(
+                providers.getBuiltinProviders()::contains,
+                providers.getStarlarkProviders()::contains))
+        .isEqualTo(result);
     return result;
   }
 
@@ -60,15 +77,15 @@ public class RequiredProvidersTest {
     assertThat(satisfies(AdvertisedProviderSet.ANY,
         RequiredProviders.acceptAnyBuilder().build())).isTrue();
     assertThat(
-        satisfies(
-            AdvertisedProviderSet.builder().addNative(P1.class).build(),
-            RequiredProviders.acceptAnyBuilder().build()
-        )).isTrue();
+            satisfies(
+                AdvertisedProviderSet.builder().addBuiltin(P1.class).build(),
+                RequiredProviders.acceptAnyBuilder().build()))
+        .isTrue();
     assertThat(
-        satisfies(
-            AdvertisedProviderSet.builder().addSkylark("p1").build(),
-            RequiredProviders.acceptAnyBuilder().build()
-        )).isTrue();
+            satisfies(
+                AdvertisedProviderSet.builder().addStarlark("p1").build(),
+                RequiredProviders.acceptAnyBuilder().build()))
+        .isTrue();
   }
 
   @Test
@@ -78,125 +95,142 @@ public class RequiredProvidersTest {
     assertThat(satisfies(AdvertisedProviderSet.ANY,
         RequiredProviders.acceptNoneBuilder().build())).isFalse();
     assertThat(
-        satisfies(
-            AdvertisedProviderSet.builder().addNative(P1.class).build(),
-            RequiredProviders.acceptNoneBuilder().build()
-        )).isFalse();
+            satisfies(
+                AdvertisedProviderSet.builder().addBuiltin(P1.class).build(),
+                RequiredProviders.acceptNoneBuilder().build()))
+        .isFalse();
     assertThat(
-        satisfies(
-            AdvertisedProviderSet.builder().addSkylark("p1").build(),
-            RequiredProviders.acceptNoneBuilder().build()
-        )).isFalse();
+            satisfies(
+                AdvertisedProviderSet.builder().addStarlark("p1").build(),
+                RequiredProviders.acceptNoneBuilder().build()))
+        .isFalse();
   }
 
-  private static final class P1 {}
-  private static final class P2 {}
-  private static final class P3 {}
-
   @Test
-  public void nativeProvidersAllMatch() {
-    AdvertisedProviderSet providerSet = AdvertisedProviderSet.builder()
-        .addNative(P1.class)
-        .addNative(P2.class)
-        .build();
-    assertThat(validateNative(providerSet, ImmutableSet.<Class<?>>of(P1.class, P2.class)))
+  public void builtinProvidersAllMatch() {
+    AdvertisedProviderSet providerSet =
+        AdvertisedProviderSet.builder().addBuiltin(P1.class).addBuiltin(P2.class).build();
+    assertThat(
+            validateNative(providerSet, NO_PROVIDERS_REQUIRED, ImmutableSet.of(P1.class, P2.class)))
         .isTrue();
   }
 
   @Test
-  public void nativeProvidersBranchMatch() {
+  public void builtinProvidersBranchMatch() {
     assertThat(
-        validateNative(
-          AdvertisedProviderSet.builder()
-              .addNative(P1.class)
-              .build(),
-          ImmutableSet.<Class<?>>of(P1.class),
-          ImmutableSet.<Class<?>>of(P2.class)
-        )).isTrue();
-  }
-
-  @Test
-  public void nativeProvidersNoMatch() {
-    assertThat(
-        validateNative(
-            AdvertisedProviderSet.builder()
-                .addNative(P3.class)
-                .build(),
-            ImmutableSet.<Class<?>>of(P1.class),
-            ImmutableSet.<Class<?>>of(P2.class)
-        )).isFalse();
-  }
-
-  @Test
-  public void skylarkProvidersAllMatch() {
-    AdvertisedProviderSet providerSet = AdvertisedProviderSet.builder()
-        .addSkylark("p1")
-        .addSkylark("p2")
-        .build();
-    assertThat(validateSkylark(providerSet, ImmutableSet.of("p1", "p2")))
+            validateNative(
+                AdvertisedProviderSet.builder().addBuiltin(P1.class).build(),
+                NO_PROVIDERS_REQUIRED,
+                ImmutableSet.of(P1.class),
+                ImmutableSet.of(P2.class)))
         .isTrue();
   }
 
   @Test
-  public void skylarkProvidersBranchMatch() {
+  public void builtinsProvidersNoMatch() {
     assertThat(
-        validateSkylark(
-            AdvertisedProviderSet.builder()
-                .addSkylark("p1")
-                .build(),
-            ImmutableSet.of("p1"),
-            ImmutableSet.of("p2")
-        )).isTrue();
+            validateNative(
+                AdvertisedProviderSet.builder().addBuiltin(P3.class).build(),
+                "P1 or P2",
+                ImmutableSet.of(P1.class),
+                ImmutableSet.of(P2.class)))
+        .isFalse();
   }
 
   @Test
-  public void skylarkProvidersNoMatch() {
+  public void starlarkProvidersAllMatch() {
+    AdvertisedProviderSet providerSet =
+        AdvertisedProviderSet.builder()
+            .addStarlark(ID_LEGACY)
+            .addStarlark(ID_NATIVE)
+            .addStarlark(ID_STARLARK)
+            .build();
     assertThat(
-        validateSkylark(
-            AdvertisedProviderSet.builder()
-                .addSkylark("p3")
-                .build(),
-            ImmutableSet.of("p1"),
-            ImmutableSet.of("p2")
-        )).isFalse();
+            validateStarlark(
+                providerSet,
+                NO_PROVIDERS_REQUIRED,
+                ImmutableSet.of(ID_LEGACY, ID_STARLARK, ID_NATIVE)))
+        .isTrue();
+  }
+
+  @Test
+  public void starlarkProvidersBranchMatch() {
+    assertThat(
+            validateStarlark(
+                AdvertisedProviderSet.builder().addStarlark(ID_LEGACY).build(),
+                NO_PROVIDERS_REQUIRED,
+                ImmutableSet.of(ID_LEGACY),
+                ImmutableSet.of(ID_NATIVE)))
+        .isTrue();
+  }
+
+  @Test
+  public void starlarkProvidersNoMatch() {
+    assertThat(
+            validateStarlark(
+                AdvertisedProviderSet.builder().addStarlark(ID_STARLARK).build(),
+                "'p_legacy' or 'p_native'",
+                ImmutableSet.of(ID_LEGACY),
+                ImmutableSet.of(ID_NATIVE)))
+        .isFalse();
+  }
+
+  @Test
+  public void checkDescriptions() {
+    assertThat(RequiredProviders.acceptAnyBuilder().build().getDescription())
+        .isEqualTo("no providers required");
+    assertThat(RequiredProviders.acceptNoneBuilder().build().getDescription())
+        .isEqualTo("no providers accepted");
+    assertThat(
+            RequiredProviders.acceptAnyBuilder()
+                .addStarlarkSet(ImmutableSet.of(ID_LEGACY, ID_STARLARK))
+                .addStarlarkSet(ImmutableSet.of(ID_STARLARK))
+                .addBuiltinSet(ImmutableSet.of(P1.class, P2.class))
+                .build()
+                .getDescription())
+        .isEqualTo("[P1, P2] or ['p_legacy', 'p_starlark'] or 'p_starlark'");
   }
 
   @SafeVarargs
-  private static boolean validateNative(AdvertisedProviderSet providerSet,
-      ImmutableSet<Class<?>>... sets) {
-    Builder anyBuilder = RequiredProviders.acceptAnyBuilder();
-    Builder noneBuilder = RequiredProviders.acceptNoneBuilder();
-    for (ImmutableSet<Class<?>> set : sets) {
-      anyBuilder.addNativeSet(set);
-      noneBuilder.addNativeSet(set);
-    }
-    boolean result = satisfies(providerSet, anyBuilder.build());
-    assertThat(satisfies(providerSet, noneBuilder.build())).isEqualTo(result);
-    return result;
-  }
-
-  @SafeVarargs
-  private static boolean validateSkylark(
+  private static boolean validateNative(
       AdvertisedProviderSet providerSet,
-      ImmutableSet<String>... sets) {
-    Builder anyBuilder = RequiredProviders.acceptAnyBuilder();
-    Builder noneBuilder = RequiredProviders.acceptNoneBuilder();
-    for (ImmutableSet<String> set : sets) {
-      ImmutableSet<SkylarkProviderIdentifier> idSet = toIdSet(set);
-      anyBuilder.addSkylarkSet(idSet);
-      noneBuilder.addSkylarkSet(idSet);
+      String missing,
+      ImmutableSet<Class<? extends TransitiveInfoProvider>>... sets) {
+    RequiredProviders.Builder anyBuilder = RequiredProviders.acceptAnyBuilder();
+    RequiredProviders.Builder noneBuilder = RequiredProviders.acceptNoneBuilder();
+    for (ImmutableSet<Class<? extends TransitiveInfoProvider>> set : sets) {
+      anyBuilder.addBuiltinSet(set);
+      noneBuilder.addBuiltinSet(set);
     }
-    boolean result = satisfies(providerSet, anyBuilder.build());
-    assertThat(satisfies(providerSet, noneBuilder.build())).isEqualTo(result);
+    RequiredProviders rpStartingFromAny = anyBuilder.build();
+    boolean result = satisfies(providerSet, rpStartingFromAny);
+    assertThat(rpStartingFromAny.getMissing(providerSet).getDescription()).isEqualTo(missing);
+
+    RequiredProviders rpStaringFromNone = noneBuilder.build();
+    assertThat(satisfies(providerSet, rpStaringFromNone)).isEqualTo(result);
+    assertThat(rpStaringFromNone.getMissing(providerSet).getDescription()).isEqualTo(missing);
     return result;
   }
 
-  private static ImmutableSet<SkylarkProviderIdentifier> toIdSet(ImmutableSet<String> set) {
-    ImmutableSet.Builder<SkylarkProviderIdentifier> builder = ImmutableSet.builder();
-    for (String id : set) {
-      builder.add(SkylarkProviderIdentifier.forLegacy(id));
+  @SafeVarargs
+  private static boolean validateStarlark(
+      AdvertisedProviderSet providerSet,
+      String missing,
+      ImmutableSet<StarlarkProviderIdentifier>... sets) {
+    RequiredProviders.Builder anyBuilder = RequiredProviders.acceptAnyBuilder();
+    RequiredProviders.Builder noneBuilder = RequiredProviders.acceptNoneBuilder();
+    for (ImmutableSet<StarlarkProviderIdentifier> set : sets) {
+      anyBuilder.addStarlarkSet(set);
+      noneBuilder.addStarlarkSet(set);
     }
-    return builder.build();
-  }
 
+    RequiredProviders rpStartingFromAny = anyBuilder.build();
+    boolean result = satisfies(providerSet, rpStartingFromAny);
+    assertThat(rpStartingFromAny.getMissing(providerSet).getDescription()).isEqualTo(missing);
+
+    RequiredProviders rpStaringFromNone = noneBuilder.build();
+    assertThat(satisfies(providerSet, rpStaringFromNone)).isEqualTo(result);
+    assertThat(rpStaringFromNone.getMissing(providerSet).getDescription()).isEqualTo(missing);
+    return result;
+  }
 }
