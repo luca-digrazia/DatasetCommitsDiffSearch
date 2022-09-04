@@ -19,8 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Interner;
-import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
-import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.FileProvider;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
@@ -48,8 +46,6 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.syntax.Printer;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.function.Consumer;
 import javax.annotation.Nullable;
 
@@ -62,8 +58,6 @@ import javax.annotation.Nullable;
  */
 @AutoCodec
 public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
-  private static final String ACTIONS_FIELD_NAME = "actions";
-
   /**
    * The configuration transition for an attribute through which a prerequisite
    * is requested.
@@ -86,12 +80,9 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
   private static final Interner<ImmutableSet<ConfiguredTargetKey>> IMPLICIT_DEPS_INTERNER =
       BlazeInterners.newWeakInterner();
 
-  private boolean actionsAccessible = true;
   private final TransitiveInfoProviderMap providers;
   private final ImmutableMap<Label, ConfigMatchingProvider> configConditions;
   private final String ruleClassString;
-  private final ArrayList<ActionAnalysisMetadata> actions;
-  private final ImmutableMap<Artifact, Integer> generatingActionIndex;
 
   @Instantiator
   @VisibleForSerialization
@@ -102,11 +93,8 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
       TransitiveInfoProviderMap providers,
       ImmutableMap<Label, ConfigMatchingProvider> configConditions,
       ImmutableSet<ConfiguredTargetKey> implicitDeps,
-      String ruleClassString,
-      List<ActionAnalysisMetadata> actions,
-      ImmutableMap<Artifact, Integer> generatingActionIndex) {
+      String ruleClassString) {
     super(label, configuration, visibility);
-
     // We don't use ImmutableMap.Builder here to allow augmenting the initial list of 'default'
     // providers by passing them in.
     TransitiveInfoProviderMapBuilder providerBuilder =
@@ -127,15 +115,9 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     this.configConditions = configConditions;
     this.implicitDeps = IMPLICIT_DEPS_INTERNER.intern(implicitDeps);
     this.ruleClassString = ruleClassString;
-    this.actions = new ArrayList<>(actions);
-    this.generatingActionIndex = generatingActionIndex;
   }
 
-  public RuleConfiguredTarget(
-      RuleContext ruleContext,
-      TransitiveInfoProviderMap providers,
-      List<? extends ActionAnalysisMetadata> actions,
-      ImmutableMap<Artifact, Integer> generatingActionIndex) {
+  public RuleConfiguredTarget(RuleContext ruleContext, TransitiveInfoProviderMap providers) {
     this(
         ruleContext.getLabel(),
         ruleContext.getConfiguration(),
@@ -143,14 +125,12 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
         providers,
         ruleContext.getConfigConditions(),
         Util.findImplicitDeps(ruleContext),
-        ruleContext.getRule().getRuleClass(),
-        (List<ActionAnalysisMetadata>) actions,
-        generatingActionIndex);
+        ruleContext.getRule().getRuleClass());
 
     // If this rule is the run_under target, then check that we have an executable; note that
     // run_under is only set in the target configuration, and the target must also be analyzed for
     // the target configuration.
-    RunUnder runUnder = ruleContext.getConfiguration().getRunUnder();
+    RunUnder runUnder = getConfiguration().getRunUnder();
     if (runUnder != null && getLabel().equals(runUnder.getLabel())) {
       if (getProvider(FilesToRunProvider.class).getExecutable() == null) {
         ruleContext.ruleError("run_under target " + runUnder.getLabel() + " is not executable");
@@ -204,7 +184,6 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
         result.accept((String) classAt);
       }
     }
-    result.accept(ACTIONS_FIELD_NAME);
   }
 
   @Override
@@ -214,9 +193,6 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
 
   @Override
   protected Object rawGetSkylarkProvider(String providerKey) {
-    if (providerKey.equals(ACTIONS_FIELD_NAME)) {
-      return actionsAccessible ? actions : ImmutableList.of();
-    }
     return providers.getProvider(providerKey);
   }
 
@@ -240,23 +216,5 @@ public final class RuleConfiguredTarget extends AbstractConfiguredTarget {
     }
     printer.append(Joiner.on(", ").join(skylarkProviderKeyStrings.build()));
     printer.append("]>");
-  }
-
-  /** Returns a list of actions that this configured target generated. */
-  public ArrayList<ActionAnalysisMetadata> getActions() {
-    return actions;
-  }
-
-  /**
-   * Returns a map where keys are artifacts that are action outputs of this rule, and values are the
-   * index of the action that generates that artifact.
-   */
-  public ImmutableMap<Artifact, Integer> getGeneratingActionIndex() {
-    return generatingActionIndex;
-  }
-
-  /** Disables accessing actions via a provider skylark interface. */
-  public void disableAcccesibleActions() {
-    this.actionsAccessible = false;
   }
 }

@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.analysis.extra;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.actions.Action;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
@@ -23,13 +24,11 @@ import com.google.devtools.build.lib.actions.CommandLineExpansionException;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.UserExecException;
 import com.google.devtools.build.lib.analysis.actions.AbstractFileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.DeterministicWriter;
 import com.google.devtools.build.lib.analysis.actions.ProtoDeterministicWriter;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.util.Fingerprint;
+import java.io.IOException;
 
 /**
  * Requests extra action info from shadowed action and writes it, in protocol buffer format, to an
@@ -44,20 +43,14 @@ public final class ExtraActionInfoFileWriteAction extends AbstractFileWriteActio
   private final Action shadowedAction;
 
   ExtraActionInfoFileWriteAction(ActionOwner owner, Artifact primaryOutput, Action shadowedAction) {
-    super(
-        owner,
-        shadowedAction.discoversInputs()
-            ? NestedSetBuilder.<Artifact>stableOrder().addAll(shadowedAction.getOutputs()).build()
-            : NestedSetBuilder.<Artifact>emptySet(Order.STABLE_ORDER),
-        primaryOutput,
-        /*makeExecutable=*/ false);
+    super(owner, ImmutableList.<Artifact>of(), primaryOutput, false);
 
     this.shadowedAction = Preconditions.checkNotNull(shadowedAction, primaryOutput);
   }
 
   @Override
   public DeterministicWriter newDeterministicWriter(ActionExecutionContext ctx)
-      throws ExecException {
+      throws IOException, InterruptedException, ExecException {
     try {
       return new ProtoDeterministicWriter(
           shadowedAction.getExtraActionInfo(ctx.getActionKeyContext()).build());

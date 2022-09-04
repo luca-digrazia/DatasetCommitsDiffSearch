@@ -204,18 +204,18 @@ public final class SourceManifestAction extends AbstractFileWriteAction {
     fp.addInt(symlinks.size());
     for (Map.Entry<PathFragment, Artifact> symlink : symlinks.entrySet()) {
       fp.addPath(symlink.getKey());
-      fp.addPath(symlink.getValue().getExecPath());
+      fp.addPath(symlink.getValue().getPath());
     }
     Map<PathFragment, Artifact> rootSymlinks = runfiles.getRootSymlinksAsMap(null);
     fp.addInt(rootSymlinks.size());
     for (Map.Entry<PathFragment, Artifact> rootSymlink : rootSymlinks.entrySet()) {
       fp.addPath(rootSymlink.getKey());
-      fp.addPath(rootSymlink.getValue().getExecPath());
+      fp.addPath(rootSymlink.getValue().getPath());
     }
 
     for (Artifact artifact : runfiles.getArtifacts()) {
       fp.addPath(artifact.getRootRelativePath());
-      fp.addPath(artifact.getExecPath());
+      fp.addPath(artifact.getPath());
     }
   }
 

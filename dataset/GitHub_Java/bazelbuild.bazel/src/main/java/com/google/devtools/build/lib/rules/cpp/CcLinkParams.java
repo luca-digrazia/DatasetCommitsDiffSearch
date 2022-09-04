@@ -243,10 +243,7 @@ public final class CcLinkParams {
      * the method does not do anything.
      */
     public Builder addTransitiveTarget(TransitiveInfoCollection target) {
-      CcLinkingInfo ccLinkingInfo = target.get(CcLinkingInfo.PROVIDER);
-      CcLinkParamsInfo ccLinkParamsInfo =
-          ccLinkingInfo == null ? null : ccLinkingInfo.getCcLinkParamsInfo();
-      return addTransitiveProvider(ccLinkParamsInfo);
+      return addTransitiveProvider(target.get(CcLinkParamsInfo.PROVIDER));
     }
 
     /**
@@ -330,10 +327,9 @@ public final class CcLinkParams {
 
     /** Adds a collection of linkstamps. */
     public Builder addLinkstamps(
-        NestedSet<Artifact> linkstamps, CcCompilationContextInfo ccCompilationContextInfo) {
+        NestedSet<Artifact> linkstamps, CcCompilationInfo ccCompilationInfo) {
       for (Artifact linkstamp : linkstamps) {
-        linkstampsBuilder.add(
-            new Linkstamp(linkstamp, ccCompilationContextInfo.getDeclaredIncludeSrcs()));
+        linkstampsBuilder.add(new Linkstamp(linkstamp, ccCompilationInfo.getDeclaredIncludeSrcs()));
       }
       return this;
     }

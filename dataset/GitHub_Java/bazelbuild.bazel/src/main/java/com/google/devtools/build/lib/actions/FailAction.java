@@ -14,17 +14,10 @@
 
 package com.google.devtools.build.lib.actions;
 
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
-import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
-import com.google.devtools.build.lib.server.FailureDetails;
-import com.google.devtools.build.lib.server.FailureDetails.FailAction.Code;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Fingerprint;
-import javax.annotation.Nullable;
 
 /**
  * FailAction is an Action that always fails to execute. (Used as scaffolding for rules we haven't
@@ -39,7 +32,7 @@ public final class FailAction extends AbstractAction {
   private final String errorMessage;
 
   public FailAction(ActionOwner owner, Iterable<Artifact> outputs, String errorMessage) {
-    super(owner, NestedSetBuilder.emptySet(Order.STABLE_ORDER), outputs);
+    super(owner, ImmutableList.<Artifact>of(), outputs);
     this.errorMessage = errorMessage;
   }
 
@@ -48,39 +41,21 @@ public final class FailAction extends AbstractAction {
     return null;
   }
 
-  public String getErrorMessage() {
-    return errorMessage;
-  }
-
   @Override
   public ActionResult execute(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException {
-    throw new ActionExecutionException(
-        errorMessage,
-        this,
-        false,
-        DetailedExitCode.of(
-            FailureDetail.newBuilder()
-                .setMessage("FailAction intentional failure: " + errorMessage)
-                .setFailAction(
-                    FailureDetails.FailAction.newBuilder().setCode(Code.INTENTIONAL_FAILURE))
-                .build()));
+    throw new ActionExecutionException(errorMessage, this, false);
   }
 
   @Override
-  protected void computeKey(
-      ActionKeyContext actionKeyContext,
-      @Nullable ArtifactExpander artifactExpander,
-      Fingerprint fp) {
+  protected void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
     fp.addString(GUID);
   }
 
   @Override
   protected String getRawProgressMessage() {
-    return "Reporting failed target "
-        + getOwner().getLabel()
-        + " located at "
-        + getOwner().getLocation();
+    return "Building unsupported rule " + getOwner().getLabel()
+        + " located at " + getOwner().getLocation();
   }
 
   @Override

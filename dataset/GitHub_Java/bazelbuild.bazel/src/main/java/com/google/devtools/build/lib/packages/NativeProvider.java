@@ -18,7 +18,6 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -40,8 +39,7 @@ import javax.annotation.Nullable;
  * </pre>
  *
  * To allow construction from Skylark and custom construction logic, override {@link
- * Provider#createInstanceFromSkylark(Object[], Environment, Location)} (see {@link #STRUCT} for an
- * example.
+ * #createInstanceFromSkylark(Object[], Location)} (see {@link #STRUCT} for an example.
  */
 @Immutable
 public abstract class NativeProvider<V extends Info> extends Provider {
@@ -80,7 +78,7 @@ public abstract class NativeProvider<V extends Info> extends Provider {
     }
 
     @Override
-    protected Info createInstanceFromSkylark(Object[] args, Environment env, Location loc) {
+    protected Info createInstanceFromSkylark(Object[] args, Location loc) {
       @SuppressWarnings("unchecked")
       Map<String, Object> kwargs = (Map<String, Object>) args[0];
       return SkylarkInfo.createSchemaless(this, kwargs, loc);
@@ -167,8 +165,7 @@ public abstract class NativeProvider<V extends Info> extends Provider {
   }
 
   @Override
-  protected Info createInstanceFromSkylark(Object[] args, Environment env, Location loc)
-      throws EvalException {
+  protected Info createInstanceFromSkylark(Object[] args, Location loc) throws EvalException {
     throw new EvalException(
         loc, String.format("'%s' cannot be constructed from Skylark", getPrintableName()));
   }
