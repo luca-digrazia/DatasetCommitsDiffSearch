@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
-import javax.validation.constraints.NotNull;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.ForbiddenException;
 import javax.ws.rs.GET;
@@ -63,7 +62,6 @@ import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static com.google.common.base.MoreObjects.firstNonNull;
 import static java.util.stream.Collectors.toSet;
 
 // TODO permission system
@@ -192,7 +190,7 @@ public class SearchResource extends RestResource implements PluginRestResource {
             search = search.toBuilder().queries(newQueries).build();
         }
 
-        search = search.applyExecutionState(objectMapper, firstNonNull(executionState, Collections.emptyMap()));
+        search = search.applyExecutionState(objectMapper, executionState);
 
         final String username = getCurrentUser() != null ? getCurrentUser().getName() : null;
 
@@ -281,10 +279,7 @@ public class SearchResource extends RestResource implements PluginRestResource {
     @ApiOperation(value = "Metadata for the posted Search object", notes = "Intended for search objects that aren't yet persisted (e.g. for validation or interactive purposes)")
     @Path("metadata")
     @NoAuditEvent("Only returning metadata for given search, not changing any data")
-    public SearchMetadata metadataForObject(@ApiParam @NotNull Search search) {
-        if (search == null) {
-            throw new IllegalArgumentException("Search must not be null.");
-        }
+    public SearchMetadata metadataForObject(@ApiParam Search search) {
         final Map<String, QueryMetadata> queryMetadatas = StreamEx.of(search.queries()).toMap(Query::id, query -> queryEngine.parse(search, query));
         return SearchMetadata.create(queryMetadatas, Maps.uniqueIndex(search.parameters(), Parameter::name));
     }
