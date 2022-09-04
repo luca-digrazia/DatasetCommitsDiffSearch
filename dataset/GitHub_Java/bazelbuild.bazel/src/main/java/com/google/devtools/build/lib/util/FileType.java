@@ -22,6 +22,7 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import javax.annotation.concurrent.Immutable;
 
@@ -43,12 +44,12 @@ public abstract class FileType implements Predicate<String> {
     return new SingletonFileType(ext);
   }
 
-  public static FileType of(final ImmutableList<String> extensions) {
-    return new ListFileType(extensions);
+  public static FileType of(final List<String> extensions) {
+    return new ListFileType(ImmutableList.copyOf(extensions));
   }
 
   public static FileType of(final String... extensions) {
-    return of(ImmutableList.copyOf(extensions));
+    return of(Arrays.asList(extensions));
   }
 
   @AutoCodec.VisibleForSerialization
@@ -67,7 +68,7 @@ public abstract class FileType implements Predicate<String> {
     }
 
     @Override
-    public ImmutableList<String> getExtensions() {
+    public List<String> getExtensions() {
       return ImmutableList.of(ext);
     }
   }
@@ -94,8 +95,8 @@ public abstract class FileType implements Predicate<String> {
     }
 
     @Override
-    public ImmutableList<String> getExtensions() {
-      return extensions;
+    public List<String> getExtensions() {
+      return ImmutableList.copyOf(extensions);
     }
 
     @Override
@@ -121,12 +122,12 @@ public abstract class FileType implements Predicate<String> {
 
   /**
    * Get a list of filename extensions this matcher handles. The first entry in the list (if
-   * available) is the primary extension that code can use to construct output file names. The list
-   * can be empty for some matchers.
+   * available) is the primary extension that code can use to construct output file names.
+   * The list can be empty for some matchers.
    *
    * @return a list of filename extensions
    */
-  public ImmutableList<String> getExtensions() {
+  public List<String> getExtensions() {
     return ImmutableList.of();
   }
 
