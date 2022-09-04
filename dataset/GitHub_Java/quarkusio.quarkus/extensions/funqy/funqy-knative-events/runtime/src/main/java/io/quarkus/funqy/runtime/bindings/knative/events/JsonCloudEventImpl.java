@@ -62,8 +62,10 @@ class JsonCloudEventImpl<T> extends AbstractCloudEvent<T> implements CloudEvent<
     public String specVersion() {
         if (specVersion == null) {
             JsonNode specVersion = event.get("specversion");
-            if (specVersion != null) {
+            if (specVersion != null && isKnownSpecVersion(specVersion.asText())) {
                 this.specVersion = specVersion.asText();
+            } else {
+                this.specVersion = "1.0";
             }
         }
 
@@ -154,7 +156,7 @@ class JsonCloudEventImpl<T> extends AbstractCloudEvent<T> implements CloudEvent<
     @Override
     public String dataSchema() {
         if (dataSchema == null) {
-            String dsName = specVersion() != null && specVersion().charAt(0) == '0' ? "schemaurl" : "dataschema";
+            String dsName = specVersion().charAt(0) == '0' ? "schemaurl" : "dataschema";
             JsonNode dataSchema = event.get(dsName);
             if (dataSchema != null) {
                 this.dataSchema = dataSchema.asText();
@@ -190,45 +192,43 @@ class JsonCloudEventImpl<T> extends AbstractCloudEvent<T> implements CloudEvent<
             }
         } else if (byte[].class.equals(dataType)) {
             try {
-                if (specVersion() != null && specVersion().charAt(0) == '0') {
-                    boolean isBase64 = false;
-                    if (event.has("datacontentencoding")) {
-                        String dce = event.get("datacontentencoding").asText();
-                        if ("base64".equals(dce)) {
-                            isBase64 = true;
-                        } else {
-                            throw new RuntimeException("Cannot deserialize data for data-content-encoding: '" + dce + "'.");
+                switch (specVersion().charAt(0)) {
+                    case '0':
+                        boolean isBase64 = false;
+                        if (event.has("datacontentencoding")) {
+                            String dce = event.get("datacontentencoding").asText();
+                            if ("base64".equals(dce)) {
+                                isBase64 = true;
+                            } else {
+                                throw new RuntimeException("Cannot deserialize data for data-content-encoding: '" + dce + "'.");
+                            }
                         }
-                    }
-                    if (isBase64) {
+                        if (isBase64) {
+                            if (event.has("data")) {
+                                String txt = event.get("data").asText();
+                                data = (T) Base64.getDecoder().decode(txt);
+                                return data;
+                            }
+                        } else {
+                            if (event.has("data")) {
+                                data = (T) mapper.writeValueAsBytes(event.get("data"));
+                                return data;
+                            }
+                        }
+                    case '1':
                         if (event.has("data")) {
-                            String txt = event.get("data").asText();
+                            data = (T) mapper.writeValueAsBytes(event.get("data"));
+                            return data;
+                        } else if (event.has("data_base64")) {
+                            String txt = event.get("data_base64").asText();
                             data = (T) Base64.getDecoder().decode(txt);
                             return data;
                         } else {
                             return null;
                         }
-                    } else {
-                        if (event.has("data")) {
-                            data = (T) mapper.writeValueAsBytes(event.get("data"));
-                            return data;
-                        } else {
-                            return null;
-                        }
-                    }
-                } else {
-                    if (event.has("data")) {
-                        data = (T) mapper.writeValueAsBytes(event.get("data"));
-                        return data;
-                    } else if (event.has("data_base64")) {
-                        String txt = event.get("data_base64").asText();
-                        data = (T) Base64.getDecoder().decode(txt);
-                        return data;
-                    } else {
-                        return null;
-                    }
+                    default:
+                        throw new RuntimeException("Cannot deserialize data for spec-version: '" + specVersion() + "'.");
                 }
-
             } catch (JsonProcessingException e) {
                 throw new RuntimeException(e);
             }
