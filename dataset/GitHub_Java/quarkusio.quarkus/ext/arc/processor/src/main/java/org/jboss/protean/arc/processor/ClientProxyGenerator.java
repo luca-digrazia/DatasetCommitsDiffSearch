@@ -60,7 +60,7 @@ public class ClientProxyGenerator extends AbstractGenerator {
         String providerTypeName = providerClass.name().toString();
         String baseName = getBaseName(bean, beanClassName);
         String targetPackage = getProxyPackageName(bean);
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + CLIENT_PROXY_SUFFIX;
+        String generatedName = targetPackage.replace(".", "/") + "/" + baseName + CLIENT_PROXY_SUFFIX;
 
         // Foo_ClientProxy extends Foo implements ClientProxy
         List<String> interfaces = new ArrayList<>();
@@ -108,12 +108,12 @@ public class ClientProxyGenerator extends AbstractGenerator {
                 ResultHandle paramTypesArray = forward.newArray(Class.class, forward.load(method.parameters().size()));
                 int idx = 0;
                 for (Type param : method.parameters()) {
-                    forward.writeArrayValue(paramTypesArray, idx++, forward.loadClass(param.name().toString()));
+                    forward.writeArrayValue(paramTypesArray, forward.load(idx++), forward.loadClass(param.name().toString()));
                 }
                 ResultHandle argsArray = forward.newArray(Object.class, forward.load(params.length));
                 idx = 0;
                 for (ResultHandle argHandle : params) {
-                    forward.writeArrayValue(argsArray, idx++, argHandle);
+                    forward.writeArrayValue(argsArray, forward.load(idx++), argHandle);
                 }
                 reflectionRegistration.registerMethod(method);
                 ret = forward.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD, forward.loadClass(method.declaringClass().name().toString()),

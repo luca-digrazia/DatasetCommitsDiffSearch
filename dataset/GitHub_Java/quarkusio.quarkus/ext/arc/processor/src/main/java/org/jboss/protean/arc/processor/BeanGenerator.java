@@ -19,7 +19,9 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
+import javax.enterprise.context.spi.Context;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.spi.InterceptionType;
@@ -31,10 +33,13 @@ import org.jboss.jandex.FieldInfo;
 import org.jboss.jandex.MethodInfo;
 import org.jboss.jandex.Type;
 import org.jboss.logging.Logger;
+import org.jboss.protean.arc.Arc;
+import org.jboss.protean.arc.ArcContainer;
 import org.jboss.protean.arc.CreationalContextImpl;
 import org.jboss.protean.arc.CurrentInjectionPointProvider;
 import org.jboss.protean.arc.InitializedInterceptor;
 import org.jboss.protean.arc.InjectableBean;
+import org.jboss.protean.arc.InjectableContext;
 import org.jboss.protean.arc.InjectableInterceptor;
 import org.jboss.protean.arc.InjectableReferenceProvider;
 import org.jboss.protean.arc.LazyValue;
@@ -70,11 +75,7 @@ public class BeanGenerator extends AbstractGenerator {
 
     private static final AtomicInteger PRODUCER_INDEX = new AtomicInteger();
 
-    protected static final String FIELD_NAME_DECLARING_PROVIDER = "declaringProvider";
-    protected static final String FIELD_NAME_BEAN_TYPES = "types";
-    protected static final String FIELD_NAME_QUALIFIERS = "qualifiers";
-    protected static final String FIELD_NAME_STEREOTYPES = "stereotypes";
-    protected static final String FIELD_NAME_PROXY = "proxy";
+    private static final String FIELD_NAME_DECLARING_PROVIDER = "declaringProvider";
 
     protected final AnnotationLiteralProcessor annotationLiterals;
 
@@ -112,7 +113,7 @@ public class BeanGenerator extends AbstractGenerator {
         ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
         String targetPackage = DotNames.packageName(providerType.name());
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
+        String generatedName = targetPackage.replace(".", "/") + "/" + baseName + BEAN_SUFFIX;
 
         ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.BEAN : null);
 
@@ -120,18 +121,14 @@ public class BeanGenerator extends AbstractGenerator {
         ClassCreator beanCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(InjectableBean.class).build();
 
         // Fields
-        FieldCreator beanTypes = beanCreator.getFieldCreator(FIELD_NAME_BEAN_TYPES, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+        FieldCreator beanTypes = beanCreator.getFieldCreator("beanTypes", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         FieldCreator qualifiers = null;
         if (!bean.getQualifiers().isEmpty() && !bean.hasDefaultQualifiers()) {
-            qualifiers = beanCreator.getFieldCreator(FIELD_NAME_QUALIFIERS, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+            qualifiers = beanCreator.getFieldCreator("qualifiers", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            beanCreator.getFieldCreator(FIELD_NAME_PROXY, LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
-        }
-        FieldCreator stereotypes = null;
-        if (!bean.getStereotypes().isEmpty()) {
-            stereotypes = beanCreator.getFieldCreator(FIELD_NAME_STEREOTYPES, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+            beanCreator.getFieldCreator("proxy", LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
 
         Map<InjectionPointInfo, String> injectionPointToProviderField = new HashMap<>();
@@ -158,10 +155,6 @@ public class BeanGenerator extends AbstractGenerator {
         if (bean.isAlternative()) {
             implementGetAlternativePriority(bean, beanCreator);
         }
-        if (stereotypes != null) {
-            implementGetStereotypes(bean, beanCreator, stereotypes.getFieldDescriptor());
-        }
-        implementGetBeanClass(bean, beanCreator);
 
         beanCreator.close();
         return classOutput.getResources();
@@ -182,7 +175,7 @@ public class BeanGenerator extends AbstractGenerator {
         ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
         String targetPackage = DotNames.packageName(declaringClass.name());
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
+        String generatedName = targetPackage.replace(".", "/") + "/" + baseName + BEAN_SUFFIX;
 
         ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.BEAN : null);
 
@@ -190,18 +183,14 @@ public class BeanGenerator extends AbstractGenerator {
         ClassCreator beanCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(InjectableBean.class).build();
 
         // Fields
-        FieldCreator beanTypes = beanCreator.getFieldCreator(FIELD_NAME_BEAN_TYPES, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+        FieldCreator beanTypes = beanCreator.getFieldCreator("beanTypes", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         FieldCreator qualifiers = null;
         if (!bean.getQualifiers().isEmpty() && !bean.hasDefaultQualifiers()) {
-            qualifiers = beanCreator.getFieldCreator(FIELD_NAME_QUALIFIERS, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+            qualifiers = beanCreator.getFieldCreator("qualifiers", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            beanCreator.getFieldCreator(FIELD_NAME_PROXY, LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
-        }
-        FieldCreator stereotypes = null;
-        if (!bean.getStereotypes().isEmpty()) {
-            stereotypes = beanCreator.getFieldCreator(FIELD_NAME_STEREOTYPES, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+            beanCreator.getFieldCreator("proxy", LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
 
         Map<InjectionPointInfo, String> injectionPointToProviderField = new HashMap<>();
@@ -226,10 +215,6 @@ public class BeanGenerator extends AbstractGenerator {
             implementGetQualifiers(bean, beanCreator, qualifiers.getFieldDescriptor());
         }
         implementGetDeclaringBean(beanCreator);
-        if (stereotypes != null) {
-            implementGetStereotypes(bean, beanCreator, stereotypes.getFieldDescriptor());
-        }
-        implementGetBeanClass(bean, beanCreator);
 
         beanCreator.close();
         return classOutput.getResources();
@@ -250,7 +235,7 @@ public class BeanGenerator extends AbstractGenerator {
         ClassInfo providerClass = bean.getDeployment().getIndex().getClassByName(providerType.name());
         String providerTypeName = providerClass.name().toString();
         String targetPackage = DotNames.packageName(declaringClass.name());
-        String generatedName = targetPackage.replace('.', '/') + "/" + baseName + BEAN_SUFFIX;
+        String generatedName = targetPackage.replace(".", "/") + "/" + baseName + BEAN_SUFFIX;
 
         ResourceClassOutput classOutput = new ResourceClassOutput(name -> name.equals(generatedName) ? SpecialType.BEAN : null);
 
@@ -258,18 +243,14 @@ public class BeanGenerator extends AbstractGenerator {
         ClassCreator beanCreator = ClassCreator.builder().classOutput(classOutput).className(generatedName).interfaces(InjectableBean.class).build();
 
         // Fields
-        FieldCreator beanTypes = beanCreator.getFieldCreator(FIELD_NAME_BEAN_TYPES, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+        FieldCreator beanTypes = beanCreator.getFieldCreator("beanTypes", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         FieldCreator qualifiers = null;
         if (!bean.getQualifiers().isEmpty() && !bean.hasDefaultQualifiers()) {
-            qualifiers = beanCreator.getFieldCreator(FIELD_NAME_QUALIFIERS, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+            qualifiers = beanCreator.getFieldCreator("qualifiers", Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
         if (bean.getScope().isNormal()) {
             // For normal scopes a client proxy is generated too
-            beanCreator.getFieldCreator(FIELD_NAME_PROXY, LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
-        }
-        FieldCreator stereotypes = null;
-        if (!bean.getStereotypes().isEmpty()) {
-            stereotypes = beanCreator.getFieldCreator(FIELD_NAME_STEREOTYPES, Set.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
+            beanCreator.getFieldCreator("proxy", LazyValue.class).setModifiers(ACC_PRIVATE | ACC_FINAL);
         }
 
         createProviderFields(beanCreator, bean, Collections.emptyMap(), Collections.emptyMap());
@@ -290,10 +271,6 @@ public class BeanGenerator extends AbstractGenerator {
             implementGetQualifiers(bean, beanCreator, qualifiers.getFieldDescriptor());
         }
         implementGetDeclaringBean(beanCreator);
-        if (stereotypes != null) {
-            implementGetStereotypes(bean, beanCreator, stereotypes.getFieldDescriptor());
-        }
-        implementGetBeanClass(bean, beanCreator);
 
         beanCreator.close();
         return classOutput.getResources();
@@ -302,12 +279,12 @@ public class BeanGenerator extends AbstractGenerator {
     protected void initMaps(BeanInfo bean, Map<InjectionPointInfo, String> injectionPointToProvider, Map<InterceptorInfo, String> interceptorToProvider) {
         int providerIdx = 1;
         for (InjectionPointInfo injectionPoint : bean.getAllInjectionPoints()) {
-            String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
+            String name = providerName(DotNames.simpleName(injectionPoint.requiredType.name())) + "Provider" + providerIdx++;
             injectionPointToProvider.put(injectionPoint, name);
         }
         if (bean.getDisposer() != null) {
             for (InjectionPointInfo injectionPoint : bean.getDisposer().getInjection().injectionPoints) {
-                String name = providerName(DotNames.simpleName(injectionPoint.getRequiredType().name())) + "Provider" + providerIdx++;
+                String name = providerName(DotNames.simpleName(injectionPoint.requiredType.name())) + "Provider" + providerIdx++;
                 injectionPointToProvider.put(injectionPoint, name);
             }
         }
@@ -393,11 +370,11 @@ public class BeanGenerator extends AbstractGenerator {
                         injectionPointToProviderField.get(injectionPoint), annotationLiterals);
             } else {
                 if (injectionPoint.getResolvedBean().getAllInjectionPoints().stream()
-                        .anyMatch(ip -> BuiltinBean.INJECTION_POINT.getRawTypeDotName().equals(ip.getRequiredType().name()))) {
+                        .anyMatch(ip -> BuiltinBean.INJECTION_POINT.getRawTypeDotName().equals(ip.requiredType.name()))) {
                     // IMPL NOTE: Injection point resolves to a dependent bean that injects InjectionPoint metadata and so we need to wrap the injectable
                     // reference provider
                     ResultHandle requiredQualifiersHandle = constructor.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
-                    for (AnnotationInstance qualifierAnnotation : injectionPoint.getRequiredQualifiers()) {
+                    for (AnnotationInstance qualifierAnnotation : injectionPoint.requiredQualifiers) {
                         BuiltinQualifier qualifier = BuiltinQualifier.of(qualifierAnnotation);
                         if (qualifier != null) {
                             constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, requiredQualifiersHandle, qualifier.getLiteralInstance(constructor));
@@ -413,8 +390,7 @@ public class BeanGenerator extends AbstractGenerator {
                     ResultHandle wrapHandle = constructor.newInstance(
                             MethodDescriptor.ofConstructor(CurrentInjectionPointProvider.class, InjectableReferenceProvider.class, java.lang.reflect.Type.class,
                                     Set.class),
-                            constructor.getMethodParam(paramIdx++), Types.getTypeHandle(constructor, injectionPoint.getRequiredType()),
-                            requiredQualifiersHandle);
+                            constructor.getMethodParam(paramIdx++), Types.getTypeHandle(constructor, injectionPoint.requiredType), requiredQualifiersHandle);
                     constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), injectionPointToProviderField.get(injectionPoint),
                             InjectableReferenceProvider.class.getName()), constructor.getThis(), wrapHandle);
                 } else {
@@ -434,8 +410,9 @@ public class BeanGenerator extends AbstractGenerator {
         for (org.jboss.jandex.Type type : bean.getTypes()) {
             constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, typesHandle, Types.getTypeHandle(constructor, type));
         }
-        ResultHandle unmodifiableTypesHandle = constructor.invokeStaticMethod(MethodDescriptors.COLLECTIONS_UNMODIFIABLE_SET, typesHandle);
-        constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_BEAN_TYPES, Set.class.getName()), constructor.getThis(),
+        ResultHandle unmodifiableTypesHandle = constructor
+                .invokeStaticMethod(MethodDescriptor.ofMethod(Collections.class, "unmodifiableSet", Set.class, Set.class), typesHandle);
+        constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), "beanTypes", Set.class.getName()), constructor.getThis(),
                 unmodifiableTypesHandle);
 
         // Qualifiers
@@ -456,21 +433,10 @@ public class BeanGenerator extends AbstractGenerator {
                             constructor.newInstance(MethodDescriptor.ofConstructor(annotationLiteralName)));
                 }
             }
-            ResultHandle unmodifiableQualifiersHandle = constructor.invokeStaticMethod(MethodDescriptors.COLLECTIONS_UNMODIFIABLE_SET, qualifiersHandle);
-            constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_QUALIFIERS, Set.class.getName()), constructor.getThis(),
+            ResultHandle unmodifiableQualifiersHandle = constructor
+                    .invokeStaticMethod(MethodDescriptor.ofMethod(Collections.class, "unmodifiableSet", Set.class, Set.class), qualifiersHandle);
+            constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), "qualifiers", Set.class.getName()), constructor.getThis(),
                     unmodifiableQualifiersHandle);
-        }
-
-        // Stereotypes
-        if (!bean.getStereotypes().isEmpty()) {
-            ResultHandle stereotypesHandle = constructor.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
-            for (StereotypeInfo stereotype : bean.getStereotypes()) {
-                constructor.invokeInterfaceMethod(MethodDescriptors.SET_ADD, stereotypesHandle,
-                        constructor.loadClass(stereotype.getTarget().name().toString()));
-            }
-            ResultHandle unmodifiableStereotypesHandle = constructor.invokeStaticMethod(MethodDescriptors.COLLECTIONS_UNMODIFIABLE_SET, stereotypesHandle);
-            constructor.writeInstanceField(FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_STEREOTYPES, Set.class.getName()), constructor.getThis(),
-                    unmodifiableStereotypesHandle);
         }
 
         if (bean.getScope().isNormal()) {
@@ -554,8 +520,8 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle paramTypesArray = destroy.newArray(Class.class, destroy.load(referenceHandles.length));
                 ResultHandle argsArray = destroy.newArray(Object.class, destroy.load(referenceHandles.length));
                 for (int i = 0; i < referenceHandles.length; i++) {
-                    destroy.writeArrayValue(paramTypesArray, i, destroy.loadClass(disposerMethod.parameters().get(i).name().toString()));
-                    destroy.writeArrayValue(argsArray, i, referenceHandles[i]);
+                    destroy.writeArrayValue(paramTypesArray, destroy.load(i), destroy.loadClass(disposerMethod.parameters().get(i).name().toString()));
+                    destroy.writeArrayValue(argsArray, destroy.load(i), referenceHandles[i]);
                 }
                 reflectionRegistration.registerMethod(disposerMethod);
                 destroy.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD, destroy.loadClass(disposerMethod.declaringClass().name().toString()),
@@ -603,15 +569,8 @@ public class BeanGenerator extends AbstractGenerator {
         ResultHandle instanceHandle = null;
 
         if (bean.isClassBean()) {
-            List<Injection> methodInjections = new ArrayList<>();
-            List<Injection> fieldInjections = new ArrayList<>();
-            for (Injection injection : bean.getInjections()) {
-                if (injection.isField()) {
-                    fieldInjections.add(injection);
-                } else if(injection.isMethod() && !injection.isConstructor()) {
-                    methodInjections.add(injection);
-                }
-            }
+            List<Injection> methodInjections = bean.getInjections().stream().filter(i -> i.isMethod() && !i.isConstructor()).collect(Collectors.toList());
+            List<Injection> fieldInjections = bean.getInjections().stream().filter(i -> i.isField()).collect(Collectors.toList());
 
             ResultHandle postConstructsHandle = null;
             ResultHandle aroundConstructsHandle = null;
@@ -679,15 +638,13 @@ public class BeanGenerator extends AbstractGenerator {
                 Optional<Injection> constructorInjection = bean.getConstructorInjection();
                 ResultHandle constructorHandle;
                 if (constructorInjection.isPresent()) {
-                    List<String> paramTypes = new ArrayList<>();
-                    for (InjectionPointInfo injectionPoint : constructorInjection.get().injectionPoints) {
-                        paramTypes.add(injectionPoint.getRequiredType().name().toString());
-                    }
+                    List<String> paramTypes = constructorInjection.get().injectionPoints.stream().map(i -> i.requiredType.name().toString())
+                            .collect(Collectors.toList());
                     ResultHandle[] paramsHandles = new ResultHandle[2];
                     paramsHandles[0] = create.loadClass(providerTypeName);
                     ResultHandle paramsArray = create.newArray(Class.class, create.load(paramTypes.size()));
                     for (ListIterator<String> iterator = paramTypes.listIterator(); iterator.hasNext();) {
-                        create.writeArrayValue(paramsArray, iterator.nextIndex(), create.loadClass(iterator.next()));
+                        create.writeArrayValue(paramsArray, create.load(iterator.nextIndex()), create.loadClass(iterator.next()));
                     }
                     paramsHandles[1] = paramsArray;
                     constructorHandle = create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_FIND_CONSTRUCTOR, paramsHandles);
@@ -754,7 +711,7 @@ public class BeanGenerator extends AbstractGenerator {
                             create.load(injectedField.name()), instanceHandle, referenceHandle);
 
                 } else {
-                    create.writeInstanceField(FieldDescriptor.of(providerTypeName, injectedField.name(), injectionPoint.getRequiredType().name().toString()),
+                    create.writeInstanceField(FieldDescriptor.of(providerTypeName, injectedField.name(), injectionPoint.requiredType.name().toString()),
                             instanceHandle, referenceHandle);
                 }
             }
@@ -778,8 +735,8 @@ public class BeanGenerator extends AbstractGenerator {
                     ResultHandle paramTypesArray = create.newArray(Class.class, create.load(referenceHandles.length));
                     ResultHandle argsArray = create.newArray(Object.class, create.load(referenceHandles.length));
                     for (int i = 0; i < referenceHandles.length; i++) {
-                        create.writeArrayValue(paramTypesArray, i, create.loadClass(initializerMethod.parameters().get(i).name().toString()));
-                        create.writeArrayValue(argsArray, i, referenceHandles[i]);
+                        create.writeArrayValue(paramTypesArray, create.load(i), create.loadClass(initializerMethod.parameters().get(i).name().toString()));
+                        create.writeArrayValue(argsArray, create.load(i), referenceHandles[i]);
                     }
                     reflectionRegistration.registerMethod(initializerMethod);
                     create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
@@ -866,8 +823,8 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle paramTypesArray = create.newArray(Class.class, create.load(referenceHandles.length));
                 ResultHandle argsArray = create.newArray(Object.class, create.load(referenceHandles.length));
                 for (int i = 0; i < referenceHandles.length; i++) {
-                    create.writeArrayValue(paramTypesArray, i, create.loadClass(producerMethod.parameters().get(i).name().toString()));
-                    create.writeArrayValue(argsArray, i, referenceHandles[i]);
+                    create.writeArrayValue(paramTypesArray, create.load(i), create.loadClass(producerMethod.parameters().get(i).name().toString()));
+                    create.writeArrayValue(argsArray, create.load(i), referenceHandles[i]);
                 }
                 reflectionRegistration.registerMethod(producerMethod);
                 instanceHandle = create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
@@ -968,7 +925,7 @@ public class BeanGenerator extends AbstractGenerator {
 
             // 1. constructor injection points
             for (int i = 0; i < injectionPoints.size(); i++) {
-                paramTypes.add(injectionPoints.get(i).getRequiredType().name().toString());
+                paramTypes.add(injectionPoints.get(i).requiredType.name().toString());
                 paramHandles.add(providerHandles.get(i));
             }
 
@@ -993,20 +950,18 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle paramTypesArray = creator.newArray(Class.class, creator.load(providerHandles.size()));
                 ResultHandle argsArray = creator.newArray(Object.class, creator.load(providerHandles.size()));
                 for (int i = 0; i < injectionPoints.size(); i++) {
-                    creator.writeArrayValue(paramTypesArray, i, creator.loadClass(injectionPoints.get(i).getRequiredType().name().toString()));
-                    creator.writeArrayValue(argsArray, i, providerHandles.get(i));
+                    creator.writeArrayValue(paramTypesArray, creator.load(i), creator.loadClass(injectionPoints.get(i).requiredType.name().toString()));
+                    creator.writeArrayValue(argsArray, creator.load(i), providerHandles.get(i));
                 }
                 registration.registerMethod(constructor);
                 return creator.invokeStaticMethod(MethodDescriptors.REFLECTIONS_NEW_INSTANCE, creator.loadClass(constructor.declaringClass().name().toString()),
                         paramTypesArray, argsArray);
             } else {
                 // new SimpleBean(foo)
-                String[] paramTypes = new String[injectionPoints.size()];
-                for (ListIterator<InjectionPointInfo> iterator = injectionPoints.listIterator(); iterator.hasNext();) {
-                    InjectionPointInfo injectionPoint = iterator.next();
-                    paramTypes[iterator.previousIndex()] = injectionPoint.getRequiredType().name().toString();
-                }
-                return creator.newInstance(MethodDescriptor.ofConstructor(providerTypeName, paramTypes), providerHandles.toArray(new ResultHandle[0]));
+                return creator.newInstance(
+                        MethodDescriptor.ofConstructor(providerTypeName,
+                                injectionPoints.stream().map(ip -> ip.requiredType.name().toString()).collect(Collectors.toList()).toArray(new String[0])),
+                        providerHandles.toArray(new ResultHandle[0]));
             }
         } else {
             MethodInfo noArgsConstructor = bean.getTarget().asClass().method("<init>");
@@ -1048,15 +1003,17 @@ public class BeanGenerator extends AbstractGenerator {
             get.returnValue(instance);
         } else if (ScopeInfo.SINGLETON.equals(bean.getScope())) {
             // return Arc.container().getContext(getScope()).get(this, new CreationalContextImpl<>())
-            ResultHandle container = get.invokeStaticMethod(MethodDescriptors.ARC_CONTAINER);
+            ResultHandle container = get.invokeStaticMethod(MethodDescriptor.ofMethod(Arc.class, "container", ArcContainer.class));
             ResultHandle creationalContext = get.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
             ResultHandle scope = get.loadClass(bean.getScope().getClazz());
-            ResultHandle context = get.invokeInterfaceMethod(MethodDescriptors.ARC_CONTAINER_GET_CONTEXT, container, scope);
-            get.returnValue(get.invokeInterfaceMethod(MethodDescriptors.CONTEXT_GET, context, get.getThis(), creationalContext));
+            ResultHandle context = get.invokeInterfaceMethod(MethodDescriptor.ofMethod(ArcContainer.class, "getContext", InjectableContext.class, Class.class),
+                    container, scope);
+            get.returnValue(get.invokeInterfaceMethod(MethodDescriptor.ofMethod(Context.class, "get", Object.class, Contextual.class, CreationalContext.class),
+                    context, get.getThis(), creationalContext));
         } else if (bean.getScope().isNormal()) {
             // return proxy.get()
             ResultHandle proxy = get.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(), "proxy", LazyValue.class.getName()), get.getThis());
-            get.returnValue(get.invokeVirtualMethod(MethodDescriptors.LAZY_VALUE_GET, proxy));
+            get.returnValue(get.invokeVirtualMethod(MethodDescriptor.ofMethod(LazyValue.class, "get", Object.class), proxy));
         }
 
         // Bridge method needed
@@ -1107,16 +1064,6 @@ public class BeanGenerator extends AbstractGenerator {
         MethodCreator getAlternativePriority = beanCreator.getMethodCreator("getAlternativePriority", Integer.class).setModifiers(ACC_PUBLIC);
         getAlternativePriority.returnValue(getAlternativePriority.newInstance(MethodDescriptor.ofConstructor(Integer.class, int.class),
                 getAlternativePriority.load(bean.getAlternativePriority())));
-    }
-
-    protected void implementGetStereotypes(BeanInfo bean, ClassCreator beanCreator, FieldDescriptor stereotypesField) {
-        MethodCreator getStereotypes = beanCreator.getMethodCreator("getStereotypes", Set.class).setModifiers(ACC_PUBLIC);
-        getStereotypes.returnValue(getStereotypes.readInstanceField(stereotypesField, getStereotypes.getThis()));
-    }
-
-    protected void implementGetBeanClass(BeanInfo bean, ClassCreator beanCreator) {
-        MethodCreator getBeanClass = beanCreator.getMethodCreator("getBeanClass", Class.class).setModifiers(ACC_PUBLIC);
-        getBeanClass.returnValue(getBeanClass.loadClass(bean.getBeanClass().toString()));
     }
 
 }
