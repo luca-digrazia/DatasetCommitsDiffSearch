@@ -13,10 +13,14 @@
 // limitations under the License.
 package com.google.devtools.build.lib.worker;
 
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.sandbox.SandboxHelpers;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
+import com.google.devtools.build.lib.sandbox.SymlinkedSandboxedSpawn;
+import com.google.devtools.build.lib.sandbox.SynchronousTreeDeleter;
 import com.google.devtools.build.lib.vfs.FileStatus;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -28,7 +32,7 @@ import java.util.Optional;
 import java.util.Set;
 
 /** Creates and manages the contents of a working directory of a persistent worker. */
-final class WorkerExecRoot {
+final class WorkerExecRoot extends SymlinkedSandboxedSpawn {
   private final Path workDir;
   private final SandboxInputs inputs;
   private final SandboxOutputs outputs;
@@ -36,12 +40,23 @@ final class WorkerExecRoot {
 
   public WorkerExecRoot(
       Path workDir, SandboxInputs inputs, SandboxOutputs outputs, Set<PathFragment> workerFiles) {
+    super(
+        workDir,
+        workDir,
+        ImmutableList.of(),
+        ImmutableMap.of(),
+        inputs,
+        outputs,
+        ImmutableSet.of(),
+        new SynchronousTreeDeleter(),
+        /*statisticsPath=*/ null);
     this.workDir = workDir;
     this.inputs = inputs;
     this.outputs = outputs;
     this.workerFiles = workerFiles;
   }
 
+  @Override
   public void createFileSystem() throws IOException {
     workDir.createDirectoryAndParents();
 
@@ -157,9 +172,5 @@ final class WorkerExecRoot {
         }
       }
     }
-  }
-
-  public void copyOutputs(Path execRoot) throws IOException {
-    SandboxHelpers.moveOutputs(outputs, workDir, execRoot);
   }
 }

@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxInputs;
 import com.google.devtools.build.lib.sandbox.SandboxHelpers.SandboxOutputs;
 import com.google.devtools.build.lib.testutil.TestUtils;
-import com.google.devtools.build.lib.vfs.DigestHashFunction;
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
@@ -45,7 +44,7 @@ public class WorkerExecRootTest {
 
   @Before
   public final void setupTestDirs() throws IOException {
-    fileSystem = new InMemoryFileSystem(DigestHashFunction.SHA256);
+    fileSystem = new InMemoryFileSystem();
     testRoot = fileSystem.getPath(TestUtils.tmpDir());
     testRoot.createDirectoryAndParents();
 
@@ -62,17 +61,17 @@ public class WorkerExecRootTest {
     Path workerSh = workspaceDir.getRelative("worker.sh");
     FileSystemUtils.writeContentAsLatin1(workerSh, "#!/bin/bash");
 
-    SandboxInputs inputs =
-        new SandboxInputs(
-            ImmutableMap.of(PathFragment.create("worker.sh"), workerSh),
-            ImmutableSet.of(),
-            ImmutableMap.of());
-    SandboxOutputs outputs =
-        SandboxOutputs.create(
-            ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of());
-    ImmutableSet<PathFragment> workerFiles = ImmutableSet.of(PathFragment.create("worker.sh"));
-    WorkerExecRoot workerExecRoot = new WorkerExecRoot(execRoot);
-    workerExecRoot.createFileSystem(workerFiles, inputs, outputs);
+    WorkerExecRoot workerExecRoot =
+        new WorkerExecRoot(
+            execRoot,
+            new SandboxInputs(
+                ImmutableMap.of(PathFragment.create("worker.sh"), workerSh),
+                ImmutableSet.of(),
+                ImmutableMap.of()),
+            SandboxOutputs.create(
+                ImmutableSet.of(PathFragment.create("very/output.txt")), ImmutableSet.of()),
+            ImmutableSet.of(PathFragment.create("worker.sh")));
+    workerExecRoot.createFileSystem();
 
     // Pretend to do some work inside the execRoot.
     execRoot.getRelative("tempdir").createDirectory();
@@ -82,7 +81,7 @@ public class WorkerExecRootTest {
     FileSystemUtils.writeContentAsLatin1(workerSh, "#!/bin/sh");
 
     // Reuse the same execRoot.
-    workerExecRoot.createFileSystem(workerFiles, inputs, outputs);
+    workerExecRoot.createFileSystem();
 
     assertThat(execRoot.getRelative("worker.sh").exists()).isTrue();
     assertThat(
@@ -102,20 +101,21 @@ public class WorkerExecRootTest {
     FileSystemUtils.ensureSymbolicLink(execRoot.getRelative("dir/input_symlink_2"), "unchanged");
     FileSystemUtils.ensureSymbolicLink(execRoot.getRelative("dir/input_symlink_3"), "whatever");
 
-    SandboxInputs inputs =
-        new SandboxInputs(
-            ImmutableMap.of(),
-            ImmutableSet.of(),
-            ImmutableMap.of(
-                PathFragment.create("dir/input_symlink_1"), PathFragment.create("new_content"),
-                PathFragment.create("dir/input_symlink_2"), PathFragment.create("unchanged")));
-    SandboxOutputs outputs = SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of());
-    ImmutableSet<PathFragment> workerFiles = ImmutableSet.of();
-    WorkerExecRoot workerExecRoot = new WorkerExecRoot(execRoot);
+    WorkerExecRoot workerExecRoot =
+        new WorkerExecRoot(
+            execRoot,
+            new SandboxInputs(
+                ImmutableMap.of(),
+                ImmutableSet.of(),
+                ImmutableMap.of(
+                    PathFragment.create("dir/input_symlink_1"), PathFragment.create("new_content"),
+                    PathFragment.create("dir/input_symlink_2"), PathFragment.create("unchanged"))),
+            SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of()),
+            ImmutableSet.of());
 
     // This should update the `input_symlink_{1,2,3}` according to `SandboxInputs`, i.e., update the
     // first/second (alternatively leave the second unchanged) and delete the third.
-    workerExecRoot.createFileSystem(workerFiles, inputs, outputs);
+    workerExecRoot.createFileSystem();
 
     assertThat(execRoot.getRelative("dir/input_symlink_1").readSymbolicLink())
         .isEqualTo(PathFragment.create("new_content"));
@@ -126,23 +126,23 @@ public class WorkerExecRootTest {
 
   @Test
   public void createsOutputDirs() throws Exception {
-    SandboxInputs inputs =
-        new SandboxInputs(ImmutableMap.of(), ImmutableSet.of(), ImmutableMap.of());
-    SandboxOutputs outputs =
-        SandboxOutputs.create(
-            ImmutableSet.of(
-                PathFragment.create("dir/foo/bar_kt.jar"),
-                PathFragment.create("dir/foo/bar_kt.jdeps"),
-                PathFragment.create("dir/foo/bar_kt-sources.jar")),
-            ImmutableSet.of(
-                PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_sourcegenfiles"),
-                PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_classes"),
-                PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_temp"),
-                PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_generated_classes")));
-    ImmutableSet<PathFragment> workerFiles = ImmutableSet.of();
-    WorkerExecRoot workerExecRoot = new WorkerExecRoot(execRoot);
+    WorkerExecRoot workerExecRoot =
+        new WorkerExecRoot(
+            execRoot,
+            new SandboxInputs(ImmutableMap.of(), ImmutableSet.of(), ImmutableMap.of()),
+            SandboxOutputs.create(
+                ImmutableSet.of(
+                    PathFragment.create("dir/foo/bar_kt.jar"),
+                    PathFragment.create("dir/foo/bar_kt.jdeps"),
+                    PathFragment.create("dir/foo/bar_kt-sources.jar")),
+                ImmutableSet.of(
+                    PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_sourcegenfiles"),
+                    PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_classes"),
+                    PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_temp"),
+                    PathFragment.create("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_generated_classes"))),
+            ImmutableSet.of());
 
-    workerExecRoot.createFileSystem(workerFiles, inputs, outputs);
+    workerExecRoot.createFileSystem();
 
     assertThat(execRoot.getRelative("dir/foo/_kotlinc/bar_kt_jvm/bar_kt_sourcegenfiles").exists())
         .isTrue();
@@ -169,15 +169,16 @@ public class WorkerExecRootTest {
     FileSystemUtils.ensureSymbolicLink(execRoot.getRelative("needed_file"), neededWorkspaceFile);
     FileSystemUtils.ensureSymbolicLink(execRoot.getRelative("other_file"), otherWorkspaceFile);
 
-    SandboxInputs inputs =
-        new SandboxInputs(
-            ImmutableMap.of(PathFragment.create("needed_file"), neededWorkspaceFile),
-            ImmutableSet.of(),
-            ImmutableMap.of());
-    SandboxOutputs outputs = SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of());
-    ImmutableSet<PathFragment> workerFiles = ImmutableSet.of();
-    WorkerExecRoot workerExecRoot = new WorkerExecRoot(execRoot);
-    workerExecRoot.createFileSystem(workerFiles, inputs, outputs);
+    WorkerExecRoot workerExecRoot =
+        new WorkerExecRoot(
+            execRoot,
+            new SandboxInputs(
+                ImmutableMap.of(PathFragment.create("needed_file"), neededWorkspaceFile),
+                ImmutableSet.of(),
+                ImmutableMap.of()),
+            SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of()),
+            ImmutableSet.of());
+    workerExecRoot.createFileSystem();
 
     assertThat(execRoot.getRelative("needed_file").readSymbolicLink())
         .isEqualTo(neededWorkspaceFile.asFragment());
@@ -197,15 +198,17 @@ public class WorkerExecRootTest {
 
     HashMap<PathFragment, Path> inputs = new HashMap<>();
     inputs.put(PathFragment.create("some_file"), null);
-    SandboxInputs sandboxInputs = new SandboxInputs(inputs, ImmutableSet.of(), ImmutableMap.of());
-    SandboxOutputs outputs = SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of());
-    ImmutableSet<PathFragment> workerFiles = ImmutableSet.of();
-    WorkerExecRoot workerExecRoot = new WorkerExecRoot(execRoot);
+    WorkerExecRoot workerExecRoot =
+        new WorkerExecRoot(
+            execRoot,
+            new SandboxInputs(inputs, ImmutableSet.of(), ImmutableMap.of()),
+            SandboxOutputs.create(ImmutableSet.of(), ImmutableSet.of()),
+            ImmutableSet.of());
 
     // This is interesting, because the filepath is a key in `SandboxInputs`, but its value is
     // `null`, which means "create an empty file". So after `createFileSystem` the file should be
     // empty.
-    workerExecRoot.createFileSystem(workerFiles, sandboxInputs, outputs);
+    workerExecRoot.createFileSystem();
 
     assertThat(
             FileSystemUtils.readContent(
