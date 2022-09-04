@@ -40,6 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.inject.Inject;
+import java.net.InetSocketAddress;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -95,7 +96,7 @@ public class GelfOutput implements MessageOutput {
         final int port = configuration.getInt(CK_PORT);
 
 
-        final GelfConfiguration gelfConfiguration = new GelfConfiguration(hostname, port)
+        final GelfConfiguration gelfConfiguration = new GelfConfiguration(new InetSocketAddress(hostname, port))
                 .transport(GelfTransports.valueOf(protocol.toUpperCase()));
 
         LOG.debug("Initializing GELF sender and connecting to {}://{}:{}", protocol, hostname, port);
@@ -124,19 +125,6 @@ public class GelfOutput implements MessageOutput {
         }
     }
 
-    private GelfMessageLevel extractLevel(Object rawLevel) {
-        if (rawLevel != null)
-            if (rawLevel instanceof Number)
-                return GelfMessageLevel.fromNumericLevel(((Number) rawLevel).intValue());
-            if (rawLevel instanceof String)
-                try {
-                    return GelfMessageLevel.fromNumericLevel(Integer.getInteger(rawLevel.toString()));
-                } catch(NumberFormatException e) {
-                    return null;
-                }
-        return null;
-    }
-
     protected GelfMessage toGELFMessage(final Message message) {
         final DateTime timestamp;
         if (message.getField("timestamp") != null || message.getField("timestamp") instanceof DateTime) {
@@ -145,18 +133,17 @@ public class GelfOutput implements MessageOutput {
             timestamp = Tools.iso8601();
         }
 
-        final GelfMessageLevel messageLevel = extractLevel(message.getField("level"));
+        final Integer level = (Integer) message.getField("level");
+        final GelfMessageLevel messageLevel = level == null ? GelfMessageLevel.ALERT : GelfMessageLevel.fromNumericLevel(level);
         final String fullMessage = (String) message.getField("message");
         final String facility = (String) message.getField("facility");
         final String forwarder = GelfOutput.class.getCanonicalName();
 
         final GelfMessageBuilder builder = new GelfMessageBuilder(message.getMessage(), message.getSource())
                 .timestamp(timestamp.getMillis() / 1000.0d)
+                .level(messageLevel)
                 .additionalField("_forwarder", forwarder)
                 .additionalFields(message.getFields());
-
-        if (messageLevel != null)
-            builder.level(messageLevel);
 
         if (fullMessage != null) {
             builder.fullMessage(fullMessage);
