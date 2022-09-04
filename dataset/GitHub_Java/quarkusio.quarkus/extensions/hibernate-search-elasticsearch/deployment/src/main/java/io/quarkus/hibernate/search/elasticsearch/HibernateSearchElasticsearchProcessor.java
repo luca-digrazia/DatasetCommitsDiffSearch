@@ -36,8 +36,8 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationBuildItem;
 import io.quarkus.hibernate.orm.deployment.integration.HibernateOrmIntegrationRuntimeConfiguredBuildItem;
@@ -92,16 +92,15 @@ class HibernateSearchElasticsearchProcessor {
     }
 
     private static void checkConfig(HibernateSearchElasticsearchBuildTimeConfig buildTimeConfig) {
-        if (buildTimeConfig.additionalBackends.defaultBackend.isPresent()) {
-            String defaultBackend = buildTimeConfig.additionalBackends.defaultBackend.get();
+        if (buildTimeConfig.defaultBackend.isPresent()) {
             // we have a default named backend
             if (buildTimeConfig.elasticsearch.version.isPresent()) {
                 throw new ConfigurationError(
                         "quarkus.hibernate-search.elasticsearch.default-backend cannot be used in conjunction with a default backend configuration.");
             }
-            if (!buildTimeConfig.additionalBackends.backends.containsKey(defaultBackend)) {
+            if (!buildTimeConfig.additionalBackends.containsKey(buildTimeConfig.defaultBackend.get())) {
                 throw new ConfigurationError(
-                        "The default backend defined does not exist: " + defaultBackend);
+                        "The default backend defined does not exist: " + buildTimeConfig.defaultBackend.get());
             }
         } else {
             // we are in the default backend case
@@ -112,9 +111,9 @@ class HibernateSearchElasticsearchProcessor {
         }
 
         // we validate that the version is present for all the additional backends
-        if (!buildTimeConfig.additionalBackends.backends.isEmpty()) {
+        if (!buildTimeConfig.additionalBackends.isEmpty()) {
             List<String> additionalBackendsWithNoVersion = new ArrayList<>();
-            for (Entry<String, ElasticsearchBackendBuildTimeConfig> additionalBackendEntry : buildTimeConfig.additionalBackends.backends
+            for (Entry<String, ElasticsearchBackendBuildTimeConfig> additionalBackendEntry : buildTimeConfig.additionalBackends
                     .entrySet()) {
                 if (!additionalBackendEntry.getValue().version.isPresent()) {
                     additionalBackendsWithNoVersion.add(additionalBackendEntry.getKey());
