@@ -18,16 +18,18 @@
 
 package com.tencent.angel.ps.storage.vector;
 
+import com.tencent.angel.common.Serialize;
 import com.tencent.angel.exception.WaitLockTimeOutException;
+import com.tencent.angel.ml.math2.VFactory;
+import com.tencent.angel.ml.math2.vector.IntKeyVector;
+import com.tencent.angel.ml.math2.vector.IntVector;
+import com.tencent.angel.ml.math2.vector.Vector;
 import com.tencent.angel.ml.matrix.RowType;
+import com.tencent.angel.ps.server.data.request.IndexType;
+import com.tencent.angel.ps.server.data.request.InitFunc;
 import com.tencent.angel.ps.server.data.request.UpdateOp;
-import com.tencent.angel.ps.storage.vector.op.GeneralOp;
-import com.tencent.angel.ps.storage.vector.storage.IStorage;
-import com.tencent.angel.psagent.matrix.transport.router.RouterType;
 import com.tencent.angel.utils.StringUtils;
 import io.netty.buffer.ByteBuf;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -39,7 +41,7 @@ import org.apache.commons.logging.LogFactory;
  * worker is split among multiple PS Servers. Therefore, we need startCol and endCol to clarify the
  * position of this ServerRow.
  */
-public abstract class ServerRow implements GeneralOp {
+public abstract class ServerRow implements Serialize {
 
   private static final Log LOG = LogFactory.getLog(ServerRow.class);
   protected int clock;
@@ -50,18 +52,22 @@ public abstract class ServerRow implements GeneralOp {
   protected long estElemNum;
   protected int size;
   protected int rowVersion;
-  protected RouterType routerType;
+  protected boolean useIntKey;
+  /**
+   * Serialize type, 0 dense, 1 sparse
+   */
+  protected int serializeType = -1;
 
+  /**
+   * Serialize key type, 0 int, 1 long
+   */
+  protected int serializeKeyType = -1;
   protected final ReentrantReadWriteLock lock;
   public static volatile transient int maxLockWaitTimeMs = 10000;
   public static volatile transient float sparseToDenseFactor = 0.2f;
-  public static volatile transient boolean useAdaptiveKey = false;
-  public static volatile transient boolean useAdaptiveStorage = false;
+  public static volatile transient boolean useAdaptiveStorage = true;
 
-  /**
-   * Row element storage
-   */
-  protected IStorage storage;
+  protected Vector row;
 
   /**
    * Create a new Server row.
@@ -72,9 +78,8 @@ public abstract class ServerRow implements GeneralOp {
    * @param endCol the end col
    * @param estElemNum the estimated element number, use for sparse vector
    */
-  public ServerRow(int rowId, RowType rowType, long startCol, long endCol,
-      long estElemNum, RouterType routerType) {
-    this(rowId, rowType, startCol, endCol, estElemNum, null, routerType);
+  public ServerRow(int rowId, RowType rowType, long startCol, long endCol, long estElemNum) {
+    this(rowId, rowType, startCol, endCol, estElemNum, null);
   }
 
   /**
@@ -87,7 +92,7 @@ public abstract class ServerRow implements GeneralOp {
    * @param estElemNum the estimated element number, use for sparse vector
    */
   public ServerRow(int rowId, RowType rowType, long startCol, long endCol, long estElemNum,
-      IStorage storage, RouterType routerType) {
+      Vector row) {
     this.rowId = rowId;
     this.rowType = rowType;
     this.startCol = startCol;
@@ -95,23 +100,17 @@ public abstract class ServerRow implements GeneralOp {
     this.rowVersion = 0;
     this.estElemNum = estElemNum;
     this.lock = new ReentrantReadWriteLock();
-    this.storage = storage;
-    this.routerType = routerType;
-  }
-
-  public void init() {
-    if (storage == null) {
-      initStorage();
+    this.row = row;
+    if (this.row == null) {
+      this.row = initRow(startCol, endCol, estElemNum);
     }
   }
-
-  protected abstract void initStorage();
 
   /**
    * Create a empty server row
    */
   public ServerRow() {
-    this(0, RowType.T_DOUBLE_DENSE, 0, 0, 0, RouterType.RANGE);
+    this(0, RowType.T_DOUBLE_DENSE, 0, 0, 0);
   }
 
   /**
@@ -129,7 +128,7 @@ public abstract class ServerRow implements GeneralOp {
    * @return true means use dense storage
    */
   public boolean isDense() {
-    return storage.isDense();
+    return row.isDense();
   }
 
   /**
@@ -138,7 +137,7 @@ public abstract class ServerRow implements GeneralOp {
    * @return true means use sparse storage
    */
   public boolean isSparse() {
-    return storage.isSparse();
+    return row.isSparse();
   }
 
   /**
@@ -147,7 +146,7 @@ public abstract class ServerRow implements GeneralOp {
    * @return true means use sorted sparse storage
    */
   public boolean isSorted() {
-    return storage.isSorted();
+    return row.isSorted();
   }
 
   /**
@@ -159,6 +158,23 @@ public abstract class ServerRow implements GeneralOp {
     return rowType;
   }
 
+  /**
+   * Get inner row
+   *
+   * @return inner row
+   */
+  public Vector getSplit() {
+    return row;
+  }
+
+  /**
+   * Set the inner row
+   *
+   * @param row the new inner row
+   */
+  public void setSplit(Vector row) {
+    this.row = row;
+  }
 
   /**
    * Update row version.
@@ -225,22 +241,61 @@ public abstract class ServerRow implements GeneralOp {
    * Reset the inner row
    */
   public void reset() {
-    storage.clear();
+    row.clear();
   }
 
-  @Override
-  public void clear() {
-    storage.clear();
-  }
+  /**
+   * Update row data
+   *
+   * @param rowType the row type
+   * @param buf the buf
+   */
+  public abstract void update(RowType rowType, ByteBuf buf, UpdateOp op);
 
-  public IStorage getStorage() {
-    return storage;
-  }
+  /**
+   * Gets row size.
+   *
+   * @return the inner row size
+   */
+  public abstract int size();
 
-  @Override
-  public int size() {
-    return storage.size();
-  }
+  /**
+   * Serialize the inner row
+   *
+   * @param buf the dest buffer
+   */
+  protected abstract void serializeRow(ByteBuf buf);
+
+  /**
+   * De-serialize the inner row
+   *
+   * @param buf the source buffer
+   */
+  protected abstract void deserializeRow(ByteBuf buf);
+
+  /**
+   * Get the buffer size for serialize the inner row
+   *
+   * @return the buffer size for serialize the inner row
+   */
+  protected abstract int getRowSpace();
+
+  /**
+   * Clone this ServerRow
+   *
+   * @return the cloned ServerRow
+   */
+  public abstract ServerRow clone();
+
+  /**
+   * Clone this ServerRow if need. For dense vector storage or sorted storage, just return a view;
+   * for sparse storage, just return a <indices, values> array pair which are packaged in sorted
+   * vector storage. It can only be used in scenes that traverse the entire vector.
+   *
+   * @return the cloned ServerRow
+   */
+  public abstract ServerRow
+adaptiveClone();
 
   /**
    * Try to get write lock
@@ -308,17 +363,8 @@ public abstract class ServerRow implements GeneralOp {
     lock.readLock().unlock();
   }
 
-
-  @Override
-  public void update(RowType updateType, ByteBuf buf, UpdateOp op) {
-    startWrite();
-    try {
-      getStorage().update(updateType, buf, op);
-      updateRowVersion();
-    } finally {
-      endWrite();
-    }
-  }
+  public abstract void indexGet(IndexType indexType, int indexSize, ByteBuf in, ByteBuf out,
+      InitFunc func) throws IOException;
 
   /////////////////////////////////////////////////////////////////////////////////////////////////
   //////// network io method, for model transform
@@ -327,112 +373,220 @@ public abstract class ServerRow implements GeneralOp {
   public void serialize(ByteBuf buf) {
     startRead();
     try {
-      // Serailize the head
-      buf.writeInt(rowId);
-      buf.writeInt(rowType.getNumber());
-      buf.writeInt(clock);
-      buf.writeLong(startCol);
-      buf.writeLong(endCol);
-      buf.writeInt(rowVersion);
-
-      // Serialize the storage
-      byte[] data = storage.getClass().getName().getBytes();
-      buf.writeInt(data.length);
-      buf.writeBytes(data);
-      storage.serialize(buf);
+      serializeHead(buf);
+      serializeRow(buf);
     } finally {
       endRead();
     }
   }
 
+  private void serializeHead(ByteBuf buf) {
+    buf.writeInt(rowId);
+    buf.writeInt(clock);
+    buf.writeLong(startCol);
+    buf.writeLong(endCol);
+    buf.writeInt(rowVersion);
+    buf.writeInt(size());
+    buf.writeInt(isDense() ? 0 : 1);
+    buf.writeInt(useIntKey ? 0 : 1);
+  }
 
   @Override
   public void deserialize(ByteBuf buf) {
     startWrite();
     try {
-      // Deserailze the head
-      rowId = buf.readInt();
-      rowType = RowType.valueOf(buf.readInt());
-      clock = buf.readInt();
-      startCol = buf.readLong();
-      endCol = buf.readLong();
-      rowVersion = buf.readInt();
-
-      // Deseralize the storage
-      int size = buf.readInt();
-      byte[] data = new byte[size];
-      buf.readBytes(data);
-      String storageClassName = new String(data);
-
-      storage = ServerRowStorageFactory.getStorage(storageClassName);
-      storage.deserialize(buf);
+      deserializeHead(buf);
+      row = initRow(startCol, endCol, size);
+      deserializeRow(buf);
     } finally {
       endWrite();
     }
+  }
+
+  private void deserializeHead(ByteBuf buf) {
+    rowId = buf.readInt();
+    clock = buf.readInt();
+    startCol = buf.readLong();
+    endCol = buf.readLong();
+    rowVersion = buf.readInt();
+    size = buf.readInt();
+    serializeType = buf.readInt();
+    serializeKeyType = buf.readInt();
+  }
+
+  protected boolean useDenseSerialize() {
+    if (serializeType == -1) {
+      serializeType = isDense() ? 0 : 1;
+    }
+    return serializeType == 0;
+  }
+
+  protected boolean useIntKeySerialize() {
+    if (serializeKeyType == -1) {
+      serializeKeyType = useIntKey ? 0 : 1;
+    }
+    return serializeKeyType == 0;
   }
 
   @Override
   public int bufferLen() {
-    int headLen = 4 * 4 + 2 * 8 + 4 + storage.getClass().getName().getBytes().length;
-    return headLen + storage.bufferLen();
-  }
-
-  @Override
-  public void serialize(DataOutputStream out) throws IOException {
-    startRead();
-    try {
-      // Serailize the head
-      out.writeInt(rowId);
-      out.writeInt(rowType.getNumber());
-      out.writeInt(clock);
-      out.writeLong(startCol);
-      out.writeLong(endCol);
-      out.writeInt(rowVersion);
-
-      // Serialize the storage
-      byte[] data = storage.getClass().getName().getBytes();
-      out.writeInt(data.length);
-      out.write(data);
-      storage.serialize(out);
-    } finally {
-      endRead();
-    }
-  }
-
-
-  @Override
-  public void deserialize(DataInputStream in) throws IOException {
-    startWrite();
-    try {
-      // Deserailze the head
-      rowId = in.readInt();
-      rowType = RowType.valueOf(in.readInt());
-      clock = in.readInt();
-      startCol = in.readLong();
-      endCol = in.readLong();
-      rowVersion = in.readInt();
-
-      // Deseralize the storage
-      int size = in.readInt();
-      byte[] data = new byte[size];
-      in.readFully(data, 0, data.length);
-      String storageClassName = new String(data);
-
-      storage = ServerRowStorageFactory.getStorage(storageClassName);
-      storage.deserialize(in);
-    } finally {
-      endWrite();
-    }
-  }
-
-  @Override
-  public int dataLen() {
-    return bufferLen();
+    return 4 * 6 + 2 * 8 + getRowSpace();
   }
 
   @Override
   public String toString() {
     return "ServerRow [rowId=" + rowId + ", clock=" + clock + ", endCol=" + endCol + ", startCol="
         + startCol + ", rowVersion=" + rowVersion + "]";
+  }
+
+  protected boolean useIntKey() {
+    return row instanceof IntVector;
+  }
+
+  private Vector initRow(long startCol, long endCol, long estElemNum) {
+    Vector ret;
+    switch (rowType) {
+      case T_DOUBLE_SPARSE:
+      case T_DOUBLE_SPARSE_COMPONENT:
+        if (useAdaptiveStorage && estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+          ret = VFactory.denseDoubleVector((int) (endCol - startCol));
+        } else {
+          ret = VFactory.sparseDoubleVector((int) (endCol - startCol), (int) estElemNum);
+        }
+        break;
+
+      case T_DOUBLE_DENSE:
+      case T_DOUBLE_DENSE_COMPONENT:
+        ret = VFactory.denseDoubleVector((int) (endCol - startCol));
+        break;
+
+      case T_FLOAT_SPARSE:
+      case T_FLOAT_SPARSE_COMPONENT:
+        if (useAdaptiveStorage && estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+          ret = VFactory.denseFloatVector((int) (endCol - startCol));
+        } else {
+          ret = VFactory.sparseFloatVector((int) (endCol - startCol), (int) estElemNum);
+        }
+        break;
+
+      case T_FLOAT_DENSE:
+      case T_FLOAT_DENSE_COMPONENT:
+        ret = VFactory.denseFloatVector((int) (endCol - startCol));
+        break;
+
+      case T_INT_SPARSE:
+      case T_INT_SPARSE_COMPONENT:
+        if (useAdaptiveStorage && estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+          ret = VFactory.denseIntVector((int) (endCol - startCol));
+        } else {
+          ret = VFactory.sparseIntVector((int) (endCol - startCol), (int) estElemNum);
+        }
+        break;
+
+      case T_INT_DENSE:
+      case T_INT_DENSE_COMPONENT:
+        ret = VFactory.denseIntVector((int) (endCol - startCol));
+        break;
+
+      case T_LONG_SPARSE:
+      case T_LONG_SPARSE_COMPONENT:
+        if (useAdaptiveStorage && estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+          ret = VFactory.denseLongVector((int) (endCol - startCol));
+        } else {
+          ret = VFactory.sparseLongVector((int) (endCol - startCol), (int) estElemNum);
+        }
+        break;
+
+      case T_LONG_DENSE:
+      case T_LONG_DENSE_COMPONENT:
+        ret = VFactory.denseLongVector((int) (endCol - startCol));
+        break;
+
+      case T_DOUBLE_SPARSE_LONGKEY:
+        if (endCol - startCol < Integer.MAX_VALUE) {
+          if (estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+            ret = VFactory.denseDoubleVector((int) (endCol - startCol));
+          } else {
+            ret = VFactory.sparseDoubleVector((int) (endCol - startCol), (int) estElemNum);
+          }
+        } else {
+          ret = VFactory.sparseLongKeyDoubleVector(endCol - startCol, (int) estElemNum);
+        }
+        break;
+
+      case T_DOUBLE_SPARSE_LONGKEY_COMPONENT:
+        ret = VFactory.sparseLongKeyDoubleVector(endCol - startCol, (int) estElemNum);
+        break;
+
+      case T_FLOAT_SPARSE_LONGKEY:
+        if (endCol - startCol < Integer.MAX_VALUE) {
+          if (estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+            ret = VFactory.denseFloatVector((int) (endCol - startCol));
+          } else {
+            ret = VFactory.sparseFloatVector((int) (endCol - startCol), (int) estElemNum);
+          }
+        } else {
+          ret = VFactory.sparseLongKeyFloatVector(endCol - startCol, (int) estElemNum);
+        }
+        break;
+
+      case T_FLOAT_SPARSE_LONGKEY_COMPONENT:
+        ret = VFactory.sparseLongKeyFloatVector(endCol - startCol, (int) estElemNum);
+        break;
+
+      case T_INT_SPARSE_LONGKEY:
+        if (endCol - startCol < Integer.MAX_VALUE) {
+          if (estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+            ret = VFactory.denseIntVector((int) (endCol - startCol));
+          } else {
+            ret = VFactory.sparseIntVector((int) (endCol - startCol), (int) estElemNum);
+          }
+        } else {
+          ret = VFactory.sparseLongKeyIntVector(endCol - startCol, (int) estElemNum);
+        }
+        break;
+
+      case T_INT_SPARSE_LONGKEY_COMPONENT:
+        ret = VFactory.sparseLongKeyIntVector(endCol - startCol, (int) estElemNum);
+        break;
+
+      case T_LONG_SPARSE_LONGKEY:
+        if (endCol - startCol < Integer.MAX_VALUE) {
+          if (estElemNum > sparseToDenseFactor * (endCol - startCol)) {
+            ret = VFactory.denseLongVector((int) (endCol - startCol));
+          } else {
+            ret = VFactory.sparseLongVector((int) (endCol - startCol), (int) estElemNum);
+          }
+        } else {
+          ret = VFactory.sparseLongKeyLongVector(endCol - startCol, (int) estElemNum);
+        }
+        break;
+
+      case T_LONG_SPARSE_LONGKEY_COMPONENT:
+        ret = VFactory.sparseLongKeyLongVector(endCol - startCol, (int) estElemNum);
+        break;
+
+      case T_DOUBLE_DENSE_LONGKEY_COMPONENT:
+        ret = VFactory.denseDoubleVector((int) (endCol - startCol));
+        break;
+
+      case T_FLOAT_DENSE_LONGKEY_COMPONENT:
+        ret = VFactory.denseFloatVector((int) (endCol - startCol));
+        break;
+
+      case T_INT_DENSE_LONGKEY_COMPONENT:
+        ret = VFactory.denseIntVector((int) (endCol - startCol));
+        break;
+
+      case T_LONG_DENSE_LONGKEY_COMPONENT:
+        ret = VFactory.denseLongVector((int) (endCol - startCol));
+        break;
+
+      default:
+        throw new UnsupportedOperationException(
+            "can not support " + rowType + " type row for ServerIntDoubleRow");
+    }
+    useIntKey = ret instanceof IntKeyVector;
+    return ret;
   }
 }
