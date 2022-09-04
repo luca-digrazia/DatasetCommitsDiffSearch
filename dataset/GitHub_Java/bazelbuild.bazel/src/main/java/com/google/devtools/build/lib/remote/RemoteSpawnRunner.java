@@ -330,4 +330,11 @@ class RemoteSpawnRunner implements SpawnRunner {
     }
     return outputFiles;
   }
+
+  /** Release resources associated with this spawn runner. */
+  public void close() {
+    if (remoteCache != null) {
+      remoteCache.close();
+    }
+  }
 }
