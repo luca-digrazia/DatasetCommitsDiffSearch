@@ -51,7 +51,6 @@ import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.CppSemantics;
-import com.google.devtools.build.lib.rules.cpp.FeatureSpecification;
 import com.google.devtools.build.lib.rules.proto.ProtoCommon;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder;
 import com.google.devtools.build.lib.rules.proto.ProtoCompileActionBuilder.ToolchainInvocation;
@@ -218,7 +217,8 @@ public class CcProtoAspect extends NativeAspectClass implements ConfiguredAspect
       FeatureConfiguration featureConfiguration =
           CcCommon.configureFeatures(
               ruleContext,
-              FeatureSpecification.create(requestedFeatures.build(), unsupportedFeatures.build()),
+              requestedFeatures.build(),
+              unsupportedFeatures.build(),
               CcLibraryHelper.SourceCategory.CC,
               ccToolchain(ruleContext));
       return featureConfiguration;

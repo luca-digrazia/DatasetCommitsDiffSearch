@@ -24,7 +24,6 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.MiddlemanFactory;
 import com.google.devtools.build.lib.analysis.AnalysisUtils;
 import com.google.devtools.build.lib.analysis.FileProvider;
-import com.google.devtools.build.lib.analysis.MakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -38,7 +37,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext.Builder;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
@@ -138,22 +136,17 @@ public class CppHelper {
         !ruleContext.getFeatures().contains("no_copts_tokenization");
 
     List<String> tokens = new ArrayList<>();
-    ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers =
-        ImmutableList.of(new CcFlagsSupplier(ruleContext));
     for (String token : input) {
       try {
         // Legacy behavior: tokenize all items.
         if (tokenization) {
-          ruleContext.tokenizeAndExpandMakeVars(
-              tokens, attributeName, token, makeVariableSuppliers);
+          ruleContext.tokenizeAndExpandMakeVars(tokens, attributeName, token);
         } else {
-          String exp =
-              ruleContext.expandSingleMakeVariable(attributeName, token, makeVariableSuppliers);
+          String exp = ruleContext.expandSingleMakeVariable(attributeName, token);
           if (exp != null) {
             ShellUtils.tokenize(tokens, exp);
           } else {
-            tokens.add(
-                ruleContext.expandMakeVariables(attributeName, token, makeVariableSuppliers));
+            tokens.add(ruleContext.expandMakeVariables(attributeName, token));
           }
         }
       } catch (ShellUtils.TokenizationException e) {
@@ -185,11 +178,7 @@ public class CppHelper {
         ruleContext.attributeError(attrName, "could not resolve label '" + attrValue + "'");
       }
     } else {
-      ruleContext.tokenizeAndExpandMakeVars(
-          values,
-          attrName,
-          attrValue,
-          ImmutableList.of(new CcFlagsSupplier(ruleContext)));
+      ruleContext.tokenizeAndExpandMakeVars(values, attrName, attrValue);
     }
   }
 

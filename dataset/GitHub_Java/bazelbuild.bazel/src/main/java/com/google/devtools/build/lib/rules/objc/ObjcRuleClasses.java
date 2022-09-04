@@ -28,7 +28,6 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -37,6 +36,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.RunfilesProvider;
 import com.google.devtools.build.lib.analysis.TransitiveInfoProvider;
+import com.google.devtools.build.lib.analysis.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
@@ -49,7 +49,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.RuleClassType;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain.RequiresXcodeConfigRule;
@@ -532,6 +531,28 @@ public class ObjcRuleClasses {
   }
 
   /**
+   * Common attributes for {@code objc_*} rules that export an xcode project.
+   */
+  public static class XcodegenRule implements RuleDefinition {
+    @Override
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+      return builder
+          .add(attr("$xcodegen", LABEL).cfg(HOST).exec()
+              .value(env.getToolsLabel("//tools/objc:xcodegen")))
+          .add(attr("$dummy_source", LABEL)
+              .value(env.getToolsLabel("//tools/objc:objc_dummy.mm")))
+          .build();
+    }
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name("$objc_xcodegen_rule")
+          .type(RuleClassType.ABSTRACT)
+          .build();
+    }
+  }
+
+  /**
    * Common attributes for {@code objc_*} rules that depend on a crosstool.
    */
   public static class CrosstoolRule implements RuleDefinition {
@@ -987,17 +1008,22 @@ public class ObjcRuleClasses {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
       return builder
+          // TODO(b/32411441): Restrict the dylibs attribute to take only dylib dependencies.
+          // This will require refactoring ObjcProvider into alternate providers.
           /* <!-- #BLAZE_RULE($apple_dylib_depending_rule).ATTRIBUTE(dylibs) -->
           <p>A list of dynamic library targets to be linked against in this rule and included
           in the final bundle. Libraries which are transitive dependencies of any such dylibs will
           not be statically linked in this target (even if they are otherwise
           transitively depended on via the <code>deps</code> attribute) to avoid duplicate symbols.
+
+          <p>Please note: this attribute should only accept apple dynamic library targets, but
+          currently accepts many other objc or apple targets. This is a bug, so do not rely on this
+          behavior.
           <!-- #END_BLAZE_RULE.ATTRIBUTE -->*/
           .add(attr(DYLIBS_ATTR_NAME, LABEL_LIST)
               .direct_compile_time_input()
-              .mandatoryProviders(ImmutableList.of(
-                  SkylarkProviderIdentifier.forKey(
-                      AppleDynamicFrameworkProvider.SKYLARK_CONSTRUCTOR.getKey())))
+              .mandatoryNativeProviders(
+                  ImmutableList.<Class<? extends TransitiveInfoProvider>>of(ObjcProvider.class))
               .allowedFileTypes()
               .aspect(objcProtoAspect))
           .build();

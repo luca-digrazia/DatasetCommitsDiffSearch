@@ -17,23 +17,23 @@ package com.google.devtools.build.lib.analysis;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.MakeVariableExpander.ExpansionException;
-import com.google.devtools.build.lib.analysis.MakeVariableSupplier.MapBackedMakeVariableSupplier;
-import com.google.devtools.build.lib.analysis.MakeVariableSupplier.PackageBackedMakeVariableSupplier;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.util.Preconditions;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Implements make variable expansion for make variables that depend on the configuration and the
- * target (not on behavior of the {@link ConfiguredTarget} implementation). Retrieved Make variable
- * value can be modified using {@link MakeVariableSupplier}
+ * Implements make variable expansion for make variables that depend on the
+ * configuration and the target (not on behavior of the
+ * {@link ConfiguredTarget} implementation)
  */
 public class ConfigurationMakeVariableContext implements MakeVariableExpander.Context {
-
-  private final ImmutableList<? extends MakeVariableSupplier> allMakeVariableSuppliers;
+  private final Package pkg;
+  private final ImmutableMap<String, String> ruleEnv;
+  private final ImmutableMap<String, String> commandLineEnv;
+  private final ImmutableMap<String, String> globalEnv;
+  private final String platform;
 
   // TODO(b/37567440): Remove when Skylark callers can be updated to get this from
   // CcToolchainProvider. We should use CcCommon.CC_TOOLCHAIN_ATTRIBUTE_NAME, but we didn't want to
@@ -43,65 +43,47 @@ public class ConfigurationMakeVariableContext implements MakeVariableExpander.Co
 
   public ConfigurationMakeVariableContext(
       RuleContext ruleContext, Package pkg, BuildConfiguration configuration) {
-    this(
-        ruleContext.getMakeVariables(defaultMakeVariableAttributes),
-        pkg,
-        configuration,
-        ImmutableList.<MakeVariableSupplier>of());
+    this(ruleContext.getMakeVariables(defaultMakeVariableAttributes), pkg, configuration);
   }
 
   public ConfigurationMakeVariableContext(
       ImmutableMap<String, String> ruleMakeVariables,
       Package pkg,
       BuildConfiguration configuration) {
-    this(ruleMakeVariables, pkg, configuration, ImmutableList.<MakeVariableSupplier>of());
-  }
-
-  public ConfigurationMakeVariableContext(
-      RuleContext ruleContext,
-      Package pkg,
-      BuildConfiguration configuration,
-      Iterable<? extends MakeVariableSupplier> makeVariableSuppliers) {
-    this(
-        ruleContext.getMakeVariables(defaultMakeVariableAttributes),
-        pkg,
-        configuration,
-        makeVariableSuppliers);
-  }
-
-  public ConfigurationMakeVariableContext(
-      ImmutableMap<String, String> ruleMakeVariables,
-      Package pkg,
-      BuildConfiguration configuration,
-      Iterable<? extends MakeVariableSupplier> extraMakeVariableSuppliers) {
-    this.allMakeVariableSuppliers =
-        ImmutableList.<MakeVariableSupplier>builder()
-            .addAll(Preconditions.checkNotNull(extraMakeVariableSuppliers))
-            .add(new MapBackedMakeVariableSupplier(ruleMakeVariables))
-            .add(new MapBackedMakeVariableSupplier(configuration.getCommandLineBuildVariables()))
-            .add(new PackageBackedMakeVariableSupplier(pkg, configuration.getPlatformName()))
-            .add(new MapBackedMakeVariableSupplier(configuration.getGlobalMakeEnvironment()))
-            .build();
+    this.pkg = pkg;
+    this.ruleEnv = ruleMakeVariables;
+    this.commandLineEnv = ImmutableMap.copyOf(configuration.getCommandLineBuildVariables());
+    this.globalEnv = ImmutableMap.copyOf(configuration.getGlobalMakeEnvironment());
+    this.platform = configuration.getPlatformName();
   }
 
   @Override
-  public String lookupMakeVariable(String variableName) throws ExpansionException {
-    for (MakeVariableSupplier supplier : allMakeVariableSuppliers) {
-      String variableValue = supplier.getMakeVariable(variableName);
-      if (variableValue != null) {
-        return variableValue;
-      }
+  public String lookupMakeVariable(String var) throws ExpansionException {
+    String value = ruleEnv.get(var);
+    if (value == null) {
+      value = commandLineEnv.get(var);
     }
-    throw new MakeVariableExpander.ExpansionException("$(" + variableName + ") not defined");
+    if (value == null) {
+      value = pkg.lookupMakeVariable(var, platform);
+    }
+    if (value == null) {
+      value = globalEnv.get(var);
+    }
+    if (value == null) {
+      throw new MakeVariableExpander.ExpansionException("$(" + var + ") not defined");
+    }
+
+    return value;
   }
 
   public SkylarkDict<String, String> collectMakeVariables() {
     Map<String, String> map = new LinkedHashMap<>();
     // Collect variables in the reverse order as in lookupMakeVariable
     // because each update is overwriting.
-    for (MakeVariableSupplier supplier : allMakeVariableSuppliers.reverse()) {
-      map.putAll(supplier.getAllMakeVariables());
-    }
+    map.putAll(pkg.getAllMakeVariables(platform));
+    map.putAll(globalEnv);
+    map.putAll(commandLineEnv);
+    map.putAll(ruleEnv);
     return SkylarkDict.<String, String>copyOf(null, map);
   }
 }

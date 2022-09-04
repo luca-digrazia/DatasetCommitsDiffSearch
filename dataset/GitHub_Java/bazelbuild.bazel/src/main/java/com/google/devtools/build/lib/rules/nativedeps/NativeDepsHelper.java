@@ -15,7 +15,6 @@
 package com.google.devtools.build.lib.rules.nativedeps;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
 import com.google.devtools.build.lib.analysis.RuleContext;
@@ -23,16 +22,13 @@ import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.rules.cpp.ArtifactCategory;
-import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppBuildInfo;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
 import com.google.devtools.build.lib.rules.cpp.CppLinkActionBuilder;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.cpp.Link;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkStaticness;
@@ -204,10 +200,8 @@ public abstract class NativeDepsHelper {
     }
     FdoSupportProvider fdoSupport =
         CppHelper.getFdoSupportUsingDefaultCcToolchainAttribute(ruleContext);
-    FeatureConfiguration featureConfiguration = CcCommon.configureFeatures(ruleContext, toolchain);
     CppLinkActionBuilder builder =
-        new CppLinkActionBuilder(
-            ruleContext, sharedLibrary, configuration, toolchain, fdoSupport, featureConfiguration);
+        new CppLinkActionBuilder(ruleContext, sharedLibrary, configuration, toolchain, fdoSupport);
     if (useDynamicRuntime) {
       builder.setRuntimeInputs(ArtifactCategory.DYNAMIC_LIBRARY,
           toolchain.getDynamicRuntimeLinkMiddleman(), toolchain.getDynamicRuntimeLinkInputs());
@@ -215,36 +209,19 @@ public abstract class NativeDepsHelper {
       builder.setRuntimeInputs(ArtifactCategory.STATIC_LIBRARY,
           toolchain.getStaticRuntimeLinkMiddleman(), toolchain.getStaticRuntimeLinkInputs());
     }
-    ImmutableMap.Builder<Artifact, Artifact> ltoBitcodeFilesMap = new ImmutableMap.Builder<>();
-    for (LibraryToLink lib : linkerInputs) {
-      if (!lib.getLTOBitcodeFiles().isEmpty()) {
-        ltoBitcodeFilesMap.putAll(lib.getLTOBitcodeFiles());
-      }
-    }
-    builder
-        .setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY)
-        .setCrosstoolInputs(toolchain.getLink())
-        .addLibraries(linkerInputs)
-        .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
-        .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
-        .setLibraryIdentifier(libraryIdentifier)
-        .addLinkopts(linkopts)
-        .setNativeDeps(true)
-        .addLinkstamps(linkstamps)
-        .addLTOBitcodeFiles(ltoBitcodeFilesMap.build());
+    CppLinkAction linkAction =
+        builder
+            .setLinkArtifactFactory(SHAREABLE_LINK_ARTIFACT_FACTORY)
+            .setCrosstoolInputs(toolchain.getLink())
+            .addLibraries(linkerInputs)
+            .setLinkType(LinkTargetType.DYNAMIC_LIBRARY)
+            .setLinkStaticness(LinkStaticness.MOSTLY_STATIC)
+            .setLibraryIdentifier(libraryIdentifier)
+            .addLinkopts(linkopts)
+            .setNativeDeps(true)
+            .addLinkstamps(linkstamps)
+            .build();
 
-    if (!builder.getLtoBitcodeFiles().isEmpty()
-        && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
-      builder.setLTOIndexing(true);
-      builder.setUsePicForLTOBackendActions(CppHelper.usePic(ruleContext, false));
-      builder.setUseFissionForLTOBackendActions(
-          ruleContext.getFragment(CppConfiguration.class).useFission());
-      CppLinkAction indexAction = builder.build();
-      ruleContext.registerAction(indexAction);
-      builder.setLTOIndexing(false);
-    }
-
-    CppLinkAction linkAction = builder.build();
     ruleContext.registerAction(linkAction);
     Artifact linkerOutput = linkAction.getPrimaryOutput();
 
