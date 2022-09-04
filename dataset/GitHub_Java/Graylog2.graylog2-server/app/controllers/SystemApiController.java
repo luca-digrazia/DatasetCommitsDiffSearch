@@ -1,21 +1,3 @@
-/*
- * Copyright 2013 TORCH UG
- *
- * This file is part of Graylog2.
- *
- * Graylog2 is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- *
- * Graylog2 is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
- */
 package controllers;
 
 import com.google.common.collect.Lists;
@@ -36,18 +18,20 @@ public class SystemApiController extends AuthenticatedController {
 
     @Inject
     private NodeService nodeService;
-    @Inject
-    private ClusterService clusterService;
-    @Inject
-    private MessagesService messagesService;
 
     public Result fields() {
-        Set<String> fields = messagesService.getMessageFields();
+        try {
+            Set<String> fields = Core.getMessageFields();
 
-        Map<String, Set<String>> result = Maps.newHashMap();
-        result.put("fields", fields);
+            Map<String, Set<String>> result = Maps.newHashMap();
+            result.put("fields", fields);
 
-        return ok(new Gson().toJson(result)).as("application/json");
+            return ok(new Gson().toJson(result)).as("application/json");
+        } catch (IOException e) {
+            return internalServerError("io exception");
+        } catch (APIException e) {
+            return internalServerError("api exception " + e);
+        }
     }
 
     public Result jobs() {
@@ -86,33 +70,30 @@ public class SystemApiController extends AuthenticatedController {
         }
     }
 
-    public Result deleteNotification(String notificationType) {
+    public Result totalThroughput() {
         try {
-            Notification.delete(Notification.Type.valueOf(notificationType.toUpperCase()));
-            return ok();
-        } catch (IllegalArgumentException e1) {
-            return notFound("no such notification type");
-        } catch (APIException e2) {
-            return internalServerError("api exception " + e2);
-        } catch (IOException e3) {
+            Map<String, Object> result = Maps.newHashMap();
+            result.put("throughput", Throughput.getTotal());
+
+            return ok(new Gson().toJson(result)).as("application/json");
+        } catch (IOException e) {
             return internalServerError("io exception");
+        } catch (APIException e) {
+            return internalServerError("api exception " + e);
         }
     }
 
-    public Result totalThroughput() {
-        Map<String, Object> result = Maps.newHashMap();
-        result.put("throughput", clusterService.getClusterThroughput());
-
-        return ok(new Gson().toJson(result)).as("application/json");
-    }
-
     public Result nodeThroughput(String nodeId) {
-        Map<String, Object> result = Maps.newHashMap();
-        final Node node = nodeService.loadNode(nodeId);
-        int throughput = node.getThroughput();
-        result.put("throughput", throughput);
+        try {
+            Map<String, Object> result = Maps.newHashMap();
+            result.put("throughput", Throughput.get(nodeService.loadNode(nodeId)));
 
-        return ok(new Gson().toJson(result)).as("application/json");
+            return ok(new Gson().toJson(result)).as("application/json");
+        } catch (IOException e) {
+            return internalServerError("io exception");
+        } catch (APIException e) {
+            return internalServerError("api exception " + e);
+        }
     }
 
     public Result pauseMessageProcessing() {

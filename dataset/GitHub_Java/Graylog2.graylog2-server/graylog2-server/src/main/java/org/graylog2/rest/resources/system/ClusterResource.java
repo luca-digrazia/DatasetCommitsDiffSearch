@@ -44,6 +44,7 @@ public class ClusterResource extends RestResource {
     private static final Logger LOG = LoggerFactory.getLogger(ClusterResource.class);
 
     @GET @Timed
+    @Path("/")
     @ApiOperation(value = "List all active nodes in this cluster.")
     @Produces(MediaType.APPLICATION_JSON)
     public String nodes() {
@@ -92,8 +93,10 @@ public class ClusterResource extends RestResource {
 
         m.put("id", node.getNodeId());
         m.put("is_master", node.isMaster());
+        m.put("hostname", Tools.getLocalCanonicalHostname());
         m.put("transport_address", node.getTransportAddress());
         m.put("last_seen", Tools.getISO8601String(node.getLastSeen()));
+        m.put("is_processing", core.isProcessing());
 
         // Only meant to be used for representation. Not a real ID.
         m.put("short_node_id", node.getShortNodeId());

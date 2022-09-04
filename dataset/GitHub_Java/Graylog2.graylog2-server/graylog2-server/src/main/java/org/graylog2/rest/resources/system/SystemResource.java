@@ -60,8 +60,6 @@ public class SystemResource extends RestResource {
         result.put("server_id", core.getNodeId());
        	result.put("version", Core.GRAYLOG2_VERSION);
         result.put("started_at", core.getStartedAt().toString());
-        result.put("is_processing", core.isProcessing());
-        result.put("hostname", Tools.getLocalCanonicalHostname());
 
         return json(result);
     }
@@ -73,7 +71,7 @@ public class SystemResource extends RestResource {
     @Produces(MediaType.APPLICATION_JSON)
     public String fields() {
         Map<String, Object> result = Maps.newHashMap();
-        result.put("fields", core.getIndexer().indices().getAllMessageFields());
+        result.put("fields", core.getIndexer().getAllMessageFields());
 
         return json(result);
     }
