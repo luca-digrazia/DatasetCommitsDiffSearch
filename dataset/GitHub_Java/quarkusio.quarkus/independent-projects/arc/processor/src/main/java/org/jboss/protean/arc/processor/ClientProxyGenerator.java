@@ -41,6 +41,8 @@ import org.jboss.protean.arc.CreationalContextImpl;
 import org.jboss.protean.arc.InjectableBean;
 import org.jboss.protean.arc.InjectableContext;
 import org.jboss.protean.arc.processor.ResourceOutput.Resource;
+import org.jboss.protean.gizmo.AssignableResultHandle;
+import org.jboss.protean.gizmo.BytecodeCreator;
 import org.jboss.protean.gizmo.ClassCreator;
 import org.jboss.protean.gizmo.DescriptorUtils;
 import org.jboss.protean.gizmo.FieldCreator;
@@ -103,7 +105,9 @@ public class ClientProxyGenerator extends AbstractGenerator {
 
         for (MethodInfo method : getDelegatingMethods(bean)) {
 
-            MethodCreator forward = clientProxy.getMethodCreator(MethodDescriptor.of(method));
+            MethodDescriptor originalMethodDescriptor = MethodDescriptor.of(method);
+
+            MethodCreator forward = clientProxy.getMethodCreator(originalMethodDescriptor);
 
             // Exceptions
             for (Type exception : method.exceptions()) {
@@ -119,6 +123,11 @@ public class ClientProxyGenerator extends AbstractGenerator {
                     .invokeVirtualMethod(MethodDescriptor.ofMethod(generatedName, "delegate", DescriptorUtils.typeToString(providerType)), forward.getThis());
             ResultHandle ret;
 
+            /**
+             * Note that we don't have to check for default interface methods if this is an interface,
+             * as it just works, and the reflection case cannot be true since it's not possible to have
+             * non-public default interface methods.
+             */
             if (isInterface) {
                 ret = forward.invokeInterfaceMethod(method, delegate, params);
             } else if (isReflectionFallbackNeeded(method, targetPackage)) {
@@ -137,7 +146,13 @@ public class ClientProxyGenerator extends AbstractGenerator {
                 ret = forward.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD, forward.loadClass(method.declaringClass().name().toString()),
                         forward.load(method.name()), paramTypesArray, delegate, argsArray);
             } else {
-                ret = forward.invokeVirtualMethod(method, delegate, params);
+                // make sure we do not use the original method descriptor as it could point to
+                // a default interface method containing class: make sure we invoke it on the provider type.
+                MethodDescriptor virtualMethod = MethodDescriptor.ofMethod(providerTypeName, 
+                                                                           originalMethodDescriptor.getName(), 
+                                                                           originalMethodDescriptor.getReturnType(), 
+                                                                           originalMethodDescriptor.getParameterTypes());
+                ret = forward.invokeVirtualMethod(virtualMethod, delegate, params);
             }
             // Finally write the bytecode
             forward.returnValue(ret);
@@ -165,10 +180,13 @@ public class ClientProxyGenerator extends AbstractGenerator {
         // getContext()
         ResultHandle context = creator.invokeInterfaceMethod(MethodDescriptor.ofMethod(ArcContainer.class, "getContext", InjectableContext.class, Class.class),
                 container, scope);
-        // new CreationalContextImpl<>()
-        ResultHandle creationContext = creator.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
-        ResultHandle result = creator.invokeInterfaceMethod(MethodDescriptors.CONTEXT_GET, context, bean, creationContext);
-        creator.returnValue(result);
+        AssignableResultHandle ret = creator.createVariable(Object.class);
+        creator.assign(ret, creator.invokeInterfaceMethod(MethodDescriptors.CONTEXT_GET_IF_PRESENT, context, bean));
+        BytecodeCreator isNullBranch = creator.ifNull(ret).trueBranch();
+        // Create a new contextual instance - new CreationalContextImpl<>()
+        ResultHandle creationContext = isNullBranch.newInstance(MethodDescriptor.ofConstructor(CreationalContextImpl.class));
+        isNullBranch.assign(ret, isNullBranch.invokeInterfaceMethod(MethodDescriptors.CONTEXT_GET, context, bean, creationContext));
+        creator.returnValue(ret);
     }
 
     void implementGetContextualInstance(ClassCreator clientProxy, String providerTypeName) {
@@ -186,7 +204,8 @@ public class ClientProxyGenerator extends AbstractGenerator {
             MethodInfo producerMethod = bean.getTarget().get().asMethod();
             Map<TypeVariable, Type> resolved = Collections.emptyMap();
             ClassInfo returnTypeClass = bean.getDeployment().getIndex().getClassByName(producerMethod.returnType().name());
-            if (!returnTypeClass.typeParameters().isEmpty()) {
+            if (!returnTypeClass.typeParameters().isEmpty() && !Modifier.isInterface(returnTypeClass.flags())) {
+                // Build the resolved map iff the return type is a parameterized class
                 resolved = Types.buildResolvedMap(producerMethod.returnType().asParameterizedType().arguments(), returnTypeClass.typeParameters(),
                         Collections.emptyMap());
             }
@@ -199,6 +218,8 @@ public class ClientProxyGenerator extends AbstractGenerator {
                 resolved = Types.buildResolvedMap(producerField.type().asParameterizedType().arguments(), fieldClass.typeParameters(), Collections.emptyMap());
             }
             Methods.addDelegatingMethods(bean.getDeployment().getIndex(), fieldClass, resolved, methods);
+        } else if (bean.isSynthetic()) {
+            Methods.addDelegatingMethods(bean.getDeployment().getIndex(), bean.getImplClazz(), Collections.emptyMap(), methods);
         }
         return methods.values();
     }

@@ -44,6 +44,8 @@ import javax.enterprise.inject.spi.Bean;
 import javax.enterprise.inject.spi.BeanManager;
 import javax.enterprise.inject.spi.CDI;
 import javax.enterprise.inject.spi.InjectionPoint;
+import javax.enterprise.inject.spi.InterceptionType;
+import javax.enterprise.inject.spi.Interceptor;
 import javax.enterprise.util.TypeLiteral;
 import javax.inject.Singleton;
 
@@ -63,7 +65,7 @@ class ArcContainerImpl implements ArcContainer {
     private final AtomicBoolean running;
 
     private final List<InjectableBean<?>> beans;
-
+    private final List<InjectableInterceptor<?>> interceptors;
     private final List<InjectableObserverMethod<?>> observers;
 
     private final Map<Class<? extends Annotation>, InjectableContext> contexts;
@@ -78,12 +80,20 @@ class ArcContainerImpl implements ArcContainer {
         id = UUID.randomUUID().toString();
         running = new AtomicBoolean(true);
         beans = new ArrayList<>();
+        interceptors = new ArrayList<>();
         observers = new ArrayList<>();
         for (ComponentsProvider componentsProvider : ServiceLoader.load(ComponentsProvider.class)) {
             Components components = componentsProvider.getComponents();
-            beans.addAll(components.getBeans());
+            for (InjectableBean<?> bean : components.getBeans()) {
+                if (bean instanceof InjectableInterceptor) {
+                    interceptors.add((InjectableInterceptor<?>) bean);
+                } else {
+                    beans.add(bean);
+                }
+            }
             observers.addAll(components.getObservers());
         }
+        Collections.sort(interceptors, (i1, i2) -> Integer.compare(i2.getPriority(), i1.getPriority()));
         contexts = new HashMap<>();
         contexts.put(ApplicationScoped.class, new ApplicationContext());
         contexts.put(Singleton.class, new SingletonContext());
@@ -106,7 +116,7 @@ class ArcContainerImpl implements ArcContainer {
         EventImpl.createNotifier(Object.class, Object.class, qualifiers, this).notify(toString());
         // Configure CDIProvider used for CDI.current()
         CDI.setCDIProvider(new ArcCDIProvider());
-        LOGGER.infof("ArC DI container initialized [beans=%s, observers=%s]", beans.size(), observers.size());
+        LOGGER.debugf("ArC DI container initialized [beans=%s, observers=%s]", beans.size(), observers.size());
     }
 
     @Override
@@ -138,18 +148,7 @@ class ArcContainerImpl implements ArcContainer {
         return new Supplier<InstanceHandle<T>>() {
             @Override
             public InstanceHandle<T> get() {
-                CreationalContextImpl<T> creationalContext = new CreationalContextImpl<>();
-                InjectionPoint prev = InjectionPointProvider.CURRENT.get();
-                InjectionPointProvider.CURRENT.set(CurrentInjectionPointProvider.EMPTY);
-                try {
-                    return new InstanceHandleImpl<T>(bean, bean.get(creationalContext), creationalContext, creationalContext);
-                } finally {
-                    if (prev != null) {
-                        InjectionPointProvider.CURRENT.set(prev);
-                    } else {
-                        InjectionPointProvider.CURRENT.remove();
-                    }
-                }
+                return beanInstanceHandle(bean, null); 
             }
         };
     }
@@ -190,7 +189,6 @@ class ArcContainerImpl implements ArcContainer {
     @Override
     public Runnable withinRequest(Runnable action) {
         return () -> {
-            requireRunning();
             ManagedContext requestContext = requestContext();
             if (requestContext.isActive()) {
                 action.run();
@@ -208,7 +206,6 @@ class ArcContainerImpl implements ArcContainer {
     @Override
     public <T> Supplier<T> withinRequest(Supplier<T> action) {
         return () -> {
-            requireRunning();
             ManagedContext requestContext = requestContext();
             if (requestContext.isActive()) {
                 return action.get();
@@ -234,28 +231,25 @@ class ArcContainerImpl implements ArcContainer {
                 + contexts.size() + "]";
     }
 
-    void shutdown() {
-        if (running.compareAndSet(true, false)) {
-            synchronized (this) {
-                // Make sure all dependent bean instances obtained via CDI.current() are destroyed correctly
-                CDI<?> cdi = CDI.current();
-                if (cdi instanceof ArcCDI) {
-                    ArcCDI arcCdi = (ArcCDI) cdi;
-                    arcCdi.destroy();
-                }
-                // Destroy contexts
-                contexts.get(ApplicationScoped.class)
-                        .destroy();
-                contexts.get(Singleton.class)
-                        .destroy();
-                ((RequestContext) contexts.get(RequestScoped.class)).terminate();
-                // Clear caches
-                contexts.clear();
-                beans.clear();
-                resolved.clear();
-                observers.clear();
-                LOGGER.infof("ArC DI container shut down");
+    synchronized void shutdown() {
+        if (running.get()) {
+            // Make sure all dependent bean instances obtained via CDI.current() are destroyed correctly
+            CDI<?> cdi = CDI.current();
+            if (cdi instanceof ArcCDI) {
+                ArcCDI arcCdi = (ArcCDI) cdi;
+                arcCdi.destroy();
             }
+            // Destroy contexts
+            contexts.get(ApplicationScoped.class).destroy();
+            contexts.get(Singleton.class).destroy();
+            ((RequestContext) contexts.get(RequestScoped.class)).terminate();
+            // Clear caches
+            contexts.clear();
+            beans.clear();
+            resolved.clear();
+            observers.clear();
+            running.set(false);
+            LOGGER.debugf("ArC DI container shut down");
         }
     }
 
@@ -446,6 +440,29 @@ class ArcContainerImpl implements ArcContainer {
         // Observers with smaller priority values are called first
         Collections.sort(resolvedObservers, InjectableObserverMethod::compare);
         return resolvedObservers;
+    }
+    
+    List<Interceptor<?>> resolveInterceptors(InterceptionType type, Annotation... interceptorBindings) {
+        if (interceptors.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Interceptor<?>> interceptors = new ArrayList<>();
+        for (InjectableInterceptor<?> interceptor : this.interceptors) {
+            if (interceptor.intercepts(type) && hasAllInterceptionBindings(interceptor, interceptorBindings)) {
+                interceptors.add(interceptor);
+            }
+        }
+        return interceptors;
+    }
+    
+    private boolean hasAllInterceptionBindings(InjectableInterceptor<?> interceptor, Annotation[] interceptorBindings) {
+        for (Annotation binding : interceptorBindings) {
+            // The resolution rules are the same for qualifiers
+            if (!Qualifiers.hasQualifier(interceptor.getInterceptorBindings(), binding)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
