@@ -34,11 +34,12 @@ import com.google.devtools.build.lib.actions.ArtifactResolver;
 import com.google.devtools.build.lib.actions.CommandAction;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionInfoSpecifier;
-import com.google.devtools.build.lib.actions.ExecutionRequirements;
+import com.google.devtools.build.lib.actions.Executor;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.extra.CppCompileInfo;
 import com.google.devtools.build.lib.actions.extra.EnvironmentVariable;
 import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
+import com.google.devtools.build.lib.analysis.actions.ExecutionRequirements;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -343,20 +344,19 @@ public class CppCompileAction extends AbstractAction
     this.useHeaderModules = useHeaderModules;
     this.discoversInputs = shouldScanIncludes || cppSemantics.needsDotdInputPruning();
     this.compileCommandLine =
-        CompileCommandLine.builder(
-                sourceFile,
-                outputFile,
-                sourceLabel,
-                copts,
-                coptsFilter,
-                features,
-                actionName,
-                cppConfiguration,
-                dotdFile,
-                cppProvider)
-            .setFeatureConfiguration(featureConfiguration)
-            .setVariables(variables)
-            .build();
+        new CompileCommandLine(
+            sourceFile,
+            outputFile,
+            sourceLabel,
+            copts,
+            coptsFilter,
+            features,
+            featureConfiguration,
+            cppConfiguration,
+            variables,
+            actionName,
+            dotdFile,
+            cppProvider);
     this.actionContext = actionContext;
     this.lipoScannables = lipoScannables;
     this.actionClassId = actionClassId;
@@ -448,21 +448,23 @@ public class CppCompileAction extends AbstractAction
   @Override
   public Iterable<Artifact> discoverInputs(ActionExecutionContext actionExecutionContext)
       throws ActionExecutionException, InterruptedException {
+    Executor executor = actionExecutionContext.getExecutor();
     Iterable<Artifact> initialResult;
 
     actionExecutionContext
+        .getExecutor()
         .getEventBus()
         .post(ActionStatusMessage.analysisStrategy(this));
     try {
       initialResult =
-          actionExecutionContext
+          executor
               .getContext(actionContext)
               .findAdditionalInputs(
                   this, actionExecutionContext, cppSemantics.getIncludeProcessing());
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "Include scanning of rule '" + getOwner().getLabel() + "'",
-          actionExecutionContext.getVerboseFailures(),
+          executor.getVerboseFailures(),
           this);
     }
 
@@ -503,7 +505,7 @@ public class CppCompileAction extends AbstractAction
     // to the set of inputs the caller may need to be aware of.
     Collection<Artifact> result = new HashSet<>();
     ArtifactResolver artifactResolver =
-        actionExecutionContext.getContext(IncludeScanningContext.class).getArtifactResolver();
+        executor.getContext(IncludeScanningContext.class).getArtifactResolver();
     for (Artifact artifact : initialResult) {
       result.addAll(specialInputsHandler.getInputsForIncludedFile(artifact, artifactResolver));
     }
@@ -1153,41 +1155,32 @@ public class CppCompileAction extends AbstractAction
           throws ActionExecutionException, InterruptedException {
     setModuleFileFlags();
 
+    Executor executor = actionExecutionContext.getExecutor();
     CppCompileActionContext.Reply reply;
-    ShowIncludesFilter showIncludesFilterForStdout = null;
-    ShowIncludesFilter showIncludesFilterForStderr = null;
+    ShowIncludesFilter showIncludesFilter = null;
     // If parse_showincludes feature is enabled, instead of parsing dotD file we parse the output of
     // cl.exe caused by /showIncludes option.
     if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
-      showIncludesFilterForStdout = new ShowIncludesFilter(getSourceFile().getFilename());
-      showIncludesFilterForStderr = new ShowIncludesFilter(getSourceFile().getFilename());
-      actionExecutionContext.getFileOutErr().setOutputFilter(showIncludesFilterForStdout);
-      actionExecutionContext.getFileOutErr().setErrorFilter(showIncludesFilterForStderr);
+      showIncludesFilter = new ShowIncludesFilter(getSourceFile().getFilename());
+      actionExecutionContext.getFileOutErr().setOutputFilter(showIncludesFilter);
     }
     try {
-      reply = actionExecutionContext.getContext(actionContext)
-          .execWithReply(this, actionExecutionContext);
+      reply = executor.getContext(actionContext).execWithReply(this, actionExecutionContext);
     } catch (ExecException e) {
-      throw e.toActionExecutionException(
-          "C++ compilation of rule '" + getOwner().getLabel() + "'",
-          actionExecutionContext.getVerboseFailures(),
-          this);
+      throw e.toActionExecutionException("C++ compilation of rule '" + getOwner().getLabel() + "'",
+          executor.getVerboseFailures(), this);
     }
     ensureCoverageNotesFilesExist();
 
     // This is the .d file scanning part.
-    IncludeScanningContext scanningContext =
-        actionExecutionContext.getContext(IncludeScanningContext.class);
-    Path execRoot = actionExecutionContext.getExecRoot();
+    IncludeScanningContext scanningContext = executor.getContext(IncludeScanningContext.class);
+    Path execRoot = executor.getExecRoot();
 
     NestedSet<Artifact> discoveredInputs;
-    if (featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES)) {
+    if (showIncludesFilter != null) {
       discoveredInputs =
-          discoverInputsFromShowIncludesFilters(
-              execRoot,
-              scanningContext.getArtifactResolver(),
-              showIncludesFilterForStdout,
-              showIncludesFilterForStderr);
+          discoverInputsFromShowIncludesFilter(
+              execRoot, scanningContext.getArtifactResolver(), showIncludesFilter);
     } else {
       discoveredInputs =
           discoverInputsFromDotdFiles(execRoot, scanningContext.getArtifactResolver(), reply);
@@ -1205,29 +1198,23 @@ public class CppCompileAction extends AbstractAction
       validateInclusions(
           discoveredInputs,
           actionExecutionContext.getArtifactExpander(),
-          actionExecutionContext.getEventHandler());
+          executor.getEventHandler());
     }
   }
 
   @VisibleForTesting
-  public NestedSet<Artifact> discoverInputsFromShowIncludesFilters(
-      Path execRoot,
-      ArtifactResolver artifactResolver,
-      ShowIncludesFilter showIncludesFilterForStdout,
-      ShowIncludesFilter showIncludesFilterForStderr)
+  public NestedSet<Artifact> discoverInputsFromShowIncludesFilter(
+      Path execRoot, ArtifactResolver artifactResolver, ShowIncludesFilter showIncludesFilter)
       throws ActionExecutionException {
     if (!cppSemantics.needsDotdInputPruning()) {
       return NestedSetBuilder.emptySet(Order.STABLE_ORDER);
     }
-    ImmutableList.Builder<Path> dependencies = new ImmutableList.Builder<>();
-    dependencies.addAll(showIncludesFilterForStdout.getDependencies(execRoot));
-    dependencies.addAll(showIncludesFilterForStderr.getDependencies(execRoot));
     HeaderDiscovery.Builder discoveryBuilder =
         new HeaderDiscovery.Builder()
             .setAction(this)
             .setSourceFile(getSourceFile())
             .setSpecialInputsHandler(specialInputsHandler)
-            .setDependencies(dependencies.build())
+            .setDependencies(showIncludesFilter.getDependencies(execRoot))
             .setPermittedSystemIncludePrefixes(getPermittedSystemIncludePrefixes(execRoot))
             .setAllowedDerivedinputsMap(getAllowedDerivedInputsMap());
 
@@ -1322,7 +1309,7 @@ public class CppCompileAction extends AbstractAction
       throws ActionExecutionException, InterruptedException {
     Iterable<Artifact> scannedIncludes;
     try {
-      scannedIncludes = actionExecutionContext.getContext(actionContext)
+      scannedIncludes = actionExecutionContext.getExecutor().getContext(actionContext)
           .findAdditionalInputs(this, actionExecutionContext,  cppSemantics.getIncludeProcessing());
     } catch (ExecException e) {
       throw e.toActionExecutionException(this);
@@ -1374,10 +1361,6 @@ public class CppCompileAction extends AbstractAction
     }
 
     return message.toString();
-  }
-
-  public CompileCommandLine getCompileCommandLine() {
-    return compileCommandLine;
   }
 
   /**

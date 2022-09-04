@@ -15,7 +15,7 @@
 package com.google.devtools.build.lib.bazel.rules.genrule;
 
 import static com.google.common.truth.Truth.assertThat;
-import static com.google.common.truth.Truth.assertWithMessage;
+import static org.junit.Assert.assertEquals;
 
 import com.google.common.base.Joiner;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
@@ -59,9 +59,10 @@ public class GenRuleCommandSubstitutionTest extends BuildViewTestCase {
       command = m.group("command");
     }
 
-    assertWithMessage("Expected command to be \"" + expected + "\", but found \"" + command + "\"")
-        .that(command)
-        .isEqualTo(expected);
+    assertEquals(
+        "Expected command to be \"" + expected + "\", but found \"" + command + "\"",
+        expected,
+        command);
   }
 
   private void assertExpansionFails(String expectedErrorSuffix, String genrule) throws Exception {
@@ -105,10 +106,10 @@ public class GenRuleCommandSubstitutionTest extends BuildViewTestCase {
     assertExpansionFails("$(locationz) not defined", "//test");
 
     genrule("$(locationz )");
-    assertExpansionFails("$(locationz) not defined", "//test");
+    assertExpansionFails("$(locationz ) not defined", "//test");
 
     genrule("$(locationz foo )");
-    assertExpansionFails("$(locationz) not defined", "//test");
+    assertExpansionFails("$(locationz foo ) not defined", "//test");
   }
 
   @Test
@@ -233,10 +234,10 @@ public class GenRuleCommandSubstitutionTest extends BuildViewTestCase {
     assertExpansionFails("$(locationsz) not defined", "//test");
 
     genrule("$(locationsz )");
-    assertExpansionFails("$(locationsz) not defined", "//test");
+    assertExpansionFails("$(locationsz ) not defined", "//test");
 
     genrule("$(locationsz foo )");
-    assertExpansionFails("$(locationsz) not defined", "//test");
+    assertExpansionFails("$(locationsz foo ) not defined", "//test");
   }
 
   @Test
@@ -447,8 +448,8 @@ public class GenRuleCommandSubstitutionTest extends BuildViewTestCase {
     assertNoEvents();
 
     genrule("$(basename file)");
-    assertExpansionFails("$(basename) not defined", "//test");
-    assertContainsEvent("$(basename) not defined");
+    assertExpansionFails("$(basename file) not defined", "//test");
+    assertContainsEvent("$(basename file) not defined");
   }
 
   @Test

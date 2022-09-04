@@ -31,7 +31,6 @@ import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.collect.ImmutableSortedKeyMap;
 import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.events.EventHandler;
-import com.google.devtools.build.lib.events.ExtendedEventHandler.Postable;
 import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AttributeMap.AcceptsLabelAttribute;
 import com.google.devtools.build.lib.packages.License.DistributionType;
@@ -192,7 +191,6 @@ public class Package {
   private ImmutableSet<String> features;
 
   private ImmutableList<Event> events;
-  private ImmutableList<Postable> posts;
 
   /**
    * Package initialization, part 1 of 3: instantiates a new package with the
@@ -317,7 +315,6 @@ public class Package {
     this.defaultDistributionSet = builder.defaultDistributionSet;
     this.features = ImmutableSortedSet.copyOf(builder.features);
     this.events = ImmutableList.copyOf(builder.events);
-    this.posts = ImmutableList.copyOf(builder.posts);
   }
 
   /**
@@ -431,10 +428,6 @@ public class Package {
    */
   public boolean containsErrors() {
     return containsErrors;
-  }
-
-  public List<Postable> getPosts() {
-    return posts;
   }
 
   public List<Event> getEvents() {
@@ -750,7 +743,6 @@ public class Package {
     private List<String> defaultCopts = null;
     private List<String> features = new ArrayList<>();
     private List<Event> events = Lists.newArrayList();
-    private List<Postable> posts = Lists.newArrayList();
     private boolean containsErrors = false;
 
     private License defaultLicense = License.NO_LICENSE;
@@ -830,10 +822,6 @@ public class Package {
 
     Path getFilename() {
       return filename;
-    }
-
-    public List<Postable> getPosts() {
-      return posts;
     }
 
     public List<Event> getEvents() {
@@ -936,18 +924,6 @@ public class Package {
 
     public boolean containsErrors() {
       return containsErrors;
-    }
-
-    public Builder addPosts(Iterable<Postable> posts) {
-      for (Postable post : posts) {
-        addPost(post);
-      }
-      return this;
-    }
-
-    public Builder addPost(Postable post) {
-      this.posts.add(post);
-      return this;
     }
 
     public Builder addEvents(Iterable<Event> events) {

@@ -91,9 +91,10 @@ public final class RunfilesSupport {
       RuleContext ruleContext,
       Artifact executable,
       Runfiles runfiles,
-      CommandLine args) {
+      CommandLine args,
+      boolean createSymlinks) {
     owningExecutable = Preconditions.checkNotNull(executable);
-    createSymlinks = ruleContext.shouldCreateRunfilesSymlinks();
+    this.createSymlinks = createSymlinks;
 
     // Adding run_under target to the runfiles manifest so it would become part
     // of runfiles tree and would be executable everywhere.
@@ -371,7 +372,22 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, CommandLine.EMPTY, ImmutableList.<MakeVariableSupplier>of()));
+        computeArgs(ruleContext, CommandLine.EMPTY, ImmutableList.<MakeVariableSupplier>of()),
+        ruleContext.shouldCreateRunfilesSymlinks());
+  }
+
+  /**
+   * Creates and returns a {@link RunfilesSupport} object for the given rule and executable. Note
+   * that this method calls back into the passed in rule to obtain the runfiles.
+   */
+  public static RunfilesSupport withExecutable(
+      RuleContext ruleContext, Runfiles runfiles, Artifact executable, boolean createSymlinks) {
+    return new RunfilesSupport(
+        ruleContext,
+        executable,
+        runfiles,
+        computeArgs(ruleContext, CommandLine.EMPTY, ImmutableList.<MakeVariableSupplier>of()),
+        createSymlinks);
   }
 
   /**
@@ -385,7 +401,8 @@ public final class RunfilesSupport {
         executable,
         runfiles,
         computeArgs(
-            ruleContext, CommandLine.of(appendingArgs), ImmutableList.<MakeVariableSupplier>of()));
+            ruleContext, CommandLine.of(appendingArgs), ImmutableList.<MakeVariableSupplier>of()),
+        ruleContext.shouldCreateRunfilesSymlinks());
   }
 
   /**
@@ -398,19 +415,22 @@ public final class RunfilesSupport {
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, appendingArgs, ImmutableList.<MakeVariableSupplier>of()));
+        computeArgs(ruleContext, appendingArgs, ImmutableList.<MakeVariableSupplier>of()),
+        ruleContext.shouldCreateRunfilesSymlinks());
   }
 
   public static RunfilesSupport withExecutable(
       RuleContext ruleContext,
       Runfiles runfiles,
       Artifact executable,
+      boolean createSymlinks,
       ImmutableList<? extends MakeVariableSupplier> makeVariableSuppliers) {
     return new RunfilesSupport(
         ruleContext,
         executable,
         runfiles,
-        computeArgs(ruleContext, CommandLine.EMPTY, makeVariableSuppliers));
+        computeArgs(ruleContext, CommandLine.EMPTY, makeVariableSuppliers),
+        createSymlinks);
   }
 
   private static CommandLine computeArgs(
