@@ -18,6 +18,7 @@ package org.graylog2.indexer.indices;
 
 import com.carrotsearch.hppc.cursors.ObjectObjectCursor;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
 import com.google.common.collect.UnmodifiableIterator;
@@ -93,7 +94,6 @@ import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
 @Singleton
 public class Indices {
     private static final Logger LOG = LoggerFactory.getLogger(Indices.class);
-    private static final String REOPENED_INDEX_SETTING = "graylog2_reopened";
 
     private final Client c;
     private final ElasticsearchConfiguration configuration;
@@ -246,17 +246,13 @@ public class Indices {
     }
 
     public boolean create(String indexName) {
-        return create(indexName, configuration.getShards(), configuration.getReplicas(), Settings.EMPTY);
-    }
-
-    public boolean create(String indexName, int numShards, int numReplicas, Settings customSettings) {
-        final Settings settings = Settings.builder()
-                .put("number_of_shards", numShards)
-                .put("number_of_replicas", numReplicas)
-                .put("analysis.analyzer.analyzer_keyword.tokenizer", "keyword")
-                .put("analysis.analyzer.analyzer_keyword.filter", "lowercase")
-                .put(customSettings)
-                .build();
+        final Map<String, String> keywordLowercase = ImmutableMap.of(
+                "tokenizer", "keyword",
+                "filter", "lowercase");
+        final Map<String, Object> settings = ImmutableMap.of(
+                "number_of_shards", configuration.getShards(),
+                "number_of_replicas", configuration.getReplicas(),
+                "index.analysis.analyzer.analyzer_keyword", keywordLowercase);
 
         // Make sure our index template exists before creating an index!
         ensureIndexTemplate();
@@ -313,14 +309,10 @@ public class Indices {
         c.admin().indices().flush(new FlushRequest(index).force(true)).actionGet();
     }
 
-    public Settings reopenIndexSettings() {
-        return Settings.builder().put(REOPENED_INDEX_SETTING, true).build();
-    }
-
     public void reopenIndex(String index) {
         // Mark this index as re-opened. It will never be touched by retention.
         UpdateSettingsRequest settings = new UpdateSettingsRequest(index);
-        settings.settings(reopenIndexSettings());
+        settings.settings(Collections.<String, Object>singletonMap("graylog2_reopened", true));
         c.admin().indices().updateSettings(settings).actionGet();
 
         // Open index.
@@ -339,7 +331,7 @@ public class Indices {
     }
 
     protected Boolean checkForReopened(IndexMetaData metaData) {
-        return metaData.getSettings().getAsBoolean("index." + REOPENED_INDEX_SETTING, false);
+        return metaData.getSettings().getAsBoolean("index.graylog2_reopened", false);
     }
 
     public Set<String> getClosedIndices() {

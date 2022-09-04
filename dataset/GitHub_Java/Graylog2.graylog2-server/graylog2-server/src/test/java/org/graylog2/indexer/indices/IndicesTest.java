@@ -16,7 +16,6 @@
  */
 package org.graylog2.indexer.indices;
 
-import com.codahale.metrics.MetricRegistry;
 import com.github.joschi.nosqlunit.elasticsearch2.ElasticsearchRule;
 import com.github.joschi.nosqlunit.elasticsearch2.EmbeddedElasticsearch;
 import com.lordofthejars.nosqlunit.annotation.UsingDataSet;
@@ -85,7 +84,7 @@ public class IndicesTest {
 
     @Before
     public void setUp() throws Exception {
-        indices = new Indices(client, CONFIG, new IndexMapping(), new Messages(client, CONFIG, new MetricRegistry()));
+        indices = new Indices(client, CONFIG, new IndexMapping(), new Messages(client, CONFIG));
     }
 
     @Test
