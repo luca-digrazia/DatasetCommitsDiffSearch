@@ -132,12 +132,6 @@ public class NativeImageMojo extends AbstractMojo {
     @Parameter(defaultValue = "false")
     private boolean addAllCharsets;
 
-    @Parameter(defaultValue = "false")
-    private boolean enableFallbackImages;
-
-    @Parameter(defaultValue = "false")
-    private boolean reportExceptionStackTraces;
-
     public NativeImageMojo() {
         MojoLogger.logSupplier = this::getLog;
     }
@@ -167,7 +161,6 @@ public class NativeImageMojo extends AbstractMojo {
                         .setDumpProxies(dumpProxies)
                         .setEnableAllSecurityServices(enableAllSecurityServices)
                         .setEnableCodeSizeReporting(enableCodeSizeReporting)
-                        .setEnableFallbackImages(enableFallbackImages)
                         .setEnableHttpsUrlHandler(enableHttpsUrlHandler)
                         .setEnableHttpUrlHandler(enableHttpUrlHandler)
                         .setEnableIsolates(enableIsolates)
@@ -178,8 +171,7 @@ public class NativeImageMojo extends AbstractMojo {
                         .setFullStackTraces(fullStackTraces)
                         .setGraalvmHome(graalvmHome)
                         .setNativeImageXmx(nativeImageXmx)
-                        .setReportErrorsAtRuntime(reportErrorsAtRuntime)
-                        .setReportExceptionStackTraces(reportExceptionStackTraces))
+                        .setReportErrorsAtRuntime(reportErrorsAtRuntime))
 
                 .build()) {
 

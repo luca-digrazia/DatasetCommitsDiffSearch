@@ -38,13 +38,14 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 
+/**
+ * Creates an example configuration file.
+ */
 @Mojo(name = "create-example-config", defaultPhase = LifecyclePhase.NONE, requiresDependencyResolution = ResolutionScope.COMPILE_PLUS_RUNTIME)
 public class ExampleConfigMojo extends AbstractMojo {
 
-
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     protected MavenProject project;
-
 
     public ExampleConfigMojo() {
         MojoLogger.logSupplier = this::getLog;
@@ -53,7 +54,7 @@ public class ExampleConfigMojo extends AbstractMojo {
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
         try {
-            File out = new File(project.getBasedir(), "src/main/resources/META-INF/example-microprofile-config.properties");
+            File out = new File(project.getBasedir(), "src/main/resources/application.properties");
             out.getParentFile().mkdirs();
 
             Properties properties = new Properties();
@@ -72,7 +73,7 @@ public class ExampleConfigMojo extends AbstractMojo {
                 }
             }
             StringBuilder sb = new StringBuilder("Example quarkus config\n\n");
-            for(Map.Entry<Object, Object> e : new TreeMap<Object, Object>( properties).entrySet()) {
+            for (Map.Entry<Object, Object> e : new TreeMap<Object, Object>(properties).entrySet()) {
                 sb.append("# ")
                         .append(e.getValue().toString().replace("\n", " "))
                         .append("\n#")
@@ -80,13 +81,12 @@ public class ExampleConfigMojo extends AbstractMojo {
                         .append("=\n\n");
             }
             getLog().error("Creating example File at " + out);
-            try(FileOutputStream f = new FileOutputStream(out)) {
+            try (FileOutputStream f = new FileOutputStream(out)) {
                 f.write(sb.toString().getBytes(StandardCharsets.UTF_8));
             }
         } catch (Exception e) {
             throw new MojoExecutionException("Failed to generate config", e);
         }
-
 
     }
 
