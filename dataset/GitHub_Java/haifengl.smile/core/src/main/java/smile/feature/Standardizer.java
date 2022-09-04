@@ -17,7 +17,6 @@
 
 package smile.feature;
 
-import java.util.DoubleSummaryStatistics;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -99,20 +98,15 @@ public class Standardizer implements FeatureTransform {
         }
 
         StructType schema = data.schema();
-        int p = schema.length();
-        double[] mu = new double[p];
-        double[] sd = new double[p];
+        double[] mu = new double[schema.length()];
+        double[] sd = new double[schema.length()];
 
         int n = data.nrow();
-        for (int i = 0; i < p; i++) {
+        for (int i = 0; i < mu.length; i++) {
             if (schema.field(i).isNumeric()) {
-                double sum = 0.0;
-                double squaredSum = 0.0;
-                for (int j = 0; j < n; j++) {
-                    double x = data.getDouble(j, i);
-                    sum += x;
-                    squaredSum += x * x;
-                }
+                final int col = i;
+                double sum = data.stream().mapToDouble(t -> t.getDouble(col)).sum();
+                double squaredSum = data.stream().mapToDouble(t -> t.getDouble(col)).map(x -> x*x).sum();
                 mu[i] = sum / n;
                 sd[i] = Math.sqrt(squaredSum / n - mu[i] * mu[i]);
             }

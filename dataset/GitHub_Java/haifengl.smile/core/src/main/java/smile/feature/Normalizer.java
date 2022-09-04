@@ -104,12 +104,11 @@ public class Normalizer implements FeatureTransform {
                 throw new IllegalStateException("Unknown type of norm: " + norm);
         }
 
-        int p = x.length;
-        double[] y = new double[p];
+        double[] y = new double[x.length];
         if (MathEx.isZero(scale)) {
-            System.arraycopy(x, 0, y, 0, p);
+            System.arraycopy(x, 0, y, 0, x.length);
         } else {
-            for (int i = 0; i < p; i++) {
+            for (int i = 0; i < x.length; i++) {
                 y[i] = x[i] / scale;
             }
         }

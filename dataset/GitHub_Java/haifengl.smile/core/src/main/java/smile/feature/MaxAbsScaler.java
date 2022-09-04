@@ -87,10 +87,9 @@ public class MaxAbsScaler implements FeatureTransform {
         }
 
         StructType schema = data.schema();
-        int p = schema.length();
-        double[] scale = new double[p];
+        double[] scale = new double[schema.length()];
 
-        for (int i = 0; i < p; i++) {
+        for (int i = 0; i < scale.length; i++) {
             if (schema.field(i).isNumeric()) {
                 scale[i] = data.doubleVector(i).stream().map(Math::abs).max().getAsDouble();
             }

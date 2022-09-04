@@ -107,11 +107,10 @@ public class Scaler implements FeatureTransform {
         }
 
         StructType schema = data.schema();
-        int p = schema.length();
-        double[] lo = new double[p];
-        double[] hi = new double[p];
+        double[] lo = new double[schema.length()];
+        double[] hi = new double[schema.length()];
 
-        for (int i = 0; i < p; i++) {
+        for (int i = 0; i < lo.length; i++) {
             if (schema.field(i).isNumeric()) {
                 lo[i] = data.doubleVector(i).stream().min().getAsDouble();
                 hi[i] = data.doubleVector(i).stream().max().getAsDouble();
