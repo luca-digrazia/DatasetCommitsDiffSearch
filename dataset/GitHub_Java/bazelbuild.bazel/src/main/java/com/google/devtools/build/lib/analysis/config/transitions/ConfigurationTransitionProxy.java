@@ -22,6 +22,9 @@ package com.google.devtools.build.lib.analysis.config.transitions;
  */
 @Deprecated
 public enum ConfigurationTransitionProxy implements Transition {
+  /** No transition, i.e., the same configuration as the current. */
+  NONE,
+
   /** Transition from the target configuration to the data configuration. */
   // TODO(bazel-team): Move this elsewhere.
   DATA,

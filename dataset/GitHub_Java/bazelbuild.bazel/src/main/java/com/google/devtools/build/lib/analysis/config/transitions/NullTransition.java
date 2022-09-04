@@ -14,12 +14,13 @@
 package com.google.devtools.build.lib.analysis.config.transitions;
 
 import com.google.devtools.build.lib.analysis.config.BuildOptions;
-import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 
-/** A {@link PatchTransition} to a null configuration. */
+/**
+ * A {@link PatchTransition} to a null configuration.
+ */
 public class NullTransition implements PatchTransition {
 
-  @AutoCodec public static final NullTransition INSTANCE = new NullTransition();
+  public static final NullTransition INSTANCE = new NullTransition();
 
   private NullTransition() {
   }
