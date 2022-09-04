@@ -30,16 +30,12 @@ import com.google.inject.assistedinject.FactoryModuleBuilder;
 import com.google.inject.multibindings.MapBinder;
 import com.google.inject.multibindings.Multibinder;
 import com.google.inject.name.Names;
-import org.graylog2.plugin.dashboards.widgets.WidgetStrategy;
-import org.graylog2.plugin.indexer.retention.RetentionStrategy;
-import org.graylog2.plugin.indexer.rotation.RotationStrategy;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
 import org.graylog2.plugin.inputs.annotations.FactoryClass;
 import org.graylog2.plugin.inputs.codecs.Codec;
 import org.graylog2.plugin.inputs.transports.Transport;
 import org.graylog2.plugin.outputs.MessageOutput;
-import org.graylog2.plugin.security.PasswordAlgorithm;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -193,22 +189,6 @@ public abstract class Graylog2Module extends AbstractModule {
                 });
     }
 
-    protected MapBinder<String, RotationStrategy> rotationStrategiesMapBinder() {
-        return MapBinder.newMapBinder(binder(), String.class, RotationStrategy.class);
-    }
-
-    protected MapBinder<String, RetentionStrategy> retentionStrategyMapBinder() {
-        return MapBinder.newMapBinder(binder(), String.class, RetentionStrategy.class);
-    }
-
-    protected void installRotationStrategy(MapBinder<String, RotationStrategy> mapBinder, Class<? extends RotationStrategy> target) {
-        mapBinder.addBinding(target.getCanonicalName()).to(target);
-    }
-
-    protected void installRetentionStrategy(MapBinder<String, RetentionStrategy> mapBinder, Class<? extends RetentionStrategy> target) {
-        mapBinder.addBinding(target.getCanonicalName()).to(target);
-    }
-
     protected <T extends MessageInput> void installInput(MapBinder<String, MessageInput.Factory<? extends MessageInput>> inputMapBinder,
                                                          Class<T> target,
                                                          Class<? extends MessageInput.Factory<T>> targetFactory) {
@@ -256,25 +236,6 @@ public abstract class Graylog2Module extends AbstractModule {
         installOutput(outputMapBinder, target, factoryClass);
     }
 
-    protected MapBinder<String, WidgetStrategy.Factory<? extends WidgetStrategy>> widgetStrategyBinder() {
-        return MapBinder.newMapBinder(binder(), TypeLiteral.get(String.class), new TypeLiteral<WidgetStrategy.Factory<? extends WidgetStrategy>>(){});
-    }
-
-    protected <T extends WidgetStrategy.Factory> void installWidgetStrategy(MapBinder<String, WidgetStrategy.Factory<? extends WidgetStrategy>> widgetStrategyBinder,
-                                                                            Class<? extends WidgetStrategy> target,
-                                                                            Class<? extends WidgetStrategy.Factory<? extends WidgetStrategy>> targetFactory) {
-        install(new FactoryModuleBuilder().implement(WidgetStrategy.class, target).build(targetFactory));
-        widgetStrategyBinder.addBinding(target.getCanonicalName()).to(Key.get(targetFactory));
-    }
-
-    protected <T extends WidgetStrategy.Factory> void installWidgetStrategyWithAlias(MapBinder<String, WidgetStrategy.Factory<? extends WidgetStrategy>> widgetStrategyBinder,
-                                                                            String key,
-                                                                            Class<? extends WidgetStrategy> target,
-                                                                            Class<? extends WidgetStrategy.Factory<? extends WidgetStrategy>> targetFactory) {
-        installWidgetStrategy(widgetStrategyBinder, target, targetFactory);
-        widgetStrategyBinder.addBinding(key).to(Key.get(targetFactory));
-    }
-
     @Nonnull
     protected Multibinder<Class<? extends DynamicFeature>> jerseyDynamicFeatureBinder() {
         return Multibinder.newSetBinder(binder(), new DynamicFeatureType());
@@ -297,10 +258,6 @@ public abstract class Graylog2Module extends AbstractModule {
 
     protected Multibinder<Service> serviceBinder() {
         return Multibinder.newSetBinder(binder(), Service.class);
-    }
-
-    protected MapBinder<String, PasswordAlgorithm> passwordAlgorithmBinder() {
-        return MapBinder.newMapBinder(binder(), String.class, PasswordAlgorithm.class);
     }
 
     private static class DynamicFeatureType extends TypeLiteral<Class<? extends DynamicFeature>> {}
