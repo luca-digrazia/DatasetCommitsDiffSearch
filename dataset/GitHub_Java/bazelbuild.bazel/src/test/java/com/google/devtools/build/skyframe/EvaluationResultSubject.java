@@ -14,6 +14,8 @@
 package com.google.devtools.build.skyframe;
 
 import static com.google.common.truth.Fact.simpleFact;
+import static com.google.common.truth.Truth.assertWithMessage;
+import static com.google.devtools.build.skyframe.ErrorInfoSubjectFactory.assertThatErrorInfo;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.truth.FailureMetadata;
@@ -46,22 +48,20 @@ public class EvaluationResultSubject extends Subject<EvaluationResultSubject, Ev
   }
 
   public Subject<?, ?> hasEntryThat(SkyKey key) {
-    return check("get(%s)", key).that(actual.get(key));
+    return assertWithMessage("Entry for " + actualAsString()).that(actual.get(key));
   }
 
   public ErrorInfoSubject hasErrorEntryForKeyThat(SkyKey key) {
-    return check("getError(%s)", key)
-        .about(new ErrorInfoSubjectFactory())
-        .that(actual.getError(key));
+    return assertThatErrorInfo(actual.getError(key)).named("Error entry for " + actualAsString());
   }
 
   public IterableSubject hasDirectDepsInGraphThat(SkyKey parent) throws InterruptedException {
-    return check("directDeps(%s)", parent)
+    return assertWithMessage("Direct deps for " + parent + " in " + actualAsString())
         .that(actual.getWalkableGraph().getDirectDeps(ImmutableList.of(parent)).get(parent));
   }
 
   public IterableSubject hasReverseDepsInGraphThat(SkyKey child) throws InterruptedException {
-    return check("reverseDeps(%s)", child)
+    return assertWithMessage("Reverse deps for " + child + " in " + actualAsString())
         .that(actual.getWalkableGraph().getReverseDeps(ImmutableList.of(child)).get(child));
   }
 }

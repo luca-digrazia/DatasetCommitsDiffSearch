@@ -25,7 +25,7 @@ import java.util.List;
 import java.util.Map;
 
 /** Testing Subject for comparing ParsedAndroidData instances. */
-class ParsedAndroidDataSubject extends Subject {
+class ParsedAndroidDataSubject extends Subject<ParsedAndroidDataSubject, ParsedAndroidData> {
 
   private final ParsedAndroidData actual;
 

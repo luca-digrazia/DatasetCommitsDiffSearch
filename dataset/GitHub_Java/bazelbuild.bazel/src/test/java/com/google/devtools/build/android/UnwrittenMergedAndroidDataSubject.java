@@ -21,7 +21,8 @@ import com.google.common.truth.FailureMetadata;
 import com.google.common.truth.Subject;
 import javax.annotation.Nullable;
 
-class UnwrittenMergedAndroidDataSubject extends Subject {
+class UnwrittenMergedAndroidDataSubject
+    extends Subject<UnwrittenMergedAndroidDataSubject, UnwrittenMergedAndroidData> {
 
   static final Subject.Factory<UnwrittenMergedAndroidDataSubject, UnwrittenMergedAndroidData>
       FACTORY = UnwrittenMergedAndroidDataSubject::new;

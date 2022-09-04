@@ -21,7 +21,7 @@ import javax.annotation.Nullable;
 /**
  * {@link Subject} for {@link CycleInfo}. Please add to this class if you need more functionality!
  */
-public class CycleInfoSubject extends Subject {
+public class CycleInfoSubject extends Subject<CycleInfoSubject, CycleInfo> {
   private final CycleInfo actual;
 
   CycleInfoSubject(FailureMetadata failureMetadata, @Nullable CycleInfo cycleInfo) {
@@ -30,10 +30,12 @@ public class CycleInfoSubject extends Subject {
   }
 
   public IterableSubject hasPathToCycleThat() {
-    return check("getPathToCycle()").that(actual.getPathToCycle());
+    return check("getPathToCycle()")
+        .withMessage("Path to cycle in " + actualAsString())
+        .that(actual.getPathToCycle());
   }
 
   public IterableSubject hasCycleThat() {
-    return check("getCycle()").that(actual.getCycle());
+    return check("getCycle()").withMessage("Cycle in " + actualAsString()).that(actual.getCycle());
   }
 }
