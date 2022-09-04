@@ -636,7 +636,8 @@ class OptionsParserImpl {
       value = equalsAt == -1 ? null : arg.substring(equalsAt + 1);
       field = optionsData.getFieldFromName(name);
 
-      // Look for a "no"-prefixed option name: "no<optionName>" or "no_<optionName>".
+      // look for a "no"-prefixed option name: "no<optionname>";
+      // (Undocumented: we also allow --no_foo.  We're generous like that.)
       if (field == null && name.startsWith("no")) {
         name = name.substring(name.startsWith("no_") ? 3 : 2);
         field = optionsData.getFieldFromName(name);

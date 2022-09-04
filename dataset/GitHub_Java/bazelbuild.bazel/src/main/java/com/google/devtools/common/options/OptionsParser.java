@@ -63,29 +63,6 @@ import javax.annotation.Nullable;
 public class OptionsParser implements OptionsProvider {
 
   /**
-   * An unchecked exception thrown when there is a problem constructing a parser, e.g. an error
-   * while validating an {@link Option} field in one of its {@link OptionsBase} subclasses.
-   *
-   * <p>This exception is unchecked because it generally indicates an internal error affecting all
-   * invocations of the program. I.e., any such error should be immediately obvious to the
-   * developer. Although unchecked, we explicitly mark some methods as throwing it as a reminder in
-   * the API.
-   */
-  public static class ConstructionException extends RuntimeException {
-    public ConstructionException(String message) {
-      super(message);
-    }
-
-    public ConstructionException(Throwable cause) {
-      super(cause);
-    }
-
-    public ConstructionException(String message, Throwable cause) {
-      super(message, cause);
-    }
-  }
-
-  /**
    * A cache for the parsed options data. Both keys and values are immutable, so
    * this is always safe. Only access this field through the {@link
    * #getOptionsData} method for thread-safety! The cache is very unlikely to
@@ -96,27 +73,23 @@ public class OptionsParser implements OptionsProvider {
       Maps.newHashMap();
 
   /**
-   * Returns {@link OpaqueOptionsData} suitable for passing along to {@link
-   * #newOptionsParser(OpaqueOptionsData optionsData)}.
+   * Returns {@link OpaqueOptionsData} suitable for passing along to
+   * {@link #newOptionsParser(OpaqueOptionsData optionsData)}.
    *
-   * <p>This is useful when you want to do the work of analyzing the given {@code optionsClasses}
+   * This is useful when you want to do the work of analyzing the given {@code optionsClasses}
    * exactly once, but you want to parse lots of different lists of strings (and thus need to
-   * construct lots of different {@link OptionsParser} instances).
+   * construct lots of different {@link OptionsParser} instances). 
    */
   public static OpaqueOptionsData getOptionsData(
-      ImmutableList<Class<? extends OptionsBase>> optionsClasses) throws ConstructionException {
+      ImmutableList<Class<? extends OptionsBase>> optionsClasses) {
     return getOptionsDataInternal(optionsClasses);
   }
 
   private static synchronized OptionsData getOptionsDataInternal(
-      ImmutableList<Class<? extends OptionsBase>> optionsClasses) throws ConstructionException {
+      ImmutableList<Class<? extends OptionsBase>> optionsClasses) {
     OptionsData result = optionsData.get(optionsClasses);
     if (result == null) {
-      try {
-        result = OptionsData.from(optionsClasses);
-      } catch (Exception e) {
-        throw new ConstructionException(e.getMessage(), e);
-      }
+      result = OptionsData.from(optionsClasses);
       optionsData.put(optionsClasses, result);
     }
     return result;
@@ -135,8 +108,7 @@ public class OptionsParser implements OptionsProvider {
   /**
    * @see #newOptionsParser(Iterable)
    */
-  public static OptionsParser newOptionsParser(Class<? extends OptionsBase> class1)
-      throws ConstructionException {
+  public static OptionsParser newOptionsParser(Class<? extends OptionsBase> class1) {
     return newOptionsParser(ImmutableList.<Class<? extends OptionsBase>>of(class1));
   }
 
@@ -144,15 +116,15 @@ public class OptionsParser implements OptionsProvider {
    * @see #newOptionsParser(Iterable)
    */
   public static OptionsParser newOptionsParser(Class<? extends OptionsBase> class1,
-                                               Class<? extends OptionsBase> class2)
-      throws ConstructionException {
+                                               Class<? extends OptionsBase> class2) {
     return newOptionsParser(ImmutableList.of(class1, class2));
   }
 
-  /** Create a new {@link OptionsParser}. */
+  /**
+   * Create a new {@link OptionsParser}.
+   */
   public static OptionsParser newOptionsParser(
-      Iterable<? extends Class<? extends OptionsBase>> optionsClasses)
-      throws ConstructionException {
+      Iterable<? extends Class<? extends OptionsBase>> optionsClasses) {
     return newOptionsParser(
         getOptionsDataInternal(ImmutableList.<Class<? extends OptionsBase>>copyOf(optionsClasses)));
   }
@@ -190,7 +162,7 @@ public class OptionsParser implements OptionsProvider {
   public void setAllowSingleDashLongOptions(boolean allowSingleDashLongOptions) {
     this.impl.setAllowSingleDashLongOptions(allowSingleDashLongOptions);
   }
-
+  
   /** Enables the Parser to handle params files loacted insinde the provided {@link FileSystem}. */
   public void enableParamsFileSupport(FileSystem fs) {
     this.impl.setArgsPreProcessor(new ParamsFilePreProcessor(fs));
@@ -276,7 +248,7 @@ public class OptionsParser implements OptionsProvider {
       return expansions;
     }
   }
-
+  
   /**
    * The name and value of an option with additional metadata describing its
    * priority, source, whether it was set via an implicit dependency, and if so,
@@ -453,7 +425,9 @@ public class OptionsParser implements OptionsProvider {
     }
 
     boolean isExpansion() {
-      return OptionsData.isExpansionOption(field.getAnnotation(Option.class));
+      Option option = field.getAnnotation(Option.class);
+      return (option.expansion().length > 0
+          || OptionsData.usesExpansionFunction(option));
     }
 
     boolean isImplicitRequirement() {
