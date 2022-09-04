@@ -222,14 +222,13 @@ class MethodLibrary {
   @StarlarkMethod(
       name = "reversed",
       doc =
-          "Returns a new, unfrozen list that contains the elements of the original iterable"
-              + " sequence in reversed order.<pre class=\"language-python\">reversed([3, 5, 4]) =="
-              + " [4, 5, 3]</pre>",
+          "Returns a list that contains the elements of the original sequence in reversed order."
+              + "<pre class=\"language-python\">reversed([3, 5, 4]) == [4, 5, 3]</pre>",
       parameters = {
-        @Param(name = "sequence", doc = "The iterable sequence (e.g. list) to be reversed."),
+        @Param(name = "sequence", doc = "The sequence (list or tuple) to be reversed."),
       },
       useStarlarkThread = true)
-  public StarlarkList<?> reversed(StarlarkIterable<?> sequence, StarlarkThread thread)
+  public StarlarkList<?> reversed(Sequence<?> sequence, StarlarkThread thread)
       throws EvalException {
     Object[] array = Starlark.toArray(sequence);
     reverse(array);
@@ -773,7 +772,7 @@ class MethodLibrary {
       extraPositionals = @Param(name = "args", doc = "lists to zip."),
       useStarlarkThread = true)
   public StarlarkList<?> zip(Sequence<?> args, StarlarkThread thread) throws EvalException {
-    StarlarkList<Tuple> result = StarlarkList.of(thread.mutability());
+    StarlarkList.Builder<Tuple> result = StarlarkList.builder();
     int ncols = args.size();
     if (ncols > 0) {
       Iterator<?>[] iterators = new Iterator<?>[ncols];
@@ -790,10 +789,10 @@ class MethodLibrary {
           }
           elem[i] = it.next();
         }
-        result.addElement(Tuple.wrap(elem));
+        result.add(Tuple.wrap(elem));
       }
     }
-    return result;
+    return result.build(thread.mutability());
   }
 
   /** Starlark bool type. */
