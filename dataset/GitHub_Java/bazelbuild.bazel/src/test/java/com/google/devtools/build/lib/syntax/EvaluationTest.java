@@ -195,14 +195,8 @@ public class EvaluationTest extends EvaluationTestCase {
   }
 
   @Test
-  public void testSlashOperatorIsForbidden() throws Exception {
-    newTest("--incompatible_disallow_slash_operator=true")
-        .testIfErrorContains("The `/` operator has been removed.", "5 / 2");
-  }
-
-  @Test
   public void testDivision() throws Exception {
-    newTest("--incompatible_disallow_slash_operator=false")
+    newTest()
         .testStatement("6 / 2", 3)
         .testStatement("6 / 4", 1)
         .testStatement("3 / 6", 0)
@@ -693,8 +687,8 @@ public class EvaluationTest extends EvaluationTestCase {
   @Test
   public void testArgBothPosKey() throws Exception {
     newTest().testIfErrorContains(
-        "got multiple values for keyword argument 'old', "
-            + "in method call replace(string, string, int, string old) of 'string'",
-        "'banana'.replace('a', 'o', 3, old='a')");
+        "arguments 'old', 'new' passed both by position and by name "
+        + "in call to replace(self: string, ",
+        "'banana'.replace('a', 'o', 3, old='a', new=4)");
   }
 }

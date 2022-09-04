@@ -18,20 +18,23 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 
 /**
- * Test case for a SkylarkCallable method which has a parameter with is neither named nor
- * positional.
+ * Test case for a SkylarkCallable method which has a positional-only parameter specified after a
+ * named positional parameter.
  */
-public class ParamNeitherNamedNorPositional {
+public class PositionalOnlyParamAfterNamed {
 
   @SkylarkCallable(
-      name = "param_neither_named_nor_positional",
+      name = "positional_only_after_named",
       documented = false,
       parameters = {
-          @Param(name = "a_parameter",
+          @Param(name = "one",
+              named = true,
+              positional = true),
+          @Param(name = "two",
               named = false,
-              positional = false)
+              positional = true)
       })
-  public Integer paramUndecidable() {
+  public Integer positionalOnlyAfterNamed(Integer one, Integer two) {
     return 42;
   }
 }
