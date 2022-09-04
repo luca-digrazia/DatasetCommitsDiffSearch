@@ -202,7 +202,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
               .collect(toImmutableSet());
       errWriter.print(
           dependencyModule.getFixMessage().get(canonicalizedMissing, canonicalizedLabel));
-      dependencyModule.setHasMissingTargets();
     }
   }
 
@@ -526,11 +525,6 @@ public final class StrictJavaDepsPlugin extends BlazeJavaCompilerPlugin {
       return false;
     }
 
-    return true;
-  }
-
-  @Override
-  public boolean runOnAttributionErrors() {
     return true;
   }
 }

@@ -792,7 +792,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
       "// access flags 0x4031",
       "// signature Ljava/lang/Enum<LTheEnum;>;",
       "// declaration: TheEnum extends java.lang.Enum<TheEnum>",
-      "public final enum TheEnum extends java/lang/Enum {",
+      "public final enum TheEnum extends java/lang/Enum  {",
       "",
       "",
       "  // access flags 0x4019",
@@ -883,11 +883,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
 
   @Test
   public void requiredConstructor() throws Exception {
-    addSourceLines(
-        "Super.java", //
-        "class Super {",
-        "  public Super(int x) {}",
-        "}");
+    addSourceLines("Super.java", "class Super {", "  public Super(int x) {}", "}");
     addSourceLines(
         "Hello.java",
         "class Hello extends Super {",
@@ -907,7 +903,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     String[] expected = {
       "// class version 52.0 (52)",
       "// access flags 0x20",
-      "class Hello extends Super {",
+      "class Hello extends Super  {",
       "",
       "",
       "  // access flags 0x1",
@@ -1239,7 +1235,6 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
       result = turbine.compile();
     }
     assertThat(errOutput.toString()).doesNotContain("[strict]");
-    assertThat(errOutput.toString()).doesNotContain("** Please add the following dependencies:");
     assertThat(result).isEqualTo(Result.ERROR);
   }
 
@@ -1299,7 +1294,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
       "// access flags 0x20",
       "// signature Ljava/lang/Object;Ljava/util/concurrent/Callable<Ljava/lang/String;>;",
       "// declaration: Bridge implements java.util.concurrent.Callable<java.lang.String>",
-      "class Bridge implements java/util/concurrent/Callable {",
+      "class Bridge implements java/util/concurrent/Callable  {",
       "",
       "",
       "  // access flags 0x0",
@@ -1338,7 +1333,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
       "// signature Ljava/lang/Enum<LP;>;Ljava/util/function/Predicate<Ljava/lang/String;>;",
       "// declaration: P extends java.lang.Enum<P>"
           + " implements java.util.function.Predicate<java.lang.String>",
-      "abstract enum P extends java/lang/Enum implements java/util/function/Predicate {",
+      "abstract enum P extends java/lang/Enum  implements java/util/function/Predicate  {",
       "",
       "  // access flags 0x4010",
       "  final enum INNERCLASS P$1 null null",
@@ -1380,7 +1375,7 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
       "// access flags 0x4030",
       "// signature Ljava/lang/Enum<LP;>;",
       "// declaration: P extends java.lang.Enum<P>",
-      "final enum P extends java/lang/Enum {",
+      "final enum P extends java/lang/Enum  {",
       "",
       "  // access flags 0x19",
       "  public final static INNERCLASS java/lang/invoke/MethodHandles$Lookup"
@@ -1516,3 +1511,4 @@ public class JavacTurbineTest extends AbstractJavacTurbineCompilationTest {
     assertThat(output.toString()).contains("A.java:2: error: class, interface, or enum expected");
   }
 }
+
