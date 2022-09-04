@@ -31,7 +31,7 @@ import org.bson.types.ObjectId;
 import org.cliffc.high_scale_lib.Counter;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfiguration;
 import org.graylog2.alarmcallbacks.AlarmCallbackConfigurationService;
-import org.graylog2.rest.models.alarmcallbacks.requests.CreateAlarmCallbackRequest;
+import org.graylog2.alarmcallbacks.CreateAlarmCallbackRequest;
 import org.graylog2.database.NotFoundException;
 import org.graylog2.plugin.database.ValidationException;
 import org.graylog2.plugin.Message;
@@ -47,7 +47,7 @@ import org.graylog2.rest.resources.streams.requests.UpdateStreamRequest;
 import org.graylog2.rest.resources.streams.responses.StreamListResponse;
 import org.graylog2.rest.resources.streams.responses.TestMatchResponse;
 import org.graylog2.rest.resources.streams.rules.requests.CreateStreamRuleRequest;
-import org.graylog2.shared.security.RestPermissions;
+import org.graylog2.security.RestPermissions;
 import org.graylog2.shared.stats.ThroughputStats;
 import org.graylog2.streams.StreamRouterEngine;
 import org.graylog2.streams.StreamRuleService;
@@ -334,7 +334,7 @@ public class StreamResource extends RestResource {
         for (AlarmCallbackConfiguration alarmCallbackConfiguration : alarmCallbackConfigurationService.getForStream(sourceStream)) {
             final CreateAlarmCallbackRequest request = new CreateAlarmCallbackRequest();
             request.type = alarmCallbackConfiguration.getType();
-            request.configuration = alarmCallbackConfiguration.getConfiguration();
+            request.configuration = alarmCallbackConfiguration.getConfiguration().getSource();
             final AlarmCallbackConfiguration alarmCallback = alarmCallbackConfigurationService.create(stream.getId(), request, getCurrentUser().getName());
             alarmCallbackConfigurationService.save(alarmCallback);
         }
