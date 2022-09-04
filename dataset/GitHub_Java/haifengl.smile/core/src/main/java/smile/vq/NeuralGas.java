@@ -26,7 +26,6 @@ import smile.graph.Graph;
 import smile.graph.Graph.Edge;
 import smile.math.MathEx;
 import smile.sort.QuickSort;
-import smile.util.TimeFunction;
 
 /**
  * Neural Gas soft competitive learning algorithm. Neural Gas is inspired
@@ -96,11 +95,11 @@ public class NeuralGas implements VectorQuantizer {
     /**
      * The learning rate function.
      */
-    private TimeFunction alpha;
+    private LearningRate alpha;
     /**
      * The neighborhood function.
      */
-    private TimeFunction theta;
+    private LearningRate theta;
     /**
      * The lifetime of connections.
      */
@@ -124,9 +123,9 @@ public class NeuralGas implements VectorQuantizer {
      * @param alpha the learning rate function.
      * @param theta the neighborhood function.
      * @param lifetime the neuron connection lifetime, usually the number of
-     *                 iterations for one or two epochs.
+     *                 iterations of one or two epochs.
      */
-    public NeuralGas(double[][] neurons, TimeFunction alpha, TimeFunction theta, int lifetime) {
+    public NeuralGas(double[][] neurons, LearningRate alpha, LearningRate theta, int lifetime) {
         this.neurons = IntStream.range(0, neurons.length).mapToObj(i -> new Neuron(i, neurons[i].clone())).toArray(Neuron[]::new);
         this.alpha = alpha;
         this.theta = theta;

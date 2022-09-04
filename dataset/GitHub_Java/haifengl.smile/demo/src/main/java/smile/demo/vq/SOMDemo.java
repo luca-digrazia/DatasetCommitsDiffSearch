@@ -109,7 +109,6 @@ public class SOMDemo  extends VQDemo {
                         plot.points(dataset[datasetIndex], pointLegend);
                         plot.grid(som.neurons());
                         plot.setTitle("SOM");
-                        plot.repaint();
 
                         try {
                             Thread.sleep(100);
@@ -118,14 +117,13 @@ public class SOMDemo  extends VQDemo {
                         }
                     }
                 }
-                System.out.format("%s epoch finishes%n", smile.util.Strings.ordinal(i+1));
             }
 
             double[][] umatrix = som.umatrix();
             PlotCanvas umatrixPlot = Hexmap.plot(umatrix, Palette.jet(256));
             umatrixPlot.setTitle("U-Matrix");
             pane.add(umatrixPlot);
-            pane.invalidate();
+            pane.repaint();
         });
         thread.start();
 

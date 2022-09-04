@@ -20,11 +20,11 @@ package smile.vq;
 import java.util.Arrays;
 import java.util.Optional;
 import java.util.stream.IntStream;
+
 import smile.clustering.CentroidClustering;
 import smile.math.MathEx;
 import smile.mds.MDS;
 import smile.sort.QuickSort;
-import smile.util.TimeFunction;
 
 /**
  * Self-Organizing Map. An SOM is a unsupervised learning method to produce
@@ -133,11 +133,11 @@ public class SOM implements VectorQuantizer {
     /**
      * The learning rate function.
      */
-    private TimeFunction alpha;
+    private LearningRate alpha;
     /**
      * The neighborhood function.
      */
-    private Neighborhood theta;
+    private LatticeNeighborhood theta;
     /**
      * The current iteration.
      */
@@ -153,7 +153,7 @@ public class SOM implements VectorQuantizer {
      * @param alpha the learning rate function.
      * @param theta the neighborhood function.
      */
-    public SOM(double[][][] neurons, TimeFunction alpha, Neighborhood theta) {
+    public SOM(double[][][] neurons, LearningRate alpha, LatticeNeighborhood theta) {
         this.alpha = alpha;
         this.theta = theta;
         this.nrows = neurons.length;
