@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -29,12 +29,10 @@ import com.googlecode.androidannotations.annotations.LongClick;
 import com.googlecode.androidannotations.helper.IdAnnotationHelper;
 import com.googlecode.androidannotations.processing.EBeansHolder.Classes;
 import com.googlecode.androidannotations.rclass.IRClass;
-import com.googlecode.androidannotations.rclass.IRClass.Res;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JExpr;
-import com.sun.codemodel.JExpression;
 import com.sun.codemodel.JFieldRef;
 import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
@@ -46,7 +44,7 @@ import com.sun.codemodel.JVar;
  * @author Pierre-Yves Ricau
  * @author Mathieu Boniface
  */
-public class LongClickProcessor implements DecoratingElementProcessor {
+public class LongClickProcessor implements ElementProcessor {
 
 	private IdAnnotationHelper helper;
 
@@ -60,7 +58,8 @@ public class LongClickProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 		Classes classes = holder.classes();
 
 		String methodName = element.getSimpleName().toString();
@@ -72,7 +71,8 @@ public class LongClickProcessor implements DecoratingElementProcessor {
 
 		boolean hasItemParameter = parameters.size() == 1;
 
-		List<JFieldRef> idsRefs = helper.extractAnnotationFieldRefs(holder, element, Res.ID, true);
+		LongClick annotation = element.getAnnotation(LongClick.class);
+		List<JFieldRef> idsRefs = helper.extractFieldRefsFromAnnotationValues(element, annotation.value(), "LongClicked", holder);
 
 		JDefinedClass listenerAnonymousClass = codeModel.anonymousClass(classes.ON_LONG_CLICK_LISTENER);
 		JMethod listenerMethod = listenerAnonymousClass.method(JMod.PUBLIC, codeModel.BOOLEAN, "onLongClick");
@@ -81,8 +81,7 @@ public class LongClickProcessor implements DecoratingElementProcessor {
 
 		JBlock listenerMethodBody = listenerMethod.body();
 
-		JExpression activityRef = holder.generatedClass.staticRef("this");
-		JInvocation call = JExpr.invoke(activityRef, methodName);
+		JInvocation call = JExpr.invoke(methodName);
 
 		if (returnMethodResult) {
 			listenerMethodBody._return(call);
