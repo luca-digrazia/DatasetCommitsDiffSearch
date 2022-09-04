@@ -11,7 +11,6 @@ import java.util.Date;
 import java.util.GregorianCalendar;
 import java.util.List;
 
-import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
@@ -311,15 +310,6 @@ class MongodbPanacheResourceTest {
 
         count = get(endpoint + "/count").as(Long.class);
         Assertions.assertEquals(0, count);
-
-        // Test prometheus metrics gathered using micrometer metrics
-        RestAssured.given()
-                .when().get("/q/metrics")
-                .then()
-                .statusCode(200)
-                .body(CoreMatchers.containsString("mongodb_driver_pool_checkedout"))
-                .body(CoreMatchers.containsString("mongodb_driver_pool_size"))
-                .body(CoreMatchers.containsString("mongodb_driver_pool_waitqueuesize"));
     }
 
     private Date yearToDate(int year) {

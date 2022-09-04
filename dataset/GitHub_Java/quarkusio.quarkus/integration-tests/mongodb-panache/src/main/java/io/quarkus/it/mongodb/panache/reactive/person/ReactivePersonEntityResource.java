@@ -1,12 +1,15 @@
 package io.quarkus.it.mongodb.panache.reactive.person;
 
 import java.net.URI;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 import javax.ws.rs.*;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
+import io.quarkus.it.mongodb.panache.person.PersonName;
 import io.quarkus.panache.common.Sort;
 import io.smallrye.mutiny.Uni;
 
@@ -20,6 +23,16 @@ public class ReactivePersonEntityResource {
             return ReactivePersonEntity.listAll(Sort.ascending(sort));
         }
         return ReactivePersonEntity.listAll();
+    }
+
+    @GET
+    @Path("/search/{name}")
+    public Set<PersonName> searchPersons(@PathParam("name") String name) {
+        Set<PersonName> uniqueNames = new HashSet<>();
+        List<PersonName> lastnames = ReactivePersonEntity.find("lastname", name).project(PersonName.class).list().await()
+                .indefinitely();
+        lastnames.forEach(p -> uniqueNames.add(p));// this will throw if it's not the right type
+        return uniqueNames;
     }
 
     @POST
@@ -69,5 +82,12 @@ public class ReactivePersonEntityResource {
     @DELETE
     public Uni<Void> deleteAll() {
         return ReactivePersonEntity.deleteAll().map(l -> null);
+    }
+
+    @POST
+    @Path("/rename")
+    public Uni<Response> rename(@QueryParam("previousName") String previousName, @QueryParam("newName") String newName) {
+        return ReactivePersonEntity.update("lastname", newName).where("lastname", previousName)
+                .map(count -> Response.ok().build());
     }
 }
