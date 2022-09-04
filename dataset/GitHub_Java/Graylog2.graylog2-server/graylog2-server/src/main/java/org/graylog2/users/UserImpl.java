@@ -37,7 +37,6 @@ import org.graylog2.database.validators.ListValidator;
 import org.graylog2.plugin.database.users.User;
 import org.graylog2.plugin.database.validators.Validator;
 import org.graylog2.plugin.security.PasswordAlgorithm;
-import org.graylog2.security.PasswordAlgorithmFactory;
 import org.joda.time.DateTimeZone;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -185,13 +184,8 @@ public class UserImpl extends PersistedImpl implements User {
         if (fields.containsKey(STARTPAGE)) {
             @SuppressWarnings("unchecked")
             final Map<String, String> obj = (Map<String, String>) fields.get(STARTPAGE);
-            final String type = obj.get("type");
-            final String id = obj.get("id");
-
-            if (type != null && id != null) {
-                startpage.put("type", type);
-                startpage.put("id", id);
-            }
+            startpage.put("type", obj.get("type"));
+            startpage.put("id", obj.get("id"));
         }
 
         return startpage;
