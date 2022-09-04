@@ -130,10 +130,7 @@ public final class RecursiveFilesystemTraversalFunctionTest extends FoundationTe
     Map<SkyFunctionName, SkyFunction> skyFunctions = new HashMap<>();
     skyFunctions.put(
         FileStateValue.FILE_STATE,
-        new FileStateFunction(
-            new AtomicReference<>(),
-            new AtomicReference<>(UnixGlob.DEFAULT_SYSCALLS),
-            externalFilesHelper));
+        new FileStateFunction(new AtomicReference<>(), externalFilesHelper));
     skyFunctions.put(FileValue.FILE, new FileFunction(pkgLocator));
     skyFunctions.put(SkyFunctions.DIRECTORY_LISTING, new DirectoryListingFunction());
     skyFunctions.put(

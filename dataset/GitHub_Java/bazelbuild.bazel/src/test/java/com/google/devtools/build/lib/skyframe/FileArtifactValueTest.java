@@ -15,7 +15,7 @@ package com.google.devtools.build.lib.skyframe;
 
 import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.actions.FileArtifactValue.createShareable;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
+import static org.junit.Assert.fail;
 
 import com.google.common.io.BaseEncoding;
 import com.google.common.testing.EqualsTester;
@@ -144,10 +144,12 @@ public class FileArtifactValueTest {
     FileArtifactValue value = createShareable(path);
     assertThat(value.getDigest()).isEqualTo(path.getDigest());
     assertThat(value.getSize()).isEqualTo(3L);
-    assertThrows(
-        "mtime for non-empty file should not be stored.",
-        UnsupportedOperationException.class,
-        () -> value.getModifiedTime());
+    try {
+      value.getModifiedTime();
+      fail("mtime for non-empty file should not be stored.");
+    } catch (UnsupportedOperationException e) {
+      // Expected.
+    }
   }
 
   @Test
@@ -166,10 +168,12 @@ public class FileArtifactValueTest {
     FileArtifactValue value = createShareable(path);
     assertThat(value.getDigest()).isEqualTo(path.getDigest());
     assertThat(value.getSize()).isEqualTo(0L);
-    assertThrows(
-        "mtime for non-empty file should not be stored.",
-        UnsupportedOperationException.class,
-        () -> value.getModifiedTime());
+    try {
+      value.getModifiedTime();
+      fail("mtime for non-empty file should not be stored.");
+    } catch (UnsupportedOperationException e) {
+      // Expected.
+    }
   }
 
   @Test
@@ -190,8 +194,12 @@ public class FileArtifactValueTest {
     Path path = fs.getPath("/some/path");
     path.getParentDirectory().createDirectoryAndParents();
     FileSystemUtils.writeContentAsLatin1(path, "content");
-    IOException e = assertThrows(IOException.class, () -> createShareable(path));
-    assertThat(e).isSameAs(exception);
+    try {
+      createShareable(path);
+      fail();
+    } catch (IOException e) {
+      assertThat(e).isSameAs(exception);
+    }
   }
 
   @Test

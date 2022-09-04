@@ -17,7 +17,6 @@ import static com.google.common.truth.Truth.assertThat;
 import static com.google.devtools.build.lib.exec.FilesetManifest.RelativeSymlinkBehavior.ERROR;
 import static com.google.devtools.build.lib.exec.FilesetManifest.RelativeSymlinkBehavior.IGNORE;
 import static com.google.devtools.build.lib.exec.FilesetManifest.RelativeSymlinkBehavior.RESOLVE;
-import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 import static org.junit.Assert.fail;
 
 import com.google.common.collect.ImmutableList;
@@ -113,18 +112,13 @@ public class SpawnInputExpanderTest {
     FakeActionInputFileCache mockCache = new FakeActionInputFileCache();
     mockCache.put(artifact, FileArtifactValue.createDirectory(-1));
 
-    IOException expected =
-        assertThrows(
-            IOException.class,
-            () ->
-                expander.addRunfilesToInputs(
-                    inputMappings,
-                    supplier,
-                    mockCache,
-                    NO_ARTIFACT_EXPANDER,
-                    ArtifactPathResolver.IDENTITY,
-                    true));
-    assertThat(expected).hasMessageThat().isEqualTo("Not a file: dir/file");
+    try {
+      expander.addRunfilesToInputs(inputMappings, supplier, mockCache, NO_ARTIFACT_EXPANDER,
+          ArtifactPathResolver.IDENTITY, true);
+      fail();
+    } catch (IOException expected) {
+      assertThat(expected).hasMessageThat().isEqualTo("Not a file: dir/file");
+    }
   }
 
   @Test
@@ -405,11 +399,12 @@ public class SpawnInputExpanderTest {
   @Test
   public void testManifestWithErrorOnRelativeSymlink() throws Exception {
     expander = new SpawnInputExpander(execRoot, /*strict=*/ true, ERROR);
-    IOException e =
-        assertThrows(
-            IOException.class,
-            () -> expander.addFilesetManifests(simpleFilesetManifest(), inputMappings));
-    assertThat(e).hasMessageThat().contains("runfiles target is not absolute: foo");
+    try {
+      expander.addFilesetManifests(simpleFilesetManifest(), inputMappings);
+      fail();
+    } catch (IOException e) {
+      assertThat(e).hasMessageThat().contains("runfiles target is not absolute: foo");
+    }
   }
 
   @Test

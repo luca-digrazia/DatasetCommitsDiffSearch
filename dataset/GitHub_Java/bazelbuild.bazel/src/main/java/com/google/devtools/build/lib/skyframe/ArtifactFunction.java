@@ -83,7 +83,7 @@ class ArtifactFunction implements SkyFunction {
     }
 
     ArtifactDependencies artifactDependencies =
-        ArtifactDependencies.discoverDependencies((Artifact.DerivedArtifact) artifact, env);
+        ArtifactDependencies.discoverDependencies(artifact, env);
     if (artifactDependencies == null) {
       return null;
     }
@@ -446,13 +446,16 @@ class ArtifactFunction implements SkyFunction {
     }
 
     /**
-     * Constructs an {@link ArtifactDependencies} for the provided {@code derivedArtifact}. Returns
-     * {@code null} if any dependencies are not yet ready.
+     * Constructs an {@link ArtifactDependencies} for the provided {@code derivedArtifact}, which
+     * must not be a source artifact. Returns {@code null} if any dependencies are not yet ready.
      */
     @Nullable
     static ArtifactDependencies discoverDependencies(
-        Artifact.DerivedArtifact derivedArtifact, SkyFunction.Environment env)
-        throws InterruptedException {
+        Artifact derivedArtifact, SkyFunction.Environment env) throws InterruptedException {
+      Preconditions.checkArgument(
+          !derivedArtifact.isSourceArtifact(),
+          "derivedArtifact is not derived: %s",
+          derivedArtifact);
 
       ActionLookupKey actionLookupKey = ArtifactFunction.getActionLookupKey(derivedArtifact);
       ActionLookupValue actionLookupValue =
