@@ -6,6 +6,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.inject.Inject;
+
 import org.jboss.jandex.ClassInfo;
 import org.jboss.jandex.DotName;
 import org.jboss.jandex.Type;
@@ -24,7 +26,7 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveHierarchyBuildItem;
 import io.quarkus.deployment.util.JandexUtil;
 import io.quarkus.jackson.deployment.IgnoreJsonDeserializeClassBuildItem;
 import io.quarkus.kubernetes.client.runtime.KubernetesClientProducer;
-import io.quarkus.kubernetes.spi.KubernetesRoleBindingBuildItem;
+import io.quarkus.kubernetes.spi.KubernetesRoleBuildItem;
 
 public class KubernetesClientProcessor {
 
@@ -38,18 +40,28 @@ public class KubernetesClientProcessor {
 
     private static final Logger log = Logger.getLogger(KubernetesClientProcessor.class.getName());
 
+    @Inject
+    BuildProducer<FeatureBuildItem> featureProducer;
+
+    @Inject
+    BuildProducer<ReflectiveClassBuildItem> reflectiveClasses;
+
+    @Inject
+    BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchies;
+
+    @Inject
+    BuildProducer<IgnoreJsonDeserializeClassBuildItem> ignoredJsonDeserializationClasses;
+
+    @Inject
+    BuildProducer<KubernetesRoleBuildItem> roleProducer;
+
     @BuildStep
     public void process(ApplicationIndexBuildItem applicationIndex, CombinedIndexBuildItem combinedIndexBuildItem,
             BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport,
-            BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildItem,
-            BuildProducer<FeatureBuildItem> featureProducer,
-            BuildProducer<ReflectiveClassBuildItem> reflectiveClasses,
-            BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchies,
-            BuildProducer<IgnoreJsonDeserializeClassBuildItem> ignoredJsonDeserializationClasses,
-            BuildProducer<KubernetesRoleBindingBuildItem> roleBindingProducer) {
+            BuildProducer<AdditionalBeanBuildItem> additionalBeanBuildItemBuildItem) {
 
         featureProducer.produce(new FeatureBuildItem(Feature.KUBERNETES_CLIENT));
-        roleBindingProducer.produce(new KubernetesRoleBindingBuildItem("view", true));
+        roleProducer.produce(new KubernetesRoleBuildItem("view"));
 
         // make sure the watchers fully (and not weakly) register Kubernetes classes for reflection
         final Set<DotName> watchedClasses = new HashSet<>();
@@ -62,10 +74,7 @@ public class KubernetesClientProcessor {
                 log.warnv("Unable to lookup class: {0}", className);
             } else {
                 reflectiveHierarchies
-                        .produce(new ReflectiveHierarchyBuildItem.Builder()
-                                .type(Type.create(watchedClass.name(), Type.Kind.CLASS))
-                                .source(getClass().getSimpleName() + " > " + watchedClass.name())
-                                .build());
+                        .produce(new ReflectiveHierarchyBuildItem(Type.create(watchedClass.name(), Type.Kind.CLASS)));
             }
         }
 
