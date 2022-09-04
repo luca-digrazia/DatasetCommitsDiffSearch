@@ -14,7 +14,6 @@ import javax.enterprise.context.ApplicationScoped;
 import javax.enterprise.context.BeforeDestroyed;
 import javax.enterprise.event.Event;
 import javax.enterprise.event.Observes;
-import javax.enterprise.inject.Any;
 import javax.enterprise.inject.Instance;
 import javax.enterprise.inject.Produces;
 import javax.inject.Singleton;
@@ -47,7 +46,6 @@ import com.cronutils.model.definition.CronDefinition;
 import com.cronutils.model.definition.CronDefinitionBuilder;
 import com.cronutils.parser.CronParser;
 
-import io.quarkus.arc.Arc;
 import io.quarkus.runtime.StartupEvent;
 import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduled.ConcurrentExecution;
@@ -60,7 +58,6 @@ import io.quarkus.scheduler.runtime.ScheduledMethodMetadata;
 import io.quarkus.scheduler.runtime.SchedulerContext;
 import io.quarkus.scheduler.runtime.SchedulerRuntimeConfig;
 import io.quarkus.scheduler.runtime.SkipConcurrentExecutionInvoker;
-import io.quarkus.scheduler.runtime.SkipPredicateInvoker;
 import io.quarkus.scheduler.runtime.util.SchedulerUtils;
 
 @Singleton
@@ -129,11 +126,6 @@ public class QuartzScheduler implements Scheduler {
                         if (scheduled.concurrentExecution() == ConcurrentExecution.SKIP) {
                             invoker = new SkipConcurrentExecutionInvoker(invoker, skippedExecutionEvent);
                         }
-                        if (!scheduled.skipExecutionIf().equals(Scheduled.Never.class)) {
-                            invoker = new SkipPredicateInvoker(invoker,
-                                    Arc.container().select(scheduled.skipExecutionIf(), Any.Literal.INSTANCE).get(),
-                                    skippedExecutionEvent);
-                        }
                         invokers.put(identity, invoker);
 
                         JobBuilder jobBuilder = JobBuilder.newJob(InvokerJob.class)
@@ -177,7 +169,7 @@ public class QuartzScheduler implements Scheduler {
                         }
 
                         TriggerBuilder<?> triggerBuilder = TriggerBuilder.newTrigger()
-                                .withIdentity(identity, Scheduler.class.getName())
+                                .withIdentity(identity + "_trigger", Scheduler.class.getName())
                                 .withSchedule(scheduleBuilder);
 
                         Long millisToAdd = null;
@@ -220,7 +212,7 @@ public class QuartzScheduler implements Scheduler {
     org.quartz.Scheduler produceQuartzScheduler() {
         if (scheduler == null) {
             throw new IllegalStateException(
-                    "Quartz scheduler is either explicitly disabled through quarkus.scheduler.enabled=false or no @Scheduled methods were found. If you only need to schedule a job programmatically you can force the start of the scheduler by setting 'quarkus.quartz.start-mode=forced'.");
+                    "Quartz scheduler is either explicitly disabled through quarkus.scheduler.enabled=false or no @Scheduled methods were found. If you only need to schedule a job programmatically you can force the start of the scheduler via quarkus.quartz.force-start=true");
         }
         return scheduler;
     }
@@ -424,7 +416,7 @@ public class QuartzScheduler implements Scheduler {
 
         final JobExecutionContext context;
 
-        QuartzTrigger(JobExecutionContext context) {
+        public QuartzTrigger(JobExecutionContext context) {
             this.context = context;
         }
 
@@ -442,7 +434,7 @@ public class QuartzScheduler implements Scheduler {
 
         @Override
         public String getId() {
-            return context.getTrigger().getKey().getName();
+            return context.getTrigger().getKey().toString();
         }
 
     }
@@ -451,7 +443,7 @@ public class QuartzScheduler implements Scheduler {
 
         final QuartzTrigger trigger;
 
-        QuartzScheduledExecution(QuartzTrigger trigger) {
+        public QuartzScheduledExecution(QuartzTrigger trigger) {
             this.trigger = trigger;
         }
 
