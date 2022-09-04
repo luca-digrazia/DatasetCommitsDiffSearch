@@ -44,8 +44,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
 
     protected final AnnotationLiteralProcessor annotationLiterals;
 
-    public ComponentsProviderGenerator(AnnotationLiteralProcessor annotationLiterals, boolean generateSources) {
-        super(generateSources);
+    public ComponentsProviderGenerator(AnnotationLiteralProcessor annotationLiterals) {
         this.annotationLiterals = annotationLiterals;
     }
 
@@ -60,7 +59,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
     Collection<Resource> generate(String name, BeanDeployment beanDeployment, Map<BeanInfo, String> beanToGeneratedName,
             Map<ObserverInfo, String> observerToGeneratedName) {
 
-        ResourceClassOutput classOutput = new ResourceClassOutput(true, generateSources);
+        ResourceClassOutput classOutput = new ResourceClassOutput(true);
 
         String generatedName = SETUP_PACKAGE + "." + name + COMPONENTS_PROVIDER_SUFFIX;
         ClassCreator componentsProvider = ClassCreator.builder().classOutput(classOutput).className(generatedName)
@@ -124,7 +123,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
         for (Resource resource : classOutput.getResources()) {
             resources.add(resource);
             resources.add(ResourceImpl.serviceProvider(ComponentsProvider.class.getName(),
-                    (resource.getName().replace('/', '.')).getBytes(Charset.forName("UTF-8")), null));
+                    (resource.getName().replace('/', '.')).getBytes(Charset.forName("UTF-8"))));
         }
         return resources;
     }
@@ -152,7 +151,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
                         .collect(Collectors.joining("\n")));
             }
             stuck = true;
-            // First try to process beans that are not dependencies
+            // First try to proces beans that are not dependencies
             stuck = addBeans(beanAdder, beanToInjections, processed, beanIdToBeanHandle,
                     beanToGeneratedName, b -> !isDependency(b, beanToInjections));
             if (stuck) {
@@ -311,22 +310,20 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
             observersHandle = addObserversMethod.getMethodParam(1);
 
             String observerType = observerToGeneratedName.get(observer);
+            List<InjectionPointInfo> injectionPoints = observer.getInjection().injectionPoints.stream()
+                    .filter(ip -> !BuiltinBean.resolvesTo(ip))
+                    .collect(toList());
             List<ResultHandle> params = new ArrayList<>();
             List<String> paramTypes = new ArrayList<>();
 
-            if (!observer.isSynthetic()) {
-                List<InjectionPointInfo> injectionPoints = observer.getInjection().injectionPoints.stream()
-                        .filter(ip -> !BuiltinBean.resolvesTo(ip))
-                        .collect(toList());
-                // First param - declaring bean
+            // First param - declaring bean
+            params.add(addObserversMethod.invokeInterfaceMethod(MethodDescriptors.MAP_GET,
+                    beanIdToBeanHandle, addObserversMethod.load(observer.getDeclaringBean().getIdentifier())));
+            paramTypes.add(Type.getDescriptor(Supplier.class));
+            for (InjectionPointInfo injectionPoint : injectionPoints) {
                 params.add(addObserversMethod.invokeInterfaceMethod(MethodDescriptors.MAP_GET,
-                        beanIdToBeanHandle, addObserversMethod.load(observer.getDeclaringBean().getIdentifier())));
+                        beanIdToBeanHandle, addObserversMethod.load(injectionPoint.getResolvedBean().getIdentifier())));
                 paramTypes.add(Type.getDescriptor(Supplier.class));
-                for (InjectionPointInfo injectionPoint : injectionPoints) {
-                    params.add(addObserversMethod.invokeInterfaceMethod(MethodDescriptors.MAP_GET,
-                            beanIdToBeanHandle, addObserversMethod.load(injectionPoint.getResolvedBean().getIdentifier())));
-                    paramTypes.add(Type.getDescriptor(Supplier.class));
-                }
             }
             ResultHandle observerInstance = addObserversMethod.newInstance(
                     MethodDescriptor.ofConstructor(observerType, paramTypes.toArray(new String[0])),
@@ -393,7 +390,7 @@ public class ComponentsProviderGenerator extends AbstractGenerator {
             if (bean.isProducerMethod() || bean.isProducerField()) {
                 if (!processedBeans.contains(bean.getDeclaringBean())) {
                     throw new IllegalStateException(
-                            "Declaring bean of a producer bean is not available - most probably an unsupported circular dependency use case \n - declaring bean: "
+                            "Declaring bean of a producer bean is not available - most probaly an unsupported circular dependency use case \n - declaring bean: "
                                     + bean.getDeclaringBean() + "\n - producer bean: " + bean);
                 }
                 params.add(addBeansMethod.invokeInterfaceMethod(MethodDescriptors.MAP_GET,

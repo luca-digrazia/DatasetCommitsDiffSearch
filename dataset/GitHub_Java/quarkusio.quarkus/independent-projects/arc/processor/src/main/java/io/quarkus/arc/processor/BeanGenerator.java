@@ -1119,31 +1119,25 @@ public class BeanGenerator extends AbstractGenerator {
             create.returnValue(instanceHandle);
 
         } else if (bean.isProducerMethod()) {
-            MethodInfo producerMethod = bean.getTarget().get().asMethod();
             instanceHandle = create.createVariable(DescriptorUtils.extToInt(providerTypeName));
             // instance = declaringProviderSupplier.get().get(new CreationalContextImpl<>()).produce()
-            ResultHandle ctxHandle = create.newInstance(
-                    MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class), create.getThis());
-            ResultHandle declaringProviderInstanceHandle;
             ResultHandle declaringProviderSupplierHandle = create.readInstanceField(
                     FieldDescriptor.of(beanCreator.getClassName(), FIELD_NAME_DECLARING_PROVIDER_SUPPLIER,
                             Supplier.class.getName()),
                     create.getThis());
             ResultHandle declaringProviderHandle = create.invokeInterfaceMethod(
                     MethodDescriptors.SUPPLIER_GET, declaringProviderSupplierHandle);
-            if (Modifier.isStatic(producerMethod.flags())) {
-                // for static producers, we don't need to resolve this this handle
-                declaringProviderInstanceHandle = create.loadNull();
-            } else {
+            ResultHandle ctxHandle = create.newInstance(
+                    MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class), create.getThis());
+            ResultHandle declaringProviderInstanceHandle = create.invokeInterfaceMethod(
+                    MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
+                    ctxHandle);
+
+            if (bean.getDeclaringBean().getScope().isNormal()) {
+                // We need to unwrap the client proxy
                 declaringProviderInstanceHandle = create.invokeInterfaceMethod(
-                        MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
-                        ctxHandle);
-                if (bean.getDeclaringBean().getScope().isNormal()) {
-                    // We need to unwrap the client proxy
-                    declaringProviderInstanceHandle = create.invokeInterfaceMethod(
-                            MethodDescriptors.CLIENT_PROXY_GET_CONTEXTUAL_INSTANCE,
-                            declaringProviderInstanceHandle);
-                }
+                        MethodDescriptors.CLIENT_PROXY_GET_CONTEXTUAL_INSTANCE,
+                        declaringProviderInstanceHandle);
             }
 
             List<InjectionPointInfo> injectionPoints = bean.getAllInjectionPoints();
@@ -1162,6 +1156,7 @@ public class BeanGenerator extends AbstractGenerator {
                 referenceHandles[paramIdx++] = referenceHandle;
             }
 
+            MethodInfo producerMethod = bean.getTarget().get().asMethod();
             if (Modifier.isPrivate(producerMethod.flags())) {
                 privateMembers.add(isApplicationClass, String.format("Producer method %s#%s()",
                         producerMethod.declaringClass().name(), producerMethod.name()));
@@ -1176,18 +1171,10 @@ public class BeanGenerator extends AbstractGenerator {
                 create.assign(instanceHandle, create.invokeStaticMethod(MethodDescriptors.REFLECTIONS_INVOKE_METHOD,
                         create.loadClass(producerMethod.declaringClass().name().toString()), create.load(producerMethod.name()),
                         paramTypesArray,
-                        declaringProviderInstanceHandle,
-                        argsArray));
+                        declaringProviderInstanceHandle, argsArray));
             } else {
-                ResultHandle invokeMethodHandle;
-                if (Modifier.isStatic(producerMethod.flags())) {
-                    invokeMethodHandle = create.invokeStaticMethod(MethodDescriptor.of(producerMethod),
-                            referenceHandles);
-                } else {
-                    invokeMethodHandle = create.invokeVirtualMethod(MethodDescriptor.of(producerMethod),
-                            declaringProviderInstanceHandle, referenceHandles);
-                }
-                create.assign(instanceHandle, invokeMethodHandle);
+                create.assign(instanceHandle, create.invokeVirtualMethod(MethodDescriptor.of(producerMethod),
+                        declaringProviderInstanceHandle, referenceHandles));
             }
 
             if (bean.getScope().isNormal()) {
@@ -1218,20 +1205,15 @@ public class BeanGenerator extends AbstractGenerator {
                     MethodDescriptors.SUPPLIER_GET, declaringProviderSupplierHandle);
             ResultHandle ctxHandle = create.newInstance(
                     MethodDescriptor.ofConstructor(CreationalContextImpl.class, Contextual.class), create.getThis());
-            ResultHandle declaringProviderInstanceHandle;
-            if (Modifier.isStatic(producerField.flags())) {
-                declaringProviderInstanceHandle = create.loadNull();
-            } else {
-                declaringProviderInstanceHandle = create.invokeInterfaceMethod(
-                        MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
-                        ctxHandle);
+            ResultHandle declaringProviderInstanceHandle = create.invokeInterfaceMethod(
+                    MethodDescriptors.INJECTABLE_REF_PROVIDER_GET, declaringProviderHandle,
+                    ctxHandle);
 
-                if (bean.getDeclaringBean().getScope().isNormal()) {
-                    // We need to unwrap the client proxy
-                    declaringProviderInstanceHandle = create.invokeInterfaceMethod(
-                            MethodDescriptors.CLIENT_PROXY_GET_CONTEXTUAL_INSTANCE,
-                            declaringProviderInstanceHandle);
-                }
+            if (bean.getDeclaringBean().getScope().isNormal()) {
+                // We need to unwrap the client proxy
+                declaringProviderInstanceHandle = create.invokeInterfaceMethod(
+                        MethodDescriptors.CLIENT_PROXY_GET_CONTEXTUAL_INSTANCE,
+                        declaringProviderInstanceHandle);
             }
 
             if (Modifier.isPrivate(producerField.flags())) {
@@ -1242,14 +1224,8 @@ public class BeanGenerator extends AbstractGenerator {
                         create.loadClass(producerField.declaringClass().name().toString()), create.load(producerField.name()),
                         declaringProviderInstanceHandle));
             } else {
-                ResultHandle readFieldHandle;
-                if (Modifier.isStatic(producerField.flags())) {
-                    readFieldHandle = create.readStaticField(FieldDescriptor.of(producerField));
-                } else {
-                    readFieldHandle = create.readInstanceField(FieldDescriptor.of(producerField),
-                            declaringProviderInstanceHandle);
-                }
-                create.assign(instanceHandle, readFieldHandle);
+                create.assign(instanceHandle,
+                        create.readInstanceField(FieldDescriptor.of(producerField), declaringProviderInstanceHandle));
             }
 
             if (bean.getScope().isNormal()) {
