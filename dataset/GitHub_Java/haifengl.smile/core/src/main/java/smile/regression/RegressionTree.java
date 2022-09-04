@@ -78,7 +78,7 @@ import smile.util.MulticoreExecutor;
  * @see GradientTreeBoost
  * @see RandomForest
  */
-public class RegressionTree implements Regression<double[]> {
+public class RegressionTree implements Regression<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**

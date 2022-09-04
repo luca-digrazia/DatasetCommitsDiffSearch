@@ -15,9 +15,11 @@
  *******************************************************************************/
 package smile.regression;
 
+import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Callable;
+
 import smile.data.Attribute;
 import smile.data.AttributeDataset;
 import smile.data.NumericAttribute;
@@ -66,7 +68,7 @@ import smile.validation.RegressionMeasure;
  * 
  * @author Haifeng Li
  */
-public class RandomForest implements Regression<double[]> {
+public class RandomForest implements Regression<double[]>, Serializable {
     private static final long serialVersionUID = 1L;
 
     /**
