@@ -256,11 +256,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
       env.getValue(actionDepKey);
       return null;
     }
-
-    @Override
-    public ImmutableSet<SkyKey> getSkyframeDependenciesForRewinding() {
-      throw new UnsupportedOperationException();
-    }
   }
 
   private interface ExecutionCountingActionFactory {
@@ -418,7 +413,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         executor,
         null,
         null,
-        options,
+        false,
         null,
         null);
 
@@ -447,7 +442,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         executor,
         null,
         null,
-        options,
+        false,
         null,
         null);
 
@@ -819,11 +814,6 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
           }
 
           @Override
-          public ImmutableSet<SkyKey> getSkyframeDependenciesForRewinding() {
-            throw new UnsupportedOperationException();
-          }
-
-          @Override
           public ActionResult execute(ActionExecutionContext actionExecutionContext)
               throws ActionExecutionException, InterruptedException {
             writeOutput(readInput(), "gen2");
@@ -842,7 +832,7 @@ public class SkyframeAwareActionTest extends TimestampBuilderTestCase {
         executor,
         null,
         null,
-        options,
+        false,
         null,
         null);
   }
