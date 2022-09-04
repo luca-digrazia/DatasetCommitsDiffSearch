@@ -121,8 +121,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
   private final boolean useLLVMCoverageMapFormat;
   private final boolean codeCoverageEnabled;
   private final boolean isHostConfiguration;
-  private final boolean forcePic;
-  private final boolean shouldStripBinaries;
 
   public CcToolchainProvider(
       ImmutableMap<String, Object> values,
@@ -193,13 +191,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
     this.useLLVMCoverageMapFormat = useLLVMCoverageMapFormat;
     this.codeCoverageEnabled = codeCoverageEnabled;
     this.isHostConfiguration = isHostConfiguration;
-    if (cppConfiguration != null) {
-      this.forcePic = cppConfiguration.forcePic();
-      this.shouldStripBinaries = cppConfiguration.shouldStripBinaries();
-    } else {
-      this.forcePic = false;
-      this.shouldStripBinaries = false;
-    }
   }
 
   /** Returns c++ Make variables. */
@@ -256,23 +247,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
     result.put("ABI", abi);
 
     return result.build();
-  }
-
-  /**
-   * Returns true if Fission is specified and supported by the CROSSTOOL for the build implied by
-   * the given configuration and toolchain.
-   */
-  public boolean useFission() {
-    return Preconditions.checkNotNull(cppConfiguration).fissionIsActiveForCurrentCompilationMode()
-        && supportsFission();
-  }
-
-  /**
-   * Returns true if Fission and PER_OBJECT_DEBUG_INFO are specified and supported by the CROSSTOOL
-   * for the build implied by the given configuration, toolchain and feature configuration.
-   */
-  public boolean shouldCreatePerObjectDebugInfo(FeatureConfiguration featureConfiguration) {
-    return useFission() && featureConfiguration.isEnabled(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
   }
 
   @Override
@@ -1046,14 +1020,6 @@ public final class CcToolchainProvider extends ToolchainInfo {
 
   public boolean isHostConfiguration() {
     return isHostConfiguration;
-  }
-
-  public boolean getForcePic() {
-    return forcePic;
-  }
-
-  public boolean getShouldStripBinaries() {
-    return shouldStripBinaries;
   }
 }
 

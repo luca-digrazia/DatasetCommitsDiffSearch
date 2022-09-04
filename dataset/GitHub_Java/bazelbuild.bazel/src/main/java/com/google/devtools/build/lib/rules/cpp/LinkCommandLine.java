@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.collect.CollectionUtils;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkerOrArchiver;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -43,7 +44,7 @@ import javax.annotation.Nullable;
 public final class LinkCommandLine extends CommandLine {
   private final String actionName;
   private final String forcedToolPath;
-  private final CcToolchainVariables variables;
+  private final CcToolchainFeatures.Variables variables;
   // The feature config can be null for tests.
   @Nullable private final FeatureConfiguration featureConfiguration;
   private final ImmutableList<Artifact> buildInfoHeaderArtifacts;
@@ -70,7 +71,7 @@ public final class LinkCommandLine extends CommandLine {
       boolean nativeDeps,
       boolean useTestOnlyFlags,
       @Nullable Artifact paramFile,
-      CcToolchainVariables variables,
+      CcToolchainFeatures.Variables variables,
       @Nullable FeatureConfiguration featureConfiguration) {
 
     this.actionName = actionName;
@@ -158,7 +159,7 @@ public final class LinkCommandLine extends CommandLine {
 
   /** Returns the build variables used to template the crosstool for this linker invocation. */
   @VisibleForTesting
-  public CcToolchainVariables getBuildVariables() {
+  public Variables getBuildVariables() {
     return this.variables;
   }
 
@@ -212,7 +213,7 @@ public final class LinkCommandLine extends CommandLine {
     private final String forcedToolPath;
     private final FeatureConfiguration featureConfiguration;
     private final String actionName;
-    private final CcToolchainVariables variables;
+    private final Variables variables;
 
     public ParamFileCommandLine(
         Artifact paramsFile,
@@ -220,7 +221,7 @@ public final class LinkCommandLine extends CommandLine {
         String forcedToolPath,
         FeatureConfiguration featureConfiguration,
         String actionName,
-        CcToolchainVariables variables) {
+        Variables variables) {
       this.paramsFile = paramsFile;
       this.linkTargetType = linkTargetType;
       this.forcedToolPath = forcedToolPath;
@@ -365,7 +366,7 @@ public final class LinkCommandLine extends CommandLine {
       FeatureConfiguration featureConfiguration,
       String actionName,
       LinkTargetType linkTargetType,
-      CcToolchainVariables variables) {
+      Variables variables) {
     List<String> argv = new ArrayList<>();
     if (forcedToolPath != null) {
       argv.add(forcedToolPath);
@@ -418,7 +419,7 @@ public final class LinkCommandLine extends CommandLine {
     private boolean nativeDeps;
     private boolean useTestOnlyFlags;
     @Nullable private Artifact paramFile;
-    private CcToolchainVariables variables;
+    private Variables variables;
     private FeatureConfiguration featureConfiguration;
 
     public Builder(RuleContext ruleContext) {
@@ -439,7 +440,7 @@ public final class LinkCommandLine extends CommandLine {
       }
       
       if (variables == null) {
-        variables = CcToolchainVariables.EMPTY;
+        variables = Variables.EMPTY;
       }
 
       String actionName = linkTargetType.getActionName();
@@ -549,8 +550,8 @@ public final class LinkCommandLine extends CommandLine {
       this.paramFile = paramFile;
       return this;
     }
-
-    public Builder setBuildVariables(CcToolchainVariables variables) {
+    
+    public Builder setBuildVariables(Variables variables) {
       this.variables = variables;
       return this;
     }

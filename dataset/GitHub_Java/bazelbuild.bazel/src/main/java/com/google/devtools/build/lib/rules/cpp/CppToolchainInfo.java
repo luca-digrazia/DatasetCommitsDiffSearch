@@ -45,7 +45,6 @@ import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import javax.annotation.Nullable;
@@ -336,8 +335,7 @@ public final class CppToolchainInfo {
     Set<ArtifactCategory> definedCategories = new HashSet<>();
     for (ArtifactNamePattern pattern : toolchainBuilder.getArtifactNamePatternList()) {
       try {
-        definedCategories.add(
-            ArtifactCategory.valueOf(pattern.getCategoryName().toUpperCase(Locale.ENGLISH)));
+        definedCategories.add(ArtifactCategory.valueOf(pattern.getCategoryName().toUpperCase()));
       } catch (IllegalArgumentException e) {
         // Invalid category name, will be detected later.
         continue;

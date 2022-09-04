@@ -438,13 +438,14 @@ public final class CcLinkingHelper {
    *
    * @throws RuleErrorException
    */
-  // TODO(b/73997894): Try to remove CcCompilationContext. Right now headers are passed as non
+  // TODO(b/73997894): Try to remove CcCompilationContextInfo. Right now headers are passed as non
   // code
   // inputs to the linker.
-  public LinkingInfo link(CcCompilationOutputs ccOutputs, CcCompilationContext ccCompilationContext)
+  public LinkingInfo link(
+      CcCompilationOutputs ccOutputs, CcCompilationContextInfo ccCompilationContextInfo)
       throws RuleErrorException, InterruptedException {
     Preconditions.checkNotNull(ccOutputs);
-    Preconditions.checkNotNull(ccCompilationContext);
+    Preconditions.checkNotNull(ccCompilationContextInfo);
 
     if (checkDepsGenerateCpp) {
       for (LanguageDependentFragment dep :
@@ -540,7 +541,8 @@ public final class CcLinkingHelper {
     Runfiles cppSharedRunfiles = collectCppRunfiles(ccLinkingOutputs, false);
 
     CcLinkingInfo.Builder ccLinkingInfoBuilder = CcLinkingInfo.Builder.create();
-    ccLinkingInfoBuilder.setCcRunfiles(new CcRunfiles(cppStaticRunfiles, cppSharedRunfiles));
+    ccLinkingInfoBuilder.setCcRunfilesInfo(
+        new CcRunfilesInfo(cppStaticRunfiles, cppSharedRunfiles));
     ccLinkingInfoBuilder.setCcExecutionDynamicLibrariesInfo(
         collectExecutionDynamicLibraryArtifacts(ccLinkingOutputs.getExecutionDynamicLibraries()));
 
@@ -549,11 +551,11 @@ public final class CcLinkingHelper {
     if (emitCcSpecificLinkParamsProvider) {
       providers.add(
           new CcSpecificLinkParamsProvider(
-              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContext, forcePic)));
+              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContextInfo, forcePic)));
     } else {
       ccLinkingInfoBuilder.setCcLinkParamsInfo(
           new CcLinkParamsInfo(
-              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContext, forcePic)));
+              createCcLinkParamsStore(ccLinkingOutputs, ccCompilationContextInfo, forcePic)));
     }
     providers.put(ccLinkingInfoBuilder.build());
     return new LinkingInfo(
@@ -627,7 +629,7 @@ public final class CcLinkingHelper {
             ruleContext.getWorkspaceName(),
             ruleContext.getConfiguration().legacyExternalRunfiles());
     builder.addTargets(deps, RunfilesProvider.DEFAULT_RUNFILES);
-    builder.addTargets(deps, CcRunfiles.runfilesFunction(linkingStatically));
+    builder.addTargets(deps, CcRunfilesInfo.runfilesFunction(linkingStatically));
     // Add the shared libraries to the runfiles.
     builder.addArtifacts(ccLinkingOutputs.getLibrariesForRunfiles(linkingStatically));
     return builder.build();
@@ -635,13 +637,13 @@ public final class CcLinkingHelper {
 
   private CcLinkParamsStore createCcLinkParamsStore(
       final CcLinkingOutputs ccLinkingOutputs,
-      final CcCompilationContext ccCompilationContext,
+      final CcCompilationContextInfo ccCompilationContextInfo,
       final boolean forcePic) {
     return new CcLinkParamsStore() {
       @Override
       protected void collect(
           CcLinkParams.Builder builder, boolean linkingStatically, boolean linkShared) {
-        builder.addLinkstamps(linkstamps.build(), ccCompilationContext);
+        builder.addLinkstamps(linkstamps.build(), ccCompilationContextInfo);
         builder.addTransitiveTargets(
             deps, CcLinkParamsInfo.TO_LINK_PARAMS, CcSpecificLinkParamsProvider.TO_LINK_PARAMS);
         if (!neverlink) {

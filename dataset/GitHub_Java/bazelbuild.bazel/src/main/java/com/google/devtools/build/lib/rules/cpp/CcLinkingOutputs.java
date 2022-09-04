@@ -39,31 +39,18 @@ public class CcLinkingOutputs {
 
   private final ImmutableList<LibraryToLink> picStaticLibraries;
 
-  /**
-   * Holds interface dynamic libraries if the toolchain supports them, full dynamic libraries
-   * otherwise.
-   *
-   * <p>These are what dependants want to link against. We put these as inputs to the C++ link
-   * action.
-   */
-  private final ImmutableList<LibraryToLink> dynamicLibrariesForLinking;
+  private final ImmutableList<LibraryToLink> dynamicLibraries;
 
-  /**
-   * Holds dynamic libraries even when the toolchain supports interface libraries.
-   *
-   * <p>These are what binaries load at runtime. We put these into runfiles.
-   */
-  private final ImmutableList<LibraryToLink> dynamicLibrariesForRuntime;
+  private final ImmutableList<LibraryToLink> executionDynamicLibraries;
 
-  private CcLinkingOutputs(
-      ImmutableList<LibraryToLink> staticLibraries,
+  private CcLinkingOutputs(ImmutableList<LibraryToLink> staticLibraries,
       ImmutableList<LibraryToLink> picStaticLibraries,
-      ImmutableList<LibraryToLink> dynamicLibrariesForLinking,
-      ImmutableList<LibraryToLink> dynamicLibrariesForRuntime) {
+      ImmutableList<LibraryToLink> dynamicLibraries,
+      ImmutableList<LibraryToLink> executionDynamicLibraries) {
     this.staticLibraries = staticLibraries;
     this.picStaticLibraries = picStaticLibraries;
-    this.dynamicLibrariesForLinking = dynamicLibrariesForLinking;
-    this.dynamicLibrariesForRuntime = dynamicLibrariesForRuntime;
+    this.dynamicLibraries = dynamicLibraries;
+    this.executionDynamicLibraries = executionDynamicLibraries;
   }
 
   public ImmutableList<LibraryToLink> getStaticLibraries() {
@@ -74,12 +61,12 @@ public class CcLinkingOutputs {
     return picStaticLibraries;
   }
 
-  public ImmutableList<LibraryToLink> getDynamicLibrariesForLinking() {
-    return dynamicLibrariesForLinking;
+  public ImmutableList<LibraryToLink> getDynamicLibraries() {
+    return dynamicLibraries;
   }
 
-  public ImmutableList<LibraryToLink> getDynamicLibrariesForRuntime() {
-    return dynamicLibrariesForRuntime;
+  public ImmutableList<LibraryToLink> getExecutionDynamicLibraries() {
+    return executionDynamicLibraries;
   }
 
   /**
@@ -89,10 +76,7 @@ public class CcLinkingOutputs {
   public ImmutableSetMultimap<String, LibraryToLink> getLibrariesByIdentifier() {
     return getLibrariesByIdentifier(
         Iterables.concat(
-            staticLibraries,
-            picStaticLibraries,
-            dynamicLibrariesForLinking,
-            dynamicLibrariesForRuntime));
+            staticLibraries, picStaticLibraries, dynamicLibraries, executionDynamicLibraries));
   }
 
   /**
@@ -165,10 +149,10 @@ public class CcLinkingOutputs {
         candidates.addAll(staticLibraries);
         candidates.addAll(picStaticLibraries);
       }
-      candidates.addAll(forRunfiles ? dynamicLibrariesForRuntime : dynamicLibrariesForLinking);
+      candidates.addAll(forRunfiles ? executionDynamicLibraries : dynamicLibraries);
     } else {
-      // First choice is the dynamic libraries.
-      candidates.addAll(forRunfiles ? dynamicLibrariesForRuntime : dynamicLibrariesForLinking);
+      // First choice is the dynamicLibraries.
+      candidates.addAll(forRunfiles ? executionDynamicLibraries : dynamicLibraries);
       if (preferPic) {
         // Second choice is the staticPicLibraries (at least they're PIC, so we won't get a
         // link error).
@@ -237,8 +221,8 @@ public class CcLinkingOutputs {
     public Builder merge(CcLinkingOutputs outputs) {
       staticLibraries.addAll(outputs.getStaticLibraries());
       picStaticLibraries.addAll(outputs.getPicStaticLibraries());
-      dynamicLibraries.addAll(outputs.getDynamicLibrariesForLinking());
-      executionDynamicLibraries.addAll(outputs.getDynamicLibrariesForRuntime());
+      dynamicLibraries.addAll(outputs.getDynamicLibraries());
+      executionDynamicLibraries.addAll(outputs.getExecutionDynamicLibraries());
       return this;
     }
 

@@ -489,7 +489,8 @@ public class CppLinkActionBuilder {
                 toolchain,
                 fdoSupport,
                 usePicForLtoBackendActions,
-                toolchain.shouldCreatePerObjectDebugInfo(featureConfiguration),
+                CppHelper.shouldCreatePerObjectDebugInfo(
+                    cppConfiguration, toolchain, featureConfiguration),
                 argv)
             : new LtoBackendArtifacts(
                 ltoOutputRootPrefix,
@@ -502,7 +503,8 @@ public class CppLinkActionBuilder {
                 toolchain,
                 fdoSupport,
                 usePicForLtoBackendActions,
-                toolchain.shouldCreatePerObjectDebugInfo(featureConfiguration),
+                CppHelper.shouldCreatePerObjectDebugInfo(
+                    cppConfiguration, toolchain, featureConfiguration),
                 argv);
     return ltoArtifact;
   }
@@ -1002,6 +1004,7 @@ public class CppLinkActionBuilder {
             thinltoMergedObjectFile,
             mustKeepDebug,
             symbolCounts,
+            cppConfiguration,
             toolchain,
             featureConfiguration,
             useTestOnlyFlags,
