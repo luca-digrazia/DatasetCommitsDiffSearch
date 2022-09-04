@@ -32,11 +32,9 @@ import com.google.devtools.build.lib.actions.ActionInputHelper;
 import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.actions.ArtifactPathResolver;
 import com.google.devtools.build.lib.actions.ExecException;
 import com.google.devtools.build.lib.actions.ExecutionRequirements;
-import com.google.devtools.build.lib.actions.MiddlemanType;
 import com.google.devtools.build.lib.actions.ResourceSet;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
 import com.google.devtools.build.lib.actions.SimpleSpawn;
@@ -52,6 +50,7 @@ import com.google.devtools.build.lib.includescanning.IncludeParser.GrepIncludesF
 import com.google.devtools.build.lib.includescanning.IncludeParser.Inclusion;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.IORuntimeException;
+import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.IOException;
@@ -71,6 +70,7 @@ public class SpawnIncludeScanner {
       ResourceSet.createWithRamCpu(/*memoryMb=*/ 10, /*cpuUsage=*/ 1);
 
   private final Path execRoot;
+  private OutputService outputService;
   private boolean inMemoryOutput;
   private final int remoteExtractionThreshold;
 
@@ -78,6 +78,11 @@ public class SpawnIncludeScanner {
   public SpawnIncludeScanner(Path execRoot, int remoteExtractionThreshold) {
     this.execRoot = execRoot;
     this.remoteExtractionThreshold = remoteExtractionThreshold;
+  }
+
+  public void setOutputService(OutputService outputService) {
+    Preconditions.checkState(this.outputService == null);
+    this.outputService = outputService;
   }
 
   public void setInMemoryOutput(boolean inMemoryOutput) {
@@ -113,11 +118,11 @@ public class SpawnIncludeScanner {
     if (file.getRoot().getRoot().isAbsolute()) {
       return false;
     }
-    // Output files are generally not locally available should be scanned remotely to avoid the
+    // Files written remotely that are not locally available should be scanned remotely to avoid the
     // bandwidth and disk space penalty of bringing them across. Also, enable include scanning
-    // remotely when the file size exceeds a certain size.
+    // remotely when explicitly directed to via a flag.
     return remoteExtractionThreshold == 0
-        || !file.isSourceArtifact()
+        || (outputService != null && outputService.isRemoteFile(file))
         || ctx.getPathResolver().toPath(file).getFileSize() > remoteExtractionThreshold;
   }
 
@@ -236,8 +241,7 @@ public class SpawnIncludeScanner {
     }
 
     @Override
-    public String getKey(
-        ActionKeyContext actionKeyContext, @Nullable ArtifactExpander artifactExpander) {
+    public String getKey(ActionKeyContext actionKeyContext) {
       throw new UnsupportedOperationException();
     }
 
@@ -288,11 +292,7 @@ public class SpawnIncludeScanner {
     Path output = getIncludesOutput(file, actionExecutionContext.getPathResolver(), fileType,
         placeNextToFile);
     if (!inMemoryOutput) {
-      AbstractAction.deleteOutput(
-          output,
-          placeNextToFile
-              ? actionExecutionContext.getPathResolver().transformRoot(file.getRoot().getRoot())
-              : null);
+      AbstractAction.deleteOutput(output, placeNextToFile ? file.getRoot() : null);
       if (!placeNextToFile) {
         output.getParentDirectory().createDirectoryAndParents();
       }
@@ -406,11 +406,7 @@ public class SpawnIncludeScanner {
         getIncludesOutput(
             file, actionExecutionContext.getPathResolver(), fileType, placeNextToFile);
     if (!inMemoryOutput) {
-      AbstractAction.deleteOutput(
-          output,
-          placeNextToFile
-              ? actionExecutionContext.getPathResolver().transformRoot(file.getRoot().getRoot())
-              : null);
+      AbstractAction.deleteOutput(output, placeNextToFile ? file.getRoot() : null);
       if (!placeNextToFile) {
         output.getParentDirectory().createDirectoryAndParents();
       }
