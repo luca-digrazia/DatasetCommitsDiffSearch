@@ -459,10 +459,7 @@ public class SkylarkRuleImplementationFunctions {
       ),
       @Param(
         name = "inputs",
-        allowedTypes = {
-          @ParamType(type = SkylarkList.class),
-          @ParamType(type = SkylarkNestedSet.class),
-        },
+        type = SkylarkList.class,
         generic1 = Artifact.class,
         named = true,
         positional = false,
@@ -474,18 +471,15 @@ public class SkylarkRuleImplementationFunctions {
   private static final BuiltinFunction createEmptyAction =
       new BuiltinFunction("empty_action") {
         @SuppressWarnings("unused")
-        public Runtime.NoneType invoke(SkylarkRuleContext ctx, String mnemonic, Object inputs)
+        public Runtime.NoneType invoke(SkylarkRuleContext ctx, String mnemonic, SkylarkList inputs)
             throws EvalException, ConversionException {
           ctx.checkMutable("empty_action");
           RuleContext ruleContext = ctx.getRuleContext();
-          NestedSet<Artifact> inputSet = inputs instanceof SkylarkNestedSet
-              ? ((SkylarkNestedSet) inputs).getSet(Artifact.class)
-              : convertInputs((SkylarkList) inputs);
           Action action =
               new PseudoAction<>(
                   generateUuid(ruleContext),
                   ruleContext.getActionOwner(),
-                  inputSet,
+                  convertInputs(inputs),
                   generateDummyOutputs(ruleContext),
                   mnemonic,
                   SpawnInfo.spawnInfo,
