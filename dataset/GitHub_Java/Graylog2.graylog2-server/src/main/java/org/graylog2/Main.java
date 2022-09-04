@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Properties;
 import org.graylog2.periodical.ChunkedGELFClientManagerThread;
 import org.graylog2.periodical.LoadStatisticsThread;
+import org.graylog2.periodical.GraphWriterThread;
 
 /**
  * Main class of Graylog2.
@@ -93,6 +94,7 @@ public final class Main {
         requiredConfigFields.add("messages_collection_size");
         requiredConfigFields.add("use_gelf");
         requiredConfigFields.add("gelf_listen_port");
+        requiredConfigFields.add("rrd_storage_dir");
 
         // Check if all required configuration fields are set.
         for (String requiredConfigField : requiredConfigFields) {
@@ -119,11 +121,6 @@ public final class Main {
         if(!allowedSyslogProtocols.contains(Main.masterConfig.getProperty("syslog_protocol"))) {
             System.out.println("Invalid syslog_protocol: " + Main.masterConfig.getProperty("syslog_protocol"));
             System.exit(1); // Exit with error.
-        }
-
-        // Print out a deprecation warning if "rrd_storage_dir" is set.
-        if (Main.masterConfig.getProperty("rrd_storage_dir") != null) {
-            System.out.println("[!] Deprecation warning: Config parameter rrd_storage_dir is no longer needed.");
         }
 
         // Are we in debug mode?
@@ -195,6 +192,11 @@ public final class Main {
             
             System.out.println("[x] GELF threads are up.");
         }
+
+         // Start graph writer thread.
+         GraphWriterThread graphThread = new GraphWriterThread();
+         graphThread.start();
+         System.out.println("[x] Graph writers are up.");
 
         // Start the thread that distincts hosts.
         HostDistinctThread hostDistinctThread = new HostDistinctThread();
