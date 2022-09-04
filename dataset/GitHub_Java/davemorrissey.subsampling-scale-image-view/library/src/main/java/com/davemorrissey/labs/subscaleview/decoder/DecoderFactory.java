@@ -1,7 +1,5 @@
 package com.davemorrissey.labs.subscaleview.decoder;
 
-import android.support.annotation.NonNull;
-
 import java.lang.reflect.InvocationTargetException;
 
 /**
@@ -18,6 +16,6 @@ public interface DecoderFactory<T> {
      * @throws NoSuchMethodException if the factory class cannot be instantiated.
      * @throws InvocationTargetException if the factory class cannot be instantiated.
      */
-    @NonNull T make() throws IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException;
+    T make() throws IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException;
 
 }
