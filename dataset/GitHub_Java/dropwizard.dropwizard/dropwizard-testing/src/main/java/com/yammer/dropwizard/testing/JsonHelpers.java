@@ -32,9 +32,9 @@ public class JsonHelpers {
      *
      * @param object    an object
      * @return {@code object} as a JSON string
-     * @throws IllegalArgumentException if there is an error encoding {@code object}
+     * @throws IOException if there is an error writing {@code object} as JSON
      */
-    public static String asJson(Object object) throws IllegalArgumentException {
+    public static String asJson(Object object) throws IOException {
         return JSON.writeValueAsString(object);
     }
 
