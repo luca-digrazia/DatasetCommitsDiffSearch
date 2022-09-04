@@ -432,6 +432,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
         "    zipalign = 'zipalign',",
+        "    resource_extractor = 'resource_extractor'",
         ")",
         "java_library(",
         "    name = 'aidl_runtime',",
@@ -491,6 +492,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
         "    zipalign = 'zipalign',",
+        "    resource_extractor = 'resource_extractor'",
         ")",
         "java_library(",
         "    name = 'aidl_runtime',",
@@ -663,8 +665,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   private void actualSignerToolTests(String apkSigningMethod, String signV1, String signV2)
       throws Exception {
-    scratch.file(
-        "sdk/BUILD",
+    scratch.file("sdk/BUILD",
         "android_sdk(",
         "    name = 'sdk',",
         "    aapt = 'aapt',",
@@ -679,7 +680,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign')");
+        "    zipalign = 'zipalign',",
+        "    resource_extractor = 'resource_extractor')");
     scratch.file("java/com/google/android/hello/BUILD",
         "android_binary(name = 'hello',",
         "               srcs = ['Foo.java'],",
@@ -2143,8 +2145,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testMainDexListWithAndroidSdk() throws Exception {
-    scratch.file(
-        "sdk/BUILD",
+    scratch.file("sdk/BUILD",
         "android_sdk(",
         "    name = 'sdk',",
         "    aapt = 'aapt',",
@@ -2159,7 +2160,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign')");
+        "    zipalign = 'zipalign',",
+        "    resource_extractor = 'resource_extractor')");
 
     scratch.file("java/a/BUILD",
         "android_binary(",
@@ -2179,8 +2181,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
 
   @Test
   public void testMainDexAaptGenerationSupported() throws Exception {
-    scratch.file(
-        "sdk/BUILD",
+    scratch.file("sdk/BUILD",
         "android_sdk(",
         "    name = 'sdk',",
         "    build_tools_version = '24.0.0',",
@@ -2196,7 +2197,8 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         "    main_dex_list_creator = 'main_dex_list_creator',",
         "    proguard = 'proguard',",
         "    shrinked_android_jar = 'shrinked_android_jar',",
-        "    zipalign = 'zipalign')");
+        "    zipalign = 'zipalign',",
+        "    resource_extractor = 'resource_extractor')");
 
     scratch.file("java/a/BUILD",
         "android_binary(",
@@ -2728,7 +2730,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     assertThat(getConfiguredTarget("//java/com/foo")).isNull();
     assertContainsEvent(
         "in config_feature_flag rule //java/com/foo:flag1: "
-            + "value must be one of [\"off\", \"on\"], but was \"invalid\"");
+            + "value must be one of ['off', 'on'], but was 'invalid'");
   }
 
   @Test
@@ -2757,7 +2759,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     assertThat(getConfiguredTarget("//java/com/foo")).isNull();
     assertContainsEvent(
         "in config_feature_flag rule //java/com/foo:flag1: "
-            + "value must be one of [\"off\", \"on\"], but was \"invalid\"");
+            + "value must be one of ['off', 'on'], but was 'invalid'");
   }
 
   @Test
@@ -2796,7 +2798,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
     scratch.file(
         "java/com/foo/reader.bzl",
         "def _impl(ctx):",
-        "  ctx.actions.write(",
+        "  ctx.file_action(",
         "      ctx.outputs.java,",
         "      '\\n'.join([",
         "          str(target.label) + ': ' + target[config_common.FeatureFlagInfo].value",
@@ -2887,7 +2889,7 @@ public class AndroidBinaryTest extends AndroidBuildViewTestCase {
         .containsAllOf("--nocompress_suffixes", ".apk", ".so")
         .inOrder();
   }
-
+  
   @Test
   public void testAndroidBinaryWithTestOnlySetsTestOnly() throws Exception {
     scratch.file(
