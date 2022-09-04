@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.jaxrs.json.JacksonJaxbJsonProvider;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.glassfish.jersey.jackson.JacksonFeature;
 import org.glassfish.jersey.message.GZipEncoder;
 import org.glassfish.jersey.server.ContainerFactory;
 import org.glassfish.jersey.server.ResourceConfig;
@@ -31,13 +32,13 @@ import org.glassfish.jersey.server.model.Resource;
 import org.graylog2.jersey.container.netty.NettyContainer;
 import org.graylog2.jersey.container.netty.SecurityContextFactory;
 import org.graylog2.plugin.BaseConfiguration;
+import org.graylog2.plugin.rest.AnyExceptionClassMapper;
+import org.graylog2.plugin.rest.JacksonPropertyExceptionMapper;
+import org.graylog2.plugin.rest.JsonProcessingExceptionMapper;
 import org.graylog2.plugin.rest.PluginRestResource;
+import org.graylog2.plugin.rest.WebApplicationExceptionMapper;
 import org.graylog2.shared.rest.CORSFilter;
 import org.graylog2.shared.rest.PrintModelProcessor;
-import org.graylog2.shared.rest.exceptionmappers.AnyExceptionClassMapper;
-import org.graylog2.shared.rest.exceptionmappers.JacksonPropertyExceptionMapper;
-import org.graylog2.shared.rest.exceptionmappers.JsonProcessingExceptionMapper;
-import org.graylog2.shared.rest.exceptionmappers.WebApplicationExceptionMapper;
 import org.jboss.netty.bootstrap.ServerBootstrap;
 import org.jboss.netty.channel.ChannelPipeline;
 import org.jboss.netty.channel.ChannelPipelineFactory;
@@ -272,6 +273,8 @@ public class RestApiService extends AbstractIdleService {
                 .property(NettyContainer.PROPERTY_BASE_URI, listenUri)
                 .registerClasses(
                         JacksonJaxbJsonProvider.class,
+                        MessageBodyReader.class,
+                        MessageBodyWriter.class,
                         JsonProcessingExceptionMapper.class,
                         JacksonPropertyExceptionMapper.class,
                         AnyExceptionClassMapper.class,
