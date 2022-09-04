@@ -49,7 +49,6 @@ import org.jboss.logging.Logger;
 import io.quarkus.deployment.ApplicationArchive;
 import io.quarkus.deployment.ApplicationArchiveImpl;
 import io.quarkus.deployment.annotations.BuildStep;
-import io.quarkus.deployment.builditem.AdditionalApplicationArchiveBuildItem;
 import io.quarkus.deployment.builditem.AdditionalApplicationArchiveMarkerBuildItem;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.ApplicationIndexBuildItem;
@@ -78,8 +77,7 @@ public class ApplicationArchiveBuildStep {
 
     @BuildStep
     ApplicationArchivesBuildItem build(ArchiveRootBuildItem root, ApplicationIndexBuildItem appindex,
-            List<AdditionalApplicationArchiveMarkerBuildItem> appMarkers,
-            List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchiveBuildItem) throws IOException {
+            List<AdditionalApplicationArchiveMarkerBuildItem> appMarkers) throws IOException {
 
         Set<String> markerFiles = new HashSet<>();
         for (AdditionalApplicationArchiveMarkerBuildItem i : appMarkers) {
@@ -87,13 +85,13 @@ public class ApplicationArchiveBuildStep {
         }
 
         List<ApplicationArchive> applicationArchives = scanForOtherIndexes(Thread.currentThread().getContextClassLoader(),
-                markerFiles, root.getPath(), additionalApplicationArchiveBuildItem);
+                markerFiles, root.getPath(), Collections.emptyList());
         return new ApplicationArchivesBuildItem(new ApplicationArchiveImpl(appindex.getIndex(), root.getPath(), null),
                 applicationArchives);
     }
 
     private List<ApplicationArchive> scanForOtherIndexes(ClassLoader classLoader, Set<String> applicationArchiveFiles,
-            Path appRoot, List<AdditionalApplicationArchiveBuildItem> additionalApplicationArchives) throws IOException {
+            Path appRoot, List<Path> additionalApplicationArchives) throws IOException {
         Set<Path> dependenciesToIndex = new HashSet<>();
         //get paths that are included via index-dependencies
         dependenciesToIndex.addAll(getIndexDependencyPaths(classLoader));
@@ -105,9 +103,7 @@ public class ApplicationArchiveBuildStep {
         //we don't index the application root, this is handled elsewhere
         dependenciesToIndex.remove(appRoot);
 
-        for (AdditionalApplicationArchiveBuildItem i : additionalApplicationArchives) {
-            dependenciesToIndex.add(i.getPath());
-        }
+        dependenciesToIndex.addAll(additionalApplicationArchives);
 
         return indexPaths(dependenciesToIndex, classLoader);
     }
