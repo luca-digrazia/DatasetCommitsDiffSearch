@@ -12,7 +12,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusDevModeTest;
 import io.quarkus.vertx.http.deployment.devmode.tests.TestStatus;
-import io.quarkus.vertx.http.testrunner.ContinuousTestingTestUtils;
+import io.quarkus.vertx.http.testrunner.TestRunnerTestUtils;
 import io.restassured.RestAssured;
 
 public class TestBrokenOnlyTestCase {
@@ -22,8 +22,8 @@ public class TestBrokenOnlyTestCase {
             .setArchiveProducer(new Supplier<JavaArchive>() {
                 @Override
                 public JavaArchive get() {
-                    return ShrinkWrap.create(JavaArchive.class).addClass(BrokenOnlyResource.class)
-                            .add(new StringAsset(ContinuousTestingTestUtils.appProperties()),
+                    return ShrinkWrap.create(JavaArchive.class).addClass(HelloResource.class)
+                            .add(new StringAsset(TestRunnerTestUtils.appProperties()),
                                     "application.properties");
                 }
             })
@@ -36,13 +36,12 @@ public class TestBrokenOnlyTestCase {
 
     @Test
     public void testBrokenOnlyMode() throws InterruptedException {
-        ContinuousTestingTestUtils utils = new ContinuousTestingTestUtils();
-        TestStatus ts = utils.waitForNextCompletion();
-        ;
-
+        TestStatus ts = TestRunnerTestUtils.waitForFirstRunToComplete();
+        Assertions.assertEquals(1L, ts.getLastRun());
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
         Assertions.assertEquals(0L, ts.getTestsSkipped());
+        Assertions.assertEquals(-1L, ts.getRunning());
 
         //start broken only mode
         RestAssured.post("q/dev/io.quarkus.quarkus-vertx-http/tests/toggle-broken-only");
@@ -53,25 +52,25 @@ public class TestBrokenOnlyTestCase {
                 return s.replace("@QuarkusTest", "@QuarkusTest //noop change");
             }
         });
-        ts = utils.waitForNextCompletion();
-        ;
-
+        ts = TestRunnerTestUtils.waitForRun(2);
+        Assertions.assertEquals(2L, ts.getLastRun());
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed()); //passing test should not have been run
         Assertions.assertEquals(0L, ts.getTestsSkipped());
+        Assertions.assertEquals(-1L, ts.getRunning());
 
-        test.modifySourceFile(BrokenOnlyResource.class, new Function<String, String>() {
+        test.modifySourceFile(HelloResource.class, new Function<String, String>() {
             @Override
             public String apply(String s) {
                 return s.replace("//setup(router);", "setup(router);");
             }
         });
-        ts = utils.waitForNextCompletion();
-        ;
-
+        ts = TestRunnerTestUtils.waitForRun(3);
+        Assertions.assertEquals(3L, ts.getLastRun());
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
         Assertions.assertEquals(0L, ts.getTestsSkipped());
+        Assertions.assertEquals(-1L, ts.getRunning());
 
         //now add a new failing test
         test.modifyTestSourceFile(SimpleET.class, new Function<String, String>() {
@@ -80,12 +79,12 @@ public class TestBrokenOnlyTestCase {
                 return s.replace("//failannotation", "@Test");
             }
         });
-        ts = utils.waitForNextCompletion();
-        ;
-
+        ts = TestRunnerTestUtils.waitForRun(4);
+        Assertions.assertEquals(4L, ts.getLastRun());
         Assertions.assertEquals(1L, ts.getTestsFailed());
         Assertions.assertEquals(0L, ts.getTestsPassed());
         Assertions.assertEquals(0L, ts.getTestsSkipped());
+        Assertions.assertEquals(-1L, ts.getRunning());
 
         //now make it pass
         test.modifyTestSourceFile(SimpleET.class, new Function<String, String>() {
@@ -94,10 +93,12 @@ public class TestBrokenOnlyTestCase {
                 return s.replace("Assertions.fail();", "//noop");
             }
         });
-        ts = utils.waitForNextCompletion();
+        ts = TestRunnerTestUtils.waitForRun(5);
+        Assertions.assertEquals(5L, ts.getLastRun());
         Assertions.assertEquals(0L, ts.getTestsFailed());
         Assertions.assertEquals(1L, ts.getTestsPassed());
         Assertions.assertEquals(0L, ts.getTestsSkipped());
+        Assertions.assertEquals(-1L, ts.getRunning());
 
     }
 }

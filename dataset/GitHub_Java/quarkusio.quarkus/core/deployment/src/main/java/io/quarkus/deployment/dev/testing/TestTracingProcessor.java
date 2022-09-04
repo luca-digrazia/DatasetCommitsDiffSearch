@@ -107,7 +107,26 @@ public class TestTracingProcessor {
                         new BiFunction<String, ClassVisitor, ClassVisitor>() {
                             @Override
                             public ClassVisitor apply(String s, ClassVisitor classVisitor) {
-                                return new TracingClassVisitor(classVisitor, theClassName);
+                                return new ClassVisitor(Opcodes.ASM9, classVisitor) {
+                                    @Override
+                                    public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                            String signature, String[] exceptions) {
+                                        MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+                                        if (name.equals("<init>") || name.equals("<clinit>")) {
+                                            return mv;
+                                        }
+                                        return new MethodVisitor(Opcodes.ASM9, mv) {
+                                            @Override
+                                            public void visitCode() {
+                                                super.visitCode();
+                                                visitLdcInsn(theClassName);
+                                                visitMethodInsn(Opcodes.INVOKESTATIC,
+                                                        TracingHandler.class.getName().replace(".", "/"), "trace",
+                                                        "(Ljava/lang/String;)V", false);
+                                            }
+                                        };
+                                    }
+                                };
                             }
                         }, true));
             }
@@ -122,33 +141,5 @@ public class TestTracingProcessor {
         List<ClassPathElement> res = cl
                 .getElementsWithResource(theClassName.replace(".", "/") + ".class", true);
         return !res.isEmpty();
-    }
-
-    public static class TracingClassVisitor extends ClassVisitor {
-        private final String theClassName;
-
-        public TracingClassVisitor(ClassVisitor classVisitor, String theClassName) {
-            super(Opcodes.ASM9, classVisitor);
-            this.theClassName = theClassName;
-        }
-
-        @Override
-        public MethodVisitor visitMethod(int access, String name, String descriptor,
-                String signature, String[] exceptions) {
-            MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
-            if (name.equals("<init>") || name.equals("<clinit>")) {
-                return mv;
-            }
-            return new MethodVisitor(Opcodes.ASM9, mv) {
-                @Override
-                public void visitCode() {
-                    super.visitCode();
-                    visitLdcInsn(theClassName);
-                    visitMethodInsn(Opcodes.INVOKESTATIC,
-                            TracingHandler.class.getName().replace(".", "/"), "trace",
-                            "(Ljava/lang/String;)V", false);
-                }
-            };
-        }
     }
 }
