@@ -25,11 +25,16 @@ import org.joda.time.DateTime;
 import javax.annotation.Nullable;
 import java.util.Map;
 
+/**
+ * Created by dennis on 12/12/14.
+ */
 @JsonAutoDetect
 @AutoValue
 public abstract class InputSummary {
     @JsonProperty
     public abstract String title();
+    @JsonProperty
+    public abstract String persistId();
     @JsonProperty
     public abstract Boolean global();
     @JsonProperty
@@ -37,7 +42,7 @@ public abstract class InputSummary {
     @JsonProperty
     @Nullable
     public abstract String contentPack();
-    @JsonProperty("id")
+    @JsonProperty
     public abstract String inputId();
     @JsonProperty
     public abstract DateTime createdAt();
@@ -52,15 +57,16 @@ public abstract class InputSummary {
 
     @JsonCreator
     public static InputSummary create(@JsonProperty("title") String title,
+                                      @JsonProperty("persist_id") String persistId,
                                       @JsonProperty("global") Boolean global,
                                       @JsonProperty("name") String name,
                                       @JsonProperty("content_pack") @Nullable String contentPack,
-                                      @JsonProperty("id") String inputId,
+                                      @JsonProperty("input_id") String inputId,
                                       @JsonProperty("created_at") DateTime createdAt,
                                       @JsonProperty("type") String type,
                                       @JsonProperty("creator_user_id") String creatorUserId,
                                       @JsonProperty("attributes") Map<String, Object> attributes,
                                       @JsonProperty("static_fields") Map<String, String> staticFields) {
-        return new AutoValue_InputSummary(title, global, name, contentPack, inputId, createdAt, type, creatorUserId, attributes, staticFields);
+        return new AutoValue_InputSummary(title, persistId, global, name, contentPack, inputId, createdAt, type, creatorUserId, attributes, staticFields);
     }
 }
