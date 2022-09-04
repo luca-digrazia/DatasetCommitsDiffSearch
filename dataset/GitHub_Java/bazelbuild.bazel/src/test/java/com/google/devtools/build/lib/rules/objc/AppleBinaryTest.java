@@ -28,7 +28,7 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.config.CompilationMode;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesInfo;
+import com.google.devtools.build.lib.analysis.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration.ConfigurationDistinguisher;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform;
@@ -612,7 +612,7 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   /** Returns the path to the dSYM binary artifact for given architecture and compilation mode. */
   protected String dsymBinaryPath(String arch, CompilationMode mode) throws Exception {
     return configurationBin(arch, ConfigurationDistinguisher.APPLEBIN_IOS, null, mode)
-        + "examples/apple_skylark/bin_bin.dwarf";
+        + "examples/apple_skylark/bin.app.dSYM/Contents/Resources/DWARF/bin_bin";
   }
 
   /** Returns the path to the linkmap artifact for a given architecture. */
@@ -967,23 +967,13 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
   }
 
   @Test
-  public void testFrameworkDepLinkFlagsPreCleanup() throws Exception {
-    checkFrameworkDepLinkFlags(getRuleType(), new ExtraLinkArgs(), false);
+  public void testFrameworkDepLinkFlags() throws Exception {
+    checkFrameworkDepLinkFlags(getRuleType(), new ExtraLinkArgs());
   }
 
   @Test
-  public void testFrameworkDepLinkFlagsPostCleanup() throws Exception {
-    checkFrameworkDepLinkFlags(getRuleType(), new ExtraLinkArgs(), true);
-  }
-
-  @Test
-  public void testDylibDependenciesPreCleanup() throws Exception {
-    checkDylibDependencies(getRuleType(), new ExtraLinkArgs(), false);
-  }
-
-  @Test
-  public void testDylibDependenciesPostCleanup() throws Exception {
-    checkDylibDependencies(getRuleType(), new ExtraLinkArgs(), true);
+  public void testDylibDependencies() throws Exception {
+    checkDylibDependencies(getRuleType(), new ExtraLinkArgs());
   }
 
   @Test
@@ -1311,8 +1301,8 @@ public class AppleBinaryTest extends ObjcRuleTestCase {
         ")");
 
     ConfiguredTarget bundleTarget = getConfiguredTarget("//examples:bundle");
-    InstrumentedFilesInfo instrumentedFilesProvider =
-        bundleTarget.get(InstrumentedFilesInfo.SKYLARK_CONSTRUCTOR);
+    InstrumentedFilesProvider instrumentedFilesProvider =
+        bundleTarget.getProvider(InstrumentedFilesProvider.class);
     assertThat(instrumentedFilesProvider).isNotNull();
 
     assertThat(Artifact.toRootRelativePaths(instrumentedFilesProvider.getInstrumentedFiles()))

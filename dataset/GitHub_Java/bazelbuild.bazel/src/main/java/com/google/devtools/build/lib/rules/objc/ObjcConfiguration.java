@@ -24,13 +24,21 @@ import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.rules.apple.ApplePlatform.PlatformType;
 import com.google.devtools.build.lib.rules.apple.DottedVersion;
 import com.google.devtools.build.lib.rules.cpp.HeaderDiscovery;
-import com.google.devtools.build.lib.skylarkbuildapi.apple.ObjcConfigurationApi;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import javax.annotation.Nullable;
 
 /** A compiler configuration containing flags required for Objective-C compilation. */
+@AutoCodec
+@SkylarkModule(
+  name = "objc",
+  category = SkylarkModuleCategory.CONFIGURATION_FRAGMENT,
+  doc = "A configuration fragment for Objective-C."
+)
 @Immutable
-public class ObjcConfiguration extends BuildConfiguration.Fragment
-    implements ObjcConfigurationApi<PlatformType> {
+public class ObjcConfiguration extends BuildConfiguration.Fragment {
   @VisibleForTesting
   static final ImmutableList<String> DBG_COPTS =
       ImmutableList.of("-O0", "-DDEBUG=1", "-fstack-protector", "-fstack-protector-all", "-g");
@@ -75,18 +83,15 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
     this.iosSimulatorDevice =
         Preconditions.checkNotNull(objcOptions.iosSimulatorDevice, "iosSimulatorDevice");
     this.iosSimulatorVersion =
-        Preconditions.checkNotNull(DottedVersion.maybeUnwrap(objcOptions.iosSimulatorVersion),
-            "iosSimulatorVersion");
+        Preconditions.checkNotNull(objcOptions.iosSimulatorVersion, "iosSimulatorVersion");
     this.watchosSimulatorDevice =
         Preconditions.checkNotNull(objcOptions.watchosSimulatorDevice, "watchosSimulatorDevice");
     this.watchosSimulatorVersion =
-        Preconditions.checkNotNull(DottedVersion.maybeUnwrap(objcOptions.watchosSimulatorVersion),
-            "watchosSimulatorVersion");
+        Preconditions.checkNotNull(objcOptions.watchosSimulatorVersion, "watchosSimulatorVersion");
     this.tvosSimulatorDevice =
         Preconditions.checkNotNull(objcOptions.tvosSimulatorDevice, "tvosSimulatorDevice");
     this.tvosSimulatorVersion =
-        Preconditions.checkNotNull(DottedVersion.maybeUnwrap(objcOptions.tvosSimulatorVersion),
-            "tvosSimulatorVersion");
+        Preconditions.checkNotNull(objcOptions.tvosSimulatorVersion, "tvosSimulatorVersion");
     this.generateLinkmap = objcOptions.generateLinkmap;
     this.runMemleaks = objcOptions.runMemleaks;
     this.copts = ImmutableList.copyOf(objcOptions.copts);
@@ -113,22 +118,80 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
     this.strictObjcModuleMaps = objcOptions.strictObjcModuleMaps;
   }
 
+  @AutoCodec.Instantiator
+  ObjcConfiguration(
+      DottedVersion iosSimulatorVersion,
+      String iosSimulatorDevice,
+      DottedVersion watchosSimulatorVersion,
+      String watchosSimulatorDevice,
+      DottedVersion tvosSimulatorVersion,
+      String tvosSimulatorDevice,
+      boolean generateDsym,
+      boolean generateLinkmap,
+      boolean runMemleaks,
+      ImmutableList<String> copts,
+      CompilationMode compilationMode,
+      ImmutableList<String> fastbuildOptions,
+      boolean enableBinaryStripping,
+      boolean moduleMapsEnabled,
+      String signingCertName,
+      boolean debugWithGlibcxx,
+      Label extraEntitlements,
+      boolean deviceDebugEntitlements,
+      boolean enableAppleBinaryNativeProtos,
+      HeaderDiscovery.DotdPruningMode dotdPruningPlan,
+      boolean experimentalHeaderThinning,
+      int objcHeaderThinningPartitionSize,
+      Label objcHeaderScannerTool,
+      Label appleSdk,
+      boolean strictObjcModuleMaps) {
+    this.iosSimulatorVersion = iosSimulatorVersion;
+    this.iosSimulatorDevice = iosSimulatorDevice;
+    this.watchosSimulatorVersion = watchosSimulatorVersion;
+    this.watchosSimulatorDevice = watchosSimulatorDevice;
+    this.tvosSimulatorVersion = tvosSimulatorVersion;
+    this.tvosSimulatorDevice = tvosSimulatorDevice;
+    this.generateDsym = generateDsym;
+    this.generateLinkmap = generateLinkmap;
+    this.runMemleaks = runMemleaks;
+    this.copts = copts;
+    this.compilationMode = compilationMode;
+    this.fastbuildOptions = fastbuildOptions;
+    this.enableBinaryStripping = enableBinaryStripping;
+    this.moduleMapsEnabled = moduleMapsEnabled;
+    this.signingCertName = signingCertName;
+    this.debugWithGlibcxx = debugWithGlibcxx;
+    this.extraEntitlements = extraEntitlements;
+    this.deviceDebugEntitlements = deviceDebugEntitlements;
+    this.enableAppleBinaryNativeProtos = enableAppleBinaryNativeProtos;
+    this.dotdPruningPlan = dotdPruningPlan;
+    this.experimentalHeaderThinning = experimentalHeaderThinning;
+    this.objcHeaderThinningPartitionSize = objcHeaderThinningPartitionSize;
+    this.objcHeaderScannerTool = objcHeaderScannerTool;
+    this.appleSdk = appleSdk;
+    this.strictObjcModuleMaps = strictObjcModuleMaps;
+  }
+
   /**
    * Returns the type of device (e.g. 'iPhone 6') to simulate when running on the simulator.
    */
-  @Override
+  @SkylarkCallable(name = "ios_simulator_device", structField = true,
+      doc = "The type of device (e.g. 'iPhone 6') to use when running on the simulator.")
   public String getIosSimulatorDevice() {
     // TODO(bazel-team): Deprecate in favor of getSimulatorDeviceForPlatformType(IOS).
     return iosSimulatorDevice;
   }
 
-  @Override
+  @SkylarkCallable(name = "ios_simulator_version", structField = true,
+      doc = "The SDK version of the iOS simulator to use when running on the simulator.")
   public DottedVersion getIosSimulatorVersion() {
     // TODO(bazel-team): Deprecate in favor of getSimulatorVersionForPlatformType(IOS).
     return iosSimulatorVersion;
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "simulator_device_for_platform_type",
+      doc = "The type of device (e.g., 'iPhone 6' to simulate when running on the simulator.")
   public String getSimulatorDeviceForPlatformType(PlatformType platformType) {
     switch (platformType) {
       case IOS:
@@ -143,7 +206,9 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
     }
   }
 
-  @Override
+  @SkylarkCallable(
+      name = "simulator_version_for_platform_type",
+      doc = "The SDK version of the simulator to use when running on the simulator.")
   public DottedVersion getSimulatorVersionForPlatformType(PlatformType platformType) {
     switch (platformType) {
       case IOS:
@@ -161,7 +226,10 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
   /**
    * Returns whether dSYM generation is enabled.
    */
-  @Override
+  @SkylarkCallable(
+      name = "generate_dsym",
+      doc = "Whether to generate debug symbol(.dSYM) artifacts.",
+      structField = true)
   public boolean generateDsym() {
     return generateDsym;
   }
@@ -169,12 +237,19 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
   /**
    * Returns whether linkmap generation is enabled.
    */
-  @Override
+  @SkylarkCallable(
+      name = "generate_linkmap",
+      doc = "Whether to generate linkmap artifacts.",
+      structField = true)
   public boolean generateLinkmap() {
     return generateLinkmap;
   }
 
-  @Override
+  @SkylarkCallable(
+    name = "run_memleaks",
+    structField = true,
+    doc = "Returns a boolean indicating whether memleaks should be run during tests or not."
+  )
   public boolean runMemleaks() {
     return runMemleaks;
   }
@@ -189,7 +264,9 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
   /**
    * Returns the default set of clang options for the current compilation mode.
    */
-  @Override
+  @SkylarkCallable(name = "copts_for_current_compilation_mode", structField = true,
+      doc = "Returns a list of default options to use for compiling Objective-C in the current "
+      + "mode.")
   public ImmutableList<String> getCoptsForCompilationMode() {
     switch (compilationMode) {
       case DBG:
@@ -214,7 +291,10 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
    * Returns options passed to (Apple) clang when compiling Objective C. These options should be
    * applied after any default options but before options specified in the attributes of the rule.
    */
-  @Override
+  @SkylarkCallable(name = "copts", structField = true,
+      doc = "Returns a list of options to use for compiling Objective-C."
+      + "These options are applied after any default options but before options specified in the "
+      + "attributes of the rule.")
   public ImmutableList<String> getCopts() {
     return copts;
   }
@@ -238,7 +318,10 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
    * Returns the flag-supplied certificate name to be used in signing or {@code null} if no such
    * certificate was specified.
    */
-  @Override
+  @Nullable
+  @SkylarkCallable(name = "signing_certificate_name", structField = true, allowReturnNones = true,
+      doc = "Returns the flag-supplied certificate name to be used in signing, or None if no such "
+      + "certificate was specified.")
   public String getSigningCertName() {
     return this.signingCertName;
   }
@@ -257,13 +340,16 @@ public class ObjcConfiguration extends BuildConfiguration.Fragment
    * <p>Note that debug entitlements will be included only if the --device_debug_entitlements flag
    * is set <b>and</b> the compilation mode is not {@code opt}.
    */
-  @Override
+  @SkylarkCallable(name = "uses_device_debug_entitlements", structField = true,
+      doc = "Returns whether device debug entitlements should be included when signing an "
+      + "application.")
   public boolean useDeviceDebugEntitlements() {
     return deviceDebugEntitlements && compilationMode != CompilationMode.OPT;
   }
 
   /** Returns true if apple_binary targets should generate and link Objc protos. */
-  @Override
+  @SkylarkCallable(name = "enable_apple_binary_native_protos", structField = true,
+      doc = "Returns whether apple_binary should generate and link protos natively.")
   public boolean enableAppleBinaryNativeProtos() {
     return enableAppleBinaryNativeProtos;
   }
