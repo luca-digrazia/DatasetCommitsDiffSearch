@@ -26,8 +26,11 @@ import javax.annotation.Nullable;
 import net.starlark.java.annot.StarlarkInterfaceUtils;
 import net.starlark.java.annot.StarlarkMethod;
 
-/** Helper functions for StarlarkMethod-annotated fields and methods. */
-final class CallUtils {
+/** Helper functions for implementing function calls. */
+// TODO(adonovan): make this class private. Logically it is part of EvalUtils, and the public
+// methods should move there, though some parts might better exposed as a group related to annotated
+// methods. For ease of review, we'll do that in a follow-up change.
+public final class CallUtils {
 
   private CallUtils() {} // uninstantiable
 
@@ -144,7 +147,9 @@ final class CallUtils {
    * objClass class reachable from Starlark. Elements are sorted by Java method name (which is not
    * necessarily the same as Starlark attribute name).
    */
-  static ImmutableMap<Method, StarlarkMethod> getAnnotatedMethods(Class<?> objClass) {
+  // TODO(adonovan): eliminate sole use in skydoc.
+  public static ImmutableMap<Method, StarlarkMethod> collectStarlarkMethodsWithAnnotation(
+      Class<?> objClass) {
     ImmutableMap.Builder<Method, StarlarkMethod> result = ImmutableMap.builder();
     for (MethodDescriptor desc :
         getCacheValue(objClass, StarlarkSemantics.DEFAULT).methods.values()) {
@@ -157,7 +162,7 @@ final class CallUtils {
    * Returns the value of the Starlark field of {@code x}, implemented by a Java method with a
    * {@code StarlarkMethod(structField=true)} annotation.
    */
-  static Object getAnnotatedField(StarlarkSemantics semantics, Object x, String fieldName)
+  public static Object getField(StarlarkSemantics semantics, Object x, String fieldName)
       throws EvalException, InterruptedException {
     MethodDescriptor desc = getCacheValue(x.getClass(), semantics).fields.get(fieldName);
     if (desc == null) {
@@ -167,12 +172,12 @@ final class CallUtils {
   }
 
   /** Returns the names of the Starlark fields of {@code x} under the specified semantics. */
-  static ImmutableSet<String> getAnnotatedFieldNames(StarlarkSemantics semantics, Object x) {
+  public static ImmutableSet<String> getFieldNames(StarlarkSemantics semantics, Object x) {
     return getCacheValue(x.getClass(), semantics).fields.keySet();
   }
 
   /** Returns the StarlarkMethod-annotated method of objClass with the given name. */
-  static MethodDescriptor getAnnotatedMethod(
+  static MethodDescriptor getMethod(
       StarlarkSemantics semantics, Class<?> objClass, String methodName) {
     return getCacheValue(objClass, semantics).methods.get(methodName);
   }
@@ -181,8 +186,7 @@ final class CallUtils {
    * Returns a set of the Starlark name of all Starlark callable methods for object of type {@code
    * objClass}.
    */
-  static ImmutableSet<String> getAnnotatedMethodNames(
-      StarlarkSemantics semantics, Class<?> objClass) {
+  static ImmutableSet<String> getMethodNames(StarlarkSemantics semantics, Class<?> objClass) {
     return getCacheValue(objClass, semantics).methods.keySet();
   }
 
@@ -202,7 +206,7 @@ final class CallUtils {
    * or null if no such method exists.
    */
   @Nullable
-  static Method getSelfCallMethod(StarlarkSemantics semantics, Class<?> objClass) {
+  public static Method getSelfCallMethod(StarlarkSemantics semantics, Class<?> objClass) {
     MethodDescriptor descriptor = getCacheValue(objClass, semantics).selfCall;
     if (descriptor == null) {
       return null;
