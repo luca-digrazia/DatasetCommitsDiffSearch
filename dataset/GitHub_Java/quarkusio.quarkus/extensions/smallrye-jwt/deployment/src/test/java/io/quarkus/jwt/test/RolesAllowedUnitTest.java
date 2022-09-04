@@ -1,7 +1,12 @@
 package io.quarkus.jwt.test;
 
+import java.io.StringReader;
 import java.net.HttpURLConnection;
 import java.util.HashMap;
+
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
 
 import org.eclipse.microprofile.jwt.Claims;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
@@ -17,8 +22,7 @@ import io.restassured.response.Response;
 
 public class RolesAllowedUnitTest {
     private static Class[] testClasses = {
-            RolesEndpoint.class,
-            TokenUtils.class
+            RolesEndpoint.class
     };
     /**
      * The test generated JWT token string
@@ -33,10 +37,6 @@ public class RolesAllowedUnitTest {
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
                     .addClasses(testClasses)
-                    .addAsResource("publicKey.pem")
-                    .addAsResource("privateKey.pem")
-                    .addAsResource("Token1.json")
-                    .addAsResource("Token2.json")
                     .addAsResource("application.properties"));
 
     @BeforeEach
@@ -56,25 +56,6 @@ public class RolesAllowedUnitTest {
                 .get("/endp/echo")
                 .then()
                 .statusCode(HttpURLConnection.HTTP_UNAUTHORIZED);
-    }
-
-    @Test()
-    public void testAuthenticatedAnnotation() {
-        RestAssured.given()
-                .when()
-                .queryParam("input", "hello")
-                .get("/endp/authenticated")
-                .then()
-                .statusCode(HttpURLConnection.HTTP_UNAUTHORIZED);
-
-        io.restassured.response.Response response = RestAssured.given().auth()
-                .oauth2(token)
-                .when()
-                .get("/endp/authenticated").andReturn();
-
-        Assertions.assertEquals(HttpURLConnection.HTTP_OK, response.getStatusCode());
-        String replyString = response.body().asString();
-        Assertions.assertEquals("jdoe@example.com", replyString);
     }
 
     /**
@@ -104,6 +85,8 @@ public class RolesAllowedUnitTest {
                 .get("/endp/echo").andReturn();
 
         Assertions.assertEquals(HttpURLConnection.HTTP_UNAUTHORIZED, response.getStatusCode());
+        String replyString = response.body().asString();
+        Assertions.assertEquals("Not authorized", replyString);
     }
 
     /**
@@ -140,7 +123,7 @@ public class RolesAllowedUnitTest {
 
         Assertions.assertEquals(HttpURLConnection.HTTP_FORBIDDEN, response.getStatusCode());
         String replyString = response.body().asString();
-        Assertions.assertEquals("Forbidden", replyString);
+        Assertions.assertEquals("Access forbidden: role not allowed", replyString);
     }
 
     /**
@@ -216,7 +199,7 @@ public class RolesAllowedUnitTest {
 
         Assertions.assertEquals(HttpURLConnection.HTTP_FORBIDDEN, response.getStatusCode());
         String replyString = response.body().asString();
-        Assertions.assertEquals("Forbidden", replyString);
+        Assertions.assertEquals("Access forbidden: role not allowed", replyString);
     }
 
     /**
