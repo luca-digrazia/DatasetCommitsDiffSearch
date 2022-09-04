@@ -16,8 +16,6 @@ package com.google.devtools.build.remote.worker;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.logging.Level.FINE;
-import static java.util.logging.Level.INFO;
-import static java.util.logging.Level.SEVERE;
 
 import build.bazel.remote.execution.v2.ActionCacheGrpc.ActionCacheImplBase;
 import build.bazel.remote.execution.v2.ActionResult;
@@ -27,18 +25,12 @@ import build.bazel.remote.execution.v2.ExecutionGrpc.ExecutionImplBase;
 import com.google.bytestream.ByteStreamGrpc.ByteStreamImplBase;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.flogger.GoogleLogger;
 import com.google.common.io.ByteStreams;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.common.util.concurrent.MoreExecutors;
-import com.google.devtools.build.lib.remote.RemoteOptions;
-import com.google.devtools.build.lib.remote.RemoteRetrier;
-import com.google.devtools.build.lib.remote.Retrier;
-import com.google.devtools.build.lib.remote.SimpleBlobStoreActionCache;
-import com.google.devtools.build.lib.remote.SimpleBlobStoreFactory;
-import com.google.devtools.build.lib.remote.blobstore.ConcurrentMapBlobStore;
-import com.google.devtools.build.lib.remote.blobstore.OnDiskBlobStore;
-import com.google.devtools.build.lib.remote.blobstore.SimpleBlobStore;
+import com.google.devtools.build.lib.remote.options.RemoteOptions;
 import com.google.devtools.build.lib.remote.util.DigestUtil;
 import com.google.devtools.build.lib.remote.util.TracingMetadataUtils;
 import com.google.devtools.build.lib.sandbox.LinuxSandboxUtil;
@@ -55,11 +47,13 @@ import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.JavaIoFileSystem;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.build.remote.worker.http.HttpCacheServerInitializer;
 import com.google.devtools.common.options.OptionsParser;
 import com.google.devtools.common.options.OptionsParsingException;
 import io.grpc.Server;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
+import io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.NettyServerBuilder;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.Channel;
@@ -68,6 +62,10 @@ import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.logging.LogLevel;
 import io.netty.handler.logging.LoggingHandler;
+import io.netty.handler.ssl.ClientAuth;
+import io.netty.handler.ssl.SslContextBuilder;
+import io.netty.handler.ssl.SslProvider;
+import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -89,7 +87,7 @@ public final class RemoteWorker {
   // collected, which would cause us to loose their configuration.
   private static final Logger rootLogger = Logger.getLogger("");
   private static final Logger nettyLogger = Logger.getLogger("io.grpc.netty");
-  private static final Logger logger = Logger.getLogger(RemoteWorker.class.getName());
+  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   private final RemoteWorkerOptions workerOptions;
   private final ActionCacheImplBase actionCacheServer;
@@ -105,7 +103,7 @@ public final class RemoteWorker {
       value = System.getProperty("bazel.DigestFunction", "SHA256");
       hashFunction = new DigestFunctionConverter().convert(value);
     } catch (OptionsParsingException e) {
-      throw new Error("The specified hash function '" + value + "' is not supported.");
+      throw new Error("The specified hash function '" + value + "' is not supported.", e);
     }
     return new JavaIoFileSystem(hashFunction);
   }
@@ -113,7 +111,7 @@ public final class RemoteWorker {
   public RemoteWorker(
       FileSystem fs,
       RemoteWorkerOptions workerOptions,
-      SimpleBlobStoreActionCache cache,
+      OnDiskBlobStoreCache cache,
       Path sandboxPath,
       DigestUtil digestUtil)
       throws IOException {
@@ -160,17 +158,35 @@ public final class RemoteWorker {
             .addService(ServerInterceptors.intercept(casServer, headersInterceptor))
             .addService(ServerInterceptors.intercept(capabilitiesServer, headersInterceptor));
 
+    if (workerOptions.tlsCertificate != null) {
+      b.sslContext(getSslContextBuilder(workerOptions).build());
+    }
+
     if (execServer != null) {
       b.addService(ServerInterceptors.intercept(execServer, headersInterceptor));
     } else {
-      logger.info("Execution disabled, only serving cache requests.");
+      logger.atInfo().log("Execution disabled, only serving cache requests");
     }
 
+    // disable auto flow control https://github.com/bazelbuild/bazel/issues/12264
+    b.flowControlWindow(NettyServerBuilder.DEFAULT_FLOW_CONTROL_WINDOW);
+
     Server server = b.build();
-    logger.log(INFO, "Starting gRPC server on port {0,number,#}.", workerOptions.listenPort);
+    logger.atInfo().log("Starting gRPC server on port %d", workerOptions.listenPort);
     server.start();
 
     return server;
+  }
+
+  private SslContextBuilder getSslContextBuilder(RemoteWorkerOptions workerOptions) {
+    SslContextBuilder sslContextBuilder =
+        SslContextBuilder.forServer(
+            new File(workerOptions.tlsCertificate), new File(workerOptions.tlsPrivateKey));
+    if (workerOptions.tlsCaCertificate != null) {
+      sslContextBuilder.clientAuth(ClientAuth.REQUIRE);
+      sslContextBuilder.trustManager(new File(workerOptions.tlsCaCertificate));
+    }
+    return GrpcSslContexts.configure(sslContextBuilder, SslProvider.OPENSSL);
   }
 
   private void createPidFile() throws IOException {
@@ -202,7 +218,9 @@ public final class RemoteWorker {
   @SuppressWarnings("FutureReturnValueIgnored")
   public static void main(String[] args) throws Exception {
     OptionsParser parser =
-        OptionsParser.newOptionsParser(RemoteOptions.class, RemoteWorkerOptions.class);
+        OptionsParser.builder()
+            .optionsClasses(RemoteOptions.class, RemoteWorkerOptions.class)
+            .build();
     parser.parseAndExitUponError(args);
     RemoteOptions remoteOptions = parser.getOptions(RemoteOptions.class);
     RemoteWorkerOptions remoteWorkerOptions = parser.getOptions(RemoteWorkerOptions.class);
@@ -232,52 +250,26 @@ public final class RemoteWorker {
       sandboxPath = prepareSandboxRunner(fs, remoteWorkerOptions);
     }
 
-    logger.info("Initializing in-memory cache server.");
-    boolean usingRemoteCache = SimpleBlobStoreFactory.isRemoteCacheOptions(remoteOptions);
-    if (!usingRemoteCache) {
-      logger.warning("Not using remote cache. This should be used for testing only!");
-    }
-    if ((remoteWorkerOptions.casPath != null)
-        && (!PathFragment.create(remoteWorkerOptions.casPath).isAbsolute()
+    if (remoteWorkerOptions.casPath == null
+        || (!PathFragment.create(remoteWorkerOptions.casPath).isAbsolute()
             || !fs.getPath(remoteWorkerOptions.casPath).exists())) {
-      logger.severe("--cas_path must refer to an existing, absolute path!");
+      logger.atSevere().log("--cas_path must be specified and refer to an exiting absolute path");
       System.exit(1);
       return;
     }
 
-    // The instance of SimpleBlobStore used is based on these criteria in order:
-    // 1. If remote cache or local disk cache is specified then use it first.
-    // 2. Finally use a ConcurrentMap to back the blob store.
-    final SimpleBlobStore blobStore;
-    if (usingRemoteCache) {
-      blobStore = SimpleBlobStoreFactory.create(remoteOptions, null, null);
-    } else if (remoteWorkerOptions.casPath != null) {
-      blobStore = new OnDiskBlobStore(fs.getPath(remoteWorkerOptions.casPath));
-    } else {
-      blobStore = new ConcurrentMapBlobStore(new ConcurrentHashMap<>());
-    }
-
+    Path casPath =
+        remoteWorkerOptions.casPath != null ? fs.getPath(remoteWorkerOptions.casPath) : null;
+    DigestUtil digestUtil = new DigestUtil(fs.getDigestFunction());
+    OnDiskBlobStoreCache cache = new OnDiskBlobStoreCache(remoteOptions, casPath, digestUtil);
     ListeningScheduledExecutorService retryService =
         MoreExecutors.listeningDecorator(Executors.newScheduledThreadPool(1));
-
-    RemoteRetrier retrier =
-        new RemoteRetrier(
-            remoteOptions,
-            RemoteRetrier.RETRIABLE_GRPC_ERRORS,
-            retryService,
-            Retrier.ALLOW_ALL_CALLS);
-    DigestUtil digestUtil = new DigestUtil(fs.getDigestFunction());
-    RemoteWorker worker =
-        new RemoteWorker(
-            fs,
-            remoteWorkerOptions,
-            new SimpleBlobStoreActionCache(remoteOptions, blobStore, retrier, digestUtil),
-            sandboxPath,
-            digestUtil);
+    RemoteWorker worker = new RemoteWorker(fs, remoteWorkerOptions, cache, sandboxPath, digestUtil);
 
     final Server server = worker.startServer();
 
-    EventLoopGroup bossGroup = null, workerGroup = null;
+    EventLoopGroup bossGroup = null;
+    EventLoopGroup workerGroup = null;
     Channel ch = null;
     if (remoteWorkerOptions.httpListenPort != 0) {
       // Configure the server.
@@ -289,11 +281,10 @@ public final class RemoteWorker {
           .handler(new LoggingHandler(LogLevel.INFO))
           .childHandler(new HttpCacheServerInitializer());
       ch = b.bind(remoteWorkerOptions.httpListenPort).sync().channel();
-      logger.log(
-          INFO,
-          "Started HTTP cache server on port " + remoteWorkerOptions.httpListenPort);
+      logger.atInfo().log(
+          "Started HTTP cache server on port %d", remoteWorkerOptions.httpListenPort);
     } else {
-      logger.log(INFO, "Not starting HTTP cache server");
+      logger.atInfo().log("Not starting HTTP cache server");
     }
 
     worker.createPidFile();
@@ -312,22 +303,23 @@ public final class RemoteWorker {
     }
   }
 
-  private static Path prepareSandboxRunner(FileSystem fs, RemoteWorkerOptions remoteWorkerOptions) {
+  private static Path prepareSandboxRunner(FileSystem fs, RemoteWorkerOptions remoteWorkerOptions)
+      throws InterruptedException {
     if (OS.getCurrent() != OS.LINUX) {
-      logger.severe("Sandboxing requested, but it is currently only available on Linux.");
+      logger.atSevere().log("Sandboxing requested, but it is currently only available on Linux");
       System.exit(1);
     }
 
     if (remoteWorkerOptions.workPath == null) {
-      logger.severe("Sandboxing requested, but --work_path was not specified.");
+      logger.atSevere().log("Sandboxing requested, but --work_path was not specified");
       System.exit(1);
     }
 
     InputStream sandbox = RemoteWorker.class.getResourceAsStream("/main/tools/linux-sandbox");
     if (sandbox == null) {
-      logger.severe(
+      logger.atSevere().log(
           "Sandboxing requested, but could not find bundled linux-sandbox binary. "
-              + "Please rebuild a worker_deploy.jar on Linux to make this work.");
+              + "Please rebuild a worker_deploy.jar on Linux to make this work");
       System.exit(1);
     }
 
@@ -339,7 +331,8 @@ public final class RemoteWorker {
       }
       sandboxPath.setExecutable(true);
     } catch (IOException e) {
-      logger.log(SEVERE, "Could not extract the bundled linux-sandbox binary to " + sandboxPath, e);
+      logger.atSevere().withCause(e).log(
+          "Could not extract the bundled linux-sandbox binary to %s", sandboxPath);
       System.exit(1);
     }
 
@@ -354,11 +347,9 @@ public final class RemoteWorker {
     try {
       cmdResult = cmd.execute();
     } catch (CommandException e) {
-      logger.log(
-          SEVERE,
-          "Sandboxing requested, but it failed to execute 'true' as a self-check: "
-              + new String(cmdResult.getStderr(), UTF_8),
-          e);
+      logger.atSevere().withCause(e).log(
+          "Sandboxing requested, but it failed to execute 'true' as a self-check: %s",
+          new String(cmdResult.getStderr(), UTF_8));
       System.exit(1);
     }
 
