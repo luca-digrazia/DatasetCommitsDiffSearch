@@ -258,49 +258,28 @@ public final class UnixGlob {
    * Filesystem calls required for glob().
    */
   public interface FilesystemCalls {
-    /** Get directory entries and their types. */
+    /**
+     * Get directory entries and their types.
+     */
     Collection<Dirent> readdir(Path path, Symlinks symlinks) throws IOException;
 
-    /** Return the stat() for the given path, or null. */
-    FileStatus statIfFound(Path path, Symlinks symlinks) throws IOException;
-
     /**
-     * Return the type of a specific file. This may be answered using stat() or readdir(). Returns
-     * null if the path does not exist.
+     * Return the stat() for the given path, or null.
      */
-    Dirent.Type getType(Path path, Symlinks symlinks) throws IOException;
+    FileStatus statIfFound(Path path, Symlinks symlinks) throws IOException;
   }
 
-  public static final FilesystemCalls DEFAULT_SYSCALLS =
-      new FilesystemCalls() {
-        @Override
-        public Collection<Dirent> readdir(Path path, Symlinks symlinks) throws IOException {
-          return path.readdir(symlinks);
-        }
-
-        @Override
-        public FileStatus statIfFound(Path path, Symlinks symlinks) throws IOException {
-          return path.statIfFound(symlinks);
-        }
-
-        @Override
-        public Dirent.Type getType(Path path, Symlinks symlinks) throws IOException {
-          return statusToDirentType(statIfFound(path, symlinks));
-        }
-      };
-
-  public static Dirent.Type statusToDirentType(FileStatus status) {
-    if (status == null) {
-      return null;
-    } else if (status.isFile()) {
-      return Dirent.Type.FILE;
-    } else if (status.isDirectory()) {
-      return Dirent.Type.DIRECTORY;
-    } else if (status.isSymbolicLink()) {
-      return Dirent.Type.SYMLINK;
+  public static FilesystemCalls DEFAULT_SYSCALLS = new FilesystemCalls() {
+    @Override
+    public Collection<Dirent> readdir(Path path, Symlinks symlinks) throws IOException {
+      return path.readdir(symlinks);
     }
-    return Dirent.Type.UNKNOWN;
-  }
+
+    @Override
+    public FileStatus statIfFound(Path path, Symlinks symlinks) throws IOException {
+      return path.statIfFound(symlinks);
+    }
+  };
 
   public static final AtomicReference<FilesystemCalls> DEFAULT_SYSCALLS_REF =
       new AtomicReference<>(DEFAULT_SYSCALLS);
