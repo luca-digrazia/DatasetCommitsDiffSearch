@@ -23,8 +23,8 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import javax.annotation.Nullable;
 
-// Note: AutoValue v1.4-rc1 has AutoValue.CopyAnnotations which makes it work with Starlark. No need
-// to un-AutoValue this class to expose it to Starlark.
+// Note: AutoValue v1.4-rc1 has AutoValue.CopyAnnotations which makes it work with Skylark. No need
+// to un-AutoValue this class to expose it to Skylark.
 /**
  * Specifies how to generate language-specific code from .proto files. Used by LANG_proto_library
  * rules.
@@ -40,23 +40,15 @@ public abstract class ProtoLangToolchainProvider implements TransitiveInfoProvid
   @Nullable
   public abstract TransitiveInfoCollection runtime();
 
-  /**
-   * This makes the blacklisted_protos member available in the provider. It can be removed after
-   * users are migrated and a sufficient time for Bazel rules to migrate has elapsed.
-   */
-  public NestedSet<Artifact> blacklistedProtos() {
-    return forbiddenProtos();
-  }
-
-  public abstract NestedSet<Artifact> forbiddenProtos();
+  public abstract NestedSet<Artifact> blacklistedProtos();
 
   @AutoCodec.Instantiator
   public static ProtoLangToolchainProvider create(
       String commandLine,
       FilesToRunProvider pluginExecutable,
       TransitiveInfoCollection runtime,
-      NestedSet<Artifact> forbiddenProtos) {
+      NestedSet<Artifact> blacklistedProtos) {
     return new AutoValue_ProtoLangToolchainProvider(
-        commandLine, pluginExecutable, runtime, forbiddenProtos);
+        commandLine, pluginExecutable, runtime, blacklistedProtos);
   }
 }
