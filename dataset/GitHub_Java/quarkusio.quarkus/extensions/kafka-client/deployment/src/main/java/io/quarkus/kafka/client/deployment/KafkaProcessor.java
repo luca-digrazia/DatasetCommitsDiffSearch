@@ -66,6 +66,7 @@ import io.quarkus.deployment.annotations.ExecutionTime;
 import io.quarkus.deployment.annotations.Record;
 import io.quarkus.deployment.builditem.AdditionalIndexedClassesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
+import io.quarkus.deployment.builditem.EnableAllSecurityServicesBuildItem;
 import io.quarkus.deployment.builditem.ExtensionSslNativeSupportBuildItem;
 import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.quarkus.deployment.builditem.IndexDependencyBuildItem;
@@ -412,7 +413,7 @@ public class KafkaProcessor {
     @BuildStep
     public void withSasl(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
             BuildProducer<ReflectiveHierarchyBuildItem> reflectiveHierarchy,
-            BuildProducer<ExtensionSslNativeSupportBuildItem> sslNativeSupport) {
+            BuildProducer<EnableAllSecurityServicesBuildItem> allsecurityServices) {
 
         reflectiveClass
                 .produce(new ReflectiveClassBuildItem(false, false, AbstractLogin.DefaultLoginCallbackHandler.class));
@@ -424,7 +425,7 @@ public class KafkaProcessor {
         // Enable SSL support if kafka.security.protocol is set to something other than PLAINTEXT, which is the default
         String securityProtocol = ConfigProvider.getConfig().getConfigValue("kafka.security.protocol").getValue();
         if (securityProtocol != null && SecurityProtocol.forName(securityProtocol) != SecurityProtocol.PLAINTEXT) {
-            sslNativeSupport.produce(new ExtensionSslNativeSupportBuildItem(Feature.KAFKA_CLIENT));
+            allsecurityServices.produce(new EnableAllSecurityServicesBuildItem());
         }
 
         final Type loginModuleType = Type
