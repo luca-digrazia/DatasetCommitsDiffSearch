@@ -13,30 +13,23 @@
 // limitations under the License.
 package com.google.devtools.build.lib.vfs.inmemoryfs;
 
-import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Collections2;
 import com.google.devtools.build.lib.clock.Clock;
 import com.google.devtools.build.lib.concurrent.ThreadSafety;
+import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.vfs.OsPathPolicy;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.Map;
-import javax.annotation.Nullable;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
- * Represents a directory stored in an {@link InMemoryFileSystem}.
- *
- * <p>Not thread-safe. Access should be synchronized from the referencing {@link
- * InMemoryFileSystem}.
+ * This class represents a directory stored in an {@link InMemoryFileSystem}.
  */
+@ThreadSafe
 class InMemoryDirectoryInfo extends InMemoryContentInfo {
-
-  private static final boolean CASE_SENSITIVE = OsPathPolicy.getFilePathOs().isCaseSensitive();
-
-  // Keys in this map are usually strings, except on case-insensitive operating systems (e.g.
-  // Windows) where we use CaseInsensitiveFilename.
-  private final Map<Object, InMemoryContentInfo> directoryContent = new HashMap<>();
+  private final ConcurrentMap<InMemoryFileName, InMemoryContentInfo> directoryContent =
+      new ConcurrentHashMap<>();
 
   InMemoryDirectoryInfo(Clock clock) {
     this(clock, true);
@@ -50,40 +43,45 @@ class InMemoryDirectoryInfo extends InMemoryContentInfo {
   }
 
   /**
-   * Adds a new child to this directory under the given name. Callers must ensure that no entry of
-   * that name exists already.
+   * Adds a new child to this directory under the name "name". Callers must
+   * ensure that no entry of that name exists already.
    */
-  void addChild(String name, InMemoryContentInfo inode) {
+  synchronized void addChild(String name, InMemoryContentInfo inode) {
     Preconditions.checkNotNull(name);
     Preconditions.checkNotNull(inode);
-    if (directoryContent.put(key(name), inode) != null) {
+    if (directoryContent.put(new InMemoryFileName(name), inode) != null) {
       throw new IllegalArgumentException("File already exists: " + name);
     }
     markModificationTime();
   }
 
   /**
-   * Does a directory lookup, and returns the inode for the specified name, or null if the child is
-   * not found.
+   * Does a directory lookup, and returns the "inode" for the specified name.
+   * Returns null if the child is not found.
    */
-  @Nullable
-  InMemoryContentInfo getChild(String name) {
-    return directoryContent.get(key(name));
+  synchronized InMemoryContentInfo getChild(String name) {
+    return directoryContent.get(new InMemoryFileName(name));
   }
 
-  /** Removes a previously existing child from the directory specified by this object. */
-  void removeChild(String name) {
-    if (directoryContent.remove(key(name)) == null) {
+  /**
+   * Removes a previously existing child from the directory specified by this
+   * object.
+   */
+  synchronized void removeChild(String name) {
+    if (directoryContent.remove(new InMemoryFileName(name)) == null) {
       throw new IllegalArgumentException(name + " is not a member of this directory");
     }
     markModificationTime();
   }
 
-  /** Returns the contents of this directory. */
+  /**
+   * This function returns the content of a directory. For now, it returns a set to reflect the
+   * semantics of the value returned (ie. unordered, no duplicates). If thats too slow, it should be
+   * changed later.
+   */
   Collection<String> getAllChildren() {
     return Collections2.transform(
-        directoryContent.keySet(),
-        CASE_SENSITIVE ? String.class::cast : name -> ((CaseInsensitiveFilename) name).name);
+        directoryContent.keySet(), inMemoryFileName -> inMemoryFileName.value);
   }
 
   @Override
@@ -115,21 +113,17 @@ class InMemoryDirectoryInfo extends InMemoryContentInfo {
     return directoryContent.size();
   }
 
-  private static Object key(String name) {
-    return CASE_SENSITIVE ? name : new CaseInsensitiveFilename(name);
-  }
-
   @ThreadSafety.Immutable
-  private static final class CaseInsensitiveFilename {
-    private final String name;
+  private static final class InMemoryFileName {
+    private final String value;
 
-    private CaseInsensitiveFilename(String name) {
-      this.name = name;
+    private InMemoryFileName(String value) {
+      this.value = value;
     }
 
     @Override
     public int hashCode() {
-      return OsPathPolicy.getFilePathOs().hash(name);
+      return OsPathPolicy.getFilePathOs().hash(value);
     }
 
     @Override
@@ -137,15 +131,10 @@ class InMemoryDirectoryInfo extends InMemoryContentInfo {
       if (obj == this) {
         return true;
       }
-      if (!(obj instanceof CaseInsensitiveFilename)) {
+      if (!(obj instanceof InMemoryFileName)) {
         return false;
       }
-      return OsPathPolicy.getFilePathOs().equals(this.name, ((CaseInsensitiveFilename) obj).name);
-    }
-
-    @Override
-    public String toString() {
-      return MoreObjects.toStringHelper(this).add("name", name).toString();
+      return OsPathPolicy.getFilePathOs().equals(this.value, ((InMemoryFileName) obj).value);
     }
   }
 }
