@@ -260,7 +260,7 @@ public final class ObjcCommon {
         addAnyProviders(propagatedObjcDeps, dep, ObjcProvider.class);
         addAnyProviders(cppDeps, dep, CppCompilationContext.class);
         if (isCcLibrary(dep)) {
-          cppDepLinkParams.add(dep.get(CcLinkParamsProvider.CC_LINK_PARAMS));
+          cppDepLinkParams.add(dep.getProvider(CcLinkParamsProvider.class));
           addDefines(dep.getProvider(CppCompilationContext.class).getDefines());
         }
       }
