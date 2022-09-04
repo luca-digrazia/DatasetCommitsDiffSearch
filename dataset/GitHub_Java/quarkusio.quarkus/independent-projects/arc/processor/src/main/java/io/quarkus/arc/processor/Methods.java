@@ -159,22 +159,19 @@ final class Methods {
             Map<MethodKey, Set<AnnotationInstance>> candidates,
             List<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
             boolean transformUnproxyableClasses) {
-        return addInterceptedMethodCandidates(beanDeployment, classInfo, classInfo, candidates, classLevelBindings,
+        return addInterceptedMethodCandidates(beanDeployment, classInfo, candidates, classLevelBindings,
                 bytecodeTransformerConsumer, transformUnproxyableClasses,
-                new SubclassSkipPredicate(beanDeployment.getAssignabilityCheck()::isAssignableFrom,
-                        beanDeployment.getBeanArchiveIndex()),
-                false);
+                new SubclassSkipPredicate(beanDeployment.getAssignabilityCheck()::isAssignableFrom), false);
     }
 
     static Set<MethodInfo> addInterceptedMethodCandidates(BeanDeployment beanDeployment, ClassInfo classInfo,
-            ClassInfo originalClassInfo,
             Map<MethodKey, Set<AnnotationInstance>> candidates,
             List<AnnotationInstance> classLevelBindings, Consumer<BytecodeTransformer> bytecodeTransformerConsumer,
             boolean transformUnproxyableClasses, SubclassSkipPredicate skipPredicate, boolean ignoreMethodLevelBindings) {
 
         Set<NameAndDescriptor> methodsFromWhichToRemoveFinal = new HashSet<>();
         Set<MethodInfo> finalMethodsFoundAndNotChanged = new HashSet<>();
-        skipPredicate.startProcessing(classInfo, originalClassInfo);
+        skipPredicate.startProcessing(classInfo);
 
         for (MethodInfo method : classInfo.methods()) {
             if (skipPredicate.test(method)) {
@@ -223,7 +220,7 @@ final class Methods {
             ClassInfo superClassInfo = getClassByName(beanDeployment.getBeanArchiveIndex(), classInfo.superName());
             if (superClassInfo != null) {
                 finalMethodsFoundAndNotChanged
-                        .addAll(addInterceptedMethodCandidates(beanDeployment, superClassInfo, classInfo, candidates,
+                        .addAll(addInterceptedMethodCandidates(beanDeployment, superClassInfo, candidates,
                                 classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses, skipPredicate,
                                 ignoreMethodLevelBindings));
             }
@@ -233,7 +230,7 @@ final class Methods {
             ClassInfo interfaceInfo = getClassByName(beanDeployment.getBeanArchiveIndex(), i);
             if (interfaceInfo != null) {
                 //interfaces can't have final methods
-                addInterceptedMethodCandidates(beanDeployment, interfaceInfo, originalClassInfo, candidates,
+                addInterceptedMethodCandidates(beanDeployment, interfaceInfo, candidates,
                         classLevelBindings, bytecodeTransformerConsumer, transformUnproxyableClasses,
                         skipPredicate, true);
             }
@@ -451,27 +448,22 @@ final class Methods {
     /**
      * This stateful predicate can be used to skip methods that should not be added to the generated subclass.
      * <p>
-     * Don't forget to call {@link SubclassSkipPredicate#startProcessing(ClassInfo, ClassInfo)} before the methods are processed
-     * and
+     * Don't forget to call {@link SubclassSkipPredicate#startProcessing(ClassInfo)} before the methods are processed and
      * {@link SubclassSkipPredicate#methodsProcessed()} afterwards.
      */
     static class SubclassSkipPredicate implements Predicate<MethodInfo> {
 
         private final BiFunction<Type, Type, Boolean> assignableFromFun;
-        private final IndexView beanArchiveIndex;
         private ClassInfo clazz;
-        private ClassInfo originalClazz;
         private List<MethodInfo> regularMethods;
         private Set<MethodInfo> bridgeMethods = new HashSet<>();
 
-        public SubclassSkipPredicate(BiFunction<Type, Type, Boolean> assignableFromFun, IndexView beanArchiveIndex) {
+        public SubclassSkipPredicate(BiFunction<Type, Type, Boolean> assignableFromFun) {
             this.assignableFromFun = assignableFromFun;
-            this.beanArchiveIndex = beanArchiveIndex;
         }
 
-        void startProcessing(ClassInfo clazz, ClassInfo originalClazz) {
+        void startProcessing(ClassInfo clazz) {
             this.clazz = clazz;
-            this.originalClazz = originalClazz;
             this.regularMethods = new ArrayList<>();
             for (MethodInfo method : clazz.methods()) {
                 if (!Modifier.isAbstract(method.flags()) && !method.isSynthetic() && !isBridge(method)) {
@@ -513,38 +505,8 @@ final class Methods {
                 // Do not skip default methods - public non-abstract instance methods declared in an interface
                 return false;
             }
-
-            List<Type> parameters = method.parameters();
-            if (!parameters.isEmpty() && (beanArchiveIndex != null)) {
-                String originalClassPackage = determinePackage(originalClazz.name());
-                for (Type type : parameters) {
-                    ClassInfo parameterClassInfo = beanArchiveIndex.getClassByName(type.name());
-                    if (parameterClassInfo == null) {
-                        continue; // hope for the best
-                    }
-                    if (Modifier.isPrivate(parameterClassInfo.flags())) {
-                        return true; // parameters whose class is private can not be loaded, as we would end up with IllegalAccessError when trying to access the use the load the class
-                    }
-                    if (!Modifier.isPublic(parameterClassInfo.flags())) {
-                        if (determinePackage(parameterClassInfo.name()).equals(originalClassPackage)) {
-                            return false;
-                        }
-                        // parameters whose class is package-private and the package is not the same as the package of the method for which we are checking can not be loaded,
-                        // as we would end up with IllegalAccessError when trying to access the use the load the class
-                        return true;
-                    }
-                }
-            }
-
             // Note that we intentionally do not skip final methods here - these are handled later
             return false;
-        }
-
-        private String determinePackage(DotName dotName) {
-            if (dotName.isInner()) {
-                dotName = dotName.prefix();
-            }
-            return dotName.prefix() == null ? "" : dotName.prefix().toString();
         }
 
         private boolean hasImplementation(MethodInfo bridge) {
