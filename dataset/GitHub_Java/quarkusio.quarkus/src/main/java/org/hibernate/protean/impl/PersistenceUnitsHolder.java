@@ -4,7 +4,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 import javax.persistence.PersistenceException;
 
 import org.hibernate.boot.spi.MetadataImplementor;
@@ -12,38 +11,31 @@ import org.hibernate.jpa.boot.internal.EntityManagerFactoryBuilderImpl;
 import org.hibernate.jpa.boot.internal.ParsedPersistenceXmlDescriptor;
 import org.hibernate.jpa.boot.internal.PersistenceXmlParser;
 import org.hibernate.jpa.boot.spi.Bootstrap;
-import org.hibernate.jpa.boot.spi.PersistenceUnitDescriptor;
+import org.hibernate.protean.nativeprocessing.NoConnectionProvider;
 
 final class PersistenceUnitsHolder {
 
-	static final List<PersistenceUnitDescriptor> units = loadPersistenceUnits();
+	static final List<ParsedPersistenceXmlDescriptor> units = loadPersistenceUnits();
 
 	private static final Map<String,MetadataImplementor> metadata = constructMetadataAdvance();
 
 	private static final Object NO_NAME_TOKEN = new Object();
 
-	private static List<PersistenceUnitDescriptor> loadPersistenceUnits() {
+	private static List<ParsedPersistenceXmlDescriptor> loadPersistenceUnits() {
 		try {
-			return loadOriginalXMLParsedDescriptors()
-					.stream()
-					.map( LightPersistenceXmlDescriptor::new )
-					.collect( Collectors.toList() );
+			//Enforce the persistence.xml configuration to be interpreted literally without allowing runtime overrides;
+			//(check for the runtime provided properties to be empty as well)
+			Map<Object, Object> configurationOverrides = Collections.emptyMap();
+			return PersistenceXmlParser.locatePersistenceUnits( configurationOverrides );
 		}
 		catch (Exception e) {
 			throw new PersistenceException( "Unable to locate persistence units", e );
 		}
 	}
 
-	private static List<ParsedPersistenceXmlDescriptor> loadOriginalXMLParsedDescriptors() {
-		//Enforce the persistence.xml configuration to be interpreted literally without allowing runtime overrides;
-		//(check for the runtime provided properties to be empty as well)
-		Map<Object, Object> configurationOverrides = Collections.emptyMap();
-		return PersistenceXmlParser.locatePersistenceUnits( configurationOverrides );
-	}
-
 	private static Map<String,MetadataImplementor> constructMetadataAdvance() {
 		Map all = new HashMap(  );
-		for ( PersistenceUnitDescriptor unit : loadOriginalXMLParsedDescriptors() ) {
+		for ( ParsedPersistenceXmlDescriptor unit : units ) {
 			MetadataImplementor m = createMetadata( unit );
 			Object previous = all.put( unitName( unit ), m );
 			if ( previous != null ) {
@@ -61,7 +53,7 @@ final class PersistenceUnitsHolder {
 		return metadata.get( key );
 	}
 
-	private static Object unitName(PersistenceUnitDescriptor unit) {
+	private static Object unitName(ParsedPersistenceXmlDescriptor unit) {
 		String name = unit.getName();
 		if ( name == null ) {
 			return NO_NAME_TOKEN;
@@ -69,7 +61,7 @@ final class PersistenceUnitsHolder {
 		return name;
 	}
 
-	private static MetadataImplementor createMetadata(PersistenceUnitDescriptor unit) {
+	private static MetadataImplementor createMetadata(ParsedPersistenceXmlDescriptor unit) {
 		final Map nativeImageProcessingProperties = createNativeImageProcessingConfiguration();
 		EntityManagerFactoryBuilderImpl entityManagerFactoryBuilder = (EntityManagerFactoryBuilderImpl) Bootstrap.getEntityManagerFactoryBuilder(
 				unit,
@@ -81,7 +73,7 @@ final class PersistenceUnitsHolder {
 
 	private static Map createNativeImageProcessingConfiguration() {
 		HashMap props = new HashMap();
-		props.put( "hibernate.temp.use_jdbc_metadata_defaults", "false" );
+		NoConnectionProvider.registerToProperties( props );
 		return props;
 	}
 
