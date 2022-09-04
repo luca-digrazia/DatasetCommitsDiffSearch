@@ -21,10 +21,6 @@ package org.graylog2.indexer.searches.timeranges;
 
 import org.graylog2.plugin.Tools;
 import org.joda.time.DateTime;
-import org.joda.time.format.ISODateTimeFormat;
-
-import java.util.HashMap;
-import java.util.Map;
 
 /**
  * @author Lennart Koopmann <lennart@torch.sh>
@@ -40,16 +36,8 @@ public class AbsoluteRange implements TimeRange, FromToRange {
         }
 
         try {
-            if (from.contains("T")) {
-                this.from = DateTime.parse(from, ISODateTimeFormat.dateTime());
-            } else {
-                this.from = DateTime.parse(from, Tools.timeFormatterWithOptionalMilliseconds());
-            }
-            if (to.contains("T")) {
-                this.to = DateTime.parse(to, ISODateTimeFormat.dateTime());
-            } else {
-                this.to = DateTime.parse(to, Tools.timeFormatterWithOptionalMilliseconds());
-            }
+            this.from = DateTime.parse(from, Tools.timeFormatterWithOptionalMilliseconds());
+            this.to = DateTime.parse(to, Tools.timeFormatterWithOptionalMilliseconds());
         } catch (IllegalArgumentException e) {
             throw new InvalidRangeParametersException();
         }
@@ -60,28 +48,12 @@ public class AbsoluteRange implements TimeRange, FromToRange {
         return Type.ABSOLUTE;
     }
 
-    @Override
-    public Map<String, Object> getPersistedConfig() {
-        return new HashMap<String, Object>() {{
-            put("type", getType().toString().toLowerCase());
-            put("from", getFrom());
-            put("to", getTo());
-        }};
-    }
-
     public DateTime getFrom() {
         return from;
     }
 
     public DateTime getTo() {
         return to;
-    }
-
-    public Map<String, DateTime> getLimits() {
-        return new HashMap<String, DateTime>() {{
-            put("from", getFrom());
-            put("to", getTo());
-        }};
     }
 
 }
