@@ -64,7 +64,7 @@ public class QuarkusDev extends QuarkusTask {
 
     private boolean preventnoverify = false;
 
-    private static final String RESOURCES_PROP = "quarkus-internal.undertow.resources";
+    private static final String RESOURCES_PROP = "quarkus.undertow.resources";
 
     public QuarkusDev() {
         super("Creates a native image");
@@ -372,10 +372,7 @@ public class QuarkusDev extends QuarkusTask {
      * Enum to classify the os.name system property
      */
     static enum OS {
-        WINDOWS,
-        LINUX,
-        MAC,
-        OTHER;
+        WINDOWS, LINUX, MAC, OTHER;
 
         private String version;
 
