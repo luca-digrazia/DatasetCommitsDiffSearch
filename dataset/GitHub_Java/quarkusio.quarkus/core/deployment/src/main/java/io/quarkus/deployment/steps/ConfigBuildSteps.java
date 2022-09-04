@@ -15,6 +15,7 @@ import org.eclipse.microprofile.config.spi.Converter;
 import io.quarkus.deployment.GeneratedClassGizmoAdaptor;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
+import io.quarkus.deployment.builditem.DeploymentClassLoaderBuildItem;
 import io.quarkus.deployment.builditem.GeneratedClassBuildItem;
 import io.quarkus.deployment.builditem.RunTimeConfigurationSourceBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
@@ -69,10 +70,11 @@ class ConfigBuildSteps {
     // XXX replace this with constant-folded service loader impl
     @BuildStep
     void nativeServiceProviders(
+            final DeploymentClassLoaderBuildItem classLoaderItem,
             final BuildProducer<ServiceProviderBuildItem> providerProducer) throws IOException {
         providerProducer.produce(new ServiceProviderBuildItem(ConfigProviderResolver.class.getName(),
                 SmallRyeConfigProviderResolver.class.getName()));
-        final ClassLoader classLoader = Thread.currentThread().getContextClassLoader();
+        final ClassLoader classLoader = classLoaderItem.getClassLoader();
         classLoader.getResources(SERVICES_PREFIX + ConfigSourceProvider.class.getName());
         for (Class<?> serviceClass : Arrays.asList(
                 ConfigSource.class,
