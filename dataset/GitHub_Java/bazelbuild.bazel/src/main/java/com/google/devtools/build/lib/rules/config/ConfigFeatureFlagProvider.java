@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.SkylarkClassObject;
-import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
@@ -37,7 +36,7 @@ public class ConfigFeatureFlagProvider extends SkylarkClassObject {
   static final String SKYLARK_NAME = "FeatureFlagInfo";
 
   /** Skylark constructor and identifier for ConfigFeatureFlagProvider. */
-  static final NativeClassObjectConstructor<ConfigFeatureFlagProvider> SKYLARK_CONSTRUCTOR =
+  public static final NativeClassObjectConstructor<ConfigFeatureFlagProvider> SKYLARK_CONSTRUCTOR =
       new NativeClassObjectConstructor<ConfigFeatureFlagProvider>(
           ConfigFeatureFlagProvider.class, SKYLARK_NAME) {};
 
@@ -54,10 +53,6 @@ public class ConfigFeatureFlagProvider extends SkylarkClassObject {
   /** Creates a new ConfigFeatureFlagProvider with the given value and valid value predicate. */
   public static ConfigFeatureFlagProvider create(String value, Predicate<String> isValidValue) {
     return new ConfigFeatureFlagProvider(value, isValidValue);
-  }
-
-  public static SkylarkProviderIdentifier id() {
-    return SKYLARK_CONSTRUCTOR.id();
   }
 
   /** Retrieves and casts the provider from the given target. */
