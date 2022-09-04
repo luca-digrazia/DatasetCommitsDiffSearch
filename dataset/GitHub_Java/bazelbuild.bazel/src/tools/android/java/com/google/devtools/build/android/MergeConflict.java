@@ -13,88 +13,112 @@
 // limitations under the License.
 package com.google.devtools.build.android;
 
-import com.google.common.base.MoreObjects;
-import com.google.common.base.Preconditions;
-
 import com.android.annotations.VisibleForTesting;
 import com.android.annotations.concurrency.Immutable;
-
-import java.nio.file.Path;
+import com.google.common.base.MoreObjects;
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.devtools.build.android.AndroidDataMerger.SourceChecker;
+import java.io.IOException;
 import java.util.Objects;
+import java.util.ServiceLoader;
 
 /**
  * Represents a conflict of two DataResources or DataAssets.
  *
- * For resources, the dataKey is the FullyQualifiedName; Assets use the RelativeAssetPath.
+ * <p>For resources, the dataKey is the FullyQualifiedName; Assets use the RelativeAssetPath.
  */
 @Immutable
 public class MergeConflict {
-  static final String CONFLICT_MESSAGE = "%s is provided from %s and %s";
+
+  private static final class LazyHolder {
+    static final ImmutableList<MergeConflictExempter> MERGE_CONFLICT_EXEMPTERS =
+        ImmutableList.copyOf(ServiceLoader.load(MergeConflictExempter.class));
+  }
+
+  private static final String CONFLICT_MESSAGE =
+      "\n\u001B[31mCONFLICT:\u001B[0m"
+          + " %s is provided with ambiguous priority from:\n\t%s\n\t%s";
+
   private final DataKey dataKey;
-  private final Path first;
-  private final Path second;
+  private final DataValue primary;
+  private final DataValue overwritten;
 
-  private MergeConflict(DataKey dataKey, Path first, Path second) {
+  private MergeConflict(DataKey dataKey, DataValue sortedFirst, DataValue sortedSecond) {
     this.dataKey = dataKey;
-    this.first = first;
-    this.second = second;
+    this.primary = sortedFirst;
+    this.overwritten = sortedSecond;
   }
 
   /**
    * Creates a MergeConflict between two DataResources.
    *
-   * The {@link DataKey} must match the first.dataKey() and second
-   * .dataKey().
+   * <p>The {@link DataKey} must match the first.dataKey() and second .dataKey().
    *
    * @param dataKey The dataKey name that both DataResources share.
-   * @param first The first DataResource.
-   * @param second The second DataResource.
+   * @param primary The DataResource that will be used in the graph.
+   * @param overwritten The DataResource that is replaced.
    * @return A new MergeConflict.
    */
-  public static MergeConflict between(DataKey dataKey, DataResource first, DataResource second) {
+  public static MergeConflict between(DataKey dataKey, DataValue primary, DataValue overwritten) {
     Preconditions.checkNotNull(dataKey);
-    Preconditions.checkArgument(dataKey.equals(first.dataKey()));
-    Preconditions.checkArgument(dataKey.equals(second.dataKey()));
-    return of(dataKey, first.source(), second.source());
-  }
-
-  /**
-   * Creates a MergeConflict between two DataResources.
-   *
-   * The {@link DataKey} must match the first.dataKey() and second
-   * .dataKey().
-   *
-   * @param dataKey The dataKey name that both DataResources share.
-   * @param first The first DataResource.
-   * @param second The second DataResource.
-   * @return A new MergeConflict.
-   */
-  public static MergeConflict between(DataKey dataKey, DataAsset first, DataAsset second) {
-    Preconditions.checkNotNull(dataKey);
-    Preconditions.checkArgument(dataKey.equals(first.dataKey()));
-    Preconditions.checkArgument(dataKey.equals(second.dataKey()));
-    return of(dataKey, first.source(), second.source());
+    return of(dataKey, primary, overwritten);
   }
 
   @VisibleForTesting
-  static MergeConflict of(DataKey key, Path first, Path second) {
-    return new MergeConflict(key, first, second);
+  static MergeConflict of(DataKey key, DataValue primary, DataValue overwritten) {
+    // Make sure the paths are always ordered.
+    DataValue sortedFirst =
+        primary.source().compareTo(overwritten.source()) > 0 ? primary : overwritten;
+    DataValue sortedSecond = sortedFirst != primary ? primary : overwritten;
+    return new MergeConflict(key, sortedFirst, sortedSecond);
   }
 
   public String toConflictMessage() {
-    return String.format(CONFLICT_MESSAGE, dataKey, first, second);
+    return String.format(
+        CONFLICT_MESSAGE,
+        dataKey.toPrettyString(),
+        primary.asConflictString(),
+        overwritten.asConflictString());
   }
 
   public DataKey dataKey() {
     return dataKey;
   }
 
+  DataValue primary() {
+    return primary;
+  }
+
+  DataValue overwritten() {
+    return overwritten;
+  }
+
+  boolean isValidWith(SourceChecker checker) throws IOException {
+    return dataKey.shouldDetectConflicts()
+        && !primary.valueEquals(overwritten)
+        && primary.compareMergePriorityTo(overwritten) == 0
+        // TODO: SourceChecker can probably be removed, since the only no-op use is from AAR
+        // generation (which shouldn't need to do these checks anyway).
+        && !checker.checkEquality(primary.source(), overwritten.source())
+        && !isExempted();
+  }
+
+  private boolean isExempted() {
+    for (MergeConflictExempter mce : LazyHolder.MERGE_CONFLICT_EXEMPTERS) {
+      if (mce.shouldAllow(dataKey, primary, overwritten)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   @Override
   public String toString() {
     return MoreObjects.toStringHelper(this)
         .add("dataKey", dataKey)
-        .add("first", first)
-        .add("second", second)
+        .add("primary", primary)
+        .add("overwritten", overwritten)
         .toString();
   }
 
@@ -107,11 +131,13 @@ public class MergeConflict {
       return false;
     }
     MergeConflict that = (MergeConflict) other;
-    return Objects.equals(first, that.first) && Objects.equals(second, that.second);
+    return Objects.equals(dataKey, that.dataKey)
+        && Objects.equals(primary, that.primary)
+        && Objects.equals(overwritten, that.overwritten);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(first, second);
+    return Objects.hash(dataKey, primary, overwritten);
   }
 }

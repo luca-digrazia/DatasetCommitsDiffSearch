@@ -15,13 +15,11 @@ package com.google.devtools.build.android.xml;
 
 import com.android.aapt.Resources.Item;
 import com.android.aapt.Resources.Primitive;
-import com.android.aapt.Resources.Reference;
 import com.android.aapt.Resources.StyledString;
 import com.android.aapt.Resources.StyledString.Span;
 import com.android.aapt.Resources.Value;
 import com.android.resources.ResourceType;
 import com.google.common.base.MoreObjects;
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.xml.XmlEscapers;
 import com.google.devtools.build.android.AndroidDataWritingVisitor;
@@ -112,9 +110,7 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
   }
 
   private final Visibility visibility;
-  private final Item item;
   private final ImmutableMap<String, String> attributes;
-  // TODO(b/112848607): remove untyped "value" String in favor of "item" above.
   @Nullable private final String value;
   private final Type valueType;
 
@@ -142,19 +138,16 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
 
   public static XmlResourceValue of(
       Type valueType, ImmutableMap<String, String> attributes, @Nullable String value) {
-    return new SimpleXmlResourceValue(
-        Visibility.UNKNOWN, valueType, Item.getDefaultInstance(), attributes, value);
+    return new SimpleXmlResourceValue(Visibility.UNKNOWN, valueType, attributes, value);
   }
 
   private SimpleXmlResourceValue(
       Visibility visibility,
       Type valueType,
-      Item item,
       ImmutableMap<String, String> attributes,
       String value) {
     this.visibility = visibility;
     this.valueType = valueType;
-    this.item = item;
     this.value = value;
     this.attributes = attributes;
   }
@@ -216,7 +209,6 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
     return new SimpleXmlResourceValue(
         visibility,
         Type.valueOf(resourceType.toString().toUpperCase(Locale.ENGLISH)),
-        item,
         attributes.build(),
         stringValue);
   }
@@ -334,7 +326,6 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
     return Objects.equals(visibility, other.visibility)
         && Objects.equals(valueType, other.valueType)
         && Objects.equals(attributes, other.attributes)
-        // TODO(b/112848607): include the "item" proto in comparison; right now it's redundant.
         && Objects.equals(value, other.value);
   }
 
@@ -363,15 +354,5 @@ public class SimpleXmlResourceValue implements XmlResourceValue {
       return String.format(" %s (with value %s)", source.asConflictString(), value);
     }
     return source.asConflictString();
-  }
-
-  @Override
-  public Visibility getVisibility() {
-    return visibility;
-  }
-
-  @Override
-  public ImmutableList<Reference> getReferencedResources() {
-    return item.hasRef() ? ImmutableList.of(item.getRef()) : ImmutableList.of();
   }
 }
