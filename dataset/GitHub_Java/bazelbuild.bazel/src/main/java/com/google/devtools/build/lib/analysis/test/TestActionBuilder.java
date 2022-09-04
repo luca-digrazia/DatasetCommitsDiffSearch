@@ -46,6 +46,7 @@ import com.google.devtools.build.lib.packages.TestTimeout;
 import com.google.devtools.build.lib.util.OS;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.devtools.common.options.EnumConverter;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -156,6 +157,37 @@ public final class TestActionBuilder {
   public TestActionBuilder setShardCount(int explicitShardCount) {
     this.explicitShardCount = explicitShardCount;
     return this;
+  }
+
+  /**
+   * Converts to {@link TestActionBuilder.TestShardingStrategy}.
+   */
+  public static class ShardingStrategyConverter extends EnumConverter<TestShardingStrategy> {
+    public ShardingStrategyConverter() {
+      super(TestShardingStrategy.class, "test sharding strategy");
+    }
+  }
+
+  /**
+   * A strategy for running the same tests in many processes.
+   */
+  public static enum TestShardingStrategy {
+    EXPLICIT {
+      @Override public int getNumberOfShards(boolean isLocal, int shardCountFromAttr,
+          boolean testShardingCompliant, TestSize testSize) {
+        return Math.max(shardCountFromAttr, 0);
+      }
+    },
+
+    DISABLED {
+      @Override public int getNumberOfShards(boolean isLocal, int shardCountFromAttr,
+          boolean testShardingCompliant, TestSize testSize) {
+        return 0;
+      }
+    };
+
+    public abstract int getNumberOfShards(boolean isLocal, int shardCountFromAttr,
+        boolean testShardingCompliant, TestSize testSize);
   }
 
   /**
@@ -350,15 +382,10 @@ public final class TestActionBuilder {
             ruleContext.getPackageRelativeArtifact(dir.getRelative("test.cache_status"), root);
 
         Artifact.DerivedArtifact coverageArtifact = null;
-        Artifact coverageDirectory = null;
         if (collectCodeCoverage) {
           coverageArtifact =
               ruleContext.getPackageRelativeArtifact(dir.getRelative("coverage.dat"), root);
           coverageArtifacts.add(coverageArtifact);
-          if (testConfiguration.fetchAllCoverageOutputs()) {
-            coverageDirectory =
-                ruleContext.getPackageRelativeTreeArtifact(dir.getRelative("_coverage"), root);
-          }
         }
 
         boolean cancelConcurrentTests =
@@ -395,7 +422,6 @@ public final class TestActionBuilder {
                 testLog,
                 cacheStatus,
                 coverageArtifact,
-                coverageDirectory,
                 testProperties,
                 extraTestEnv,
                 executionSettings,
