@@ -33,8 +33,7 @@ final class DebugServerTransport {
 
   /** Sets up the server transport and blocks while waiting for an incoming connection. */
   static DebugServerTransport createAndWaitForClient(
-      EventHandler eventHandler, ServerSocket serverSocket, boolean verboseLogging)
-      throws IOException {
+      EventHandler eventHandler, ServerSocket serverSocket) throws IOException {
     // TODO(bazel-team): reject all connections after the first
     eventHandler.handle(Event.progress("Waiting for debugger..."));
     Socket clientSocket = serverSocket.accept();
@@ -44,8 +43,7 @@ final class DebugServerTransport {
         serverSocket,
         clientSocket,
         clientSocket.getInputStream(),
-        clientSocket.getOutputStream(),
-        verboseLogging);
+        clientSocket.getOutputStream());
   }
 
   private final EventHandler eventHandler;
@@ -53,21 +51,18 @@ final class DebugServerTransport {
   private final Socket clientSocket;
   private final InputStream requestStream;
   private final OutputStream eventStream;
-  private final boolean verboseLogging;
 
   private DebugServerTransport(
       EventHandler eventHandler,
       ServerSocket serverSocket,
       Socket clientSocket,
       InputStream requestStream,
-      OutputStream eventStream,
-      boolean verboseLogging) {
+      OutputStream eventStream) {
     this.eventHandler = eventHandler;
     this.serverSocket = serverSocket;
     this.clientSocket = clientSocket;
     this.requestStream = requestStream;
     this.eventStream = eventStream;
-    this.verboseLogging = verboseLogging;
   }
 
   /**
@@ -79,9 +74,7 @@ final class DebugServerTransport {
     synchronized (requestStream) {
       try {
         DebugRequest request = DebugRequest.parseDelimitedFrom(requestStream);
-        if (verboseLogging) {
-          eventHandler.handle(Event.debug("Received debug client request:\n" + request));
-        }
+        eventHandler.handle(Event.debug("Received debug client request:\n" + request));
         return request;
       } catch (IOException e) {
         handleParsingError(e);
@@ -102,9 +95,7 @@ final class DebugServerTransport {
 
   /** Posts a debug event. */
   void postEvent(DebugEvent event) {
-    if (verboseLogging) {
-      eventHandler.handle(Event.debug("Sending debug event:\n" + event));
-    }
+    eventHandler.handle(Event.debug("Sending debug event:\n" + event));
     synchronized (eventStream) {
       try {
         event.writeDelimitedTo(eventStream);

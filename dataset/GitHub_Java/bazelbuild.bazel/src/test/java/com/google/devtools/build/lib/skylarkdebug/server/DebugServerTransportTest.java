@@ -16,6 +16,7 @@ package com.google.devtools.build.lib.skylarkdebug.server;
 
 import static com.google.common.truth.Truth.assertThat;
 
+import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.EventKind;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.skylarkdebugging.SkylarkDebuggingProtos.ContinueExecutionResponse;
@@ -46,6 +47,17 @@ public class DebugServerTransportTest {
 
   private final EventCollectionApparatus events =
       new EventCollectionApparatus(EventKind.ALL_EVENTS);
+
+  /**
+   * The default fail-fast {@link EventHandler} fails on debug-level events, so we instead use a
+   * handler suppressing those events.
+   */
+  private final EventHandler eventHandler =
+      event -> {
+        if (event.getKind() != EventKind.DEBUG) {
+          events.reporter().handle(event);
+        }
+      };
 
   /** A simple debug client for testing purposes. */
   private static class MockDebugClient {
@@ -88,8 +100,7 @@ public class DebugServerTransportTest {
     Future<DebugServerTransport> future =
         executor.submit(
             () ->
-                DebugServerTransport.createAndWaitForClient(
-                    events.reporter(), serverSocket, false));
+                DebugServerTransport.createAndWaitForClient(eventHandler, serverSocket));
     MockDebugClient client = new MockDebugClient();
     client.connect(Duration.ofSeconds(10), serverSocket);
 
@@ -112,8 +123,7 @@ public class DebugServerTransportTest {
     Future<DebugServerTransport> future =
         executor.submit(
             () ->
-                DebugServerTransport.createAndWaitForClient(
-                    events.reporter(), serverSocket, false));
+                DebugServerTransport.createAndWaitForClient(eventHandler, serverSocket));
     MockDebugClient client = new MockDebugClient();
     client.connect(Duration.ofSeconds(10), serverSocket);
 
