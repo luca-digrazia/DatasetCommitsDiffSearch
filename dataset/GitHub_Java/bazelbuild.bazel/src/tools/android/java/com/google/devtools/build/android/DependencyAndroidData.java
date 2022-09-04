@@ -38,7 +38,7 @@ class DependencyAndroidData extends SerializedAndroidData {
   private static final Pattern VALID_REGEX = Pattern.compile(".*:.*:.+:.+(:.*){0,2}");
 
   public static final String EXPECTED_FORMAT =
-      "resources[#resources]:assets[#assets]:manifest:r.txt(:symbols.zip?):symbols.bin";
+      "resources[#resources]:assets[#assets]:manifest:r.txt:static.library.ap_:symbols.bin";
 
   public static DependencyAndroidData valueOf(String text) {
     return valueOf(text, FileSystems.getDefault());
@@ -61,11 +61,10 @@ class DependencyAndroidData extends SerializedAndroidData {
     if (parts.length == 6) { // contains symbols bin and compiled symbols
       compiledSymbols = CompiledResources.from(exists(fileSystem.getPath(parts[4])));
       symbolsBin = exists(fileSystem.getPath(parts[5]));
-    } else if (parts.length == 5) {
-      // This is either symbols bin or compiled symbols depending on "useCompiledResourcesForMerge"
-      compiledSymbols = CompiledResources.from(exists(fileSystem.getPath(parts[4])));
+    } else if (parts.length == 5) { // contains symbols bin
       symbolsBin = exists(fileSystem.getPath(parts[4]));
     }
+
 
     return new DependencyAndroidData(
         splitPaths(parts[0], fileSystem),
