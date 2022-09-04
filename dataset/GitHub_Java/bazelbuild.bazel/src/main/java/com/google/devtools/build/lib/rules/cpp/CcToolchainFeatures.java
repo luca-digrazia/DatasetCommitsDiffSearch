@@ -32,8 +32,6 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Sets;
 import com.google.common.collect.Sets.SetView;
 import com.google.common.collect.Streams;
-import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Artifact.ArtifactExpander;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
@@ -78,7 +76,7 @@ import javax.annotation.Nullable;
  */
 @Immutable
 public class CcToolchainFeatures implements Serializable {
-
+  
   /**
    * Thrown when a flag value cannot be expanded under a set of build variables.
    *
@@ -294,7 +292,7 @@ public class CcToolchainFeatures implements Serializable {
      * <p>The {@code variables} controls which variables are visible during the expansion and allows
      * to recursively expand nested flag groups.
      */
-    void expand(Variables variables, @Nullable ArtifactExpander expander, List<String> commandLine);
+    void expand(Variables variables, List<String> commandLine);
   }
 
   /**
@@ -310,11 +308,10 @@ public class CcToolchainFeatures implements Serializable {
     private Flag(ImmutableList<StringChunk> chunks) {
       this.chunks = chunks;
     }
-
+    
     /** Expand this flag into a single new entry in {@code commandLine}. */
     @Override
-    public void expand(
-        Variables variables, @Nullable ArtifactExpander expander, List<String> commandLine) {
+    public void expand(Variables variables, List<String> commandLine) {
       StringBuilder flag = new StringBuilder();
       for (StringChunk chunk : chunks) {
         chunk.expand(variables, flag);
@@ -409,55 +406,53 @@ public class CcToolchainFeatures implements Serializable {
         this.expandIfEqual = null;
       }
     }
-
+    
     @Override
-    public void expand(
-        Variables variables, @Nullable ArtifactExpander expander, final List<String> commandLine) {
-      if (!canBeExpanded(variables, expander)) {
+    public void expand(Variables variables, final List<String> commandLine) {
+      if (!canBeExpanded(variables)) {
         return;
       }
       if (iterateOverVariable != null) {
-        for (VariableValue variableValue :
-            variables.getSequenceVariable(iterateOverVariable, expander)) {
+        for (VariableValue variableValue : variables.getSequenceVariable(iterateOverVariable)) {
           Variables nestedVariables = new Variables(variables, iterateOverVariable, variableValue);
           for (Expandable expandable : expandables) {
-            expandable.expand(nestedVariables, expander, commandLine);
+            expandable.expand(nestedVariables, commandLine);
           }
         }
       } else {
         for (Expandable expandable : expandables) {
-          expandable.expand(variables, expander, commandLine);
+          expandable.expand(variables, commandLine);
         }
       }
     }
 
-    private boolean canBeExpanded(Variables variables, @Nullable ArtifactExpander expander) {
+    private boolean canBeExpanded(Variables variables) {
       for (String variable : expandIfAllAvailable) {
-        if (!variables.isAvailable(variable, expander)) {
+        if (!variables.isAvailable(variable)) {
           return false;
         }
       }
       for (String variable : expandIfNoneAvailable) {
-        if (variables.isAvailable(variable, expander)) {
+        if (variables.isAvailable(variable)) {
           return false;
         }
       }
       if (expandIfTrue != null
-          && (!variables.isAvailable(expandIfTrue, expander)
+          && (!variables.isAvailable(expandIfTrue)
               || !variables.getVariable(expandIfTrue).isTruthy())) {
         return false;
       }
       if (expandIfFalse != null
-          && (!variables.isAvailable(expandIfFalse, expander)
+          && (!variables.isAvailable(expandIfFalse)
               || variables.getVariable(expandIfFalse).isTruthy())) {
         return false;
       }
       if (expandIfEqual != null
-          && (!variables.isAvailable(expandIfEqual.variable, expander)
+          && (!variables.isAvailable(expandIfEqual.variable)
               || !variables
-                  .getVariable(expandIfEqual.variable)
-                  .getStringValue(expandIfEqual.variable)
-                  .equals(expandIfEqual.value))) {
+                .getVariable(expandIfEqual.variable)
+                .getStringValue(expandIfEqual.variable)
+                .equals(expandIfEqual.value))) {
         return false;
       }
       return true;
@@ -478,9 +473,8 @@ public class CcToolchainFeatures implements Serializable {
      *       explicit 'iterate_over' instead.
      * </ul>
      */
-    private void expandCommandLine(
-        Variables variables, @Nullable ArtifactExpander expander, final List<String> commandLine) {
-      expand(variables, expander, commandLine);
+    private void expandCommandLine(Variables variables, final List<String> commandLine) {
+      expand(variables, commandLine);
     }
   }
 
@@ -538,10 +532,9 @@ public class CcToolchainFeatures implements Serializable {
         String action,
         Variables variables,
         Set<String> enabledFeatureNames,
-        @Nullable ArtifactExpander expander,
         List<String> commandLine) {
       for (String variable : expandIfAllAvailable) {
-        if (!variables.isAvailable(variable, expander)) {
+        if (!variables.isAvailable(variable)) {
           return;
         }
       }
@@ -552,7 +545,7 @@ public class CcToolchainFeatures implements Serializable {
         return;
       }
       for (FlagGroup flagGroup : flagGroups) {
-        flagGroup.expandCommandLine(variables, expander, commandLine);
+        flagGroup.expandCommandLine(variables, commandLine);
       }
     }
   }
@@ -656,10 +649,9 @@ public class CcToolchainFeatures implements Serializable {
         String action,
         Variables variables,
         Set<String> enabledFeatureNames,
-        @Nullable ArtifactExpander expander,
         List<String> commandLine) {
       for (FlagSet flagSet : flagSets) {
-        flagSet.expandCommandLine(action, variables, enabledFeatureNames, expander, commandLine);
+        flagSet.expandCommandLine(action, variables, enabledFeatureNames, commandLine);
       }
     }
   }
@@ -786,13 +778,9 @@ public class CcToolchainFeatures implements Serializable {
 
     /** Adds the flags that apply to this action to {@code commandLine}. */
     private void expandCommandLine(
-        Variables variables,
-        Set<String> enabledFeatureNames,
-        @Nullable ArtifactExpander expander,
-        List<String> commandLine) {
+        Variables variables, Set<String> enabledFeatureNames, List<String> commandLine) {
       for (FlagSet flagSet : flagSets) {
-        flagSet.expandCommandLine(
-            actionName, variables, enabledFeatureNames, expander, commandLine);
+        flagSet.expandCommandLine(actionName, variables, enabledFeatureNames, commandLine);
       }
     }
   }
@@ -911,9 +899,6 @@ public class CcToolchainFeatures implements Serializable {
        */
       VariableValue getFieldValue(String variableName, String field);
 
-      VariableValue getFieldValue(
-          String variableName, String field, @Nullable ArtifactExpander expander);
-
       /** Returns true if the variable is truthy */
       boolean isTruthy();
     }
@@ -934,12 +919,6 @@ public class CcToolchainFeatures implements Serializable {
 
       @Override
       public VariableValue getFieldValue(String variableName, String field) {
-        return getFieldValue(variableName, field, null);
-      }
-
-      @Override
-      public VariableValue getFieldValue(
-          String variableName, String field, @Nullable ArtifactExpander expander) {
         throw new ExpansionException(
             String.format(
                 "Invalid toolchain configuration: Cannot expand variable '%s.%s': variable '%s' is "
@@ -1118,87 +1097,58 @@ public class CcToolchainFeatures implements Serializable {
       }
 
       private final String name;
-      private final Artifact directory;
       private final ImmutableList<String> objectFiles;
       private final boolean isWholeArchive;
       private final Type type;
 
       public static LibraryToLinkValue forDynamicLibrary(String name) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, null, false, Type.DYNAMIC_LIBRARY);
+            Preconditions.checkNotNull(name), null, false, Type.DYNAMIC_LIBRARY);
       }
 
       public static LibraryToLinkValue forVersionedDynamicLibrary(
           String name) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, null, false, Type.VERSIONED_DYNAMIC_LIBRARY);
+            Preconditions.checkNotNull(name), null, false, Type.VERSIONED_DYNAMIC_LIBRARY);
       }
 
       public static LibraryToLinkValue forInterfaceLibrary(String name) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, null, false, Type.INTERFACE_LIBRARY);
+            Preconditions.checkNotNull(name), null, false, Type.INTERFACE_LIBRARY);
       }
 
       public static LibraryToLinkValue forStaticLibrary(String name, boolean isWholeArchive) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, null, isWholeArchive, Type.STATIC_LIBRARY);
+            Preconditions.checkNotNull(name), null, isWholeArchive, Type.STATIC_LIBRARY);
       }
 
       public static LibraryToLinkValue forObjectFile(String name, boolean isWholeArchive) {
         return new LibraryToLinkValue(
-            Preconditions.checkNotNull(name), null, null, isWholeArchive, Type.OBJECT_FILE);
+            Preconditions.checkNotNull(name), null, isWholeArchive, Type.OBJECT_FILE);
       }
 
       public static LibraryToLinkValue forObjectFileGroup(
           ImmutableList<String> objects, boolean isWholeArchive) {
         Preconditions.checkNotNull(objects);
         Preconditions.checkArgument(!objects.isEmpty());
-        return new LibraryToLinkValue(null, null, objects, isWholeArchive, Type.OBJECT_FILE_GROUP);
-      }
-
-      public static LibraryToLinkValue forObjectDirectory(
-          Artifact directory, boolean isWholeArchive) {
-        Preconditions.checkNotNull(directory);
-        Preconditions.checkArgument(directory.isTreeArtifact());
-        return new LibraryToLinkValue(
-            null, directory, null, isWholeArchive, Type.OBJECT_FILE_GROUP);
+        return new LibraryToLinkValue(null, objects, isWholeArchive, Type.OBJECT_FILE_GROUP);
       }
 
       private LibraryToLinkValue(
-          String name,
-          Artifact directory,
-          ImmutableList<String> objectFiles,
-          boolean isWholeArchive,
-          Type type) {
+          String name, ImmutableList<String> objectFiles, boolean isWholeArchive, Type type) {
         this.name = name;
-        this.directory = directory;
         this.objectFiles = objectFiles;
         this.isWholeArchive = isWholeArchive;
         this.type = type;
       }
 
       @Override
-      public VariableValue getFieldValue(
-          String variableName, String field, @Nullable ArtifactExpander expander) {
+      public VariableValue getFieldValue(String variableName, String field) {
         Preconditions.checkNotNull(field);
         if (NAME_FIELD_NAME.equals(field) && !type.equals(Type.OBJECT_FILE_GROUP)) {
           return new StringValue(name);
         } else if (OBJECT_FILES_FIELD_NAME.equals(field) && type.equals(Type.OBJECT_FILE_GROUP)) {
-          ImmutableList.Builder<String> expandedObjectFiles = ImmutableList.builder();
-          if (objectFiles != null) {
-            expandedObjectFiles.addAll(objectFiles);
-          } else if (directory != null) {
-            if (expander != null) {
-              List<Artifact> artifacts = new ArrayList<>();
-              expander.expand(directory, artifacts);
-
-              expandedObjectFiles.addAll(
-                  Iterables.transform(artifacts, artifact -> artifact.getExecPathString()));
-            } else {
-              expandedObjectFiles.add(directory.getExecPathString());
-            }
-          }
-          return new StringSequence(expandedObjectFiles.build());
+          return new StringSequence(objectFiles);
         } else if (TYPE_FIELD_NAME.equals(field)) {
           return new StringValue(type.name);
         } else if (IS_WHOLE_ARCHIVE_FIELD_NAME.equals(field)) {
@@ -1333,8 +1283,7 @@ public class CcToolchainFeatures implements Serializable {
       }
 
       @Override
-      public VariableValue getFieldValue(
-          String variableName, String field, @Nullable ArtifactExpander expander) {
+      public VariableValue getFieldValue(String variableName, String field) {
         if (value.containsKey(field)) {
           return value.get(field);
         } else {
@@ -1621,11 +1570,7 @@ public class CcToolchainFeatures implements Serializable {
      *     accessing a field of non-structured variable
      */
     public VariableValue getVariable(String name) {
-      return lookupVariable(name, true, null);
-    }
-
-    public VariableValue getVariable(String name, @Nullable ArtifactExpander expander) {
-      return lookupVariable(name, true, expander);
+      return lookupVariable(name, true);
     }
 
     /**
@@ -1635,14 +1580,12 @@ public class CcToolchainFeatures implements Serializable {
      * @return Pair<VariableValue, String> returns either (variable value, null) or (null, string
      *     reason why variable was not found)
      */
-    private VariableValue lookupVariable(
-        String name, boolean throwOnMissingVariable, @Nullable ArtifactExpander expander) {
+    private VariableValue lookupVariable(String name, boolean throwOnMissingVariable) {
       VariableValue nonStructuredVariable = getNonStructuredVariable(name);
       if (nonStructuredVariable != null) {
         return nonStructuredVariable;
       }
-      VariableValue structuredVariable =
-          getStructureVariable(name, throwOnMissingVariable, expander);
+      VariableValue structuredVariable = getStructureVariable(name, throwOnMissingVariable);
       if (structuredVariable != null) {
         return structuredVariable;
       } else if (throwOnMissingVariable) {
@@ -1669,8 +1612,7 @@ public class CcToolchainFeatures implements Serializable {
       return null;
     }
 
-    private VariableValue getStructureVariable(
-        String name, boolean throwOnMissingVariable, @Nullable ArtifactExpander expander) {
+    private VariableValue getStructureVariable(String name, boolean throwOnMissingVariable) {
       if (!name.contains(".")) {
         return null;
       }
@@ -1691,7 +1633,7 @@ public class CcToolchainFeatures implements Serializable {
 
       while (!fieldsToAccess.empty()) {
         String field = fieldsToAccess.pop();
-        variable = variable.getFieldValue(structPath, field, expander);
+        variable = variable.getFieldValue(structPath, field);
         if (variable == null) {
           if (throwOnMissingVariable) {
             throw new ExpansionException(
@@ -1708,29 +1650,16 @@ public class CcToolchainFeatures implements Serializable {
     }
 
     public String getStringVariable(String variableName) {
-      return getVariable(variableName, null).getStringValue(variableName);
-    }
-
-    public String getStringVariable(String variableName, @Nullable ArtifactExpander expander) {
-      return getVariable(variableName, expander).getStringValue(variableName);
+      return getVariable(variableName).getStringValue(variableName);
     }
 
     public Iterable<? extends VariableValue> getSequenceVariable(String variableName) {
-      return getVariable(variableName, null).getSequenceValue(variableName);
-    }
-
-    public Iterable<? extends VariableValue> getSequenceVariable(
-        String variableName, @Nullable ArtifactExpander expander) {
-      return getVariable(variableName, expander).getSequenceValue(variableName);
+      return getVariable(variableName).getSequenceValue(variableName);
     }
 
     /** Returns whether {@code variable} is set. */
     boolean isAvailable(String variable) {
-      return isAvailable(variable, null);
-    }
-
-    boolean isAvailable(String variable, @Nullable ArtifactExpander expander) {
-      return lookupVariable(variable, false, expander) != null;
+      return lookupVariable(variable, false) != null;
     }
   }
   
@@ -1796,22 +1725,19 @@ public class CcToolchainFeatures implements Serializable {
       return enabledActionConfigActionNames.contains(actionName);
     }
 
-    /** @return the command line for the given {@code action}. */
+    /**
+     * @return the command line for the given {@code action}.
+     */
     public List<String> getCommandLine(String action, Variables variables) {
-      return getCommandLine(action, variables, null);
-    }
-
-    public List<String> getCommandLine(
-        String action, Variables variables, @Nullable ArtifactExpander expander) {
       List<String> commandLine = new ArrayList<>();
       if (actionIsConfigured(action)) {
         actionConfigByActionName
             .get(action)
-            .expandCommandLine(variables, enabledFeatureNames, expander, commandLine);
+            .expandCommandLine(variables, enabledFeatureNames, commandLine);
       }
 
       for (Feature feature : enabledFeatures) {
-        feature.expandCommandLine(action, variables, enabledFeatureNames, expander, commandLine);
+        feature.expandCommandLine(action, variables, enabledFeatureNames, commandLine);
       }
 
       return commandLine;
@@ -1820,23 +1746,18 @@ public class CcToolchainFeatures implements Serializable {
     /** @return the flags expanded for the given {@code action} in per-feature buckets. */
     public ImmutableList<Pair<String, List<String>>> getPerFeatureExpansions(
         String action, Variables variables) {
-      return getPerFeatureExpansions(action, variables, null);
-    }
-
-    public ImmutableList<Pair<String, List<String>>> getPerFeatureExpansions(
-        String action, Variables variables, @Nullable ArtifactExpander expander) {
       ImmutableList.Builder<Pair<String, List<String>>> perFeatureExpansions =
           ImmutableList.builder();
       if (actionIsConfigured(action)) {
         List<String> commandLine = new ArrayList<>();
         ActionConfig actionConfig = actionConfigByActionName.get(action);
-        actionConfig.expandCommandLine(variables, enabledFeatureNames, expander, commandLine);
+        actionConfig.expandCommandLine(variables, enabledFeatureNames, commandLine);
         perFeatureExpansions.add(Pair.of(actionConfig.getName(), commandLine));
       }
 
       for (Feature feature : enabledFeatures) {
         List<String> commandLine = new ArrayList<>();
-        feature.expandCommandLine(action, variables, enabledFeatureNames, expander, commandLine);
+        feature.expandCommandLine(action, variables, enabledFeatureNames, commandLine);
         perFeatureExpansions.add(Pair.of(feature.getName(), commandLine));
       }
 

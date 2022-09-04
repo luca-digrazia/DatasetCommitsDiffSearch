@@ -98,7 +98,6 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables.Var
 import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
 import com.google.devtools.build.lib.rules.cpp.CppCompilationContext;
 import com.google.devtools.build.lib.rules.cpp.CppCompileAction;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppFileTypes;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.cpp.CppLinkAction;
@@ -558,9 +557,6 @@ public class CompilationSupport {
     }
     if (objcProvider.is(Flag.USES_OBJC)) {
       activatedCrosstoolSelectables.add(CONTAINS_OBJC);
-    }
-    if (CppHelper.useFission(ruleContext.getFragment(CppConfiguration.class), toolchain)) {
-      activatedCrosstoolSelectables.add(CppRuleClasses.PER_OBJECT_DEBUG_INFO);
     }
 
     activatedCrosstoolSelectables.addAll(ruleContext.getFeatures());

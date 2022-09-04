@@ -32,7 +32,7 @@ import java.util.List;
  **/
 public class LinkBuildVariablesTestCase extends BuildViewTestCase {
 
-  protected CppLinkAction getCppLinkAction(ConfiguredTarget target, Link.LinkTargetType type) {
+  private CppLinkAction getCppLinkAction(ConfiguredTarget target, Link.LinkTargetType type) {
     Artifact linkerOutput = null;
     switch (type) {
       case STATIC_LIBRARY:
@@ -43,11 +43,8 @@ public class LinkBuildVariablesTestCase extends BuildViewTestCase {
       case ALWAYS_LINK_PIC_STATIC_LIBRARY:
         linkerOutput = getBinArtifact("lib" + target.getLabel().getName() + "pic.a", target);
         break;
-      case NODEPS_DYNAMIC_LIBRARY:
-        linkerOutput = getBinArtifact("lib" + target.getLabel().getName() + ".so", target);
-        break;
       case DYNAMIC_LIBRARY:
-        linkerOutput = getBinArtifact(target.getLabel().getName(), target);
+        linkerOutput = getBinArtifact("lib" + target.getLabel().getName() + ".so", target);
         break;
       case EXECUTABLE:
         linkerOutput = getExecutable(target);
