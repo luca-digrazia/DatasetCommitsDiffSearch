@@ -24,6 +24,7 @@ import com.google.devtools.build.lib.analysis.config.BuildConfiguration.StrictDe
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArtifacts;
 import com.google.devtools.build.lib.rules.java.JavaCompilationHelper;
+import com.google.devtools.build.lib.rules.java.JavaConfiguration;
 import com.google.devtools.build.lib.rules.java.JavaInfo;
 import com.google.devtools.build.lib.rules.java.JavaLibraryHelper;
 import com.google.devtools.build.lib.rules.java.JavaRuleOutputJarsProvider;
@@ -31,7 +32,9 @@ import com.google.devtools.build.lib.rules.java.JavaRuntimeInfo;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.proto.ProtoLangToolchainProvider;
 
-/** Common logic used by java*_proto aspects (e.g. {@link JavaLiteProtoAspect}). */
+/**
+ * Common logic used by java*_proto aspects (e.g. {@link JavaLiteProtoAspect}).
+ */
 public class JavaProtoAspectCommon {
 
   // The name of an attribute of {@link JavaProtoAspect} used for storing the {@link Label} of
@@ -52,28 +55,36 @@ public class JavaProtoAspectCommon {
   private final RpcSupport rpcSupport;
 
   /**
-   * Returns a {@link JavaProtoAspectCommon} instance that handles logic for {@code
-   * java_proto_library}.
+   * Returns a {@link JavaProtoAspectCommon} instance that handles logic for
+   * {@code java_proto_library}.
    */
   static JavaProtoAspectCommon getSpeedInstance(
       RuleContext ruleContext, JavaSemantics javaSemantics, RpcSupport rpcSupport) {
     return new JavaProtoAspectCommon(
-        ruleContext, javaSemantics, rpcSupport, SPEED_PROTO_TOOLCHAIN_ATTR, SPEED_JAR_SUFFIX);
+        ruleContext,
+        javaSemantics,
+        rpcSupport,
+        SPEED_PROTO_TOOLCHAIN_ATTR,
+        SPEED_JAR_SUFFIX);
   }
 
   /**
-   * Returns a {@link JavaProtoAspectCommon} instance that handles logic for {@code
-   * java_lite_proto_library}.
+   * Returns a {@link JavaProtoAspectCommon} instance that handles logic for
+   * {@code java_lite_proto_library}.
    */
   static JavaProtoAspectCommon getLiteInstance(
       RuleContext ruleContext, JavaSemantics javaSemantics) {
     return new JavaProtoAspectCommon(
-        ruleContext, javaSemantics, null, LITE_PROTO_TOOLCHAIN_ATTR, LITE_JAR_SUFFIX);
+        ruleContext,
+        javaSemantics,
+        null,
+        LITE_PROTO_TOOLCHAIN_ATTR,
+        LITE_JAR_SUFFIX);
   }
 
   /**
-   * Returns a {@link JavaProtoAspectCommon} instance that handles logic for {@code
-   * java_mutable_proto_library}.
+   * Returns a {@link JavaProtoAspectCommon} instance that handles logic for
+   * {@code java_mutable_proto_library}.
    */
   public static JavaProtoAspectCommon getMutableInstance(
       RuleContext ruleContext,
@@ -81,7 +92,11 @@ public class JavaProtoAspectCommon {
       RpcSupport rpcSupport,
       String protoToolchainAttr) {
     return new JavaProtoAspectCommon(
-        ruleContext, javaSemantics, rpcSupport, protoToolchainAttr, MUTABLE_JAR_SUFFIX);
+        ruleContext,
+        javaSemantics,
+        rpcSupport,
+        protoToolchainAttr,
+        MUTABLE_JAR_SUFFIX);
   }
 
   private JavaProtoAspectCommon(
@@ -114,12 +129,15 @@ public class JavaProtoAspectCommon {
             .setInjectingRuleKind(injectingRuleKind)
             .setOutput(outputJar)
             .addSourceJars(sourceJar)
-            .setJavacOpts(ProtoJavacOpts.constructJavacOpts(ruleContext))
-            .addDep(dep)
-            .setCompilationStrictDepsMode(StrictDepsMode.ERROR);
+            .setJavacOpts(ProtoJavacOpts.constructJavacOpts(ruleContext));
+    if (ruleContext.getFragment(JavaConfiguration.class).isProtoGeneratedStrictDeps()) {
+      helper.addDep(dep).setCompilationStrictDepsMode(StrictDepsMode.ERROR);
+    } else {
+      helper.addDep(dep).setCompilationStrictDepsMode(StrictDepsMode.OFF);
+    }
     for (TransitiveInfoCollection t : getProtoRuntimeDeps()) {
       JavaCompilationArgsProvider provider =
-          JavaInfo.getProvider(JavaCompilationArgsProvider.class, t);
+            JavaInfo.getProvider(JavaCompilationArgsProvider.class, t);
       if (provider != null) {
         helper.addDep(provider);
       }
@@ -132,8 +150,8 @@ public class JavaProtoAspectCommon {
             JavaRuntimeInfo.forHost(ruleContext),
             JavaCompilationHelper.getInstrumentationJars(ruleContext),
             JavaRuleOutputJarsProvider.builder(),
-            /*createOutputSourceJar*/ false,
-            /*outputSourceJar=*/ null);
+              /*createOutputSourceJar*/ false,
+              /*outputSourceJar=*/ null);
     return helper.buildCompilationArgsProvider(
         artifacts, /*isReportedAsStrict=*/ true, /*isNeverlink=*/ false);
   }
@@ -154,10 +172,12 @@ public class JavaProtoAspectCommon {
     return result.build();
   }
 
-  /** Returns the toolchain that specifies how to generate code from {@code .proto} files. */
+  /**
+   * Returns the toolchain that specifies how to generate code from {@code .proto} files.
+   */
   public ProtoLangToolchainProvider getProtoToolchainProvider() {
-    return checkNotNull(
-        ruleContext.getPrerequisite(protoToolchainAttr, TARGET, ProtoLangToolchainProvider.class));
+    return checkNotNull(ruleContext.getPrerequisite(
+        protoToolchainAttr, TARGET, ProtoLangToolchainProvider.class));
   }
 
   /**
@@ -173,7 +193,7 @@ public class JavaProtoAspectCommon {
    * name and the library type of the current instance. For example, if the instance is created with
    * {@link getLiteInstance} the name of the jar will be "<label>-lite-src.jar".
    *
-   * <p>The {@link Artifact} will be created in the bazel-genfiles directory.
+   * The {@link Artifact} will be created in the bazel-genfiles directory.
    */
   public Artifact getSourceJarArtifact() {
     return ruleContext.getGenfilesArtifact(
@@ -185,7 +205,7 @@ public class JavaProtoAspectCommon {
    * name and the library type of the current instance. For example, if the instance is created with
    * {@link getLiteInstance} the name of the jar will be "lib<label>-lite.jar".
    *
-   * <p>The {@link Artifact} will be created in the bazel-bin directory.
+   * The {@link Artifact} will be created in the bazel-bin directory.
    */
   public Artifact getOutputJarArtifact() {
     return ruleContext.getBinArtifact(
