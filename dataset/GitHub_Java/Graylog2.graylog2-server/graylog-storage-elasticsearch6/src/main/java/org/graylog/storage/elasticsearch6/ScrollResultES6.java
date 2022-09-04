@@ -38,12 +38,9 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-import static org.graylog2.indexer.searches.ScrollCommand.NO_LIMIT;
-
 public class ScrollResultES6 extends IndexQueryResult implements ScrollResult {
     private static final Logger LOG = LoggerFactory.getLogger(ScrollResult.class);
     private static final String DEFAULT_SCROLL = "1m";
-    private static final String SCROLL_ID_FIELD = "_scroll_id";
 
     private final JestClient jestClient;
     private final ObjectMapper objectMapper;
@@ -54,33 +51,20 @@ public class ScrollResultES6 extends IndexQueryResult implements ScrollResult {
     private final long totalHits;
 
     private String scrollId;
-    private final int limit;
     private int chunkId = 0;
-    private int resultCount = 0;
 
     public interface Factory {
-        ScrollResultES6 create(SearchResult initialResult, @Assisted("query") String query, @Assisted("scroll") String scroll,
-                               List<String> fields, int limit);
+        ScrollResultES6 create(@Assisted SearchResult initialResult, @Assisted("query") String query, @Assisted("scroll") String scroll, @Assisted List<String> fields);
+    }
+
+
+    @AssistedInject
+    public ScrollResultES6(JestClient jestClient, ObjectMapper objectMapper, @Assisted SearchResult initialResult, @Assisted("query") String query, @Assisted List<String> fields) {
+        this(jestClient, objectMapper, initialResult, query, DEFAULT_SCROLL, fields);
     }
 
     @AssistedInject
-    public ScrollResultES6(JestClient jestClient,
-                           ObjectMapper objectMapper,
-                           @Assisted SearchResult initialResult,
-                           @Assisted("query") String query,
-                           @Assisted List<String> fields,
-                           @Assisted int limit) {
-        this(jestClient, objectMapper, initialResult, query, DEFAULT_SCROLL, fields, limit);
-    }
-
-    @AssistedInject
-    public ScrollResultES6(JestClient jestClient,
-                           ObjectMapper objectMapper,
-                           @Assisted SearchResult initialResult,
-                           @Assisted("query") String query,
-                           @Assisted("scroll") String scroll,
-                           @Assisted List<String> fields,
-                           @Assisted int limit) {
+    public ScrollResultES6(JestClient jestClient, ObjectMapper objectMapper, @Assisted SearchResult initialResult, @Assisted("query") String query, @Assisted("scroll") String scroll, @Assisted List<String> fields) {
         super(query, null, initialResult.getJsonObject().path("took").asLong());
         this.jestClient = jestClient;
         this.objectMapper = objectMapper;
@@ -89,7 +73,6 @@ public class ScrollResultES6 extends IndexQueryResult implements ScrollResult {
         this.fields = fields;
         totalHits = initialResult.getTotal();
         scrollId = getScrollIdFromResult(initialResult);
-        this.limit = limit;
 
         final Md5Hash md5Hash = new Md5Hash(getOriginalQuery());
         queryHash = md5Hash.toHex();
@@ -99,55 +82,38 @@ public class ScrollResultES6 extends IndexQueryResult implements ScrollResult {
 
     @Override
     public ScrollChunk nextChunk() throws IOException {
-        if (limit != NO_LIMIT && resultCount >= limit) {
-            LOG.debug("[{}] Reached limit for query {}", queryHash, getOriginalQuery());
-            return null;
-        }
 
         final JestResult search;
-        final List<ResultMessage> resultMessages;
+        final List<ResultMessage> hits;
         if (initialResult == null) {
             search = getNextScrollResult();
-            resultMessages = StreamSupport.stream(search.getJsonObject().path("hits").path("hits").spliterator(), false)
+            hits = StreamSupport.stream(search.getJsonObject().path("hits").path("hits").spliterator(), false)
                     .map(hit -> ResultMessage.parseFromSource(hit.path("_id").asText(),
                             hit.path("_index").asText(),
                             objectMapper.convertValue(hit.get("_source"), TypeReferences.MAP_STRING_OBJECT)))
                     .collect(Collectors.toList());
         } else {
-            // make sure to return the initial resultMessages, see https://github.com/Graylog2/graylog2-server/issues/2126
+            // make sure to return the initial hits, see https://github.com/Graylog2/graylog2-server/issues/2126
             search = initialResult;
-            resultMessages = initialResult.getHits(Map.class, false).stream()
+            hits = initialResult.getHits(Map.class, false).stream()
                 .map(hit -> ResultMessage.parseFromSource(hit.id, hit.index, (Map<String, Object>)hit.source))
                 .collect(Collectors.toList());
             this.initialResult = null;
         }
 
-        if (resultMessages.size() == 0) {
+        if (hits.size() == 0) {
             // scroll exhausted
             LOG.debug("[{}] Reached end of scroll results for query {}", queryHash, getOriginalQuery());
             return null;
         }
-
-        final int remainingResultsForLimit = limit - resultCount;
-
-        final List<ResultMessage> resultMessagesSlice = (limit != NO_LIMIT && remainingResultsForLimit < resultMessages.size())
-                ? resultMessages.subList(0, remainingResultsForLimit)
-                : resultMessages;
-
-        resultCount += resultMessagesSlice.size();
-
-        LOG.debug("[{}][{}] New scroll id {}, number of resultMessages in chunk: {}", queryHash, chunkId,
-                getScrollIdFromResult(search), resultMessagesSlice.size());
+        LOG.debug("[{}][{}] New scroll id {}, number of hits in chunk: {}", queryHash, chunkId, getScrollIdFromResult(search), hits.size());
         scrollId = getScrollIdFromResult(search); // save the id for the next request.
 
-        return new ScrollChunkES6(resultMessagesSlice, fields, chunkId++);
+        return new ScrollChunkES6(hits, fields, chunkId++);
     }
 
     private String getScrollIdFromResult(JestResult result) {
-        if (!result.getJsonObject().hasNonNull(SCROLL_ID_FIELD)) {
-            throw new IllegalStateException("Unable to extract scroll id from search result!");
-        }
-        return result.getJsonObject().path(SCROLL_ID_FIELD).asText();
+        return result.getJsonObject().path("_scroll_id").asText();
     }
 
     private JestResult getNextScrollResult() throws IOException {
@@ -189,6 +155,10 @@ public class ScrollResultES6 extends IndexQueryResult implements ScrollResult {
 
         public int getChunkNumber() {
             return chunkNumber;
+        }
+
+        public boolean isFirstChunk() {
+            return getChunkNumber() == 0;
         }
 
         public List<ResultMessage> getMessages() {
