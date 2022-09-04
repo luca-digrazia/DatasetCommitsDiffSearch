@@ -15,10 +15,8 @@ package com.google.devtools.build.lib.packages;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Lists;
 import com.google.errorprone.annotations.CheckReturnValue;
 import java.util.BitSet;
-import java.util.List;
 import javax.annotation.Nullable;
 
 /**
@@ -44,13 +42,6 @@ abstract class AttributeContainer {
    */
   @Nullable
   abstract Object getAttributeValue(int attrIndex);
-
-  /**
-   * Returns attribute values as tracked by this instance. The indices of attribute values in the
-   * returned list are not guaranteed to be consistent with the other methods of this class. If this
-   * is important, which is generally the case, avoid this method.
-   */
-  abstract List<Object> getRawAttributeValues();
 
   /**
    * Updates the value of the attribute.
@@ -129,12 +120,6 @@ abstract class AttributeContainer {
       } else {
         return new Large(values, explicitAttrs);
       }
-    }
-
-    @Override
-    List<Object> getRawAttributeValues() {
-      // Mutable copy since ImmutableList doesn't support null.
-      return Lists.newArrayList(values);
     }
   }
 
@@ -275,12 +260,6 @@ abstract class AttributeContainer {
       int stateIndex = getStateIndex(state, 0, attrIndex, 0x7f);
       return stateIndex < 0 ? null : values[stateIndex];
     }
-
-    @Override
-    List<Object> getRawAttributeValues() {
-      // Mutable copy since ImmutableList doesn't support null.
-      return Lists.newArrayList(values);
-    }
   }
 
   /**
@@ -396,12 +375,6 @@ abstract class AttributeContainer {
       int p = prefixSize(maxAttrCount);
       int stateIndex = getStateIndex(state, p, attrIndex, 0xff);
       return stateIndex < 0 ? null : values[stateIndex - p];
-    }
-
-    @Override
-    List<Object> getRawAttributeValues() {
-      // Mutable copy since ImmutableList doesn't support null.
-      return Lists.newArrayList(values);
     }
   }
 }
