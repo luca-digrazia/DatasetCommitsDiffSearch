@@ -223,7 +223,6 @@ public class FakeCcModule
       Object textualHdrs,
       Object modularPublicHdrs,
       Object modularPrivateHdrs,
-      Object purpose,
       StarlarkThread thread)
       throws EvalException {
     return null;
