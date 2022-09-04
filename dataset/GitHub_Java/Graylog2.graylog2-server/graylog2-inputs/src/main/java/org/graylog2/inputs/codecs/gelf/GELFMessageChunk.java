@@ -1,24 +1,23 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.codecs.gelf;
 
+import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.inputs.MessageInput;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
 
 public final class GELFMessageChunk {
 
@@ -61,7 +60,7 @@ public final class GELFMessageChunk {
     private byte[] data = new byte[1];
     private int sequenceNumber = -1;
     private int sequenceCount = -1;
-    private long arrival = -1l;
+    private long arrival = -1L;
 
     private final byte[] payload;
     private final MessageInput sourceInput;
@@ -114,7 +113,7 @@ public final class GELFMessageChunk {
         extractSequenceCount();
         extractSequenceNumber();
         extractData();
-        this.arrival = DateTime.now(DateTimeZone.UTC).getMillis();
+        this.arrival = Tools.iso8601().getMillis();
     }
 
     private String extractId() {

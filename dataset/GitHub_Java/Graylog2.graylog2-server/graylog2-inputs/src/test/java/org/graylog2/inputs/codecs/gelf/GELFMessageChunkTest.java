@@ -1,27 +1,29 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.inputs.codecs.gelf;
 
 import org.graylog2.inputs.TestHelper;
-import org.joda.time.DateTime;
-import org.joda.time.DateTimeZone;
-import org.testng.annotations.Test;
+import org.graylog2.plugin.Tools;
+import org.junit.Test;
 
-import static org.testng.AssertJUnit.*;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 
 public class GELFMessageChunkTest {
@@ -39,9 +41,9 @@ public class GELFMessageChunkTest {
     @Test
     public void testGetArrival() throws Exception {
         final GELFMessageChunk chunk = buildChunk();
-        final long l = DateTime.now(DateTimeZone.UTC).getMillis();
+        final long l = Tools.iso8601().getMillis();
         final long arrival = chunk.getArrival();
-        assertTrue(l - arrival < 5000l); // delta shmelta
+        assertTrue(l - arrival < 5000L); // delta shmelta
     }
 
     @Test

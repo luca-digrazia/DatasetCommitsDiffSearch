@@ -16,7 +16,6 @@
  */
 package org.graylog2.alerts.types;
 
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -153,7 +152,7 @@ public class FieldContentValueAlertConditionTest extends AlertConditionTest {
                 any(Sorting.class))).thenReturn(searchResult);
 
         final FieldContentValueAlertCondition alertCondition = new FieldContentValueAlertCondition(searches, configuration, stream,
-                null, DateTime.now(), "mockuser", ImmutableMap.<String,Object>of("field", "test", "value", "test"));
+                null, DateTime.now(), "mockuser", Collections.<String,Object>emptyMap());
 
         final AbstractAlertCondition.CheckResult result = alertCondition.runCheck();
     }

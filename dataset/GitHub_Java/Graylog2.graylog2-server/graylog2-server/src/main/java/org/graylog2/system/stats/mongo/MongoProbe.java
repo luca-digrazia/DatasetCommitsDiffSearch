@@ -209,8 +209,8 @@ public class MongoProbe {
                     memoryMap.getInt("resident"),
                     memoryMap.getInt("virtual"),
                     memoryMap.getBoolean("supported"),
-                    memoryMap.getInt("mapped", -1),
-                    memoryMap.getInt("mappedWithJournal", -1)
+                    memoryMap.getInt("mapped"),
+                    memoryMap.getInt("mappedWithJournal")
             );
 
             final BasicDBObject storageEngineMap = (BasicDBObject) serverStatusResult.get("storageEngine");

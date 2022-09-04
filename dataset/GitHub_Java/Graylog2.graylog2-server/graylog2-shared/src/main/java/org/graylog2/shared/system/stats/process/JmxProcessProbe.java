@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.system.stats.process;
 
@@ -45,7 +45,7 @@ public class JmxProcessProbe implements ProcessProbe {
             final String processId = ManagementFactory.getRuntimeMXBean().getName().split("@")[0];
             return Long.parseLong(processId);
         } catch (Exception e) {
-            return -1l;
+            return -1L;
         }
     }
 
@@ -59,11 +59,11 @@ public class JmxProcessProbe implements ProcessProbe {
     }
 
     static long getOpenFileDescriptorCount() {
-        return invokeMethod(openFileDescriptorCountMethod, operatingSystemMXBean, -1l);
+        return invokeMethod(openFileDescriptorCountMethod, operatingSystemMXBean, -1L);
     }
 
     static long getMaxFileDescriptorCount() {
-        return invokeMethod(maxFileDescriptorCountMethod, operatingSystemMXBean, -1l);
+        return invokeMethod(maxFileDescriptorCountMethod, operatingSystemMXBean, -1L);
     }
 
     @Override

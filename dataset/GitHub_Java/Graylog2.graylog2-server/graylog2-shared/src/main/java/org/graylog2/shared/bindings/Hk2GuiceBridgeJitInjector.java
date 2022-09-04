@@ -1,18 +1,18 @@
 /**
- * This file is part of Graylog2.
+ * This file is part of Graylog.
  *
- * Graylog2 is free software: you can redistribute it and/or modify
+ * Graylog is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * Graylog2 is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  *
  * You should have received a copy of the GNU General Public License
- * along with Graylog2.  If not, see <http://www.gnu.org/licenses/>.
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog2.shared.bindings;
 
@@ -22,6 +22,7 @@ import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Key;
 import com.google.inject.Module;
+import com.google.inject.Stage;
 import com.google.inject.TypeLiteral;
 
 import java.lang.reflect.InvocationHandler;
@@ -52,11 +53,11 @@ public class Hk2GuiceBridgeJitInjector implements InvocationHandler {
     private final Injector injector;
 
     public static Injector create(final Module module, final String... packagePrefixes) {
-        return create(Guice.createInjector(module), packagePrefixes);
+        return create(Guice.createInjector(Stage.PRODUCTION, module), packagePrefixes);
     }
 
     public static Injector create(final Iterable<? extends Module> modules, final String... packagePrefixes) {
-        return create(Guice.createInjector(modules), packagePrefixes);
+        return create(Guice.createInjector(Stage.PRODUCTION, modules), packagePrefixes);
     }
 
     public static Injector create(final Injector injector, final String... packagePrefixes) {
@@ -85,7 +86,7 @@ public class Hk2GuiceBridgeJitInjector implements InvocationHandler {
     /**
      * {@inheritDoc}
      */
-    public Object invoke(final Object proxy, final Method method, final Object... args) throws Throwable {
+    public Object invoke(final Object proxy, final Method method, final Object[] args) throws Throwable {
         final Object result = method.invoke(injector, args);
         if (result == null && method.equals(getExistingBindingMethod)) {
             if (isInsideTargettedPackage((Class<?>) getRawTypeMethod.invoke(getTypeLiteralMethod.invoke(args[0])))) {
