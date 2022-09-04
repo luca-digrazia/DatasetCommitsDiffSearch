@@ -38,17 +38,14 @@ public class MergedAndroidResources extends ParsedAndroidResources {
   private final ProcessedAndroidManifest manifest;
 
   public static MergedAndroidResources mergeFrom(
-      RuleContext ruleContext,
-      ParsedAndroidResources parsed,
-      ResourceDependencies resourceDeps,
-      boolean enableDataBinding,
-      AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
+      RuleContext ruleContext, ParsedAndroidResources parsed, ResourceDependencies resourceDeps)
+      throws InterruptedException, RuleErrorException {
 
     AndroidConfiguration androidConfiguration = AndroidCommon.getAndroidConfig(ruleContext);
 
     boolean useCompiledMerge =
-        aaptVersion == AndroidAaptVersion.AAPT2 && androidConfiguration.skipParsingAction();
+        AndroidAaptVersion.chooseTargetAaptVersion(ruleContext) == AndroidAaptVersion.AAPT2
+            && androidConfiguration.skipParsingAction();
 
     Preconditions.checkState(
         !useCompiledMerge || parsed.getCompiledSymbols() != null,
@@ -61,7 +58,7 @@ public class MergedAndroidResources extends ParsedAndroidResources {
             .setThrowOnResourceConflict(androidConfiguration.throwOnResourceConflict())
             .setUseCompiledMerge(useCompiledMerge);
 
-    if (enableDataBinding) {
+    if (DataBinding.isEnabled(ruleContext)) {
       builder.setDataBindingInfoZip(DataBinding.getLayoutInfoFile(ruleContext));
     }
 
@@ -145,12 +142,12 @@ public class MergedAndroidResources extends ParsedAndroidResources {
   /**
    * Validates and packages this rule's resources.
    *
-   * <p>See {@link ValidatedAndroidResources#validateFrom(RuleContext, MergedAndroidResources,
-   * AndroidAaptVersion)}. This method is a convenience method for calling that one.
+   * <p>See {@link ValidatedAndroidResources#validateFrom(RuleContext, MergedAndroidResources)}.
+   * This method is a convenience method for calling that one.
    */
-  public ValidatedAndroidResources validate(RuleContext ruleContext, AndroidAaptVersion aaptVersion)
-      throws InterruptedException {
-    return ValidatedAndroidResources.validateFrom(ruleContext, this, aaptVersion);
+  public ValidatedAndroidResources validate(RuleContext ruleContext)
+      throws InterruptedException, RuleErrorException {
+    return ValidatedAndroidResources.validateFrom(ruleContext, this);
   }
 
   @Override

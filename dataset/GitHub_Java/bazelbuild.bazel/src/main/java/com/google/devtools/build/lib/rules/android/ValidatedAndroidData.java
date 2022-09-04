@@ -17,7 +17,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.packages.RuleErrorConsumer;
-import com.google.devtools.build.lib.skylarkbuildapi.android.ValidatedAndroidDataApi;
 
 /**
  * A {@link CompiledMergableAndroidData} that has been fully processed, validated, and packaged.
@@ -28,7 +27,7 @@ import com.google.devtools.build.lib.skylarkbuildapi.android.ValidatedAndroidDat
  * ResourceContainer} is removed, this interface can be replaced with {@link
  * ValidatedAndroidResources}
  */
-public interface ValidatedAndroidData extends CompiledMergableAndroidData, ValidatedAndroidDataApi {
+public interface ValidatedAndroidData extends CompiledMergableAndroidData {
 
   Artifact getRTxt();
 
@@ -62,9 +61,5 @@ public interface ValidatedAndroidData extends CompiledMergableAndroidData, Valid
   Artifact getMergedResources();
 
   ProcessedAndroidManifest getProcessedManifest();
-
-  /** Exports an immutable version of this data. */
-  default ValidatedAndroidData export() {
-    return this;
-  }
 }
+
