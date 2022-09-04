@@ -84,10 +84,6 @@ public class ResourceWriter {
         return mediaTypes;
     }
 
-    public List<MediaType> modifiableMediaTypes() {
-        return new ArrayList<>(mediaTypes());
-    }
-
     public ServerMediaType serverMediaType() {
         if (serverMediaType == null) {
             synchronized (this) {
