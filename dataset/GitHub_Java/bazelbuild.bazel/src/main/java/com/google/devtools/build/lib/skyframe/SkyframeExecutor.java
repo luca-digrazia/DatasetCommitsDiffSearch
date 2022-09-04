@@ -277,6 +277,11 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   // since it is not yet created when we create the value builders, we have to use a supplier,
   // initialized when the build view is created.
   private final MutableArtifactFactorySupplier artifactFactory;
+  // Used to give to WriteBuildInfoAction via a supplier. Relying on BuildVariableValue.BUILD_ID
+  // would be preferable, but we have no way to have the Action depend on that value directly.
+  // Having the BuildInfoFunction own the supplier is currently not possible either, because then
+  // it would be invalidated on every build, since it would depend on the build id value.
+  private final MutableSupplier<UUID> buildId = new MutableSupplier<>();
   private final ActionKeyContext actionKeyContext;
 
   protected boolean active = true;
@@ -298,8 +303,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   protected int modifiedFilesDuringPreviousBuild;
 
   @VisibleForTesting boolean lastAnalysisDiscarded = false;
-
-  private boolean analysisCacheDiscarded = false;
 
   private final ImmutableMap<SkyFunctionName, SkyFunction> extraSkyFunctions;
 
@@ -683,12 +686,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return buildDriver;
   }
 
-  public boolean wasAnalysisCacheDiscardedAndResetBit() {
-    boolean tmp = analysisCacheDiscarded;
-    analysisCacheDiscarded = false;
-    return tmp;
-  }
-
   /**
    * This method exists only to allow a module to make a top-level Skyframe call during the
    * transition to making it fully Skyframe-compatible. Do not add additional callers!
@@ -716,7 +713,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   public abstract ActionGraphContainer getActionGraphContainer(
-      List<String> actionGraphTargets, boolean includeActionCmdLine, boolean includeArtifacts)
+      List<String> actionGraphTargets, boolean includeActionCmdLine)
       throws CommandLineExpansionException;
 
   class BuildViewProvider {
@@ -808,7 +805,6 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   /** Clear any configured target data stored outside Skyframe. */
   public void handleAnalysisInvalidatingChange() {
     logger.info("Dropping configured target data");
-    analysisCacheDiscarded = true;
     skyframeBuildView.clearInvalidatedConfiguredTargets();
     skyframeBuildView.clearLegacyData();
   }
@@ -1006,27 +1002,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   }
 
   private WorkspaceStatusAction makeWorkspaceStatusAction(String workspaceName) {
-    WorkspaceStatusAction.Environment env =
-        new WorkspaceStatusAction.Environment() {
-          @Override
-          public Artifact createStableArtifact(String name) {
-            ArtifactRoot root = directories.getBuildDataDirectory(workspaceName);
-            return skyframeBuildView
-                .getArtifactFactory()
-                .getDerivedArtifact(
-                    PathFragment.create(name), root, WorkspaceStatusValue.BUILD_INFO_KEY);
-          }
+    return workspaceStatusActionFactory.createWorkspaceStatusAction(
+        artifactFactory.get(), WorkspaceStatusValue.BUILD_INFO_KEY, workspaceName);
+  }
 
-          @Override
-          public Artifact createVolatileArtifact(String name) {
-            ArtifactRoot root = directories.getBuildDataDirectory(workspaceName);
-            return skyframeBuildView
-                .getArtifactFactory()
-                .getConstantMetadataArtifact(
-                    PathFragment.create(name), root, WorkspaceStatusValue.BUILD_INFO_KEY);
-          }
-        };
-    return workspaceStatusActionFactory.createWorkspaceStatusAction(env);
+  @VisibleForTesting
+  public WorkspaceStatusAction.Factory getWorkspaceStatusActionFactoryForTesting() {
+    return workspaceStatusActionFactory;
   }
 
   @VisibleForTesting
@@ -1084,6 +1066,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   @VisibleForTesting
   public void setCommandId(UUID commandId) {
     PrecomputedValue.BUILD_ID.set(injectable(), commandId);
+    buildId.set(commandId);
   }
 
   /** Returns the build-info.txt and build-changelist.txt artifacts. */
@@ -1333,9 +1316,13 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     setShowLoadingProgress(packageCacheOptions.showLoadingProgress);
     setDefaultVisibility(packageCacheOptions.defaultVisibility);
     setSkylarkSemantics(skylarkSemanticsOptions.toSkylarkSemantics());
-
-    setupDefaultPackage("# //tools/defaults in-memory package is disabled.");
-    PrecomputedValue.ENABLE_DEFAULTS_PACKAGE.set(injectable(), false);
+    if (packageCacheOptions.incompatibleDisableInMemoryToolsDefaultsPackage) {
+      setupDefaultPackage("# //tools/defaults in-memory package is disabled.");
+      PrecomputedValue.ENABLE_DEFAULTS_PACKAGE.set(injectable(), false);
+    } else {
+      setupDefaultPackage(defaultsPackageContents);
+      PrecomputedValue.ENABLE_DEFAULTS_PACKAGE.set(injectable(), true);
+    }
 
     setPackageLocator(pkgLocator);
 

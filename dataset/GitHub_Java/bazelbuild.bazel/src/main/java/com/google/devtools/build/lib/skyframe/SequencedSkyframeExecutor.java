@@ -51,13 +51,11 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.pkgcache.PackageCacheOptions;
 import com.google.devtools.build.lib.pkgcache.PathPackageLocator;
 import com.google.devtools.build.lib.profiler.Profiler;
-import com.google.devtools.build.lib.profiler.ProfilerTask;
 import com.google.devtools.build.lib.profiler.SilentCloseable;
-import com.google.devtools.build.lib.query2.AqueryActionFilter;
 import com.google.devtools.build.lib.skyframe.AspectValue.AspectKey;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.BasicFilesystemDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.DirtinessCheckerUtils.ExternalDirtinessChecker;
@@ -94,7 +92,6 @@ import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.SkyValue;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.PrintStream;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
@@ -134,12 +131,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   private final DiffAwarenessManager diffAwarenessManager;
   private final Iterable<SkyValueDirtinessChecker> customDirtinessCheckers;
   private Set<String> previousClientEnvironment = ImmutableSet.of();
-
-  private int modifiedFiles;
-  private int outputDirtyFiles;
-  private int modifiedFilesDuringPreviousBuild;
-  private Duration sourceDiffCheckingDuration = Duration.ofSeconds(-1L);
-  private Duration outputTreeDiffCheckingDuration = Duration.ofSeconds(-1L);
 
   private SequencedSkyframeExecutor(
       Consumer<SkyframeExecutor> skyframeExecutorConsumerOnInit,
@@ -296,7 +287,8 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ExtendedEventHandler eventHandler,
       PackageCacheOptions packageCacheOptions,
       PathPackageLocator packageLocator,
-      StarlarkSemanticsOptions starlarkSemanticsOptions,
+      SkylarkSemanticsOptions skylarkSemanticsOptions,
+      String defaultsPackageContents,
       UUID commandId,
       Map<String, String> clientEnv,
       TimestampGranularityMonitor tsgm,
@@ -312,17 +304,15 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         eventHandler,
         packageCacheOptions,
         packageLocator,
-        starlarkSemanticsOptions,
+        skylarkSemanticsOptions,
+        defaultsPackageContents,
         commandId,
         clientEnv,
         tsgm,
         options);
-    long startTime = System.nanoTime();
-    handleDiffs(eventHandler, packageCacheOptions.checkOutputFiles, options);
-    long stopTime = System.nanoTime();
-    Profiler.instance().logSimpleTask(startTime, stopTime, ProfilerTask.INFO, "handleDiffs");
-    long duration = stopTime - startTime;
-    sourceDiffCheckingDuration = duration > 0 ? Duration.ofNanos(duration) : Duration.ZERO;
+    try (SilentCloseable c = Profiler.instance().profile("handleDiffs")) {
+      handleDiffs(eventHandler, packageCacheOptions.checkOutputFiles, options);
+    }
   }
 
   /**
@@ -685,8 +675,9 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
   @Override
   public void detectModifiedOutputFiles(
       ModifiedFileSet modifiedOutputFiles, @Nullable Range<Long> lastExecutionTimeRange)
-      throws InterruptedException {
-    long startTime = System.nanoTime();
+      throws AbruptExitException, InterruptedException {
+
+    // Detect external modifications in the output tree.
     FilesystemValueChecker fsvc =
         new FilesystemValueChecker(Preconditions.checkNotNull(tsgm.get()), lastExecutionTimeRange);
     BatchStat batchStatter = outputService == null ? null : outputService.getBatchStatter();
@@ -696,12 +687,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     modifiedFiles += fsvc.getNumberOfModifiedOutputFiles();
     outputDirtyFiles += fsvc.getNumberOfModifiedOutputFiles();
     modifiedFilesDuringPreviousBuild += fsvc.getNumberOfModifiedOutputFilesDuringPreviousBuild();
-    logger.info(String.format("Found %d modified files from last build", modifiedFiles));
-    long stopTime = System.nanoTime();
-    Profiler.instance()
-        .logSimpleTask(startTime, stopTime, ProfilerTask.INFO, "detectModifiedOutputFiles");
-    long duration = stopTime - startTime;
-    outputTreeDiffCheckingDuration = duration > 0 ? Duration.ofNanos(duration) : Duration.ZERO;
+    informAboutNumberOfModifiedFiles();
   }
 
   @Override
@@ -725,6 +711,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
               throw new IllegalStateException(
                   "Failed to get Rule target from package when calculating stats.", e);
             }
+            RuleConfiguredTarget ruleConfiguredTarget = (RuleConfiguredTarget) configuredTarget;
             RuleClass ruleClass = rule.getRuleClassObject();
             RuleStat ruleStat =
                 ruleStats.computeIfAbsent(
@@ -745,28 +732,9 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
 
   @Override
   public ActionGraphContainer getActionGraphContainer(
-      List<String> actionGraphTargets, boolean includeActionCmdLine, boolean includeArtifacts)
+      List<String> actionGraphTargets, boolean includeActionCmdLine)
       throws CommandLineExpansionException {
-    ActionGraphDump actionGraphDump =
-        new ActionGraphDump(actionGraphTargets, includeActionCmdLine, includeArtifacts);
-    return buildActionGraphContainerFromDump(actionGraphDump);
-  }
-
-  /** Get ActionGraphContainer from the Skyframe evaluator. Used for aquery. */
-  public ActionGraphContainer getActionGraphContainer(
-      boolean includeActionCmdLine,
-      AqueryActionFilter aqueryActionFilter,
-      boolean includeParamFiles,
-      boolean includeArtifacts)
-      throws CommandLineExpansionException {
-    ActionGraphDump actionGraphDump =
-        new ActionGraphDump(
-            includeActionCmdLine, includeArtifacts, aqueryActionFilter, includeParamFiles);
-    return buildActionGraphContainerFromDump(actionGraphDump);
-  }
-
-  private ActionGraphContainer buildActionGraphContainerFromDump(ActionGraphDump actionGraphDump)
-      throws CommandLineExpansionException {
+    ActionGraphDump actionGraphDump = new ActionGraphDump(actionGraphTargets, includeActionCmdLine);
     for (Map.Entry<SkyKey, SkyValue> skyKeyAndValue :
         memoizingEvaluator.getDoneValues().entrySet()) {
       SkyKey key = skyKeyAndValue.getKey();
@@ -782,7 +750,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
             AspectKey aspectKey = aspectValue.getKey();
             ConfiguredTargetValue configuredTargetValue =
                 (ConfiguredTargetValue)
-                    memoizingEvaluator.getExistingValue(aspectKey.getBaseConfiguredTargetKey());
+                memoizingEvaluator.getExistingValue(aspectKey.getBaseConfiguredTargetKey());
             actionGraphDump.dumpAspect(aspectValue, configuredTargetValue);
           }
         }
@@ -842,21 +810,6 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
     } finally {
       progressReceiver.ignoreInvalidations = false;
     }
-  }
-
-  @Override
-  public ExecutionFinishedEvent createExecutionFinishedEvent() {
-    ExecutionFinishedEvent result =
-        new ExecutionFinishedEvent(
-            outputDirtyFiles,
-            modifiedFilesDuringPreviousBuild,
-            sourceDiffCheckingDuration,
-            outputTreeDiffCheckingDuration);
-    outputDirtyFiles = 0;
-    modifiedFilesDuringPreviousBuild = 0;
-    sourceDiffCheckingDuration = Duration.ZERO;
-    outputTreeDiffCheckingDuration = Duration.ZERO;
-    return result;
   }
 
   @Override

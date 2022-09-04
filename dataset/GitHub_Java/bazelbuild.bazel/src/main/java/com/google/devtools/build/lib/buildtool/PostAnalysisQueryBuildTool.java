@@ -25,11 +25,10 @@ import com.google.devtools.build.lib.query2.engine.QueryException;
 import com.google.devtools.build.lib.query2.engine.QueryExpression;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.QueryRuntimeHelper;
+import com.google.devtools.build.lib.runtime.QueryRuntimeHelper.Factory.CommandLineException;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutorWrappingWalkableGraph;
-import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.build.skyframe.WalkableGraph;
 import java.io.IOException;
-import java.util.Collection;
 
 /**
  * Version of {@link BuildTool} that handles all work for queries based on results from the analysis
@@ -45,8 +44,11 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
   }
 
   @Override
-  protected void postProcessAnalysisResult(BuildRequest request, AnalysisResult analysisResult)
-      throws InterruptedException, ViewCreationFailedException, QueryCommandLineException {
+  protected void postProcessAnalysisResult(
+      BuildRequest request,
+      AnalysisResult analysisResult)
+      throws InterruptedException, ViewCreationFailedException,
+          PostAnalysisQueryCommandLineException {
     // TODO: b/71905538 - this query will operate over the graph as constructed by analysis, but
     // will also pick up any nodes that are in the graph from prior builds. This makes the results
     // not reproducible at the level of a single command. Either tolerate, or wipe the analysis
@@ -54,7 +56,7 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
     // (SkyframeExecutor#handleAnalysisInvalidatingChange should be sufficient).
     if (queryExpression != null) {
       if (!env.getSkyframeExecutor().tracksStateForIncrementality()) {
-        throw new QueryCommandLineException(
+        throw new PostAnalysisQueryCommandLineException(
             "Queries based on analysis results are not allowed "
                 + "if incrementality state is not being kept");
       }
@@ -64,7 +66,6 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
             request,
             analysisResult.getConfigurationCollection().getHostConfiguration(),
             new TopLevelConfigurations(analysisResult.getTopLevelTargetsWithConfigs()),
-            env.getSkyframeExecutor().getTransitiveConfigurationKeys(),
             queryRuntimeHelper,
             queryExpression);
       } catch (QueryException | IOException e) {
@@ -72,8 +73,8 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
           throw new ViewCreationFailedException("Error doing post analysis query", e);
         }
         env.getReporter().error(null, "Error doing post analysis query", e);
-      } catch (QueryRuntimeHelper.Factory.CommandLineException e) {
-        throw new QueryCommandLineException(e.getMessage());
+      } catch (CommandLineException e) {
+        throw new PostAnalysisQueryCommandLineException(e.getMessage());
       }
     }
   }
@@ -82,15 +83,12 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
       BuildRequest request,
       BuildConfiguration hostConfiguration,
       TopLevelConfigurations topLevelConfigurations,
-      Collection<SkyKey> transitiveConfigurationKeys,
-      WalkableGraph walkableGraph)
-      throws InterruptedException;
+      WalkableGraph walkableGraph);
 
   private void doPostAnalysisQuery(
       BuildRequest request,
       BuildConfiguration hostConfiguration,
       TopLevelConfigurations topLevelConfigurations,
-      Collection<SkyKey> transitiveConfigurationKeys,
       QueryRuntimeHelper queryRuntimeHelper,
       QueryExpression queryExpression)
       throws InterruptedException, QueryException, IOException {
@@ -98,12 +96,7 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
         SkyframeExecutorWrappingWalkableGraph.of(env.getSkyframeExecutor());
 
     PostAnalysisQueryEnvironment<T> postAnalysisQueryEnvironment =
-        getQueryEnvironment(
-            request,
-            hostConfiguration,
-            topLevelConfigurations,
-            transitiveConfigurationKeys,
-            walkableGraph);
+        getQueryEnvironment(request, hostConfiguration, topLevelConfigurations, walkableGraph);
 
     Iterable<NamedThreadSafeOutputFormatterCallback<T>> callbacks =
         postAnalysisQueryEnvironment.getDefaultOutputFormatters(
@@ -133,5 +126,12 @@ public abstract class PostAnalysisQueryBuildTool<T> extends BuildTool {
       env.getReporter().handle(Event.info("Empty query results"));
     }
     queryRuntimeHelper.afterQueryOutputIsWritten();
+  }
+
+  /** Post analysis query specific command line exception. */
+  protected static class PostAnalysisQueryCommandLineException extends Exception {
+    PostAnalysisQueryCommandLineException(String message) {
+      super(message);
+    }
   }
 }

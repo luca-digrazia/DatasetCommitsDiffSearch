@@ -35,9 +35,8 @@ import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.NoSuchThingException;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.Rule;
-import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
+import com.google.devtools.build.lib.packages.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.packages.Target;
 import com.google.devtools.build.lib.packages.util.LoadingMock;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
@@ -45,6 +44,7 @@ import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.DiffAwareness;
 import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skyframe.SequencedSkyframeExecutor;
+import com.google.devtools.build.lib.skyframe.SkyValueDirtinessChecker;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.testutil.ManualClock;
 import com.google.devtools.build.lib.testutil.TestConstants;
@@ -59,6 +59,8 @@ import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
 import com.google.devtools.build.lib.vfs.RootedPath;
 import com.google.devtools.build.lib.vfs.inmemoryfs.InMemoryFileSystem;
+import com.google.devtools.build.skyframe.SkyFunction;
+import com.google.devtools.build.skyframe.SkyFunctionName;
 import com.google.devtools.common.options.Options;
 import com.google.devtools.common.options.OptionsProvider;
 import java.io.FileNotFoundException;
@@ -476,19 +478,25 @@ public class IncrementalLoadingTest {
               /* defaultSystemJavabase= */ null,
               loadingMock.getProductName());
       ConfiguredRuleClassProvider ruleClassProvider = loadingMock.createRuleClassProvider();
-      PackageFactory pkgFactory =
-          loadingMock.getPackageFactoryBuilderForTesting(directories).build(ruleClassProvider, fs);
       skyframeExecutor =
-          BazelSkyframeExecutorConstants.newBazelSkyframeExecutorBuilder()
-              .setPkgFactory(pkgFactory)
-              .setFileSystem(fs)
-              .setDirectories(directories)
-              .setActionKeyContext(actionKeyContext)
-              .setBuildInfoFactories(loadingMock.createRuleClassProvider().getBuildInfoFactories())
-              .setDefaultBuildOptions(
-                  DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider))
-              .setDiffAwarenessFactories(ImmutableList.of(new ManualDiffAwarenessFactory()))
-              .build();
+          SequencedSkyframeExecutor.create(
+              loadingMock
+                  .getPackageFactoryBuilderForTesting(directories)
+                  .build(ruleClassProvider, fs),
+              fs,
+              directories,
+              actionKeyContext,
+              /* workspaceStatusActionFactory= */ null,
+              loadingMock.createRuleClassProvider().getBuildInfoFactories(),
+              ImmutableList.of(new ManualDiffAwarenessFactory()),
+              ImmutableMap.<SkyFunctionName, SkyFunction>of(),
+              ImmutableList.<SkyValueDirtinessChecker>of(),
+              BazelSkyframeExecutorConstants.HARDCODED_BLACKLISTED_PACKAGE_PREFIXES,
+              BazelSkyframeExecutorConstants.ADDITIONAL_BLACKLISTED_PACKAGE_PREFIXES_FILE,
+              BazelSkyframeExecutorConstants.CROSS_REPOSITORY_LABEL_VIOLATION_STRATEGY,
+              BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY,
+              BazelSkyframeExecutorConstants.ACTION_ON_IO_EXCEPTION_READING_BUILD_FILE,
+              DefaultBuildOptionsForTesting.getDefaultBuildOptionsForTest(ruleClassProvider));
       TestConstants.processSkyframeExecutorForTesting(skyframeExecutor);
       PackageCacheOptions packageCacheOptions = Options.getDefaults(PackageCacheOptions.class);
       packageCacheOptions.defaultVisibility = ConstantRuleVisibility.PUBLIC;
@@ -505,7 +513,8 @@ public class IncrementalLoadingTest {
               ImmutableList.of(Root.fromPath(workspace)),
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
           packageCacheOptions,
-          Options.getDefaults(StarlarkSemanticsOptions.class),
+          Options.getDefaults(SkylarkSemanticsOptions.class),
+          "",
           UUID.randomUUID(),
           ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(BlazeClock.instance()));
@@ -595,7 +604,8 @@ public class IncrementalLoadingTest {
               ImmutableList.of(Root.fromPath(workspace)),
               BazelSkyframeExecutorConstants.BUILD_FILES_BY_PRIORITY),
           packageCacheOptions,
-          Options.getDefaults(StarlarkSemanticsOptions.class),
+          Options.getDefaults(SkylarkSemanticsOptions.class),
+          "",
           UUID.randomUUID(),
           ImmutableMap.<String, String>of(),
           new TimestampGranularityMonitor(BlazeClock.instance()));

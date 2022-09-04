@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.google.devtools.build.lib.skyframe;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -34,6 +35,7 @@ import javax.annotation.Nullable;
 @Immutable
 @ThreadSafe
 @AutoCodec(explicitlyAllowClass = RuleConfiguredTarget.class)
+@VisibleForTesting
 public final class RuleConfiguredTargetValue extends ActionLookupValue
     implements ConfiguredTargetValue {
 
@@ -67,12 +69,14 @@ public final class RuleConfiguredTargetValue extends ActionLookupValue
     this.generatingActionIndex = configuredTarget.getGeneratingActionIndex();
   }
 
+  @VisibleForTesting
   @Override
   public ConfiguredTarget getConfiguredTarget() {
     Preconditions.checkNotNull(configuredTarget);
     return configuredTarget;
   }
 
+  @VisibleForTesting
   @Override
   public ImmutableList<ActionAnalysisMetadata> getActions() {
     return actions;
