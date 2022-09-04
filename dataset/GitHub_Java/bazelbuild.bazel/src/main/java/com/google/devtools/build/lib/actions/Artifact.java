@@ -30,6 +30,7 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata.MiddlemanTyp
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.shell.ShellUtils;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
@@ -100,14 +101,16 @@ import javax.annotation.Nullable;
  */
 @Immutable
 @SkylarkModule(
-    name = "File",
-    category = SkylarkModuleCategory.BUILTIN,
-    doc = "This object is created during the analysis phase to represent a file or directory that "
-        + "will be read or written during the execution phase. It is not an open file handle, and "
-        + "cannot be used to directly read or write file contents. Rather, you use it to construct "
-        + "the action graph in a rule implementation function by passing it to action-creating "
-        + "functions. See the <a href='../rules.$DOC_EXT#files'>Rules page</a> for more "
-        + "information."
+  name = "File",
+  category = SkylarkModuleCategory.BUILTIN,
+  doc =
+      "<p>This type represents a file or directory used by the build system. It can be "
+          + "either a source file or a derived file produced by a rule.</p>"
+          + "<p>The File constructor is private, so you cannot call it directly to create new "
+          + "Files. You typically get a File object from a "
+          + "<a href='Target.html'>Target</a>, or using "
+          + "<a href='actions.html#declare_file'>ctx.actions.declare_file</a>, "
+          + "or <a href='actions.html#declare_directory'>ctx.actions.declare_directory</a>."
 )
 @AutoCodec
 public class Artifact
@@ -116,6 +119,8 @@ public class Artifact
         SkylarkValue,
         Comparable<Object>,
         CommandLineItem {
+
+  public static final ObjectCodec<Artifact> CODEC = new Artifact_AutoCodec();
 
   /** Compares artifact according to their exec paths. Sorts null values first. */
   @SuppressWarnings("ReferenceEquality")  // "a == b" is an optimization
@@ -445,6 +450,10 @@ public class Artifact
   @VisibleForTesting
   @AutoCodec
   public static final class SpecialArtifact extends Artifact {
+
+    public static final ObjectCodec<SpecialArtifact> CODEC =
+        new Artifact_SpecialArtifact_AutoCodec();
+
     private final SpecialArtifactType type;
 
     @VisibleForSerialization
@@ -502,6 +511,9 @@ public class Artifact
   @Immutable
   @AutoCodec
   public static final class TreeFileArtifact extends Artifact {
+    public static final ObjectCodec<TreeFileArtifact> CODEC =
+        new Artifact_TreeFileArtifact_AutoCodec();
+
     private final SpecialArtifact parentTreeArtifact;
     private final PathFragment parentRelativePath;
 
