@@ -82,29 +82,26 @@ class OptionsParserImpl {
       Stream.of(PriorityCategory.values())
           .collect(Collectors.toMap(p -> p, OptionPriority::lowestOptionPriorityAtCategory));
 
-  private ArgsPreProcessor argsPreProcessor = args -> args;
+  private boolean allowSingleDashLongOptions = false;
 
-  private final String skippedPrefix;
+  private ArgsPreProcessor argsPreProcessor = args -> args;
 
   /** Create a new parser object. Do not accept a null OptionsData object. */
   OptionsParserImpl(OptionsData optionsData) {
     Preconditions.checkNotNull(optionsData);
     this.optionsData = optionsData;
-    this.skippedPrefix = null;
-  }
-
-  /**
-   * Creates a new parser object. Do not accept a null OptionsData object. Takes a prefix that
-   * signifies the parser should skip parsing args that begin with that prefix.
-   */
-  OptionsParserImpl(OptionsData optionsData, String skippedPrefix) {
-    Preconditions.checkNotNull(optionsData);
-    this.optionsData = optionsData;
-    this.skippedPrefix = skippedPrefix;
   }
 
   OptionsData getOptionsData() {
     return optionsData;
+  }
+
+  /**
+   * Indicates whether or not the parser will allow long options with a
+   * single-dash, instead of the usual double-dash, too, eg. -example instead of just --example.
+   */
+  void setAllowSingleDashLongOptions(boolean allowSingleDashLongOptions) {
+    this.allowSingleDashLongOptions = allowSingleDashLongOptions;
   }
 
   /** Sets the ArgsPreProcessor for manipulations of the options before parsing. */
@@ -315,11 +312,6 @@ class OptionsParserImpl {
         continue; // not an option arg
       }
 
-      if (skippedPrefix != null && arg.startsWith(skippedPrefix)) {
-        unparsedArgs.add(arg);
-        continue;
-      }
-
       if (arg.equals("--")) { // "--" means all remaining args aren't options
         Iterators.addAll(unparsedPostDoubleDashArgs, argsIterator);
         break;
@@ -488,7 +480,8 @@ class OptionsParserImpl {
       optionDefinition = optionsData.getFieldForAbbrev(arg.charAt(1));
       booleanValue = false;
 
-    } else if (arg.startsWith("--")) { // --long_option
+    } else if (allowSingleDashLongOptions // -long_option
+        || arg.startsWith("--")) { // or --long_option
 
       int equalsAt = arg.indexOf('=');
       int nameStartsAt = arg.startsWith("--") ? 2 : 1;

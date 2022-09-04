@@ -14,6 +14,7 @@
 
 package com.google.devtools.common.options;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
@@ -21,7 +22,6 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ListMultimap;
-import com.google.common.collect.MoreCollectors;
 import com.google.common.escape.Escaper;
 import com.google.devtools.common.options.OptionDefinition.NotAnOptionException;
 import com.google.devtools.common.options.OptionsParserImpl.ResidueAndPriority;
@@ -175,28 +175,14 @@ public class OptionsParser implements OptionsParsingResult {
     return new OptionsParser((OptionsData) optionsData);
   }
 
-  /**
-   * Create a new {@link OptionsParser}, using {@link OpaqueOptionsData} previously returned from
-   * {@link #getOptionsData} and a prefix that signifies the parser should skip parsing args that
-   * begin with that prefix.
-   */
-  public static OptionsParser newOptionsParser(
-      OpaqueOptionsData optionsData, String skippedPrefix) {
-    return new OptionsParser((OptionsData) optionsData, skippedPrefix);
-  }
-
   private final OptionsParserImpl impl;
-  private List<String> residue = new ArrayList<>();
+  private final List<String> residue = new ArrayList<String>();
   private final List<String> postDoubleDashResidue = new ArrayList<>();
   private boolean allowResidue = true;
-  private Map<String, Object> starlarkOptions = new HashMap<>();
+  private Map<String, Object> skylarkOptions = new HashMap<>();
 
   OptionsParser(OptionsData optionsData) {
     impl = new OptionsParserImpl(optionsData);
-  }
-
-  OptionsParser(OptionsData optionsData, String skippedPrefix) {
-    impl = new OptionsParserImpl(optionsData, skippedPrefix);
   }
 
   /**
@@ -210,12 +196,13 @@ public class OptionsParser implements OptionsParsingResult {
   }
 
   @Override
-  public Map<String, Object> getStarlarkOptions() {
-    return starlarkOptions;
+  public Map<String, Object> getSkylarkOptions() {
+    return skylarkOptions;
   }
 
-  public void setStarlarkOptions(Map<String, Object> starlarkOptions) {
-    this.starlarkOptions = starlarkOptions;
+  @VisibleForTesting
+  public void setSkylarkOptionsForTesting(Map<String, Object> skylarkOptions) {
+    this.skylarkOptions = skylarkOptions;
   }
 
   /**
@@ -566,14 +553,15 @@ public class OptionsParser implements OptionsParsingResult {
   }
 
   /**
-   * {@inheritDoc}
-   *
-   * <p>Returns the value set by the last previous call to {@link
+   * Returns a description of the option value set by the last previous call to {@link
    * #parse(OptionPriority.PriorityCategory, String, List)} that successfully set the given option.
    * If the option is of type {@link List}, the description will correspond to any one of the calls,
    * but not necessarily the last.
+   *
+   * @return The {@link com.google.devtools.common.options.OptionValueDescription} for the option,
+   *     or null if the value has not been set.
+   * @throws IllegalArgumentException if there is no option by the given name.
    */
-  @Override
   public OptionValueDescription getOptionValueDescription(String name) {
     return impl.getOptionValueDescription(name);
   }
@@ -717,14 +705,6 @@ public class OptionsParser implements OptionsParsingResult {
             .collect(Collectors.toList());
   }
 
-  public List<String> getPostDoubleDashResidue() {
-    return postDoubleDashResidue;
-  }
-
-  public void setResidue(List<String> residue) {
-    this.residue = residue;
-  }
-
   /** Returns a list of warnings about problems encountered by previous parse calls. */
   public List<String> getWarnings() {
     return impl.getWarnings();
@@ -769,23 +749,6 @@ public class OptionsParser implements OptionsParsingResult {
   public static ImmutableList<OptionDefinition> getOptionDefinitions(
       Class<? extends OptionsBase> optionsClass) {
     return OptionsData.getAllOptionDefinitionsForClass(optionsClass);
-  }
-
-  /**
-   * Returns the option with the given name from the given class.
-   *
-   * <p>The preferred way of using this method is as the initializer for a static final field in the
-   * options class which defines the option. This reduces the possibility that another contributor
-   * might change the name of the option without realizing it's used by name elsewhere.
-   *
-   * @throws IllegalArgumentException if there are two or more options with that name.
-   * @throws NoSuchElementException if there are no options with that name.
-   */
-  public static OptionDefinition getOptionDefinitionByName(
-      Class<? extends OptionsBase> optionsClass, String optionName) {
-    return getOptionDefinitions(optionsClass).stream()
-        .filter(definition -> definition.getOptionName().equals(optionName))
-        .collect(MoreCollectors.onlyElement());
   }
 
   /**
@@ -924,4 +887,3 @@ public class OptionsParser implements OptionsParsingResult {
             + "}");
   }
 }
-
