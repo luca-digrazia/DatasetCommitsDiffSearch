@@ -35,17 +35,7 @@ public class WPGMALinkage extends Linkage {
      * dissimilarity. To save space, we only need the lower half of matrix.
      */
     public WPGMALinkage(double[][] proximity) {
-        super(proximity);
-    }
-
-    /**
-     * Constructor.
-     * @param size the data size.
-     * @param proximity column-wise linearized proximity matrix that stores
-     *                  only the lower half without diagonal elements.
-     */
-    public WPGMALinkage(int size, float[] proximity) {
-        super(size, proximity);
+        init(proximity);
     }
 
     @Override

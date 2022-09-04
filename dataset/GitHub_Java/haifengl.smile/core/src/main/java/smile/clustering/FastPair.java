@@ -217,14 +217,14 @@ class FastPair {
         float d = linkage.d(p, q);
 
         if (d < distance[p]) {
-            distance[p] = d;
+            distance[p] = q;
             neighbor[p] = q;
         } else if (neighbor[p] == q && d > distance[p]) {
             findNeighbor(p);
         }
 
         if (d < distance[q]) {
-            distance[q] = d;
+            distance[q] = p;
             neighbor[q] = p;
         } else if (neighbor[q] == p && d > distance[q]) {
             findNeighbor(q);

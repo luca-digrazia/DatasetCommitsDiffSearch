@@ -41,27 +41,10 @@ public class UPGMALinkage extends Linkage {
      * dissimilarity. To save space, we only need the lower half of matrix.
      */
     public UPGMALinkage(double[][] proximity) {
-        super(proximity);
-        init();
-    }
-
-    /**
-     * Constructor.
-     * @param size the data size.
-     * @param proximity column-wise linearized proximity matrix that stores
-     *                  only the lower half without diagonal elements.
-     */
-    public UPGMALinkage(int size, float[] proximity) {
-        super(size, proximity);
-        init();
-    }
-
-    /** Initialize sample size. */
-    private void init() {
-        n = new int[size];
-        for (int i = 0; i < size; i++) {
+        init(proximity);
+        n = new int[proximity.length];
+        for (int i = 0; i < n.length; i++)
             n[i] = 1;
-        }
     }
 
     @Override
