@@ -81,11 +81,9 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
     public final double mu;
     /** The standard deviation. */
     public final double sigma;
-    /** The variance. */
     private final double variance;
-    /** Shannon entropy. */
+
     private final double entropy;
-    /** The constant factor in PDF. */
     private final double pdfConstant;
 
     /**
@@ -113,10 +111,7 @@ public class GaussianDistribution extends AbstractDistribution implements Expone
         return new GaussianDistribution(mu, sigma);
     }
 
-    /**
-     * Returns the standard normal distribution.
-     * @return the standard normal distribution.
-     */
+    /** Returns the standard normal distribution. */
     public static GaussianDistribution getInstance() {
         return singleton;
     }

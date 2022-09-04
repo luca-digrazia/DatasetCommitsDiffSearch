@@ -33,9 +33,7 @@ import smile.math.matrix.Matrix;
 public class MahalanobisDistance implements Metric<double[]> {
     private static final long serialVersionUID = 1L;
 
-    /** The covariance matrix. */
     private final Matrix sigma;
-    /** The inverse of covariance matrix. */
     private final Matrix sigmaInv;
 
     /**
@@ -55,12 +53,12 @@ public class MahalanobisDistance implements Metric<double[]> {
 
     @Override
     public double d(double[] x, double[] y) {
-        if (x.length != sigma.nrow()) {
-            throw new IllegalArgumentException(String.format("Array x[%d] has different dimension with Sigma[%d][%d].", x.length, sigma.nrow(), sigma.ncol()));
+        if (x.length != sigma.nrows()) {
+            throw new IllegalArgumentException(String.format("Array x[%d] has different dimension with Sigma[%d][%d].", x.length, sigma.nrows(), sigma.ncols()));
         }
 
-        if (y.length != sigma.nrow()) {
-            throw new IllegalArgumentException(String.format("Array y[%d] has different dimension with Sigma[%d][%d].", y.length, sigma.nrow(), sigma.ncol()));
+        if (y.length != sigma.nrows()) {
+            throw new IllegalArgumentException(String.format("Array y[%d] has different dimension with Sigma[%d][%d].", y.length, sigma.nrows(), sigma.ncols()));
         }
 
         int n = x.length;
