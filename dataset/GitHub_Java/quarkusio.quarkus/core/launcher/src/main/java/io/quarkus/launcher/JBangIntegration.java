@@ -1,15 +1,10 @@
 package io.quarkus.launcher;
 
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.URL;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -20,33 +15,8 @@ public class JBangIntegration {
     public static final String CONFIG = "//Q:CONFIG";
 
     public static Map<String, Object> postBuild(Path appClasses, Path pomFile, List<Map.Entry<String, String>> repositories,
-            List<Map.Entry<String, Path>> originalDeps,
-            List<String> comments, boolean nativeImage) throws IOException {
-        //dev mode takes a very different path
-        if (Boolean.getBoolean("quarkus.dev")) {
-            System.clearProperty("quarkus.dev"); //avoid unknown config key warnings
-            HashMap<String, byte[]> files = new HashMap<>();
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            DataOutputStream dataOutputStream = new DataOutputStream(outputStream);
-            //pom file contents
-            String pomContents = String.join("\n", Files.readAllLines(pomFile));
-            dataOutputStream.writeUTF(pomContents);
-            //Source file locations
-            dataOutputStream.writeUTF(appClasses.toAbsolutePath().toString());
-            dataOutputStream.writeUTF(System.getProperty("jbang.source"));
-            dataOutputStream.writeInt(originalDeps.size());
-            for (Map.Entry<String, Path> i : originalDeps) {
-                dataOutputStream.writeUTF(i.getKey());
-                dataOutputStream.writeUTF(i.getValue().toAbsolutePath().toString());
-            }
-            dataOutputStream.close();
-            files.put("jbang-dev.dat", outputStream.toByteArray());
-            HashMap<String, Object> ret = new HashMap<>();
-            ret.put("files", files);
-            ret.put("main-class", "io.quarkus.launcher.JBangDevModeLauncher");
-            return ret;
-        }
-
+            List<Map.Entry<String, Path>> dependencies,
+            List<String> comments, boolean nativeImage) {
         for (String comment : comments) {
             //we allow config to be provided via //Q:CONFIG name=value
             if (comment.startsWith(CONFIG)) {
@@ -56,17 +26,6 @@ public class JBangIntegration {
                     throw new RuntimeException("invalid config  " + comment);
                 }
                 System.setProperty(conf.substring(0, equals), conf.substring(equals + 1));
-            }
-        }
-
-        //huge hack
-        //jbang does not consider the pom when resolving dependencies
-        //so can get the wrong version of asm
-        //we remove it from the deps list so we can use the correct one
-        List<Map.Entry<String, Path>> dependencies = new ArrayList<>();
-        for (Map.Entry<String, Path> i : originalDeps) {
-            if (!i.getKey().startsWith("org.ow2.asm:asm:")) {
-                dependencies.add(i);
             }
         }
 
@@ -116,7 +75,7 @@ public class JBangIntegration {
                         }
                     });
             Thread.currentThread().setContextClassLoader(loader);
-            Class<?> launcher = loader.loadClass("io.quarkus.bootstrap.jbang.JBangBuilderImpl");
+            Class<?> launcher = loader.loadClass("io.quarkus.bootstrap.JBangBuilderImpl");
             return (Map<String, Object>) launcher
                     .getDeclaredMethod("postBuild", Path.class, Path.class, List.class, List.class, boolean.class).invoke(
                             null,
@@ -132,4 +91,5 @@ public class JBangIntegration {
             Thread.currentThread().setContextClassLoader(old);
         }
     }
+
 }
