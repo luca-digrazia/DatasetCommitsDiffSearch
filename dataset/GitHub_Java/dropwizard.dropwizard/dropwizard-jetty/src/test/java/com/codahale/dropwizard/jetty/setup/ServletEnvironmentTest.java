@@ -6,40 +6,31 @@ import org.eclipse.jetty.http.MimeTypes;
 import org.eclipse.jetty.security.SecurityHandler;
 import org.eclipse.jetty.server.session.SessionHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
-import org.eclipse.jetty.servlet.ServletHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
-import org.junit.Before;
 import org.junit.Test;
 import org.mockito.ArgumentCaptor;
 
 import javax.servlet.*;
+import java.util.EnumSet;
 
 import static org.fest.assertions.api.Assertions.assertThat;
+import static org.mockito.Matchers.eq;
 import static org.mockito.Mockito.*;
 
 public class ServletEnvironmentTest {
-    private final ServletHandler servletHandler = mock(ServletHandler.class);
     private final MutableServletContextHandler handler = mock(MutableServletContextHandler.class);
     private final ServletEnvironment environment = new ServletEnvironment(handler);
-
-    @Before
-    public void setUp() throws Exception {
-        when(handler.getServletHandler()).thenReturn(servletHandler);
-    }
 
     @Test
     public void addsServletInstances() throws Exception {
         final Servlet servlet = mock(Servlet.class);
 
-        final ServletRegistration.Dynamic builder = environment.addServlet("servlet", servlet);
+        final ServletBuilder builder = environment.addServlet(servlet, "/things/*");
         assertThat(builder)
                 .isNotNull();
 
         final ArgumentCaptor<ServletHolder> holder = ArgumentCaptor.forClass(ServletHolder.class);
-        verify(servletHandler).addServlet(holder.capture());
-
-        assertThat(holder.getValue().getName())
-                .isEqualTo("servlet");
+        verify(handler).addServlet(holder.capture(), eq("/things/*"));
 
         assertThat(holder.getValue().getServlet())
                 .isEqualTo(servlet);
@@ -47,15 +38,12 @@ public class ServletEnvironmentTest {
 
     @Test
     public void addsServletClasses() throws Exception {
-        final ServletRegistration.Dynamic builder = environment.addServlet("servlet", GenericServlet.class);
+        final ServletBuilder builder = environment.addServlet(GenericServlet.class, "/things/*");
         assertThat(builder)
                 .isNotNull();
 
         final ArgumentCaptor<ServletHolder> holder = ArgumentCaptor.forClass(ServletHolder.class);
-        verify(servletHandler).addServlet(holder.capture());
-
-        assertThat(holder.getValue().getName())
-                .isEqualTo("servlet");
+        verify(handler).addServlet(holder.capture(), eq("/things/*"));
 
         // this is ugly, but comparing classes sucks with these type bounds
         assertThat(holder.getValue().getHeldClass().equals(GenericServlet.class))
@@ -66,15 +54,14 @@ public class ServletEnvironmentTest {
     public void addsFilterInstances() throws Exception {
         final Filter filter = mock(Filter.class);
 
-        final FilterRegistration.Dynamic builder = environment.addFilter("filter", filter);
+        final FilterBuilder builder = environment.addFilter(filter, "/things/*");
         assertThat(builder)
                 .isNotNull();
 
         final ArgumentCaptor<FilterHolder> holder = ArgumentCaptor.forClass(FilterHolder.class);
-        verify(servletHandler).addFilter(holder.capture());
-
-        assertThat(holder.getValue().getName())
-                .isEqualTo("filter");
+        verify(handler).addFilter(holder.capture(),
+                                  eq("/things/*"),
+                                  eq(EnumSet.of(DispatcherType.REQUEST)));
 
         assertThat(holder.getValue().getFilter())
                 .isEqualTo(filter);
@@ -82,15 +69,14 @@ public class ServletEnvironmentTest {
 
     @Test
     public void addsFilterClasses() throws Exception {
-        final FilterRegistration.Dynamic builder = environment.addFilter("filter", ContinuationFilter.class);
+        final FilterBuilder builder = environment.addFilter(ContinuationFilter.class, "/things/*");
         assertThat(builder)
                 .isNotNull();
 
         final ArgumentCaptor<FilterHolder> holder = ArgumentCaptor.forClass(FilterHolder.class);
-        verify(servletHandler).addFilter(holder.capture());
-
-        assertThat(holder.getValue().getName())
-                .isEqualTo("filter");
+        verify(handler).addFilter(holder.capture(),
+                                  eq("/things/*"),
+                                  eq(EnumSet.of(DispatcherType.REQUEST)));
 
         // this is ugly, but comparing classes sucks with these type bounds
         assertThat(holder.getValue().getHeldClass().equals(ContinuationFilter.class))
