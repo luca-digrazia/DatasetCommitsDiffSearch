@@ -1,7 +1,6 @@
 package io.quarkus.deployment.util;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -155,20 +154,6 @@ public class JandexUtilTest {
         checkRepoArg(index, ErasedRepo2.class, Repo.class, A.class);
     }
 
-    @Test
-    public void testNonProblematicUnindexed() {
-        final Index index = index(Single.class, SingleFromInterfaceAndSuperClass.class);
-        checkRepoArg(index, SingleFromInterfaceAndSuperClass.class, Single.class, String.class);
-    }
-
-    @Test
-    public void testProblematicUnindexed() {
-        final Index index = index(Single.class, AbstractSingleImpl.class, ExtendsAbstractSingleImpl.class);
-        assertThatThrownBy(() -> {
-            JandexUtil.resolveTypeParameters(name(ExtendsAbstractSingleImpl.class), name(Single.class), index);
-        }).isInstanceOf(IllegalArgumentException.class);
-    }
-
     public interface Single<T> {
     }
 
@@ -320,17 +305,17 @@ public class JandexUtilTest {
     private void checkRepoArg(Index index, Class<?> baseClass, Class<?> soughtClass, Class<?> expectedArg) {
         List<Type> args = JandexUtil.resolveTypeParameters(name(baseClass), name(soughtClass),
                 index);
-        assertThat(args).extracting(Type::name).containsOnly(name(expectedArg));
+        assertThat(args).extracting("name").containsOnly(name(expectedArg));
     }
 
     private void checkRepoArg(Index index, Class<?> baseClass, Class<?> soughtClass, Class<?>... expectedArgs) {
         List<Type> args = JandexUtil.resolveTypeParameters(name(baseClass), name(soughtClass),
                 index);
-        DotName[] expectedArgNames = new DotName[expectedArgs.length];
+        Object[] expectedArgNames = new Object[expectedArgs.length];
         for (int i = 0; i < expectedArgs.length; i++) {
             expectedArgNames[i] = name(expectedArgs[i]);
         }
-        assertThat(args).extracting(Type::name).containsOnly(expectedArgNames);
+        assertThat(args).extracting("name").containsOnly(expectedArgNames);
     }
 
     private void checkRepoArg(Index index, Class<?> baseClass, Class<?> soughtClass, String expectedArg) {

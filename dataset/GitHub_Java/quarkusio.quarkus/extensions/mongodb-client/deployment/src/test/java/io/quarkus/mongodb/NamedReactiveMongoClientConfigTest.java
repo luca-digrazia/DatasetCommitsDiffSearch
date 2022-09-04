@@ -21,7 +21,6 @@ import com.mongodb.reactivestreams.client.internal.MongoClientImpl;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.InjectableBean;
 import io.quarkus.arc.InstanceHandle;
-import io.quarkus.arc.runtime.ClientProxyUnwrapper;
 import io.quarkus.mongodb.impl.ReactiveMongoClientImpl;
 import io.quarkus.mongodb.reactive.ReactiveMongoClient;
 import io.quarkus.test.QuarkusUnitTest;
@@ -40,8 +39,6 @@ public class NamedReactiveMongoClientConfigTest extends MongoWithReplicasTestBas
     @Inject
     @MongoClientName("cluster2")
     ReactiveMongoClient client2;
-
-    private final ClientProxyUnwrapper unwrapper = new ClientProxyUnwrapper();
 
     @AfterEach
     void cleanup() {
@@ -65,7 +62,7 @@ public class NamedReactiveMongoClientConfigTest extends MongoWithReplicasTestBas
     }
 
     private void assertProperConnection(ReactiveMongoClient client, int expectedPort) {
-        assertThat(unwrapper.apply(client)).isInstanceOfSatisfying(ReactiveMongoClientImpl.class, rc -> {
+        assertThat(client).isInstanceOfSatisfying(ReactiveMongoClientImpl.class, rc -> {
             Field mongoClientField;
             try {
                 mongoClientField = ReactiveMongoClientImpl.class.getDeclaredField("client");

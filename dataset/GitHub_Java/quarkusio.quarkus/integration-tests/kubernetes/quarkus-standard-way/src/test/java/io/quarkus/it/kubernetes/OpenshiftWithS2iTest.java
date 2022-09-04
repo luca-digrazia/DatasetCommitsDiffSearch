@@ -86,6 +86,7 @@ public class OpenshiftWithS2iTest {
                             });
                             assertThat(envVars).anySatisfy(envVar -> {
                                 assertThat(envVar.getName()).isEqualTo("JAVA_OPTIONS");
+                                assertThat(envVar.getValue()).contains("-Dquarkus.http.host=0.0.0.0");
                                 assertThat(envVar.getValue())
                                         .contains("-Djava.util.logging.manager=org.jboss.logmanager.LogManager");
                             });

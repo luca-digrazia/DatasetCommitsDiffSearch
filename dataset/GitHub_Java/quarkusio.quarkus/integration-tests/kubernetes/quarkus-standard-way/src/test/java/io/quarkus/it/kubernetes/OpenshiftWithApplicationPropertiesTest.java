@@ -7,9 +7,7 @@ import static org.assertj.core.api.Assertions.tuple;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
-import org.assertj.core.api.AbstractObjectAssert;
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
@@ -50,18 +48,14 @@ public class OpenshiftWithApplicationPropertiesTest {
                 assertThat(m.getLabels()).contains(entry("foo", "bar"));
                 assertThat(m.getNamespace()).isEqualTo("applications");
             });
-            AbstractObjectAssert<?, ?> specAssert = assertThat(h).extracting("spec");
-            specAssert.extracting("replicas").isEqualTo(3);
-            specAssert.extracting("template").extracting("spec").isInstanceOfSatisfying(PodSpec.class,
+            assertThat(h).extracting("spec").extracting("replicas").isEqualTo(3);
+            assertThat(h).extracting("spec").extracting("template").extracting("spec").isInstanceOfSatisfying(PodSpec.class,
                     podSpec -> {
                         assertThat(podSpec.getContainers()).singleElement().satisfies(container -> {
                             assertThat(container.getEnv()).extracting("name", "value")
                                     .contains(tuple("MY_ENV_VAR", "SOMEVALUE"));
                         });
                     });
-            specAssert.extracting("selector").isInstanceOfSatisfying(Map.class, selectorsMap -> {
-                assertThat(selectorsMap).containsOnly(entry("app.kubernetes.io/name", "test-it"));
-            });
         });
 
         assertThat(openshiftList).filteredOn(h -> "Service".equals(h.getKind())).singleElement().satisfies(h -> {
@@ -71,26 +65,22 @@ public class OpenshiftWithApplicationPropertiesTest {
                 });
 
                 assertThat(s.getSpec()).satisfies(spec -> {
-                    assertThat(spec.getSelector()).containsOnly(entry("app.kubernetes.io/name", "test-it"));
                     assertThat(spec.getPorts()).hasSize(1).singleElement().satisfies(p -> {
-                        assertThat(p.getPort()).isEqualTo(80);
-                        assertThat(p.getTargetPort().getIntVal()).isEqualTo(9090);
+                        assertThat(p.getPort()).isEqualTo(9090);
                     });
                 });
             });
         });
 
         assertThat(openshiftList).filteredOn(i -> "Route".equals(i.getKind())).singleElement().satisfies(i -> {
-            assertThat(i).isInstanceOfSatisfying(Route.class, r -> {
+            assertThat(i).isInstanceOfSatisfying(Route.class, in -> {
                 //Check that labels and annotations are also applied to Routes (#10260)
-                assertThat(r.getMetadata()).satisfies(m -> {
+                assertThat(i.getMetadata()).satisfies(m -> {
                     assertThat(m.getName()).isEqualTo("test-it");
                     assertThat(m.getLabels()).contains(entry("foo", "bar"));
                     assertThat(m.getAnnotations()).contains(entry("bar", "baz"));
                     assertThat(m.getNamespace()).isEqualTo("applications");
                 });
-
-                assertThat(r.getSpec().getPort().getTargetPort().getIntVal()).isEqualTo(9090);
             });
         });
     }
