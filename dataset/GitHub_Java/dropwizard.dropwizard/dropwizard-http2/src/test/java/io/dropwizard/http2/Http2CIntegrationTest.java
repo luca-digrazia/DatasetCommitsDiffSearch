@@ -2,12 +2,19 @@ package io.dropwizard.http2;
 
 import com.google.common.net.HttpHeaders;
 import io.dropwizard.Configuration;
+import io.dropwizard.logging.BootstrapLogging;
 import io.dropwizard.testing.ResourceHelpers;
 import io.dropwizard.testing.junit.DropwizardAppRule;
-import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.http.HttpFields;
+import org.eclipse.jetty.http.HttpURI;
+import org.eclipse.jetty.http.HttpVersion;
+import org.eclipse.jetty.http.MetaData;
+import org.eclipse.jetty.http2.api.Session;
+import org.eclipse.jetty.http2.api.server.ServerSessionListener;
 import org.eclipse.jetty.http2.client.HTTP2Client;
-import org.eclipse.jetty.http2.client.HTTP2ClientConnectionFactory;
-import org.eclipse.jetty.http2.client.http.HttpClientTransportOverHTTP2;
+import org.eclipse.jetty.http2.frames.HeadersFrame;
+import org.eclipse.jetty.util.FuturePromise;
+import org.eclipse.jetty.util.Promise;
 import org.glassfish.jersey.client.JerseyClient;
 import org.glassfish.jersey.client.JerseyClientBuilder;
 import org.junit.After;
@@ -17,23 +24,26 @@ import org.junit.Test;
 
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.net.InetSocketAddress;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class Http2CIntegrationTest  extends AbstractHttp2Test {
+public class Http2CIntegrationTest {
 
+    static {
+        BootstrapLogging.bootstrap();
+    }
 
     @Rule
     public DropwizardAppRule<Configuration> appRule = new DropwizardAppRule<>(
             FakeApplication.class, ResourceHelpers.resourceFilePath("test-http2c.yml"));
 
-    private HttpClient client;
+    private final HTTP2Client client = new HTTP2Client();
 
     @Before
     public void setUp() throws Exception {
-        final HTTP2Client http2Client = new HTTP2Client();
-        http2Client.setClientConnectionFactory(new HTTP2ClientConnectionFactory()); // No need for ALPN
-        client = new HttpClient(new HttpClientTransportOverHTTP2(http2Client), null);
         client.start();
     }
 
@@ -57,14 +67,42 @@ public class Http2CIntegrationTest  extends AbstractHttp2Test {
 
     @Test
     public void testHttp2c() throws Exception {
-        assertResponse(client.GET("http://localhost:" + appRule.getLocalPort() + "/api/test"));
+        final String hostname = "127.0.0.1";
+        final int port = appRule.getLocalPort();
+
+        final FuturePromise<Session> sessionPromise = new FuturePromise<>();
+        client.connect(new InetSocketAddress(hostname, port), new ServerSessionListener.Adapter(), sessionPromise);
+        final Session session = sessionPromise.get(5, TimeUnit.SECONDS);
+
+        final MetaData.Request request = new MetaData.Request("GET",
+                new HttpURI("http://" + hostname + ":" + port + "/api/test"),
+                HttpVersion.HTTP_2, new HttpFields());
+        CountDownLatch latch = new CountDownLatch(1);
+        session.newStream(new HeadersFrame(request, null, true), new Promise.Adapter<>(), new ResponseListener(latch));
+
+        latch.await(5, TimeUnit.SECONDS);
+        assertThat(latch.getCount()).isEqualTo(0);
     }
 
     @Test
     public void testHttp2cManyRequests() throws Exception {
-        // For some reason the library requires to perform the first request synchronously with HTTP/2
-        testHttp2c();
+        final String hostname = "127.0.0.1";
+        final int port = appRule.getLocalPort();
 
-        performManyAsyncRequests(client, "http://localhost:" + appRule.getLocalPort() + "/api/test");
+        final FuturePromise<Session> sessionPromise = new FuturePromise<>();
+        client.connect(new InetSocketAddress(hostname, port), new ServerSessionListener.Adapter(), sessionPromise);
+        final Session session = sessionPromise.get(5, TimeUnit.SECONDS);
+
+        final MetaData.Request request = new MetaData.Request("GET",
+                new HttpURI("http://" + hostname + ":" + port + "/api/test"),
+                HttpVersion.HTTP_2, new HttpFields());
+        int amount = 100;
+        final CountDownLatch latch = new CountDownLatch(amount);
+        for (int i = 0; i < amount; i++) {
+            session.newStream(new HeadersFrame(request, null, true), new Promise.Adapter<>(),
+                    new ResponseListener(latch));
+        }
+        latch.await(10, TimeUnit.SECONDS);
+        assertThat(latch.getCount()).isEqualTo(0);
     }
 }
