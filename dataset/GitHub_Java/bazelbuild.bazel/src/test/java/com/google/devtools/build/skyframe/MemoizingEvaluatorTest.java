@@ -26,6 +26,7 @@ import static org.junit.Assert.fail;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Predicates;
+import com.google.common.base.Supplier;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
@@ -61,7 +62,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Supplier;
 import javax.annotation.Nullable;
 import org.junit.After;
 import org.junit.Before;
@@ -2283,7 +2283,7 @@ public class MemoizingEvaluatorTest {
               @Override
               public SkyValue compute(SkyKey skyKey, Environment env) {
                 if (numFunctionCalls.getAndIncrement() < 2) {
-                  return Restart.SELF;
+                  return SkyFunction.SENTINEL_FOR_RESTART_FROM_SCRATCH;
                 }
                 return expectedValue;
               }
@@ -2363,7 +2363,7 @@ public class MemoizingEvaluatorTest {
                 }
                 env.getValues(ImmutableList.of(newlyRequestedDoneDep, newlyRequestedNotDoneDep));
                 if (numFunctionCalls.get() < 4) {
-                  return Restart.SELF;
+                  return SkyFunction.SENTINEL_FOR_RESTART_FROM_SCRATCH;
                 } else if (numFunctionCalls.get() == 4) {
                   if (cleanBuild.get()) {
                     Preconditions.checkState(
@@ -4336,10 +4336,7 @@ public class MemoizingEvaluatorTest {
         new TrackingProgressReceiver() {
           @Override
           public void evaluated(
-              SkyKey skyKey,
-              @Nullable SkyValue value,
-              Supplier<EvaluationSuccessState> evaluationSuccessState,
-              EvaluationState state) {
+              SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
             evaluated.add(skyKey);
           }
         });
@@ -4475,10 +4472,7 @@ public class MemoizingEvaluatorTest {
         new TrackingProgressReceiver() {
           @Override
           public void evaluated(
-              SkyKey skyKey,
-              @Nullable SkyValue value,
-              Supplier<EvaluationSuccessState> evaluationSuccessState,
-              EvaluationState state) {
+              SkyKey skyKey, Supplier<SkyValue> skyValueSupplier, EvaluationState state) {
             evaluated.add(skyKey);
           }
         });
@@ -4892,25 +4886,18 @@ public class MemoizingEvaluatorTest {
       this.driver = getBuildDriver(evaluator);
     }
 
-    /**
-     * Sets the {@link #progressReceiver}. {@link #initialize} must be called after this to have any
-     * effect.
-     */
-    public void setProgressReceiver(TrackingProgressReceiver progressReceiver) {
-      this.progressReceiver = progressReceiver;
+    public void setProgressReceiver(TrackingProgressReceiver customProgressReceiver) {
+      Preconditions.checkState(evaluator == null, "evaluator already initialized");
+      progressReceiver = customProgressReceiver;
     }
 
     /**
      * Sets the {@link #graphInconsistencyReceiver}. {@link #initialize} must be called after this
-     * to have any effect.
+     * to have any effect/
      */
     public void setGraphInconsistencyReceiver(
         GraphInconsistencyReceiver graphInconsistencyReceiver) {
       this.graphInconsistencyReceiver = graphInconsistencyReceiver;
-    }
-
-    public MemoizingEvaluator getEvaluator() {
-      return evaluator;
     }
 
     public void invalidate() {

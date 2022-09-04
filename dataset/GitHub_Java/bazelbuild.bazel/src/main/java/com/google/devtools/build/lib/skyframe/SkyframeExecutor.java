@@ -358,8 +358,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
         syscalls, cyclesReporter, pkgLocator, numPackagesLoaded, this);
     this.resourceManager = ResourceManager.instance();
     this.skyframeActionExecutor =
-        new SkyframeActionExecutor(
-            actionKeyContext, statusReporterRef, this::getPathEntries, usesActionFileSystem);
+        new SkyframeActionExecutor(actionKeyContext, statusReporterRef, usesActionFileSystem);
     this.fileSystem = fileSystem;
     this.directories = Preconditions.checkNotNull(directories);
     this.actionKeyContext = Preconditions.checkNotNull(actionKeyContext);
@@ -1220,12 +1219,12 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     ConfigurationTransition dataTransition =
         ((ConfiguredRuleClassProvider) ruleClassProvider).getLipoDataTransition();
     BuildOptions dataOptions = dataTransition != NoTransition.INSTANCE
-        ? ((PatchTransition) dataTransition).patch(firstTargetConfig.getOptions())
+        ? ((PatchTransition) dataTransition).apply(firstTargetConfig.getOptions())
         : firstTargetConfig.getOptions();
 
     BuildOptions hostOptions =
         dataOptions.get(BuildConfiguration.Options.class).useDistinctHostConfiguration
-            ? HostTransition.INSTANCE.patch(dataOptions)
+            ? HostTransition.INSTANCE.apply(dataOptions)
             : dataOptions;
     BuildConfiguration hostConfig = getConfiguration(eventHandler, hostOptions, keepGoing);
 
