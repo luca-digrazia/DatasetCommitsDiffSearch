@@ -59,9 +59,8 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
     @SuppressWarnings("unchecked")
     protected final void run(AbstractService<?> service,
                              CommandLine params) throws Exception {
-        final ConfigurationFactory<T> factory = ConfigurationFactory.forClass(getConfigurationClass(),
-                                                                              new Validator(),
-                                                                              service.getJacksonModules());
+        final ConfigurationFactory<T> factory = new ConfigurationFactory<T>(getConfigurationClass(),
+                                                                            new Validator());
         final String[] args = params.getArgs();
         if (args.length >= 1) {
             params.getArgList().remove(0);
@@ -70,10 +69,10 @@ public abstract class ConfiguredCommand<T extends Configuration> extends Command
                 new LoggingFactory(configuration.getLoggingConfiguration()).configure();
                 run((AbstractService<T>) service, configuration, params);
             } catch (ConfigurationException e) {
-                printHelp(e.getMessage(), service.getClass());
+                printHelp(e.getMessage());
             }
         } else {
-            printHelp(service.getClass());
+            printHelp();
             System.exit(-1);
         }
     }
