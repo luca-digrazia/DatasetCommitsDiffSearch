@@ -9,7 +9,6 @@ import io.dropwizard.util.SizeUnit;
 import io.dropwizard.validation.MinDuration;
 import io.dropwizard.validation.MinSize;
 import io.dropwizard.validation.PortRange;
-import org.eclipse.jetty.http.HttpCompliance;
 import org.eclipse.jetty.io.ArrayByteBufferPool;
 import org.eclipse.jetty.io.ByteBufferPool;
 import org.eclipse.jetty.server.ConnectionFactory;
@@ -117,14 +116,6 @@ import static com.codahale.metrics.MetricRegistry.name;
  *         </td>
  *     </tr>
  *     <tr>
- *         <td>{@code blockingTimeout}</td>
- *         <td>(none)</td>
- *         <td>The timeout applied to blocking operations. This timeout is in addition to the {@code idleTimeout},
- *             and applies to the total operation (as opposed to the idle timeout that applies to the time no data
- *             is being sent).
- *          </td>
- *     </tr>
- *     <tr>
  *         <td>{@code minBufferPoolSize}</td>
  *         <td>64 bytes</td>
  *         <td>The minimum size of the buffer pool.</td>
@@ -229,8 +220,6 @@ public class HttpConnectorFactory implements ConnectorFactory {
     @MinDuration(value = 1, unit = TimeUnit.MILLISECONDS)
     private Duration idleTimeout = Duration.seconds(30);
 
-    private Duration blockingTimeout = null;
-
     @NotNull
     @MinSize(value = 1, unit = SizeUnit.BYTES)
     private Size minBufferPoolSize = Size.bytes(64);
@@ -257,7 +246,6 @@ public class HttpConnectorFactory implements ConnectorFactory {
     private boolean useServerHeader = false;
     private boolean useDateHeader = true;
     private boolean useForwardedHeaders = true;
-    private HttpCompliance httpCompliance = HttpCompliance.RFC7230;
 
     @JsonProperty
     public int getPort() {
@@ -347,16 +335,6 @@ public class HttpConnectorFactory implements ConnectorFactory {
     @JsonProperty
     public void setIdleTimeout(Duration idleTimeout) {
         this.idleTimeout = idleTimeout;
-    }
-
-    @JsonProperty
-    public Duration getBlockingTimeout() {
-        return blockingTimeout;
-    }
-
-    @JsonProperty
-    public void setBlockingTimeout(Duration blockingTimeout) {
-        this.blockingTimeout = blockingTimeout;
     }
 
     @JsonProperty
@@ -469,17 +447,6 @@ public class HttpConnectorFactory implements ConnectorFactory {
         this.useForwardedHeaders = useForwardedHeaders;
     }
 
-    @JsonProperty
-    public HttpCompliance getHttpCompliance() {
-        return httpCompliance;
-    }
-
-    @JsonProperty
-    public void setHttpCompliance(HttpCompliance httpCompliance) {
-        this.httpCompliance = httpCompliance;
-    }
-
-
     @Override
     public Connector build(Server server,
                            MetricRegistry metrics,
@@ -543,7 +510,7 @@ public class HttpConnectorFactory implements ConnectorFactory {
     }
 
     protected HttpConnectionFactory buildHttpConnectionFactory(HttpConfiguration httpConfig) {
-        final HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory(httpConfig, httpCompliance);
+        final HttpConnectionFactory httpConnectionFactory = new HttpConnectionFactory(httpConfig);
         httpConnectionFactory.setInputBufferSize((int) inputBufferSize.toBytes());
         return httpConnectionFactory;
     }
@@ -559,9 +526,6 @@ public class HttpConnectorFactory implements ConnectorFactory {
 
         if (useForwardedHeaders) {
             httpConfig.addCustomizer(new ForwardedRequestCustomizer());
-        }
-        if (blockingTimeout != null) {
-            httpConfig.setBlockingTimeout(blockingTimeout.toMilliseconds());
         }
         return httpConfig;
     }
