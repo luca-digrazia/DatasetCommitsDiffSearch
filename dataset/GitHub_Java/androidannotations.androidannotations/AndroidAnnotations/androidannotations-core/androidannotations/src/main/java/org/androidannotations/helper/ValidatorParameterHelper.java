@@ -120,7 +120,7 @@ public class ValidatorParameterHelper {
 		}
 
 		public V anyType() {
-			return param(new AnyTypeParameterRequirement());
+			return extendsType(CanonicalNameConstants.OBJECT);
 		}
 
 		public V annotatedWith(Class<? extends Annotation> annotationClass) {
