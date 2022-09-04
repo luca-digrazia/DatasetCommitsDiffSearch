@@ -26,9 +26,11 @@ import com.google.devtools.build.lib.bazel.repository.skylark.SkylarkRepositoryF
 import com.google.devtools.build.lib.bazel.rules.BazelRulesModule;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
+import com.google.devtools.build.lib.packages.RuleClassProvider;
 import com.google.devtools.build.lib.rules.repository.RepositoryDelegatorFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryFunction;
 import com.google.devtools.build.lib.rules.repository.RepositoryLoaderFunction;
+import com.google.devtools.build.lib.runtime.proto.InvocationPolicyOuterClass.InvocationPolicy;
 import com.google.devtools.build.lib.skyframe.ActionEnvironmentFunction;
 import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.skyframe.ClientEnvironmentFunction;
@@ -50,6 +52,12 @@ import java.util.concurrent.atomic.AtomicReference;
  * caching or incrementality.
  */
 public class BazelPackageLoader extends AbstractPackageLoader {
+
+  /**
+   * Version is the string BazelPackageLoader reports in native.bazel_version to be used by Skylark.
+   */
+  private final String version;
+
   /** Returns a fresh {@link Builder} instance. */
   public static Builder builder(Path workspaceDir, Path installBase, Path outputBase) {
     // Prevent PackageLoader from fetching any remote repositories; these should only be fetched by
@@ -93,10 +101,7 @@ public class BazelPackageLoader extends AbstractPackageLoader {
         PrecomputedValue.injected(PrecomputedValue.ACTION_ENV, ImmutableMap.of()),
         PrecomputedValue.injected(
             RepositoryDelegatorFunction.REPOSITORY_OVERRIDES,
-            Suppliers.ofInstance(ImmutableMap.of())),
-        PrecomputedValue.injected(
-            RepositoryDelegatorFunction.DEPENDENCY_FOR_UNCONDITIONAL_FETCHING,
-            RepositoryDelegatorFunction.DONT_FETCH_UNCONDITIONALLY));
+            Suppliers.ofInstance(ImmutableMap.of())));
 
     return builder;
   }
@@ -107,6 +112,8 @@ public class BazelPackageLoader extends AbstractPackageLoader {
         createRuleClassProvider();
 
     private final AtomicBoolean isFetch;
+
+    private String version = "";
 
     private static ConfiguredRuleClassProvider createRuleClassProvider() {
       ConfiguredRuleClassProvider.Builder classProvider = new ConfiguredRuleClassProvider.Builder();
@@ -122,12 +129,27 @@ public class BazelPackageLoader extends AbstractPackageLoader {
 
     @Override
     public BazelPackageLoader buildImpl() {
-      return new BazelPackageLoader(this);
+      return new BazelPackageLoader(this, version);
     }
 
     @Override
-    protected ConfiguredRuleClassProvider getDefaultRuleClassProvider() {
+    protected RuleClassProvider getDefaultRuleClassProvider() {
       return DEFAULT_RULE_CLASS_PROVIDER;
+    }
+
+    @Override
+    protected String getDefaultDefaultPackageContents() {
+      return DEFAULT_RULE_CLASS_PROVIDER.getDefaultsPackageContent(
+          InvocationPolicy.getDefaultInstance());
+    }
+
+    /**
+     * Version is the string BazelPackageLoader reports in native.bazel_version to be used by
+     * Skylark.
+     */
+    public Builder setVersion(String version) {
+      this.version = version;
+      return this;
     }
 
     Builder setFetchForTesting() {
@@ -136,8 +158,14 @@ public class BazelPackageLoader extends AbstractPackageLoader {
     }
   }
 
-  private BazelPackageLoader(Builder builder) {
+  private BazelPackageLoader(Builder builder, String version) {
     super(builder);
+    this.version = version;
+  }
+
+  @Override
+  protected String getVersion() {
+    return version;
   }
 
   @Override
