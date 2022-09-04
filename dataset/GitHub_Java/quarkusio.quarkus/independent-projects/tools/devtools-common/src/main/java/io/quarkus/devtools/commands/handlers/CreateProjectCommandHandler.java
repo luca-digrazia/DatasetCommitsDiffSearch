@@ -182,8 +182,8 @@ public class CreateProjectCommandHandler implements QuarkusCommandHandler {
     @SuppressWarnings("unchecked")
     private List<ExtensionCatalog> getExtensionOrigins(ExtensionCatalog extensionCatalog, List<Extension> extensionsToAdd)
             throws QuarkusCommandException {
-        final ElementCatalog<ExtensionCatalog> ec = ElementCatalogBuilder.getElementCatalog(extensionCatalog,
-                ExtensionCatalog.class);
+        final ElementCatalog<ExtensionCatalog> ec = (ElementCatalog<ExtensionCatalog>) extensionCatalog.getMetadata()
+                .get("element-catalog");
         if (ec == null) {
             return Collections.emptyList();
         }

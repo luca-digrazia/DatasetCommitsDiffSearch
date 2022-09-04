@@ -19,7 +19,9 @@ import io.quarkus.registry.client.spi.RegistryClientFactoryProvider;
 import io.quarkus.registry.config.RegistriesConfig;
 import io.quarkus.registry.config.RegistriesConfigLocator;
 import io.quarkus.registry.config.RegistryConfig;
+import io.quarkus.registry.union.ElementCatalog;
 import io.quarkus.registry.union.ElementCatalogBuilder;
+import io.quarkus.registry.union.ElementCatalogBuilder.MemberBuilder;
 import io.quarkus.registry.union.ElementCatalogBuilder.UnionBuilder;
 import java.io.File;
 import java.net.URL;
@@ -278,7 +280,7 @@ public class ExtensionCatalogResolver {
                         for (ArtifactCoords bom : release.getMemberBoms()) {
                             final ExtensionCatalog ec = registry.resolvePlatformExtensions(bom);
                             catalogs.add(ec);
-                            ElementCatalogBuilder.addUnionMember(union, ec);
+                            addUnion(union, ec);
                         }
 
                         final Map<String, List<RegistryExtensionResolver>> registriesByQuarkusCore = new HashMap<>(2);
@@ -296,7 +298,10 @@ public class ExtensionCatalogResolver {
         }
 
         final ExtensionCatalog catalog = JsonCatalogMerger.merge(catalogs);
-        ElementCatalogBuilder.setElementCatalog(catalog, catalogBuilder.build());
+        final ElementCatalog<ExtensionCatalog> elements = catalogBuilder.build();
+        if (!elements.isEmpty()) {
+            catalog.getMetadata().put("element-catalog", elements);
+        }
         return catalog;
     }
 
@@ -471,7 +476,7 @@ public class ExtensionCatalogResolver {
         for (ArtifactCoords bom : release.getMemberBoms()) {
             final ExtensionCatalog ec = registry.resolvePlatformExtensions(bom);
             catalogs.add(ec);
-            ElementCatalogBuilder.addUnionMember(union, ec);
+            addUnion(union, ec);
         }
 
         final Map<String, List<RegistryExtensionResolver>> registriesByQuarkusCore = new HashMap<>(2);
@@ -485,7 +490,11 @@ public class ExtensionCatalogResolver {
 
         appendNonPlatformExtensions(registriesByQuarkusCore, union, catalogs);
         final ExtensionCatalog catalog = JsonCatalogMerger.merge(catalogs);
-        ElementCatalogBuilder.setElementCatalog(catalog, catalogBuilder.build());
+
+        final ElementCatalog<ExtensionCatalog> elements = catalogBuilder.build();
+        if (!elements.isEmpty()) {
+            catalog.getMetadata().put("element-catalog", elements);
+        }
         return catalog;
     }
 
@@ -494,6 +503,14 @@ public class ExtensionCatalogResolver {
         if (registriesTotal == 0) {
             throw new RegistryResolutionException("No registries configured");
         }
+    }
+
+    private void addUnion(final UnionBuilder<ExtensionCatalog> union, final ExtensionCatalog ec) {
+        final MemberBuilder<ExtensionCatalog> builder = union.getOrCreateMember(
+                ec.getId(), ec.getBom().getVersion(), ec);
+        ec.getExtensions()
+                .forEach(e -> builder
+                        .addElement(e.getArtifact().getGroupId() + ":" + e.getArtifact().getArtifactId()));
     }
 
     public ExtensionCatalog resolveExtensionCatalog(Collection<ArtifactCoords> platforms)
@@ -570,8 +587,7 @@ public class ExtensionCatalogResolver {
                 if (nonPlatformCatalog != null) {
                     extensionCatalogs.add(nonPlatformCatalog);
                     if (union != null) {
-                        final UnionBuilder<ExtensionCatalog> union1 = union;
-                        ElementCatalogBuilder.addUnionMember(union1, nonPlatformCatalog);
+                        addUnion(union, nonPlatformCatalog);
                     }
                 }
             }
