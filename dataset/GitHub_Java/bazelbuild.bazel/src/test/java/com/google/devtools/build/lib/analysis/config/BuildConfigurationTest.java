@@ -14,16 +14,13 @@
 package com.google.devtools.build.lib.analysis.config;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableListMultimap;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Iterables;
-import com.google.devtools.build.lib.analysis.config.BuildOptions.MapBackedChecksumCache;
-import com.google.devtools.build.lib.analysis.config.BuildOptions.OptionsChecksumCache;
-import com.google.devtools.build.lib.analysis.config.OutputDirectories.InvalidMnemonicException;
 import com.google.devtools.build.lib.analysis.util.ConfigurationTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -34,6 +31,7 @@ import com.google.devtools.build.lib.skyframe.serialization.testutils.Serializat
 import com.google.devtools.build.lib.vfs.FileSystem;
 import com.google.devtools.common.options.Options;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -109,7 +107,7 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
   }
 
   @Test
-  public void testCaching() {
+  public void testCaching() throws Exception {
     CoreOptions a = Options.getDefaults(CoreOptions.class);
     CoreOptions b = Options.getDefaults(CoreOptions.class);
     // The String representations of the CoreOptions must be equal even if these are
@@ -353,29 +351,11 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
   }
 
   @Test
-  public void throwsOnBadMnemonic() {
-    InvalidMnemonicException e =
-        assertThrows(InvalidMnemonicException.class, () -> create("--cpu=//bad/cpu"));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo(
-            "Output directory name '//bad/cpu' specified by CppConfiguration is invalid as part of"
-                + " a path: must not contain /");
-    e =
-        assertThrows(
-            InvalidMnemonicException.class, () -> create("--platform_suffix=//bad/suffix"));
-    assertThat(e)
-        .hasMessageThat()
-        .isEqualTo(
-            "Platform suffix '//bad/suffix' is invalid as part of a path: must not contain /");
-  }
-
-  @Test
   public void testCodec() throws Exception {
     // Unnecessary ImmutableList.copyOf apparently necessary to choose non-varargs constructor.
     new SerializationTester(ImmutableList.copyOf(getTestConfigurations()))
         .addDependency(FileSystem.class, getScratch().getFileSystem())
-        .addDependency(OptionsChecksumCache.class, new MapBackedChecksumCache())
+        .addDependency(BuildOptions.OptionsDiffCache.class, new BuildOptions.DiffToByteCache())
         .setVerificationFunction(BuildConfigurationTest::verifyDeserialized)
         .runTests();
   }
@@ -383,10 +363,11 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
   @Test
   public void testKeyCodec() throws Exception {
     new SerializationTester(
-            getTestConfigurations().stream()
+            getTestConfigurations()
+                .stream()
                 .map(BuildConfigurationValue::key)
                 .collect(ImmutableList.toImmutableList()))
-        .addDependency(OptionsChecksumCache.class, new MapBackedChecksumCache())
+        .addDependency(BuildOptions.OptionsDiffCache.class, new BuildOptions.DiffToByteCache())
         .runTests();
   }
 
@@ -399,5 +380,42 @@ public class BuildConfigurationTest extends ConfigurationTestCase {
   private static void verifyDeserialized(
       BuildConfiguration subject, BuildConfiguration deserialized) {
     assertThat(deserialized.getOptions()).isEqualTo(subject.getOptions());
+  }
+
+  @Test
+  public void testDescribe() throws Exception {
+    scratch.file(
+        "test/defs.bzl",
+        "def _rule_impl(ctx):",
+        "    return []",
+        "string_flag = rule(",
+        "    implementation = _rule_impl,",
+        "    build_setting = config.string()",
+        ")");
+    scratch.file(
+        "test/BUILD",
+        "load('//test:defs.bzl', 'string_flag')",
+        "string_flag(",
+        "    name = 'my_flag1',",
+        "    build_setting_default = '')",
+        "string_flag(",
+        "    name = 'my_flag2',",
+        "    build_setting_default = '')");
+
+    BuildConfiguration config = create(ImmutableMap.of("//test:my_flag1", "custom"));
+    StringBuilder sb = new StringBuilder();
+    config.describe(sb);
+    String desc = sb.toString();
+
+    // Just sample the expected lines. Testing against the full expected output would be too spammy
+    // and also brittle, as fragments and their options and default option values change.
+    String expected =
+        "fragments: .*com.google.devtools.build.lib.analysis.PlatformConfiguration.*"
+            + "Fragment com.google.devtools.build.lib.analysis.PlatformOptions \\{.*"
+            + "Fragment user-defined \\{.*"
+            + "  //test:my_flag1: custom.*"
+            + "\\}";
+
+    assertThat(desc).containsMatch(Pattern.compile(expected, Pattern.DOTALL));
   }
 }
