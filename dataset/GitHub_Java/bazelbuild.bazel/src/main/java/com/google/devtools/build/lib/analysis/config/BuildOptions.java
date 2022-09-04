@@ -192,11 +192,6 @@ public final class BuildOptions implements Cloneable, Serializable {
     return fragmentOptionsMap.values();
   }
 
-  /** Returns the set of fragment classes contained in these options. */
-  public Set<Class<? extends FragmentOptions>> getFragmentClasses() {
-    return fragmentOptionsMap.keySet();
-  }
-
   public ImmutableMap<Label, Object> getStarlarkOptions() {
     return skylarkOptionsMap;
   }
