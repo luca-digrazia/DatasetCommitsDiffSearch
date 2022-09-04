@@ -21,17 +21,22 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.NoType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.rest.Post;
 import com.googlecode.androidannotations.helper.CanonicalNameConstants;
-import com.googlecode.androidannotations.processing.EBeanHolder;
+import com.googlecode.androidannotations.processing.EBeansHolder;
+import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
+import com.sun.codemodel.JExpr;
+import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JVar;
 
-public class PostProcessor extends GetPostProcessor {
+public class PostProcessor extends MethodProcessor {
+
+	private EBeansHolder activitiesHolder;
 
 	public PostProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		super(processingEnv, restImplementationHolder);
@@ -43,49 +48,73 @@ public class PostProcessor extends GetPostProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
 
-		this.holder = holder;
+		this.activitiesHolder = activitiesHolder;
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		TypeMirror returnType = executableElement.getReturnType();
 
-		JClass expectedClass = null;
-		JClass generatedReturnClass = null;
+		JClass generatedReturnType = null;
 		String returnTypeString = returnType.toString();
+		JClass expectedClass = null;
 
-		// TODO: Refactoring this block...
 		if (returnType.getKind() != TypeKind.VOID) {
 			if (returnTypeString.startsWith(CanonicalNameConstants.URI)) {
-				DeclaredType declaredReturnType = (DeclaredType) returnType;
-				TypeMirror typeParameter = declaredReturnType.getTypeArguments().get(0);
-				expectedClass = holder.refClass(typeParameter.toString());
-				generatedReturnClass = holder.refClass(CanonicalNameConstants.URI);
+				DeclaredType declaredReturnedType = (DeclaredType) returnType;
+				TypeMirror typeParameter = declaredReturnedType.getTypeArguments().get(0);
+				expectedClass = activitiesHolder.refClass(typeParameter.toString());
+				generatedReturnType = activitiesHolder.refClass(CanonicalNameConstants.URI);
 			} else if (returnTypeString.startsWith(CanonicalNameConstants.RESPONSE_ENTITY)) {
-				DeclaredType declaredReturnType = (DeclaredType) returnType;
-				TypeMirror typeParameter = declaredReturnType.getTypeArguments().get(0);
-				expectedClass = holder.refClass(typeParameter.toString());
-				generatedReturnClass = holder.refClass(CanonicalNameConstants.RESPONSE_ENTITY).narrow(expectedClass);
-			} else if (returnType.getKind() == TypeKind.DECLARED) {
-				DeclaredType declaredReturnType = (DeclaredType) returnType;
-				TypeMirror enclosingType = declaredReturnType.getEnclosingType();
-				if (enclosingType instanceof NoType) {
-					expectedClass = holder.parseClass(declaredReturnType.toString());
-				} else {
-					expectedClass = holder.parseClass(enclosingType.toString());
-				}
-
-				generatedReturnClass = holder.parseClass(declaredReturnType.toString());
+				DeclaredType declaredReturnedType = (DeclaredType) returnType;
+				TypeMirror typeParameter = declaredReturnedType.getTypeArguments().get(0);
+				expectedClass = activitiesHolder.refClass(typeParameter.toString());
+				generatedReturnType = activitiesHolder.refClass(CanonicalNameConstants.RESPONSE_ENTITY).narrow(expectedClass);
 			} else {
-				generatedReturnClass = holder.refClass(returnTypeString);
-				expectedClass = holder.refClass(returnTypeString);
+				generatedReturnType = activitiesHolder.refClass(returnTypeString);
+				expectedClass = generatedReturnType;
 			}
 		}
 
 		Post postAnnotation = element.getAnnotation(Post.class);
 		String urlSuffix = postAnnotation.value();
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(holder, executableElement, urlSuffix, expectedClass, generatedReturnClass, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(activitiesHolder, executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
+	}
+
+	@Override
+	protected JInvocation addHttpEntityVar(JInvocation restCall, MethodProcessorHolder methodHolder) {
+		return restCall.arg(generateHttpEntityVar(methodHolder));
+	}
+
+	@Override
+	protected JInvocation addResponseEntityArg(JInvocation restCall, MethodProcessorHolder methodHolder) {
+		JClass expectedClass = methodHolder.getExpectedClass();
+
+		if (expectedClass != null) {
+			restCall.arg(expectedClass.dotclass());
+		} else {
+			restCall.arg(JExpr._null());
+		}
+
+		return restCall;
+	}
+
+	@Override
+	protected JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder) {
+		JClass expectedClass = methodHolder.getExpectedClass();
+		JClass generatedReturnType = methodHolder.getGeneratedReturnType();
+
+		if (expectedClass == generatedReturnType && expectedClass != null) {
+			restCall = JExpr.invoke(restCall, "getBody");
+		}
+
+		return restCall;
+	}
+
+	@Override
+	protected JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
+		return generateHttpHeadersVar(activitiesHolder, body, executableElement);
 	}
 
 }

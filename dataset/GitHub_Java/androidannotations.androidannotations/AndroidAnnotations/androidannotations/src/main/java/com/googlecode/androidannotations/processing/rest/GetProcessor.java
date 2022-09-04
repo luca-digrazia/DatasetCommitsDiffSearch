@@ -21,13 +21,12 @@ import javax.annotation.processing.ProcessingEnvironment;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.NoType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.rest.Get;
 import com.googlecode.androidannotations.helper.CanonicalNameConstants;
-import com.googlecode.androidannotations.processing.EBeanHolder;
+import com.googlecode.androidannotations.processing.EBeansHolder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -37,7 +36,7 @@ import com.sun.codemodel.JVar;
 
 public class GetProcessor extends MethodProcessor {
 
-	private EBeanHolder holder;
+	private EBeansHolder activitiesHolder;
 
 	public GetProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
 		super(processingEnv, restImplementationHolder);
@@ -49,50 +48,41 @@ public class GetProcessor extends MethodProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
 
-		this.holder = holder;
+		this.activitiesHolder = activitiesHolder;
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		TypeMirror returnType = executableElement.getReturnType();
 
-		JClass expectedClass = null;
-		JClass generatedReturnClass = null;
+		JClass generatedReturnType = null;
 		String returnTypeString = returnType.toString();
+		JClass expectedClass = null;
 
 		if (returnType.getKind() != TypeKind.VOID) {
-			DeclaredType declaredReturnType = (DeclaredType) returnType;
-
 			if (returnTypeString.startsWith(CanonicalNameConstants.RESPONSE_ENTITY)) {
-				TypeMirror typeParameter = declaredReturnType.getTypeArguments().get(0);
-				expectedClass = holder.refClass(typeParameter.toString());
-				generatedReturnClass = holder.refClass(CanonicalNameConstants.RESPONSE_ENTITY).narrow(expectedClass);
-			} else if (returnType.getKind() == TypeKind.DECLARED) {
-				TypeMirror enclosingType = declaredReturnType.getEnclosingType();
-				if (enclosingType instanceof NoType) {
-					expectedClass = holder.parseClass(declaredReturnType.toString());
-				} else {
-					expectedClass = holder.parseClass(enclosingType.toString());
-				}
-
-				generatedReturnClass = holder.parseClass(declaredReturnType.toString());
+				DeclaredType declaredReturnedType = (DeclaredType) returnType;
+				TypeMirror typeParameter = declaredReturnedType.getTypeArguments().get(0);
+				expectedClass = activitiesHolder.refClass(typeParameter.toString());
+				generatedReturnType = activitiesHolder.refClass(CanonicalNameConstants.RESPONSE_ENTITY).narrow(expectedClass);
 			} else {
-				generatedReturnClass = holder.refClass(returnTypeString);
-				expectedClass = holder.refClass(returnTypeString);
+				generatedReturnType = activitiesHolder.refClass(returnTypeString);
+				expectedClass = generatedReturnType;
 			}
 		}
 
 		Get getAnnotation = element.getAnnotation(Get.class);
 		String urlSuffix = getAnnotation.value();
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(holder, executableElement, urlSuffix, expectedClass, generatedReturnClass, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(activitiesHolder, executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
 	}
 
 	@Override
 	protected JInvocation addResultCallMethod(JInvocation restCall, MethodProcessorHolder methodHolder) {
+		JClass expectedClass = methodHolder.getExpectedClass();
 		JClass generatedReturnType = methodHolder.getGeneratedReturnType();
 
-		if (!generatedReturnType.fullName().startsWith(CanonicalNameConstants.RESPONSE_ENTITY)) {
+		if (expectedClass == generatedReturnType) {
 			restCall = JExpr.invoke(restCall, "getBody");
 		}
 
@@ -117,7 +107,7 @@ public class GetProcessor extends MethodProcessor {
 
 	@Override
 	protected JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
-		return generateHttpHeadersVar(holder, body, executableElement);
+		return generateHttpHeadersVar(activitiesHolder, body, executableElement);
 	}
 
 }

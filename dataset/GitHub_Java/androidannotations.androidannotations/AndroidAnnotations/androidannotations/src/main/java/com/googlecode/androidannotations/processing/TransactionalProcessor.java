@@ -33,7 +33,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JVar;
 
-public class TransactionalProcessor implements DecoratingElementProcessor {
+public class TransactionalProcessor implements ElementProcessor {
 
 	private final APTCodeModelHelper helper = new APTCodeModelHelper();
 
@@ -43,7 +43,8 @@ public class TransactionalProcessor implements DecoratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
+		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
 
 		ExecutableElement executableElement = (ExecutableElement) element;
 
@@ -61,7 +62,7 @@ public class TransactionalProcessor implements DecoratingElementProcessor {
 
 		JTryBlock tryBlock = body._try();
 
-		JExpression activitySuper = holder.generatedClass.staticRef("super");
+		JExpression activitySuper = holder.eBean.staticRef("super");
 		JInvocation superCall = JExpr.invoke(activitySuper, method);
 
 		for (JVar param : method.params()) {
@@ -86,7 +87,7 @@ public class TransactionalProcessor implements DecoratingElementProcessor {
 
 		JInvocation errorInvoke = catchBody.staticInvoke(holder.classes().LOG, "e");
 
-		errorInvoke.arg(holder.generatedClass.name());
+		errorInvoke.arg(holder.eBean.name());
 		errorInvoke.arg("Error in transaction");
 		errorInvoke.arg(exceptionParam);
 

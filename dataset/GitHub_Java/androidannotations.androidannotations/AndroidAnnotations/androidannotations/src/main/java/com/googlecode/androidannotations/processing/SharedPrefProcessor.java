@@ -62,7 +62,7 @@ import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
 
-public class SharedPrefProcessor implements GeneratingElementProcessor {
+public class SharedPrefProcessor implements ElementProcessor {
 
 	private static class EditorFieldHolder {
 		public final Class<?> fieldClass;
@@ -91,7 +91,7 @@ public class SharedPrefProcessor implements GeneratingElementProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeansHolder eBeansHolder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
 
 		TypeElement typeElement = (TypeElement) element;
 
@@ -100,7 +100,6 @@ public class SharedPrefProcessor implements GeneratingElementProcessor {
 
 		String helperQualifiedName = interfaceQualifiedName + ModelConstants.GENERATION_SUFFIX;
 		JDefinedClass helperClass = codeModel._class(JMod.PUBLIC | JMod.FINAL, helperQualifiedName, ClassType.CLASS);
-		eBeansHolder.create(typeElement, getTarget(), helperClass);
 
 		helperClass._extends(SharedPreferencesHelper.class);
 
@@ -115,11 +114,11 @@ public class SharedPrefProcessor implements GeneratingElementProcessor {
 		// Static editor class
 		JDefinedClass editorClass = helperClass._class(JMod.PUBLIC | JMod.STATIC | JMod.FINAL, interfaceSimpleName + "Editor" + ModelConstants.GENERATION_SUFFIX);
 
-		editorClass._extends(eBeansHolder.refClass(EditorHelper.class).narrow(editorClass));
+		editorClass._extends(activitiesHolder.refClass(EditorHelper.class).narrow(editorClass));
 
 		// Editor constructor
 		JMethod editorConstructor = editorClass.constructor(JMod.NONE);
-		JClass sharedPreferencesClass = eBeansHolder.refClass("android.content.SharedPreferences");
+		JClass sharedPreferencesClass = activitiesHolder.refClass("android.content.SharedPreferences");
 		JVar sharedPreferencesParam = editorConstructor.param(sharedPreferencesClass, "sharedPreferences");
 		editorConstructor.body().invoke("super").arg(sharedPreferencesParam);
 
@@ -127,14 +126,14 @@ public class SharedPrefProcessor implements GeneratingElementProcessor {
 		for (ExecutableElement method : validMethods) {
 			String returnType = method.getReturnType().toString();
 			EditorFieldHolder editorFieldHolder = EDITOR_FIELD_BY_TYPE.get(returnType);
-			JClass editorFieldClass = eBeansHolder.refClass(editorFieldHolder.fieldClass);
+			JClass editorFieldClass = activitiesHolder.refClass(editorFieldHolder.fieldClass);
 			String fieldName = method.getSimpleName().toString();
 			JMethod editorFieldMethod = editorClass.method(JMod.PUBLIC, editorFieldClass.narrow(editorClass), fieldName);
 			editorFieldMethod.body()._return(JExpr.invoke(editorFieldHolder.fieldMethodName).arg(fieldName));
 		}
 
 		// Helper constructor
-		JClass contextClass = eBeansHolder.refClass("android.content.Context");
+		JClass contextClass = activitiesHolder.refClass("android.content.Context");
 
 		SharedPref sharedPrefAnnotation = typeElement.getAnnotation(SharedPref.class);
 		Scope scope = sharedPrefAnnotation.value();
@@ -144,7 +143,7 @@ public class SharedPrefProcessor implements GeneratingElementProcessor {
 		case ACTIVITY_DEFAULT: {
 
 			JVar contextParam = constructor.param(contextClass, "context");
-			JMethod getLocalClassName = getLocalClassName(eBeansHolder, helperClass, codeModel);
+			JMethod getLocalClassName = getLocalClassName(activitiesHolder, helperClass, codeModel);
 			constructor.body().invoke("super") //
 					.arg(contextParam.invoke("getSharedPreferences") //
 							.arg(invoke(getLocalClassName).arg(contextParam)) //
@@ -153,7 +152,7 @@ public class SharedPrefProcessor implements GeneratingElementProcessor {
 		}
 		case ACTIVITY: {
 			JVar contextParam = constructor.param(contextClass, "context");
-			JMethod getLocalClassName = getLocalClassName(eBeansHolder, helperClass, codeModel);
+			JMethod getLocalClassName = getLocalClassName(activitiesHolder, helperClass, codeModel);
 			constructor.body().invoke("super") //
 					.arg(contextParam.invoke("getSharedPreferences") //
 							.arg(invoke(getLocalClassName).arg(contextParam) //
@@ -171,7 +170,7 @@ public class SharedPrefProcessor implements GeneratingElementProcessor {
 			break;
 		}
 		case APPLICATION_DEFAULT: {
-			JClass preferenceManagerClass = eBeansHolder.refClass("android.preference.PreferenceManager");
+			JClass preferenceManagerClass = activitiesHolder.refClass("android.preference.PreferenceManager");
 			JVar contextParam = constructor.param(contextClass, "context");
 			constructor.body() //
 					.invoke("super") //

@@ -25,16 +25,20 @@ import javax.lang.model.type.TypeMirror;
 
 import com.googlecode.androidannotations.annotations.rest.Options;
 import com.googlecode.androidannotations.helper.CanonicalNameConstants;
-import com.googlecode.androidannotations.processing.EBeanHolder;
+import com.googlecode.androidannotations.processing.EBeansHolder;
+import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JExpr;
 import com.sun.codemodel.JInvocation;
+import com.sun.codemodel.JVar;
 
 public class OptionsProcessor extends MethodProcessor {
 
-	public OptionsProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationsHolder) {
-		super(processingEnv, restImplementationsHolder);
+	private EBeansHolder activitiesHolder;
+
+	public OptionsProcessor(ProcessingEnvironment processingEnv, RestImplementationsHolder restImplementationHolder) {
+		super(processingEnv, restImplementationHolder);
 	}
 
 	@Override
@@ -43,8 +47,9 @@ public class OptionsProcessor extends MethodProcessor {
 	}
 
 	@Override
-	public void process(Element element, JCodeModel codeModel, EBeanHolder holder) throws Exception {
+	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) throws Exception {
 
+		this.activitiesHolder = activitiesHolder;
 		ExecutableElement executableElement = (ExecutableElement) element;
 
 		TypeMirror returnType = executableElement.getReturnType();
@@ -53,14 +58,14 @@ public class OptionsProcessor extends MethodProcessor {
 
 		TypeMirror typeParameter = declaredReturnType.getTypeArguments().get(0);
 
-		JClass expectedClass = holder.refClass(typeParameter.toString());
+		JClass expectedClass = activitiesHolder.refClass(typeParameter.toString());
 
-		JClass generatedReturnType = holder.refClass(CanonicalNameConstants.SET).narrow(expectedClass);
+		JClass generatedReturnType = activitiesHolder.refClass(CanonicalNameConstants.SET).narrow(expectedClass);
 
 		Options optionsAnnotation = element.getAnnotation(Options.class);
 		String urlSuffix = optionsAnnotation.value();
 
-		generateRestTemplateCallBlock(new MethodProcessorHolder(holder, executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
+		generateRestTemplateCallBlock(new MethodProcessorHolder(activitiesHolder, executableElement, urlSuffix, expectedClass, generatedReturnType, codeModel));
 	}
 
 	@Override
@@ -68,6 +73,21 @@ public class OptionsProcessor extends MethodProcessor {
 		restCall = JExpr.invoke(restCall, "getHeaders");
 		restCall = JExpr.invoke(restCall, "getAllow");
 		return restCall;
+	}
+
+	@Override
+	protected JInvocation addHttpEntityVar(JInvocation restCall, MethodProcessorHolder methodHolder) {
+		return restCall.arg(JExpr._null());
+	}
+
+	@Override
+	protected JInvocation addResponseEntityArg(JInvocation restCall, MethodProcessorHolder methodHolder) {
+		return restCall.arg(JExpr._null());
+	}
+
+	@Override
+	protected JVar addHttpHeadersVar(JBlock body, ExecutableElement executableElement) {
+		return generateHttpHeadersVar(activitiesHolder, body, executableElement);
 	}
 
 }

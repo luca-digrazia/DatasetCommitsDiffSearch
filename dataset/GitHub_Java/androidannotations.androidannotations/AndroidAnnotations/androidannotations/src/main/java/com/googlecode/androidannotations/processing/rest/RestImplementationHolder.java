@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2011 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2012 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -15,10 +15,6 @@
  */
 package com.googlecode.androidannotations.processing.rest;
 
-import java.util.HashMap;
-import java.util.Map;
-
-import com.sun.codemodel.JClass;
 import com.sun.codemodel.JDefinedClass;
 import com.sun.codemodel.JFieldVar;
 
@@ -26,22 +22,8 @@ public class RestImplementationHolder {
 
 	public JDefinedClass restImplementationClass;
 
-	private Map<String, JClass> loadedClasses = new HashMap<String, JClass>();
-
 	public JFieldVar restTemplateField;
 
-	public String urlPrefix;
-
-	public JClass refClass(String fullyQualifiedClassName) {
-
-		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
-
-		if (refClass == null) {
-			refClass = restImplementationClass.owner().ref(fullyQualifiedClassName);
-			loadedClasses.put(fullyQualifiedClassName, refClass);
-		}
-
-		return refClass;
-	}
+	public JFieldVar rootUrlField;
 
 }

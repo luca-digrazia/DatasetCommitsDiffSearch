@@ -19,7 +19,7 @@ import java.util.TreeMap;
 
 import javax.lang.model.element.Element;
 
-import com.googlecode.androidannotations.processing.EBeanHolder;
+import com.googlecode.androidannotations.processing.EBeansHolder;
 import com.sun.codemodel.JBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -35,10 +35,10 @@ public class MethodProcessorHolder {
 
 	private JBlock body;
 	private TreeMap<String, JVar> methodParams;
-	private final EBeanHolder holder;
+	private final EBeansHolder activitiesHolder;
 
-	public MethodProcessorHolder(EBeanHolder holder, Element element, String urlSuffix, JClass expectedClass, JClass generatedReturnType, JCodeModel codeModel) {
-		this.holder = holder;
+	public MethodProcessorHolder(EBeansHolder activitiesHolder, Element element, String urlSuffix, JClass expectedClass, JClass generatedReturnType, JCodeModel codeModel) {
+		this.activitiesHolder = activitiesHolder;
 		this.element = element;
 		this.urlSuffix = urlSuffix;
 		this.expectedClass = expectedClass;
@@ -58,16 +58,8 @@ public class MethodProcessorHolder {
 		return expectedClass;
 	}
 
-	public void setExpectedClass(JClass expectedClass) {
-		this.expectedClass = expectedClass;
-	}
-
 	public JClass getGeneratedReturnType() {
 		return generatedReturnType;
-	}
-
-	public void setGeneratedReturnType(JClass generatedReturnType) {
-		this.generatedReturnType = generatedReturnType;
 	}
 
 	public JCodeModel getCodeModel() {
@@ -90,8 +82,8 @@ public class MethodProcessorHolder {
 		this.methodParams = methodParams;
 	}
 
-	public EBeanHolder getHolder() {
-		return holder;
+	public EBeansHolder getActivitiesHolder() {
+		return activitiesHolder;
 	}
 
 }
