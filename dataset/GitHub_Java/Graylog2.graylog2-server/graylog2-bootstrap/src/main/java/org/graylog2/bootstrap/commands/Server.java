@@ -24,7 +24,7 @@ import com.mongodb.MongoException;
 import io.airlift.airline.Command;
 import io.airlift.airline.Option;
 import org.graylog2.Configuration;
-import org.graylog2.ServerVersion;
+import org.graylog2.shared.ServerVersion;
 import org.graylog2.UI;
 import org.graylog2.bindings.AlarmCallbackBindings;
 import org.graylog2.bindings.InitializerBindings;
@@ -36,8 +36,8 @@ import org.graylog2.bindings.RotationStrategyBindings;
 import org.graylog2.bindings.ServerBindings;
 import org.graylog2.bindings.ServerMessageInputBindings;
 import org.graylog2.bindings.ServerObjectMapperModule;
-import org.graylog2.bootstrap.Main;
 import org.graylog2.bootstrap.ServerBootstrap;
+import org.graylog2.bootstrap.Main;
 import org.graylog2.cluster.NodeService;
 import org.graylog2.configuration.ElasticsearchConfiguration;
 import org.graylog2.configuration.EmailConfiguration;
@@ -56,10 +56,7 @@ import org.slf4j.LoggerFactory;
 import javax.inject.Inject;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.EnumSet;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 @Command(name = "server", description = "Start the Graylog2 server")
 public class Server extends ServerBootstrap implements Runnable {
@@ -131,7 +128,7 @@ public class Server extends ServerBootstrap implements Runnable {
 
     @Override
     protected List<Module> getCommandBindings() {
-        return Arrays.<Module>asList(new ServerBindings(configuration, capabilities()),
+        return Arrays.<Module>asList(new ServerBindings(configuration),
                 new PersistenceServicesBindings(),
                 new ServerMessageInputBindings(),
                 new MessageFilterBindings(),
@@ -163,7 +160,7 @@ public class Server extends ServerBootstrap implements Runnable {
 
         if (configuration.isMaster() && !nodeService.isOnlyMaster(serverStatus.getNodeId())) {
             LOG.warn("Detected another master in the cluster. Retrying in {} seconds to make sure it is not "
-                    + "an old stale instance.", TimeUnit.MILLISECONDS.toSeconds(configuration.getStaleMasterTimeout()));
+                    + "an old stale instance.", configuration.getStaleMasterTimeout());
             try {
                 Thread.sleep(configuration.getStaleMasterTimeout());
             } catch (InterruptedException e) { /* nope */ }
@@ -235,15 +232,6 @@ public class Server extends ServerBootstrap implements Runnable {
                 LOG.error(UI.wallString("Unable to connect to MongoDB. Is it running and the configuration correct?"));
                 System.exit(-1);
             }
-        }
-    }
-
-    @Override
-    protected Set<ServerStatus.Capability> capabilities() {
-        if (configuration.isMaster()) {
-            return EnumSet.of(ServerStatus.Capability.SERVER, ServerStatus.Capability.MASTER);
-        } else {
-            return EnumSet.of(ServerStatus.Capability.SERVER);
         }
     }
 }
