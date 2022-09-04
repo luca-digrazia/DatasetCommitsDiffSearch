@@ -25,6 +25,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.VisibilityProvider;
 import com.google.devtools.build.lib.analysis.VisibilityProviderImpl;
+import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.rules.AliasConfiguredTarget;
 
@@ -39,8 +40,8 @@ public class XcodeConfigAlias implements RuleConfiguredTargetFactory {
   @Override
   public ConfiguredTarget create(RuleContext ruleContext)
       throws InterruptedException, RuleErrorException, ActionConflictException {
-    ConfiguredTarget actual =
-        (ConfiguredTarget) ruleContext.getPrerequisite(XcodeConfigRule.XCODE_CONFIG_ATTR_NAME);
+    ConfiguredTarget actual = (ConfiguredTarget) ruleContext.getPrerequisite(
+        XcodeConfigRule.XCODE_CONFIG_ATTR_NAME, Mode.TARGET);
     return new AliasConfiguredTarget(
         ruleContext,
         actual,
@@ -77,8 +78,7 @@ public class XcodeConfigAlias implements RuleConfiguredTargetFactory {
     public Metadata getMetadata() {
       return Metadata.builder()
           .name("xcode_config_alias")
-          .ancestors(
-              BaseRuleClasses.NativeBuildRule.class, AppleToolchain.RequiresXcodeConfigRule.class)
+          .ancestors(BaseRuleClasses.BaseRule.class, AppleToolchain.RequiresXcodeConfigRule.class)
           .factoryClass(XcodeConfigAlias.class)
           .build();
     }
