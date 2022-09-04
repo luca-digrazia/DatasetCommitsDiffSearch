@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
@@ -40,6 +39,7 @@ import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.Link.Picness;
 import com.google.devtools.build.lib.rules.cpp.Link.Staticness;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
+import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.util.FileType;
 import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
@@ -1290,6 +1290,12 @@ public final class CppModel {
         && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {
       dynamicLinkActionBuilder.setLtoIndexing(true);
       dynamicLinkActionBuilder.setUsePicForLtoBackendActions(usePicForSharedLibs);
+      // If support is ever added for generating a dwp file for shared
+      // library targets (e.g. when linkstatic=0), then this should change
+      // to generate dwo files when cppConfiguration.useFission(),
+      // and the dwp generating action for the shared library should
+      // include all of the resulting dwo files.
+      dynamicLinkActionBuilder.setUseFissionForLtoBackendActions(false);
       CppLinkAction indexAction = dynamicLinkActionBuilder.build();
       env.registerAction(indexAction);
 
