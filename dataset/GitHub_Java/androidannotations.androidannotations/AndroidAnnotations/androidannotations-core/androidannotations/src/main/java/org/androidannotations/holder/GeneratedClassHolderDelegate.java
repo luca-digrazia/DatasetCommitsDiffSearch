@@ -42,8 +42,9 @@ public abstract class GeneratedClassHolderDelegate<T extends GeneratedClassHolde
 		return holder.getAnnotatedElement();
 	}
 
-	protected final Classes getClasses() {
-		return environment().getClasses();
+	@Override
+	public final Classes classes() {
+		return holder.classes();
 	}
 
 	@Override

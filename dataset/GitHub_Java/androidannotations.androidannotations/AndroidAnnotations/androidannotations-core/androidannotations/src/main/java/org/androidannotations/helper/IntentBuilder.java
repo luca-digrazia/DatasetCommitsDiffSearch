@@ -48,11 +48,10 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
 import com.sun.codemodel.JVar;
-import org.androidannotations.process.ProcessHolder;
 
 public abstract class IntentBuilder {
 
-	protected AndroidAnnotationsEnvironment environment;
+	private AndroidAnnotationsEnvironment environment;
 	protected HasIntentBuilder holder;
 	protected AndroidManifest androidManifest;
 	protected JDefinedClass builderClass;
@@ -94,7 +93,7 @@ public abstract class IntentBuilder {
 	private void createContextConstructor() {
 		JExpression generatedClass = holder.getGeneratedClass().dotclass();
 		JMethod constructor = holder.getIntentBuilderClass().constructor(JMod.PUBLIC);
-		JVar constructorContextParam = constructor.param(getClasses().CONTEXT, "context");
+		JVar constructorContextParam = constructor.param(holder.classes().CONTEXT, "context");
 		constructor.body().invoke("super").arg(constructorContextParam).arg(generatedClass);
 	}
 
@@ -145,8 +144,4 @@ public abstract class IntentBuilder {
 	}
 
 	protected abstract JClass getSuperClass();
-
-	protected ProcessHolder.Classes getClasses() {
-		return environment.getClasses();
-	}
 }

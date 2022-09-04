@@ -18,6 +18,7 @@ package org.androidannotations.holder;
 import javax.lang.model.element.TypeElement;
 
 import org.androidannotations.AndroidAnnotationsEnvironment;
+import org.androidannotations.process.ProcessHolder;
 
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JCodeModel;
@@ -29,6 +30,8 @@ public interface GeneratedClassHolder {
 	TypeElement getAnnotatedElement();
 
 	AndroidAnnotationsEnvironment environment();
+
+	ProcessHolder.Classes classes();
 
 	JCodeModel codeModel();
 

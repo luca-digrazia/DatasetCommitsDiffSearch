@@ -54,7 +54,7 @@ public class BeanHandler extends BaseAnnotationHandler<EComponentHolder> {
 		TypeMirror typeMirror = annotationHelper.extractAnnotationClassParameter(element);
 		if (typeMirror == null) {
 			typeMirror = element.asType();
-			typeMirror = getProcessingEnvironment().getTypeUtils().erasure(typeMirror);
+			typeMirror = processingEnvironment().getTypeUtils().erasure(typeMirror);
 		}
 
 		String typeQualifiedName = typeMirror.toString();
