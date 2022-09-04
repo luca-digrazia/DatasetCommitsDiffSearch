@@ -94,10 +94,12 @@ public class CompiledResources implements ManifestContainer {
   }
 
   public List<String> getAssetsStrings() {
-    return assetsDirs.stream()
-        .peek(
+    return assetsDirs
+        .stream()
+        .map(
             p -> {
               Preconditions.checkArgument(Files.exists(p), "does not exist %s", p);
+              return p;
             })
         .map(Path::toString)
         .collect(Collectors.toList());
