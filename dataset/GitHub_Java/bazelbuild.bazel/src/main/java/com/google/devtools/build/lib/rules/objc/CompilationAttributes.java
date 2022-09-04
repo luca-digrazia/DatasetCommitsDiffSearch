@@ -28,9 +28,9 @@ import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.Type;
 import com.google.devtools.build.lib.rules.cpp.CcCommon;
 import com.google.devtools.build.lib.rules.cpp.CppModuleMap;
+import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Pair;
 import com.google.devtools.build.lib.vfs.PathFragment;
 
@@ -47,7 +47,6 @@ final class CompilationAttributes {
     private final NestedSetBuilder<PathFragment> sdkIncludes = NestedSetBuilder.stableOrder();
     private final ImmutableList.Builder<String> copts = ImmutableList.builder();
     private final ImmutableList.Builder<String> linkopts = ImmutableList.builder();
-    private final ImmutableList.Builder<String> defines = ImmutableList.builder();
     private final NestedSetBuilder<CppModuleMap> moduleMapsForDirectDeps =
         NestedSetBuilder.stableOrder();
     private final NestedSetBuilder<SdkFramework> sdkFrameworks = NestedSetBuilder.stableOrder();
@@ -119,12 +118,6 @@ final class CompilationAttributes {
       return this;
     }
 
-    /** Adds defines. */
-    public Builder addDefines(Iterable<String> defines) {
-      this.defines.addAll(defines);
-      return this;
-    }
-
     /**
      * Adds clang module maps for direct dependencies of the rule. These are needed to generate
      * module maps.
@@ -193,7 +186,6 @@ final class CompilationAttributes {
           this.packageFragment,
           this.copts.build(),
           this.linkopts.build(),
-          this.defines.build(),
           this.moduleMapsForDirectDeps.build(),
           this.enableModules);
     }
@@ -265,10 +257,6 @@ final class CompilationAttributes {
       if (ruleContext.attributes().has("linkopts", Type.STRING_LIST)) {
         builder.addLinkopts(ruleContext.getExpander().withDataLocations().tokenized("linkopts"));
       }
-
-      if (ruleContext.attributes().has("defines", Type.STRING_LIST)) {
-        builder.addDefines(ruleContext.getExpander().withDataLocations().tokenized("defines"));
-      }
     }
 
     private static void addModuleOptionsFromRuleContext(Builder builder, RuleContext ruleContext) {
@@ -311,7 +299,6 @@ final class CompilationAttributes {
   private final Optional<PathFragment> packageFragment;
   private final ImmutableList<String> copts;
   private final ImmutableList<String> linkopts;
-  private final ImmutableList<String> defines;
   private final NestedSet<CppModuleMap> moduleMapsForDirectDeps;
   private final boolean enableModules;
 
@@ -326,7 +313,6 @@ final class CompilationAttributes {
       Optional<PathFragment> packageFragment,
       ImmutableList<String> copts,
       ImmutableList<String> linkopts,
-      ImmutableList<String> defines,
       NestedSet<CppModuleMap> moduleMapsForDirectDeps,
       boolean enableModules) {
     this.hdrs = hdrs;
@@ -339,7 +325,6 @@ final class CompilationAttributes {
     this.packageFragment = packageFragment;
     this.copts = copts;
     this.linkopts = linkopts;
-    this.defines = defines;
     this.moduleMapsForDirectDeps = moduleMapsForDirectDeps;
     this.enableModules = enableModules;
   }
@@ -424,11 +409,6 @@ final class CompilationAttributes {
    */
   public ImmutableList<String> linkopts() {
     return this.linkopts;
-  }
-
-  /** Returns the defines. */
-  public ImmutableList<String> defines() {
-    return this.defines;
   }
 
   /**
