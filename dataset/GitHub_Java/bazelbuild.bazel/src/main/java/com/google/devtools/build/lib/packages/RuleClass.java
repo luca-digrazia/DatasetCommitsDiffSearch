@@ -58,6 +58,7 @@ import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkCallable;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -234,19 +235,19 @@ public class RuleClass {
      * configured target creation in cases where it can no longer continue.
      */
     final class RuleErrorException extends Exception {
-      public RuleErrorException() {
+      RuleErrorException() {
         super();
       }
 
-      public RuleErrorException(String message) {
+      RuleErrorException(String message) {
         super(message);
       }
 
-      public RuleErrorException(Throwable cause) {
+      RuleErrorException(Throwable cause) {
         super(cause);
       }
 
-      public RuleErrorException(String message, Throwable cause) {
+      RuleErrorException(String message, Throwable cause) {
         super(message, cause);
       }
     }
@@ -657,6 +658,7 @@ public class RuleClass {
     private final boolean starlark;
     private boolean starlarkTestable = false;
     private boolean documented;
+    private boolean publicByDefault = false;
     private boolean binaryOutput = true;
     private boolean workspaceOnly = false;
     private boolean isExecutableStarlark = false;
@@ -874,6 +876,7 @@ public class RuleClass {
           starlark,
           starlarkTestable,
           documented,
+          publicByDefault,
           binaryOutput,
           workspaceOnly,
           isExecutableStarlark,
@@ -1043,6 +1046,11 @@ public class RuleClass {
 
     public Builder setUndocumented() {
       documented = false;
+      return this;
+    }
+
+    public Builder publicByDefault() {
+      publicByDefault = true;
       return this;
     }
 
@@ -1550,6 +1558,7 @@ public class RuleClass {
   private final boolean isStarlark;
   private final boolean starlarkTestable;
   private final boolean documented;
+  private final boolean publicByDefault;
   private final boolean binaryOutput;
   private final boolean workspaceOnly;
   private final boolean isExecutableStarlark;
@@ -1687,6 +1696,7 @@ public class RuleClass {
       boolean isStarlark,
       boolean starlarkTestable,
       boolean documented,
+      boolean publicByDefault,
       boolean binaryOutput,
       boolean workspaceOnly,
       boolean isExecutableStarlark,
@@ -1725,6 +1735,7 @@ public class RuleClass {
     this.targetKind = name + Rule.targetKindSuffix();
     this.starlarkTestable = starlarkTestable;
     this.documented = documented;
+    this.publicByDefault = publicByDefault;
     this.binaryOutput = binaryOutput;
     this.implicitOutputsFunction = implicitOutputsFunction;
     this.transitionFactory = transitionFactory;
@@ -1995,8 +2006,7 @@ public class RuleClass {
       boolean checkThirdPartyRulesHaveLicenses)
       throws LabelSyntaxException, InterruptedException, CannotPrecomputeDefaultsException {
     Rule rule =
-        pkgBuilder.createRule(
-            ruleLabel, this, location, callstack, AttributeContainer.newInstance(this));
+        pkgBuilder.createRule(ruleLabel, this, location, callstack, new AttributeContainer(this));
     populateRuleAttributeValues(rule, pkgBuilder, attributeValues, eventHandler);
     checkAspectAllowedValues(rule, eventHandler);
     rule.populateOutputFiles(eventHandler, pkgBuilder);
@@ -2236,8 +2246,12 @@ public class RuleClass {
 
       } else if (attr.getName().equals("distribs") && attr.getType() == BuildType.DISTRIBUTIONS) {
         rule.setAttributeValue(attr, pkgBuilder.getDefaultDistribs(), /*explicit=*/ false);
+
+      } else {
+        Object defaultValue = attr.getDefaultValue(/*rule=*/ null);
+        rule.setAttributeValue(attr, defaultValue, /*explicit=*/ false);
+        checkAllowedValues(rule, attr, eventHandler);
       }
-      // Don't store default values, querying materializes them at read time.
     }
 
     // An instance of the built-in 'test_suite' rule with an undefined or empty 'tests' attribute
@@ -2310,6 +2324,30 @@ public class RuleClass {
 
     rule.setAttributeValue(configDepsAttribute, ImmutableList.copyOf(configLabels),
         /*explicit=*/false);
+  }
+
+  public void checkAttributesNonEmpty(
+      RuleErrorConsumer ruleErrorConsumer, AttributeMap attributes) {
+    for (String attributeName : attributes.getAttributeNames()) {
+      Attribute attr = attributes.getAttributeDefinition(attributeName);
+      if (!attr.isNonEmpty()) {
+        continue;
+      }
+      Object attributeValue = attributes.get(attributeName, attr.getType());
+
+      boolean isEmpty = false;
+      if (attributeValue instanceof Sequence) {
+        isEmpty = ((Sequence<?>) attributeValue).isEmpty();
+      } else if (attributeValue instanceof List<?>) {
+        isEmpty = ((List<?>) attributeValue).isEmpty();
+      } else if (attributeValue instanceof Map<?, ?>) {
+        isEmpty = ((Map<?, ?>) attributeValue).isEmpty();
+      }
+
+      if (isEmpty) {
+        ruleErrorConsumer.attributeError(attr.getName(), "attribute must be non empty");
+      }
+    }
   }
 
   /**
@@ -2535,6 +2573,10 @@ public class RuleClass {
 
   public boolean isDocumented() {
     return documented;
+  }
+
+  public boolean isPublicByDefault() {
+    return publicByDefault;
   }
 
   /**
