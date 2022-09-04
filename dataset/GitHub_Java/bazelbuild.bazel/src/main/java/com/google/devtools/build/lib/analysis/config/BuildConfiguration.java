@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.analysis.config;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
-import com.google.common.base.Predicate;
 import com.google.common.base.Splitter;
 import com.google.common.base.Verify;
 import com.google.common.collect.ArrayListMultimap;
@@ -75,8 +74,11 @@ import com.google.devtools.common.options.Converter;
 import com.google.devtools.common.options.Converters;
 import com.google.devtools.common.options.EnumConverter;
 import com.google.devtools.common.options.Option;
+import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParsingException;
 import com.google.devtools.common.options.TriState;
+import java.io.Serializable;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -190,14 +192,6 @@ public final class BuildConfiguration {
      */
     public ImmutableSet<String> configurationEnabledFeatures(RuleContext ruleContext) {
       return ImmutableSet.of();
-    }
-
-    /**
-     * @return false if a Fragment understands that it won't be able to work with a given strategy,
-     *     or true otherwise.
-     */
-    public boolean compatibleWithStrategy(String strategyName) {
-      return true;
     }
   }
 
@@ -1037,7 +1031,6 @@ public final class BuildConfiguration {
 
   private final ImmutableMap<Class<? extends Fragment>, Fragment> fragments;
   private final ImmutableMap<String, Class<? extends Fragment>> skylarkVisibleFragments;
-  private final String mainRepositoryName;
 
   /**
    * Directories in the output tree.
@@ -1107,21 +1100,18 @@ public final class BuildConfiguration {
     }
 
     Root getRoot(
-        RepositoryName repositoryName, String outputDirName, BlazeDirectories directories,
-        String mainRepositoryName) {
+        RepositoryName repositoryName, String outputDirName, BlazeDirectories directories) {
       // e.g., execroot/repo1
-      Path execRoot = directories.getExecRoot(mainRepositoryName);
+      Path execRoot = directories.getExecRoot();
       // e.g., execroot/repo1/bazel-out/config/bin
       Path outputDir = execRoot.getRelative(directories.getRelativeOutputPath())
           .getRelative(outputDirName);
       if (middleman) {
-        return INTERNER.intern(Root.middlemanRoot(execRoot, outputDir,
-            repositoryName.strippedName().equals(mainRepositoryName)));
+        return INTERNER.intern(Root.middlemanRoot(execRoot, outputDir, repositoryName.isMain()));
       }
       // e.g., [[execroot/repo1]/bazel-out/config/bin]
       return INTERNER.intern(
-          Root.asDerivedRoot(execRoot, outputDir.getRelative(name),
-              repositoryName.strippedName().equals(mainRepositoryName)));
+          Root.asDerivedRoot(execRoot, outputDir.getRelative(name), repositoryName.isMain()));
     }
   }
 
@@ -1156,8 +1146,42 @@ public final class BuildConfiguration {
 
   private final int hashCode; // We can precompute the hash code as all its inputs are immutable.
 
-  /** Data for introspecting the options used by this configuration. */
-  private final TransitiveOptionDetails transitiveOptionDetails;
+  /**
+   * Helper container for {@link #transitiveOptionsMap} below.
+   */
+  private static class OptionDetails implements Serializable {
+    private OptionDetails(Class<? extends OptionsBase> optionsClass, Object value,
+        boolean allowsMultiple) {
+      this.optionsClass = optionsClass;
+      this.value = value;
+      this.allowsMultiple = allowsMultiple;
+    }
+
+    /** The {@link FragmentOptions} class that defines this option. */
+    private final Class<? extends OptionsBase> optionsClass;
+
+    /**
+     * The value of the given option (either explicitly defined or default). May be null.
+     */
+    private final Object value;
+
+    /** Whether or not this option supports multiple values. */
+    private final boolean allowsMultiple;
+  }
+
+  /**
+   * Maps option names to the {@link OptionDetails} the option takes for this configuration.
+   *
+   * <p>This can be used to:
+   * <ol>
+   *   <li>Find an option's (parsed) value given its command-line name</li>
+   *   <li>Parse alternative values for the option.</li>
+   * </ol>
+   *
+   * <p>This map is "transitive" in that it includes *all* options recognizable by this
+   * configuration, including those defined in child fragments.
+   */
+  private final Map<String, OptionDetails> transitiveOptionsMap;
 
   /**
    * Returns true if this configuration is semantically equal to the other, with
@@ -1276,20 +1300,6 @@ public final class BuildConfiguration {
   }
 
   /**
-   * @return false if any of the fragments don't work well with the supplied strategy.
-   */
-  public boolean compatibleWithStrategy(final String strategyName) {
-    return Iterables.all(
-        fragments.values(),
-        new Predicate<Fragment>() {
-          @Override
-          public boolean apply(@Nullable Fragment fragment) {
-            return fragment.compatibleWithStrategy(strategyName);
-          }
-        });
-  }
-
-  /**
    * Compute the shell environment, which, at configuration level, is a pair consisting of the
    * statically set environment variables with their values and the set of environment variables to
    * be inherited from the client environment.
@@ -1336,8 +1346,7 @@ public final class BuildConfiguration {
   public BuildConfiguration(BlazeDirectories directories,
       Map<Class<? extends Fragment>, Fragment> fragmentsMap,
       BuildOptions buildOptions,
-      boolean actionsDisabled,
-      String repositoryName) {
+      boolean actionsDisabled) {
     this.directories = directories;
     this.actionsEnabled = !actionsDisabled;
     this.fragments = ImmutableSortedMap.copyOf(fragmentsMap, lexicalFragmentSorter);
@@ -1346,7 +1355,6 @@ public final class BuildConfiguration {
 
     this.buildOptions = buildOptions;
     this.options = buildOptions.get(Options.class);
-    this.mainRepositoryName = repositoryName;
 
     Map<String, String> testEnv = new TreeMap<>();
     for (Map.Entry<String, String> entry : this.options.testEnvironment) {
@@ -1378,7 +1386,7 @@ public final class BuildConfiguration {
     this.localShellEnvironment = shellEnvironment.getFirst();
     this.envVariables = shellEnvironment.getSecond();
 
-    this.transitiveOptionDetails = computeOptionsMap(buildOptions, fragments.values());
+    this.transitiveOptionsMap = computeOptionsMap(buildOptions, fragments.values());
 
     ImmutableMap.Builder<String, String> globalMakeEnvBuilder = ImmutableMap.builder();
     for (Fragment fragment : fragments.values()) {
@@ -1416,8 +1424,8 @@ public final class BuildConfiguration {
     }
     BuildOptions options = buildOptions.trim(
         getOptionsClasses(fragmentsMap.keySet(), ruleClassProvider));
-    BuildConfiguration newConfig = new BuildConfiguration(
-        directories, fragmentsMap, options, !actionsEnabled, mainRepositoryName);
+    BuildConfiguration newConfig =
+        new BuildConfiguration(directories, fragmentsMap, options, !actionsEnabled);
     newConfig.setConfigurationTransitions(this.transitions);
     return newConfig;
   }
@@ -1457,17 +1465,11 @@ public final class BuildConfiguration {
   }
 
   /**
-   * Retrieves the {@link TransitiveOptionDetails} containing data on this configuration's options.
-   *
-   * @see BuildConfigurationOptionDetails
+   * Computes and returns the transitive optionName -> "option info" map for
+   * this configuration.
    */
-  TransitiveOptionDetails getTransitiveOptionDetails() {
-    return transitiveOptionDetails;
-  }
-
-  /** Computes and returns the {@link TransitiveOptionDetails} for this configuration. */
-  private static TransitiveOptionDetails computeOptionsMap(
-      BuildOptions buildOptions, Iterable<Fragment> fragments) {
+  private static Map<String, OptionDetails> computeOptionsMap(BuildOptions buildOptions,
+      Iterable<Fragment> fragments) {
     // Collect from our fragments "alternative defaults" for options where the default
     // should be something other than what's specified in Option.defaultValue.
     Map<String, Object> lateBoundDefaults = Maps.newHashMap();
@@ -1475,8 +1477,35 @@ public final class BuildConfiguration {
       lateBoundDefaults.putAll(fragment.lateBoundOptionDefaults());
     }
 
-    return TransitiveOptionDetails.forOptionsWithDefaults(
-        buildOptions.getOptions(), lateBoundDefaults);
+    ImmutableMap.Builder<String, OptionDetails> map = ImmutableMap.builder();
+    try {
+      for (FragmentOptions options : buildOptions.getOptions()) {
+        for (Field field : options.getClass().getFields()) {
+          if (field.isAnnotationPresent(Option.class)) {
+            Option option = field.getAnnotation(Option.class);
+            if (option.category().equals("internal")) {
+              // ignore internal options
+              continue;
+            }
+            Object value = field.get(options);
+            if (value == null) {
+              if (lateBoundDefaults.containsKey(option.name())) {
+                value = lateBoundDefaults.get(option.name());
+              } else if (!option.defaultValue().equals("null")) {
+                // See {@link Option#defaultValue} for an explanation of default "null" strings.
+                value = option.defaultValue();
+              }
+            }
+            map.put(option.name(),
+                new OptionDetails(options.getClass(), value, option.allowMultiple()));
+          }
+        }
+      }
+    } catch (IllegalAccessException e) {
+      throw new IllegalStateException(
+          "Unexpected illegal access trying to create this configuration's options map: ", e);
+    }
+    return map.build();
   }
 
   private String buildMnemonic() {
@@ -1952,7 +1981,8 @@ public final class BuildConfiguration {
     // from these transitions, since their *purpose* is to do computation on the owning
     // rule's configuration.
     // TODO(bazel-team): don't require special casing here. This is far too hackish.
-    if (toTarget instanceof Rule && ((Rule) toTarget).getRuleClassObject().isConfigMatcher()) {
+    if (toTarget instanceof Rule
+        && ((Rule) toTarget).getRuleClass().equals(ConfigRuleClasses.ConfigSettingRule.RULE_NAME)) {
       transitionApplier.applyTransition(Attribute.ConfigurationTransition.NONE); // Unnecessary.
       return;
     }
@@ -1983,6 +2013,44 @@ public final class BuildConfiguration {
   }
 
   /**
+   * Returns the {@link Option} class the defines the given option, null if the
+   * option isn't recognized.
+   *
+   * <p>optionName is the name of the option as it appears on the command line
+   * e.g. {@link Option#name}).
+   */
+  Class<? extends OptionsBase> getOptionClass(String optionName) {
+    OptionDetails optionData = transitiveOptionsMap.get(optionName);
+    return optionData == null ? null : optionData.optionsClass;
+  }
+
+  /**
+   * Returns the value of the specified option for this configuration or null if the
+   * option isn't recognized. Since an option's legitimate value could be null, use
+   * {@link #getOptionClass} to distinguish between that and an unknown option.
+   *
+   * <p>optionName is the name of the option as it appears on the command line
+   * e.g. {@link Option#name}).
+   */
+  Object getOptionValue(String optionName) {
+    OptionDetails optionData = transitiveOptionsMap.get(optionName);
+    return (optionData == null) ? null : optionData.value;
+  }
+
+  /**
+   * Returns whether or not the given option supports multiple values at the command line (e.g.
+   * "--myoption value1 --myOption value2 ..."). Returns false for unrecognized options. Use
+   * {@link #getOptionClass} to distinguish between those and legitimate single-value options.
+   *
+   * <p>As declared in {@link Option#allowMultiple}, multi-value options are expected to be
+   * of type {@code List<T>}.
+   */
+  boolean allowsMultipleValues(String optionName) {
+    OptionDetails optionData = transitiveOptionsMap.get(optionName);
+    return (optionData == null) ? false : optionData.allowsMultiple;
+  }
+
+  /**
    * The platform string, suitable for use as a key into a MakeEnvironment.
    */
   public String getPlatformName() {
@@ -1993,8 +2061,7 @@ public final class BuildConfiguration {
    * Returns the output directory for this build configuration.
    */
   public Root getOutputDirectory(RepositoryName repositoryName) {
-    return OutputDirectory.OUTPUT.getRoot(
-        repositoryName, outputDirName, directories, mainRepositoryName);
+    return OutputDirectory.OUTPUT.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2013,8 +2080,7 @@ public final class BuildConfiguration {
    * repositories (external) but will need to be fixed.
    */
   public Root getBinDirectory(RepositoryName repositoryName) {
-    return OutputDirectory.BIN.getRoot(
-        repositoryName, outputDirName, directories, mainRepositoryName);
+    return OutputDirectory.BIN.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2028,8 +2094,7 @@ public final class BuildConfiguration {
    * Returns the include directory for this build configuration.
    */
   public Root getIncludeDirectory(RepositoryName repositoryName) {
-    return OutputDirectory.INCLUDE.getRoot(
-        repositoryName, outputDirName, directories, mainRepositoryName);
+    return OutputDirectory.INCLUDE.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2042,8 +2107,7 @@ public final class BuildConfiguration {
   }
 
   public Root getGenfilesDirectory(RepositoryName repositoryName) {
-    return OutputDirectory.GENFILES.getRoot(
-        repositoryName, outputDirName, directories, mainRepositoryName);
+    return OutputDirectory.GENFILES.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2052,16 +2116,14 @@ public final class BuildConfiguration {
    * needed for Jacoco's coverage reporting tools.
    */
   public Root getCoverageMetadataDirectory(RepositoryName repositoryName) {
-    return OutputDirectory.COVERAGE.getRoot(
-        repositoryName, outputDirName, directories, mainRepositoryName);
+    return OutputDirectory.COVERAGE.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
    * Returns the testlogs directory for this build configuration.
    */
   public Root getTestLogsDirectory(RepositoryName repositoryName) {
-    return OutputDirectory.TESTLOGS.getRoot(
-        repositoryName, outputDirName, directories, mainRepositoryName);
+    return OutputDirectory.TESTLOGS.getRoot(repositoryName, outputDirName, directories);
   }
 
   /**
@@ -2088,8 +2150,7 @@ public final class BuildConfiguration {
    * Returns the internal directory (used for middlemen) for this build configuration.
    */
   public Root getMiddlemanDirectory(RepositoryName repositoryName) {
-    return OutputDirectory.MIDDLEMAN.getRoot(
-        repositoryName, outputDirName, directories, mainRepositoryName);
+    return OutputDirectory.MIDDLEMAN.getRoot(repositoryName, outputDirName, directories);
   }
 
   public boolean getAllowRuntimeDepsOnNeverLink() {
@@ -2102,10 +2163,6 @@ public final class BuildConfiguration {
 
   public List<Label> getPlugins() {
     return options.pluginList;
-  }
-
-  public String getMainRepositoryName() {
-    return mainRepositoryName;
   }
 
   /**

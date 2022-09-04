@@ -799,7 +799,8 @@ public abstract class AndroidBinary implements RuleConfiguredTargetFactory {
 
     androidCommon.addTransitiveInfoProviders(
         builder, androidSemantics, null /* aar */, resourceApk, zipAlignedApk, apksUnderTest);
-    androidSemantics.addTransitiveInfoProviders(builder, ruleContext, javaCommon, androidCommon);
+    androidSemantics.addTransitiveInfoProviders(
+        builder, ruleContext, javaCommon, androidCommon, jarToDex);
 
     if (proguardOutput.getMapping() != null) {
       builder.add(

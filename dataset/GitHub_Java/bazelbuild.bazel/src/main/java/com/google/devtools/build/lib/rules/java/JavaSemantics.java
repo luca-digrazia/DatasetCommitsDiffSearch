@@ -26,7 +26,6 @@ import com.google.devtools.build.lib.analysis.LanguageDependentFragment.LibraryL
 import com.google.devtools.build.lib.analysis.OutputGroupProvider;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.Runfiles;
 import com.google.devtools.build.lib.analysis.Runfiles.Builder;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
@@ -86,9 +85,6 @@ public interface JavaSemantics {
   SafeImplicitOutputsFunction JAVA_BINARY_DEPLOY_SOURCE_JAR =
       fromTemplates("%{name}_deploy-src.jar");
 
-  SafeImplicitOutputsFunction JAVA_TEST_CLASSPATHS_FILE =
-      fromTemplates("%{name}_classpaths_file");
-
   FileType JAVA_SOURCE = FileType.of(".java");
   FileType JAR = FileType.of(".jar");
   FileType PROPERTIES = FileType.of(".properties");
@@ -130,32 +126,35 @@ public interface JavaSemantics {
   String GENERATED_JARS_OUTPUT_GROUP =
       OutputGroupProvider.HIDDEN_OUTPUT_GROUP_PREFIX + "gen_jars";
 
-  /** Implementation for the :jvm attribute. */
-  static LateBoundLabel<BuildConfiguration> jvmAttribute(RuleDefinitionEnvironment env) {
-    return new LateBoundLabel<BuildConfiguration>(
-        env.getToolsLabel(JavaImplicitAttributes.JDK_LABEL), Jvm.class) {
-      @Override
-      public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-        return configuration.getFragment(Jvm.class).getJvmLabel();
-      }
-    };
-  }
 
-  /** Implementation for the :host_jdk attribute. */
-  static LateBoundLabel<BuildConfiguration> hostJdkAttribute(RuleDefinitionEnvironment env) {
-    return new LateBoundLabel<BuildConfiguration>(
-        env.getToolsLabel(JavaImplicitAttributes.JDK_LABEL), Jvm.class) {
-      @Override
-      public boolean useHostConfiguration() {
-        return true;
-      }
+  /**
+   * Implementation for the :jvm attribute.
+   */
+  LateBoundLabel<BuildConfiguration> JVM =
+      new LateBoundLabel<BuildConfiguration>(JavaImplicitAttributes.JDK_LABEL, Jvm.class) {
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
+          return configuration.getFragment(Jvm.class).getJvmLabel();
+        }
+      };
 
-      @Override
-      public Label resolve(Rule rule, AttributeMap attributes, BuildConfiguration configuration) {
-        return configuration.getFragment(Jvm.class).getJvmLabel();
-      }
-    };
-  }
+  /**
+   * Implementation for the :host_jdk attribute.
+   */
+  LateBoundLabel<BuildConfiguration> HOST_JDK =
+      new LateBoundLabel<BuildConfiguration>(JavaImplicitAttributes.JDK_LABEL, Jvm.class) {
+        @Override
+        public boolean useHostConfiguration() {
+          return true;
+        }
+
+        @Override
+        public Label resolve(Rule rule, AttributeMap attributes,
+            BuildConfiguration configuration) {
+          return configuration.getFragment(Jvm.class).getJvmLabel();
+        }
+      };
 
   /**
    * Implementation for the :java_launcher attribute. Note that the Java launcher is disabled by
@@ -295,13 +294,6 @@ public interface JavaSemantics {
       Artifact executable,
       String javaStartClass,
       String javaExecutable);
-
-  /**
-   * Optionally creates a file containing the relative classpaths within the runfiles tree. If
-   * {@link Optional#isPresent()}, then the caller should ensure the file appears in the runfiles.
-   */
-  Optional<Artifact> createClasspathsFile(RuleContext ruleContext, JavaCommon javaCommon)
-      throws InterruptedException;
 
   /**
    * Adds extra runfiles for a {@code java_binary} rule.

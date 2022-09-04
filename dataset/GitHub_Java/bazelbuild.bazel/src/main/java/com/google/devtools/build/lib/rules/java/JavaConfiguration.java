@@ -131,6 +131,7 @@ public final class JavaConfiguration extends Fragment {
   private final boolean useIjars;
   private final boolean useHeaderCompilation;
   private final boolean headerCompilationDirectClasspath;
+  private final boolean headerCompilationDirectClasspathFallbackError;
   private final boolean generateJavaDeps;
   private final boolean strictDepsJavaProtos;
   private final boolean enforceOneVersion;
@@ -145,8 +146,6 @@ public final class JavaConfiguration extends Fragment {
   private final JavaOptimizationMode javaOptimizationMode;
   private final ImmutableMap<String, Optional<Label>> bytecodeOptimizers;
   private final Label javaToolchain;
-  private final boolean explicitJavaTestDeps;
-  private final boolean experimentalTestRunner;
 
   // TODO(dmarting): remove once we have a proper solution for #2539
   private final boolean legacyBazelJavaTest;
@@ -163,6 +162,8 @@ public final class JavaConfiguration extends Fragment {
     this.useIjars = javaOptions.useIjars;
     this.useHeaderCompilation = javaOptions.headerCompilation;
     this.headerCompilationDirectClasspath = javaOptions.headerCompilationDirectClasspath;
+    this.headerCompilationDirectClasspathFallbackError =
+        javaOptions.headerCompilationDirectClasspathFallbackError;
     this.generateJavaDeps = generateJavaDeps;
     this.javaClasspath = javaOptions.javaClasspath;
     this.defaultJvmFlags = ImmutableList.copyOf(defaultJvmFlags);
@@ -176,8 +177,6 @@ public final class JavaConfiguration extends Fragment {
     this.legacyBazelJavaTest = javaOptions.legacyBazelJavaTest;
     this.strictDepsJavaProtos = javaOptions.strictDepsJavaProtos;
     this.enforceOneVersion = javaOptions.enforceOneVersion;
-    this.explicitJavaTestDeps = javaOptions.explicitJavaTestDeps;
-    this.experimentalTestRunner = javaOptions.experimentalTestRunner;
 
     ImmutableList.Builder<Label> translationsBuilder = ImmutableList.builder();
     for (String s : javaOptions.translationTargets) {
@@ -223,14 +222,6 @@ public final class JavaConfiguration extends Fragment {
     globalMakeEnvBuilder.put("JAVA_TRANSLATIONS", buildTranslations() ? "1" : "0");
   }
 
-  @Override
-  public boolean compatibleWithStrategy(String strategyName) {
-    if (strategyName.equals("experimental_worker")) {
-      return explicitJavaTestDeps() && useExperimentalTestRunner();
-    }
-    return true;
-  }
-
   /**
    * Returns true iff Java compilation should use ijars.
    */
@@ -246,6 +237,14 @@ public final class JavaConfiguration extends Fragment {
   /** Returns true if header compilations should use direct dependencies only. */
   public boolean headerCompilationDirectClasspath() {
     return headerCompilationDirectClasspath;
+  }
+
+  /**
+   * Returns true if transitive classpath fallback should be an error when {@link
+   * #headerCompilationDirectClasspath} is enabled.
+   */
+  public boolean headerCompilationDirectClasspathFallbackError() {
+    return headerCompilationDirectClasspathFallbackError;
   }
 
   /**
@@ -354,22 +353,6 @@ public final class JavaConfiguration extends Fragment {
    */
   public boolean useLegacyBazelJavaTest() {
     return legacyBazelJavaTest;
-  }
-
-  /**
-   * Returns true if we should be the ExperimentalTestRunner instead of the BazelTestRunner for
-   * bazel's java_test runs.
-   */
-  public boolean useExperimentalTestRunner() {
-    return experimentalTestRunner;
-  }
-
-  /**
-   * Make it mandatory for java_test targets to explicitly declare any JUnit or Hamcrest
-   * dependencies instead of accidentally obtaining them from the TestRunner's dependencies.
-   */
-  public boolean explicitJavaTestDeps() {
-    return explicitJavaTestDeps;
   }
 
   /**
