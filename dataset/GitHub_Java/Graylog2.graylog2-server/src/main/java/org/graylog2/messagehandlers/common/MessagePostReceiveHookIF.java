@@ -30,6 +30,6 @@ public interface MessagePostReceiveHookIF {
     /**
      * Process the hook.
      */
-    public void process(Object payload);
+    public void process();
 
 }

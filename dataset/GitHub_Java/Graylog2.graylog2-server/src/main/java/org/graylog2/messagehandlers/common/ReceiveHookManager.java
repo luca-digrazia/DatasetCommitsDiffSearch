@@ -28,9 +28,6 @@ package org.graylog2.messagehandlers.common;
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
 public class ReceiveHookManager {
-
-    private ReceiveHookManager() { }
-
     /**
      * @param hook The hook to call.
      */

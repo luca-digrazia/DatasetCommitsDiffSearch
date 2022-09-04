@@ -32,7 +32,7 @@ public class MessageCounterHook implements MessagePostReceiveHookIF {
     /**
      * Process the hook.
      */
-    public void process(Object message) {
+    public void process() {
         MessageCounter.getInstance().countUp(MessageCounter.ALL_HOSTS);
     }
 }

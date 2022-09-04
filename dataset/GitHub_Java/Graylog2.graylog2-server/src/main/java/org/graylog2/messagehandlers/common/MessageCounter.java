@@ -27,7 +27,7 @@ package org.graylog2.messagehandlers.common;
  *
  * @author: Lennart Koopmann <lennart@socketfeed.com>
  */
-public final class MessageCounter {
+public class MessageCounter {
     private static MessageCounter INSTANCE;
 
     /**
