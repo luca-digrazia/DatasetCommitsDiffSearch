@@ -1216,7 +1216,10 @@ public final class BuildOptions implements Cloneable, Serializable {
 
     @Override
     public void prime(OptionsDiffForReconstruction optionsDiff) {
-      map.putIfAbsent(optionsDiff.getChecksum(), optionsDiff);
+      // Avoid the lock-acquiring overhead of put() if it's already present.
+      if (!map.containsKey(optionsDiff.getChecksum())) {
+        map.put(optionsDiff.getChecksum(), optionsDiff);
+      }
     }
   }
 }
