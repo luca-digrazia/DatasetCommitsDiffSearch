@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.bazel.rules.cpp.BazelCcLibraryRule;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCcTestRule;
 import com.google.devtools.build.lib.bazel.rules.cpp.BazelCppRuleClasses;
 import com.google.devtools.build.lib.rules.core.CoreRules;
-import com.google.devtools.build.lib.rules.cpp.CcHostToolchainAliasRule;
 import com.google.devtools.build.lib.rules.cpp.CcImportRule;
 import com.google.devtools.build.lib.rules.cpp.CcModule;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainAliasRule;
@@ -57,7 +56,6 @@ public class CcRules implements RuleSet {
     builder.addRuleDefinition(new CcToolchainRule());
     builder.addRuleDefinition(new CcToolchainSuiteRule());
     builder.addRuleDefinition(new CcToolchainAliasRule());
-    builder.addRuleDefinition(new CcHostToolchainAliasRule());
     builder.addRuleDefinition(new CcImportRule());
     builder.addRuleDefinition(new CcToolchainTypeRule());
     builder.addRuleDefinition(new BazelCppRuleClasses.CcLinkingRule());
