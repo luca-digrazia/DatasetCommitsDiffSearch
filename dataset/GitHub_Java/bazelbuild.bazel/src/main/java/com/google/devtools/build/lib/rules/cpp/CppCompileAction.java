@@ -519,11 +519,7 @@ public class CppCompileAction extends AbstractAction
           findUsedHeaders(
               actionExecutionContext,
               ccCompilationContext
-                  .createIncludeScanningHeaderData(
-                      actionExecutionContext.getEnvironmentForDiscoveringInputs(),
-                      usePic,
-                      useHeaderModules,
-                      headerInfo)
+                  .createIncludeScanningHeaderData(usePic, useHeaderModules, headerInfo)
                   .setSystemIncludeDirs(systemIncludeDirs)
                   .setCmdlineIncludes(getCmdlineIncludes(options))
                   .build());
@@ -673,11 +669,6 @@ public class CppCompileAction extends AbstractAction
       }
     }
     return result.build();
-  }
-
-  @Override
-  public ImmutableList<PathFragment> getFrameworkIncludeDirs() {
-    return ccCompilationContext.getFrameworkIncludeDirs();
   }
 
   @VisibleForTesting
@@ -1481,10 +1472,7 @@ public class CppCompileAction extends AbstractAction
               actionExecutionContext,
               ccCompilationContext
                   .createIncludeScanningHeaderData(
-                      actionExecutionContext.getEnvironmentForDiscoveringInputs(),
-                      usePic,
-                      useHeaderModules,
-                      ccCompilationContext.getTransitiveHeaderInfos())
+                      usePic, useHeaderModules, ccCompilationContext.getTransitiveHeaderInfos())
                   .setSystemIncludeDirs(getSystemIncludeDirs())
                   .setCmdlineIncludes(getCmdlineIncludes(getCompilerOptions()))
                   .build());
