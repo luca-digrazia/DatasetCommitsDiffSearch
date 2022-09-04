@@ -1,5 +1,5 @@
 /**
- * Copyright (C) 2010-2014 eBusiness Information, Excilys Group
+ * Copyright (C) 2010-2013 eBusiness Information, Excilys Group
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not
  * use this file except in compliance with the License. You may obtain a copy of
@@ -17,22 +17,13 @@ package org.androidannotations.test15.prefs;
 
 import static org.fest.assertions.Assertions.assertThat;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Set;
-import java.util.TreeSet;
-
-import org.androidannotations.api.sharedpreferences.SetXmlSerializer;
-import org.androidannotations.test15.AndroidAnnotationsTestRunner;
-import org.androidannotations.test15.R;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.xtremelabs.robolectric.Robolectric;
-import com.xtremelabs.robolectric.shadows.ShadowXml;
-
 import android.content.SharedPreferences;
+
+import org.androidannotations.test15.AndroidAnnotationsTestRunner;
 
 @RunWith(AndroidAnnotationsTestRunner.class)
 public class PrefsActivityTest {
@@ -48,7 +39,6 @@ public class PrefsActivityTest {
 		activity.onCreate(null);
 		somePrefs = activity.somePrefs;
 		sharedPref = somePrefs.getSharedPreferences();
-		Robolectric.bindShadowClass(ShadowXml.class);
 	}
 
 	@Test
@@ -59,6 +49,11 @@ public class PrefsActivityTest {
 	@Test
 	public void sharedPrefsNotNull() {
 		assertThat(sharedPref).isNotNull();
+	}
+
+	@Test
+	public void innerPrefsNotNull() {
+		assertThat(activity.innerPrefs).isNotNull();
 	}
 
 	@Test
@@ -78,20 +73,6 @@ public class PrefsActivityTest {
 		long now = System.currentTimeMillis();
 		somePrefs.lastUpdated().put(now);
 		assertThat(sharedPref.getLong("lastUpdated", 0)).isEqualTo(now);
-	}
-
-	@Test
-	public void putStringSet() {
-		Set<String> values = new TreeSet<String>(Arrays.asList("1", "2", "3"));
-		
-		somePrefs.types().put(values);
-		assertThat(SetXmlSerializer.deserialize(sharedPref.getString("types", null))).isEqualTo(values);
-	}
-	
-	@Test
-	public void putNullSet() {
-		somePrefs.types().put(null);
-		assertThat(SetXmlSerializer.deserialize(sharedPref.getString("types", null))).isEqualTo(Collections.emptySet());
 	}
 
 	@Test
@@ -173,15 +154,6 @@ public class PrefsActivityTest {
 	}
 
 	@Test
-	public void getStringSet() {
-		Set<String> values = new TreeSet<String>(Arrays.asList("1", "2", "3"));
-		sharedPref.edit().putString("types", SetXmlSerializer.serialize(values)).commit();
-		
-		Set<String> set = somePrefs.types().get();
-		assertThat(values).isEqualTo(set);
-	}
-
-	@Test
 	public void defaultValue() {
 		assertThat(somePrefs.name().get()).isEqualTo("John");
 	}
@@ -199,9 +171,4 @@ public class PrefsActivityTest {
 		assertThat(sharedPref.contains("name")).isFalse();
 	}
 
-	@Test
-	public void stringResourcePrefKey() {
-		somePrefs.stringResKeyPref().put(88);
-		assertThat(sharedPref.getInt(activity.getString(R.string.prefStringKey), 0)).isEqualTo(88);
-	}
 }
