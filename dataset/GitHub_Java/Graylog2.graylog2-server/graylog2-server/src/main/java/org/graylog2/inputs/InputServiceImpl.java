@@ -288,6 +288,8 @@ public class InputServiceImpl extends PersistedServiceImpl implements InputServi
         // Add static fields.
         input.addStaticFields(io.getStaticFields());
 
+        input.setConfiguration(configuration);
+
         return input;
     }
 }

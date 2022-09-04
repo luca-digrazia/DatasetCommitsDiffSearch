@@ -41,7 +41,6 @@ import org.graylog2.rest.resources.system.inputs.responses.InputStateSummary;
 import org.graylog2.rest.resources.system.inputs.responses.InputSummary;
 import org.graylog2.rest.resources.system.inputs.responses.InputsList;
 import org.graylog2.security.RestPermissions;
-import org.graylog2.shared.inputs.InputLauncher;
 import org.graylog2.shared.inputs.InputRegistry;
 import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
@@ -81,19 +80,13 @@ public class InputsResource extends RestResource {
     private final InputRegistry inputRegistry;
     private final ActivityWriter activityWriter;
     private final MessageInputFactory messageInputFactory;
-    private final InputLauncher inputLauncher;
 
     @Inject
-    public InputsResource(InputService inputService,
-                          InputRegistry inputRegistry,
-                          ActivityWriter activityWriter,
-                          MessageInputFactory messageInputFactory,
-                          InputLauncher inputLauncher) {
+    public InputsResource(InputService inputService, InputRegistry inputRegistry, ActivityWriter activityWriter, MessageInputFactory messageInputFactory) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.activityWriter = activityWriter;
         this.messageInputFactory = messageInputFactory;
-        this.inputLauncher = inputLauncher;
     }
 
     @GET
@@ -212,7 +205,7 @@ public class InputsResource extends RestResource {
         input.initialize();
 
         // Launch input. (this will run async and clean up itself in case of an error.)
-        inputLauncher.launch(input, inputId);
+        inputRegistry.launch(input, inputId);
 
         final URI inputUri = UriBuilder.fromResource(InputsResource.class)
                 .path("{inputId}")
@@ -265,7 +258,7 @@ public class InputsResource extends RestResource {
         LOG.info(msg);
         activityWriter.write(new Activity(msg, InputsResource.class));
 
-        inputRegistry.remove(messageInput);
+        inputRegistry.terminate(messageInput);
 
         if (serverStatus.hasCapability(ServerStatus.Capability.MASTER) || !messageInput.isGlobal()) {
             // Remove from list and mongo.
@@ -318,9 +311,9 @@ public class InputsResource extends RestResource {
         activityWriter.write(new Activity(msg, InputsResource.class));
 
         if (inputState == null) {
-            inputLauncher.launchPersisted(messageInput);
+            inputRegistry.launchPersisted(messageInput);
         } else {
-            inputLauncher.launch(inputState);
+            inputRegistry.launch(inputState);
         }
 
         final String msg2 = "Launched existing input [" + messageInput.getName() + "]. Reason: REST request.";
