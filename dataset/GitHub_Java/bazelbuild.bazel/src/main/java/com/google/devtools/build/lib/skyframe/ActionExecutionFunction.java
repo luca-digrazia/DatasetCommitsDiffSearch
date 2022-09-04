@@ -678,7 +678,7 @@ public class ActionExecutionFunction implements SkyFunction, CompletionReceiver 
       }
 
       ImmutableList<FilesetOutputSymlink> mapping =
-          ActionInputMapHelper.getFilesets(env, (Artifact.SpecialArtifact) actionInput);
+          ActionInputMapHelper.getFilesets(env, actionInput);
       if (mapping == null) {
         return null;
       }
