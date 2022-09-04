@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.util.concurrent.ListeningScheduledExecutorService;
 import com.google.devtools.build.lib.actions.ActionGraph;
 import com.google.devtools.build.lib.actions.ActionInput;
+import com.google.devtools.build.lib.actions.ExecutorInitException;
 import com.google.devtools.build.lib.analysis.ArtifactsToOwnerLabels;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.ExecutorLifecycleListener;
@@ -111,16 +112,20 @@ final class RemoteActionContextProvider implements ExecutorLifecycleListener {
   }
 
   /**
-   * Registers a spawn cache action context
+   * Registers a spawn cache action context if this instance was created without an executor,
+   * otherwise does nothing.
    *
    * @param registryBuilder builder with which to register the cache
    */
-  public void registerSpawnCache(ModuleActionContextRegistry.Builder registryBuilder) {
+  public void registerSpawnCacheIfApplicable(ModuleActionContextRegistry.Builder registryBuilder) {
+    if (executor != null) {
+      return; // No need to register cache if we're using a remote executor.
+    }
+
     RemoteSpawnCache spawnCache =
         new RemoteSpawnCache(
             env.getExecRoot(),
             checkNotNull(env.getOptions().getOptions(RemoteOptions.class)),
-            checkNotNull(env.getOptions().getOptions(ExecutionOptions.class)).verboseFailures,
             cache,
             env.getBuildRequestId(),
             env.getCommandId().toString(),
@@ -140,11 +145,12 @@ final class RemoteActionContextProvider implements ExecutorLifecycleListener {
   }
 
   @Override
-  public void executorCreated() {}
+  public void executorCreated() throws ExecutorInitException {}
 
   @Override
   public void executionPhaseStarting(
-      ActionGraph actionGraph, Supplier<ArtifactsToOwnerLabels> topLevelArtifactsToOwnerLabels) {}
+      ActionGraph actionGraph, Supplier<ArtifactsToOwnerLabels> topLevelArtifactsToOwnerLabels)
+      throws ExecutorInitException, InterruptedException {}
 
   @Override
   public void executionPhaseEnding() {
