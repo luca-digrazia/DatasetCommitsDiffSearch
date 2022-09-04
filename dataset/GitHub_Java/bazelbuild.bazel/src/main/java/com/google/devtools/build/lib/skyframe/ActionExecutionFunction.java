@@ -291,10 +291,6 @@ public class ActionExecutionFunction implements SkyFunction {
     }
 
     long actionStartTime = BlazeClock.nanoTime();
-    long attemptStartTime = actionStartTime;
-    if (state.actionStartNanos != 0) {
-      actionStartTime = state.actionStartNanos;
-    }
     ActionExecutionValue result;
     try {
       result =
@@ -306,8 +302,7 @@ public class ActionExecutionFunction implements SkyFunction {
               actionLookupData,
               previousExecution,
               skyframeDepsResult,
-              actionStartTime,
-              attemptStartTime);
+              actionStartTime);
     } catch (LostInputsActionExecutionException e) {
       return handleLostInputs(
           e, actionLookupData, action, actionStartTime, env, inputDeps, allInputs, state);
@@ -725,8 +720,7 @@ public class ActionExecutionFunction implements SkyFunction {
       ActionLookupData actionLookupData,
       @Nullable ActionExecutionState previousAction,
       Object skyframeDepsResult,
-      long actionStartTime,
-      long attemptStartTime)
+      long actionStartTime)
       throws ActionExecutionException, InterruptedException {
     if (previousAction != null) {
       // There are two cases where we can already have an executing action for a specific output:
@@ -831,12 +825,9 @@ public class ActionExecutionFunction implements SkyFunction {
                 action,
                 /*catastrophe=*/ false);
           } finally {
-            if (state.discoveredInputsDuration.isZero()) {
-              state.actionStartNanos = actionStartTime;
-            }
             state.discoveredInputsDuration =
                 state.discoveredInputsDuration.plus(
-                    Duration.ofNanos(BlazeClock.nanoTime() - attemptStartTime));
+                    Duration.ofNanos(BlazeClock.nanoTime() - actionStartTime));
           }
           Preconditions.checkState(
               env.valuesMissing() == (state.discoveredInputs == null),
@@ -1357,7 +1348,6 @@ public class ActionExecutionFunction implements SkyFunction {
     NestedSet<Artifact> discoveredInputs = null;
     FileSystem actionFileSystem = null;
     Duration discoveredInputsDuration = Duration.ZERO;
-    long actionStartNanos = 0;
 
     /**
      * Stores the ArtifactNestedSetKeys created from the inputs of this actions. Objective: avoid
