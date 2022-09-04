@@ -63,7 +63,6 @@ import io.quarkus.runtime.ObjectSubstitution;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.StartupContext;
 import io.quarkus.runtime.StartupTask;
-import io.quarkus.runtime.annotations.IgnoreProperty;
 import io.quarkus.runtime.annotations.RecordableConstructor;
 import io.quarkus.runtime.annotations.RelaxedValidation;
 
@@ -1107,9 +1106,7 @@ public class BytecodeRecorderImpl implements RecorderContext {
         if (param instanceof Collection) {
             //if this is a collection we want to serialize every element
             for (Object i : (Collection) param) {
-                DeferredParameter val = i != null
-                        ? loadObjectInstance(i, existing, i.getClass(), relaxedValidation)
-                        : loadObjectInstance(null, existing, Object.class, relaxedValidation);
+                DeferredParameter val = loadObjectInstance(i, existing, i.getClass(), relaxedValidation);
                 setupSteps.add(new SerialzationStep() {
                     @Override
                     public void handle(MethodContext context, MethodCreator method, DeferredArrayStoreParameter out) {
@@ -1188,18 +1185,6 @@ public class BytecodeRecorderImpl implements RecorderContext {
         Set<String> handledProperties = new HashSet<>();
         Property[] desc = PropertyUtils.getPropertyDescriptors(param);
         for (Property i : desc) {
-            // check if the getter is ignored
-            if ((i.getReadMethod() != null) && (i.getReadMethod().getAnnotation(IgnoreProperty.class) != null)) {
-                continue;
-            }
-            // check if the matching field is ignored
-            try {
-                if (param.getClass().getDeclaredField(i.getName()).getAnnotation(IgnoreProperty.class) != null) {
-                    continue;
-                }
-            } catch (NoSuchFieldException ignored) {
-
-            }
             Integer ctorParamIndex = constructorParamNameMap.remove(i.name);
             if (i.getReadMethod() != null && i.getWriteMethod() == null && ctorParamIndex == null) {
                 try {
@@ -1286,8 +1271,8 @@ public class BytecodeRecorderImpl implements RecorderContext {
                         //check if there is actually a field with the name
                         try {
                             i.getReadMethod().getDeclaringClass().getDeclaredField(i.getName());
-                            throw new RuntimeException("Cannot serialise field '" + i.getName() + "' on object '" + param
-                                    + "' as the property is read only");
+                            throw new RuntimeException("Cannot serialise field " + i.getName() + " on object " + param
+                                    + " as the property is read only");
                         } catch (NoSuchFieldException e) {
                             //if there is no underlying field then we ignore the property
                         }
@@ -1372,10 +1357,6 @@ public class BytecodeRecorderImpl implements RecorderContext {
 
         //now handle accessible fields
         for (Field field : param.getClass().getFields()) {
-            // check if the field is ignored
-            if (field.getAnnotation(IgnoreProperty.class) != null) {
-                continue;
-            }
             if (!handledProperties.contains(field.getName())) {
                 Integer ctorParamIndex = constructorParamNameMap.remove(field.getName());
                 if ((ctorParamIndex != null || !Modifier.isFinal(field.getModifiers())) &&
