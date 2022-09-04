@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.ShToolchain;
 import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
@@ -655,11 +654,10 @@ public class SkylarkActionFactory implements SkylarkValue {
       Artifact helperScript =
           CommandHelper.shellCommandHelperScriptMaybe(
               ruleContext, command, helperScriptSuffix, executionInfo);
-      PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
       if (helperScript == null) {
-        builder.setShellCommand(shExecutable, command);
+        builder.setShellCommand(command);
       } else {
-        builder.setShellCommand(shExecutable, helperScript.getExecPathString());
+        builder.setShellCommand(helperScript.getExecPathString());
         builder.addInput(helperScript);
         FilesToRunProvider provider = context.getExecutableRunfiles(helperScript);
         if (provider != null) {
