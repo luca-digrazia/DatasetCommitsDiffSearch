@@ -16,7 +16,6 @@ package com.google.devtools.build.lib.bazel.repository.skylark;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Ascii;
-import com.google.common.base.Joiner;
 import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
@@ -48,6 +47,7 @@ import com.google.devtools.build.lib.rules.repository.WorkspaceAttributeMapper;
 import com.google.devtools.build.lib.runtime.ProcessWrapperUtil;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor;
 import com.google.devtools.build.lib.runtime.RepositoryRemoteExecutor.ExecutionResult;
+import com.google.devtools.build.lib.skyframe.PrecomputedValue;
 import com.google.devtools.build.lib.skylarkbuildapi.repository.SkylarkRepositoryContextApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -90,12 +90,6 @@ import javax.annotation.Nullable;
 /** Skylark API for the repository_rule's context. */
 public class SkylarkRepositoryContext
     implements SkylarkRepositoryContextApi<RepositoryFunctionException> {
-  private static final ImmutableList<String> WHITELISTED_REPOS_FOR_FLAG_ENABLED =
-      ImmutableList.of("@rules_cc", "@bazel_tools");
-  private static final ImmutableList<String> WHITELISTED_PATHS_FOR_FLAG_ENABLED =
-      ImmutableList.of(
-          "rules_cc/cc/private/toolchain/unix_cc_configure.bzl",
-          "bazel_tools/tools/cpp/unix_cc_configure.bzl");
 
   private final Rule rule;
   private final PathPackageLocator packageLocator;
@@ -642,6 +636,7 @@ public class SkylarkRepositoryContext
         getUrls(
             url,
             /* ensureNonEmpty= */ !allowFail,
+            env,
             /* checksumGiven= */ !Strings.isNullOrEmpty(sha256)
                 || !Strings.isNullOrEmpty(integrity));
     Optional<Checksum> checksum;
@@ -757,6 +752,7 @@ public class SkylarkRepositoryContext
         getUrls(
             url,
             /* ensureNonEmpty= */ !allowFail,
+            env,
             /* checksumGiven= */ !Strings.isNullOrEmpty(sha256)
                 || !Strings.isNullOrEmpty(integrity));
     Optional<Checksum> checksum;
@@ -845,21 +841,6 @@ public class SkylarkRepositoryContext
     return downloadResult;
   }
 
-  @Override
-  public boolean flagEnabled(String flag, StarlarkThread starlarkThread) throws EvalException {
-    try {
-      if (WHITELISTED_PATHS_FOR_FLAG_ENABLED.stream()
-          .noneMatch(x -> !starlarkThread.getCallerLocation().toString().endsWith(x))) {
-        throw Starlark.errorf(
-            "flag_enabled() is restricted to: '%s'.",
-            Joiner.on(", ").join(WHITELISTED_REPOS_FOR_FLAG_ENABLED));
-      }
-      return starlarkSemantics.flagValue(flag);
-    } catch (IllegalArgumentException e) {
-      throw Starlark.errorf("Can't query value of '%s'.\n%s", flag, e.getMessage());
-    }
-  }
-
   private Checksum calculateChecksum(Optional<Checksum> originalChecksum, Path path)
       throws IOException, InterruptedException {
     if (originalChecksum.isPresent()) {
@@ -944,7 +925,8 @@ public class SkylarkRepositoryContext
     return result.build();
   }
 
-  private static List<URL> getUrls(Object urlOrList, boolean ensureNonEmpty, boolean checksumGiven)
+  private static List<URL> getUrls(
+      Object urlOrList, boolean ensureNonEmpty, Environment env, boolean checksumGiven)
       throws RepositoryFunctionException, EvalException, InterruptedException {
     List<String> urlStrings;
     if (urlOrList instanceof String) {
@@ -955,6 +937,7 @@ public class SkylarkRepositoryContext
     if (ensureNonEmpty && urlStrings.isEmpty()) {
       throw new RepositoryFunctionException(new IOException("urls not set"), Transience.PERSISTENT);
     }
+    StarlarkSemantics semantics = PrecomputedValue.STARLARK_SEMANTICS.get(env);
     List<URL> urls = new ArrayList<>();
     for (String urlString : urlStrings) {
       URL url;
@@ -968,7 +951,7 @@ public class SkylarkRepositoryContext
         throw new RepositoryFunctionException(
             new IOException("Unsupported protocol: " + url.getProtocol()), Transience.PERSISTENT);
       }
-      if (!checksumGiven) {
+      if (semantics.incompatibleDisallowUnverifiedHttpDownloads() && !checksumGiven) {
         if (!Ascii.equalsIgnoreCase("http", url.getProtocol())) {
           urls.add(url);
         }

@@ -26,7 +26,7 @@ import javax.annotation.Nullable;
 @Immutable
 public class ApkInfo extends NativeInfo implements ApkInfoApi<Artifact> {
 
-  private static final String STARLARK_NAME = "ApkInfo";
+  private static final String SKYLARK_NAME = "ApkInfo";
 
   /**
    * Provider instance for {@link ApkInfo}.
@@ -88,7 +88,7 @@ public class ApkInfo extends NativeInfo implements ApkInfoApi<Artifact> {
       implements ApkInfoApiProvider {
 
     private ApkInfoProvider() {
-      super(STARLARK_NAME, ApkInfo.class);
+      super(SKYLARK_NAME, ApkInfo.class);
     }
 
     @Override

@@ -16,14 +16,14 @@ package com.google.devtools.build.lib.syntax;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Arrays;
 import javax.annotation.Nullable;
-import net.starlark.java.annot.StarlarkMethod;
 
 /**
- * A value class to store Methods with their corresponding {@link StarlarkMethod} annotation
+ * A value class to store Methods with their corresponding {@link SkylarkCallable} annotation
  * metadata. This is needed because the annotation is sometimes in a superclass.
  *
  * <p>The annotation metadata is duplicated in this class to avoid usage of Java dynamic proxies
@@ -31,7 +31,7 @@ import net.starlark.java.annot.StarlarkMethod;
  */
 final class MethodDescriptor {
   private final Method method;
-  private final StarlarkMethod annotation;
+  private final SkylarkCallable annotation;
 
   private final String name;
   private final String doc;
@@ -47,7 +47,7 @@ final class MethodDescriptor {
 
   private MethodDescriptor(
       Method method,
-      StarlarkMethod annotation,
+      SkylarkCallable annotation,
       String name,
       String doc,
       boolean documented,
@@ -74,14 +74,14 @@ final class MethodDescriptor {
     this.useStarlarkSemantics = useStarlarkSemantics;
   }
 
-  /** Returns the StarlarkMethod annotation corresponding to this method. */
-  StarlarkMethod getAnnotation() {
+  /** Returns the SkylarkCallable annotation corresponding to this method. */
+  SkylarkCallable getAnnotation() {
     return annotation;
   }
 
-  /** @return Starlark method descriptor for provided Java method and signature annotation. */
+  /** @return Skylark method descriptor for provided Java method and signature annotation. */
   static MethodDescriptor of(
-      Method method, StarlarkMethod annotation, StarlarkSemantics semantics) {
+      Method method, SkylarkCallable annotation, StarlarkSemantics semantics) {
     // This happens when the interface is public but the implementation classes
     // have reduced visibility.
     method.setAccessible(true);
@@ -129,24 +129,8 @@ final class MethodDescriptor {
     try {
       result = method.invoke(obj, args);
     } catch (IllegalAccessException ex) {
-      // "Can't happen": the annotated processor ensures that annotated methods are accessible.
+      // The annotated processor ensures that annotated methods are accessible.
       throw new IllegalStateException(ex);
-
-    } catch (IllegalArgumentException ex) {
-      // "Can't happen": unexpected type mismatch.
-      // Show details to aid debugging (see e.g. b/162444744).
-      StringBuilder buf = new StringBuilder();
-      buf.append(
-          String.format(
-              "IllegalArgumentException (%s) in Starlark call of %s, obj=%s (%s), args=[",
-              ex.getMessage(), method, Starlark.repr(obj), Starlark.type(obj)));
-      String sep = "";
-      for (Object arg : args) {
-        buf.append(String.format("%s%s (%s)", sep, Starlark.repr(arg), Starlark.type(arg)));
-        sep = ", ";
-      }
-      buf.append(']');
-      throw new IllegalArgumentException(buf.toString());
 
     } catch (InvocationTargetException ex) {
       Throwable e = ex.getCause();
@@ -182,7 +166,7 @@ final class MethodDescriptor {
     return Starlark.fromJava(result, mu);
   }
 
-  /** @see StarlarkMethod#name() */
+  /** @see SkylarkCallable#name() */
   String getName() {
     return name;
   }
@@ -191,22 +175,22 @@ final class MethodDescriptor {
     return method;
   }
 
-  /** @see StarlarkMethod#structField() */
+  /** @see SkylarkCallable#structField() */
   boolean isStructField() {
     return structField;
   }
 
-  /** @see StarlarkMethod#useStarlarkThread() */
+  /** @see SkylarkCallable#useStarlarkThread() */
   boolean isUseStarlarkThread() {
     return useStarlarkThread;
   }
 
-  /** @see StarlarkMethod#useStarlarkSemantics() */
+  /** @see SkylarkCallable#useStarlarkSemantics() */
   boolean isUseStarlarkSemantics() {
     return useStarlarkSemantics;
   }
 
-  /** @see StarlarkMethod#allowReturnNones() */
+  /** @see SkylarkCallable#allowReturnNones() */
   boolean isAllowReturnNones() {
     return allowReturnNones;
   }
@@ -216,12 +200,12 @@ final class MethodDescriptor {
     return extraPositionals;
   }
 
-  /** @see StarlarkMethod#extraKeywords() */
+  /** @see SkylarkCallable#extraKeywords() */
   boolean acceptsExtraKwargs() {
     return extraKeywords;
   }
 
-  /** @see StarlarkMethod#parameters() */
+  /** @see SkylarkCallable#parameters() */
   ParamDescriptor[] getParameters() {
     return parameters;
   }
@@ -236,17 +220,17 @@ final class MethodDescriptor {
     return -1;
   }
 
-  /** @see StarlarkMethod#documented() */
+  /** @see SkylarkCallable#documented() */
   boolean isDocumented() {
     return documented;
   }
 
-  /** @see StarlarkMethod#doc() */
+  /** @see SkylarkCallable#doc() */
   String getDoc() {
     return doc;
   }
 
-  /** @see StarlarkMethod#selfCall() */
+  /** @see SkylarkCallable#selfCall() */
   boolean isSelfCall() {
     return selfCall;
   }

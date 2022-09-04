@@ -32,7 +32,6 @@ import com.google.devtools.build.lib.packages.RuleFactory.InvalidRuleException;
 import com.google.devtools.build.lib.skylarkbuildapi.WorkspaceGlobalsApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.NoneType;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
@@ -236,8 +235,7 @@ public class WorkspaceGlobals implements WorkspaceGlobalsApi {
 
   private static List<String> renamePatterns(
       List<String> patterns, Package.Builder builder, StarlarkThread thread) {
-    RepositoryName myName =
-        getRepositoryName((Label) Module.ofInnermostEnclosingStarlarkFunction(thread).getLabel());
+    RepositoryName myName = getRepositoryName((Label) thread.getGlobals().getLabel());
     Map<RepositoryName, RepositoryName> renaming = builder.getRepositoryMappingFor(myName);
     return patterns.stream()
         .map(patternEntry -> TargetPattern.renameRepository(patternEntry, renaming))

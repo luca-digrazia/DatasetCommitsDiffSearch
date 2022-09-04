@@ -655,7 +655,6 @@ public interface CcModuleApi<
             positional = false,
             named = true,
             enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_CC_SHARED_LIBRARY,
-            noneable = true,
             valueWhenDisabled = "None",
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Depset.class)}),
         @Param(

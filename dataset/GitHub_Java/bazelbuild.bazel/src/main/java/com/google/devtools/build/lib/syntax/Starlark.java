@@ -18,11 +18,9 @@ import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkInterfaceUtils;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.util.Pair;
 import com.google.errorprone.annotations.CheckReturnValue;
 import com.google.errorprone.annotations.FormatMethod;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -145,28 +143,12 @@ public final class Starlark {
   }
 
   /**
-   * Checks whether the Freezable Starlark value is frozen or temporarily immutable due to active
-   * iterators.
-   *
-   * @throws EvalException if the value is not mutable.
-   */
-  public static void checkMutable(Mutability.Freezable x) throws EvalException {
-    if (x.mutability().isFrozen()) {
-      throw Starlark.errorf("trying to mutate a frozen %s value", Starlark.type(x));
-    }
-    if (x.updateIteratorCount(0)) {
-      throw Starlark.errorf(
-          "%s value is temporarily immutable due to active for-loop iteration", Starlark.type(x));
-    }
-  }
-
-  /**
    * Returns an iterable view of {@code x} if it is an iterable Starlark value; throws EvalException
    * otherwise.
    *
-   * <p>Whereas the interpreter temporarily freezes the iterable value by bracketing {@code for}
-   * loops and comprehensions in calls to {@link Freezable#updateIteratorCount}, iteration using
-   * this method does not freeze the value. Callers should exercise care not to mutate the
+   * <p>Whereas the interpreter temporarily freezes the iterable value using {@link EvalUtils#lock}
+   * and {@link EvalUtils#unlock} while iterating in {@code for} loops and comprehensions, iteration
+   * using this method does not freeze the value. Callers should exercise care not to mutate the
    * underlying object during iteration.
    */
   public static Iterable<?> toIterable(Object x) throws EvalException {
@@ -502,7 +484,7 @@ public final class Starlark {
    */
   public static Module exec(
       StarlarkThread thread, ParserInput input, Map<String, Object> predeclared)
-      throws SyntaxError.Exception, EvalException, InterruptedException {
+      throws SyntaxError, EvalException, InterruptedException {
     // Pseudocode:
     // file = StarlarkFile.parse(input)
     // validateFile(file, predeclared.keys, thread.semantics)
@@ -520,7 +502,7 @@ public final class Starlark {
    * exception.
    */
   public static Object eval(StarlarkThread thread, ParserInput input, Map<String, Object> env)
-      throws SyntaxError.Exception, EvalException, InterruptedException {
+      throws SyntaxError, EvalException, InterruptedException {
     // Pseudocode:
     // StarlarkFunction fn = exprFunc(input, env, thread.semantics)
     // return call(thread, fn)
@@ -532,9 +514,8 @@ public final class Starlark {
    * it. If the final statement is an expression, return its value.
    *
    * <p>This complicated function, which combines exec and eval, is intended for use in a REPL or
-   * debugger. In case of parse of validation error, it throws SyntaxError.Exception. In case of
-   * execution error, the function returns partial results: the incomplete module plus the
-   * exception.
+   * debugger. In case of parse of validation error, it throws SyntaxError. In case of execution
+   * error, the function returns partial results: the incomplete module plus the exception.
    *
    * <p>Assignments in the input act as updates to a new module created by this function, which is
    * returned.
@@ -554,7 +535,7 @@ public final class Starlark {
    */
   public static ModuleAndValue execAndEval(
       StarlarkThread thread, ParserInput input, Map<String, Object> predeclared)
-      throws SyntaxError.Exception {
+      throws SyntaxError {
     // Pseudocode:
     // file = StarlarkFile.parse(input)
     // validateFile(file, predeclared.keys, thread.semantics)
@@ -584,16 +565,16 @@ public final class Starlark {
   /**
    * Parse the input as a file, validates it in the specified predeclared environment (a set of
    * names, optionally filtered by the semantics), and compiles it to a Program. It throws
-   * SyntaxError.Exception in case of scan/parse/validation error.
+   * SyntaxError in case of scan/parse/validation error.
    *
    * <p>In addition to the program, it returns the validated syntax tree. This permits clients such
    * as Bazel to inspect the syntax (for BUILD dialect checks, glob prefetching, etc.)
    */
-  public static Object /*Pair<Program, StarlarkFile>*/ compileFile(
+  public static Pair<Program, StarlarkFile> compileFile(
       ParserInput input, //
       Set<String> predeclared,
       StarlarkSemantics semantics)
-      throws SyntaxError.Exception {
+      throws SyntaxError {
     // Pseudocode:
     // file = StarlarkFile.parse(input)
     // validateFile(file, predeclared.keys, thread.semantics)
@@ -637,7 +618,7 @@ public final class Starlark {
       ParserInput input, //
       Map<String, Object> env,
       StarlarkSemantics semantics)
-      throws SyntaxError.Exception {
+      throws SyntaxError {
     // Pseudocode:
     // expr = Expression.parse(input)
     // validateExpr(expr, env.keys, semantics)
@@ -645,25 +626,5 @@ public final class Starlark {
     // module = new module(env)
     // return new StarlarkFunction(prog.toplevel, module)
     throw new UnsupportedOperationException();
-  }
-
-  /**
-   * Starts the CPU profiler with the specified sampling period, writing a pprof profile to {@code
-   * out}. All running Starlark threads are profiled. May be called concurrent with Starlark
-   * execution.
-   *
-   * @throws IllegalStateException exception if the Starlark profiler is already running or if the
-   *     operating system's profiling resources for this process are already in use.
-   */
-  public static void startCpuProfile(OutputStream out, Duration period) {
-    CpuProfiler.start(out, period);
-  }
-
-  /**
-   * Stops the profiler and waits for the log to be written. Throws an unchecked exception if the
-   * profiler was not already started by a prior call to {@link #startCpuProfile}.
-   */
-  public static void stopCpuProfile() throws IOException {
-    CpuProfiler.stop();
   }
 }

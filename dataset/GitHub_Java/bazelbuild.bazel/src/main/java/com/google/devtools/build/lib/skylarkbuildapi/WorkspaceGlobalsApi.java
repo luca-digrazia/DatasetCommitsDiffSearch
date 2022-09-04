@@ -85,7 +85,7 @@ public interface WorkspaceGlobalsApi {
       throws EvalException, InterruptedException;
 
   @SkylarkCallable(
-      name = "toplevel_output_directories",
+      name = "dont_symlink_directories_in_execroot",
       doc =
           "Exclude directories under workspace from symlinking into execroot.\n"
               + "<p>Normally, source directories are symlinked to the execroot, so that the"

@@ -15,13 +15,12 @@
 package com.google.devtools.build.lib.analysis.platform;
 
 import static com.google.common.truth.Truth.assertThat;
-import static org.junit.Assert.assertThrows;
+import static com.google.devtools.build.lib.testutil.MoreAsserts.assertThrows;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.testing.EqualsTester;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
-import com.google.devtools.build.lib.cmdline.Label;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
@@ -32,25 +31,21 @@ public class PlatformInfoTest extends BuildViewTestCase {
 
   @Test
   public void platformInfo() throws Exception {
-    ConstraintSettingInfo setting1 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s1"));
-    ConstraintSettingInfo setting2 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s2"));
+    ConstraintSettingInfo setting1 = ConstraintSettingInfo.create(makeLabel("//constraint:s1"));
+    ConstraintSettingInfo setting2 = ConstraintSettingInfo.create(makeLabel("//constraint:s2"));
 
     PlatformInfo.Builder builder = PlatformInfo.builder();
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting1, Label.parseAbsoluteUnchecked("//constraint:v1")));
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:v2")));
+    builder.addConstraint(ConstraintValueInfo.create(setting1, makeLabel("//constraint:v1")));
+    builder.addConstraint(ConstraintValueInfo.create(setting2, makeLabel("//constraint:v2")));
     PlatformInfo platformInfo = builder.build();
 
     assertThat(platformInfo).isNotNull();
     assertThat(platformInfo.constraints().has(setting1)).isTrue();
     assertThat(platformInfo.constraints().get(setting1).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v1"));
+        .isEqualTo(makeLabel("//constraint:v1"));
     assertThat(platformInfo.constraints().has(setting2)).isTrue();
     assertThat(platformInfo.constraints().get(setting2).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v2"));
+        .isEqualTo(makeLabel("//constraint:v2"));
   }
 
   @Test
@@ -65,73 +60,58 @@ public class PlatformInfoTest extends BuildViewTestCase {
 
   @Test
   public void platformInfo_parentPlatform_noOverlaps() throws Exception {
-    ConstraintSettingInfo setting1 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s1"));
-    ConstraintSettingInfo setting2 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s2"));
-    ConstraintSettingInfo setting3 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s3"));
+    ConstraintSettingInfo setting1 = ConstraintSettingInfo.create(makeLabel("//constraint:s1"));
+    ConstraintSettingInfo setting2 = ConstraintSettingInfo.create(makeLabel("//constraint:s2"));
+    ConstraintSettingInfo setting3 = ConstraintSettingInfo.create(makeLabel("//constraint:s3"));
 
     PlatformInfo parent =
         PlatformInfo.builder()
-            .addConstraint(
-                ConstraintValueInfo.create(
-                    setting1, Label.parseAbsoluteUnchecked("//constraint:v1")))
+            .addConstraint(ConstraintValueInfo.create(setting1, makeLabel("//constraint:v1")))
             .build();
 
     PlatformInfo.Builder builder = PlatformInfo.builder();
     builder.setParent(parent);
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:v2")));
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting3, Label.parseAbsoluteUnchecked("//constraint:v3")));
+    builder.addConstraint(ConstraintValueInfo.create(setting2, makeLabel("//constraint:v2")));
+    builder.addConstraint(ConstraintValueInfo.create(setting3, makeLabel("//constraint:v3")));
     PlatformInfo platformInfo = builder.build();
 
     assertThat(platformInfo).isNotNull();
     assertThat(platformInfo.constraints().has(setting1)).isTrue();
     assertThat(platformInfo.constraints().get(setting1).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v1"));
+        .isEqualTo(makeLabel("//constraint:v1"));
     assertThat(platformInfo.constraints().has(setting2)).isTrue();
     assertThat(platformInfo.constraints().get(setting2).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v2"));
+        .isEqualTo(makeLabel("//constraint:v2"));
     assertThat(platformInfo.constraints().has(setting3)).isTrue();
     assertThat(platformInfo.constraints().get(setting3).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v3"));
+        .isEqualTo(makeLabel("//constraint:v3"));
   }
 
   @Test
   public void platformInfo_parentPlatform_overlaps() throws Exception {
-    ConstraintSettingInfo setting1 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s1"));
-    ConstraintSettingInfo setting2 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s2"));
-    ConstraintSettingInfo setting3 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:s3"));
+    ConstraintSettingInfo setting1 = ConstraintSettingInfo.create(makeLabel("//constraint:s1"));
+    ConstraintSettingInfo setting2 = ConstraintSettingInfo.create(makeLabel("//constraint:s2"));
+    ConstraintSettingInfo setting3 = ConstraintSettingInfo.create(makeLabel("//constraint:s3"));
 
     PlatformInfo parent =
         PlatformInfo.builder()
-            .addConstraint(
-                ConstraintValueInfo.create(
-                    setting1, Label.parseAbsoluteUnchecked("//constraint:v1")))
+            .addConstraint(ConstraintValueInfo.create(setting1, makeLabel("//constraint:v1")))
             .build();
 
     PlatformInfo.Builder builder = PlatformInfo.builder();
     builder.setParent(parent);
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting1, Label.parseAbsoluteUnchecked("//constraint:v1a")));
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:v2")));
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting3, Label.parseAbsoluteUnchecked("//constraint:v3")));
+    builder.addConstraint(ConstraintValueInfo.create(setting1, makeLabel("//constraint:v1a")));
+    builder.addConstraint(ConstraintValueInfo.create(setting2, makeLabel("//constraint:v2")));
+    builder.addConstraint(ConstraintValueInfo.create(setting3, makeLabel("//constraint:v3")));
     PlatformInfo platformInfo = builder.build();
 
     assertThat(platformInfo).isNotNull();
     assertThat(platformInfo.constraints().get(setting1).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v1a"));
+        .isEqualTo(makeLabel("//constraint:v1a"));
     assertThat(platformInfo.constraints().get(setting2).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v2"));
+        .isEqualTo(makeLabel("//constraint:v2"));
     assertThat(platformInfo.constraints().get(setting3).label())
-        .isEqualTo(Label.parseAbsoluteUnchecked("//constraint:v3"));
+        .isEqualTo(makeLabel("//constraint:v3"));
   }
 
   @Test
@@ -204,29 +184,21 @@ public class PlatformInfoTest extends BuildViewTestCase {
 
   @Test
   public void platformInfo_overlappingConstraintsError() throws Exception {
-    ConstraintSettingInfo setting1 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:basic"));
+    ConstraintSettingInfo setting1 = ConstraintSettingInfo.create(makeLabel("//constraint:basic"));
     ConstraintSettingInfo setting2 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:complex"));
-    ConstraintSettingInfo setting3 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:single"));
+        ConstraintSettingInfo.create(makeLabel("//constraint:complex"));
+    ConstraintSettingInfo setting3 = ConstraintSettingInfo.create(makeLabel("//constraint:single"));
 
     PlatformInfo.Builder builder = PlatformInfo.builder();
 
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting1, Label.parseAbsoluteUnchecked("//constraint:value1")));
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting1, Label.parseAbsoluteUnchecked("//constraint:value2")));
+    builder.addConstraint(ConstraintValueInfo.create(setting1, makeLabel("//constraint:value1")));
+    builder.addConstraint(ConstraintValueInfo.create(setting1, makeLabel("//constraint:value2")));
 
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:value3")));
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:value4")));
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:value5")));
+    builder.addConstraint(ConstraintValueInfo.create(setting2, makeLabel("//constraint:value3")));
+    builder.addConstraint(ConstraintValueInfo.create(setting2, makeLabel("//constraint:value4")));
+    builder.addConstraint(ConstraintValueInfo.create(setting2, makeLabel("//constraint:value5")));
 
-    builder.addConstraint(
-        ConstraintValueInfo.create(setting3, Label.parseAbsoluteUnchecked("//constraint:value6")));
+    builder.addConstraint(ConstraintValueInfo.create(setting3, makeLabel("//constraint:value6")));
 
     ConstraintCollection.DuplicateConstraintException exception =
         assertThrows(
@@ -243,55 +215,53 @@ public class PlatformInfoTest extends BuildViewTestCase {
 
   @Test
   public void platformInfo_equalsTester() throws Exception {
-    ConstraintSettingInfo setting1 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:basic"));
-    ConstraintSettingInfo setting2 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//constraint:other"));
+    ConstraintSettingInfo setting1 = ConstraintSettingInfo.create(makeLabel("//constraint:basic"));
+    ConstraintSettingInfo setting2 = ConstraintSettingInfo.create(makeLabel("//constraint:other"));
 
     ConstraintValueInfo value1 =
-        ConstraintValueInfo.create(setting1, Label.parseAbsoluteUnchecked("//constraint:value1"));
+        ConstraintValueInfo.create(setting1, makeLabel("//constraint:value1"));
     ConstraintValueInfo value2 =
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:value2"));
+        ConstraintValueInfo.create(setting2, makeLabel("//constraint:value2"));
     ConstraintValueInfo value3 =
-        ConstraintValueInfo.create(setting2, Label.parseAbsoluteUnchecked("//constraint:value3"));
+        ConstraintValueInfo.create(setting2, makeLabel("//constraint:value3"));
 
     new EqualsTester()
         .addEqualityGroup(
             // Base case.
             PlatformInfo.builder()
-                .setLabel(Label.parseAbsoluteUnchecked("//platform/plat1"))
+                .setLabel(makeLabel("//platform/plat1"))
                 .addConstraint(value1)
                 .addConstraint(value2)
                 .build(),
             PlatformInfo.builder()
-                .setLabel(Label.parseAbsoluteUnchecked("//platform/plat1"))
+                .setLabel(makeLabel("//platform/plat1"))
                 .addConstraint(value1)
                 .addConstraint(value2)
                 .build())
         .addEqualityGroup(
             // Different label.
             PlatformInfo.builder()
-                .setLabel(Label.parseAbsoluteUnchecked("//platform/plat2"))
+                .setLabel(makeLabel("//platform/plat2"))
                 .addConstraint(value1)
                 .addConstraint(value2)
                 .build())
         .addEqualityGroup(
             // Extra constraint.
             PlatformInfo.builder()
-                .setLabel(Label.parseAbsoluteUnchecked("//platform/plat1"))
+                .setLabel(makeLabel("//platform/plat1"))
                 .addConstraint(value1)
                 .addConstraint(value3)
                 .build())
         .addEqualityGroup(
             // Missing constraint.
             PlatformInfo.builder()
-                .setLabel(Label.parseAbsoluteUnchecked("//platform/plat1"))
+                .setLabel(makeLabel("//platform/plat1"))
                 .addConstraint(value1)
                 .build())
         .addEqualityGroup(
             // Different remote exec properties.
             PlatformInfo.builder()
-                .setLabel(Label.parseAbsoluteUnchecked("//platform/plat1"))
+                .setLabel(makeLabel("//platform/plat1"))
                 .addConstraint(value1)
                 .addConstraint(value2)
                 .setRemoteExecutionProperties("foo")
@@ -382,18 +352,17 @@ public class PlatformInfoTest extends BuildViewTestCase {
         "    ],",
         ")");
 
-    setBuildLanguageOptions("--experimental_platforms_api");
+    setSkylarkSemanticsOptions("--experimental_platforms_api");
     ConfiguredTarget platform = getConfiguredTarget("//test/platform:custom");
     assertThat(platform).isNotNull();
 
     PlatformInfo provider = PlatformProviderUtils.platform(platform);
     assertThat(provider).isNotNull();
-    assertThat(provider.label()).isEqualTo(Label.parseAbsoluteUnchecked("//test/platform:custom"));
+    assertThat(provider.label()).isEqualTo(makeLabel("//test/platform:custom"));
     ConstraintSettingInfo constraintSetting =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//test/constraint:basic"));
+        ConstraintSettingInfo.create(makeLabel("//test/constraint:basic"));
     ConstraintValueInfo constraintValue =
-        ConstraintValueInfo.create(
-            constraintSetting, Label.parseAbsoluteUnchecked("//test/constraint:foo"));
+        ConstraintValueInfo.create(constraintSetting, makeLabel("//test/constraint:foo"));
     assertThat(provider.constraints().get(constraintSetting)).isEqualTo(constraintValue);
   }
 
@@ -442,28 +411,26 @@ public class PlatformInfoTest extends BuildViewTestCase {
         "    ],",
         ")");
 
-    setBuildLanguageOptions("--experimental_platforms_api");
+    setSkylarkSemanticsOptions("--experimental_platforms_api");
     ConfiguredTarget platform = getConfiguredTarget("//test/platform:custom");
     assertThat(platform).isNotNull();
 
     PlatformInfo provider = PlatformProviderUtils.platform(platform);
     assertThat(provider).isNotNull();
-    assertThat(provider.label()).isEqualTo(Label.parseAbsoluteUnchecked("//test/platform:custom"));
+    assertThat(provider.label()).isEqualTo(makeLabel("//test/platform:custom"));
 
     // Check that overrides work.
     ConstraintSettingInfo constraintSetting =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//test/constraint:basic"));
+        ConstraintSettingInfo.create(makeLabel("//test/constraint:basic"));
     ConstraintValueInfo constraintValue =
-        ConstraintValueInfo.create(
-            constraintSetting, Label.parseAbsoluteUnchecked("//test/constraint:bar"));
+        ConstraintValueInfo.create(constraintSetting, makeLabel("//test/constraint:bar"));
     assertThat(provider.constraints().get(constraintSetting)).isEqualTo(constraintValue);
 
     // Check that inheritance works.
     ConstraintSettingInfo constraintSetting2 =
-        ConstraintSettingInfo.create(Label.parseAbsoluteUnchecked("//test/constraint:complex"));
+        ConstraintSettingInfo.create(makeLabel("//test/constraint:complex"));
     ConstraintValueInfo constraintValue2 =
-        ConstraintValueInfo.create(
-            constraintSetting2, Label.parseAbsoluteUnchecked("//test/constraint:baz"));
+        ConstraintValueInfo.create(constraintSetting2, makeLabel("//test/constraint:baz"));
     assertThat(provider.constraints().get(constraintSetting2)).isEqualTo(constraintValue2);
   }
 
@@ -486,7 +453,7 @@ public class PlatformInfoTest extends BuildViewTestCase {
         "constraint_value(name = 'foo',",
         "    constraint_setting = ':basic',",
         ")");
-    setBuildLanguageOptions("--experimental_platforms_api");
+    setSkylarkSemanticsOptions("--experimental_platforms_api");
     checkError(
         "test/platform",
         "custom",

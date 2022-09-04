@@ -13,179 +13,195 @@
 // limitations under the License.
 package com.google.devtools.build.lib.analysis.skylark;
 
+import static java.util.stream.Collectors.toList;
+
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.actions.Action;
+import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
+import com.google.devtools.build.lib.actions.ActionLookupValue;
+import com.google.devtools.build.lib.actions.ActionRegistry;
 import com.google.devtools.build.lib.actions.Artifact;
-import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.actions.ArtifactRoot;
+import com.google.devtools.build.lib.actions.CommandLine;
+import com.google.devtools.build.lib.actions.ParamFileInfo;
 import com.google.devtools.build.lib.actions.RunfilesSupplier;
+import com.google.devtools.build.lib.actions.extra.ExtraActionInfo;
 import com.google.devtools.build.lib.actions.extra.SpawnInfo;
+import com.google.devtools.build.lib.analysis.BashCommandConstructor;
+import com.google.devtools.build.lib.analysis.CommandHelper;
 import com.google.devtools.build.lib.analysis.FilesToRunProvider;
 import com.google.devtools.build.lib.analysis.PseudoAction;
 import com.google.devtools.build.lib.analysis.RuleContext;
+import com.google.devtools.build.lib.analysis.ShToolchain;
+import com.google.devtools.build.lib.analysis.actions.ActionConstructionContext;
 import com.google.devtools.build.lib.analysis.actions.FileWriteAction;
+import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
 import com.google.devtools.build.lib.analysis.actions.SpawnAction;
+import com.google.devtools.build.lib.analysis.actions.StarlarkAction;
+import com.google.devtools.build.lib.analysis.actions.Substitution;
+import com.google.devtools.build.lib.analysis.actions.SymlinkAction;
 import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction;
-import com.google.devtools.build.lib.analysis.actions.TemplateExpansionAction.Substitution;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
-import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.ParamType;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
-import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.packages.TargetUtils;
+import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
+import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkbuildapi.SkylarkActionFactoryApi;
+import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkList;
-import com.google.devtools.build.lib.syntax.SkylarkNestedSet;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.PathFragment;
+import com.google.protobuf.GeneratedMessage;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
-/**
- * Provides a Skylark interface for all action creation needs.
- */
-@SkylarkModule(
-    name = "actions",
-    category = SkylarkModuleCategory.BUILTIN,
-    doc = "Module providing functions to create actions."
-)
-
-public class SkylarkActionFactory implements SkylarkValue {
+/** Provides a Skylark interface for all action creation needs. */
+public class SkylarkActionFactory implements SkylarkActionFactoryApi {
   private final SkylarkRuleContext context;
+  private final StarlarkSemantics starlarkSemantics;
   private RuleContext ruleContext;
+  /** Counter for actions.run_shell helper scripts. Every script must have a unique name. */
+  private int runShellOutputCounter = 0;
 
-
-  public SkylarkActionFactory(SkylarkRuleContext context, RuleContext ruleContext) {
+  public SkylarkActionFactory(
+      SkylarkRuleContext context, StarlarkSemantics starlarkSemantics, RuleContext ruleContext) {
     this.context = context;
+    this.starlarkSemantics = starlarkSemantics;
     this.ruleContext = ruleContext;
   }
 
-  Root newFileRoot() throws EvalException {
+  ArtifactRoot newFileRoot() throws EvalException {
     return context.isForAspect()
         ? ruleContext.getConfiguration().getBinDirectory(ruleContext.getRule().getRepository())
         : ruleContext.getBinOrGenfilesDirectory();
   }
 
-  @SkylarkCallable(
-      name = "declare_file",
-      doc =
-          "Declares that rule or aspect creates a file with the given filename. "
-              + "If <code>sibling</code> is not specified, file name is relative to "
-              + "package directory, otherwise the file is in the same directory as "
-              + "<code>sibling</code>. "
-              + "You must create an action that generates the file. <br>"
-              + "Files that are specified in rule's outputs do not need to be declared and are "
-              + "available through <a href=\"ctx.html#outputs\">ctx.outputs</a>.",
-      parameters = {
-          @Param(
-              name = "filename",
-              type = String.class,
-              doc =
-                  "If no 'sibling' provided, path of the new file, relative "
-                  + "to the current package. Otherwise a base name for a file "
-                   + "('sibling' determines a directory)."
-          ),
-          @Param(
-              name = "sibling",
-              doc = "A file that lives in the same directory as the newly created file.",
-              type = Artifact.class,
-              noneable = true,
-              positional = false,
-              named = true,
-              defaultValue = "None"
-          )
+  /**
+   * Returns a {@link ActionRegistry} object to register actions using this action factory.
+   *
+   * @throws EvalException if actions cannot be registered with this object
+   */
+  public ActionRegistry asActionRegistry(SkylarkActionFactory skylarkActionFactory)
+      throws EvalException {
+    validateActionCreation();
+    return new ActionRegistry() {
+
+      @Override
+      public void registerAction(ActionAnalysisMetadata... actions) {
+        ruleContext.registerAction(actions);
       }
-  )
+
+      @Override
+      public ActionLookupValue.ActionLookupKey getOwner() {
+        return skylarkActionFactory
+            .getActionConstructionContext()
+            .getAnalysisEnvironment()
+            .getOwner();
+      }
+    };
+  }
+
+  @Override
   public Artifact declareFile(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_file");
-    if (Runtime.NONE.equals(sibling)) {
-      return ruleContext.getPackageRelativeArtifact(filename, newFileRoot());
+
+    PathFragment fragment;
+    if (Starlark.NONE.equals(sibling)) {
+      fragment = ruleContext.getPackageDirectory().getRelative(PathFragment.create(filename));
     } else {
       PathFragment original = ((Artifact) sibling).getRootRelativePath();
-      PathFragment fragment = original.replaceName(filename);
-      return ruleContext.getDerivedArtifact(fragment, newFileRoot());
+      fragment = original.replaceName(filename);
     }
+
+    if (!fragment.startsWith(ruleContext.getPackageDirectory())) {
+      throw Starlark.errorf(
+          "the output artifact '%s' is not under package directory '%s' for target '%s'",
+          fragment, ruleContext.getPackageDirectory(), ruleContext.getLabel());
+    }
+    return ruleContext.getDerivedArtifact(fragment, newFileRoot());
   }
 
-  @SkylarkCallable(
-      name = "declare_directory",
-      doc =
-          "Declares that rule or aspect create a directory with the given name, in the "
-              + "current package. You must create an action that generates the directory.",
-      parameters = {
-          @Param(
-              name = "filename",
-              type = String.class,
-              doc =
-                  "If no 'sibling' provided, path of the new directory, relative "
-                      + "to the current package. Otherwise a base name for a file "
-                      + "('sibling' defines a directory)."
-          ),
-          @Param(
-              name = "sibling",
-              doc = "A file that lives in the same directory as the newly declared directory.",
-              type = Artifact.class,
-              noneable = true,
-              positional = false,
-              named = true,
-              defaultValue = "None"
-          )
-      }
-  )
+  @Override
   public Artifact declareDirectory(String filename, Object sibling) throws EvalException {
     context.checkMutable("actions.declare_directory");
-    if (Runtime.NONE.equals(sibling)) {
-      return ruleContext.getPackageRelativeTreeArtifact(
-          PathFragment.create(filename), newFileRoot());
+    PathFragment fragment;
+
+    if (Starlark.NONE.equals(sibling)) {
+      fragment = ruleContext.getPackageDirectory().getRelative(PathFragment.create(filename));
     } else {
       PathFragment original = ((Artifact) sibling).getRootRelativePath();
-      PathFragment fragment = original.replaceName(filename);
-      return ruleContext.getTreeArtifact(fragment, newFileRoot());
+      fragment = original.replaceName(filename);
     }
+
+    if (!fragment.startsWith(ruleContext.getPackageDirectory())) {
+      throw new EvalException(
+          String.format(
+              "the output directory '%s' is not under package directory '%s' for target '%s'",
+              fragment, ruleContext.getPackageDirectory(), ruleContext.getLabel()));
+    }
+
+    Artifact result = ruleContext.getTreeArtifact(fragment, newFileRoot());
+    if (!result.isTreeArtifact()) {
+      throw new EvalException(
+          null,
+          String.format(
+              "'%s' has already been declared as a regular file, not directory.", filename));
+    }
+    return result;
   }
 
+  @Override
+  public Artifact declareSymlink(String filename, Object sibling) throws EvalException {
+    context.checkMutable("actions.declare_symlink");
 
-  @SkylarkCallable(
-      name = "do_nothing",
-      doc =
-          "Creates an empty action that neither executes a command nor produces any "
-              + "output, but that is useful for inserting 'extra actions'.",
-      parameters = {
-          @Param(
-              name = "mnemonic",
-              type = String.class,
-              named = true,
-              positional = false,
-              doc = "a one-word description of the action, e.g. CppCompile or GoLink."
-          ),
-          @Param(
-              name = "inputs",
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              named = true,
-              positional = false,
-              defaultValue = "[]",
-              doc = "list of the input files of the action."
-          ),
-      }
-  )
+    if (!ruleContext.getConfiguration().allowUnresolvedSymlinks()) {
+      throw Starlark.errorf(
+          "actions.declare_symlink() is not allowed; "
+              + "use the --experimental_allow_unresolved_symlinks command line option");
+    }
+
+    Artifact result;
+    PathFragment rootRelativePath;
+    if (Starlark.NONE.equals(sibling)) {
+      rootRelativePath = ruleContext.getPackageDirectory().getRelative(filename);
+    } else {
+      PathFragment original = ((Artifact) sibling).getRootRelativePath();
+      rootRelativePath = original.replaceName(filename);
+    }
+
+    result =
+        ruleContext.getAnalysisEnvironment().getSymlinkArtifact(rootRelativePath, newFileRoot());
+
+    if (!result.isSymlink()) {
+      throw Starlark.errorf(
+          "'%s' has already been declared as something other than a symlink.", filename);
+    }
+
+    return result;
+  }
+
+  @Override
   public void doNothing(String mnemonic, Object inputs) throws EvalException {
     context.checkMutable("actions.do_nothing");
-    NestedSet<Artifact> inputSet = inputs instanceof SkylarkNestedSet
-        ? ((SkylarkNestedSet) inputs).getSet(Artifact.class)
-        : NestedSetBuilder.<Artifact>compileOrder()
-            .addAll(((SkylarkList) inputs).getContents(Artifact.class, "inputs"))
-            .build();
+    NestedSet<Artifact> inputSet =
+        inputs instanceof Depset
+            ? ((Depset) inputs).getSetFromParam(Artifact.class, "inputs")
+            : NestedSetBuilder.<Artifact>compileOrder()
+                .addAll(((Sequence<?>) inputs).getContents(Artifact.class, "inputs"))
+                .build();
     Action action =
         new PseudoAction<>(
             UUID.nameUUIDFromBytes(
@@ -195,159 +211,72 @@ public class SkylarkActionFactory implements SkylarkValue {
             inputSet,
             ImmutableList.of(PseudoAction.getDummyOutput(ruleContext)),
             mnemonic,
-            SpawnInfo.spawnInfo,
+            SPAWN_INFO,
             SpawnInfo.newBuilder().build());
-    ruleContext.registerAction(action);
+    registerAction(action);
   }
 
-  @SkylarkCallable(
-    name = "write",
-    doc =
-        "Creates a file write action. When the action is executed, it will write the given content "
-            + "to a file. This is used to generate files using information available in the "
-            + "analysis phase. If the file is large and with a lot of static content, consider "
-            + "using <a href=\"#expand_template\">expand_template</a>. "
-            + "<a href=\"https://github.com/laurentlb/examples/blob/master/rules/executable/executable.bzl\">"
-            + "See example of use</a>",
-    parameters = {
-      @Param(name = "output", type = Artifact.class, doc = "the output file.", named = true),
-      @Param(
-        name = "content",
-        type = String.class,
-        doc = "the contents of the file.",
-        named = true
-      ),
-      @Param(
-        name = "is_executable",
-        type = Boolean.class,
-        defaultValue = "False",
-        doc = "whether the output file should be executable.",
-        named = true
-      )
+  @AutoCodec @AutoCodec.VisibleForSerialization
+  static final GeneratedMessage.GeneratedExtension<ExtraActionInfo, SpawnInfo> SPAWN_INFO =
+      SpawnInfo.spawnInfo;
+
+  @Override
+  public void symlink(FileApi output, String path) throws EvalException {
+    context.checkMutable("actions.symlink");
+
+    if (!ruleContext.getConfiguration().allowUnresolvedSymlinks()) {
+      throw new EvalException(
+          null,
+          "actions.symlink() is not allowed; "
+              + "use the --experimental_allow_unresolved_symlinks command line option");
     }
-  )
-  public void write(Artifact output, String content, Boolean isExecutable) throws EvalException {
-    context.checkMutable("actions.write");
-    FileWriteAction action =
-        FileWriteAction.create(ruleContext, output, content, isExecutable);
-    ruleContext.registerAction(action);
+
+    PathFragment targetPath = PathFragment.create(path);
+    Artifact outputArtifact = (Artifact) output;
+    if (!outputArtifact.isSymlink()) {
+      throw Starlark.errorf("output of symlink action must be created by declare_symlink()");
+    }
+
+    Action action =
+        SymlinkAction.createUnresolved(
+            ruleContext.getActionOwner(),
+            outputArtifact,
+            targetPath,
+            "creating symlink " + ((Artifact) output).getRootRelativePathString());
+    registerAction(action);
   }
 
-  @SkylarkCallable(
-      name = "run",
-      doc =
-          "Creates an action that runs an executable.",
-      parameters = {
-          @Param(
-              name = "outputs",
-              type = SkylarkList.class,
-              generic1 = Artifact.class,
-              named = true,
-              positional = false,
-              doc = "list of the output files of the action."
-          ),
-          @Param(
-              name = "inputs",
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              defaultValue = "[]",
-              named = true,
-              positional = false,
-              doc = "list of the input files of the action."
-          ),
-          @Param(
-              name = "executable",
-              type = Object.class,
-              allowedTypes = {
-                  @ParamType(type = Artifact.class),
-                  @ParamType(type = String.class),
-              },
-              named = true,
-              positional = false,
-              doc = "the executable file to be called by the action."
-          ),
-          @Param(
-              name = "arguments",
-              type = SkylarkList.class,
-              generic1 = String.class,
-              defaultValue = "[]",
-              named = true,
-              positional = false,
-              doc = "command line arguments of the action."
-          ),
-          @Param(
-              name = "mnemonic",
-              type = String.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc = "a one-word description of the action, e.g. CppCompile or GoLink."
-          ),
-          @Param(
-              name = "progress_message",
-              type = String.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc =
-                  "progress message to show to the user during the build, "
-                      + "e.g. \"Compiling foo.cc to create foo.o\"."
-          ),
-          @Param(
-              name = "use_default_shell_env",
-              type = Boolean.class,
-              defaultValue = "False",
-              named = true,
-              positional = false,
-              doc = "whether the action should use the built in shell environment or not."
-          ),
-          @Param(
-              name = "env",
-              type = SkylarkDict.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc = "sets the dictionary of environment variables."
-          ),
-          @Param(
-              name = "execution_requirements",
-              type = SkylarkDict.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc =
-                  "information for scheduling the action. See "
-                      + "<a href=\"/docs/be/common-definitions.html#common.tags\">tags</a> "
-                      + "for useful keys."
-          ),
-          @Param(
-              // TODO(bazel-team): The name here isn't accurate anymore.
-              // This is technically experimental, so folks shouldn't be too attached,
-              // but consider renaming to be more accurate/opaque.
-              name = "input_manifests",
-              type = SkylarkList.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc =
-                  "(Experimental) sets the input runfiles metadata; "
-                      + "they are typically generated by resolve_command."
-          )
-      }
-  )
+  @Override
+  public void write(FileApi output, Object content, Boolean isExecutable) throws EvalException {
+    context.checkMutable("actions.write");
+    final Action action;
+    if (content instanceof String) {
+      action =
+          FileWriteAction.create(ruleContext, (Artifact) output, (String) content, isExecutable);
+    } else if (content instanceof Args) {
+      Args args = (Args) content;
+      action =
+          new ParameterFileWriteAction(
+              ruleContext.getActionOwner(),
+              NestedSetBuilder.wrap(Order.STABLE_ORDER, args.getDirectoryArtifacts()),
+              (Artifact) output,
+              args.build(),
+              args.getParameterFileType(),
+              StandardCharsets.UTF_8);
+    } else {
+      throw new AssertionError("Unexpected type: " + content.getClass().getSimpleName());
+    }
+    registerAction(action);
+  }
+
+  @Override
   public void run(
-      SkylarkList outputs,
+      Sequence<?> outputs,
       Object inputs,
+      Object unusedInputsList,
       Object executableUnchecked,
-      SkylarkList arguments,
+      Object toolsUnchecked,
+      Object arguments,
       Object mnemonicUnchecked,
       Object progressMessage,
       Boolean useDefaultShellEnv,
@@ -356,15 +285,12 @@ public class SkylarkActionFactory implements SkylarkValue {
       Object inputManifestsUnchecked)
       throws EvalException {
     context.checkMutable("actions.run");
-    SpawnAction.Builder builder = new SpawnAction.Builder();
+    StarlarkAction.Builder builder = new StarlarkAction.Builder();
 
-    @SuppressWarnings("unchecked")
-    List<String> argumentsContents = arguments.getContents(String.class, "arguments");
-
-    builder.addArguments(argumentsContents);
+    Sequence<?> argumentsList = ((Sequence) arguments);
+    buildCommandLine(builder, argumentsList);
     if (executableUnchecked instanceof Artifact) {
       Artifact executable = (Artifact) executableUnchecked;
-      builder.addInput(executable);
       FilesToRunProvider provider = context.getExecutableRunfiles(executable);
       if (provider == null) {
         builder.setExecutable(executable);
@@ -373,179 +299,17 @@ public class SkylarkActionFactory implements SkylarkValue {
       }
     } else if (executableUnchecked instanceof String) {
       builder.setExecutable(PathFragment.create((String) executableUnchecked));
+    } else if (executableUnchecked instanceof FilesToRunProvider) {
+      builder.setExecutable((FilesToRunProvider) executableUnchecked);
     } else {
-      throw new EvalException(
-          null,
-          "expected file or string for "
-              + "executable but got "
-              + EvalUtils.getDataTypeName(executableUnchecked)
-              + " instead");
+      // Should have been verified by Starlark before this function is called
+      throw new IllegalStateException();
     }
-    registerSpawnAction(outputs, inputs, mnemonicUnchecked, progressMessage, useDefaultShellEnv,
-        envUnchecked, executionRequirementsUnchecked, inputManifestsUnchecked, builder);
-  }
-
-
-  @SkylarkCallable(
-      name = "run_shell",
-      doc = "Creates an action that runs a shell command.",
-      parameters = {
-          @Param(
-              name = "outputs",
-              type = SkylarkList.class,
-              generic1 = Artifact.class,
-              named = true,
-              positional = false,
-              doc = "list of the output files of the action."
-          ),
-          @Param(
-              name = "inputs",
-              allowedTypes = {
-                  @ParamType(type = SkylarkList.class),
-                  @ParamType(type = SkylarkNestedSet.class),
-              },
-              generic1 = Artifact.class,
-              defaultValue = "[]",
-              named = true,
-              positional = false,
-              doc = "list of the input files of the action."
-          ),
-          @Param(
-              name = "arguments",
-              type = SkylarkList.class,
-              generic1 = String.class,
-              defaultValue = "[]",
-              named = true,
-              positional = false,
-              doc = "command line arguments of the action."
-          ),
-          @Param(
-              name = "mnemonic",
-              type = String.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc = "a one-word description of the action, e.g. CppCompile or GoLink."
-          ),
-          @Param(
-              name = "command",
-              type = Object.class,
-              allowedTypes = {
-                  @ParamType(type = String.class),
-                  @ParamType(type = SkylarkList.class, generic1 = String.class),
-                  @ParamType(type = Runtime.NoneType.class),
-              },
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc =
-                  "shell command to execute. "
-                      + "Arguments are available with <code>$1</code>, <code>$2</code>, etc."
-          ),
-          @Param(
-              name = "progress_message",
-              type = String.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc =
-                  "progress message to show to the user during the build, "
-                      + "e.g. \"Compiling foo.cc to create foo.o\"."
-          ),
-          @Param(
-              name = "use_default_shell_env",
-              type = Boolean.class,
-              defaultValue = "False",
-              named = true,
-              positional = false,
-              doc = "whether the action should use the built in shell environment or not."
-          ),
-          @Param(
-              name = "env",
-              type = SkylarkDict.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc = "sets the dictionary of environment variables."
-          ),
-          @Param(
-              name = "execution_requirements",
-              type = SkylarkDict.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc =
-                  "information for scheduling the action. See "
-                      + "<a href=\"/docs/be/common-definitions.html#common.tags\">tags</a> "
-                      + "for useful keys."
-          ),
-          @Param(
-              // TODO(bazel-team): The name here isn't accurate anymore.
-              // This is technically experimental, so folks shouldn't be too attached,
-              // but consider renaming to be more accurate/opaque.
-              name = "input_manifests",
-              type = SkylarkList.class,
-              noneable = true,
-              defaultValue = "None",
-              named = true,
-              positional = false,
-              doc =
-                  "(Experimental) sets the input runfiles metadata; "
-                      + "they are typically generated by resolve_command."
-          )
-      }
-  )
-  public void runShell(
-      SkylarkList outputs,
-      Object inputs,
-      SkylarkList arguments,
-      Object mnemonicUnchecked,
-      Object commandUnchecked,
-      Object progressMessage,
-      Boolean useDefaultShellEnv,
-      Object envUnchecked,
-      Object executionRequirementsUnchecked,
-      Object inputManifestsUnchecked)
-      throws EvalException {
-    context.checkMutable("actions.run_shell");
-
-    // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
-    SpawnAction.Builder builder = new SpawnAction.Builder();
-    if (arguments.size() > 0) {
-      // When we use a shell command, add an empty argument before other arguments.
-      //   e.g.  bash -c "cmd" '' 'arg1' 'arg2'
-      // bash will use the empty argument as the value of $0 (which we don't care about).
-      // arg1 and arg2 will be $1 and $2, as a user expects.
-      builder.addArgument("");
-    }
-
-    @SuppressWarnings("unchecked")
-    List<String> argumentsContents = arguments.getContents(String.class, "arguments");
-    builder.addArguments(argumentsContents);
-
-    if (commandUnchecked instanceof String) {
-      builder.setShellCommand((String) commandUnchecked);
-    } else if (commandUnchecked instanceof SkylarkList) {
-      SkylarkList commandList = (SkylarkList) commandUnchecked;
-      if (commandList.size() < 3) {
-        throw new EvalException(null, "'command' list has to be of size at least 3");
-      }
-      @SuppressWarnings("unchecked")
-      List<String> command = commandList.getContents(String.class, "command");
-      builder.setShellCommand(command);
-    } else {
-      throw new EvalException(
-          null,
-          "expected string or list of strings for command instead of "
-              + EvalUtils.getDataTypeName(commandUnchecked));
-    }
-    registerSpawnAction(
+    registerStarlarkAction(
         outputs,
         inputs,
+        unusedInputsList,
+        toolsUnchecked,
         mnemonicUnchecked,
         progressMessage,
         useDefaultShellEnv,
@@ -555,76 +319,300 @@ public class SkylarkActionFactory implements SkylarkValue {
         builder);
   }
 
+  private void validateActionCreation() throws EvalException {
+    if (ruleContext.getRule().isAnalysisTest()) {
+      throw Starlark.errorf(
+          "implementation function of a rule with "
+              + "analysis_test=true may not register actions. Analysis test rules may only return "
+              + "success/failure information via AnalysisTestResultInfo.");
+    }
+  }
+
   /**
-   * Stup for spawn actions common between {@link #run} and {@link #runShell}.
+   * Registers actions in the context of this {@link SkylarkActionFactory}.
    *
-   * {@code builder} should have either executable or a command set.
+   * <p>Use {@link #getActionConstructionContext()} to obtain the context required to create those
+   * actions.
    */
-  private void registerSpawnAction(
-      SkylarkList outputs,
+  public void registerAction(ActionAnalysisMetadata... actions) throws EvalException {
+    validateActionCreation();
+    ruleContext.registerAction(actions);
+  }
+
+  /**
+   * Returns information needed to construct actions that can be registered with {@link
+   * #registerAction(ActionAnalysisMetadata...)}.
+   */
+  public ActionConstructionContext getActionConstructionContext() {
+    return ruleContext;
+  }
+
+  public RuleContext getRuleContext() {
+    return ruleContext;
+  }
+
+  @Override
+  public void runShell(
+      Sequence<?> outputs,
       Object inputs,
+      Object toolsUnchecked,
+      Object arguments,
+      Object mnemonicUnchecked,
+      Object commandUnchecked,
+      Object progressMessage,
+      Boolean useDefaultShellEnv,
+      Object envUnchecked,
+      Object executionRequirementsUnchecked,
+      Object inputManifestsUnchecked,
+      StarlarkThread thread)
+      throws EvalException {
+    context.checkMutable("actions.run_shell");
+
+    Sequence<?> argumentList = (Sequence) arguments;
+    StarlarkAction.Builder builder = new StarlarkAction.Builder();
+    buildCommandLine(builder, argumentList);
+
+    if (commandUnchecked instanceof String) {
+      Map<String, String> executionInfo =
+          ImmutableMap.copyOf(TargetUtils.getExecutionInfo(ruleContext.getRule()));
+      String helperScriptSuffix = String.format(".run_shell_%d.sh", runShellOutputCounter++);
+      String command = (String) commandUnchecked;
+      PathFragment shExecutable = ShToolchain.getPathOrError(ruleContext);
+      BashCommandConstructor constructor =
+          CommandHelper.buildBashCommandConstructor(
+              executionInfo, shExecutable, helperScriptSuffix);
+      Artifact helperScript =
+          CommandHelper.commandHelperScriptMaybe(ruleContext, command, constructor);
+      if (helperScript == null) {
+        builder.setShellCommand(shExecutable, command);
+      } else {
+        builder.setShellCommand(shExecutable, helperScript.getExecPathString());
+        builder.addInput(helperScript);
+        FilesToRunProvider provider = context.getExecutableRunfiles(helperScript);
+        if (provider != null) {
+          builder.addTool(provider);
+        }
+      }
+    } else if (commandUnchecked instanceof Sequence) {
+      if (thread.getSemantics().incompatibleRunShellCommandString()) {
+        throw Starlark.errorf(
+            "'command' must be of type string. passing a sequence of strings as 'command'"
+                + " is deprecated. To temporarily disable this check,"
+                + " set --incompatible_objc_framework_cleanup=false.");
+      }
+      Sequence<?> commandList = (Sequence) commandUnchecked;
+      if (argumentList.size() > 0) {
+        throw Starlark.errorf("'arguments' must be empty if 'command' is a sequence of strings");
+      }
+      List<String> command = commandList.getContents(String.class, "command");
+      builder.setShellCommand(command);
+    } else {
+      throw new EvalException(
+          null,
+          "expected string or list of strings for command instead of "
+              + EvalUtils.getDataTypeName(commandUnchecked));
+    }
+    if (argumentList.size() > 0) {
+      // When we use a shell command, add an empty argument before other arguments.
+      //   e.g.  bash -c "cmd" '' 'arg1' 'arg2'
+      // bash will use the empty argument as the value of $0 (which we don't care about).
+      // arg1 and arg2 will be $1 and $2, as a user expects.
+      builder.addExecutableArguments("");
+    }
+    registerStarlarkAction(
+        outputs,
+        inputs,
+        /*unusedInputsList=*/ Starlark.NONE,
+        toolsUnchecked,
+        mnemonicUnchecked,
+        progressMessage,
+        useDefaultShellEnv,
+        envUnchecked,
+        executionRequirementsUnchecked,
+        inputManifestsUnchecked,
+        builder);
+  }
+
+  private static void buildCommandLine(SpawnAction.Builder builder, Sequence<?> argumentsList)
+      throws EvalException {
+    List<String> stringArgs = new ArrayList<>();
+    for (Object value : argumentsList) {
+      if (value instanceof String) {
+        stringArgs.add((String) value);
+      } else if (value instanceof Args) {
+        if (!stringArgs.isEmpty()) {
+          builder.addCommandLine(CommandLine.of(stringArgs));
+          stringArgs = new ArrayList<>();
+        }
+        Args args = (Args) value;
+        ParamFileInfo paramFileInfo = args.getParamFileInfo();
+        builder.addCommandLine(args.build(), paramFileInfo);
+      } else {
+        throw new EvalException(
+            null,
+            "expected list of strings or ctx.actions.args() for arguments instead of "
+                + EvalUtils.getDataTypeName(value));
+      }
+    }
+    if (!stringArgs.isEmpty()) {
+      builder.addCommandLine(CommandLine.of(stringArgs));
+    }
+  }
+
+  /**
+   * Setup for spawn actions common between {@link #run} and {@link #runShell}.
+   *
+   * <p>{@code builder} should have either executable or a command set.
+   */
+  private void registerStarlarkAction(
+      Sequence<?> outputs,
+      Object inputs,
+      Object unusedInputsList,
+      Object toolsUnchecked,
       Object mnemonicUnchecked,
       Object progressMessage,
-      Boolean useDefaultShellEnv, Object envUnchecked,
+      Boolean useDefaultShellEnv,
+      Object envUnchecked,
       Object executionRequirementsUnchecked,
-      Object inputManifestsUnchecked, SpawnAction.Builder builder)
+      Object inputManifestsUnchecked,
+      StarlarkAction.Builder builder)
       throws EvalException {
-    // TODO(bazel-team): builder still makes unnecessary copies of inputs, outputs and args.
     Iterable<Artifact> inputArtifacts;
-    if (inputs instanceof SkylarkList) {
-      inputArtifacts = ((SkylarkList) inputs).getContents(Artifact.class, "inputs");
+    if (inputs instanceof Sequence) {
+      inputArtifacts = ((Sequence<?>) inputs).getContents(Artifact.class, "inputs");
       builder.addInputs(inputArtifacts);
     } else {
-      inputArtifacts = ((SkylarkNestedSet) inputs).toCollection(Artifact.class);
-      builder.addInputs(((SkylarkNestedSet) inputs).getSet(Artifact.class));
+      NestedSet<Artifact> inputSet = ((Depset) inputs).getSetFromParam(Artifact.class, "inputs");
+      builder.addTransitiveInputs(inputSet);
+      inputArtifacts = inputSet.toList();
     }
-    builder.addOutputs(outputs.getContents(Artifact.class, "outputs"));
 
-    // The actual command can refer to an executable from the inputs, which could require
-    // some runfiles. Consequently, we add the runfiles of all inputs of this action manually.
-    for (Artifact current : inputArtifacts) {
-      FilesToRunProvider provider = context.getExecutableRunfiles(current);
-      if (provider != null) {
-        builder.addTool(provider);
+    List<Artifact> outputArtifacts = outputs.getContents(Artifact.class, "outputs");
+    if (outputArtifacts.isEmpty()) {
+      throw Starlark.errorf("param 'outputs' may not be empty");
+    }
+    builder.addOutputs(outputArtifacts);
+
+    if (unusedInputsList != Starlark.NONE) {
+      if (!starlarkSemantics.experimentalStarlarkUnusedInputsList()) {
+        throw Starlark.errorf(
+            "'unused_inputs_list' attribute is experimental and disabled by default. "
+                + "This API is in development and subject to change at any time. "
+                + "Use --experimental_starlark_unused_inputs_list to use this experimental API.");
+      }
+      if (unusedInputsList instanceof Artifact) {
+        builder.setUnusedInputsList(Optional.of((Artifact) unusedInputsList));
+      } else {
+        throw Starlark.errorf(
+            "expected value of type 'File' for a member of parameter 'unused_inputs_list' but got"
+                + " %s instead",
+            EvalUtils.getDataTypeName(unusedInputsList));
+      }
+    }
+
+    if (toolsUnchecked != Starlark.UNBOUND) {
+      Iterable<?> toolsIterable;
+      if (toolsUnchecked instanceof Sequence) {
+        toolsIterable = ((Sequence<?>) toolsUnchecked).getContents(Object.class, "tools");
+      } else {
+        toolsIterable = ((Depset) toolsUnchecked).getSet().toList();
+      }
+      for (Object toolUnchecked : toolsIterable) {
+        if (toolUnchecked instanceof Artifact) {
+          Artifact artifact = (Artifact) toolUnchecked;
+          builder.addInput(artifact);
+          FilesToRunProvider provider = context.getExecutableRunfiles(artifact);
+          if (provider != null) {
+            builder.addTool(provider);
+          }
+        } else if (toolUnchecked instanceof FilesToRunProvider) {
+          builder.addTool((FilesToRunProvider) toolUnchecked);
+        } else {
+          throw new EvalException(
+              null,
+              "expected value of type 'File or FilesToRunProvider' for "
+                  + "a member of parameter 'tools' but got "
+                  + EvalUtils.getDataTypeName(toolUnchecked)
+                  + " instead");
+        }
+      }
+    } else {
+      // Users didn't pass 'tools', kick in compatibility modes
+      if (starlarkSemantics.incompatibleNoSupportToolsInActionInputs()) {
+        // In this mode we error out if we find any tools among the inputs
+        List<Artifact> tools = null;
+        for (Artifact artifact : inputArtifacts) {
+          FilesToRunProvider provider = context.getExecutableRunfiles(artifact);
+          if (provider != null) {
+            tools = tools != null ? tools : new ArrayList<>(1);
+            tools.add(artifact);
+          }
+        }
+        if (tools != null) {
+          String toolsAsString =
+              Joiner.on(", ")
+                  .join(
+                      tools
+                          .stream()
+                          .map(Artifact::getExecPathString)
+                          .map(s -> "'" + s + "'")
+                          .collect(toList()));
+          throw Starlark.errorf(
+              "Found tool(s) %s in inputs. "
+                  + "A tool is an input with executable=True set. "
+                  + "All tools should be passed using the 'tools' "
+                  + "argument instead of 'inputs' in order to make their runfiles available "
+                  + "to the action. This safety check will not be performed once the action "
+                  + "is modified to take a 'tools' argument. "
+                  + "To temporarily disable this check, "
+                  + "set --incompatible_no_support_tools_in_action_inputs=false.",
+              toolsAsString);
+        }
+      } else {
+        // Full legacy support -- add tools from inputs
+        for (Artifact artifact : inputArtifacts) {
+          FilesToRunProvider provider = context.getExecutableRunfiles(artifact);
+          if (provider != null) {
+            builder.addTool(provider);
+          }
+        }
       }
     }
 
     String mnemonic = getMnemonic(mnemonicUnchecked);
     builder.setMnemonic(mnemonic);
-    if (envUnchecked != Runtime.NONE) {
+    if (envUnchecked != Starlark.NONE) {
       builder.setEnvironment(
           ImmutableMap.copyOf(
-              SkylarkDict.castSkylarkDictOrNoneToDict(
-                  envUnchecked, String.class, String.class, "env")));
+              Dict.castSkylarkDictOrNoneToDict(envUnchecked, String.class, String.class, "env")));
     }
-    if (progressMessage != Runtime.NONE) {
+    if (progressMessage != Starlark.NONE) {
       builder.setProgressMessageNonLazy((String) progressMessage);
     }
-    if (EvalUtils.toBoolean(useDefaultShellEnv)) {
+    if (Starlark.truth(useDefaultShellEnv)) {
       builder.useDefaultShellEnvironment();
     }
-    if (executionRequirementsUnchecked != Runtime.NONE) {
-      builder.setExecutionInfo(
-          ImmutableMap.copyOf(
-              SkylarkDict.castSkylarkDictOrNoneToDict(
-                  executionRequirementsUnchecked,
-                  String.class,
-                  String.class,
-                  "execution_requirements")));
-    }
-    if (inputManifestsUnchecked != Runtime.NONE) {
-      for (RunfilesSupplier supplier : SkylarkList.castSkylarkListOrNoneToList(
-          inputManifestsUnchecked, RunfilesSupplier.class, "runfiles suppliers")) {
+
+    ImmutableMap<String, String> executionInfo =
+        TargetUtils.getFilteredExecutionInfo(
+            executionRequirementsUnchecked,
+            ruleContext.getRule(),
+            starlarkSemantics.experimentalAllowTagsPropagation());
+    builder.setExecutionInfo(executionInfo);
+
+    if (inputManifestsUnchecked != Starlark.NONE) {
+      for (RunfilesSupplier supplier :
+          Sequence.castSkylarkListOrNoneToList(
+              inputManifestsUnchecked, RunfilesSupplier.class, "runfiles suppliers")) {
         builder.addRunfilesSupplier(supplier);
       }
     }
     // Always register the action
-    ruleContext.registerAction(builder.build(ruleContext));
+    registerAction(builder.build(ruleContext));
   }
 
   private String getMnemonic(Object mnemonicUnchecked) {
-    String mnemonic =
-        mnemonicUnchecked == Runtime.NONE ? "SkylarkAction" : (String) mnemonicUnchecked;
+    String mnemonic = mnemonicUnchecked == Starlark.NONE ? "Action" : (String) mnemonicUnchecked;
     if (ruleContext.getConfiguration().getReservedActionMnemonics().contains(mnemonic)) {
       mnemonic = mangleMnemonic(mnemonic);
     }
@@ -632,57 +620,12 @@ public class SkylarkActionFactory implements SkylarkValue {
   }
 
   private static String mangleMnemonic(String mnemonic) {
-    return mnemonic + "FromSkylark";
+    return mnemonic + "FromStarlark";
   }
 
-  @SkylarkCallable(
-    name = "expand_template",
-    doc =
-        "Creates a template expansion action. When the action is executed, it will "
-            + "generate a file based on a template. Parts of the template will be replaced "
-            + "using the <code>substitutions</code> dictionary. Whenever a key of the "
-            + "dictionary appears in the template, it is replaced with the associated value. "
-            + "There is no special syntax for the keys. You may for example use curly braces "
-            + "to avoid conflicts (e.g. <code>{KEY}</code>). "
-            + "<a href=\"https://github.com/laurentlb/examples/blob/master/rules/expand_template/hello.bzl\">"
-            + "See example of use</a>",
-    parameters = {
-      @Param(
-        name = "template",
-        type = Artifact.class,
-        named = true,
-        positional = false,
-        doc = "the template file, which is a UTF-8 encoded text file."
-      ),
-      @Param(
-        name = "output",
-        type = Artifact.class,
-        named = true,
-        positional = false,
-        doc = "the output file, which is a UTF-8 encoded text file."
-      ),
-      @Param(
-        name = "substitutions",
-        type = SkylarkDict.class,
-        named = true,
-        positional = false,
-        doc = "substitutions to make when expanding the template."
-      ),
-      @Param(
-        name = "is_executable",
-        type = Boolean.class,
-        defaultValue = "False",
-        named = true,
-        positional = false,
-        doc = "whether the output file should be executable."
-      )
-    }
-  )
+  @Override
   public void expandTemplate(
-      Artifact template,
-      Artifact output,
-      SkylarkDict<?, ?> substitutionsUnchecked,
-      Boolean executable)
+      FileApi template, FileApi output, Dict<?, ?> substitutionsUnchecked, Boolean executable)
       throws EvalException {
     context.checkMutable("actions.expand_template");
     ImmutableList.Builder<Substitution> substitutionsBuilder = ImmutableList.builder();
@@ -690,26 +633,26 @@ public class SkylarkActionFactory implements SkylarkValue {
         substitutionsUnchecked
             .getContents(String.class, String.class, "substitutions")
             .entrySet()) {
-      // ParserInputSource.create(Path) uses Latin1 when reading BUILD files, which might
+      // ParserInput.create(Path) uses Latin1 when reading BUILD files, which might
       // contain UTF-8 encoded symbols as part of template substitution.
       // As a quick fix, the substitution values are corrected before being passed on.
-      // In the long term, fixing ParserInputSource.create(Path) would be a better approach.
+      // In the long term, fixing ParserInput.create(Path) would be a better approach.
       substitutionsBuilder.add(
-          Substitution.of(
-              substitution.getKey(), convertLatin1ToUtf8(substitution.getValue())));
+          Substitution.of(substitution.getKey(), convertLatin1ToUtf8(substitution.getValue())));
     }
     TemplateExpansionAction action =
         new TemplateExpansionAction(
             ruleContext.getActionOwner(),
-            template,
-            output,
+            (Artifact) template,
+            (Artifact) output,
             substitutionsBuilder.build(),
             executable);
-    ruleContext.registerAction(action);
+    registerAction(action);
   }
 
   /**
    * Returns the proper UTF-8 representation of a String that was erroneously read using Latin1.
+   *
    * @param latin1 Input string
    * @return The input string, UTF8 encoded
    */
@@ -717,7 +660,10 @@ public class SkylarkActionFactory implements SkylarkValue {
     return new String(latin1.getBytes(StandardCharsets.ISO_8859_1), StandardCharsets.UTF_8);
   }
 
-
+  @Override
+  public Args args(StarlarkThread thread) {
+    return Args.newArgs(thread.mutability(), thread.getSemantics());
+  }
 
   @Override
   public boolean isImmutable() {
@@ -725,7 +671,7 @@ public class SkylarkActionFactory implements SkylarkValue {
   }
 
   @Override
-  public void repr(SkylarkPrinter printer) {
+  public void repr(Printer printer) {
     printer.append("actions for");
     context.repr(printer);
   }

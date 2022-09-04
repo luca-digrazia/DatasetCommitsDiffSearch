@@ -298,9 +298,7 @@ public abstract class AndroidSkylarkData
       String aaptVersionString,
       Dict<?, ?> manifestValues, // <String, String>
       Sequence<?> deps, // <ConfiguredTarget>
-      Sequence<?> noCompressExtensions, // <String>
-      Sequence<?> resourceConfigurationFilters, // <String>
-      Sequence<?> densities) // <String>)
+      Sequence<?> noCompressExtensions) // <String>
       throws InterruptedException, EvalException {
     SkylarkErrorReporter errorReporter = SkylarkErrorReporter.from(ctx.getRuleErrorConsumer());
     List<ConfiguredTarget> depsTargets = deps.getContents(ConfiguredTarget.class, "deps");
@@ -337,11 +335,7 @@ public abstract class AndroidSkylarkData
               AssetDependencies.fromProviders(
                   getProviders(depsTargets, AndroidAssetsInfo.PROVIDER), /* neverlink = */ false),
               manifestValues.getContents(String.class, String.class, "manifest_values"),
-              noCompressExtensions.getContents(String.class, "nocompress_extensions"),
-              ResourceFilterFactory.from(
-                  resourceConfigurationFilters.getContents(
-                      String.class, "resource_configuration_filters"),
-                  densities.getContents(String.class, "densities")));
+              noCompressExtensions.getContents(String.class, "nocompress_extensions"));
 
       ImmutableMap.Builder<Provider, NativeInfo> builder = ImmutableMap.builder();
       builder.putAll(getNativeInfosFrom(resourceApk, ctx.getLabel()));

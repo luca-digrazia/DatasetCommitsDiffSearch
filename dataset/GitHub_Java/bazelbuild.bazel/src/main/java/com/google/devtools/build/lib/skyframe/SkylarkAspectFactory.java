@@ -20,10 +20,9 @@ import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
 import com.google.devtools.build.lib.analysis.ConfiguredAspectFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.StarlarkProviderValidationUtil;
+import com.google.devtools.build.lib.analysis.SkylarkProviderValidationUtil;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleConfiguredTargetUtil;
 import com.google.devtools.build.lib.analysis.skylark.SkylarkRuleContext;
-import com.google.devtools.build.lib.events.Event;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.BazelStarlarkContext;
@@ -33,20 +32,22 @@ import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
 import com.google.devtools.build.lib.packages.StructImpl;
 import com.google.devtools.build.lib.packages.StructProvider;
 import com.google.devtools.build.lib.packages.Target;
-import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalExceptionWithStackTrace;
+import com.google.devtools.build.lib.syntax.EvalUtils;
 import com.google.devtools.build.lib.syntax.Mutability;
+import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 import java.util.Map;
 
-/** A factory for aspects that are defined in Starlark. */
+/** A factory for aspects that are defined in Skylark. */
 public class SkylarkAspectFactory implements ConfiguredAspectFactory {
+
   private final SkylarkDefinedAspect skylarkAspect;
 
-  SkylarkAspectFactory(SkylarkDefinedAspect skylarkAspect) {
+  public SkylarkAspectFactory(SkylarkDefinedAspect skylarkAspect) {
     this.skylarkAspect = skylarkAspect;
   }
 
@@ -74,7 +75,7 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
           StarlarkThread.builder(mutability)
               .setSemantics(analysisEnv.getSkylarkSemantics())
               .build();
-      thread.setPrintHandler(Event.makeDebugPrintHandler(analysisEnv.getEventHandler()));
+      thread.setPrintHandler(StarlarkThread.makeDebugPrintHandler(analysisEnv.getEventHandler()));
 
       new BazelStarlarkContext(
               BazelStarlarkContext.Phase.ANALYSIS,
@@ -106,10 +107,10 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
               String.format(
                   "Aspect implementation should return a struct, a list, or a provider "
                       + "instance, but got %s",
-                  Starlark.type(aspectSkylarkObject)));
+                  EvalUtils.getDataTypeName(aspectSkylarkObject)));
           return null;
         }
-        return createAspect(aspectSkylarkObject, ruleContext);
+        return createAspect(aspectSkylarkObject, aspectDescriptor, ruleContext);
       } catch (EvalException e) {
         addAspectToStackTrace(ctadBase.getTarget(), e);
         ruleContext.ruleError("\n" + e.print());
@@ -122,10 +123,11 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     }
   }
 
-  private static ConfiguredAspect createAspect(Object aspectSkylarkObject, RuleContext ruleContext)
+  private ConfiguredAspect createAspect(
+      Object aspectSkylarkObject, AspectDescriptor aspectDescriptor, RuleContext ruleContext)
       throws EvalException, ActionConflictException {
 
-    ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(ruleContext);
+    ConfiguredAspect.Builder builder = new ConfiguredAspect.Builder(aspectDescriptor, ruleContext);
 
     if (aspectSkylarkObject instanceof Iterable) {
       addDeclaredProviders(builder, (Iterable) aspectSkylarkObject);
@@ -139,15 +141,16 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
           if (field.equals("output_groups")) {
             addOutputGroups(struct.getValue(field), builder);
           } else if (field.equals("providers")) {
-            Object providers = struct.getValue(field);
-            // TODO(adonovan): can we be more specific than iterable, and use Sequence.cast?
-            if (!(providers instanceof Iterable)) {
-              throw Starlark.errorf(
-                  "The value for \"providers\" should be a list of declared providers, "
-                      + "got %s instead",
-                  Starlark.type(providers));
-            }
-            addDeclaredProviders(builder, (Iterable<?>) providers);
+            Object value = struct.getValue(field);
+            Iterable<?> providers =
+                SkylarkType.cast(
+                    value,
+                    Iterable.class,
+                    null,
+                    "The value for \"providers\" should be a list of declared providers, "
+                        + "got %s instead",
+                    EvalUtils.getDataTypeName(value, false));
+            addDeclaredProviders(builder, providers);
           } else {
             builder.addSkylarkTransitiveInfo(field, struct.getValue(field));
           }
@@ -158,33 +161,39 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
     }
 
     ConfiguredAspect configuredAspect = builder.build();
-    StarlarkProviderValidationUtil.validateArtifacts(ruleContext);
+    SkylarkProviderValidationUtil.validateArtifacts(ruleContext);
     return configuredAspect;
   }
 
-  private static void addDeclaredProviders(
+  private void addDeclaredProviders(
       ConfiguredAspect.Builder builder, Iterable<?> aspectSkylarkObject) throws EvalException {
     int i = 0;
     for (Object o : aspectSkylarkObject) {
-      if (!(o instanceof Info)) {
-        throw Starlark.errorf(
-            "A return value of an aspect implementation function should be "
-                + "a sequence of declared providers, instead got a %s at index %d",
-            Starlark.type(o), i);
-      }
-      builder.addSkylarkDeclaredProvider((Info) o);
+      Info declaredProvider =
+          SkylarkType.cast(
+              o,
+              Info.class,
+              null,
+              "A return value of an aspect implementation function should be "
+                  + "a sequence of declared providers, instead got a %s at index %d",
+              o.getClass(),
+              i);
+      builder.addSkylarkDeclaredProvider(declaredProvider);
       i++;
     }
   }
 
-  private static void addOutputGroups(Object outputGroups, ConfiguredAspect.Builder builder)
+  private static void addOutputGroups(Object value, ConfiguredAspect.Builder builder)
       throws EvalException {
-    for (Map.Entry<String, StarlarkValue> entry :
-        Dict.cast(outputGroups, String.class, StarlarkValue.class, "output_groups").entrySet()) {
+    Map<String, StarlarkValue> outputGroups =
+        SkylarkType.castMap(value, String.class, StarlarkValue.class, "output_groups");
+
+    for (String outputGroup : outputGroups.keySet()) {
+      StarlarkValue objects = outputGroups.get(outputGroup);
+
       builder.addOutputGroup(
-          entry.getKey(),
-          SkylarkRuleConfiguredTargetUtil.convertToOutputGroupValue(
-              entry.getKey(), entry.getValue()));
+          outputGroup,
+          SkylarkRuleConfiguredTargetUtil.convertToOutputGroupValue(outputGroup, objects));
     }
   }
 

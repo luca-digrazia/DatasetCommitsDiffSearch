@@ -14,16 +14,16 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.java;
 
-import com.google.devtools.build.lib.collect.nestedset.Depset;
-import com.google.devtools.build.lib.starlarkbuildapi.FileApi;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaAnnotationProcessingApi;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaCompilationInfoProviderApi;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaInfoApi;
-import com.google.devtools.build.lib.starlarkbuildapi.java.JavaRuleOutputJarsProviderApi;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Printer;
-import net.starlark.java.eval.Sequence;
-import net.starlark.java.eval.StarlarkThread;
+import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaAnnotationProcessingApi;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaCompilationInfoProviderApi;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.java.JavaRuleOutputJarsProviderApi;
+import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Printer;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /**
  * Fake implementation of {@link JavaInfoApi}.
@@ -118,11 +118,6 @@ public class FakeJavaInfo implements JavaInfoApi<FileApi> {
         FileApi outputJarApi,
         Object compileJarApi,
         Object sourceJarApi,
-        Object compileJdepsApi,
-        Object generatedClassJarApi,
-        Object generatedSourceJarApi,
-        Object nativeHeadersJarApi,
-        Object manifestProtoApi,
         Boolean neverlink,
         Sequence<?> deps,
         Sequence<?> runtimeDeps,

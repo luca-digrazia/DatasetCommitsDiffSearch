@@ -16,24 +16,24 @@ package com.google.devtools.build.lib.skylarkbuildapi.cpp;
 
 import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkMethod;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.syntax.StarlarkValue;
 
 /** Interface for a structured representation of the compilation outputs of a C++ rule. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "CcCompilationOutputs",
-    category = StarlarkDocumentationCategory.BUILTIN,
+    category = SkylarkModuleCategory.BUILTIN,
     documented = true,
     doc = "Helper class containing CC compilation outputs.")
 public interface CcCompilationOutputsApi<FileT extends FileApi> extends StarlarkValue {
 
-  /** @deprecated use {@link #getStarlarkObjects} or {@link #getStarlarkPicObjects}. */
-  @StarlarkMethod(
+  /** @deprecated use {@link #getSkylarkObjects} or {@link #getSkylarkPicObjects}. */
+  @SkylarkCallable(
       name = "object_files",
       doc = "Do not use. Use eiher 'objects' or 'pic_objects'.",
       useStarlarkThread = true,
@@ -41,12 +41,11 @@ public interface CcCompilationOutputsApi<FileT extends FileApi> extends Starlark
         @Param(name = "use_pic", doc = "use_pic", positional = false, named = true),
       })
   @Deprecated
-  Sequence<FileT> getStarlarkObjectFiles(boolean usePic, StarlarkThread thread)
-      throws EvalException;
+  Sequence<FileT> getSkylarkObjectFiles(boolean usePic, StarlarkThread thread) throws EvalException;
 
-  @StarlarkMethod(name = "objects", documented = false, structField = true)
-  Sequence<FileT> getStarlarkObjects() throws EvalException;
+  @SkylarkCallable(name = "objects", documented = false, structField = true)
+  Sequence<FileT> getSkylarkObjects() throws EvalException;
 
-  @StarlarkMethod(name = "pic_objects", documented = false, structField = true)
-  Sequence<FileT> getStarlarkPicObjects() throws EvalException;
+  @SkylarkCallable(name = "pic_objects", documented = false, structField = true)
+  Sequence<FileT> getSkylarkPicObjects() throws EvalException;
 }

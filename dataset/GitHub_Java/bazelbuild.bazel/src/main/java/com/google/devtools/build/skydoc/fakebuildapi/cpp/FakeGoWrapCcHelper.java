@@ -42,15 +42,15 @@ public class FakeGoWrapCcHelper
         FileApi,
         ConstraintValueInfoApi,
         SkylarkRuleContextApi<ConstraintValueInfoApi>,
-        CcInfoApi<FileApi>,
+        CcInfoApi,
         FeatureConfigurationApi,
         CcToolchainProviderApi<FeatureConfigurationApi>,
         CcLinkingContextApi<FileApi>,
         GoConfigurationApi,
         GoContextInfoApi,
         TransitiveInfoCollectionApi,
-        CompilationInfoApi<FileApi>,
-        CcCompilationContextApi<FileApi>,
+        CompilationInfoApi,
+        CcCompilationContextApi,
         WrapCcIncludeProviderApi> {
 
   @Override
@@ -71,13 +71,13 @@ public class FakeGoWrapCcHelper
       FileApi pkg,
       FileApi gopkg,
       Object skylarkWrapContext,
-      CcInfoApi<FileApi> ccInfo) {
+      CcInfoApi ccInfo) {
     return null;
   }
 
   @Override
-  public GoWrapCcInfoApi<FileApi> getGoWrapCcInfo(
-      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext, CcInfoApi<FileApi> ccInfo) {
+  public GoWrapCcInfoApi getGoWrapCcInfo(
+      SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext, CcInfoApi ccInfo) {
     return null;
   }
 
@@ -135,7 +135,7 @@ public class FakeGoWrapCcHelper
   }
 
   @Override
-  public CompilationInfoApi<FileApi> skylarkCreateCompileActions(
+  public CompilationInfoApi skylarkCreateCompileActions(
       SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       FeatureConfigurationApi featureConfiguration,
       CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain,
@@ -163,7 +163,7 @@ public class FakeGoWrapCcHelper
       SkylarkRuleContextApi<ConstraintValueInfoApi> skylarkRuleContext,
       CcToolchainProviderApi<FeatureConfigurationApi> ccToolchain,
       FeatureConfigurationApi featureConfiguration,
-      CcCompilationContextApi<FileApi> wrapperCcCompilationContext,
+      CcCompilationContextApi wrapperCcCompilationContext,
       Depset swigIncludes,
       FileApi swigSource,
       Sequence<?> subParameters,

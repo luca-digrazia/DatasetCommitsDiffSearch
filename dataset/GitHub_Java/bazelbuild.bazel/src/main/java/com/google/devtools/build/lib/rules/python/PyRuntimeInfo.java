@@ -21,12 +21,13 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.skylarkbuildapi.python.PyRuntimeInfoApi;
 import com.google.devtools.build.lib.syntax.Depset;
+import com.google.devtools.build.lib.syntax.Depset.TypeException;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -157,8 +158,9 @@ public final class PyRuntimeInfo implements Info, PyRuntimeInfoApi<Artifact> {
   public NestedSet<Artifact> getFiles() {
     try {
       return files == null ? null : files.getSet(Artifact.class);
-    } catch (Depset.TypeException ex) {
-      throw new IllegalStateException("for files, " + ex.getMessage());
+    } catch (TypeException e) {
+      throw new IllegalStateException(
+          "'files' depset was found to be invalid type " + files.getContentType(), e);
     }
   }
 
@@ -198,9 +200,9 @@ public final class PyRuntimeInfo implements Info, PyRuntimeInfoApi<Artifact> {
       Artifact interpreter = interpreterUncast == NONE ? null : (Artifact) interpreterUncast;
       Depset filesDepset = null;
       if (filesUncast != NONE) {
-        // Validate type of filesDepset.
-        Depset.cast(filesUncast, Artifact.class, "files");
         filesDepset = (Depset) filesUncast;
+        // Validate type of filesDepset.
+        filesDepset.getSetFromParam(Artifact.class, "files");
       }
 
       if ((interpreter == null) == (interpreterPath == null)) {

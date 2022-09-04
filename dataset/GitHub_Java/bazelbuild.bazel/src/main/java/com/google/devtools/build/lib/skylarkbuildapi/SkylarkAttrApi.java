@@ -728,6 +728,19 @@ public interface SkylarkAttrApi extends StarlarkValue {
       doc = "Creates a schema for an output (label) attribute." + OUTPUT_ATTR_TEXT,
       parameters = {
         @Param(
+            name = DEFAULT_ARG,
+            allowedTypes = {
+              @ParamType(type = Label.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
+            noneable = true,
+            defaultValue = "None",
+            named = true,
+            positional = false,
+            disableWithFlag = FlagIdentifier.INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT,
+            valueWhenDisabled = "None",
+            doc = DEFAULT_DOC),
+        @Param(
             name = DOC_ARG,
             type = String.class,
             defaultValue = "''",
@@ -743,7 +756,8 @@ public interface SkylarkAttrApi extends StarlarkValue {
             doc = MANDATORY_DOC)
       },
       useStarlarkThread = true)
-  Descriptor outputAttribute(String doc, Boolean mandatory, StarlarkThread thread)
+  Descriptor outputAttribute(
+      Object defaultValue, String doc, Boolean mandatory, StarlarkThread thread)
       throws EvalException;
 
   @SkylarkCallable(
@@ -756,6 +770,19 @@ public interface SkylarkAttrApi extends StarlarkValue {
             defaultValue = "True",
             doc = ALLOW_EMPTY_DOC,
             named = true),
+        @Param(
+            name = DEFAULT_ARG,
+            allowedTypes = {
+              @ParamType(type = Sequence.class, generic1 = Label.class),
+              @ParamType(type = StarlarkFunction.class)
+            },
+            noneable = true,
+            defaultValue = "None",
+            named = true,
+            positional = false,
+            disableWithFlag = FlagIdentifier.INCOMPATIBLE_NO_OUTPUT_ATTR_DEFAULT,
+            valueWhenDisabled = "None",
+            doc = DEFAULT_DOC),
         @Param(
             name = DOC_ARG,
             type = String.class,
@@ -781,6 +808,7 @@ public interface SkylarkAttrApi extends StarlarkValue {
       useStarlarkThread = true)
   Descriptor outputListAttribute(
       Boolean allowEmpty,
+      Object defaultValue,
       String doc,
       Boolean mandatory,
       Boolean nonEmpty,

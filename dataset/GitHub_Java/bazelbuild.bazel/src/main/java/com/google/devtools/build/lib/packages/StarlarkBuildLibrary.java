@@ -27,8 +27,9 @@ import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Runtime;
-import com.google.devtools.build.lib.syntax.SkylarkList;
+import com.google.devtools.build.lib.syntax.NoneType;
+import com.google.devtools.build.lib.syntax.Sequence;
+import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.List;
 import java.util.Set;
@@ -44,9 +45,9 @@ class StarlarkBuildLibrary {
   public static final ImmutableMap<String, Object> BINDINGS = initializeBindings();
 
   private static ImmutableMap<String, Object> initializeBindings() {
-    ImmutableMap.Builder<String, Object> bindings = ImmutableMap.builder();
-    Runtime.setupSkylarkLibrary(bindings, new StarlarkBuildLibrary());
-    return bindings.build();
+    ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
+    Starlark.addMethods(env, new StarlarkBuildLibrary());
+    return env.build();
   }
 
   private StarlarkBuildLibrary() {
@@ -68,14 +69,14 @@ class StarlarkBuildLibrary {
         // Both parameter below are lists of label designators
         @Param(
             name = "environments",
-            type = SkylarkList.class,
+            type = Sequence.class,
             generic1 = Object.class,
             positional = false,
             named = true,
             doc = "A list of Labels for the environments to be grouped, from the same package."),
         @Param(
             name = "defaults",
-            type = SkylarkList.class,
+            type = Sequence.class,
             generic1 = Object.class,
             positional = false,
             named = true,
@@ -84,16 +85,14 @@ class StarlarkBuildLibrary {
       // Not documented by docgen, as this is only available in BUILD files.
       // TODO(cparsons): Devise a solution to document BUILD functions.
       documented = false,
-      useLocation = true,
       useStarlarkThread = true)
-  public Runtime.NoneType environmentGroup(
+  public NoneType environmentGroup(
       String name,
-      SkylarkList<?> environmentsList, // <Label>
-      SkylarkList<?> defaultsList, // <Label>
-      Location loc,
+      Sequence<?> environmentsList, // <Label>
+      Sequence<?> defaultsList, // <Label>
       StarlarkThread thread)
       throws EvalException {
-    PackageContext context = getContext(thread, loc);
+    PackageContext context = getContext(thread);
     List<Label> environments =
         BuildType.LABEL_LIST.convert(
             environmentsList,
@@ -104,18 +103,17 @@ class StarlarkBuildLibrary {
             defaultsList, "'environment_group argument'", context.pkgBuilder.getBuildFileLabel());
 
     if (environments.isEmpty()) {
-      throw new EvalException(
-          loc, "environment group " + name + " must contain at least one environment");
+      throw Starlark.errorf("environment group %s must contain at least one environment", name);
     }
     try {
+      Location loc = thread.getCallerLocation();
       context.pkgBuilder.addEnvironmentGroup(
           name, environments, defaults, context.eventHandler, loc);
-      return Runtime.NONE;
+      return Starlark.NONE;
     } catch (LabelSyntaxException e) {
-      throw new EvalException(
-          loc, "environment group has invalid name: " + name + ": " + e.getMessage());
+      throw Starlark.errorf("environment group has invalid name: %s: %s", name, e.getMessage());
     } catch (Package.NameConflictException e) {
-      throw new EvalException(loc, e.getMessage());
+      throw Starlark.errorf("%s", e.getMessage());
     }
   }
 
@@ -125,29 +123,27 @@ class StarlarkBuildLibrary {
       parameters = {
         @Param(
             name = "license_strings",
-            type = SkylarkList.class,
+            type = Sequence.class,
             generic1 = String.class,
             doc = "A list of strings, the names of the licenses used.")
       },
       // Not documented by docgen, as this is only available in BUILD files.
       // TODO(cparsons): Devise a solution to document BUILD functions.
       documented = false,
-      useStarlarkThread = true,
-      useLocation = true)
-  public Runtime.NoneType invoke(
-      SkylarkList<?> licensesList, // list of license strings
-      Location loc,
+      useStarlarkThread = true)
+  public NoneType licenses(
+      Sequence<?> licensesList, // list of license strings
       StarlarkThread thread)
       throws EvalException {
-    PackageContext context = getContext(thread, loc);
+    PackageContext context = getContext(thread);
     try {
       License license = BuildType.LICENSE.convert(licensesList, "'licenses' operand");
       context.pkgBuilder.setDefaultLicense(license);
     } catch (ConversionException e) {
-      context.eventHandler.handle(Event.error(loc, e.getMessage()));
+      context.eventHandler.handle(Event.error(thread.getCallerLocation(), e.getMessage()));
       context.pkgBuilder.setContainsErrors();
     }
-    return Runtime.NONE;
+    return Starlark.NONE;
   }
 
   @SkylarkCallable(
@@ -159,20 +155,18 @@ class StarlarkBuildLibrary {
       // Not documented by docgen, as this is only available in BUILD files.
       // TODO(cparsons): Devise a solution to document BUILD functions.
       documented = false,
-      useStarlarkThread = true,
-      useLocation = true)
-  public Runtime.NoneType distribs(Object object, Location loc, StarlarkThread thread)
-      throws EvalException {
-    PackageContext context = getContext(thread, loc);
+      useStarlarkThread = true)
+  public NoneType distribs(Object object, StarlarkThread thread) throws EvalException {
+    PackageContext context = getContext(thread);
 
     try {
       Set<DistributionType> distribs =
           BuildType.DISTRIBUTIONS.convert(object, "'distribs' operand");
       context.pkgBuilder.setDefaultDistribs(distribs);
     } catch (ConversionException e) {
-      context.eventHandler.handle(Event.error(loc, e.getMessage()));
+      context.eventHandler.handle(Event.error(thread.getCallerLocation(), e.getMessage()));
       context.pkgBuilder.setContainsErrors();
     }
-    return Runtime.NONE;
+    return Starlark.NONE;
   }
 }

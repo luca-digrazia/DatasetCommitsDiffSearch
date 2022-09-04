@@ -15,37 +15,35 @@
 package com.google.devtools.build.lib.skylarkbuildapi.platform;
 
 import com.google.devtools.build.lib.cmdline.Label;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkConstructor;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
 
 /** Info object representing data about a specific platform. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "PlatformInfo",
     doc =
-        "Provides access to data about a specific platform. See "
-            + "<a href='../../platforms.html#defining-constraints-and-platforms'>Defining "
-            + "Constraints and Platforms</a> for more information."
+        "Provides access to data about a specific platform. "
             + PlatformInfoApi.EXPERIMENTAL_WARNING,
-    category = StarlarkDocumentationCategory.PROVIDER)
+    category = SkylarkModuleCategory.PROVIDER)
 public interface PlatformInfoApi<
         ConstraintSettingInfoT extends ConstraintSettingInfoApi,
         ConstraintValueInfoT extends ConstraintValueInfoApi>
     extends StructApi {
 
   String EXPERIMENTAL_WARNING =
-      "<br/><i>Note: This API is experimental and may change at any time. It is disabled by"
-          + " default, but may be enabled with <code>--experimental_platforms_api</code></i>";
+      "<i>Note: This API is experimental and may change at any time. It is disabled by default, "
+          + "but may be enabled with <code>--experimental_platforms_api</code></i>";
 
   @SkylarkCallable(
       name = "label",
@@ -78,7 +76,7 @@ public interface PlatformInfoApi<
   Map<String, String> execProperties();
 
   /** Provider for {@link PlatformInfoApi} objects. */
-  @StarlarkBuiltin(name = "Provider", documented = false, doc = "")
+  @SkylarkModule(name = "Provider", documented = false, doc = "")
   interface Provider<
           ConstraintSettingInfoT extends ConstraintSettingInfoApi,
           ConstraintValueInfoT extends ConstraintValueInfoApi,
@@ -122,15 +120,15 @@ public interface PlatformInfoApi<
               doc = "The exec properties for the platform.")
         },
         selfCall = true,
-        useStarlarkThread = true,
+        useLocation = true,
         enableOnlyWithFlag = FlagIdentifier.EXPERIMENTAL_PLATFORM_API)
-    @StarlarkConstructor(objectType = PlatformInfoApi.class, receiverNameForDoc = "PlatformInfo")
+    @SkylarkConstructor(objectType = PlatformInfoApi.class, receiverNameForDoc = "PlatformInfo")
     PlatformInfoT platformInfo(
         Label label,
         Object parent,
         Sequence<?> constraintValues,
         Object execProperties,
-        StarlarkThread thread)
+        Location location)
         throws EvalException;
   }
 }

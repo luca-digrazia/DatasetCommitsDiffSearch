@@ -14,7 +14,6 @@
 
 package com.google.devtools.build.skydoc.fakebuildapi.cpp;
 
-import com.google.devtools.build.lib.skylarkbuildapi.FileApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationContextApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcInfoApi;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
@@ -22,10 +21,10 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Printer;
 
 /** Fake implementation of {@link CcInfoApi}. */
-public class FakeCcInfo implements CcInfoApi<FileApi> {
+public class FakeCcInfo implements CcInfoApi {
 
   @Override
-  public CcCompilationContextApi<FileApi> getCcCompilationContext() {
+  public CcCompilationContextApi getCcCompilationContext() {
     return null;
   }
 
@@ -48,10 +47,10 @@ public class FakeCcInfo implements CcInfoApi<FileApi> {
   public void repr(Printer printer) {}
 
   /** Fake implementation of {@link CcInfoApi.Provider}. */
-  public static class Provider implements CcInfoApi.Provider<FileApi> {
+  public static class Provider implements CcInfoApi.Provider {
 
     @Override
-    public CcInfoApi<FileApi> createInfo(Object ccCompilationContext, Object ccLinkingInfo)
+    public CcInfoApi createInfo(Object ccCompilationContext, Object ccLinkingInfo)
         throws EvalException {
       return new FakeCcInfo();
     }

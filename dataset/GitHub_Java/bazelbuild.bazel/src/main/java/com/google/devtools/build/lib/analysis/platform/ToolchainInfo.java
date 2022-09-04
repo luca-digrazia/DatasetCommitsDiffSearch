@@ -19,17 +19,17 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.ImmutableSortedMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.platform.ToolchainInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.platform.ToolchainInfoApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.Starlark;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.Starlark;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.syntax.Location;
 
 /**
  * A provider that supplies information about a specific language toolchain, including what platform
@@ -41,8 +41,8 @@ import net.starlark.java.syntax.Location;
 @Immutable
 public class ToolchainInfo extends NativeInfo implements ToolchainInfoApi {
 
-  /** Name used in Starlark for accessing this provider. */
-  public static final String STARLARK_NAME = "ToolchainInfo";
+  /** Name used in Skylark for accessing this provider. */
+  public static final String SKYLARK_NAME = "ToolchainInfo";
 
   /** Provider singleton constant. */
   public static final BuiltinProvider<ToolchainInfo> PROVIDER = new Provider();
@@ -51,7 +51,7 @@ public class ToolchainInfo extends NativeInfo implements ToolchainInfoApi {
   private static class Provider extends BuiltinProvider<ToolchainInfo>
       implements ToolchainInfoApi.Provider {
     private Provider() {
-      super(STARLARK_NAME, ToolchainInfo.class);
+      super(SKYLARK_NAME, ToolchainInfo.class);
     }
 
     @Override
@@ -65,29 +65,20 @@ public class ToolchainInfo extends NativeInfo implements ToolchainInfoApi {
 
   /** Constructs a ToolchainInfo. The {@code values} map itself is not retained. */
   protected ToolchainInfo(Map<String, Object> values, Location location) {
-    super(location);
+    super(PROVIDER, location);
     this.values = copyValues(values);
-  }
-
-  public ToolchainInfo(Map<String, Object> values) {
-    this.values = copyValues(values);
-  }
-
-  @Override
-  public BuiltinProvider<ToolchainInfo> getProvider() {
-    return PROVIDER;
   }
 
   /**
    * Preprocesses a map of field values to convert the field names and field values to
-   * Starlark-acceptable names and types.
+   * Skylark-acceptable names and types.
    *
    * <p>Entries are ordered by key.
    */
   private static ImmutableSortedMap<String, Object> copyValues(Map<String, Object> values) {
     ImmutableSortedMap.Builder<String, Object> builder = ImmutableSortedMap.naturalOrder();
     for (Map.Entry<String, Object> e : values.entrySet()) {
-      builder.put(Attribute.getStarlarkName(e.getKey()), Starlark.fromJava(e.getValue(), null));
+      builder.put(Attribute.getSkylarkName(e.getKey()), Starlark.fromJava(e.getValue(), null));
     }
     return builder.build();
   }

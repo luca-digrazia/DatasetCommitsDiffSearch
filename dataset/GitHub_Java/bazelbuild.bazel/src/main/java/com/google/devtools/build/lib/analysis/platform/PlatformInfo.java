@@ -19,18 +19,17 @@ import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.platform.ConstraintCollection.DuplicateConstraintException;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.starlarkbuildapi.platform.PlatformInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.platform.PlatformInfoApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.Starlark;
-import com.google.devtools.build.lib.syntax.StarlarkThread;
 import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.util.StringUtilities;
 import java.util.HashMap;
@@ -51,8 +50,8 @@ public class PlatformInfo extends NativeInfo
    */
   public static final String PARENT_REMOTE_EXECUTION_KEY = "{PARENT_REMOTE_EXECUTION_PROPERTIES}";
 
-  /** Name used in Starlark for accessing this provider. */
-  public static final String STARLARK_NAME = "PlatformInfo";
+  /** Name used in Skylark for accessing this provider. */
+  public static final String SKYLARK_NAME = "PlatformInfo";
 
   /** Provider singleton constant. */
   public static final BuiltinProvider<PlatformInfo> PROVIDER = new Provider();
@@ -62,7 +61,7 @@ public class PlatformInfo extends NativeInfo
       implements PlatformInfoApi.Provider<
           ConstraintSettingInfo, ConstraintValueInfo, PlatformInfo> {
     private Provider() {
-      super(STARLARK_NAME, PlatformInfo.class);
+      super(SKYLARK_NAME, PlatformInfo.class);
     }
 
     @Override
@@ -71,7 +70,7 @@ public class PlatformInfo extends NativeInfo
         Object parentUnchecked,
         Sequence<?> constraintValuesUnchecked,
         Object execPropertiesUnchecked,
-        StarlarkThread thread)
+        Location location)
         throws EvalException {
       PlatformInfo.Builder builder = PlatformInfo.builder();
       builder.setLabel(label);
@@ -80,21 +79,20 @@ public class PlatformInfo extends NativeInfo
       }
       if (!constraintValuesUnchecked.isEmpty()) {
         builder.addConstraints(
-            Sequence.cast(
-                constraintValuesUnchecked, ConstraintValueInfo.class, "constraint_values"));
+            constraintValuesUnchecked.getContents(ConstraintValueInfo.class, "constraint_values"));
       }
       if (execPropertiesUnchecked != null) {
-        Dict<String, String> execProperties =
-            Dict.noneableCast(
+        Map<String, String> execProperties =
+            Dict.castSkylarkDictOrNoneToDict(
                 execPropertiesUnchecked, String.class, String.class, "exec_properties");
         builder.setExecProperties(ImmutableMap.copyOf(execProperties));
       }
-      builder.setLocation(thread.getCallerLocation());
+      builder.setLocation(location);
 
       try {
         return builder.build();
       } catch (DuplicateConstraintException | ExecPropertiesException e) {
-        throw new EvalException(e);
+        throw new EvalException(location, e);
       }
     }
   }

@@ -14,40 +14,34 @@
 
 package com.google.devtools.build.lib.skylarkbuildapi;
 
-import com.google.devtools.build.lib.collect.nestedset.Depset;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.StructApi;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkConstructor;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkBuiltin;
-import com.google.devtools.build.lib.skylarkinterface.StarlarkDocumentationCategory;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
+import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 
 /** A provider that gives general information about a target's direct and transitive files. */
-@StarlarkBuiltin(
+@SkylarkModule(
     name = "DefaultInfo",
-    category = StarlarkDocumentationCategory.PROVIDER,
-    doc =
-        "A provider that gives general information about a target's direct and transitive files. "
-            + "Every rule type has this provider, even if it is not returned explicitly by the "
-            + "rule's implementation function. "
-            + "Each <code>DefaultInfo</code> instance has the following fields: "
-            + "<ul>"
-            + "<li><code>files</code>"
-            + "<li><code>files_to_run</code>"
-            + "<li><code>data_runfiles</code>"
-            + "<li><code>default_runfiles</code>"
-            + "</ul>"
-            + "See the <a href='../rules.$DOC_EXT'>rules</a> page for extensive guides on how to "
-            + "use this provider.")
+    category = SkylarkModuleCategory.PROVIDER,
+    doc = "A provider that gives general information about a target's direct and transitive files. "
+        + "Every rule type has this provider, even if it is not returned explicitly by the "
+        + "rule's implementation function."
+        + "Each <code>DefaultInfo</code> instance has the following fields: "
+        + "<ul>"
+        + "<li><code>files</code>"
+        + "<li><code>files_to_run</code>"
+        + "<li><code>data_runfiles</code>"
+        + "<li><code>default_runfiles</code>"
+        + "</ul>"
+        + "See the <a href='../rules.$DOC_EXT'>rules</a> page for more information."
+)
 public interface DefaultInfoApi extends StructApi {
-
-  static final String DEPRECATED_RUNFILES_PARAMETER_WARNING =
-      "<p><b>It is recommended that you avoid using this parameter (see "
-          + "<a href='../rules.$DOC_EXT#runfiles-features-to-avoid'>"
-          + "\"runfiles features to avoid\"</a>)</b></p> ";
 
   @SkylarkCallable(
       name = "files",
@@ -71,27 +65,25 @@ public interface DefaultInfoApi extends StructApi {
 
   @SkylarkCallable(
       name = "data_runfiles",
-      doc =
-          "runfiles descriptor describing the files that this target needs when run in the "
-              + "condition that it is a <code>data</code> dependency attribute. Under most "
-              + "circumstances, use the <code>default_runfiles</code> parameter instead. "
-              + "See <a href='../rules.$DOC_EXT#runfiles-features-to-avoid'>"
-              + "\"runfiles features to avoid\"</a> for details. ",
+      doc = "the files that are added to the runfiles of a "
+          + "target that depend on the rule via the <code>data</code> attribute.",
       structField = true,
-      allowReturnNones = true)
+      allowReturnNones = true
+  )
   RunfilesApi getDataRunfiles();
 
   @SkylarkCallable(
       name = "default_runfiles",
-      doc =
-          "runfiles descriptor describing the files that this target needs when run "
-              + "(via the <code>run</code> command or as a tool dependency).",
+      doc = "the files that are added to the runfiles of "
+          + "a target that depend on the rule via anything but the <code>data</code> "
+          + "attribute.",
       structField = true,
-      allowReturnNones = true)
+      allowReturnNones = true
+  )
   RunfilesApi getDefaultRunfiles();
 
   /** Provider for {@link DefaultInfoApi}. */
-  @StarlarkBuiltin(name = "Provider", documented = false, doc = "")
+  @SkylarkModule(name = "Provider", documented = false, doc = "")
   interface DefaultInfoApiProvider<RunfilesT extends RunfilesApi, FileT extends FileApi>
       extends ProviderApi {
 
@@ -119,8 +111,8 @@ public interface DefaultInfoApi extends StructApi {
               defaultValue = "None",
               noneable = true,
               doc =
-                  "runfiles descriptor describing the files that this target needs when run "
-                      + "(via the <code>run</code> command or as a tool dependency)."),
+                  "set of files acting as both the "
+                      + "<code>data_runfiles</code> and <code>default_runfiles</code>."),
           @Param(
               name = "data_runfiles",
               type = RunfilesApi.class,
@@ -129,9 +121,8 @@ public interface DefaultInfoApi extends StructApi {
               defaultValue = "None",
               noneable = true,
               doc =
-                  DEPRECATED_RUNFILES_PARAMETER_WARNING
-                      + "runfiles descriptor describing the runfiles this target needs to run "
-                      + "when it is a dependency via the <code>data</code> attribute."),
+                  "the files that are added to the runfiles of a "
+                      + "target that depend on the rule via the <code>data</code> attribute."),
           @Param(
               name = "default_runfiles",
               type = RunfilesApi.class,
@@ -140,10 +131,9 @@ public interface DefaultInfoApi extends StructApi {
               defaultValue = "None",
               noneable = true,
               doc =
-                  DEPRECATED_RUNFILES_PARAMETER_WARNING
-                      + "runfiles descriptor describing the runfiles this target needs to run "
-                      + "when it is a dependency via any attribute other than the "
-                      + "<code>data</code> attribute."),
+                  "the files that are added to the runfiles of "
+                      + "a target that depend on the rule via anything but the <code>data</code> "
+                      + "attribute."),
           @Param(
               name = "executable",
               type = FileApi.class,

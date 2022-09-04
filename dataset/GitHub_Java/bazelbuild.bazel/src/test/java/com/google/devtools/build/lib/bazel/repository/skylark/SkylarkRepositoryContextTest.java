@@ -42,7 +42,6 @@ import com.google.devtools.build.lib.skyframe.BazelSkyframeExecutorConstants;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Mutability;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.StarlarkFunction;
@@ -104,10 +103,8 @@ public final class SkylarkRepositoryContextTest {
 
   private static Object execAndEval(String... lines) {
     try (Mutability mu = Mutability.create("impl")) {
-      StarlarkThread thread = StarlarkThread.builder(mu).useDefaultSemantics().build();
-      Module module = thread.getGlobals();
       return EvalUtils.execAndEvalOptionalFinalExpression(
-          ParserInput.fromLines(lines), module, thread);
+          ParserInput.fromLines(lines), StarlarkThread.builder(mu).useDefaultSemantics().build());
     } catch (Exception ex) { // SyntaxError | EvalException | InterruptedException
       throw new AssertionError("exec failed", ex);
     }

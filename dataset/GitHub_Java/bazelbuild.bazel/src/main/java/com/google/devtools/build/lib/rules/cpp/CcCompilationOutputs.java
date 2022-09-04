@@ -23,7 +23,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcCompilationOutputsApi;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkList;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -109,9 +108,7 @@ public class CcCompilationOutputs implements CcCompilationOutputsApi<Artifact> {
     CcCommon.checkLocationWhitelisted(
         thread.getSemantics(),
         thread.getCallerLocation(),
-        ((Label) Module.ofInnermostEnclosingStarlarkFunction(thread).getLabel())
-            .getPackageIdentifier()
-            .toString());
+        ((Label) thread.getGlobals().getLabel()).getPackageIdentifier().toString());
     return StarlarkList.immutableCopyOf(getObjectFiles(usePic));
   }
 

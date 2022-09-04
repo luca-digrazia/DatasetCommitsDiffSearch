@@ -21,6 +21,7 @@ import com.google.devtools.build.lib.skylarkinterface.ParamType;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
+import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.errorprone.annotations.FormatMethod;
 import java.util.HashSet;
 import java.util.List;
@@ -148,7 +149,8 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
       if (annot.selfCall() && !classesWithSelfcall.add(cls)) {
         errorf(method, "Containing class has more than one selfCall method defined.");
       }
-      if (!annot.enableOnlyWithFlag().isEmpty() && !annot.disableWithFlag().isEmpty()) {
+      if (annot.enableOnlyWithFlag() != FlagIdentifier.NONE
+          && annot.disableWithFlag() != FlagIdentifier.NONE) {
         errorf(
             method,
             "Only one of SkylarkCallable.enablingFlag and SkylarkCallable.disablingFlag may be"
@@ -275,7 +277,7 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
               "Positional parameter '%s' is specified after one or more non-positional parameters",
               paramAnnot.name());
         }
-        if (!paramAnnot.named() && !allowPositionalOnlyNext) {
+        if (!isParamNamed(paramAnnot) && !allowPositionalOnlyNext) {
           errorf(
               param,
               "Positional-only parameter '%s' is specified after one or more named parameters",
@@ -297,17 +299,21 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
         // No positional parameters can come after this parameter.
         allowPositionalNext = false;
 
-        if (!paramAnnot.named()) {
+        if (!isParamNamed(paramAnnot)) {
           errorf(param, "Parameter '%s' must be either positional or named", paramAnnot.name());
         }
       }
-      if (paramAnnot.named()) {
+      if (isParamNamed(paramAnnot)) {
         // No positional-only parameters can come after this parameter.
         allowPositionalOnlyNext = false;
       }
     }
 
     checkSpecialParams(method, annot);
+  }
+
+  private static boolean isParamNamed(Param param) {
+    return param.named() || param.legacyNamed();
   }
 
   // Checks consistency of a single parameter with its Param annotation.
@@ -388,14 +394,16 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
     }
 
     // Check sense of flag-controlled parameters.
-    if (!paramAnnot.enableOnlyWithFlag().isEmpty() && !paramAnnot.disableWithFlag().isEmpty()) {
+    if (paramAnnot.enableOnlyWithFlag() != FlagIdentifier.NONE
+        && paramAnnot.disableWithFlag() != FlagIdentifier.NONE) {
       errorf(
           param,
           "Parameter '%s' has enableOnlyWithFlag and disableWithFlag set. At most one may be set",
           paramAnnot.name());
     }
     boolean isParamControlledByFlag =
-        !paramAnnot.enableOnlyWithFlag().isEmpty() || !paramAnnot.disableWithFlag().isEmpty();
+        paramAnnot.enableOnlyWithFlag() != FlagIdentifier.NONE
+            || paramAnnot.disableWithFlag() != FlagIdentifier.NONE;
     if (!isParamControlledByFlag && !paramAnnot.valueWhenDisabled().isEmpty()) {
       errorf(
           param,
@@ -434,12 +442,12 @@ public final class SkylarkCallableProcessor extends AbstractProcessor {
   }
 
   private void checkSpecialParams(ExecutableElement method, SkylarkCallable annot) {
-    if (!annot.extraPositionals().enableOnlyWithFlag().isEmpty()
-        || !annot.extraPositionals().disableWithFlag().isEmpty()) {
+    if (annot.extraPositionals().enableOnlyWithFlag() != FlagIdentifier.NONE
+        || annot.extraPositionals().disableWithFlag() != FlagIdentifier.NONE) {
       errorf(method, "The extraPositionals parameter may not be toggled by semantic flag");
     }
-    if (!annot.extraKeywords().enableOnlyWithFlag().isEmpty()
-        || !annot.extraKeywords().disableWithFlag().isEmpty()) {
+    if (annot.extraKeywords().enableOnlyWithFlag() != FlagIdentifier.NONE
+        || annot.extraKeywords().disableWithFlag() != FlagIdentifier.NONE) {
       errorf(method, "The extraKeywords parameter may not be toggled by semantic flag");
     }
 

@@ -17,7 +17,7 @@ import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
-import com.google.devtools.starlark.spelling.SpellChecker;
+import com.google.devtools.build.lib.util.SpellChecker;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -166,7 +166,8 @@ public final class BuiltinCallable implements StarlarkCallable {
       }
 
       // disabled?
-      if (param.disabledByFlag() != null) {
+      StarlarkSemantics.FlagIdentifier flag = param.disabledByFlag();
+      if (flag != null) {
         // Skip disabled parameter as if not present at all.
         // The default value will be filled in below.
         continue;
@@ -238,7 +239,7 @@ public final class BuiltinCallable implements StarlarkCallable {
       }
 
       // disabled?
-      String flag = param.disabledByFlag();
+      StarlarkSemantics.FlagIdentifier flag = param.disabledByFlag();
       if (flag != null) {
         // spill to **kwargs
         if (kwargs == null) {
@@ -325,28 +326,15 @@ public final class BuiltinCallable implements StarlarkCallable {
   }
 
   private void checkParamValue(ParamDescriptor param, Object value) throws EvalException {
-    // Value must belong to one of the specified classes.
-    boolean ok = false;
-    for (Class<?> cls : param.getAllowedClasses()) {
-      if (cls.isInstance(value)) {
-        ok = true;
-        break;
-      }
-    }
-    if (!ok) {
+    // invalid argument?
+    SkylarkType type = param.getSkylarkType();
+    if (!type.contains(value)) {
       throw Starlark.errorf(
           "in call to %s(), parameter '%s' got value of type '%s', want '%s'",
-          methodName, param.getName(), Starlark.type(value), param.getTypeErrorMessage());
+          methodName, param.getName(), EvalUtils.getDataTypeName(value), type);
     }
 
-    // None is valid if and only if the parameter is marked noneable,
-    // in which case the above check passes as the list of classes will include NoneType.
-    // The reason for this check is to ensure that merely having type=Object.class
-    // does not allow None as an argument value; I'm not sure why, that but that's the
-    // historical behavior.
-    //
-    // We do this check second because the first check prints a better error
-    // that enumerates the allowed types.
+    // unexpected None?
     if (value == Starlark.NONE && !param.isNoneable()) {
       throw Starlark.errorf(
           "in call to %s(), parameter '%s' cannot be None", methodName, param.getName());
@@ -354,19 +342,20 @@ public final class BuiltinCallable implements StarlarkCallable {
   }
 
   // Returns a phrase meaning "disabled" appropriate to the specified flag.
-  private static String disabled(String flag, StarlarkSemantics semantics) {
+  private static String disabled(
+      StarlarkSemantics.FlagIdentifier flag, StarlarkSemantics semantics) {
     // If the flag is True, it must be a deprecation flag. Otherwise it's an experimental flag.
     // TODO(adonovan): is that assumption sound?
     if (semantics.flagValue(flag)) {
       return String.format(
           "deprecated and will be removed soon. It may be temporarily re-enabled by setting"
               + " --%s=false",
-          flag);
+          flag.getFlagName());
     } else {
       return String.format(
           "experimental and thus unavailable with the current flags. It may be enabled by setting"
               + " --%s",
-          flag);
+          flag.getFlagName());
     }
   }
 }

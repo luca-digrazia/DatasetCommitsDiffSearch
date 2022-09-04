@@ -16,15 +16,15 @@ package com.google.devtools.build.lib.analysis;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.starlarkbuildapi.TemplateVariableInfoApi;
+import com.google.devtools.build.lib.skylarkbuildapi.TemplateVariableInfoApi;
+import com.google.devtools.build.lib.syntax.Dict;
+import com.google.devtools.build.lib.syntax.EvalException;
+import com.google.devtools.build.lib.syntax.StarlarkThread;
 import java.util.Map;
-import net.starlark.java.eval.Dict;
-import net.starlark.java.eval.EvalException;
-import net.starlark.java.eval.StarlarkThread;
-import net.starlark.java.syntax.Location;
 
 /** Provides access to make variables from the current fragments. */
 @Immutable
@@ -43,7 +43,8 @@ public final class TemplateVariableInfo extends NativeInfo implements TemplateVa
     @Override
     public TemplateVariableInfo templateVariableInfo(Dict<?, ?> vars, StarlarkThread thread)
         throws EvalException {
-      Map<String, String> varsMap = Dict.noneableCast(vars, String.class, String.class, "vars");
+      Map<String, String> varsMap =
+          Dict.castSkylarkDictOrNoneToDict(vars, String.class, String.class, "vars");
       return new TemplateVariableInfo(ImmutableMap.copyOf(varsMap), thread.getCallerLocation());
     }
   }
@@ -52,13 +53,8 @@ public final class TemplateVariableInfo extends NativeInfo implements TemplateVa
 
   @AutoCodec.Instantiator
   public TemplateVariableInfo(ImmutableMap<String, String> variables, Location location) {
-    super(location);
+    super(PROVIDER, location);
     this.variables = variables;
-  }
-
-  @Override
-  public BuiltinProvider<TemplateVariableInfo> getProvider() {
-    return PROVIDER;
   }
 
   @Override

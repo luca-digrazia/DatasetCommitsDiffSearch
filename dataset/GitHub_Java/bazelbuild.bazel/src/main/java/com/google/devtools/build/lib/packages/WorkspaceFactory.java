@@ -171,7 +171,6 @@ public class WorkspaceFactory {
     thread.setThreadLocal(
         PackageFactory.PackageContext.class,
         new PackageFactory.PackageContext(builder, null, localReporter));
-    Module module = thread.getGlobals();
 
     // The workspace environment doesn't need the tools repository or the fragment map
     // because executing workspace rules happens before analysis and it doesn't need a
@@ -195,7 +194,7 @@ public class WorkspaceFactory {
     } else if (PackageFactory.checkBuildSyntax(
         file, globs, globs, new HashMap<>(), localReporter)) {
       try {
-        EvalUtils.exec(file, module, thread);
+        EvalUtils.exec(file, thread);
       } catch (EvalException ex) {
         localReporter.handle(Event.error(ex.getLocation(), ex.getMessage()));
       }
@@ -350,7 +349,6 @@ public class WorkspaceFactory {
   private ImmutableMap<String, Object> getDefaultEnvironment() {
     ImmutableMap.Builder<String, Object> env = ImmutableMap.builder();
     env.putAll(Starlark.UNIVERSE);
-    env.putAll(StarlarkLibrary.COMMON); // e.g. select, depset
     env.putAll(workspaceFunctions);
     if (installDir != null) {
       env.put("__embedded_dir__", installDir.getPathString());

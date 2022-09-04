@@ -16,12 +16,12 @@ package com.google.devtools.build.lib.analysis.platform;
 
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.NativeInfo;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
-import com.google.devtools.build.lib.starlarkbuildapi.platform.ConstraintValueInfoApi;
-import com.google.devtools.build.lib.syntax.Location;
+import com.google.devtools.build.lib.skylarkbuildapi.platform.ConstraintValueInfoApi;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.util.Fingerprint;
 import java.util.Objects;
@@ -30,12 +30,12 @@ import java.util.Objects;
 @Immutable
 @AutoCodec
 public class ConstraintValueInfo extends NativeInfo implements ConstraintValueInfoApi {
-  /** Name used in Starlark for accessing this provider. */
-  public static final String STARLARK_NAME = "ConstraintValueInfo";
+  /** Name used in Skylark for accessing this provider. */
+  public static final String SKYLARK_NAME = "ConstraintValueInfo";
 
   /** Provider singleton constant. */
   public static final BuiltinProvider<ConstraintValueInfo> PROVIDER =
-      new BuiltinProvider<ConstraintValueInfo>(STARLARK_NAME, ConstraintValueInfo.class) {};
+      new BuiltinProvider<ConstraintValueInfo>(SKYLARK_NAME, ConstraintValueInfo.class) {};
 
   private final ConstraintSettingInfo constraint;
   private final Label label;
@@ -60,11 +60,8 @@ public class ConstraintValueInfo extends NativeInfo implements ConstraintValueIn
 
   @Override
   public void repr(Printer printer) {
-    Printer.format(
-        printer,
-        "ConstraintValueInfo(setting=%s, %s)",
-        constraint.label().toString(),
-        label.toString());
+    printer.format(
+        "ConstraintValueInfo(setting=%s, %s)", constraint.label().toString(), label.toString());
   }
 
   /** Returns a new {@link ConstraintValueInfo} with the given data. */

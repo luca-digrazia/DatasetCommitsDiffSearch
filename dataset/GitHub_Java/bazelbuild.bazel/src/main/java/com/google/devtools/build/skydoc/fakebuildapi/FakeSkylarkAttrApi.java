@@ -19,7 +19,6 @@ import com.google.devtools.build.lib.skylarkbuildapi.SkylarkAttrApi;
 import com.google.devtools.build.lib.skylarkbuildapi.core.ProviderApi;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.syntax.Module;
 import com.google.devtools.build.lib.syntax.Printer;
 import com.google.devtools.build.lib.syntax.Sequence;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -279,11 +278,12 @@ public class FakeSkylarkAttrApi implements SkylarkAttrApi {
    * name will be set to "Unknown Provider".
    */
   private static String providerName(ProviderApi provider, StarlarkThread thread) {
-    Map<String, Object> bindings =
-        Module.ofInnermostEnclosingStarlarkFunction(thread).getTransitiveBindings();
-    for (Entry<String, Object> envEntry : bindings.entrySet()) {
-      if (provider.equals(envEntry.getValue())) {
-        return envEntry.getKey();
+    Map<String, Object> bindings = thread.getGlobals().getTransitiveBindings();
+    if (bindings.containsValue(provider)) {
+      for (Entry<String, Object> envEntry : bindings.entrySet()) {
+        if (provider.equals(envEntry.getValue())) {
+          return envEntry.getKey();
+        }
       }
     }
     return "Unknown Provider";

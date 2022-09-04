@@ -17,10 +17,11 @@ package com.google.devtools.build.lib.skylarkbuildapi.repository;
 import com.google.devtools.build.lib.skylarkinterface.Param;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkCallable;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkGlobalLibrary;
+import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Dict;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.Sequence;
-import com.google.devtools.build.lib.syntax.StarlarkCallable;
+import com.google.devtools.build.lib.syntax.StarlarkFunction;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics.FlagIdentifier;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
 
@@ -39,10 +40,10 @@ public interface RepositoryModuleApi {
       parameters = {
         @Param(
             name = "implementation",
-            type = StarlarkCallable.class,
+            type = StarlarkFunction.class,
             named = true,
             doc =
-                "the function that implements this rule. Must have a single parameter,"
+                "the Starlark function that implements this rule. Must have a single parameter,"
                     + " <code><a href=\"repository_ctx.html\">repository_ctx</a></code>. The"
                     + " function is called during the loading phase for each instance of the"
                     + " rule."),
@@ -107,8 +108,8 @@ public interface RepositoryModuleApi {
             positional = false)
       },
       useStarlarkThread = true)
-  StarlarkCallable repositoryRule(
-      StarlarkCallable implementation,
+  BaseFunction repositoryRule(
+      StarlarkFunction implementation,
       Object attrs,
       Boolean local,
       Sequence<?> environ, // <String> expected

@@ -120,6 +120,8 @@ public interface SkylarkNativeModuleApi extends StarlarkValue {
         @Param(
             name = "name",
             type = String.class,
+            // TODO(cparsons): This parameter should be positional-only.
+            legacyNamed = true,
             doc = "The name of the target.")
       },
       useStarlarkThread = true)
@@ -176,7 +178,7 @@ public interface SkylarkNativeModuleApi extends StarlarkValue {
       name = "exports_files",
       doc =
           "Specifies a list of files belonging to this package that are exported to other "
-              + "packages.",
+              + "packages but not otherwise mentioned.",
       parameters = {
         @Param(
             name = "srcs",

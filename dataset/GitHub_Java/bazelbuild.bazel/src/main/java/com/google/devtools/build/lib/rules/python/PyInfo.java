@@ -19,6 +19,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.BuiltinProvider;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.skylarkbuildapi.python.PyInfoApi;
@@ -26,7 +27,6 @@ import com.google.devtools.build.lib.syntax.Depset;
 import com.google.devtools.build.lib.syntax.Depset.TypeException;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.EvalUtils;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.lib.syntax.SkylarkType;
 import com.google.devtools.build.lib.syntax.Starlark;
 import com.google.devtools.build.lib.syntax.StarlarkThread;
@@ -209,8 +209,8 @@ public final class PyInfo implements Info, PyInfoApi<Artifact> {
             "'imports' field should be a depset of strings (got a '%s')", describeType(imports));
       }
       // Validate depset parameters
-      Depset.cast(transitiveSources, Artifact.class, "transitive_sources");
-      Depset.cast(imports, String.class, "imports");
+      transitiveSources.getSetFromParam(Artifact.class, "transitive_sources");
+      imports.getSetFromParam(String.class, "imports");
 
       return new PyInfo(
           thread.getCallerLocation(),
