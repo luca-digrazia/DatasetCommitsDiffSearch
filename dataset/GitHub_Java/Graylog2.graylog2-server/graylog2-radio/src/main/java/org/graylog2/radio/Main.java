@@ -27,29 +27,35 @@ import com.github.joschi.jadconfig.JadConfig;
 import com.github.joschi.jadconfig.RepositoryException;
 import com.github.joschi.jadconfig.ValidationException;
 import com.github.joschi.jadconfig.repositories.PropertiesRepository;
-import com.google.common.collect.Lists;
-import com.google.common.util.concurrent.MoreExecutors;
-import com.google.common.util.concurrent.ServiceManager;
 import com.google.inject.Guice;
 import com.google.inject.Injector;
 import com.google.inject.Module;
+import org.apache.commons.io.IOUtils;
 import org.apache.log4j.Level;
-import org.graylog2.plugin.Plugin;
-import org.graylog2.plugin.PluginModule;
+import org.graylog2.inputs.gelf.http.GELFHttpInput;
+import org.graylog2.inputs.gelf.tcp.GELFTCPInput;
+import org.graylog2.inputs.gelf.udp.GELFUDPInput;
+import org.graylog2.inputs.misc.jsonpath.JsonPathInput;
+import org.graylog2.inputs.misc.metrics.LocalMetricsInput;
+import org.graylog2.inputs.random.FakeHttpMessageInput;
+import org.graylog2.inputs.raw.tcp.RawTCPInput;
+import org.graylog2.inputs.raw.udp.RawUDPInput;
+import org.graylog2.inputs.syslog.tcp.SyslogTCPInput;
+import org.graylog2.inputs.syslog.udp.SyslogUDPInput;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.lifecycles.Lifecycle;
 import org.graylog2.radio.bindings.RadioBindings;
-import org.graylog2.radio.bindings.RadioInitializerBindings;
 import org.graylog2.shared.NodeRunner;
 import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.GuiceInstantiationService;
-import org.graylog2.shared.initializers.ServiceManagerListener;
-import org.graylog2.shared.plugins.PluginLoader;
+import org.graylog2.shared.inputs.InputRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.bridge.SLF4JBridgeHandler;
 
 import java.io.File;
+import java.io.FileWriter;
+import java.io.Writer;
 import java.util.List;
 
 /**
@@ -82,7 +88,19 @@ public class Main extends NodeRunner {
         String configFile = commandLineArguments.getConfigFile();
         LOG.info("Using config file: {}", configFile);
 
-        final Configuration configuration = getConfiguration(configFile);
+        final Configuration configuration = new Configuration();
+        JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
+
+        LOG.info("Loading configuration");
+        try {
+            jadConfig.process();
+        } catch (RepositoryException e) {
+            LOG.error("Couldn't load configuration file: [{}]", configFile, e);
+            System.exit(1);
+        } catch (ValidationException e) {
+            LOG.error("Invalid configuration", e);
+            System.exit(1);
+        }
 
         // Are we in debug mode?
         Level logLevel = Level.INFO;
@@ -91,19 +109,8 @@ public class Main extends NodeRunner {
             logLevel = Level.DEBUG;
         }
 
-        PluginLoader pluginLoader = new PluginLoader(new File(configuration.getPluginDir()));
-        List<PluginModule> pluginModules = Lists.newArrayList();
-        for (Plugin plugin : pluginLoader.loadPlugins())
-            pluginModules.addAll(plugin.modules());
-
-        LOG.debug("Loaded modules: " + pluginModules);
-
         GuiceInstantiationService instantiationService = new GuiceInstantiationService();
-        List<Module> bindingsModules = getBindingsModules(instantiationService,
-                new RadioBindings(configuration),
-                new RadioInitializerBindings());
-        LOG.debug("Adding plugin modules: " + pluginModules);
-        bindingsModules.addAll(pluginModules);
+        List<Module> bindingsModules = getBindingsModules(instantiationService, new RadioBindings(configuration));
         Injector injector = Guice.createInjector(bindingsModules);
         instantiationService.setInjector(injector);
 
@@ -132,14 +139,31 @@ public class Main extends NodeRunner {
 
         ServerStatus serverStatus = injector.getInstance(ServerStatus.class);
 
+        // Register inputs. (find an automatic way here (annotations?) and do the same in graylog2-server.Main
+        final InputRegistry inputRegistry = injector.getInstance(InputRegistry.class);
+        inputRegistry.register(SyslogUDPInput.class, SyslogUDPInput.NAME);
+        inputRegistry.register(SyslogTCPInput.class, SyslogTCPInput.NAME);
+        inputRegistry.register(RawUDPInput.class, RawUDPInput.NAME);
+        inputRegistry.register(RawTCPInput.class, RawTCPInput.NAME);
+        inputRegistry.register(GELFUDPInput.class, GELFUDPInput.NAME);
+        inputRegistry.register(GELFTCPInput.class, GELFTCPInput.NAME);
+        inputRegistry.register(GELFHttpInput.class, GELFHttpInput.NAME);
+        inputRegistry.register(FakeHttpMessageInput.class, FakeHttpMessageInput.NAME);
+        inputRegistry.register(LocalMetricsInput.class, LocalMetricsInput.NAME);
+        inputRegistry.register(JsonPathInput.class, JsonPathInput.NAME);
+
         monkeyPatchHK2(injector);
 
+        Radio radio = injector.getInstance(Radio.class);
         serverStatus.setLifecycle(Lifecycle.STARTING);
+        radio.initialize();
 
-        final ServiceManager serviceManager = injector.getInstance(ServiceManager.class);
-        final ServiceManagerListener serviceManagerListener = injector.getInstance(ServiceManagerListener.class);
-        serviceManager.addListener(serviceManagerListener, MoreExecutors.sameThreadExecutor());
-        serviceManager.startAsync().awaitHealthy();
+        // Register in Graylog2 cluster.
+        //radio.ping();
+
+        // Start regular pinging Graylog2 cluster to show that we are alive.
+        //radio.startPings();
+
 
         LOG.info("Graylog2 Radio up and running.");
 
@@ -148,35 +172,26 @@ public class Main extends NodeRunner {
         }
     }
 
-    private static Configuration getConfiguration(String configFile) {
-        final Configuration configuration = new Configuration();
-        JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
+    private static void savePidFile(String pidFile) {
 
-        LOG.info("Loading configuration");
+        String pid = Tools.getPID();
+        Writer pidFileWriter = null;
+
         try {
-            jadConfig.process();
-        } catch (RepositoryException e) {
-            LOG.error("Couldn't load configuration file: [{}]", configFile, e);
-            System.exit(1);
-        } catch (ValidationException e) {
-            LOG.error("Invalid configuration", e);
-            System.exit(1);
-        }
-
-        if (configuration.getRestTransportUri() == null) {
-            String guessedIf;
-            try {
-                guessedIf = Tools.guessPrimaryNetworkAddress().getHostAddress();
-            } catch (Exception e) {
-                LOG.error("Could not guess primary network address for rest_transport_uri. Please configure it in your graylog2-radio.conf.", e);
-                throw new RuntimeException("No rest_transport_uri.");
+            if (pid == null || pid.isEmpty() || pid.equals("unknown")) {
+                throw new Exception("Could not determine PID.");
             }
 
-            String transportStr = "http://" + guessedIf + ":" + configuration.getRestListenUri().getPort();
-            LOG.info("No rest_transport_uri set. Falling back to [{}].", transportStr);
-            configuration.setRestTransportUri(transportStr);
+            pidFileWriter = new FileWriter(pidFile);
+            IOUtils.write(pid, pidFileWriter);
+        } catch (Exception e) {
+            LOG.error("Could not write PID file: " + e.getMessage(), e);
+            System.exit(1);
+        } finally {
+            IOUtils.closeQuietly(pidFileWriter);
+            // make sure to remove our pid when we exit
+            new File(pidFile).deleteOnExit();
         }
-
-        return configuration;
     }
+
 }

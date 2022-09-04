@@ -22,14 +22,14 @@ package org.graylog2.shared.initializers;
 import com.google.common.base.Stopwatch;
 import com.google.common.util.concurrent.AbstractIdleService;
 import com.google.inject.Inject;
+import org.graylog2.periodical.Periodical;
 import org.graylog2.periodical.Periodicals;
-import org.graylog2.plugin.periodical.Periodical;
 import org.graylog2.shared.ServerStatus;
 import org.graylog2.shared.bindings.InstantiationService;
+import org.reflections.Reflections;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Singleton;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
@@ -38,7 +38,6 @@ import java.util.concurrent.TimeUnit;
 /**
  * @author Dennis Oelkers <dennis@torch.sh>
  */
-@Singleton
 public class PeriodicalsService extends AbstractIdleService {
     private final Logger LOG = LoggerFactory.getLogger(PeriodicalsService.class);
 
@@ -46,25 +45,27 @@ public class PeriodicalsService extends AbstractIdleService {
     private final InstantiationService instantiationService;
     private final Periodicals periodicals;
     private final ServerStatus serverStatus;
-    private final Set<Periodical> periodicalSet;
 
     @Inject
     public PeriodicalsService(InstantiationService instantiationService,
                                   Periodicals periodicals,
-                                  ServerStatus serverStatus,
-                                  Set<Periodical> periodicalSet) {
+                                  ServerStatus serverStatus) {
         this.instantiationService = instantiationService;
         this.periodicals = periodicals;
         this.serverStatus = serverStatus;
-        this.periodicalSet = periodicalSet;
     }
 
     @Override
     protected void startUp() throws Exception {
+        Reflections reflections = new Reflections("org.graylog2.periodical");
+        Set<Class<? extends Periodical>> periodicalSet = reflections.getSubTypesOf(Periodical.class);
+        System.out.println("Starting " + periodicalSet.size() + " periodicals: " + periodicalSet);
         LOG.info("Starting {} periodicals ...", periodicalSet.size());
 
-        for (Periodical periodical : periodicalSet) {
+        for (Class<? extends Periodical> type : periodicalSet) {
             try {
+                Periodical periodical = instantiationService.getInstance(type);
+
                 periodical.initialize();
 
                 if (periodical.masterOnly() && !serverStatus.hasCapability(ServerStatus.Capability.MASTER)) {
@@ -89,7 +90,7 @@ public class PeriodicalsService extends AbstractIdleService {
     protected void shutDown() throws Exception {
         for (Periodical periodical : periodicals.getAllStoppedOnGracefulShutdown()) {
             LOG.info("Shutting down periodical [{}].", periodical.getClass().getCanonicalName());
-            Stopwatch s = Stopwatch.createStarted();
+            Stopwatch s = new Stopwatch().start();
 
             // Cancel future executions.
             Map<Periodical,ScheduledFuture> futures = periodicals.getFutures();
