@@ -1,4 +1,4 @@
-package io.quarkus.quartz.test;
+package io.quarkus.scheduler.test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
@@ -10,7 +10,6 @@ import javax.enterprise.event.Observes;
 import javax.interceptor.Interceptor;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
-import org.jboss.shrinkwrap.api.asset.StringAsset;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -20,16 +19,14 @@ import io.quarkus.scheduler.Scheduled;
 import io.quarkus.scheduler.Scheduler;
 import io.quarkus.test.QuarkusUnitTest;
 
-public class PausedMethodExpressionTest {
+public class PausedMethodTest {
 
     @RegisterExtension
     static final QuarkusUnitTest test = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(PausedMethodExpressionTest.Jobs.class)
-                    .addAsResource(new StringAsset("scheduler.identity=myIdentity"),
-                            "application.properties"));
+                    .addClasses(PausedMethodTest.Jobs.class));
 
-    private static final String IDENTITY = "{scheduler.identity}";
+    private static final String IDENTITY = "myScheduled";
 
     @Test
     public void testPause() throws InterruptedException {
