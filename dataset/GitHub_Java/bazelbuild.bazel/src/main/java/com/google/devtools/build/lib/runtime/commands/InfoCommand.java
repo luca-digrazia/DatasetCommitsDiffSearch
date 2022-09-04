@@ -35,7 +35,7 @@ import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionMetadataTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsParser;
-import com.google.devtools.common.options.OptionsParsingResult;
+import com.google.devtools.common.options.OptionsProvider;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -112,10 +112,10 @@ public class InfoCommand implements BlazeCommand {
 
   @Override
   public BlazeCommandResult exec(
-      final CommandEnvironment env, final OptionsParsingResult optionsParsingResult) {
+      final CommandEnvironment env, final OptionsProvider optionsProvider) {
     final BlazeRuntime runtime = env.getRuntime();
     env.getReporter().switchToAnsiAllowingHandler();
-    Options infoOptions = optionsParsingResult.getOptions(Options.class);
+    Options infoOptions = optionsProvider.getOptions(Options.class);
     OutErr outErr = env.getReporter().getOutErr();
     // Creating a BuildConfiguration is expensive and often unnecessary. Delay the creation until
     // it is needed. We memoize so that it's cached intra-command (it's still created freshly on
@@ -128,14 +128,14 @@ public class InfoCommand implements BlazeCommand {
                 // the package path. Since info inherits all the build options, all the necessary
                 // information is available here.
                 env.setupPackageCache(
-                    optionsParsingResult, runtime.getDefaultsPackageContent(optionsParsingResult));
+                    optionsProvider, runtime.getDefaultsPackageContent(optionsProvider));
                 env.getSkyframeExecutor()
                     .setConfigurationFragmentFactories(runtime.getConfigurationFragmentFactories());
                 // TODO(bazel-team): What if there are multiple configurations? [multi-config]
                 return env.getSkyframeExecutor()
                     .getConfiguration(
                         env.getReporter(),
-                        runtime.createBuildOptions(optionsParsingResult),
+                        runtime.createBuildOptions(optionsProvider),
                         /*keepGoing=*/ true);
               } catch (InvalidConfigurationException e) {
                 env.getReporter().handle(Event.error(e.getMessage()));
@@ -149,7 +149,7 @@ public class InfoCommand implements BlazeCommand {
               }
             });
 
-    Map<String, InfoItem> items = getInfoItemMap(env, optionsParsingResult);
+    Map<String, InfoItem> items = getInfoItemMap(env, optionsProvider);
 
     try {
       if (infoOptions.showMakeEnvironment) {
@@ -160,7 +160,7 @@ public class InfoCommand implements BlazeCommand {
         }
       }
 
-      List<String> residue = optionsParsingResult.getResidue();
+      List<String> residue = optionsProvider.getResidue();
       if (residue.size() > 1) {
         env.getReporter().handle(Event.error("at most one key may be specified"));
         return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
@@ -206,7 +206,7 @@ public class InfoCommand implements BlazeCommand {
     return BlazeCommandResult.exitCode(ExitCode.SUCCESS);
   }
 
-  static Map<String, InfoItem> getHardwiredInfoItemMap(OptionsParsingResult commandOptions,
+  static Map<String, InfoItem> getHardwiredInfoItemMap(OptionsProvider commandOptions,
       String productName) {
     List<InfoItem> hardwiredInfoItems =
         ImmutableList.<InfoItem>of(
@@ -251,9 +251,9 @@ public class InfoCommand implements BlazeCommand {
   }
 
   static Map<String, InfoItem> getInfoItemMap(
-      CommandEnvironment env, OptionsParsingResult optionsParsingResult) {
+      CommandEnvironment env, OptionsProvider optionsProvider) {
     Map<String, InfoItem> items = new TreeMap<>(env.getRuntime().getInfoItems());
-    items.putAll(getHardwiredInfoItemMap(optionsParsingResult, env.getRuntime().getProductName()));
+    items.putAll(getHardwiredInfoItemMap(optionsProvider, env.getRuntime().getProductName()));
     return items;
   }
 }
