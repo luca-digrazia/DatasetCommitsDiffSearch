@@ -228,9 +228,6 @@ public class Configuration {
     @Parameter(value = "rest_enable_cors", required = false)
     private boolean restEnableCors = false;
 
-    @Parameter(value = "rest_enable_gzip", required = false)
-    private boolean restEnableGzip = false;
-
     public boolean isMaster() {
         return isMaster;
     }
@@ -520,10 +517,6 @@ public class Configuration {
 
     public boolean isRestEnableCors() {
         return restEnableCors;
-    }
-
-    public boolean isRestEnableGzip() {
-        return restEnableGzip;
     }
 
 }
