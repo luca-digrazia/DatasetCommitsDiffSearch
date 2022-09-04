@@ -20,12 +20,12 @@
 package org.graylog2.initializers;
 
 /**
+ * Initializer.java: Apr 11, 2012 5:00:39 PM
+ *
  * @author Lennart Koopmann <lennart@socketfeed.com>
  */
 public interface Initializer {
 
     void initialize();
 
-    boolean masterOnly();
-    
 }
