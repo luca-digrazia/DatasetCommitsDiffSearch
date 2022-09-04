@@ -35,19 +35,14 @@ import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.KeepGoingOption;
 import com.google.devtools.build.lib.runtime.LoadingPhaseThreadsOption;
 import com.google.devtools.build.lib.runtime.QueryRuntimeHelper;
-import com.google.devtools.build.lib.runtime.QueryRuntimeHelper.QueryRuntimeHelperException;
+import com.google.devtools.build.lib.runtime.QueryRuntimeHelper.Factory.CommandLineException;
 import com.google.devtools.build.lib.runtime.TargetProviderForQueryEnvironment;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Interrupted;
-import com.google.devtools.build.lib.server.FailureDetails.Query;
 import com.google.devtools.build.lib.skyframe.LoadingPhaseStartedEvent;
 import com.google.devtools.build.lib.skyframe.PackageProgressReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutorWrappingWalkableGraph;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.Either;
 import com.google.devtools.build.lib.util.ExitCode;
-import com.google.devtools.build.lib.util.InterruptedFailureDetails;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.build.skyframe.WalkableGraph;
@@ -100,22 +95,21 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
     QueryOptions queryOptions = options.getOptions(QueryOptions.class);
 
     try {
-      env.syncPackageLoading(options);
+      env.setupPackageCache(options);
     } catch (InterruptedException e) {
-      return reportAndCreateInterruptResult(
-          env, "query interrupted", Interrupted.Code.PACKAGE_LOADING_SYNC);
+      env.getReporter().handle(Event.error("query interrupted"));
+      return BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
     } catch (AbruptExitException e) {
       env.getReporter().handle(Event.error(null, "Unknown error: " + e.getMessage()));
-      return BlazeCommandResult.detailedExitCode(e.getDetailedExitCode());
+      return BlazeCommandResult.exitCode(e.getExitCode());
     }
 
     String query;
     if (!options.getResidue().isEmpty()) {
       if (!queryOptions.queryFile.isEmpty()) {
-        return reportAndCreateFailureResult(
-            env,
-            "Command-line query and --query_file cannot both be specified",
-            Query.Code.QUERY_FILE_WITH_COMMAND_LINE_EXPRESSION);
+        env.getReporter()
+            .handle(Event.error("Command-line query and --query_file cannot both be specified"));
+        return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
       }
       query = Joiner.on(' ').join(options.getResidue());
     } else if (!queryOptions.queryFile.isEmpty()) {
@@ -124,30 +118,28 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
       try {
         query = new String(FileSystemUtils.readContent(residuePath), StandardCharsets.UTF_8);
       } catch (IOException e) {
-        return reportAndCreateFailureResult(
-            env,
-            "I/O error reading from " + residuePath.getPathString(),
-            Query.Code.QUERY_FILE_READ_FAILURE);
+        env.getReporter()
+            .handle(Event.error("I/O error reading from " + residuePath.getPathString()));
+        return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
       }
     } else {
-      return reportAndCreateFailureResult(
-          env,
-          String.format(
-              "missing query expression. Type '%s help query' for syntax and help",
-              runtime.getProductName()),
-          Query.Code.COMMAND_LINE_EXPRESSION_MISSING);
+      env.getReporter().handle(Event.error(String.format(
+          "missing query expression. Type '%s help query' for syntax and help",
+          runtime.getProductName())));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
 
     Iterable<OutputFormatter> formatters = runtime.getQueryOutputFormatters();
     OutputFormatter formatter =
         OutputFormatters.getFormatter(formatters, queryOptions.outputFormat);
     if (formatter == null) {
-      return reportAndCreateFailureResult(
-          env,
-          String.format(
-              "Invalid output format '%s'. Valid values are: %s",
-              queryOptions.outputFormat, OutputFormatters.formatterNames(formatters)),
-          Query.Code.OUTPUT_FORMAT_INVALID);
+      env.getReporter()
+          .handle(
+              Event.error(
+                  String.format(
+                      "Invalid output format '%s'. Valid values are: %s",
+                      queryOptions.outputFormat, OutputFormatters.formatterNames(formatters))));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
 
     Set<Setting> settings = queryOptions.toSettings();
@@ -156,13 +148,14 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
         queryOptions.useGraphlessQuery == TriState.YES
             || (queryOptions.useGraphlessQuery == TriState.AUTO && streamResults);
     if (useGraphlessQuery && !streamResults) {
-      return reportAndCreateFailureResult(
-          env,
-          String.format(
-              "--experimental_graphless_query requires --order_output=no and an --output"
-                  + " option that supports streaming; valid values are: %s",
-              OutputFormatters.streamingFormatterNames(formatters)),
-          Query.Code.GRAPHLESS_PREREQ_UNMET);
+      env.getReporter()
+          .handle(
+              Event.error(
+                  String.format(
+                      "--experimental_graphless_query requires --order_output=no and an --output"
+                          + " option that supports streaming; valid values are: %s",
+                      OutputFormatters.streamingFormatterNames(formatters))));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
 
     try (QueryRuntimeHelper queryRuntimeHelper =
@@ -189,23 +182,23 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
             }
             try {
               queryRuntimeHelper.afterQueryOutputIsWritten();
-            } catch (QueryRuntimeHelperException e) {
-              env.getReporter().handle(Event.error(e.getMessage()));
-              return BlazeCommandResult.detailedExitCode(DetailedExitCode.of(e.getFailureDetail()));
+            } catch (IOException e) {
+              env.getReporter().handle(Event.error("I/O error:" + e.getMessage()));
+              return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
             } catch (InterruptedException e) {
-              return reportAndCreateInterruptResult(
-                  env, "query interrupted", Interrupted.Code.AFTER_QUERY);
+              env.getReporter().handle(Event.error("query interrupted"));
+              return BlazeCommandResult.exitCode(ExitCode.INTERRUPTED);
             }
-            if (queryEvalResult.getSuccess()) {
-              return BlazeCommandResult.success();
-            }
-            // TODO(b/138456686): query + keep_going partial failures require more refactoring for
-            //  detailed failure representations.
-            return BlazeCommandResult.exitCode(ExitCode.PARTIAL_ANALYSIS_FAILURE);
+            ExitCode exitCode =
+                queryEvalResult.getSuccess() ? ExitCode.SUCCESS : ExitCode.PARTIAL_ANALYSIS_FAILURE;
+            return BlazeCommandResult.exitCode(exitCode);
           });
-    } catch (QueryRuntimeHelperException e) {
-      env.getReporter().handle(Event.error(e.getMessage()));
-      return BlazeCommandResult.detailedExitCode(DetailedExitCode.of(e.getFailureDetail()));
+    } catch (IOException e) {
+      env.getReporter().handle(Event.error("I/O error: " + e.getMessage()));
+      return BlazeCommandResult.exitCode(ExitCode.LOCAL_ENVIRONMENTAL_ERROR);
+    } catch (CommandLineException e) {
+      env.getReporter().handle(Event.error("Commandline error: " + e.getMessage()));
+      return BlazeCommandResult.exitCode(ExitCode.COMMAND_LINE_ERROR);
     }
   }
 
@@ -261,27 +254,5 @@ public abstract class QueryEnvironmentBasedCommand implements BlazeCommand {
             env.getPackageManager().getPackagePath(),
             /*blockUniverseEvaluationErrors=*/ false,
             useGraphlessQuery);
-  }
-
-  private static BlazeCommandResult reportAndCreateInterruptResult(
-      CommandEnvironment env, String message, Interrupted.Code detailedCode) {
-    env.getReporter().handle(Event.error(message));
-    return BlazeCommandResult.detailedExitCode(
-        InterruptedFailureDetails.detailedExitCode(message, detailedCode));
-  }
-
-  private static BlazeCommandResult reportAndCreateFailureResult(
-      CommandEnvironment env, String message, Query.Code detailedCode) {
-    env.getReporter().handle(Event.error(message));
-    return createFailureResult(message, detailedCode);
-  }
-
-  private static BlazeCommandResult createFailureResult(String message, Query.Code detailedCode) {
-    return BlazeCommandResult.detailedExitCode(
-        DetailedExitCode.of(
-            FailureDetail.newBuilder()
-                .setMessage(message)
-                .setQuery(Query.newBuilder().setCode(detailedCode))
-                .build()));
   }
 }
