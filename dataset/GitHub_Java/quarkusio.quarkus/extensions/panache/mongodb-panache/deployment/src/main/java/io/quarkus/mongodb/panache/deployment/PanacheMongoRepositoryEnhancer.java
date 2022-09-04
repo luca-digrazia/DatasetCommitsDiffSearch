@@ -5,7 +5,6 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.IndexView;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
-import org.objectweb.asm.Opcodes;
 
 import io.quarkus.mongodb.panache.PanacheMongoRepository;
 import io.quarkus.mongodb.panache.PanacheMongoRepositoryBase;
@@ -46,29 +45,6 @@ public class PanacheMongoRepositoryEnhancer extends PanacheRepositoryEnhancer {
         @Override
         protected String getPanacheOperationsBinaryName() {
             return PanacheMongoEntityEnhancer.MONGO_OPERATIONS_BINARY_NAME;
-        }
-
-        @Override
-        public void visitEnd() {
-            // Bridge for findById
-            MethodVisitor mv = super.visitMethod(Opcodes.ACC_PUBLIC | Opcodes.ACC_SYNTHETIC | Opcodes.ACC_BRIDGE,
-                    "findById",
-                    "(Ljava/lang/Object;)Ljava/lang/Object;",
-                    null,
-                    null);
-            mv.visitParameter("id", 0);
-            mv.visitCode();
-            mv.visitIntInsn(Opcodes.ALOAD, 0);
-            mv.visitIntInsn(Opcodes.ALOAD, 1);
-            mv.visitMethodInsn(Opcodes.INVOKEVIRTUAL,
-                    daoBinaryName,
-                    "findById",
-                    "(Ljava/lang/Object;)" + entitySignature, false);
-            mv.visitInsn(Opcodes.ARETURN);
-            mv.visitMaxs(0, 0);
-            mv.visitEnd();
-
-            super.visitEnd();
         }
 
         @Override

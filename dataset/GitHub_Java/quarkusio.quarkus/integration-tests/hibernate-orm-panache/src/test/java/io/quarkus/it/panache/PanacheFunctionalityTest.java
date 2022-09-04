@@ -4,10 +4,12 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.io.StringWriter;
+import java.util.Optional;
 
+import javax.inject.Inject;
 import javax.json.bind.Jsonb;
 import javax.json.bind.JsonbBuilder;
-import javax.transaction.Transactional;
+import javax.persistence.LockModeType;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -18,6 +20,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import io.quarkus.test.junit.DisabledOnNativeImage;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
@@ -45,7 +48,6 @@ public class PanacheFunctionalityTest {
 
         RestAssured.when().get("/test/model1").then().body(is("OK"));
         RestAssured.when().get("/test/model2").then().body(is("OK"));
-        RestAssured.when().get("/test/projection").then().body(is("OK"));
         RestAssured.when().get("/test/model3").then().body(is("OK"));
     }
 
@@ -166,50 +168,34 @@ public class PanacheFunctionalityTest {
         RestAssured.when().get("/test/8254").then().body(is("OK"));
     }
 
-    @Test
-    public void testBug9025() {
-        RestAssured.when().get("/test/9025").then().body(is("OK"));
-    }
-
-    @Test
-    public void testBug9036() {
-        RestAssured.when().get("/test/9036").then().body(is("OK"));
-    }
-
-    @DisabledOnNativeImage
-    @Transactional
-    @Test
-    void testBug7102InOneTransaction() {
-        testBug7102();
-    }
+    @Inject
+    PersonRepository realPersonRepository;
 
     @DisabledOnNativeImage
     @Test
-    public void testBug7102() {
-        Person person = createBug7102();
-        Person person1 = getBug7102(person.id);
-        Assertions.assertEquals("pero", person1.name);
-        updateBug7102(person.id);
-        Person person2 = getBug7102(person.id);
-        Assertions.assertEquals("jozo", person2.name);
-    }
+    public void testPanacheRepositoryBridges() {
+        // normal method call
+        Assertions.assertNull(realPersonRepository.findById(0l));
+        // bridge call
+        Assertions.assertNull(((PanacheRepositoryBase) realPersonRepository).findById(0l));
+        // normal method call
+        Assertions.assertNull(realPersonRepository.findById(0l, LockModeType.NONE));
+        // bridge call
+        Assertions.assertNull(((PanacheRepositoryBase) realPersonRepository).findById(0l, LockModeType.NONE));
 
-    @Transactional
-    Person createBug7102() {
-        Person personPanache = new Person();
-        personPanache.name = "pero";
-        personPanache.persistAndFlush();
-        return personPanache;
-    }
+        // normal method call
+        Assertions.assertEquals(Optional.empty(), realPersonRepository.findByIdOptional(0l));
+        // bridge call
+        Assertions.assertEquals(Optional.empty(), ((PanacheRepositoryBase) realPersonRepository).findByIdOptional(0l));
+        // normal method call
+        Assertions.assertEquals(Optional.empty(), realPersonRepository.findByIdOptional(0l, LockModeType.NONE));
+        // bridge call
+        Assertions.assertEquals(Optional.empty(),
+                ((PanacheRepositoryBase) realPersonRepository).findByIdOptional(0l, LockModeType.NONE));
 
-    @Transactional
-    void updateBug7102(Long id) {
-        final Person person = Person.findById(id);
-        person.name = "jozo";
-    }
-
-    @Transactional
-    Person getBug7102(Long id) {
-        return Person.findById(id);
+        // normal method call
+        Assertions.assertEquals(false, realPersonRepository.deleteById(0l));
+        // bridge call
+        Assertions.assertEquals(false, ((PanacheRepositoryBase) realPersonRepository).deleteById(0l));
     }
 }
