@@ -1,6 +1,7 @@
 package io.quarkus.deployment.util;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -12,13 +13,15 @@ import org.jboss.jandex.DotName;
 import org.jboss.jandex.Index;
 import org.jboss.jandex.Indexer;
 import org.jboss.jandex.Type;
-import org.jboss.jandex.Type.Kind;
 import org.junit.jupiter.api.Test;
 
 public class JandexUtilTest {
 
     private static final DotName SIMPLE = DotName.createSimple(Single.class.getName());
     private static final DotName MULTIPLE = DotName.createSimple(Multiple.class.getName());
+    private static final DotName STRING = DotName.createSimple(String.class.getName());
+    private static final DotName INTEGER = DotName.createSimple(Integer.class.getName());
+    private static final DotName DOUBLE = DotName.createSimple(Double.class.getName());
 
     @Test
     public void testInterfaceNotInHierarchy() {
@@ -31,15 +34,17 @@ public class JandexUtilTest {
     @Test
     public void testNoTypePassed() {
         final Index index = index(Single.class, SingleImplNoType.class);
-        checkRepoArg(index, SingleImplNoType.class, Single.class, Object.class);
+        final DotName impl = DotName.createSimple(SingleImplNoType.class.getName());
+        final List<Type> result = JandexUtil.resolveTypeParameters(impl, SIMPLE, index);
+        assertThat(result).isEmpty();
     }
 
     @Test
     public void testAbstractSingle() {
         final Index index = index(Single.class, AbstractSingle.class);
         final DotName impl = DotName.createSimple(AbstractSingle.class.getName());
-        List<Type> ret = JandexUtil.resolveTypeParameters(impl, SIMPLE, index);
-        assertThat(ret).hasSize(1).allMatch(t -> t.kind() == Kind.TYPE_VARIABLE && t.asTypeVariable().identifier().equals("S"));
+        assertThatThrownBy(() -> JandexUtil.resolveTypeParameters(impl, SIMPLE, index))
+                .isInstanceOf(IllegalStateException.class);
     }
 
     @Test
@@ -321,7 +326,7 @@ public class JandexUtilTest {
     private void checkRepoArg(Index index, Class<?> baseClass, Class<?> soughtClass, String expectedArg) {
         List<Type> args = JandexUtil.resolveTypeParameters(name(baseClass), name(soughtClass),
                 index);
-        assertThat(args).singleElement().satisfies(t -> {
+        assertThat(args).hasOnlyOneElementSatisfying(t -> {
             assertThat(t.toString()).isEqualTo(expectedArg);
         });
     }
