@@ -2750,7 +2750,7 @@ public class SkylarkIntegrationTest extends BuildViewTestCase {
                     .getAssociatedRule()
                     .getRuleClassObject()
                     .getAttributeByName("dep")
-                    .getTransitionFactory())
+                    .getSplitTransitionProviderForTesting())
             .getStarlarkDefinedConfigTransitionForTesting();
 
     StarlarkDefinedConfigTransition attrTransition =

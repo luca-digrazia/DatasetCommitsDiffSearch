@@ -18,7 +18,6 @@ import static com.google.common.truth.Truth.assertThat;
 import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.skylark.util.SkylarkTestCase;
-import com.google.devtools.build.lib.syntax.StarlarkValue;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import com.google.devtools.build.lib.vfs.Root;
@@ -174,7 +173,7 @@ public class SkylarkStringRepresentationsTest extends SkylarkTestCase {
         "dep = rule(implementation = _impl)",
         "",
         "def _genfile_impl(ctx):",
-        "  ctx.actions.write(output = ctx.outputs.my_output, content = 'foo')",
+        "  ctx.file_action(output = ctx.outputs.my_output, content = 'foo')",
         "genfile = rule(",
         "  implementation = _genfile_impl,",
         "  outputs = {'my_output': '%{name}.txt'},",
@@ -240,8 +239,7 @@ public class SkylarkStringRepresentationsTest extends SkylarkTestCase {
     assertThat(skylarkLoadingEval("repr(Label('//foo:bar'))")).isEqualTo("Label(\"//foo:bar\")");
     assertThat(skylarkLoadingEval("'%r' % Label('//foo:bar')")).isEqualTo("Label(\"//foo:bar\")");
 
-    assertThat(skylarkLoadingEval("'{}'.format([Label('//foo:bar')])"))
-        .isEqualTo("[Label(\"//foo:bar\")]");
+    assertThat(skylarkLoadingEval("'{}'.format([Label('//foo:bar')])")).isEqualTo("[Label(\"//foo:bar\")]");
   }
 
   @Test
@@ -269,12 +267,12 @@ public class SkylarkStringRepresentationsTest extends SkylarkTestCase {
   @Test
   public void testStringRepresentations_Rules() throws Exception {
     assertStringRepresentation("native.cc_library", "<built-in rule cc_library>");
-    assertStringRepresentation("def f(): pass", "rule(implementation=f)", "<rule>");
+    assertStringRepresentation("rule(implementation=str)", "<rule>");
   }
 
   @Test
   public void testStringRepresentations_Aspects() throws Exception {
-    assertStringRepresentation("def f(): pass", "aspect(implementation=f)", "<aspect>");
+    assertStringRepresentation("aspect(implementation=str)", "<aspect>");
   }
 
   @Test
@@ -377,17 +375,14 @@ public class SkylarkStringRepresentationsTest extends SkylarkTestCase {
     }
   }
 
-  private static class Dummy implements StarlarkValue {}
-
   @Test
-  public void testStringRepresentationsOfArbitraryObjects() throws Exception {
-    update("dummy", new Dummy());
+  public void testStringRepresentationsOfUnknownObjects() throws Exception {
+    update("mock", new Object());
 
-    String dummy = "com.google.devtools.build.lib.skylark.SkylarkStringRepresentationsTest$Dummy";
-    assertThat(eval("str(dummy)")).isEqualTo("<unknown object " + dummy + ">");
-    assertThat(eval("repr(dummy)")).isEqualTo("<unknown object " + dummy + ">");
-    assertThat(eval("'{}'.format(dummy)")).isEqualTo("<unknown object " + dummy + ">");
-    assertThat(eval("'%s' % dummy")).isEqualTo("<unknown object " + dummy + ">");
-    assertThat(eval("'%r' % dummy")).isEqualTo("<unknown object " + dummy + ">");
+    assertThat(eval("str(mock)")).isEqualTo("<unknown object java.lang.Object>");
+    assertThat(eval("repr(mock)")).isEqualTo("<unknown object java.lang.Object>");
+    assertThat(eval("'{}'.format(mock)")).isEqualTo("<unknown object java.lang.Object>");
+    assertThat(eval("'%s' % mock")).isEqualTo("<unknown object java.lang.Object>");
+    assertThat(eval("'%r' % mock")).isEqualTo("<unknown object java.lang.Object>");
   }
 }
