@@ -37,8 +37,6 @@ import com.google.common.base.Charsets;
 import com.google.common.collect.Maps;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.plugin.ConfigClass;
-import org.graylog2.plugin.FactoryClass;
 import org.graylog2.plugin.Message;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.configuration.Configuration;
@@ -61,9 +59,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.regex.Pattern;
 
 import static com.google.common.base.Throwables.propagate;
@@ -205,57 +201,51 @@ public class SyslogCodec implements Codec {
         return "syslog";
     }
 
-    @FactoryClass
+    @Nonnull
+    @Override
+    public ConfigurationRequest getRequestedConfiguration() {
+        final ConfigurationRequest r = new ConfigurationRequest();
+
+        r.addField(
+                new BooleanField(
+                        CK_FORCE_RDNS,
+                        "Force rDNS?",
+                        false,
+                        "Force rDNS resolution of hostname? Use if hostname cannot be parsed."
+                )
+        );
+
+        r.addField(
+                new BooleanField(
+                        CK_ALLOW_OVERRIDE_DATE,
+                        "Allow overriding date?",
+                        true,
+                        "Allow to override with current date if date could not be parsed?"
+                )
+        );
+
+        r.addField(
+                new BooleanField(
+                        CK_STORE_FULL_MESSAGE,
+                        "Store full message?",
+                        false,
+                        "Store the full original syslog message as full_message?"
+                )
+        );
+
+        return r;
+    }
+
+    @Override
+    public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
+        if (cr.containsField(NettyTransport.CK_PORT)) {
+            cr.getField(NettyTransport.CK_PORT).setDefaultValue(514);
+        }
+    }
+
     public interface Factory extends Codec.Factory<SyslogCodec> {
         @Override
         SyslogCodec create(Configuration configuration);
-
-        @Override
-        Config getConfig();
-    }
-
-    @ConfigClass
-    public static class Config implements Codec.Config {
-        @Override
-        public ConfigurationRequest getRequestedConfiguration() {
-            final ConfigurationRequest r = new ConfigurationRequest();
-
-            r.addField(
-                    new BooleanField(
-                            CK_FORCE_RDNS,
-                            "Force rDNS?",
-                            false,
-                            "Force rDNS resolution of hostname? Use if hostname cannot be parsed."
-                    )
-            );
-
-            r.addField(
-                    new BooleanField(
-                            CK_ALLOW_OVERRIDE_DATE,
-                            "Allow overriding date?",
-                            true,
-                            "Allow to override with current date if date could not be parsed?"
-                    )
-            );
-
-            r.addField(
-                    new BooleanField(
-                            CK_STORE_FULL_MESSAGE,
-                            "Store full message?",
-                            false,
-                            "Store the full original syslog message as full_message?"
-                    )
-            );
-
-            return r;
-        }
-
-        @Override
-        public void overrideDefaultValues(@Nonnull ConfigurationRequest cr) {
-            if (cr.containsField(NettyTransport.CK_PORT)) {
-                cr.getField(NettyTransport.CK_PORT).setDefaultValue(514);
-            }
-        }
     }
 
     /**
@@ -271,14 +261,20 @@ public class SyslogCodec implements Codec {
             Map<String, Object> fields = Maps.newHashMap();
             try {
                 Map raw = msg.getStructuredMessage().getStructuredData();
-                if (raw != null) {
-                    Set ks = raw.keySet();
-                    if (ks.size() > 0) {
-                        Object[] fl = raw.keySet().toArray();
+                if (raw != null && raw.size() > 0) {
+                    // Parsing this structured syslog message results in the following nested Map structure.
+                    // "<165>1 2012-12-25T22:14:15.003Z mymachine evntslog - - [exampleSDID@32473 iut=\"3\" eventID=\"1011\"][meta sequenceId=\"1\"] message"
+                    // {exampleSDID@32473={eventID=1011, iut=3}, meta={sequenceId=1}}
+                    //
+                    // TODO: If two different RFC5424 SD-ELEMENTS share the same SD-PARAM keys, they overwrites each other.
+                    // Example: [test1 test="v1"][test2 test="v2"] might result in "test"="v2" in the fields map.
+                    // Order is not guaranteed in the current syslog4j implementation!
 
-                        if (fl != null && fl.length > 0) {
-                            String sdID = (String) fl[0];
-                            fields = (HashMap) raw.get(sdID);
+                    for (Object o : raw.entrySet()) {
+                        final Map.Entry entry = (Map.Entry) o;
+
+                        if (entry.getValue() instanceof Map) {
+                            fields.putAll((Map) entry.getValue());
                         }
                     }
                 }
