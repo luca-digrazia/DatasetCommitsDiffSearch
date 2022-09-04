@@ -50,7 +50,6 @@ import java.util.function.Supplier;
 import javax.enterprise.context.spi.Contextual;
 import javax.enterprise.context.spi.CreationalContext;
 import javax.enterprise.inject.IllegalProductException;
-import javax.enterprise.inject.TransientReference;
 import javax.enterprise.inject.literal.InjectLiteral;
 import javax.enterprise.inject.spi.InterceptionType;
 import javax.interceptor.InvocationContext;
@@ -881,8 +880,7 @@ public class BeanGenerator extends AbstractGenerator {
     private List<ResultHandle> newProviderHandles(BeanInfo bean, ClassCreator beanCreator, MethodCreator createMethod,
             Map<InjectionPointInfo, String> injectionPointToProviderField,
             Map<InterceptorInfo, String> interceptorToProviderField,
-            Map<InterceptorInfo, ResultHandle> interceptorToWrap,
-            List<TransientReference> transientReferences) {
+            Map<InterceptorInfo, ResultHandle> interceptorToWrap) {
 
         List<ResultHandle> providerHandles = new ArrayList<>();
         Optional<Injection> constructorInjection = bean.getConstructorInjection();
@@ -897,12 +895,8 @@ public class BeanGenerator extends AbstractGenerator {
                         providerSupplierHandle);
                 ResultHandle childCtx = createMethod.invokeStaticMethod(MethodDescriptors.CREATIONAL_CTX_CHILD_CONTEXTUAL,
                         providerHandle, createMethod.getMethodParam(0));
-                ResultHandle referenceHandle = createMethod.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
-                        providerHandle, childCtx);
-                providerHandles.add(referenceHandle);
-                if (injectionPoint.isDependentTransientReference()) {
-                    transientReferences.add(new TransientReference(providerHandle, referenceHandle, childCtx));
-                }
+                providerHandles.add(createMethod.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
+                        providerHandle, childCtx));
             }
         }
         if (bean.isSubclassRequired()) {
@@ -1109,7 +1103,6 @@ public class BeanGenerator extends AbstractGenerator {
 
         List<InjectionPointInfo> injectionPoints = bean.getAllInjectionPoints();
         ResultHandle[] referenceHandles = new ResultHandle[injectionPoints.size()];
-        List<TransientReference> transientReferences = new ArrayList<>();
         int paramIdx = 0;
         for (InjectionPointInfo injectionPoint : injectionPoints) {
             ResultHandle providerSupplierHandle = create.readInstanceField(FieldDescriptor.of(beanCreator.getClassName(),
@@ -1122,10 +1115,6 @@ public class BeanGenerator extends AbstractGenerator {
             ResultHandle referenceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
                     providerHandle, childCtxHandle);
             referenceHandles[paramIdx++] = referenceHandle;
-            // We need to destroy dependent beans for @TransientReference injection points
-            if (injectionPoint.isDependentTransientReference()) {
-                transientReferences.add(new TransientReference(providerHandle, referenceHandle, childCtxHandle));
-            }
         }
 
         if (Modifier.isPrivate(producerMethod.flags())) {
@@ -1168,9 +1157,6 @@ public class BeanGenerator extends AbstractGenerator {
             create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_BEAN_DESTROY, declaringProviderHandle,
                     declaringProviderInstanceHandle, ctxHandle);
         }
-        // Destroy injected transient references
-        destroyTransientReferences(create, transientReferences);
-
         create.returnValue(instanceHandle);
     }
 
@@ -1304,10 +1290,9 @@ public class BeanGenerator extends AbstractGenerator {
                 reflectionRegistration.registerMethod(noArgsConstructor);
             }
 
-            List<TransientReference> transientReferences = new ArrayList<>();
             List<ResultHandle> providerHandles = newProviderHandles(bean, beanCreator, create,
                     injectionPointToProviderSupplierField, interceptorToProviderSupplierField,
-                    interceptorToWrap, transientReferences);
+                    interceptorToWrap);
 
             // Forwarding function
             // Supplier<Object> forward = () -> new SimpleBean_Subclass(ctx,lifecycleInterceptorProvider1)
@@ -1316,10 +1301,7 @@ public class BeanGenerator extends AbstractGenerator {
             ResultHandle retHandle = newInstanceHandle(bean, beanCreator, funcBytecode, create, providerTypeName, baseName,
                     providerHandles,
                     reflectionRegistration, isApplicationClass);
-            // Destroy injected transient references
-            destroyTransientReferences(funcBytecode, transientReferences);
             funcBytecode.returnValue(retHandle);
-
             // Interceptor bindings
             ResultHandle bindingsHandle = create.newInstance(MethodDescriptor.ofConstructor(HashSet.class));
             for (AnnotationInstance binding : aroundConstructs.bindings) {
@@ -1346,14 +1328,11 @@ public class BeanGenerator extends AbstractGenerator {
                     invocationContextHandle));
 
         } else {
-            List<TransientReference> transientReferences = new ArrayList<>();
             create.assign(instanceHandle, newInstanceHandle(bean, beanCreator, create, create, providerTypeName, baseName,
                     newProviderHandles(bean, beanCreator, create, injectionPointToProviderSupplierField,
                             interceptorToProviderSupplierField,
-                            interceptorToWrap, transientReferences),
+                            interceptorToWrap),
                     reflectionRegistration, isApplicationClass));
-            // Destroy injected transient references
-            destroyTransientReferences(create, transientReferences);
         }
 
         // Perform field and initializer injections
@@ -1395,7 +1374,6 @@ public class BeanGenerator extends AbstractGenerator {
                     catchBlock.getCaughtException());
         }
         for (Injection methodInjection : methodInjections) {
-            List<TransientReference> transientReferences = new ArrayList<>();
             ResultHandle[] referenceHandles = new ResultHandle[methodInjection.injectionPoints.size()];
             int paramIdx = 0;
             for (InjectionPointInfo injectionPoint : methodInjection.injectionPoints) {
@@ -1410,10 +1388,6 @@ public class BeanGenerator extends AbstractGenerator {
                 ResultHandle referenceHandle = create.invokeInterfaceMethod(MethodDescriptors.INJECTABLE_REF_PROVIDER_GET,
                         providerHandle, childCtxHandle);
                 referenceHandles[paramIdx++] = referenceHandle;
-                // We need to destroy dependent beans for @TransientReference injection points
-                if (injectionPoint.isDependentTransientReference()) {
-                    transientReferences.add(new TransientReference(providerHandle, referenceHandle, childCtxHandle));
-                }
             }
 
             MethodInfo initializerMethod = methodInjection.target.asMethod();
@@ -1440,9 +1414,6 @@ public class BeanGenerator extends AbstractGenerator {
                 create.invokeVirtualMethod(MethodDescriptor.of(methodInjection.target.asMethod()), instanceHandle,
                         referenceHandles);
             }
-
-            // Destroy injected transient references
-            destroyTransientReferences(create, transientReferences);
         }
 
         // PostConstruct lifecycle callback interceptors
@@ -1817,27 +1788,6 @@ public class BeanGenerator extends AbstractGenerator {
             }
         }
         return requiredQualifiersHandle;
-    }
-
-    static void destroyTransientReferences(BytecodeCreator bytecode, Iterable<TransientReference> transientReferences) {
-        for (TransientReference transientReference : transientReferences) {
-            bytecode.invokeStaticMethod(MethodDescriptors.INJECTABLE_REFERENCE_PROVIDERS_DESTROY, transientReference.provider,
-                    transientReference.instance, transientReference.creationalContext);
-        }
-    }
-
-    static class TransientReference {
-
-        final ResultHandle provider;
-        final ResultHandle instance;
-        final ResultHandle creationalContext;
-
-        public TransientReference(ResultHandle provider, ResultHandle contextualInstance, ResultHandle creationalContext) {
-            this.provider = provider;
-            this.instance = contextualInstance;
-            this.creationalContext = creationalContext;
-        }
-
     }
 
 }
