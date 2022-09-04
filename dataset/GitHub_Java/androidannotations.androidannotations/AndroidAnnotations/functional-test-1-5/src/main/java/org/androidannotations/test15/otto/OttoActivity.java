@@ -15,6 +15,35 @@
  */
 package org.androidannotations.test15.otto;
 
-public class Event {
+import org.androidannotations.annotations.EActivity;
 
+import android.app.Activity;
+import android.os.Bundle;
+
+import com.squareup.otto.Bus;
+import com.squareup.otto.Produce;
+import com.squareup.otto.Subscribe;
+
+@EActivity
+public class OttoActivity extends Activity {
+
+	Event lastEvent;
+	
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		
+		Bus bus = new Bus();
+		bus.register(this);
+	}
+	
+	@Subscribe
+	public void onEvent(Event event) {
+		lastEvent = event;
+	}
+	
+	@Produce
+	public Event produceEvent() {
+		return new Event();
+	}
 }

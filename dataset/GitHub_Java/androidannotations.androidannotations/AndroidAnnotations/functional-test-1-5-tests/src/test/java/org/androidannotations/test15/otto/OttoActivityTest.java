@@ -15,6 +15,21 @@
  */
 package org.androidannotations.test15.otto;
 
-public class Event {
+import static org.fest.assertions.Assertions.assertThat;
 
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.Robolectric;
+import org.robolectric.RobolectricTestRunner;
+
+@RunWith(RobolectricTestRunner.class)
+public class OttoActivityTest {
+
+	@Test
+	public void testOttoMethodsCalled() {
+		OttoActivity activity = Robolectric.setupActivity(OttoActivity_.class);
+		
+		assertThat(activity.lastEvent).isNotNull();
+	}
+	
 }
