@@ -1,29 +1,12 @@
 package io.quarkus.hibernate.orm.deployment;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmCompositeAttributeType;
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmDiscriminatorSubclassEntityType;
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmEntityBaseDefinition;
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmHibernateMapping;
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmJoinedSubclassEntityType;
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmRootEntityType;
-import org.hibernate.boot.jaxb.hbm.spi.JaxbHbmUnionSubclassEntityType;
-import org.hibernate.boot.jaxb.mapping.spi.JaxbEmbeddable;
-import org.hibernate.boot.jaxb.mapping.spi.JaxbEntity;
-import org.hibernate.boot.jaxb.mapping.spi.JaxbEntityMappings;
-import org.hibernate.boot.jaxb.mapping.spi.JaxbMappedSuperclass;
-import org.hibernate.boot.jaxb.mapping.spi.ManagedType;
 import org.jboss.jandex.AnnotationInstance;
 import org.jboss.jandex.AnnotationTarget;
 import org.jboss.jandex.ClassInfo;
@@ -35,8 +18,6 @@ import org.jboss.jandex.Type;
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.deployment.configuration.ConfigurationError;
-import io.quarkus.hibernate.orm.deployment.xml.QuarkusMappingFileParser;
-import io.quarkus.hibernate.orm.runtime.boot.xml.RecordableXmlMapping;
 
 /**
  * Scan the Jandex index to find JPA entities (and embeddables supporting entity models).
@@ -53,20 +34,17 @@ public final class JpaJandexScavenger {
 
     public static final List<DotName> EMBEDDED_ANNOTATIONS = Arrays.asList(ClassNames.EMBEDDED, ClassNames.ELEMENT_COLLECTION);
 
-    private static final String XML_MAPPING_DEFAULT_ORM_XML = "META-INF/orm.xml";
-    private static final String XML_MAPPING_NO_FILE = "no-file";
-
-    private final List<JpaModelPersistenceUnitContributionBuildItem> persistenceUnitContributions;
+    private final List<PersistenceXmlDescriptorBuildItem> explicitDescriptors;
     private final BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
     private final IndexView index;
     private final Set<String> ignorableNonIndexedClasses;
 
     JpaJandexScavenger(BuildProducer<ReflectiveClassBuildItem> reflectiveClass,
-            List<JpaModelPersistenceUnitContributionBuildItem> persistenceUnitContributions,
+            List<PersistenceXmlDescriptorBuildItem> explicitDescriptors,
             IndexView index,
             Set<String> ignorableNonIndexedClasses) {
         this.reflectiveClass = reflectiveClass;
-        this.persistenceUnitContributions = persistenceUnitContributions;
+        this.explicitDescriptors = explicitDescriptors;
         this.index = index;
         this.ignorableNonIndexedClasses = ignorableNonIndexedClasses;
     }
@@ -83,8 +61,9 @@ public final class JpaJandexScavenger {
                 ClassNames.MAPPED_SUPERCLASS);
         enlistEmbeddedsAndElementCollections(collector);
 
-        for (JpaModelPersistenceUnitContributionBuildItem persistenceUnitContribution : persistenceUnitContributions) {
-            enlistExplicitMappings(collector, persistenceUnitContribution);
+        for (PersistenceXmlDescriptorBuildItem pud : explicitDescriptors) {
+            final List<String> managedClassNames = pud.getDescriptor().getManagedClassNames();
+            enlistExplicitClasses(collector, managedClassNames);
         }
 
         Set<String> allModelClassNames = new HashSet<>(collector.entityTypes);
@@ -122,135 +101,19 @@ public final class JpaJandexScavenger {
             }
         }
 
-        return new JpaModelBuildItem(collector.packages, collector.entityTypes, allModelClassNames,
-                collector.xmlMappingsByPU);
+        return new JpaModelBuildItem(collector.packages, collector.entityTypes, allModelClassNames);
     }
 
-    private void enlistExplicitMappings(Collector collector,
-            JpaModelPersistenceUnitContributionBuildItem persistenceUnitContribution) {
-        // Classes explicitly mentioned in persistence.xml
-        for (String className : persistenceUnitContribution.explicitlyListedClassNames) {
-            enlistExplicitClass(collector, className);
-        }
-
-        // Classes explicitly mentioned in a mapping file
-        Set<String> mappingFileNames = new LinkedHashSet<>(persistenceUnitContribution.explicitlyListedMappingFiles);
-        if (!mappingFileNames.remove(XML_MAPPING_NO_FILE)) {
-            mappingFileNames.add(XML_MAPPING_DEFAULT_ORM_XML);
-        }
-        try (QuarkusMappingFileParser parser = QuarkusMappingFileParser.create()) {
-            for (String mappingFileName : mappingFileNames) {
-                Optional<RecordableXmlMapping> mappingOptional = parser.parse(mappingFileName);
-                if (!mappingOptional.isPresent()) {
-                    if (persistenceUnitContribution.explicitlyListedMappingFiles.contains(mappingFileName)) {
-                        // Trigger an exception for files that are explicitly mentioned and could not be found
-                        // DEFAULT_ORM_XML in particular may be mentioned only implicitly,
-                        // in which case it's fine if we cannot find it.
-                        throw new IllegalStateException("Cannot find ORM mapping file '" + mappingFileName
-                                + "' in the classpath");
-                    }
-                    continue;
-                }
-                RecordableXmlMapping mapping = mappingOptional.get();
-                if (mapping.getOrmXmlRoot() != null) {
-                    enlistOrmXmlMapping(collector, mapping.getOrmXmlRoot());
-                }
-                if (mapping.getHbmXmlRoot() != null) {
-                    enlistHbmXmlMapping(collector, mapping.getHbmXmlRoot());
-                }
-                collector.xmlMappingsByPU
-                        .computeIfAbsent(persistenceUnitContribution.persistenceUnitName, ignored -> new ArrayList<>())
-                        .add(mapping);
+    private void enlistExplicitClasses(Collector collector, List<String> managedClassNames) {
+        for (String className : managedClassNames) {
+            DotName dotName = DotName.createSimple(className);
+            boolean isInIndex = index.getClassByName(dotName) != null;
+            if (!isInIndex) {
+                collector.unindexedClasses.add(dotName);
             }
-        }
-    }
 
-    private void enlistOrmXmlMapping(Collector collector, JaxbEntityMappings mapping) {
-        String packageName = mapping.getPackage();
-        String packagePrefix = packageName == null ? "" : packageName + ".";
-
-        for (JaxbEntity entity : mapping.getEntity()) {
-            String name = safeGetClassName(packagePrefix, entity, "entity");
-            enlistExplicitClass(collector, name);
-            // The call to 'enlistExplicitClass' above may not
-            // detect that this class is an entity if it is not annotated
-            collector.entityTypes.add(name);
+            addClassHierarchyToReflectiveList(collector, dotName);
         }
-        for (JaxbMappedSuperclass mappedSuperclass : mapping.getMappedSuperclass()) {
-            String name = safeGetClassName(packagePrefix, mappedSuperclass, "mapped-superclass");
-            enlistExplicitClass(collector, name);
-        }
-        for (JaxbEmbeddable embeddable : mapping.getEmbeddable()) {
-            String name = safeGetClassName(packagePrefix, embeddable, "embeddable");
-            enlistExplicitClass(collector, name);
-        }
-    }
-
-    private static String safeGetClassName(String packagePrefix, ManagedType managedType, String nodeName) {
-        String name = managedType.getClazz();
-        if (name == null) {
-            throw new IllegalArgumentException("Missing attribute '" + nodeName + ".class'");
-        }
-        return packagePrefix + name;
-    }
-
-    private void enlistHbmXmlMapping(Collector collector, JaxbHbmHibernateMapping mapping) {
-        String packageValue = mapping.getPackage();
-        String packagePrefix = packageValue == null ? "" : packageValue + ".";
-
-        for (JaxbHbmRootEntityType entity : mapping.getClazz()) {
-            enlistHbmXmlEntity(collector, packagePrefix, entity, entity.getAttributes());
-            for (JaxbHbmDiscriminatorSubclassEntityType subclass : entity.getSubclass()) {
-                enlistHbmXmlEntity(collector, packagePrefix, subclass, subclass.getAttributes());
-            }
-            for (JaxbHbmUnionSubclassEntityType subclass : entity.getUnionSubclass()) {
-                enlistHbmXmlEntity(collector, packagePrefix, subclass, subclass.getAttributes());
-            }
-            for (JaxbHbmJoinedSubclassEntityType subclass : entity.getJoinedSubclass()) {
-                enlistHbmXmlEntity(collector, packagePrefix, subclass, subclass.getAttributes());
-            }
-        }
-
-        // For some reason the format also allows specifying subclasses at the top level.
-        for (JaxbHbmDiscriminatorSubclassEntityType subclass : mapping.getSubclass()) {
-            enlistHbmXmlEntity(collector, packagePrefix, subclass, subclass.getAttributes());
-        }
-        for (JaxbHbmUnionSubclassEntityType subclass : mapping.getUnionSubclass()) {
-            enlistHbmXmlEntity(collector, packagePrefix, subclass, subclass.getAttributes());
-        }
-        for (JaxbHbmJoinedSubclassEntityType subclass : mapping.getJoinedSubclass()) {
-            enlistHbmXmlEntity(collector, packagePrefix, subclass, subclass.getAttributes());
-        }
-    }
-
-    private void enlistHbmXmlEntity(Collector collector, String packagePrefix,
-            JaxbHbmEntityBaseDefinition entityDefinition, List<?> attributes) {
-        String name = packagePrefix + entityDefinition.getName();
-        enlistExplicitClass(collector, name);
-        // The call to 'enlistExplicitClass' above may not
-        // detect that this class is an entity if it is not annotated
-        collector.entityTypes.add(name);
-        collectHbmXmlEmbeddedTypes(collector, packagePrefix, attributes);
-    }
-
-    private void collectHbmXmlEmbeddedTypes(Collector collector, String packagePrefix, List<?> attributes) {
-        for (Object attribute : attributes) {
-            if (attribute instanceof JaxbHbmCompositeAttributeType) {
-                JaxbHbmCompositeAttributeType compositeAttribute = (JaxbHbmCompositeAttributeType) attribute;
-                String name = packagePrefix + compositeAttribute.getClazz();
-                enlistExplicitClass(collector, name);
-                // The call to 'enlistExplicitClass' above may not
-                // detect that this class is an entity if it is not annotated
-                collector.entityTypes.add(name);
-                collectHbmXmlEmbeddedTypes(collector, packagePrefix, attributes);
-            }
-        }
-    }
-
-    private void enlistExplicitClass(Collector collector, String className) {
-        DotName dotName = DotName.createSimple(className);
-        // This will also take care of adding the class to unindexedClasses if necessary.
-        addClassHierarchyToReflectiveList(collector, dotName);
     }
 
     private void enlistEmbeddedsAndElementCollections(Collector collector) {
@@ -419,6 +282,5 @@ public final class JpaJandexScavenger {
         final Set<String> enumTypes = new HashSet<>();
         final Set<String> javaTypes = new HashSet<>();
         final Set<DotName> unindexedClasses = new HashSet<>();
-        final Map<String, List<RecordableXmlMapping>> xmlMappingsByPU = new HashMap<>();
     }
 }
