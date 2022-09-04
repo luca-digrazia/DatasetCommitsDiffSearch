@@ -21,6 +21,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Iterables;
 import com.google.common.eventbus.EventBus;
 import com.google.devtools.build.lib.actions.FileStateValue;
 import com.google.devtools.build.lib.actions.FileValue;
@@ -30,6 +31,7 @@ import com.google.devtools.build.lib.analysis.ServerDirectories;
 import com.google.devtools.build.lib.clock.BlazeClock;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.events.Reporter;
+import com.google.devtools.build.lib.packages.AstParseResult;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.CachingPackageLocator;
@@ -67,7 +69,6 @@ import com.google.devtools.build.lib.skyframe.SkylarkImportLookupFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceASTFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceFileFunction;
 import com.google.devtools.build.lib.skyframe.WorkspaceNameFunction;
-import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.io.TimestampGranularityMonitor;
 import com.google.devtools.build.lib.vfs.Path;
@@ -356,7 +357,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         "Unexpected Exception type from PackageValue for '"
             + pkgId
             + "'' with root causes: "
-            + error.getRootCauses().toList().toString(),
+            + Iterables.toString(error.getRootCauses()),
         e);
   }
 
@@ -386,7 +387,7 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         new AtomicReference<>(new TimestampGranularityMonitor(BlazeClock.instance()));
     Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache =
         CacheBuilder.newBuilder().build();
-    Cache<PackageIdentifier, StarlarkFile> astCache = CacheBuilder.newBuilder().build();
+    Cache<PackageIdentifier, AstParseResult> astCache = CacheBuilder.newBuilder().build();
     AtomicReference<FilesystemCalls> syscallCacheRef =
         new AtomicReference<>(
             PerBuildSyscallCache.newBuilder().setConcurrencyLevel(legacyGlobbingThreads).build());
@@ -422,7 +423,8 @@ public abstract class AbstractPackageLoader implements PackageLoader {
         .put(
             SkyFunctions.BLACKLISTED_PACKAGE_PREFIXES,
             new BlacklistedPackagePrefixesFunction(
-                /*blacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
+                /*hardcodedBlacklistedPackagePrefixes=*/ ImmutableSet.of(),
+                /*additionalBlacklistedPackagePrefixesFile=*/ PathFragment.EMPTY_FRAGMENT))
         .put(SkyFunctions.CONTAINING_PACKAGE_LOOKUP, new ContainingPackageLookupFunction())
         .put(SkyFunctions.AST_FILE_LOOKUP, new ASTFileLookupFunction(ruleClassProvider))
         .put(

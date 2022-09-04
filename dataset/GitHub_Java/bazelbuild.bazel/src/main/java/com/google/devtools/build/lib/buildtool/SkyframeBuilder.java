@@ -14,6 +14,7 @@
 package com.google.devtools.build.lib.buildtool;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Optional;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
@@ -46,7 +47,6 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TopDownActionCache;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
@@ -55,10 +55,10 @@ import com.google.devtools.build.skyframe.ErrorInfo;
 import com.google.devtools.build.skyframe.EvaluationResult;
 import com.google.devtools.build.skyframe.SkyKey;
 import com.google.devtools.common.options.OptionsProvider;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -129,7 +129,7 @@ public class SkyframeBuilder implements Builder {
         .getEventBus()
         .post(new ExecutionProgressReceiverAvailableEvent(executionProgressReceiver));
 
-    List<DetailedExitCode> detailedExitCodes = new ArrayList<>();
+    List<ExitCode> exitCodes = new LinkedList<>();
     EvaluationResult<?> result;
 
     ActionExecutionStatusReporter statusReporter = ActionExecutionStatusReporter.create(
@@ -168,15 +168,15 @@ public class SkyframeBuilder implements Builder {
               executionProgressReceiver,
               topLevelArtifactContext);
       // progressReceiver is finished, so unsynchronized access to builtTargets is now safe.
-      DetailedExitCode detailedExitCode =
+      Optional<ExitCode> exitCode =
           processResult(
               reporter,
               result,
               options.getOptions(KeepGoingOption.class).keepGoing,
               skyframeExecutor);
 
-      if (detailedExitCode != null) {
-        detailedExitCodes.add(detailedExitCode);
+      if (exitCode != null) {
+        exitCodes.add(exitCode.orNull());
       }
 
       // Run exclusive tests: either tagged as "exclusive" or is run in an invocation with
@@ -196,20 +196,20 @@ public class SkyframeBuilder implements Builder {
                 topDownActionCache,
                 null,
                 topLevelArtifactContext);
-        detailedExitCode =
+        exitCode =
             processResult(
                 reporter,
                 result,
                 options.getOptions(KeepGoingOption.class).keepGoing,
                 skyframeExecutor);
         Preconditions.checkState(
-            detailedExitCode != null || !result.keyNames().isEmpty(),
+            exitCode != null || !result.keyNames().isEmpty(),
             "Build reported as successful but test %s not executed: %s",
             exclusiveTest,
             result);
 
-        if (detailedExitCode != null) {
-          detailedExitCodes.add(detailedExitCode);
+        if (exitCode != null) {
+          exitCodes.add(exitCode.orNull());
         }
       }
     } finally {
@@ -218,36 +218,27 @@ public class SkyframeBuilder implements Builder {
       statusReporter.unregisterFromEventBus();
     }
 
-    if (detailedExitCodes.isEmpty()) {
-      return;
-    }
-
-    if (options.getOptions(KeepGoingOption.class).keepGoing) {
-      // Use the exit code with the highest priority.
-      throw new BuildFailedException(
-          null, Collections.max(detailedExitCodes, DetailedExitCodeComparator.INSTANCE));
-    } else {
-      throw new BuildFailedException();
+    if (!exitCodes.isEmpty()) {
+      if (options.getOptions(KeepGoingOption.class).keepGoing) {
+        // Use the exit code with the highest priority.
+        throw new BuildFailedException(
+            null, Collections.max(exitCodes, ExitCodeComparator.INSTANCE));
+      } else {
+        throw new BuildFailedException();
+      }
     }
   }
 
   /**
-   * Process an {@link EvaluationResult}, taking into account the keepGoing setting.
+   * Process the Skyframe update, taking into account the keepGoing setting.
    *
-   * <p>Returns a nullable {@link DetailedExitCode} value, as follows:
-   *
-   * <ol>
-   *   <li>{@code null}, if {@code result} had no errors
-   *   <li>{@code e} if result had errors and one of them specified a {@link DetailedExitCode} value
-   *       {@code e}
-   *   <li>{@code DetailedExitCode.justExitCode(ExitCode.BUILD_FAILURE)} if result had errors but
-   *       none specified a {@link DetailedExitCode} value
-   * </ol>
-   *
-   * <p>Throws on catastrophic failures and, if !keepGoing, on any failure.
+   * <p>Returns optional {@link ExitCode} based on following conditions: 1. null, if result had no
+   * errors. 2. Optional.absent(), if result had errors but none of the errors specified an exit
+   * code. 3. Optional.of(e), if result had errors and one of them specified exit code 'e'. Throws
+   * on fail-fast failures.
    */
   @Nullable
-  private static DetailedExitCode processResult(
+  private static Optional<ExitCode> processResult(
       ExtendedEventHandler eventHandler,
       EvaluationResult<?> result,
       boolean keepGoing,
@@ -267,24 +258,22 @@ public class SkyframeBuilder implements Builder {
         // in the following order:
         //   1. First infrastructure error with non-null exit code
         //   2. First non-infrastructure error with non-null exit code
-        //   3. If the build fails but no interpretable error is specified, BUILD_FAILURE.
-        DetailedExitCode detailedExitCode = null;
+        //   3. Null (later default to 1)
+        ExitCode exitCode = null;
         for (Map.Entry<SkyKey, ErrorInfo> error : result.errorMap().entrySet()) {
           Throwable cause = error.getValue().getException();
           if (cause instanceof ActionExecutionException) {
             ActionExecutionException actionExecutionCause = (ActionExecutionException) cause;
-            DetailedExitCode thisCode = actionExecutionCause.getDetailedExitCode();
+            ExitCode code = actionExecutionCause.getExitCode();
             // Update global exit code when current exit code is not null and global exit code has
             // a lower 'reporting' priority.
-            if (DetailedExitCodeComparator.INSTANCE.compare(thisCode, detailedExitCode) > 0) {
-              detailedExitCode = thisCode;
+            if (ExitCodeComparator.INSTANCE.compare(code, exitCode) > 0) {
+              exitCode = code;
             }
           }
         }
 
-        return detailedExitCode != null
-            ? detailedExitCode
-            : DetailedExitCode.justExitCode(ExitCode.BUILD_FAILURE);
+        return Optional.fromNullable(exitCode);
       }
       ErrorInfo errorInfo = Preconditions.checkNotNull(result.getError(), result);
       Exception exception = errorInfo.getException();
@@ -315,7 +304,7 @@ public class SkyframeBuilder implements Builder {
       // Sometimes ActionExecutionExceptions are caused by Actions with no owner.
       String message =
           (actionExecutionCause.getLocation() != null)
-              ? (actionExecutionCause.getLocation() + " " + cause.getMessage())
+              ? (actionExecutionCause.getLocation().print() + " " + cause.getMessage())
               : cause.getMessage();
       throw new BuildFailedException(
           message,
@@ -323,7 +312,7 @@ public class SkyframeBuilder implements Builder {
           actionExecutionCause.getAction(),
           actionExecutionCause.getRootCauses(),
           /*errorAlreadyShown=*/ !actionExecutionCause.showError(),
-          actionExecutionCause.getDetailedExitCode());
+          actionExecutionCause.getExitCode());
     } else if (cause instanceof MissingInputFileException) {
       throw new BuildFailedException(cause.getMessage());
     } else if (cause instanceof BuildFileNotFoundException) {
@@ -353,24 +342,24 @@ public class SkyframeBuilder implements Builder {
   }
 
   /**
-   * A comparator to determine the reporting priority of {@link DetailedExitCode}.
+   * A comparator to determine the reporting priority of {@link ExitCode}.
    *
-   * <p>Priority: infrastructure exit codes > non-infrastructure exit codes > null exit codes.
+   * <p> Priority: infrastructure exit codes > non-infrastructure exit codes > null exit codes.
    */
-  private static class DetailedExitCodeComparator implements Comparator<DetailedExitCode> {
-    private static final DetailedExitCodeComparator INSTANCE = new DetailedExitCodeComparator();
+  private static class ExitCodeComparator implements Comparator<ExitCode> {
+    private static final ExitCodeComparator INSTANCE = new ExitCodeComparator();
 
     @Override
-    public int compare(DetailedExitCode c1, DetailedExitCode c2) {
+    public int compare(ExitCode c1, ExitCode c2) {
       // returns POSITIVE result when the priority of c1 is HIGHER than the priority of c2
       return getPriority(c1) - getPriority(c2);
     }
 
-    private static int getPriority(DetailedExitCode code) {
+    private int getPriority(ExitCode code) {
       if (code == null) {
         return 0;
       } else {
-        return code.getExitCode().isInfrastructureFailure() ? 2 : 1;
+        return code.isInfrastructureFailure() ? 2 : 1;
       }
     }
   }

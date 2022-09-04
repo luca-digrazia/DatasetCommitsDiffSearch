@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
+import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
@@ -50,6 +51,7 @@ import javax.annotation.Nullable;
 
 /** A {@link SkyFunction.Environment} implementation for {@link ParallelEvaluator}. */
 class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
+  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   private static final SkyValue NULL_MARKER = new SkyValue() {};
   private static final boolean PREFETCH_OLD_DEPS =
@@ -283,8 +285,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
       eventBuilder.addTransitive(ValueWithMetadata.getEvents(value));
       postBuilder.addTransitive(ValueWithMetadata.getPosts(value));
     }
-    NestedSet<TaggedEvents> taggedEvents = eventBuilder.buildInterruptibly();
-    NestedSet<Postable> postables = postBuilder.buildInterruptibly();
+    NestedSet<TaggedEvents> taggedEvents = eventBuilder.build();
+    NestedSet<Postable> postables = postBuilder.build();
     evaluatorContext.getReplayingNestedSetEventVisitor().visit(taggedEvents);
     evaluatorContext.getReplayingNestedSetPostableVisitor().visit(postables);
     return Pair.of(taggedEvents, postables);
@@ -733,6 +735,21 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
         oldDepEntry.removeReverseDep(skyKey);
       }
     }
+    DepFingerprintList depFingerprintList = null;
+    if (primaryEntry.canPruneDepsByFingerprint()) {
+      DepFingerprintList.Builder depFingerprintListBuilder =
+          new DepFingerprintList.Builder(temporaryDirectDeps.listSize());
+      // TODO(janakr): in the common case, all these nodes may be locally cached. Do multi-level
+      // checking a la #getDepValuesForDoneNodeFromErrorOrDepsOrGraph to save graph lookups?
+      Map<SkyKey, ? extends NodeEntry> allDeps =
+          evaluatorContext.getBatchValues(
+              skyKey, Reason.DEP_REQUESTED, temporaryDirectDeps.getAllElementsAsIterable());
+      for (Collection<SkyKey> depGroup : temporaryDirectDeps) {
+        depFingerprintListBuilder.add(
+            AbstractParallelEvaluator.composeDepFingerprints(depGroup, allDeps));
+      }
+      depFingerprintList = depFingerprintListBuilder.build();
+    }
 
     Version evaluationVersion = maxChildVersion;
     if (bubbleErrorInfo != null) {
@@ -756,7 +773,8 @@ class SkyFunctionEnvironment extends AbstractSkyFunctionEnvironment {
     Version previousVersion = primaryEntry.getVersion();
     // If this entry is dirty, setValue may not actually change it, if it determines that
     // the data being written now is the same as the data already present in the entry.
-    Set<SkyKey> reverseDeps = primaryEntry.setValue(valueWithMetadata, evaluationVersion);
+    Set<SkyKey> reverseDeps =
+        primaryEntry.setValue(valueWithMetadata, evaluationVersion, depFingerprintList);
 
     // Note that if this update didn't actually change the entry, this version may not be
     // evaluationVersion.

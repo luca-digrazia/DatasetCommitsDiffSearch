@@ -107,6 +107,7 @@ import com.google.devtools.build.lib.events.EventHandler;
 import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.Reporter;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
+import com.google.devtools.build.lib.packages.AstParseResult;
 import com.google.devtools.build.lib.packages.BuildFileContainsErrorsException;
 import com.google.devtools.build.lib.packages.BuildFileName;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
@@ -146,7 +147,6 @@ import com.google.devtools.build.lib.skyframe.PackageLookupFunction.CrossReposit
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ActionCompletedReceiver;
 import com.google.devtools.build.lib.skyframe.SkyframeActionExecutor.ProgressSupplier;
 import com.google.devtools.build.lib.skyframe.trimming.TrimmedConfigurationCache;
-import com.google.devtools.build.lib.syntax.StarlarkFile;
 import com.google.devtools.build.lib.syntax.StarlarkSemantics;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.ExitCode;
@@ -259,7 +259,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
   // [skyframe-loading]
   private final Cache<PackageIdentifier, LoadedPackageCacheEntry> packageFunctionCache =
       newPkgFunctionCache();
-  private final Cache<PackageIdentifier, StarlarkFile> fileSyntaxCache = newFileSyntaxCache();
+  private final Cache<PackageIdentifier, AstParseResult> astCache = newAstCache();
 
   private final AtomicInteger numPackagesLoaded = new AtomicInteger(0);
   @Nullable private final PackageProgressReceiver packageProgress;
@@ -522,7 +522,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
             packageManager,
             showLoadingProgress,
             packageFunctionCache,
-            fileSyntaxCache,
+            astCache,
             numPackagesLoaded,
             skylarkImportLookupFunctionForInlining,
             packageProgress,
@@ -1140,7 +1140,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
     return CacheBuilder.newBuilder().build();
   }
 
-  protected Cache<PackageIdentifier, StarlarkFile> newFileSyntaxCache() {
+  protected Cache<PackageIdentifier, AstParseResult> newAstCache() {
     return CacheBuilder.newBuilder().build();
   }
 
@@ -1397,7 +1397,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
 
     // If the PackageFunction was interrupted, there may be stale entries here.
     packageFunctionCache.invalidateAll();
-    fileSyntaxCache.invalidateAll();
+    astCache.invalidateAll();
     numPackagesLoaded.set(0);
     if (packageProgress != null) {
       packageProgress.reset();
@@ -1495,7 +1495,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
       configuredTargetProgress.reset();
     }
 
-    ImmutableList<BuildConfiguration> topLevelTargetConfigs =
+    List<BuildConfiguration> topLevelTargetConfigs =
         getConfigurations(
             eventHandler,
             PrepareAnalysisPhaseFunction.getTopLevelBuildOptions(buildOptions, multiCpu),
@@ -1907,7 +1907,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
    * @throws InvalidConfigurationException if any build options produces an invalid configuration
    */
   // TODO(ulfjack): Remove this legacy method after switching to the Skyframe-based implementation.
-  private ImmutableList<BuildConfiguration> getConfigurations(
+  private List<BuildConfiguration> getConfigurations(
       ExtendedEventHandler eventHandler,
       List<BuildOptions> optionsList,
       BuildOptions referenceBuildOptions,
@@ -2597,7 +2597,7 @@ public abstract class SkyframeExecutor implements WalkableGraphFactory {
               "Unexpected Exception type from PackageValue for '"
                   + pkgName
                   + "'' with root causes: "
-                  + error.getRootCauses().toList().toString(),
+                  + Iterables.toString(error.getRootCauses()),
               e);
         }
         return result.get(key).getPackage();
