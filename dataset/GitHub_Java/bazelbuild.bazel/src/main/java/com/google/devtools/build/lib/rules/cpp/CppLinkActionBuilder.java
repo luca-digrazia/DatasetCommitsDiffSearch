@@ -569,8 +569,7 @@ public class CppLinkActionBuilder {
                 toolchain,
                 fdoSupport,
                 usePicForLtoBackendActions,
-                CppHelper.shouldCreatePerObjectDebugInfo(
-                    cppConfiguration, toolchain, featureConfiguration),
+                CppHelper.useFission(cppConfiguration, toolchain),
                 argv)
             : new LtoBackendArtifacts(
                 ltoOutputRootPrefix,
@@ -583,8 +582,7 @@ public class CppLinkActionBuilder {
                 toolchain,
                 fdoSupport,
                 usePicForLtoBackendActions,
-                CppHelper.shouldCreatePerObjectDebugInfo(
-                    cppConfiguration, toolchain, featureConfiguration),
+                CppHelper.useFission(cppConfiguration, toolchain),
                 argv);
     return ltoArtifact;
   }
@@ -1648,8 +1646,7 @@ public class CppLinkActionBuilder {
       }
 
       if (getLinkType().staticness().equals(Staticness.DYNAMIC)
-          && CppHelper.shouldCreatePerObjectDebugInfo(
-              cppConfiguration, toolchain, featureConfiguration)) {
+          && CppHelper.useFission(cppConfiguration, toolchain)) {
         buildVariables.addStringVariable(IS_USING_FISSION_VARIABLE, "");
       }
 
