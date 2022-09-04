@@ -357,7 +357,7 @@ public final class HibernateOrmProcessor {
             List<JdbcDataSourceBuildItem> dataSourcesConfigured,
             JpaEntitiesBuildItem jpaEntities, List<NonJpaModelBuildItem> nonJpaModels,
             List<HibernateOrmIntegrationRuntimeConfiguredBuildItem> integrationsRuntimeConfigured,
-            List<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) throws Exception {
+            Optional<JdbcDataSourceSchemaReadyBuildItem> schemaReadyBuildItem) throws Exception {
         if (!hasEntities(jpaEntities, nonJpaModels)) {
             return;
         }
@@ -570,7 +570,7 @@ public final class HibernateOrmProcessor {
             //we have no persistence.xml so we will create a default one
             Optional<String> dialect = hibernateConfig.dialect;
             if (!dialect.isPresent()) {
-                dialect = guessDialect(driverBuildItem.map(JdbcDataSourceBuildItem::getDbKind));
+                dialect = guessDialect(driverBuildItem.map(JdbcDataSourceBuildItem::getKind));
             }
             dialect.ifPresent(s -> {
                 // we found one
@@ -716,34 +716,34 @@ public final class HibernateOrmProcessor {
         }
     }
 
-    private Optional<String> guessDialect(Optional<String> dbKind) {
+    private Optional<String> guessDialect(Optional<String> kind) {
         // For now select the latest dialect from the driver
         // later, we can keep doing that but also avoid DCE
         // of all the dialects we want in so that people can override them
-        String resolvedDbKind = dbKind.orElse("NO_DATABASE_KIND");
-        if (DatabaseKind.isPostgreSQL(resolvedDbKind)) {
+        String resolvedKind = kind.orElse("NO_KIND");
+        if (DatabaseKind.isPostgreSQL(resolvedKind)) {
             return Optional.of(QuarkusPostgreSQL10Dialect.class.getName());
         }
-        if (DatabaseKind.isH2(resolvedDbKind)) {
+        if (DatabaseKind.isH2(resolvedKind)) {
             return Optional.of(QuarkusH2Dialect.class.getName());
         }
-        if (DatabaseKind.isMariaDB(resolvedDbKind)) {
+        if (DatabaseKind.isMariaDB(resolvedKind)) {
             return Optional.of(MariaDB103Dialect.class.getName());
         }
-        if (DatabaseKind.isMySQL(resolvedDbKind)) {
+        if (DatabaseKind.isMySQL(resolvedKind)) {
             return Optional.of(MySQL8Dialect.class.getName());
         }
-        if (DatabaseKind.isDerby(resolvedDbKind)) {
+        if (DatabaseKind.isDerby(resolvedKind)) {
             return Optional.of((DerbyTenSevenDialect.class.getName()));
         }
-        if (DatabaseKind.isMsSQL(resolvedDbKind)) {
+        if (DatabaseKind.isMsSQL(resolvedKind)) {
             return Optional.of((SQLServer2012Dialect.class.getName()));
         }
 
-        String error = dbKind.isPresent()
-                ? "Hibernate extension could not guess the dialect from the database kind '" + resolvedDbKind
+        String error = kind.isPresent()
+                ? "Hibernate extension could not guess the dialect from the kind '" + resolvedKind
                         + "'. Add an explicit '" + HIBERNATE_ORM_CONFIG_PREFIX + "dialect' property."
-                : "Hibernate extension cannot guess the dialect as no database kind is specified by 'quarkus.datasource.db-kind'";
+                : "Hibernate extension cannot guess the dialect as no kind is specified by 'quarkus.datasource.kind'";
         throw new ConfigurationError(error);
     }
 
