@@ -242,19 +242,6 @@ public class CppHelper {
    */
   public static NestedSet<Artifact> getDefaultCcToolchainDynamicRuntimeInputs(
       RuleContext ruleContext) throws RuleErrorException {
-    try {
-      return getDefaultCcToolchainDynamicRuntimeInputsFromStarlark(ruleContext);
-    } catch (EvalException e) {
-      throw ruleContext.throwWithRuleError(e.getMessage());
-    }
-  }
-
-  /**
-   * Convenience function for finding the dynamic runtime inputs for the current toolchain. Useful
-   * for Starlark-defined rules that link against the C++ runtime.
-   */
-  public static NestedSet<Artifact> getDefaultCcToolchainDynamicRuntimeInputsFromStarlark(
-      RuleContext ruleContext) throws EvalException {
     CcToolchainProvider defaultToolchain =
         getToolchainUsingDefaultCcToolchainAttribute(ruleContext);
     if (defaultToolchain == null) {
@@ -262,8 +249,11 @@ public class CppHelper {
     }
     FeatureConfiguration featureConfiguration =
         CcCommon.configureFeaturesOrReportRuleError(ruleContext, defaultToolchain);
-
-    return defaultToolchain.getDynamicRuntimeLinkInputs(featureConfiguration);
+    try {
+      return defaultToolchain.getDynamicRuntimeLinkInputs(featureConfiguration);
+    } catch (EvalException e) {
+      throw ruleContext.throwWithRuleError(e.getMessage());
+    }
   }
 
   /**
@@ -302,25 +292,6 @@ public class CppHelper {
     return getToolchain(ruleContext, dep);
   }
 
-  /**
-   * Makes sure that the given info collection has a {@link CcToolchainProvider} (gives an error
-   * otherwise), and returns a reference to that {@link CcToolchainProvider}. The method never
-   * returns {@code null}, even if there is no toolchain.
-   */
-  public static CcToolchainProvider getToolchain(
-      RuleContext ruleContext, TransitiveInfoCollection dep) {
-    Label toolchainType = getToolchainTypeFromRuleClass(ruleContext);
-    return getToolchain(ruleContext, dep, toolchainType);
-  }
-
-  public static CcToolchainProvider getToolchain(
-      RuleContext ruleContext, TransitiveInfoCollection dep, Label toolchainType) {
-    if (toolchainType != null && useToolchainResolution(ruleContext)) {
-      return getToolchainFromPlatformConstraints(ruleContext, toolchainType);
-    }
-    return getToolchainFromCrosstoolTop(ruleContext, dep);
-  }
-
   /** Returns the c++ toolchain type, or null if it is not specified on the rule class. */
   public static Label getToolchainTypeFromRuleClass(RuleContext ruleContext) {
     Label toolchainType;
@@ -332,6 +303,21 @@ public class CppHelper {
       toolchainType = null;
     }
     return toolchainType;
+  }
+
+  /**
+   * Makes sure that the given info collection has a {@link CcToolchainProvider} (gives an error
+   * otherwise), and returns a reference to that {@link CcToolchainProvider}. The method never
+   * returns {@code null}, even if there is no toolchain.
+   */
+  public static CcToolchainProvider getToolchain(
+      RuleContext ruleContext, TransitiveInfoCollection dep) {
+
+    Label toolchainType = getToolchainTypeFromRuleClass(ruleContext);
+    if (toolchainType != null && useToolchainResolution(ruleContext)) {
+      return getToolchainFromPlatformConstraints(ruleContext, toolchainType);
+    }
+    return getToolchainFromCrosstoolTop(ruleContext, dep);
   }
 
   private static CcToolchainProvider getToolchainFromPlatformConstraints(
@@ -965,27 +951,10 @@ public class CppHelper {
         .collect(ImmutableList.toImmutableList());
   }
 
-  public static CcDebugInfoContext mergeCcDebugInfoContexts(
-      CcCompilationOutputs compilationOutputs, Iterable<CcInfo> deps) {
-    ImmutableList.Builder<CcDebugInfoContext> contexts = ImmutableList.builder();
-    for (CcInfo ccInfo : deps) {
-      contexts.add(ccInfo.getCcDebugInfoContext());
-    }
-    contexts.add(CcDebugInfoContext.from(compilationOutputs));
-    return CcDebugInfoContext.merge(contexts.build());
-  }
-
   public static ImmutableList<CcLinkingContext> getLinkingContextsFromDeps(
       ImmutableList<TransitiveInfoCollection> deps) {
     return Streams.stream(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
         .map(CcInfo::getCcLinkingContext)
-        .collect(ImmutableList.toImmutableList());
-  }
-
-  public static ImmutableList<CcDebugInfoContext> getDebugInfoContextsFromDeps(
-      List<TransitiveInfoCollection> deps) {
-    return Streams.stream(AnalysisUtils.getProviders(deps, CcInfo.PROVIDER))
-        .map(CcInfo::getCcDebugInfoContext)
         .collect(ImmutableList.toImmutableList());
   }
 
