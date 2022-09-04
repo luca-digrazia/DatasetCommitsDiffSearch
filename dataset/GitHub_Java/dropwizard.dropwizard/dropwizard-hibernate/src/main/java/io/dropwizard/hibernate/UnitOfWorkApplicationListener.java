@@ -70,7 +70,7 @@ public class UnitOfWorkApplicationListener implements ApplicationEventListener {
         private Session session;
         private SessionFactory sessionFactory;
 
-        UnitOfWorkEventListener(Map<Method, UnitOfWork> methodMap,
+        public UnitOfWorkEventListener(Map<Method, UnitOfWork> methodMap,
                                        Map<String, SessionFactory> sessionFactories) {
             this.methodMap = methodMap;
             this.sessionFactories = sessionFactories;
