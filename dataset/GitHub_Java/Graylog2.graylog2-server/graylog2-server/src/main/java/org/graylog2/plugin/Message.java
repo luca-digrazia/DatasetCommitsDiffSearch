@@ -45,7 +45,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 import static com.google.common.base.Predicates.equalTo;
 import static com.google.common.base.Predicates.not;
@@ -434,16 +433,14 @@ public class Message implements Messages {
         return streams.remove(stream);
     }
 
+    @SuppressWarnings("unchecked")
     public List<String> getStreamIds() {
         if (!hasField(FIELD_STREAMS)) {
-            return streams.stream().map(Stream::getId).collect(Collectors.toList());
+            return Collections.emptyList();
         }
         try {
-            @SuppressWarnings("unchecked")
-            final List<String> streamIds = getFieldAs(List.class, FIELD_STREAMS);
-            return new ArrayList<>(streamIds);
+            return Lists.<String>newArrayList(getFieldAs(List.class, FIELD_STREAMS));
         } catch (ClassCastException e) {
-            LOG.trace("Couldn't cast {} to List", FIELD_STREAMS, e);
             return Collections.emptyList();
         }
     }
