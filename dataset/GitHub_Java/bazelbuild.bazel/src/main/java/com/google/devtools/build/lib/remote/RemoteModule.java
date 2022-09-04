@@ -86,7 +86,7 @@ public final class RemoteModule extends BlazeModule {
   }
 
   @Override
-  public void beforeCommand(CommandEnvironment env) {
+  public void beforeCommand(Command command, CommandEnvironment env) {
     this.env = env;
     env.getEventBus().register(this);
   }
