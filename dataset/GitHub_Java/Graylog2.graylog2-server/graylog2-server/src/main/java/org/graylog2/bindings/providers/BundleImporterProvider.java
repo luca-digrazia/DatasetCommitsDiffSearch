@@ -30,7 +30,6 @@ import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.streams.OutputService;
 import org.graylog2.streams.StreamRuleService;
 import org.graylog2.streams.StreamService;
-import org.graylog2.timeranges.TimeRangeFactory;
 
 import javax.inject.Inject;
 import javax.inject.Provider;
@@ -50,7 +49,6 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
     private final MessageInputFactory messageInputFactory;
     private final InputLauncher inputLauncher;
     private final GrokPatternService grokPatternService;
-    private final TimeRangeFactory timeRangeFactory;
 
     @Inject
     public BundleImporterProvider(final InputService inputService,
@@ -65,8 +63,7 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
                                   final Searches searches,
                                   final MessageInputFactory messageInputFactory,
                                   final InputLauncher inputLauncher,
-                                  final GrokPatternService grokPatternService,
-                                  final TimeRangeFactory timeRangeFactory) {
+                                  final GrokPatternService grokPatternService) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
@@ -80,7 +77,6 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
         this.messageInputFactory = messageInputFactory;
         this.inputLauncher = inputLauncher;
         this.grokPatternService = grokPatternService;
-        this.timeRangeFactory = timeRangeFactory;
     }
 
     @Override
@@ -88,6 +84,6 @@ public class BundleImporterProvider implements Provider<BundleImporter> {
         return new BundleImporter(inputService, inputRegistry, extractorFactory,
                 streamService, streamRuleService, outputService, dashboardService,
                 dashboardWidgetCreator, serverStatus, searches,
-                messageInputFactory, inputLauncher, grokPatternService, timeRangeFactory);
+                messageInputFactory, inputLauncher, grokPatternService);
     }
 }
