@@ -14,8 +14,6 @@
 
 package com.google.devtools.build.lib.rules.cpp;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import com.google.common.base.Predicate;
 import com.google.common.base.Predicates;
 import com.google.common.base.Supplier;
@@ -25,16 +23,12 @@ import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.FailAction;
-import com.google.devtools.build.lib.actions.ParameterFile;
 import com.google.devtools.build.lib.analysis.AnalysisEnvironment;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
-import com.google.devtools.build.lib.analysis.actions.CustomCommandLine;
-import com.google.devtools.build.lib.analysis.actions.ParameterFileWriteAction;
-import com.google.devtools.build.lib.analysis.actions.SpawnAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.PerLabelOptions;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.packages.BuildType;
@@ -60,7 +54,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.annotation.Nullable;
 
 /**
  * Representation of a C/C++ compilation. Its purpose is to share the code that creates compilation
@@ -166,10 +159,7 @@ public final class CppModel {
 
   /** Build variable for flags coming from unfiltered_cxx_flag CROSSTOOL fields. */
   public static final String UNFILTERED_COMPILE_FLAGS_VARIABLE_NAME = "unfiltered_compile_flags";
-
-  /** Name of the build variable for the sysroot path variable name. */
-  public static final String SYSROOT_VARIABLE_NAME = "sysroot";
-
+  
   private final CppSemantics semantics;
   private final RuleContext ruleContext;
   private final BuildConfiguration configuration;
@@ -527,7 +517,7 @@ public final class CppModel {
       CppModuleMap cppModuleMap,
       Map<String, String> sourceSpecificBuildVariables) {
     CcToolchainFeatures.Variables.Builder buildVariables =
-        new CcToolchainFeatures.Variables.Builder(ccToolchain.getBuildVariables());
+        new CcToolchainFeatures.Variables.Builder();
 
     CppCompilationContext builderContext = builder.getContext();
     Artifact sourceFile = builder.getSourceFile();
@@ -651,6 +641,8 @@ public final class CppModel {
           LTO_INDEXING_BITCODE_FILE_VARIABLE_NAME, ltoIndexingFile.getExecPathString());
     }
 
+    buildVariables.addAllStringVariables(ccToolchain.getBuildVariables());
+
     buildVariables.addAllStringVariables(sourceSpecificBuildVariables);
 
     for (VariablesExtension extension : variablesExtensions) {
@@ -678,60 +670,6 @@ public final class CppModel {
   private boolean isGenerateDotdFile(Artifact sourceArtifact) {
     return CppFileTypes.headerDiscoveryRequired(sourceArtifact)
         && !featureConfiguration.isEnabled(CppRuleClasses.PARSE_SHOWINCLUDES);
-  }
-
-  /**
-   * Create actions for parsing object files to generate a DEF file, should on be used on Windows.
-   *
-   * <p>The method only creates the actions when WINDOWS_EXPORT_ALL_SYMBOLS feature is enabled and
-   * NO_WINDOWS_EXPORT_ALL_SYMBOLS feature is not enabled.
-   *
-   * @param objectFiles A list of object files to parse
-   * @param dllName The DLL name to be written into the DEF file, it specifies which DLL is required
-   *     at runtime
-   * @return The DEF file artifact, null if actions are not created.
-   */
-  @Nullable
-  public Artifact createDefFileActions(ImmutableList<Artifact> objectFiles, String dllName) {
-    if (!featureConfiguration.isEnabled(CppRuleClasses.WINDOWS_EXPORT_ALL_SYMBOLS)
-        || featureConfiguration.isEnabled(CppRuleClasses.NO_WINDOWS_EXPORT_ALL_SYMBOLS)) {
-      return null;
-    }
-    Artifact defFile = ruleContext.getBinArtifact(ruleContext.getLabel().getName() + ".def");
-    CustomCommandLine.Builder argv = new CustomCommandLine.Builder();
-    for (Artifact objectFile : objectFiles) {
-      argv.addDynamicString(objectFile.getExecPathString());
-    }
-
-    Artifact paramFile =
-        ruleContext.getDerivedArtifact(
-            ParameterFile.derivePath(defFile.getRootRelativePath()), defFile.getRoot());
-
-    ruleContext.registerAction(
-        new ParameterFileWriteAction(
-            ruleContext.getActionOwner(),
-            paramFile,
-            argv.build(),
-            ParameterFile.ParameterFileType.SHELL_QUOTED,
-            UTF_8));
-
-    Artifact defParser = ccToolchain.getDefParserTool();
-    ruleContext.registerAction(
-        new SpawnAction.Builder()
-            .addInput(paramFile)
-            .addInputs(objectFiles)
-            .addOutput(defFile)
-            .setExecutable(defParser)
-            .useDefaultShellEnvironment()
-            .addCommandLine(
-                CustomCommandLine.builder()
-                    .addExecPath(defFile)
-                    .addDynamicString(dllName)
-                    .addPrefixedExecPath("@", paramFile)
-                    .build())
-            .setMnemonic("DefParser")
-            .build(ruleContext));
-    return defFile;
   }
 
   /**
@@ -1471,14 +1409,11 @@ public final class CppModel {
               configuration,
               LinkTargetType.INTERFACE_DYNAMIC_LIBRARY,
               linkedArtifactNameSuffix);
-      // TODO(b/28946988): Remove this hard-coded flag.
-      if (!featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-        sonameLinkopts =
-            ImmutableList.of(
-                "-Wl,-soname="
-                    + SolibSymlinkAction.getDynamicLibrarySoname(
-                        soImpl.getRootRelativePath(), /* preserveName= */ false));
-      }
+      sonameLinkopts =
+          ImmutableList.of(
+              "-Wl,-soname="
+                  + SolibSymlinkAction.getDynamicLibrarySoname(
+                      soImpl.getRootRelativePath(), /* preserveName= */ false));
     }
 
     CppLinkActionBuilder dynamicLinkActionBuilder =
@@ -1498,24 +1433,6 @@ public final class CppModel {
                 ccToolchain.getDynamicRuntimeLinkMiddleman(),
                 ccToolchain.getDynamicRuntimeLinkInputs())
             .addVariablesExtensions(variablesExtensions);
-
-    Artifact defFile =
-        createDefFileActions(
-            ccOutputs.getObjectFiles(false),
-            SolibSymlinkAction.getDynamicLibrarySoname(soImpl.getRootRelativePath(), true));
-    if (defFile != null) {
-      dynamicLinkActionBuilder.setDefFile(defFile);
-    }
-
-    // On Windows, we cannot build a shared library with symbols unresolved, so here we dynamically
-    // link to all it's dependencies.
-    if (featureConfiguration.isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-      CcLinkParams.Builder ccLinkParamsbuilder =
-          CcLinkParams.builder(/* linkingStatically= */ false, /* linkShared= */ true);
-      ccLinkParamsbuilder.addCcLibrary(
-          ruleContext, false, ImmutableList.of(), CcLinkingOutputs.EMPTY);
-      dynamicLinkActionBuilder.addLinkParams(ccLinkParamsbuilder.build(), ruleContext);
-    }
 
     if (!ccOutputs.getLtoBitcodeFiles().isEmpty()
         && featureConfiguration.isEnabled(CppRuleClasses.THIN_LTO)) {

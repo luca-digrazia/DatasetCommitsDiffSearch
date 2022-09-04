@@ -129,10 +129,7 @@ public class FakeCppCompileAction extends CppCompileAction {
     CppCompileActionContext context = actionExecutionContext.getContext(actionContext);
     CppCompileActionContext.Reply reply = null;
     try {
-      CppCompileActionResult cppCompileActionResult =
-          context.execWithReply(this, actionExecutionContext);
-      // TODO(b/62588075) Save spawnResults from cppCompileActionResult and return them upwards.
-      reply = cppCompileActionResult.contextReply();
+      reply = context.execWithReply(this, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "C++ compilation of rule '" + getOwner().getLabel() + "'",

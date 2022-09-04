@@ -22,9 +22,9 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.Artifact;
+import com.google.devtools.build.lib.analysis.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -657,9 +657,8 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  public CppCompileActionBuilder setShouldScanIncludes(boolean shouldScanIncludes) {
+  public void setShouldScanIncludes(boolean shouldScanIncludes) {
     this.shouldScanIncludes = shouldScanIncludes;
-    return this;
   }
 
   public boolean getShouldScanIncludes() {
@@ -670,8 +669,7 @@ public class CppCompileActionBuilder {
     return ccToolchain;
   }
 
-  public CppCompileActionBuilder setCoptsFilter(Predicate<String> coptsFilter) {
+  public void setCoptsFilter(Predicate<String> coptsFilter) {
     this.coptsFilter = Preconditions.checkNotNull(coptsFilter);
-    return this;
   }
 }

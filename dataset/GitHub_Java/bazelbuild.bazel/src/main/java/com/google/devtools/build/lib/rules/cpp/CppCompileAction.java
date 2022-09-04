@@ -123,9 +123,6 @@ public class CppCompileAction extends AbstractAction
   /** A string constant for the strip action name. */
   public static final String STRIP_ACTION_NAME = "strip";
 
-  /** A string constant for the linkstamp-compile action. */
-  public static final String LINKSTAMP_COMPILE = "linkstamp-compile";
-
   /**
    * A string constant for the c compilation action.
    */
@@ -348,7 +345,8 @@ public class CppCompileAction extends AbstractAction
                 coptsFilter,
                 actionName,
                 cppConfiguration,
-                dotdFile)
+                dotdFile,
+                cppProvider)
             .setFeatureConfiguration(featureConfiguration)
             .setVariables(variables)
             .build();
@@ -1164,12 +1162,8 @@ public class CppCompileAction extends AbstractAction
       actionExecutionContext.getFileOutErr().setErrorFilter(showIncludesFilterForStderr);
     }
     try {
-      CppCompileActionResult cppCompileActionResult =
-          actionExecutionContext
-              .getContext(actionContext)
-              .execWithReply(this, actionExecutionContext);
-      // TODO(b/62588075) Save spawnResults from cppCompileActionResult and return them upwards.
-      reply = cppCompileActionResult.contextReply();
+      reply = actionExecutionContext.getContext(actionContext)
+          .execWithReply(this, actionExecutionContext);
     } catch (ExecException e) {
       throw e.toActionExecutionException(
           "C++ compilation of rule '" + getOwner().getLabel() + "'",

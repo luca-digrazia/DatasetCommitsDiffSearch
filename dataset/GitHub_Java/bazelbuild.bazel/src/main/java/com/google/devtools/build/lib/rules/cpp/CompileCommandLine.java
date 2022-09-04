@@ -39,6 +39,7 @@ public final class CompileCommandLine {
   private final CcToolchainFeatures.Variables variables;
   private final String actionName;
   private final CppConfiguration cppConfiguration;
+  private final CcToolchainProvider cppProvider;
   private final DotdFile dotdFile;
 
   private CompileCommandLine(
@@ -49,7 +50,8 @@ public final class CompileCommandLine {
       CppConfiguration cppConfiguration,
       CcToolchainFeatures.Variables variables,
       String actionName,
-      DotdFile dotdFile) {
+      DotdFile dotdFile,
+      CcToolchainProvider cppProvider) {
     this.sourceFile = Preconditions.checkNotNull(sourceFile);
     this.outputFile = Preconditions.checkNotNull(outputFile);
     this.coptsFilter = coptsFilter;
@@ -58,6 +60,7 @@ public final class CompileCommandLine {
     this.variables = variables;
     this.actionName = actionName;
     this.dotdFile = isGenerateDotdFile(sourceFile) ? Preconditions.checkNotNull(dotdFile) : null;
+    this.cppProvider = cppProvider;
   }
 
   /** Returns true if Dotd file should be generated. */
@@ -108,12 +111,20 @@ public final class CompileCommandLine {
     CcToolchainFeatures.Variables updatedVariables = variables;
     if (variables != null && overwrittenVariables != null) {
       CcToolchainFeatures.Variables.Builder variablesBuilder =
-          new CcToolchainFeatures.Variables.Builder(variables);
-      variablesBuilder.addAllNonTransitive(overwrittenVariables);
+          new CcToolchainFeatures.Variables.Builder();
+      variablesBuilder.addAll(variables);
+      variablesBuilder.addAndOverwriteAll(overwrittenVariables);
       updatedVariables = variablesBuilder.build();
     }
     addFilteredOptions(
         options, featureConfiguration.getPerFeatureExpansions(actionName, updatedVariables));
+
+    if (isObjcCompile(actionName)) {
+      PathFragment sysroot = cppProvider.getSysroot();
+      if (sysroot != null) {
+        options.add(cppConfiguration.getSysrootCompilerOption(sysroot));
+      }
+    }
 
     if (!featureConfiguration.isEnabled("compile_action_flags_in_flag_set")) {
       if (FileType.contains(outputFile, CppFileTypes.ASSEMBLER, CppFileTypes.PIC_ASSEMBLER)) {
@@ -129,6 +140,11 @@ public final class CompileCommandLine {
     }
 
     return options;
+  }
+
+  private boolean isObjcCompile(String actionName) {
+    return (actionName.equals(CppCompileAction.OBJC_COMPILE)
+        || actionName.equals(CppCompileAction.OBJCPP_COMPILE));
   }
 
   // For each option in 'in', add it to 'out' unless it is matched by the 'coptsFilter' regexp.
@@ -177,9 +193,16 @@ public final class CompileCommandLine {
       Predicate<String> coptsFilter,
       String actionName,
       CppConfiguration cppConfiguration,
-      DotdFile dotdFile) {
+      DotdFile dotdFile,
+      CcToolchainProvider cppProvider) {
     return new Builder(
-        sourceFile, outputFile, coptsFilter, actionName, cppConfiguration, dotdFile);
+        sourceFile,
+        outputFile,
+        coptsFilter,
+        actionName,
+        cppConfiguration,
+        dotdFile,
+        cppProvider);
   }
 
   /** A builder for a {@link CompileCommandLine}. */
@@ -192,6 +215,7 @@ public final class CompileCommandLine {
     private final String actionName;
     private final CppConfiguration cppConfiguration;
     @Nullable private final DotdFile dotdFile;
+    private final CcToolchainProvider ccToolchainProvider;
 
     public CompileCommandLine build() {
       return new CompileCommandLine(
@@ -202,7 +226,8 @@ public final class CompileCommandLine {
           Preconditions.checkNotNull(cppConfiguration),
           Preconditions.checkNotNull(variables),
           Preconditions.checkNotNull(actionName),
-          dotdFile);
+          dotdFile,
+          Preconditions.checkNotNull(ccToolchainProvider));
     }
 
     private Builder(
@@ -211,13 +236,15 @@ public final class CompileCommandLine {
         Predicate<String> coptsFilter,
         String actionName,
         CppConfiguration cppConfiguration,
-        DotdFile dotdFile) {
+        DotdFile dotdFile,
+        CcToolchainProvider ccToolchainProvider) {
       this.sourceFile = sourceFile;
       this.outputFile = outputFile;
       this.coptsFilter = coptsFilter;
       this.actionName = actionName;
       this.cppConfiguration = cppConfiguration;
       this.dotdFile = dotdFile;
+      this.ccToolchainProvider = ccToolchainProvider;
     }
 
     /** Sets the feature configuration for this compile action. */

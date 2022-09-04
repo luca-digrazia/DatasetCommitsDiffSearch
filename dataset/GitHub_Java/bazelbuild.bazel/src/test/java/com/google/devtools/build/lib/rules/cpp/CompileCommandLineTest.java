@@ -19,6 +19,7 @@ import com.google.common.base.Predicate;
 import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.actions.Root;
+import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.util.BuildViewTestCase;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CompileCommandLine.Builder;
@@ -54,15 +55,17 @@ public class CompileCommandLineTest extends BuildViewTestCase {
       throws Exception {
     return CcToolchainFeaturesTest.buildFeatures(crosstool)
         .getFeatureConfiguration(
-            ImmutableSet.of(
-                CppCompileAction.ASSEMBLE,
-                CppCompileAction.PREPROCESS_ASSEMBLE,
-                CppCompileAction.C_COMPILE,
-                CppCompileAction.CPP_COMPILE,
-                CppCompileAction.CPP_HEADER_PARSING,
-                CppCompileAction.CPP_HEADER_PREPROCESSING,
-                CppCompileAction.CPP_MODULE_CODEGEN,
-                CppCompileAction.CPP_MODULE_COMPILE));
+            FeatureSpecification.create(
+                ImmutableSet.of(
+                    CppCompileAction.ASSEMBLE,
+                    CppCompileAction.PREPROCESS_ASSEMBLE,
+                    CppCompileAction.C_COMPILE,
+                    CppCompileAction.CPP_COMPILE,
+                    CppCompileAction.CPP_HEADER_PARSING,
+                    CppCompileAction.CPP_HEADER_PREPROCESSING,
+                    CppCompileAction.CPP_MODULE_CODEGEN,
+                    CppCompileAction.CPP_MODULE_COMPILE),
+                ImmutableSet.<String>of()));
   }
 
   @Test
@@ -136,6 +139,8 @@ public class CompileCommandLineTest extends BuildViewTestCase {
   }
 
   private Builder makeCompileCommandLineBuilder() throws Exception {
+    ConfiguredTarget dummyTarget =
+        scratchConfiguredTarget("a", "a", "cc_binary(name='a', srcs=['a.cc'])");
     return CompileCommandLine.builder(
         scratchArtifact("a/FakeInput"),
         scratchArtifact("a/FakeOutput"),
@@ -147,6 +152,7 @@ public class CompileCommandLineTest extends BuildViewTestCase {
         },
         "c++-compile",
         getTargetConfiguration().getFragment(CppConfiguration.class),
-        new DotdFile(scratchArtifact("a/dotD")));
+        new DotdFile(scratchArtifact("a/dotD")),
+        CppHelper.getToolchainUsingDefaultCcToolchainAttribute(getRuleContext(dummyTarget)));
   }
 }
