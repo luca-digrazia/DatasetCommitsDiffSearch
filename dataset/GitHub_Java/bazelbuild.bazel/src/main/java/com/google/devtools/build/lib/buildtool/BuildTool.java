@@ -47,7 +47,6 @@ import com.google.devtools.build.lib.profiler.SilentCloseable;
 import com.google.devtools.build.lib.runtime.BlazeRuntime;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.util.AbruptExitException;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.vfs.Path;
 import com.google.devtools.common.options.OptionsProvider;
@@ -284,11 +283,10 @@ public class BuildTool {
     maybeSetStopOnFirstFailure(request, result);
     int startSuspendCount = suspendCount();
     Throwable catastrophe = null;
-    DetailedExitCode detailedExitCode =
-        DetailedExitCode.justExitCode(ExitCode.BLAZE_INTERNAL_ERROR);
+    ExitCode exitCode = ExitCode.BLAZE_INTERNAL_ERROR;
     try {
       buildTargets(request, result, validator);
-      detailedExitCode = DetailedExitCode.justExitCode(ExitCode.SUCCESS);
+      exitCode = ExitCode.SUCCESS;
     } catch (BuildFailedException e) {
       if (e.isErrorAlreadyShown()) {
         // The actual error has already been reported by the Builder.
@@ -298,35 +296,34 @@ public class BuildTool {
       if (e.isCatastrophic()) {
         result.setCatastrophe();
       }
-      detailedExitCode = e.getDetailedExitCode();
+      exitCode = e.getExitCode() != null ? e.getExitCode() : ExitCode.BUILD_FAILURE;
     } catch (InterruptedException e) {
       // We may have been interrupted by an error, or the user's interruption may have raced with
       // an error, so check to see if we should report that error code instead.
-      ExitCode environmentPendingExitCode = env.getPendingExitCode();
-      if (environmentPendingExitCode == null) {
-        detailedExitCode = DetailedExitCode.justExitCode(ExitCode.INTERRUPTED);
+      exitCode = env.getPendingExitCode();
+      if (exitCode == null) {
+        exitCode = ExitCode.INTERRUPTED;
         env.getReporter().handle(Event.error("build interrupted"));
         env.getEventBus().post(new BuildInterruptedEvent());
       } else {
         // Report the exception from the environment - the exception we're handling here is just an
         // interruption.
-        detailedExitCode = DetailedExitCode.justExitCode(environmentPendingExitCode);
         reportExceptionError(env.getPendingException());
         result.setCatastrophe();
       }
     } catch (TargetParsingException | LoadingFailedException | ViewCreationFailedException e) {
-      detailedExitCode = DetailedExitCode.justExitCode(ExitCode.PARSING_FAILURE);
+      exitCode = ExitCode.PARSING_FAILURE;
       reportExceptionError(e);
     } catch (PostAnalysisQueryCommandLineException e) {
-      detailedExitCode = DetailedExitCode.justExitCode(ExitCode.COMMAND_LINE_ERROR);
+      exitCode = ExitCode.COMMAND_LINE_ERROR;
       reportExceptionError(e);
     } catch (TestExecException e) {
       // ExitCode.SUCCESS means that build was successful. Real return code of program
       // is going to be calculated in TestCommand.doTest().
-      detailedExitCode = DetailedExitCode.justExitCode(ExitCode.SUCCESS);
+      exitCode = ExitCode.SUCCESS;
       reportExceptionError(e);
     } catch (InvalidConfigurationException e) {
-      detailedExitCode = DetailedExitCode.justExitCode(ExitCode.COMMAND_LINE_ERROR);
+      exitCode = ExitCode.COMMAND_LINE_ERROR;
       reportExceptionError(e);
       // TODO(gregce): With "global configurations" we cannot tie a configuration creation failure
       // to a single target and have to halt the entire build. Once configurations are genuinely
@@ -334,14 +331,14 @@ public class BuildTool {
       // target(s) that triggered them.
       result.setCatastrophe();
     } catch (AbruptExitException e) {
-      detailedExitCode = DetailedExitCode.justExitCode(e.getExitCode());
+      exitCode = e.getExitCode();
       reportExceptionError(e);
       result.setCatastrophe();
     } catch (Throwable throwable) {
       catastrophe = throwable;
       Throwables.propagate(throwable);
     } finally {
-      stopRequest(result, catastrophe, detailedExitCode, startSuspendCount);
+      stopRequest(result, catastrophe, exitCode, startSuspendCount);
     }
 
     return result;
@@ -380,20 +377,17 @@ public class BuildTool {
    *
    * @param result result to update
    * @param crash any unexpected {@link RuntimeException} or {@link Error}. May be null
-   * @param detailedExitCode describes the exit code and an optional detailed failure value to add
-   *     to {@code result}
+   * @param exitCondition a suggested exit condition from either the build logic or a thrown
+   *     exception somewhere along the way
    * @param startSuspendCount number of suspensions before the build started
    */
   public void stopRequest(
-      BuildResult result,
-      Throwable crash,
-      DetailedExitCode detailedExitCode,
-      int startSuspendCount) {
-    Preconditions.checkState((crash == null) || !detailedExitCode.isSuccess());
+      BuildResult result, Throwable crash, ExitCode exitCondition, int startSuspendCount) {
+    Preconditions.checkState((crash == null) || !exitCondition.equals(ExitCode.SUCCESS));
     int stopSuspendCount = suspendCount();
     Preconditions.checkState(startSuspendCount <= stopSuspendCount);
     result.setUnhandledThrowable(crash);
-    result.setDetailedExitCode(detailedExitCode);
+    result.setExitCondition(exitCondition);
     InterruptedException ie = null;
     try {
       env.getSkyframeExecutor().notifyCommandComplete(env.getReporter());
@@ -416,13 +410,14 @@ public class BuildTool {
     // modules add their data to the collection.
     env.getEventBus().post(result.getBuildToolLogCollection().freeze().toEvent());
     if (ie != null) {
-      if (detailedExitCode.isSuccess()) {
-        result.setDetailedExitCode(DetailedExitCode.justExitCode(ExitCode.INTERRUPTED));
-      } else if (!detailedExitCode.getExitCode().equals(ExitCode.INTERRUPTED)) {
+      if (exitCondition.equals(ExitCode.SUCCESS)) {
+        result.setExitCondition(ExitCode.INTERRUPTED);
+      } else if (!exitCondition.equals(ExitCode.INTERRUPTED)) {
         logger.log(
             Level.WARNING,
-            "Suppressed interrupted exception during stop request because already failing with: "
-                + detailedExitCode,
+            "Suppressed interrupted exception during stop request because already failing with exit"
+                + " code "
+                + exitCondition,
             ie);
       }
     }

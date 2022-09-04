@@ -81,6 +81,7 @@ import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey;
 import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.util.AbruptExitException;
 import com.google.devtools.build.lib.util.LoggingUtil;
+import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.ModifiedFileSet;
 import com.google.devtools.build.lib.vfs.OutputService;
 import com.google.devtools.build.lib.vfs.Path;
@@ -167,12 +168,6 @@ public class ExecutionTool {
       throw new ExecutorInitException(
           "--local_resources is deprecated. Please use "
               + "--local_ram_resources and/or --local_cpu_resources");
-    }
-
-    if (options.removeRamUtilizationFactor && options.ramUtilizationPercentage != 0) {
-      throw new ExecutorInitException(
-          "--ram_utilization_factor is deprecated. "
-              + "Please use --local_ram_resources=HOST_RAM*<float>");
     }
   }
 
@@ -452,15 +447,9 @@ public class ExecutionTool {
     }
 
     try {
-      directory.createDirectoryAndParents();
+      FileSystemUtils.createDirectoryAndParents(directory);
     } catch (IOException e) {
       throw new ExecutorInitException("Couldn't create action output directory", e);
-    }
-
-    try {
-      env.getPersistentActionOutsDirectory().createDirectoryAndParents();
-    } catch (IOException e) {
-      throw new ExecutorInitException("Couldn't create persistent action output directory", e);
     }
   }
 
@@ -685,11 +674,11 @@ public class ExecutionTool {
       ModifiedFileSet modifiedOutputFiles) {
     BuildRequestOptions options = request.getBuildOptions();
 
-    skyframeExecutor.setActionOutputRoot(
-        env.getActionTempsDirectory(), env.getPersistentActionOutsDirectory());
-
+    Path actionOutputRoot = env.getActionTempsDirectory();
     Predicate<Action> executionFilter =
         CheckUpToDateFilter.fromOptions(request.getOptions(ExecutionOptions.class));
+
+    skyframeExecutor.setActionOutputRoot(actionOutputRoot);
     ArtifactFactory artifactFactory = env.getSkyframeBuildView().getArtifactFactory();
     return new SkyframeBuilder(
         skyframeExecutor,

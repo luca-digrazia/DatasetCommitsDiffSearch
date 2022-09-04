@@ -73,22 +73,8 @@ public interface TestActionContext extends ActionContext {
    * implementations.
    */
   interface TestAttemptResult {
-    /** Test attempt result, splitting failures into permanent vs retriable. */
-    enum Result {
-      /** Test attempt successful. */
-      PASSED,
-      /** Test failed, potentially due to test flakiness, can be retried. */
-      FAILED_CAN_RETRY,
-      /** Permanent failure. */
-      FAILED;
-
-      boolean canRetry() {
-        return this == FAILED_CAN_RETRY;
-      }
-    }
-
-    /** Returns the overall test result. */
-    Result result();
+    /** Returns {@code true} if the test attempt passed successfully. */
+    boolean hasPassed();
 
     /** Returns a list of spawn results for this test attempt. */
     ImmutableList<SpawnResult> spawnResults();
