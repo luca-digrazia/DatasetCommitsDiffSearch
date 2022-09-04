@@ -192,13 +192,6 @@ public enum ApplePlatform implements ApplePlatformApi {
     printer.append(toString());
   }
 
-  /** Exception indicating an unknown or unsupported Apple platform type. */
-  public static class UnsupportedPlatformTypeException extends Exception {
-    public UnsupportedPlatformTypeException(String msg) {
-      super(msg);
-    }
-  }
-
   /**
    * Value used to describe Apple platform "type". A {@link ApplePlatform} is implied from a
    * platform type (for example, watchOS) together with a cpu value (for example, armv7).
@@ -229,16 +222,15 @@ public enum ApplePlatform implements ApplePlatformApi {
     /**
      * Returns the {@link PlatformType} with given name (case insensitive).
      *
-     * @throws UnsupportedPlatformTypeException if the name does not match a valid platform type.
+     * @throws IllegalArgumentException if the name does not match a valid platform type.
      */
-    public static PlatformType fromString(String name) throws UnsupportedPlatformTypeException {
+    public static PlatformType fromString(String name) {
       for (PlatformType platformType : PlatformType.values()) {
         if (name.equalsIgnoreCase(platformType.toString())) {
           return platformType;
         }
       }
-      throw new UnsupportedPlatformTypeException(
-          String.format("Unsupported platform type \"%s\"", name));
+      throw new IllegalArgumentException(String.format("Unsupported platform type \"%s\"", name));
     }
 
     /** Returns a Skylark struct that contains the instances of this enum. */
