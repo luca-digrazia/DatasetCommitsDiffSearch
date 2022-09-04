@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
@@ -51,8 +51,8 @@ public class AUC implements ProbabilisticClassificationMetric {
 
     /**
      * Calculates AUC for binary classifier.
-     * @param truth The sample labels
-     * @param probability The posterior probability of positive class.
+     * @param truth the ground truth.
+     * @param probability the posterior probability of positive class.
      * @return AUC
      */
     public static double of(int[] truth, double[] probability) {
@@ -65,13 +65,13 @@ public class AUC implements ProbabilisticClassificationMetric {
         double pos = 0;
         double neg = 0;
 
-        for (int i = 0; i < truth.length; i++) {
-            if (truth[i] == 0) {
+        for (int label : truth) {
+            if (label == 0) {
                 neg++;
-            } else if (truth[i] == 1) {
+            } else if (label == 1) {
                 pos++;
             } else {
-                throw new IllegalArgumentException("AUC is only for binary classification. Invalid label: " + truth[i]);
+                throw new IllegalArgumentException("AUC is only for binary classification. Invalid label: " + label);
             }
         }
 

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
@@ -53,7 +53,7 @@ public class FScore implements ClassificationMetric {
      * as much importance to recall as precision. The default value 1.0
      * corresponds to F1-score.
      */
-    private double beta = 1.0;
+    private final double beta;
 
     /** Constructor of F1 score. */
     public FScore() {
@@ -81,11 +81,19 @@ public class FScore implements ClassificationMetric {
      *             the effectiveness of retrieval with respect
      *             to a user who attaches &beta; times as much
      *             importance to recall as precision.
+     * @param truth the ground truth.
+     * @param prediction the prediction.
+     * @return the metric.
      */
     public static double of(double beta, int[] truth, int[] prediction) {
         double beta2 = beta * beta;
         double p = Precision.of(truth, prediction);
         double r = Recall.of(truth, prediction);
         return (1 + beta2) * (p * r) / (beta2 * p + r);
+    }
+
+    @Override
+    public String toString() {
+        return String.format("F-Score(%f)", beta);
     }
 }

@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,13 +13,13 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
 /**
  * Matthews correlation coefficient. The MCC is in essence a correlation
- * coefficient between the observed and predicted binary classifications
+ * coefficient between the observed and predicted binary classifications.
  * It is considered as a balanced measure for binary classification,
  * even in unbalanced data sets. It  varies between -1 (perfect
  * disagreement) and +1 (perfect agreement). When it is 0,
@@ -37,7 +37,12 @@ public class MatthewsCorrelation implements ClassificationMetric {
         return of(truth, prediction);
     }
 
-    /** Calculates Matthews correlation coefficient. */
+    /**
+     * Calculates Matthews correlation coefficient.
+     * @param truth the ground truth.
+     * @param prediction the prediction.
+     * @return the metric.
+     */
     public static double of(int[] truth, int[] prediction) {
         if (truth.length != prediction.length) {
             throw new IllegalArgumentException(String.format("The vector sizes don't match: %d != %d.", truth.length, prediction.length));
@@ -47,7 +52,7 @@ public class MatthewsCorrelation implements ClassificationMetric {
         int[][] matrix = confusion.matrix;
 
         if (matrix.length != 2 || matrix[0].length != 2) {
-            throw new IllegalArgumentException("MCC can only be applied to binary classification: " + confusion.toString());
+            throw new IllegalArgumentException("MCC can only be applied to binary classification: " + confusion);
         }
 
         int tp = matrix[0][0];
@@ -63,6 +68,6 @@ public class MatthewsCorrelation implements ClassificationMetric {
 
     @Override
     public String toString() {
-        return "MCC";
+        return "MatthewsCorrelation";
     }
 }

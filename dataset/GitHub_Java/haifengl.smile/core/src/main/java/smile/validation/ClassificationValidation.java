@@ -1,17 +1,17 @@
 /*
- * Copyright (c) 2010-2021 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
+ * it under the terms of the GNU Lesser General Public License as
+ * published by the Free Software Foundation, either version 3 of
+ * the License, or (at your option) any later version.
  *
  * Smile is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
  */
 
@@ -103,13 +103,13 @@ public class ClassificationValidation<M> implements Serializable {
      * @return the validation results.
      */
     public static <T, M extends Classifier<T>> ClassificationValidation<M> of(T[] x, int[] y, T[] testx, int[] testy, BiFunction<T[], int[], M> trainer) {
+        int k = MathEx.unique(y).length;
         long start = System.nanoTime();
         M model = trainer.apply(x, y);
         double fitTime = (System.nanoTime() - start) / 1E6;
 
         start = System.nanoTime();
         if (model.soft()) {
-            int k = model.numClasses();
             double[][] posteriori = new double[testx.length][k];
             int[] prediction = model.predict(testx, posteriori);
             double scoreTime = (System.nanoTime() - start) / 1E6;
@@ -161,6 +161,7 @@ public class ClassificationValidation<M> implements Serializable {
         int[] y = formula.y(train).toIntArray();
         int[] testy = formula.y(test).toIntArray();
 
+        int k = MathEx.unique(y).length;
         long start = System.nanoTime();
         M model = trainer.apply(formula, train);
         double fitTime = (System.nanoTime() - start) / 1E6;
@@ -168,7 +169,6 @@ public class ClassificationValidation<M> implements Serializable {
         int n = test.nrow();
         int[] prediction = new int[n];
         if (model.soft()) {
-            int k = model.numClasses();
             double[][] posteriori = new double[n][k];
             start = System.nanoTime();
             for (int i = 0; i < n; i++) {

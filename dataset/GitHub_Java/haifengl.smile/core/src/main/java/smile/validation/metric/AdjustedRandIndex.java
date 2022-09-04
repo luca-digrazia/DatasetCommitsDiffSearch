@@ -1,4 +1,4 @@
-/*******************************************************************************
+/*
  * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
  *
  * Smile is free software: you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ */
 
 package smile.validation.metric;
 
@@ -43,13 +43,18 @@ public class AdjustedRandIndex implements ClusteringMetric {
     public final static AdjustedRandIndex instance = new AdjustedRandIndex();
 
     @Override
-    public double score(int[] y1, int[] y2) {
-        return of(y1, y2);
+    public double score(int[] truth, int[] cluster) {
+        return of(truth, cluster);
     }
 
-    /** Calculates the adjusted rand index. */
-    public static double of(int[] y1, int[] y2) {
-        ContingencyTable contingency = new ContingencyTable(y1, y2);
+    /**
+     * Calculates the adjusted rand index.
+     * @param truth the ground truth (or simply a clustering labels).
+     * @param cluster the alternative cluster labels.
+     * @return the metric.
+     */
+    public static double of(int[] truth, int[] cluster) {
+        ContingencyTable contingency = new ContingencyTable(truth, cluster);
         int n = contingency.n;
         int n1 = contingency.n1;
         int n2 = contingency.n2;
@@ -89,12 +94,11 @@ public class AdjustedRandIndex implements ClusteringMetric {
         double rand4 = (rand2a + rand2b) / 2;
         double randD = rand4 - rand3;
 
-        double rand = rand_N / randD;
-        return rand;
+        return rand_N / randD;
     }
 
     @Override
     public String toString() {
-        return "Adjusted Rand Index";
+        return "AdjustedRandIndex";
     }
 }
