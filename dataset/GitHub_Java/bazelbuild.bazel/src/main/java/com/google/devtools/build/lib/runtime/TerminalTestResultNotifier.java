@@ -13,20 +13,20 @@
 // limitations under the License.
 package com.google.devtools.build.lib.runtime;
 
-import com.google.devtools.build.lib.analysis.test.TestResult;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
 import com.google.devtools.build.lib.exec.TestLogHelper;
 import com.google.devtools.build.lib.exec.TestStrategy.TestOutputFormat;
 import com.google.devtools.build.lib.exec.TestStrategy.TestSummaryFormat;
+import com.google.devtools.build.lib.rules.test.TestResult;
 import com.google.devtools.build.lib.util.StringUtil;
 import com.google.devtools.build.lib.util.io.AnsiTerminalPrinter;
 import com.google.devtools.build.lib.view.test.TestStatus.BlazeTestStatus;
 import com.google.devtools.common.options.Option;
 import com.google.devtools.common.options.OptionDocumentationCategory;
-import com.google.devtools.common.options.OptionEffectTag;
 import com.google.devtools.common.options.OptionsBase;
 import com.google.devtools.common.options.OptionsProvider;
+import com.google.devtools.common.options.proto.OptionFilters.OptionEffectTag;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -122,9 +122,7 @@ public class TerminalTestResultNotifier implements TestResultNotifier {
   private void printShortSummary(Set<TestSummary> summaries, boolean showPassingTests) {
     boolean withConfig = duplicateLabels(summaries);
     for (TestSummary summary : summaries) {
-      if ((summary.getStatus() != BlazeTestStatus.PASSED
-              && summary.getStatus() != BlazeTestStatus.NO_STATUS)
-          || showPassingTests) {
+      if (summary.getStatus() != BlazeTestStatus.PASSED || showPassingTests) {
         TestSummaryPrinter.print(summary, printer, summaryOptions.verboseSummary, false,
             withConfig);
       }
@@ -188,11 +186,11 @@ public class TerminalTestResultNotifier implements TestResultNotifier {
         break;
 
       case SHORT:
-        printShortSummary(summaries, /* showPassingTests= */ true);
+        printShortSummary(summaries, /*printSuccess=*/true);
         break;
 
       case TERSE:
-        printShortSummary(summaries, /* showPassingTests= */ false);
+        printShortSummary(summaries, /*printSuccess=*/false);
         break;
 
       case NONE:
