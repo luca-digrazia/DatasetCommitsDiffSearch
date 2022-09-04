@@ -22,16 +22,15 @@ import java.lang.annotation.Annotation;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import javax.lang.model.element.Element;
 
 import org.androidannotations.helper.CanonicalNameConstants;
 
 import com.sun.codemodel.JClass;
+import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
 import com.sun.codemodel.JDefinedClass;
 
@@ -149,9 +148,7 @@ public class EBeansHolder {
 
 	private final Classes classes;
 
-	private final Map<String, List<Element>> originatingElementsByGeneratedClassQualifiedName = new HashMap<String, List<Element>>();
-
-	private final Set<Class<?>> apiClassesToGenerate = new HashSet<Class<?>>();
+	private final Map<String, Element> originatingElementsByGeneratedClassQualifiedName = new HashMap<String, Element>();
 
 	public EBeansHolder(JCodeModel codeModel) {
 		this.codeModel = codeModel;
@@ -168,51 +165,189 @@ public class EBeansHolder {
 	public EBeanHolder create(Element element, Class<? extends Annotation> eBeanAnnotation, JDefinedClass generatedClass) {
 
 		String qualifiedName = generatedClass.fullName();
-
-		addAsOriginatingElement(qualifiedName, element);
+		originatingElementsByGeneratedClassQualifiedName.put(qualifiedName, element);
 
 		EBeanHolder activityHolder = new EBeanHolder(this, eBeanAnnotation, generatedClass);
 		eBeanHolders.put(element, activityHolder);
 		return activityHolder;
 	}
 
-	private void addAsOriginatingElement(String qualifiedName, Element element) {
-		List<Element> originatingElements = originatingElementsByGeneratedClassQualifiedName.get(qualifiedName);
-		if (originatingElements == null) {
-			originatingElements = new ArrayList<Element>();
-			originatingElementsByGeneratedClassQualifiedName.put(qualifiedName, originatingElements);
-		}
-		originatingElements.add(element);
-	}
-
 	public EBeanHolder getEBeanHolder(Element element) {
 		return eBeanHolders.get(element);
 	}
 
+	public JClass refClass(Class<?> clazz) {
+		return codeModel.ref(clazz);
+	}
+
 	public JClass refClass(String fullyQualifiedClassName) {
-
-		int arrayCounter = 0;
-		while (fullyQualifiedClassName.endsWith("[]")) {
-			arrayCounter++;
-			fullyQualifiedClassName = fullyQualifiedClassName.substring(0, fullyQualifiedClassName.length() - 2);
-		}
-
 		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
+		if (refClass == null) {
+			if (fullyQualifiedClassName.endsWith("[]")) {
+				return refClass(fullyQualifiedClassName.substring(0, fullyQualifiedClassName.length() - 2)).array();
+			} else {
+				refClass = new TypeNameParser(fullyQualifiedClassName).parseTypeName();
+				loadedClasses.put(fullyQualifiedClassName, refClass);
+			}
+		}
+		return refClass;
+	}
 
+	public JDefinedClass definedClass(String fullyQualifiedClassName) {
+		JDefinedClass refClass = (JDefinedClass) loadedClasses.get(fullyQualifiedClassName);
+		if (refClass == null) {
+			try {
+				refClass = codeModel._class(fullyQualifiedClassName);
+			} catch (JClassAlreadyExistsException e) {
+				refClass = (JDefinedClass) refClass(fullyQualifiedClassName);
+			}
+			loadedClasses.put(fullyQualifiedClassName, refClass);
+		}
+		return refClass;
+	}
+
+	/**
+	 * Return a unique JClass reference by using {@link JCodeModel#ref(String)}
+	 * and keeping a buffer.
+	 * 
+	 * @param fullyQualifiedClassName
+	 * @return
+	 */
+	JClass uniqueClass(String fullyQualifiedClassName) {
+		JClass refClass = loadedClasses.get(fullyQualifiedClassName);
 		if (refClass == null) {
 			refClass = codeModel.directClass(fullyQualifiedClassName);
 			loadedClasses.put(fullyQualifiedClassName, refClass);
 		}
-
-		for (int i = 0; i < arrayCounter; i++) {
-			refClass = refClass.array();
-		}
-
 		return refClass;
 	}
 
-	public JClass refClass(Class<?> clazz) {
-		return codeModel.ref(clazz);
+	private final class TypeNameParser {
+		private final String s;
+		private int idx;
+
+		public TypeNameParser(String s) {
+			this.s = s;
+		}
+
+		/**
+		 * Parses a type name token T (which can be potentially of the form
+		 * Tr&ly;T1,T2,...>, or "? extends/super T".)
+		 * 
+		 * @return the index of the character next to T.
+		 */
+		JClass parseTypeName() {
+			int start = idx;
+			String typeName = null;
+
+			// wildcard
+			if (s.charAt(idx) == '?') {
+				idx++;
+				ws();
+
+				// Handle simple '?'
+				char ch = s.charAt(idx);
+				if (ch == '>' || ch == ',') {
+					return refClass(Object.class).wildcard();
+				}
+			} else {
+				while (idx < s.length()) {
+					char ch = s.charAt(idx);
+					if (Character.isJavaIdentifierStart(ch) || Character.isJavaIdentifierPart(ch) || ch == '.') {
+						idx++;
+					} else {
+						break;
+					}
+				}
+				typeName = s.substring(start, idx);
+			}
+
+			ws();
+			String head = s.substring(idx);
+			if (head.startsWith("extends")) {
+				idx += 7;
+				ws();
+				if (typeName != null) {
+					throw new UnsupportedOperationException("T extends MyObject not implemented (" + s + ")");
+				}
+				return parseTypeName().wildcard();
+			} else if (head.startsWith("super")) {
+				throw new UnsupportedOperationException("? super MyObject not implemented (" + s + ")");
+			}
+
+			JClass clazz = uniqueClass(typeName);
+			return parseSuffix(clazz);
+		}
+
+		/**
+		 * Parses additional left-associative suffixes, like type arguments and
+		 * array specifiers.
+		 */
+		private JClass parseSuffix(JClass clazz) {
+			if (idx == s.length()) {
+				return clazz; // hit EOL
+			}
+
+			char ch = s.charAt(idx);
+
+			if (ch == '<') {
+				return parseSuffix(parseArguments(clazz));
+			}
+
+			if (ch == '[') {
+				if (s.charAt(idx + 1) == ']') {
+					idx += 2;
+					return parseSuffix(clazz.array());
+				}
+				throw new IllegalArgumentException("Expected ']' but found " + s.substring(idx + 1));
+			}
+
+			return clazz;
+		}
+
+		/**
+		 * Skips whitespaces
+		 */
+		private void ws() {
+			while (idx < s.length() && Character.isWhitespace(s.charAt(idx))) {
+				idx++;
+			}
+		}
+
+		/**
+		 * Parses '&lt;T1,T2,...,Tn>'
+		 * 
+		 * @return the index of the character next to '>'
+		 */
+		private JClass parseArguments(JClass rawType) {
+			if (s.charAt(idx) != '<') {
+				throw new IllegalArgumentException();
+			}
+			idx++;
+			ws();
+
+			List<JClass> args = new ArrayList<JClass>();
+
+			while (true) {
+				args.add(parseTypeName());
+				if (idx == s.length()) {
+					throw new IllegalArgumentException("Missing '>' in " + s);
+				}
+				char ch = s.charAt(idx);
+				if (ch == '>') {
+					idx++;
+					ws();
+					return rawType.narrow(args.toArray(new JClass[args.size()]));
+				}
+
+				if (ch != ',') {
+					throw new IllegalArgumentException(s);
+				}
+				idx++;
+				ws();
+			}
+
+		}
 	}
 
 	public JCodeModel codeModel() {
@@ -223,17 +358,8 @@ public class EBeansHolder {
 		return classes;
 	}
 
-	public Map<String, List<Element>> getOriginatingElementsByGeneratedClassQualifiedName() {
+	public Map<String, Element> getOriginatingElementsByGeneratedClassQualifiedName() {
 		return originatingElementsByGeneratedClassQualifiedName;
-	}
-
-	public Set<Class<?>> getApiClassesToGenerate() {
-		return apiClassesToGenerate;
-	}
-
-	public void generateApiClass(Element originatingElement, Class<?> apiClass) {
-		addAsOriginatingElement(apiClass.getCanonicalName(), originatingElement);
-		apiClassesToGenerate.add(apiClass);
 	}
 
 }
