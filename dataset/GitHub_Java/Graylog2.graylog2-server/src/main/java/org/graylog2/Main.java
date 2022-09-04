@@ -48,7 +48,6 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import org.graylog2.messagequeue.MessageQueue;
 import org.graylog2.messagequeue.MessageQueueFlusher;
 import org.graylog2.periodical.BulkIndexerThread;
 
@@ -60,12 +59,10 @@ import org.graylog2.periodical.BulkIndexerThread;
 public final class Main {
 
     private static final Logger LOG = Logger.getLogger(Main.class);
-    private static final String GRAYLOG2_VERSION = "0.9.6-PREVIEW.2";
+    private static final String GRAYLOG2_VERSION = "0.9.6-PREVIEW";
 
     public static RulesEngine drools = null;
     private static final int SCHEDULED_THREADS_POOL_SIZE = 5;
-
-    public static Configuration configuration = null;
 
     private Main() {
     }
@@ -102,7 +99,7 @@ public final class Main {
         String configFile = commandLineArguments.getConfigFile();
         LOG.info("Using config file: " + configFile);
 
-        configuration = new Configuration();
+        Configuration configuration = new Configuration();
         JadConfig jadConfig = new JadConfig(new PropertiesRepository(configFile), configuration);
 
         LOG.info("Loading configuration");
@@ -183,10 +180,6 @@ public final class Main {
     }
 
     private static void initializeMessageQueue(ScheduledExecutorService scheduler, Configuration configuration) {
-        // Set the maximum size if it was configured to something else than 0 (= UNLIMITED)
-        if (configuration.getMessageQueueMaximumSize() != MessageQueue.SIZE_LIMIT_UNLIMITED) {
-            MessageQueue.getInstance().setMaximumSize(configuration.getMessageQueueMaximumSize());
-        }
 
         scheduler.scheduleAtFixedRate(new BulkIndexerThread(configuration), BulkIndexerThread.INITIAL_DELAY, configuration.getMessageQueuePollFrequency(), TimeUnit.SECONDS);
 
