@@ -17,7 +17,6 @@ package com.google.devtools.build.lib.rules.cpp;
 import static com.google.devtools.build.lib.packages.BuildType.LABEL;
 import static java.util.stream.Collectors.joining;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSetMultimap;
@@ -53,15 +52,12 @@ import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.CompilationIn
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
-import com.google.devtools.build.lib.rules.cpp.LinkerInputs.SolibLibraryToLink;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * A ConfiguredTarget for <code>cc_library</code> rules.
@@ -357,24 +353,13 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
             ccLinkingOutputs,
             precompiledStaticLibraries,
             precompiledPicStaticLibraries,
-            dynamicLibraries,
+            /* dynamicLibrariesForLinking= */ dynamicLibraries,
+            /* dynamicLibrariesForRuntime= */ dynamicLibraries,
             ccCompilationOutputs);
 
-    ImmutableList<LibraryToLinkWrapper> libraryToLinkWrappers = ImmutableList.of();
-    if (!neverLink) {
-      libraryToLinkWrappers =
-          createLibraryToLinkWrappersList(
-              ruleContext,
-              ccLinkingOutputs,
-              precompiledStaticLibraries,
-              precompiledPicStaticLibraries,
-              dynamicLibraries,
-              ccCompilationOutputs);
-    }
-
     CcLinkingInfo ccLinkingInfo =
-        linkingHelper.buildCcLinkingInfoFromLibraryToLinkWrappers(
-            libraryToLinkWrappers, compilationInfo.getCcCompilationContext());
+        linkingHelper.buildCcLinkingInfo(
+            ccLinkingOutputsWithPrecompiledLibraries, compilationInfo.getCcCompilationContext());
     CcNativeLibraryProvider ccNativeLibraryProvider =
         CppHelper.collectNativeCcLibraries(
             ruleContext.getPrerequisites("deps", Mode.TARGET),
@@ -410,9 +395,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     instrumentedObjectFiles.addAll(compilationInfo.getCcCompilationOutputs().getObjectFiles(true));
     InstrumentedFilesProvider instrumentedFilesProvider =
         common.getInstrumentedFilesProvider(
-            instrumentedObjectFiles,
-            /* withBaselineCoverage= */ true,
-            /* virtualToOriginalHeaders= */ NestedSetBuilder.create(Order.STABLE_ORDER));
+            instrumentedObjectFiles, /* withBaselineCoverage= */ true);
     CppHelper.maybeAddStaticLinkMarkerProvider(targetBuilder, ruleContext);
 
     Runfiles.Builder builder = new Runfiles.Builder(ruleContext.getWorkspaceName());
@@ -435,13 +418,9 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
 
     targetBuilder
         .setFilesToBuild(filesToBuild)
-        .addProvider(compilationInfo.getCppDebugFileProvider())
+        .addProviders(compilationInfo.getProviders())
         .addProvider(ccNativeLibraryProvider)
-        .addNativeDeclaredProvider(
-            CcInfo.builder()
-                .setCcCompilationContext(compilationInfo.getCcCompilationContext())
-                .setCcLinkingInfo(ccLinkingInfo)
-                .build())
+        .addNativeDeclaredProvider(ccLinkingInfo)
         .addSkylarkTransitiveInfo(CcSkylarkApiProvider.NAME, new CcSkylarkApiProvider())
         .addOutputGroups(
             CcCommon.mergeOutputGroups(
@@ -617,255 +596,32 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     return outputGroups.build();
   }
 
-  private static ImmutableList<LibraryToLinkWrapper> createLibraryToLinkWrappersList(
-      RuleContext ruleContext,
-      CcLinkingOutputs ccLinkingOutputs,
-      List<LibraryToLink> staticLibraries,
-      List<LibraryToLink> picStaticLibraries,
-      List<LibraryToLink> dynamicLibrariesForRuntime,
-      CcCompilationOutputs ccCompilationOutputs) {
-    Preconditions.checkState(ccLinkingOutputs.getStaticLibraries().size() <= 1);
-    Preconditions.checkState(ccLinkingOutputs.getPicStaticLibraries().size() <= 1);
-    Preconditions.checkState(ccLinkingOutputs.getDynamicLibrariesForLinking().size() <= 1);
-    Preconditions.checkState(ccLinkingOutputs.getDynamicLibrariesForRuntime().size() <= 1);
-
-    ImmutableList.Builder<LibraryToLinkWrapper> libraryToLinkWrappers = ImmutableList.builder();
-
-    checkIfLinkOutputsCollidingWithPrecompiledFiles(
-        ruleContext,
-        ccLinkingOutputs,
-        staticLibraries,
-        picStaticLibraries,
-        dynamicLibrariesForRuntime,
-        ccCompilationOutputs);
-
-    if (ruleContext.hasErrors()) {
-      return libraryToLinkWrappers.build();
-    }
-
-    // For cc_library if it contains precompiled libraries we link them. If it contains normal
-    // sources we link them as well, if it doesn't contain normal sources, then we don't do
-    // anything else if there were  precompiled libraries. However, if there are no precompiled
-    // libraries and there are no normal sources, then we use the implicitly created link output
-    // files if they exist.
-    libraryToLinkWrappers.addAll(
-        convertPrecompiledLibrariesToLibraryToLinkWrapper(
-            staticLibraries, picStaticLibraries, dynamicLibrariesForRuntime));
-    if (!ccCompilationOutputs.isEmpty()
-        || (staticLibraries.isEmpty()
-            && picStaticLibraries.isEmpty()
-            && dynamicLibrariesForRuntime.isEmpty()
-            && isContentsOfCcLinkingOutputsImplicitlyCreated(
-                ccCompilationOutputs, ccLinkingOutputs))) {
-      LibraryToLinkWrapper linkOutputsLibraryToLinkWrapper =
-          convertLinkOutputsToLibraryToLinkWrapper(ccLinkingOutputs);
-      if (linkOutputsLibraryToLinkWrapper != null) {
-        libraryToLinkWrappers.add(linkOutputsLibraryToLinkWrapper);
-      }
-    }
-
-    return libraryToLinkWrappers.build();
-  }
-
-  private static boolean isContentsOfCcLinkingOutputsImplicitlyCreated(
-      CcCompilationOutputs ccCompilationOutputs, CcLinkingOutputs ccLinkingOutputs) {
-    return ccCompilationOutputs.isEmpty() && !ccLinkingOutputs.isEmpty();
-  }
-
-  private static List<LibraryToLinkWrapper> convertPrecompiledLibrariesToLibraryToLinkWrapper(
-      List<LibraryToLink> staticLibraries,
-      List<LibraryToLink> picStaticLibraries,
-      List<LibraryToLink> dynamicLibrariesForRuntime) {
-    ImmutableList.Builder<LibraryToLinkWrapper> libraryToLinkWrappers = ImmutableList.builder();
-
-    Set<String> identifiersUsed = new HashSet<>();
-    // Here we hae an O(n^2) algorithm, the size of the inputs is never big though, we only work
-    // here with the local libraries, none of the libraries of the transitive closure.
-    for (LibraryToLink staticLibrary : staticLibraries) {
-      LibraryToLinkWrapper.Builder libraryToLinkWrapperBuilder = LibraryToLinkWrapper.builder();
-      libraryToLinkWrapperBuilder.setStaticLibrary(staticLibrary.getArtifact());
-      String identifier = staticLibrary.getLibraryIdentifier();
-      libraryToLinkWrapperBuilder.setLibraryIdentifier(identifier);
-      List<LibraryToLink> sameIdentifierPicStaticLibraries =
-          picStaticLibraries.stream()
-              .filter(x -> x.getLibraryIdentifier().equals(identifier))
-              .collect(ImmutableList.toImmutableList());
-      if (!sameIdentifierPicStaticLibraries.isEmpty()) {
-        libraryToLinkWrapperBuilder.setPicStaticLibrary(
-            sameIdentifierPicStaticLibraries.get(0).getArtifact());
-      }
-      List<LibraryToLink> sameIdentifierDynamicLibraries =
-          dynamicLibrariesForRuntime.stream()
-              .filter(x -> x.getLibraryIdentifier().equals(identifier))
-              .collect(ImmutableList.toImmutableList());
-      if (!sameIdentifierDynamicLibraries.isEmpty()) {
-        LibraryToLink dynamicLibrary = sameIdentifierDynamicLibraries.get(0);
-        libraryToLinkWrapperBuilder.setDynamicLibrary(dynamicLibrary.getArtifact());
-        if (dynamicLibrary instanceof SolibLibraryToLink) {
-          libraryToLinkWrapperBuilder.setResolvedSymlinkDynamicLibrary(
-              dynamicLibrary.getOriginalLibraryArtifact());
-        }
-      }
-      libraryToLinkWrapperBuilder.setAlwayslink(
-          staticLibrary.getArtifactCategory() == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY);
-      identifiersUsed.add(identifier);
-      libraryToLinkWrappers.add(libraryToLinkWrapperBuilder.build());
-    }
-
-    for (LibraryToLink picStaticLibrary : picStaticLibraries) {
-      String identifier = picStaticLibrary.getLibraryIdentifier();
-      if (identifiersUsed.contains(identifier)) {
-        continue;
-      }
-      LibraryToLinkWrapper.Builder libraryToLinkWrapperBuilder = LibraryToLinkWrapper.builder();
-      libraryToLinkWrapperBuilder.setPicStaticLibrary(picStaticLibrary.getArtifact());
-      libraryToLinkWrapperBuilder.setLibraryIdentifier(identifier);
-      List<LibraryToLink> sameIdentifierDynamicLibraries =
-          dynamicLibrariesForRuntime.stream()
-              .filter(x -> x.getLibraryIdentifier().equals(identifier))
-              .collect(ImmutableList.toImmutableList());
-      if (!sameIdentifierDynamicLibraries.isEmpty()) {
-        LibraryToLink dynamicLibrary = sameIdentifierDynamicLibraries.get(0);
-        libraryToLinkWrapperBuilder.setDynamicLibrary(dynamicLibrary.getArtifact());
-        if (dynamicLibrary instanceof SolibLibraryToLink) {
-          libraryToLinkWrapperBuilder.setResolvedSymlinkDynamicLibrary(
-              dynamicLibrary.getOriginalLibraryArtifact());
-        }
-      }
-      libraryToLinkWrapperBuilder.setAlwayslink(
-          picStaticLibrary.getArtifactCategory() == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY);
-      identifiersUsed.add(identifier);
-      libraryToLinkWrappers.add(libraryToLinkWrapperBuilder.build());
-    }
-
-    for (LibraryToLink dynamicLibrary : dynamicLibrariesForRuntime) {
-      String identifier = dynamicLibrary.getLibraryIdentifier();
-      if (identifiersUsed.contains(identifier)) {
-        continue;
-      }
-      LibraryToLinkWrapper.Builder libraryToLinkWrapperBuilder = LibraryToLinkWrapper.builder();
-      libraryToLinkWrapperBuilder.setDynamicLibrary(dynamicLibrary.getArtifact());
-      libraryToLinkWrapperBuilder.setLibraryIdentifier(identifier);
-      if (dynamicLibrary instanceof SolibLibraryToLink) {
-        libraryToLinkWrapperBuilder.setResolvedSymlinkDynamicLibrary(
-            dynamicLibrary.getOriginalLibraryArtifact());
-      }
-      libraryToLinkWrappers.add(libraryToLinkWrapperBuilder.build());
-    }
-    return libraryToLinkWrappers.build();
-  }
-
-  private static LibraryToLinkWrapper convertLinkOutputsToLibraryToLinkWrapper(
-      CcLinkingOutputs ccLinkingOutputs) {
-    Preconditions.checkState(!ccLinkingOutputs.isEmpty());
-
-    LibraryToLinkWrapper.Builder libraryToLinkWrapperBuilder = LibraryToLinkWrapper.builder();
-    if (!ccLinkingOutputs.getStaticLibraries().isEmpty()) {
-      LibraryToLink staticLibrary = ccLinkingOutputs.getStaticLibraries().get(0);
-      libraryToLinkWrapperBuilder.setStaticLibrary(staticLibrary.getArtifact());
-      libraryToLinkWrapperBuilder.setObjectFiles(
-          ImmutableList.copyOf(staticLibrary.getObjectFiles()));
-      libraryToLinkWrapperBuilder.setLtoBitcodeFiles(
-          ImmutableMap.copyOf(staticLibrary.getLtoBitcodeFiles()));
-      libraryToLinkWrapperBuilder.setSharedNonLtoBackends(
-          ImmutableMap.copyOf(staticLibrary.getSharedNonLtoBackends()));
-      libraryToLinkWrapperBuilder.setAlwayslink(
-          staticLibrary.getArtifactCategory() == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY);
-      libraryToLinkWrapperBuilder.setLibraryIdentifier(staticLibrary.getLibraryIdentifier());
-    }
-
-    if (!ccLinkingOutputs.getPicStaticLibraries().isEmpty()) {
-      LibraryToLink picStaticLibrary = ccLinkingOutputs.getPicStaticLibraries().get(0);
-      libraryToLinkWrapperBuilder.setPicStaticLibrary(picStaticLibrary.getArtifact());
-      libraryToLinkWrapperBuilder.setPicObjectFiles(
-          ImmutableList.copyOf(picStaticLibrary.getObjectFiles()));
-      libraryToLinkWrapperBuilder.setPicLtoBitcodeFiles(
-          ImmutableMap.copyOf(picStaticLibrary.getLtoBitcodeFiles()));
-      libraryToLinkWrapperBuilder.setPicSharedNonLtoBackends(
-          ImmutableMap.copyOf(picStaticLibrary.getSharedNonLtoBackends()));
-      libraryToLinkWrapperBuilder.setAlwayslink(
-          picStaticLibrary.getArtifactCategory() == ArtifactCategory.ALWAYSLINK_STATIC_LIBRARY);
-      libraryToLinkWrapperBuilder.setLibraryIdentifier(picStaticLibrary.getLibraryIdentifier());
-    }
-
-    if (!ccLinkingOutputs.getDynamicLibrariesForLinking().isEmpty()) {
-      LibraryToLink dynamicLibraryForLinking =
-          ccLinkingOutputs.getDynamicLibrariesForLinking().get(0);
-      Preconditions.checkState(!ccLinkingOutputs.getDynamicLibrariesForRuntime().isEmpty());
-      LibraryToLink dynamicLibraryForRuntime =
-          ccLinkingOutputs.getDynamicLibrariesForRuntime().get(0);
-      if (dynamicLibraryForLinking != dynamicLibraryForRuntime) {
-        libraryToLinkWrapperBuilder.setInterfaceLibrary(dynamicLibraryForLinking.getArtifact());
-        if (dynamicLibraryForLinking instanceof SolibLibraryToLink) {
-          libraryToLinkWrapperBuilder.setResolvedSymlinkInterfaceLibrary(
-              dynamicLibraryForLinking.getOriginalLibraryArtifact());
-        }
-        libraryToLinkWrapperBuilder.setDynamicLibrary(dynamicLibraryForRuntime.getArtifact());
-        if (dynamicLibraryForRuntime instanceof SolibLibraryToLink) {
-          libraryToLinkWrapperBuilder.setResolvedSymlinkDynamicLibrary(
-              dynamicLibraryForRuntime.getOriginalLibraryArtifact());
-        }
-      } else {
-        libraryToLinkWrapperBuilder.setDynamicLibrary(dynamicLibraryForRuntime.getArtifact());
-        if (dynamicLibraryForRuntime instanceof SolibLibraryToLink) {
-          libraryToLinkWrapperBuilder.setResolvedSymlinkDynamicLibrary(
-              dynamicLibraryForRuntime.getOriginalLibraryArtifact());
-        }
-      }
-      libraryToLinkWrapperBuilder.setLibraryIdentifier(
-          dynamicLibraryForLinking.getLibraryIdentifier());
-    }
-    return libraryToLinkWrapperBuilder.build();
-  }
-
   private static CcLinkingOutputs addPrecompiledLibrariesToLinkingOutputs(
       RuleContext ruleContext,
       CcLinkingOutputs ccLinkingOutputs,
       List<LibraryToLink> staticLibraries,
       List<LibraryToLink> picStaticLibraries,
+      List<LibraryToLink> dynamicLibrariesForLinking,
       List<LibraryToLink> dynamicLibrariesForRuntime,
       CcCompilationOutputs ccCompilationOutputs) {
     if (staticLibraries.isEmpty()
         && picStaticLibraries.isEmpty()
+        && dynamicLibrariesForLinking.isEmpty()
         && dynamicLibrariesForRuntime.isEmpty()) {
       return ccLinkingOutputs;
     }
 
     CcLinkingOutputs.Builder newOutputsBuilder = new CcLinkingOutputs.Builder();
     if (!ccCompilationOutputs.isEmpty()) {
+      // Add the linked outputs of this rule iff we had anything to put in them, but then
+      // make sure we're not colliding with some library added from the inputs.
       newOutputsBuilder.merge(ccLinkingOutputs);
-    }
-
-    checkIfLinkOutputsCollidingWithPrecompiledFiles(
-        ruleContext,
-        ccLinkingOutputs,
-        staticLibraries,
-        picStaticLibraries,
-        dynamicLibrariesForRuntime,
-        ccCompilationOutputs);
-
-    // Merge the pre-compiled libraries (static & dynamic) into the linker outputs.
-    return newOutputsBuilder
-        .addStaticLibraries(staticLibraries)
-        .addPicStaticLibraries(picStaticLibraries)
-        .addDynamicLibraries(dynamicLibrariesForRuntime)
-        .addDynamicLibrariesForRuntime(dynamicLibrariesForRuntime)
-        .build();
-  }
-
-  private static void checkIfLinkOutputsCollidingWithPrecompiledFiles(
-      RuleContext ruleContext,
-      CcLinkingOutputs ccLinkingOutputs,
-      List<LibraryToLink> staticLibraries,
-      List<LibraryToLink> picStaticLibraries,
-      List<LibraryToLink> dynamicLibrariesForRuntime,
-      CcCompilationOutputs ccCompilationOutputs) {
-    if (!ccCompilationOutputs.isEmpty()) {
       ImmutableSetMultimap<String, LibraryToLink> precompiledLibraryMap =
           CcLinkingOutputs.getLibrariesByIdentifier(
               Iterables.concat(
                   staticLibraries,
                   picStaticLibraries,
+                  dynamicLibrariesForLinking,
                   dynamicLibrariesForRuntime));
       ImmutableSetMultimap<String, LibraryToLink> linkedLibraryMap =
           ccLinkingOutputs.getLibrariesByIdentifier();
@@ -892,5 +648,13 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 + "which could cause confusion");
       }
     }
+
+    // Merge the pre-compiled libraries (static & dynamic) into the linker outputs.
+    return newOutputsBuilder
+        .addStaticLibraries(staticLibraries)
+        .addPicStaticLibraries(picStaticLibraries)
+        .addDynamicLibraries(dynamicLibrariesForLinking)
+        .addDynamicLibrariesForRuntime(dynamicLibrariesForRuntime)
+        .build();
   }
 }
