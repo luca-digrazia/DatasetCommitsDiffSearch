@@ -216,8 +216,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
       ImmutableList<BuildInfoFactory> buildInfoFactories,
       Iterable<? extends DiffAwareness.Factory> diffAwarenessFactories,
       PathFragment blacklistedPackagePrefixesFile,
-      String productName,
-      Preprocessor.Factory.Supplier preprocessorFactorySupplier) {
+      String productName) {
     return create(
         pkgFactory,
         directories,
@@ -226,7 +225,7 @@ public final class SequencedSkyframeExecutor extends SkyframeExecutor {
         buildInfoFactories,
         diffAwarenessFactories,
         Predicates.<PathFragment>alwaysFalse(),
-        preprocessorFactorySupplier,
+        Preprocessor.Factory.Supplier.NullSupplier.INSTANCE,
         ImmutableMap.<SkyFunctionName, SkyFunction>of(),
         ImmutableList.<PrecomputedValue.Injected>of(),
         ImmutableList.<SkyValueDirtinessChecker>of(),
