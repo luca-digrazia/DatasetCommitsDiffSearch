@@ -43,7 +43,6 @@ import com.google.devtools.build.lib.buildeventstream.BuildEventStreamProtos;
 import com.google.devtools.build.lib.buildeventstream.BuildEventTransport;
 import com.google.devtools.build.lib.buildeventstream.PathConverter;
 import com.google.devtools.build.lib.clock.Clock;
-import com.google.devtools.build.lib.util.ExitCode;
 import com.google.devtools.build.lib.util.JavaSleeper;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.Sleeper;
@@ -193,7 +192,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
    */
   @FunctionalInterface
   public interface ExitFunction {
-    void accept(String message, Throwable cause, ExitCode code);
+    void accept(String message, Throwable cause);
   }
 
   /**
@@ -387,10 +386,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
             publishLifecycleEvent(besProtoUtil.buildFinished(currentTime(), buildStatus));
           }
         }
-        exitFunc.accept(
-            "The Build Event Protocol upload finished successfully",
-            /*cause=*/ null,
-            ExitCode.SUCCESS);
+        exitFunc.accept("The Build Event Protocol upload finished successfully", null);
         synchronized (lock) {
           // Invariant: closeFuture is not null.
           // publishBuildEvents() only terminates successfully after SendLastBuildEventCommand
@@ -404,10 +400,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           synchronized (lock) {
             Preconditions.checkState(
                 interruptCausedByTimeout, "Unexpected interrupt on BES uploader thread");
-            exitFunc.accept(
-                "The Build Event Protocol upload timed out",
-                e,
-                ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR);
+            exitFunc.accept("The Build Event Protocol upload timed out", e);
           }
         } finally {
           // TODO(buchgr): Due to b/113035235 exitFunc needs to be called before the close future
@@ -419,11 +412,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           String message =
               "The Build Event Protocol upload failed: " + besClient.userReadableError(e);
           logInfo(e, message);
-          ExitCode code =
-              shouldRetryStatus(e.getStatus())
-                  ? ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR
-                  : ExitCode.PERSISTENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR;
-          exitFunc.accept(message, e, code);
+          exitFunc.accept(message, e);
         } finally {
           failCloseFuture(e);
         }
@@ -433,8 +422,7 @@ public class BuildEventServiceTransport implements BuildEventTransport {
           String message =
               "The Build Event Protocol local file upload failed: " + e.getCause().getMessage();
           logInfo(e.getCause(), message);
-          exitFunc.accept(
-              message, e.getCause(), ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR);
+          exitFunc.accept(message, e.getCause());
         } finally {
           failCloseFuture(e.getCause());
         }
