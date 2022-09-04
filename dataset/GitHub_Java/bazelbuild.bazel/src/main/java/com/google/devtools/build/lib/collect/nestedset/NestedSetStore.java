@@ -15,7 +15,6 @@ package com.google.devtools.build.lib.collect.nestedset;
 
 import com.google.auto.value.AutoValue;
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Stopwatch;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableList;
@@ -24,7 +23,6 @@ import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.MoreExecutors;
 import com.google.common.util.concurrent.SettableFuture;
-import com.google.devtools.build.lib.bugreport.BugReport;
 import com.google.devtools.build.lib.skyframe.serialization.DeserializationContext;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationConstants;
 import com.google.devtools.build.lib.skyframe.serialization.SerializationContext;
@@ -34,13 +32,11 @@ import com.google.protobuf.CodedInputStream;
 import com.google.protobuf.CodedOutputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
-import java.util.logging.Logger;
 import javax.annotation.Nullable;
 
 /**
@@ -68,10 +64,6 @@ import javax.annotation.Nullable;
  * recursively retrieving B using its fingerprint.
  */
 public class NestedSetStore {
-
-  private static final Logger logger = Logger.getLogger(NestedSetStore.class.getName());
-  private static final Duration FETCH_FROM_STORAGE_LOGGING_THRESHOLD = Duration.ofSeconds(5);
-
   /** Stores fingerprint -> NestedSet associations. */
   public interface NestedSetStorageEndpoint {
     /**
@@ -192,12 +184,8 @@ public class NestedSetStore {
                   FingerprintComputationResult.create(fingerprint, Futures.immediateFuture(null)));
 
             } catch (ExecutionException e) {
-              // Failure to fetch the NestedSet contents is unexpected, but the failed future can
-              // be stored as the NestedSet children. This way the exception is only propagated if
-              // the NestedSet is consumed (unrolled).
-              BugReport.sendBugReport(
-                  new IllegalStateException(
-                      "Expected write for " + fingerprint + " to be complete", e));
+              throw new AssertionError(
+                  "Expected write for " + fingerprint + " to be complete", e.getCause());
             }
           },
           MoreExecutors.directExecutor());
@@ -360,19 +348,10 @@ public class NestedSetStore {
       return contents;
     }
     ListenableFuture<byte[]> retrieved = nestedSetStorageEndpoint.get(fingerprint);
-    Stopwatch fetchStopwatch = Stopwatch.createStarted();
     future.setFuture(
         Futures.transformAsync(
             retrieved,
             bytes -> {
-              Duration fetchDuration = fetchStopwatch.elapsed();
-              if (FETCH_FROM_STORAGE_LOGGING_THRESHOLD.compareTo(fetchDuration) < 0) {
-                logger.info(
-                    String.format(
-                        "NestedSet fetch took: %dms, size: %dB",
-                        fetchDuration.toMillis(), bytes.length));
-              }
-
               CodedInputStream codedIn = CodedInputStream.newInstance(bytes);
               int numberOfElements = codedIn.readInt32();
               DeserializationContext newDeserializationContext =
