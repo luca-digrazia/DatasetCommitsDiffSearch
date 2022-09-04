@@ -149,23 +149,6 @@ public class HibernateOrmConfigPersistenceUnit {
     @ConfigItem(defaultValue = "true")
     public boolean secondLevelCachingEnabled;
 
-    /**
-     * Defines the method for multi-tenancy (DATABASE, NONE, SCHEMA). The complete list of allowed values is available in the
-     * https://docs.jboss.org/hibernate/stable/orm/javadocs/org/hibernate/MultiTenancyStrategy.html[Hibernate ORM JavaDoc].
-     * The type DISCRIMINATOR is currently not supported. The default value is NONE (no multi-tenancy).
-     *
-     * @asciidoclet
-     */
-    @ConfigItem
-    public Optional<String> multitenant;
-
-    /**
-     * Defines the name of the datasource to use in case of SCHEMA approach. The datasource of the persistence unit will be used
-     * if not set.
-     */
-    @ConfigItem
-    public Optional<String> multitenantSchemaDatasource;
-
     public boolean isAnyPropertySet() {
         return datasource.isPresent() ||
                 packages.isPresent() ||
@@ -180,9 +163,7 @@ public class HibernateOrmConfigPersistenceUnit {
                 jdbc.isAnyPropertySet() ||
                 log.isAnyPropertySet() ||
                 !cache.isEmpty() ||
-                !secondLevelCachingEnabled ||
-                multitenant.isPresent() ||
-                multitenantSchemaDatasource.isPresent();
+                !secondLevelCachingEnabled;
     }
 
     @ConfigGroup
