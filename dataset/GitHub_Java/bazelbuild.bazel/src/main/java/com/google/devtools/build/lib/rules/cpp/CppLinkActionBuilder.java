@@ -103,9 +103,7 @@ public class CppLinkActionBuilder {
   private final FdoSupportProvider fdoSupport;
   private Artifact interfaceOutput;
   private Artifact symbolCounts;
-  /** Directory where toolchain stores language-runtime libraries (libstdc++, libc++ ...) */
-  private PathFragment toolchainLibrariesSolibDir;
-
+  private PathFragment runtimeSolibDir;
   protected final BuildConfiguration configuration;
   private final CppConfiguration cppConfiguration;
   private FeatureConfiguration featureConfiguration;
@@ -117,9 +115,8 @@ public class CppLinkActionBuilder {
   private final NestedSetBuilder<LibraryToLink> libraries = NestedSetBuilder.linkOrder();
   private NestedSet<Artifact> crosstoolInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   private Artifact runtimeMiddleman;
-  private ArtifactCategory toolchainLibrariesType = null;
-  private NestedSet<Artifact> toolchainLibrariesInputs =
-      NestedSetBuilder.emptySet(Order.STABLE_ORDER);
+  private ArtifactCategory runtimeType = null;
+  private NestedSet<Artifact> runtimeInputs = NestedSetBuilder.emptySet(Order.STABLE_ORDER);
   private final ImmutableSet.Builder<Linkstamp> linkstampsBuilder = ImmutableSet.builder();
   private ImmutableList<String> additionalLinkstampDefines = ImmutableList.of();
   private final List<String> linkopts = new ArrayList<>();
@@ -228,7 +225,7 @@ public class CppLinkActionBuilder {
     this.toolchain = toolchain;
     this.fdoSupport = fdoSupport;
     if (featureConfiguration.isEnabled(CppRuleClasses.STATIC_LINK_CPP_RUNTIMES)) {
-      toolchainLibrariesSolibDir = toolchain.getDynamicRuntimeSolibDir();
+      runtimeSolibDir = toolchain.getDynamicRuntimeSolibDir();
     }
     this.featureConfiguration = featureConfiguration;
     this.cppSemantics = Preconditions.checkNotNull(cppSemantics);
@@ -256,7 +253,7 @@ public class CppLinkActionBuilder {
       FeatureConfiguration featureConfiguration,
       CppSemantics cppSemantics) {
     // These Builder-only fields get set in the constructor:
-    //   ruleContext, analysisEnvironment, outputPath, configuration, toolchainLibrariesSolibDir
+    //   ruleContext, analysisEnvironment, outputPath, configuration, runtimeSolibDir
     this(
         ruleContext,
         output,
@@ -275,8 +272,8 @@ public class CppLinkActionBuilder {
     this.crosstoolInputs = linkContext.crosstoolInputs;
     this.ltoBitcodeFiles = linkContext.ltoBitcodeFiles;
     this.runtimeMiddleman = linkContext.runtimeMiddleman;
-    this.toolchainLibrariesInputs = linkContext.runtimeInputs;
-    this.toolchainLibrariesType = linkContext.runtimeType;
+    this.runtimeInputs = linkContext.runtimeInputs;
+    this.runtimeType = linkContext.runtimeType;
     this.linkstampsBuilder.addAll(linkContext.linkstamps);
     this.linkopts.addAll(linkContext.linkopts);
     this.linkType = linkContext.linkType;
@@ -320,14 +317,16 @@ public class CppLinkActionBuilder {
   public Artifact getRuntimeMiddleman() {
     return this.runtimeMiddleman;
   }
-
-  /** Returns runtime inputs for this link action. */
-  public NestedSet<Artifact> getToolchainLibrariesInputs() {
-    return this.toolchainLibrariesInputs;
+  
+  /**
+   * Returns runtime inputs for this link action.
+   */
+  public NestedSet<Artifact> getRuntimeInputs() {
+    return this.runtimeInputs;
   }
 
-  public ArtifactCategory getToolchainLibrariesType() {
-    return toolchainLibrariesType;
+  public ArtifactCategory getRuntimeType() {
+    return runtimeType;
   }
 
   /** Returns linkstamps for this link action. */
@@ -399,8 +398,7 @@ public class CppLinkActionBuilder {
       objectFileInputsBuilder.add(
           LinkerInputs.simpleLinkerInput(
               this.ltoBitcodeFiles.getOrDefault(objectFile, objectFile),
-              ArtifactCategory.OBJECT_FILE,
-              /* disableWholeArchive= */ false));
+              ArtifactCategory.OBJECT_FILE));
     }
     return objectFileInputsBuilder.build();
   }
@@ -830,10 +828,7 @@ public class CppLinkActionBuilder {
       objectFileInputs = ImmutableSet.copyOf(objectFiles);
       linkstampObjectFileInputs =
           ImmutableSet.copyOf(
-              LinkerInputs.simpleLinkerInputs(
-                  linkstampMap.values(),
-                  ArtifactCategory.OBJECT_FILE,
-                  /* disableWholeArchive= */ false));
+              LinkerInputs.simpleLinkerInputs(linkstampMap.values(), ArtifactCategory.OBJECT_FILE));
       uniqueLibraries = originalUniqueLibraries;
     }
 
@@ -938,15 +933,10 @@ public class CppLinkActionBuilder {
                         uniqueLibraries,
                         needWholeArchive,
                         CppHelper.getArchiveType(cppConfiguration, toolchain))))
-            .add(
-                // Adding toolchain libraries without whole archive no-matter-what. People don't
-                // want to include whole libstdc++ in their binary ever.
-                ImmutableSet.copyOf(
-                    LinkerInputs.simpleLinkerInputs(
-                        toolchainLibrariesInputs,
-                        toolchainLibrariesType,
-                        /* disableWholeArchive= */ true)))
             .build();
+
+    ImmutableList<LinkerInput> runtimeLinkerInputs =
+        ImmutableList.copyOf(LinkerInputs.simpleLinkerInputs(runtimeInputs, runtimeType));
 
     PathFragment paramRootPath =
         ParameterFile.derivePath(outputRootPath, (isLtoIndexing) ? "lto-index" : "2");
@@ -972,13 +962,14 @@ public class CppLinkActionBuilder {
             isNativeDeps,
             cppConfiguration,
             toolchain,
-            toolchainLibrariesSolibDir,
+            runtimeSolibDir,
             linkType,
             linkStaticness,
             output,
             solibDir,
             isLtoIndexing,
             allLtoArtifacts,
+            runtimeLinkerInputs,
             featureConfiguration,
             thinltoParamFile,
             allowLtoIndexing,
@@ -1027,7 +1018,7 @@ public class CppLinkActionBuilder {
     }
     if (linkType.staticness() == Staticness.STATIC) {
       // solib dir must be null for static links
-      toolchainLibrariesSolibDir = null;
+      runtimeSolibDir = null;
 
       Preconditions.checkArgument(
           linkStaticness == LinkStaticness.FULLY_STATIC, "static library link must be static");
@@ -1042,10 +1033,10 @@ public class CppLinkActionBuilder {
     LinkCommandLine.Builder linkCommandLineBuilder =
         new LinkCommandLine.Builder(ruleContext)
             .setLinkerInputs(linkerInputs)
+            .setRuntimeInputs(runtimeLinkerInputs)
             .setLinkTargetType(linkType)
             .setLinkStaticness(linkStaticness)
-            .setToolchainLibrariesSolibDir(
-                linkType.staticness() == Staticness.STATIC ? null : toolchainLibrariesSolibDir)
+            .setRuntimeSolibDir(linkType.staticness() == Staticness.STATIC ? null : runtimeSolibDir)
             .setNativeDeps(isNativeDeps)
             .setUseTestOnlyFlags(useTestOnlyFlags)
             .setParamFile(paramFile)
@@ -1332,9 +1323,9 @@ public class CppLinkActionBuilder {
   public CppLinkActionBuilder setRuntimeInputs(
       ArtifactCategory runtimeType, Artifact middleman, NestedSet<Artifact> inputs) {
     Preconditions.checkArgument((middleman == null) == inputs.isEmpty());
-    this.toolchainLibrariesType = runtimeType;
+    this.runtimeType = runtimeType;
     this.runtimeMiddleman = middleman;
-    this.toolchainLibrariesInputs = inputs;
+    this.runtimeInputs = inputs;
     return this;
   }
 
@@ -1393,9 +1384,7 @@ public class CppLinkActionBuilder {
    * Adds a single object file to the set of inputs.
    */
   public CppLinkActionBuilder addObjectFile(Artifact input) {
-    addObjectFile(
-        LinkerInputs.simpleLinkerInput(
-            input, ArtifactCategory.OBJECT_FILE, /* disableWholeArchive= */ false));
+    addObjectFile(LinkerInputs.simpleLinkerInput(input, ArtifactCategory.OBJECT_FILE));
     return this;
   }
 
@@ -1404,9 +1393,7 @@ public class CppLinkActionBuilder {
    */
   public CppLinkActionBuilder addObjectFiles(Iterable<Artifact> inputs) {
     for (Artifact input : inputs) {
-      addObjectFile(
-          LinkerInputs.simpleLinkerInput(
-              input, ArtifactCategory.OBJECT_FILE, /* disableWholeArchive= */ false));
+      addObjectFile(LinkerInputs.simpleLinkerInput(input, ArtifactCategory.OBJECT_FILE));
     }
     return this;
   }
@@ -1605,9 +1592,8 @@ public class CppLinkActionBuilder {
    * Sets the name of the directory where the solib symlinks for the dynamic runtime libraries live.
    * This is usually automatically set from the cc_toolchain.
    */
-  public CppLinkActionBuilder setToolchainLibrariesSolibDir(
-      PathFragment toolchainLibrariesSolibDir) {
-    this.toolchainLibrariesSolibDir = toolchainLibrariesSolibDir;
+  public CppLinkActionBuilder setRuntimeSolibDir(PathFragment runtimeSolibDir) {
+    this.runtimeSolibDir = runtimeSolibDir;
     return this;
   }
   
