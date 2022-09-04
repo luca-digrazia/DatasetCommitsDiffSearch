@@ -34,7 +34,6 @@ import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.mutiny.groups.UniSubscribe;
 import io.smallrye.mutiny.subscription.Cancellable;
-import io.vertx.core.Future;
 import io.vertx.core.MultiMap;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
@@ -94,6 +93,8 @@ class Methods {
             Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_SUBSCRIBE_BUFFER = MethodDescriptor.ofMethod(MultiSupport.class, "subscribeBuffer",
             Void.TYPE, Multi.class, RoutingContext.class);
+    static final MethodDescriptor MULTI_SUBSCRIBE_RX_BUFFER = MethodDescriptor.ofMethod(MultiSupport.class, "subscribeRxBuffer",
+            Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_SUBSCRIBE_MUTINY_BUFFER = MethodDescriptor.ofMethod(MultiSupport.class,
             "subscribeMutinyBuffer", Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_SUBSCRIBE_OBJECT = MethodDescriptor.ofMethod(MultiSupport.class, "subscribeObject",
@@ -105,6 +106,9 @@ class Methods {
             Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_SSE_SUBSCRIBE_BUFFER = MethodDescriptor.ofMethod(MultiSseSupport.class,
             "subscribeBuffer",
+            Void.TYPE, Multi.class, RoutingContext.class);
+    static final MethodDescriptor MULTI_SSE_SUBSCRIBE_RX_BUFFER = MethodDescriptor.ofMethod(MultiSseSupport.class,
+            "subscribeRxBuffer",
             Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_SSE_SUBSCRIBE_MUTINY_BUFFER = MethodDescriptor.ofMethod(MultiSseSupport.class,
             "subscribeMutinyBuffer", Void.TYPE, Multi.class, RoutingContext.class);
@@ -120,6 +124,8 @@ class Methods {
             "subscribeString", Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_JSON_SUBSCRIBE_BUFFER = MethodDescriptor.ofMethod(MultiJsonArraySupport.class,
             "subscribeBuffer", Void.TYPE, Multi.class, RoutingContext.class);
+    static final MethodDescriptor MULTI_JSON_SUBSCRIBE_RX_BUFFER = MethodDescriptor.ofMethod(MultiJsonArraySupport.class,
+            "subscribeRxBuffer", Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_JSON_SUBSCRIBE_MUTINY_BUFFER = MethodDescriptor.ofMethod(MultiJsonArraySupport.class,
             "subscribeMutinyBuffer", Void.TYPE, Multi.class, RoutingContext.class);
     static final MethodDescriptor MULTI_JSON_SUBSCRIBE_OBJECT = MethodDescriptor.ofMethod(MultiJsonArraySupport.class,
@@ -127,13 +133,16 @@ class Methods {
     static final MethodDescriptor MULTI_JSON_FAIL = MethodDescriptor.ofMethod(MultiJsonArraySupport.class,
             "fail", Void.TYPE, RoutingContext.class);
 
-    static final MethodDescriptor END = MethodDescriptor.ofMethod(HttpServerResponse.class, "end", Future.class);
+    static final MethodDescriptor END = MethodDescriptor.ofMethod(HttpServerResponse.class, "end", Void.TYPE);
     static final MethodDescriptor END_WITH_STRING = MethodDescriptor
-            .ofMethod(HttpServerResponse.class, "end", Future.class, String.class);
+            .ofMethod(HttpServerResponse.class, "end", Void.TYPE, String.class);
     static final MethodDescriptor END_WITH_BUFFER = MethodDescriptor
-            .ofMethod(HttpServerResponse.class, "end", Future.class, Buffer.class);
+            .ofMethod(HttpServerResponse.class, "end", Void.TYPE, Buffer.class);
     static final MethodDescriptor SET_STATUS = MethodDescriptor
             .ofMethod(HttpServerResponse.class, "setStatusCode", HttpServerResponse.class, Integer.TYPE);
+    static final MethodDescriptor RX_GET_DELEGATE = MethodDescriptor
+            .ofMethod(io.vertx.reactivex.core.buffer.Buffer.class, "getDelegate", Buffer.class);
+
     static final MethodDescriptor MUTINY_GET_DELEGATE = MethodDescriptor
             .ofMethod(io.vertx.mutiny.core.buffer.Buffer.class, "getDelegate", Buffer.class);
     static final MethodDescriptor JSON_ENCODE = MethodDescriptor
@@ -180,7 +189,7 @@ class Methods {
     static final MethodDescriptor VALIDATION_HANDLE_VIOLATION_EXCEPTION = MethodDescriptor
             .ofMethod(ValidationSupport.class.getName(), "handleViolationException",
                     Void.TYPE.getName(), Methods.VALIDATION_CONSTRAINT_VIOLATION_EXCEPTION,
-                    RoutingContext.class.getName(), Boolean.TYPE.getName());
+                    RoutingContext.class.getName());
 
     static final MethodDescriptor VALIDATOR_VALIDATE = MethodDescriptor
             .ofMethod("javax.validation.Validator", "validate", "java.util.Set",
@@ -233,7 +242,8 @@ class Methods {
     }
 
     static MethodDescriptor getEndMethodForContentType(HandlerDescriptor descriptor) {
-        if (descriptor.isContentTypeBuffer() || descriptor.isContentTypeMutinyBuffer()) {
+        if (descriptor.isContentTypeBuffer() || descriptor.isContentTypeRxBuffer() || descriptor
+                .isContentTypeMutinyBuffer()) {
             return END_WITH_BUFFER;
         }
         return END_WITH_STRING;
