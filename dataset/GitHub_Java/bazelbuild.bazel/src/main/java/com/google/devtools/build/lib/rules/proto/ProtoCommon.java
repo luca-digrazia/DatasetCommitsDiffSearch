@@ -75,18 +75,18 @@ public class ProtoCommon {
    *
    * <p>Each import is a Artifact/Label pair.
    */
-  public static NestedSet<Artifact> collectTransitiveProtoSources(
-      RuleContext ruleContext, ImmutableList<Artifact> protoSources) {
-    NestedSetBuilder<Artifact> result = NestedSetBuilder.naiveLinkOrder();
+  public static NestedSet<Artifact> collectTransitiveImports(RuleContext ruleContext,
+      ImmutableList<Artifact> protoSources) {
+    NestedSetBuilder<Artifact> importsBuilder = NestedSetBuilder.naiveLinkOrder();
 
-    result.addAll(protoSources);
+    importsBuilder.addAll(protoSources);
 
     for (ProtoSourcesProvider dep : ruleContext.getPrerequisites(
         "deps", Mode.TARGET, ProtoSourcesProvider.class)) {
-      result.addTransitive(dep.getTransitiveProtoSources());
+      importsBuilder.addTransitive(dep.getTransitiveImports());
     }
 
-    return result.build();
+    return importsBuilder.build();
   }
 
   public static NestedSet<Artifact> collectDependenciesDescriptorSets(RuleContext ruleContext) {
