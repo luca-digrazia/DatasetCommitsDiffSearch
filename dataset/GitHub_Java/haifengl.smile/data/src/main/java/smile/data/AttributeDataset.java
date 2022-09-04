@@ -16,7 +16,6 @@
 package smile.data;
 
 import java.util.Date;
-import java.util.HashSet;
 import smile.math.Math;
 
 /**
@@ -369,7 +368,6 @@ public class AttributeDataset extends Dataset<double[]> {
         return column(i);
     }
 
-    /** Returns a dataset with selected columns. */
     public AttributeDataset columns(String... cols) {
         Attribute[] attrs = new Attribute[cols.length];
         int[] index = new int[cols.length];
@@ -393,43 +391,7 @@ public class AttributeDataset extends Dataset<double[]> {
             for (int i = 0; i < x.length; i++) {
                 x[i] = datum.x[index[i]];
             }
-            Row row = response == null ? sub.add(x) : sub.add(x, datum.y);
-            row.name = datum.name;
-            row.weight = datum.weight;
-            row.description = datum.description;
-            row.timestamp = datum.timestamp;
-        }
-
-        return sub;
-    }
-
-    /** Returns a new dataset without given columns. */
-    public AttributeDataset remove(String... cols) {
-        HashSet<String> remains = new HashSet<>();
-        for (Attribute attr : attributes) {
-            remains.add(attr.getName());
-        }
-        for (String col : cols) {
-            remains.remove(col);
-        }
-
-        Attribute[] attrs = new Attribute[remains.size()];
-        int[] index = new int[remains.size()];
-        for (int j = 0, i = 0; j < attributes.length; j++) {
-            if (remains.contains(attributes[j].getName())) {
-                index[i] = j;
-                attrs[i] = attributes[j];
-                i++;
-            }
-        }
-
-        AttributeDataset sub = new AttributeDataset(name, attrs, response);
-        for (Datum<double[]> datum : data) {
-            double[] x = new double[index.length];
-            for (int i = 0; i < x.length; i++) {
-                x[i] = datum.x[index[i]];
-            }
-            Row row = response == null ? sub.add(x) : sub.add(x, datum.y);
+            Row row = sub.add(x, datum.y);
             row.name = datum.name;
             row.weight = datum.weight;
             row.description = datum.description;
