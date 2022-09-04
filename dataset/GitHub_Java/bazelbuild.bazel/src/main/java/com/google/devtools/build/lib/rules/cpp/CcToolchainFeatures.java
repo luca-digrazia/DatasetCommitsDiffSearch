@@ -692,7 +692,7 @@ public class CcToolchainFeatures implements Serializable {
     private final ImmutableList<String> implies;
     private final ImmutableList<String> provides;
 
-    Feature(CToolchain.Feature feature) throws InvalidConfigurationException {
+    private Feature(CToolchain.Feature feature) throws InvalidConfigurationException {
       this.name = feature.getName();
       ImmutableList.Builder<FlagSet> flagSetBuilder = ImmutableList.builder();
       for (CToolchain.FlagSet flagSet : feature.getFlagSetList()) {
@@ -888,7 +888,7 @@ public class CcToolchainFeatures implements Serializable {
     private final boolean enabled;
     private final ImmutableList<String> implies;
 
-    ActionConfig(CToolchain.ActionConfig actionConfig, PathFragment crosstoolTop)
+    private ActionConfig(CToolchain.ActionConfig actionConfig, PathFragment crosstoolTop)
         throws InvalidConfigurationException {
       this.configName = actionConfig.getConfigName();
       this.actionName = actionConfig.getActionName();
@@ -995,13 +995,13 @@ public class CcToolchainFeatures implements Serializable {
 
   /** A description of how artifacts of a certain type are named. */
   @Immutable
-  static class ArtifactNamePattern {
+  private static class ArtifactNamePattern {
 
     private final ArtifactCategory artifactCategory;
     private final String prefix;
     private final String extension;
 
-    ArtifactNamePattern(CToolchain.ArtifactNamePattern artifactNamePattern)
+    private ArtifactNamePattern(CToolchain.ArtifactNamePattern artifactNamePattern)
         throws InvalidConfigurationException {
 
       ArtifactCategory foundCategory = null;
@@ -1269,13 +1269,14 @@ public class CcToolchainFeatures implements Serializable {
       buildConfigurationCache();
 
   /**
-   * Constructs the feature configuration from a {@code crosstoolInfo}.
+   * Constructs the feature configuration from a {@code CToolchain} protocol buffer.
    *
-   * @param crosstoolInfo the toolchain information as specified by the user.
+   * @param toolchain the toolchain configuration as specified by the user.
    * @throws InvalidConfigurationException if the configuration has logical errors.
    */
   @VisibleForTesting
-  public CcToolchainFeatures(CrosstoolInfo crosstoolInfo) throws InvalidConfigurationException {
+  public CcToolchainFeatures(CToolchain toolchain, PathFragment crosstoolTop)
+      throws InvalidConfigurationException {
     // Build up the feature/action config graph.  We refer to features/action configs as
     // 'selectables'.
     // First, we build up the map of name -> selectables in one pass, so that earlier selectables
@@ -1287,7 +1288,8 @@ public class CcToolchainFeatures implements Serializable {
     ImmutableMap.Builder<String, ActionConfig> actionConfigsByActionName = ImmutableMap.builder();
 
     ImmutableList.Builder<String> defaultSelectablesBuilder = ImmutableList.builder();
-    for (Feature feature : crosstoolInfo.getFeatures()) {
+    for (CToolchain.Feature toolchainFeature : toolchain.getFeatureList()) {
+      Feature feature = new Feature(toolchainFeature);
       selectablesBuilder.add(feature);
       selectablesByName.put(feature.getName(), feature);
       if (feature.isEnabled()) {
@@ -1295,7 +1297,8 @@ public class CcToolchainFeatures implements Serializable {
       }
     }
 
-    for (ActionConfig actionConfig : crosstoolInfo.getActionConfigs()) {
+    for (CToolchain.ActionConfig toolchainActionConfig : toolchain.getActionConfigList()) {
+      ActionConfig actionConfig = new ActionConfig(toolchainActionConfig, crosstoolTop);
       selectablesBuilder.add(actionConfig);
       selectablesByName.put(actionConfig.getName(), actionConfig);
       actionConfigsByActionName.put(actionConfig.getActionName(), actionConfig);
@@ -1308,12 +1311,18 @@ public class CcToolchainFeatures implements Serializable {
     this.selectables = selectablesBuilder.build();
     this.selectablesByName = ImmutableMap.copyOf(selectablesByName);
 
-    checkForActionNameDups(crosstoolInfo.getActionConfigs());
+    checkForActionNameDups(toolchain.getActionConfigList());
     checkForActivatableDups(this.selectables);
 
     this.actionConfigsByActionName = actionConfigsByActionName.build();
 
-    this.artifactNamePatterns = crosstoolInfo.getArtifactNamePatterns();
+    ImmutableList.Builder<ArtifactNamePattern> artifactNamePatternsBuilder =
+        ImmutableList.builder();
+    for (CToolchain.ArtifactNamePattern artifactNamePattern :
+        toolchain.getArtifactNamePatternList()) {
+      artifactNamePatternsBuilder.add(new ArtifactNamePattern(artifactNamePattern));
+    }
+    this.artifactNamePatterns = artifactNamePatternsBuilder.build();
 
     // Next, we build up all forward references for 'implies', 'requires', and 'provides' edges.
     ImmutableMultimap.Builder<CrosstoolSelectable, CrosstoolSelectable> implies =
@@ -1327,32 +1336,32 @@ public class CcToolchainFeatures implements Serializable {
     ImmutableMultimap.Builder<CrosstoolSelectable, CrosstoolSelectable> requiredBy =
         ImmutableMultimap.builder();
 
-    for (Feature feature : crosstoolInfo.getFeatures()) {
-      String name = feature.getName();
+    for (CToolchain.Feature toolchainFeature : toolchain.getFeatureList()) {
+      String name = toolchainFeature.getName();
       CrosstoolSelectable selectable = selectablesByName.get(name);
-      for (ImmutableSet<String> requiredFeatures : feature.getRequires()) {
+      for (CToolchain.FeatureSet requiredFeatures : toolchainFeature.getRequiresList()) {
         ImmutableSet.Builder<CrosstoolSelectable> allOf = ImmutableSet.builder();
-        for (String requiredName : requiredFeatures) {
+        for (String requiredName : requiredFeatures.getFeatureList()) {
           CrosstoolSelectable required = getActivatableOrFail(requiredName, name);
           allOf.add(required);
           requiredBy.put(required, selectable);
         }
         requires.put(selectable, allOf.build());
       }
-      for (String impliedName : feature.getImplies()) {
+      for (String impliedName : toolchainFeature.getImpliesList()) {
         CrosstoolSelectable implied = getActivatableOrFail(impliedName, name);
         impliedBy.put(implied, selectable);
         implies.put(selectable, implied);
       }
-      for (String providesName : feature.getProvides()) {
+      for (String providesName : toolchainFeature.getProvidesList()) {
         provides.put(selectable, providesName);
       }
     }
 
-    for (ActionConfig actionConfig : crosstoolInfo.getActionConfigs()) {
-      String name = actionConfig.getName();
+    for (CToolchain.ActionConfig toolchainActionConfig : toolchain.getActionConfigList()) {
+      String name = toolchainActionConfig.getConfigName();
       CrosstoolSelectable selectable = selectablesByName.get(name);
-      for (String impliedName : actionConfig.getImplies()) {
+      for (String impliedName : toolchainActionConfig.getImpliesList()) {
         CrosstoolSelectable implied = getActivatableOrFail(impliedName, name);
         impliedBy.put(implied, selectable);
         implies.put(selectable, implied);
@@ -1380,10 +1389,10 @@ public class CcToolchainFeatures implements Serializable {
     }
   }
 
-  private static void checkForActionNameDups(Iterable<ActionConfig> actionConfigs)
+  private static void checkForActionNameDups(Iterable<CToolchain.ActionConfig> actionConfigs)
       throws InvalidConfigurationException {
     Collection<String> actionNames = new HashSet<>();
-    for (ActionConfig actionConfig : actionConfigs) {
+    for (CToolchain.ActionConfig actionConfig : actionConfigs) {
       if (!actionNames.add(actionConfig.getActionName())) {
         throw new InvalidConfigurationException(
             "Invalid toolchain configuration: multiple action "
