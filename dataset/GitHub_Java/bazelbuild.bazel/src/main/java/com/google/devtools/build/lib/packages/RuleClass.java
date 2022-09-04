@@ -703,6 +703,13 @@ public class RuleClass {
               "Attribute %s is inherited multiple times in %s ruleclass",
               attrName,
               name);
+          if (attrName.equals("exec_compatible_with")
+              && parent.executionPlatformConstraintsAllowed
+                  == ExecutionPlatformConstraintsAllowed.PER_TARGET) {
+            // This attribute should not be inherited because executionPlatformConstraintsAllowed is
+            // not inherited.
+            continue;
+          }
           attributes.put(attrName, attribute);
         }
 
@@ -755,8 +762,12 @@ public class RuleClass {
       if (type == RuleClassType.PLACEHOLDER) {
         Preconditions.checkNotNull(ruleDefinitionEnvironmentHashCode, this.name);
       }
-      if (executionPlatformConstraintsAllowed == ExecutionPlatformConstraintsAllowed.PER_TARGET
-          && !this.contains("exec_compatible_with")) {
+      if (executionPlatformConstraintsAllowed == ExecutionPlatformConstraintsAllowed.PER_TARGET) {
+        // Only rules that allow per target execution constraints need this attribute.
+        Preconditions.checkState(
+            !this.attributes.containsKey("exec_compatible_with"),
+            "Rule should not already define the attribute \"exec_compatible_with\""
+                + " if executionPlatformConstraintsAllowed is set to PER_TARGET");
         this.add(
             attr("exec_compatible_with", BuildType.LABEL_LIST)
                 .allowedFileTypes()
