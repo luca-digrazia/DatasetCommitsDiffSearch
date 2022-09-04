@@ -16,7 +16,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -73,13 +72,15 @@ public class NativeImageBuildStep {
 
         final String runnerJarName = runnerJar.getFileName().toString();
 
+        boolean vmVersionOutOfDate = isThisGraalVMVersionObsolete();
+
         HashMap<String, String> env = new HashMap<>(System.getenv());
         List<String> nativeImage;
 
         String noPIE = "";
 
-        if (nativeConfig.containerRuntime.isPresent() || nativeConfig.containerBuild) {
-            String containerRuntime = nativeConfig.containerRuntime.orElse("docker");
+        if (!"".equals(nativeConfig.containerRuntime) || nativeConfig.containerBuild) {
+            String containerRuntime = nativeConfig.containerRuntime.isEmpty() ? "docker" : nativeConfig.containerRuntime;
             // E.g. "/usr/bin/docker run -v {{PROJECT_DIR}}:/project --rm quarkus/graalvm-native-image"
             nativeImage = new ArrayList<>();
             Collections.addAll(nativeImage, containerRuntime, "run", "-v",
@@ -97,7 +98,7 @@ public class NativeImageBuildStep {
                     nativeImage.add("--userns=keep-id");
                 }
             }
-            nativeConfig.containerRuntimeOptions.ifPresent(nativeImage::addAll);
+            nativeImage.addAll(nativeConfig.containerRuntimeOptions);
             if (nativeConfig.debugBuildProcess && nativeConfig.publishDebugBuildProcessPort) {
                 // publish the debug port onto the host if asked for
                 nativeImage.add("--publish=" + DEBUG_BUILD_PROCESS_PORT + ":" + DEBUG_BUILD_PROCESS_PORT);
@@ -108,10 +109,12 @@ public class NativeImageBuildStep {
                 noPIE = detectNoPIE();
             }
 
-            Optional<String> graal = nativeConfig.graalvmHome;
+            String graal = nativeConfig.graalvmHome;
             File java = nativeConfig.javaHome;
-            if (graal.isPresent()) {
-                env.put(GRAALVM_HOME, graal.get());
+            if (graal != null) {
+                env.put(GRAALVM_HOME, graal);
+            } else {
+                graal = env.get(GRAALVM_HOME);
             }
             if (java == null) {
                 // try system property first - it will be the JAVA_HOME used by the current JVM
@@ -129,28 +132,6 @@ public class NativeImageBuildStep {
             nativeImage = Collections.singletonList(getNativeImageExecutable(graal, java, env).getAbsolutePath());
         }
 
-        Optional<String> graalVMVersion = Optional.empty();
-
-        try {
-            List<String> versionCommand = new ArrayList<>(nativeImage);
-            versionCommand.add("--version");
-
-            Process versionProcess = new ProcessBuilder(versionCommand.toArray(new String[0]))
-                    .start();
-            versionProcess.waitFor();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(versionProcess.getInputStream()))) {
-                graalVMVersion = reader.lines().filter((l) -> l.startsWith("GraalVM Version")).findFirst();
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to get GraalVM version", e);
-        }
-
-        if (graalVMVersion.isPresent()) {
-            checkGraalVMVersion(graalVMVersion.get());
-        } else {
-            log.error("Unable to get GraalVM version from the native-image binary.");
-        }
-
         try {
             List<String> command = new ArrayList<>(nativeImage);
             if (nativeConfig.cleanupServer) {
@@ -165,7 +146,6 @@ public class NativeImageBuildStep {
                 process.waitFor();
             }
             Boolean enableSslNative = false;
-            boolean enableAllTimeZones = false;
             for (NativeImageSystemPropertyBuildItem prop : nativeImageProperties) {
                 //todo: this should be specific build items
                 if (prop.getKey().equals("quarkus.ssl.native") && prop.getValue() != null) {
@@ -176,8 +156,6 @@ public class NativeImageBuildStep {
                     nativeConfig.enableAllSecurityServices |= Boolean.parseBoolean(prop.getValue());
                 } else if (prop.getKey().equals("quarkus.native.enable-all-charsets") && prop.getValue() != null) {
                     nativeConfig.addAllCharsets |= Boolean.parseBoolean(prop.getValue());
-                } else if (prop.getKey().equals("quarkus.native.enable-all-timezones") && prop.getValue() != null) {
-                    enableAllTimeZones = Boolean.parseBoolean(prop.getValue());
                 } else {
                     // todo maybe just -D is better than -J-D in this case
                     if (prop.getValue() == null) {
@@ -193,11 +171,15 @@ public class NativeImageBuildStep {
                 nativeConfig.enableAllSecurityServices = true;
             }
 
-            nativeConfig.additionalBuildArgs.ifPresent(command::addAll);
+            if (nativeConfig.additionalBuildArgs != null) {
+                command.addAll(nativeConfig.additionalBuildArgs);
+            }
             command.add("--initialize-at-build-time=");
             command.add("-H:InitialCollectionPolicy=com.oracle.svm.core.genscavenge.CollectionPolicy$BySpaceAndTime"); //the default collection policy results in full GC's 50% of the time
             command.add("-jar");
             command.add(runnerJarName);
+            //https://github.com/oracle/graal/issues/660
+            command.add("-J-Djava.util.concurrent.ForkJoinPool.common.parallelism=1");
             if (nativeConfig.enableFallbackImages) {
                 command.add("-H:FallbackThreshold=5");
             } else {
@@ -242,9 +224,6 @@ public class NativeImageBuildStep {
                 command.add("-H:+AddAllCharsets");
             } else {
                 command.add("-H:-AddAllCharsets");
-            }
-            if (enableAllTimeZones) {
-                command.add("-H:+IncludeAllTimeZones");
             }
             if (!protocols.isEmpty()) {
                 command.add("-H:EnableURLProtocols=" + String.join(",", protocols));
@@ -313,20 +292,23 @@ public class NativeImageBuildStep {
         }
     }
 
-    private void checkGraalVMVersion(String version) {
-        log.info("Running Quarkus native-image plugin on " + version);
-        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.", "19.2.");
-        final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(v -> version.contains(" " + v));
+    //FIXME remove after transition period
+    private boolean isThisGraalVMVersionObsolete() {
+        final String vmName = System.getProperty("java.vm.name");
+        log.info("Running Quarkus native-image plugin on " + vmName);
+        final List<String> obsoleteGraalVmVersions = Arrays.asList("1.0.0", "19.0.", "19.1.", "19.2.0");
+        final boolean vmVersionIsObsolete = obsoleteGraalVmVersions.stream().anyMatch(vmName::contains);
         if (vmVersionIsObsolete) {
-            throw new IllegalStateException(
-                    "Out of date build of GraalVM detected: " + version + ". Please upgrade to GraalVM 19.3.0.");
+            log.error("Out of date build of GraalVM detected! Please upgrade to GraalVM 19.2.1.");
+            return true;
         }
+        return false;
     }
 
-    private static File getNativeImageExecutable(Optional<String> graalVmHome, File javaHome, Map<String, String> env) {
+    private static File getNativeImageExecutable(String graalVmHome, File javaHome, Map<String, String> env) {
         String imageName = IS_WINDOWS ? "native-image.cmd" : "native-image";
-        if (graalVmHome.isPresent()) {
-            File file = Paths.get(graalVmHome.get(), "bin", imageName).toFile();
+        if (graalVmHome != null) {
+            File file = Paths.get(graalVmHome, "bin", imageName).toFile();
             if (file.exists()) {
                 return file;
             }
