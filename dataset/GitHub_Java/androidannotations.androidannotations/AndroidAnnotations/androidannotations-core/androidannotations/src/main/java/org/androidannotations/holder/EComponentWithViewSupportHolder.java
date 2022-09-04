@@ -71,12 +71,8 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 
 	public EComponentWithViewSupportHolder(AndroidAnnotationsEnvironment environment, TypeElement annotatedElement) throws Exception {
 		super(environment, annotatedElement);
-		viewNotifierHelper = new ViewNotifierHelper(this, environment);
+		viewNotifierHelper = new ViewNotifierHelper(this);
 		keyEventCallbackMethodsDelegate = new KeyEventCallbackMethodsDelegate<>(this);
-	}
-
-	public IJExpression getFindViewByIdExpression(JVar idParam) {
-		return _null();
 	}
 
 	public JBlock getOnViewChangedBody() {
@@ -136,7 +132,7 @@ public abstract class EComponentWithViewSupportHolder extends EComponentHolder i
 	}
 
 	public JInvocation findViewById(JFieldRef idRef) {
-		JInvocation findViewById = invoke(getOnViewChangedHasViewsParam(), "internalFindViewById");
+		JInvocation findViewById = invoke(getOnViewChangedHasViewsParam(), "findViewById");
 		findViewById.arg(idRef);
 		return findViewById;
 	}
