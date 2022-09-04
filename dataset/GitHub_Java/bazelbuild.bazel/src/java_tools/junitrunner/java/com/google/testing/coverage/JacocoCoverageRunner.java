@@ -17,9 +17,11 @@ package com.google.testing.coverage;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 import com.google.common.annotations.VisibleForTesting;
+import com.google.common.base.Function;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
-import com.google.common.io.Files;
+import com.google.common.collect.Iterables;
 import java.io.BufferedReader;
 import java.io.ByteArrayInputStream;
 import java.io.File;
@@ -31,7 +33,6 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.lang.reflect.Method;
 import java.net.URL;
-import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
@@ -292,9 +293,10 @@ public class JacocoCoverageRunner {
   }
 
   public static void main(String[] args) throws Exception {
-    final String metadataFile = System.getenv("JACOCO_METADATA_JAR");
-    final boolean isNewImplementation = metadataFile.endsWith(".txt");
-    final String javaRunfilesRoot = System.getenv("JACOCO_JAVA_RUNFILES_ROOT");
+    final String metadataJar = System.getenv("JACOCO_METADATA_JAR");
+    String newMetadataJarsString = System.getenv("JACOCO_METADATA_JARS");
+    final List<String> newMetadataJars =
+        newMetadataJarsString == null ? null : Splitter.on(':').splitToList(newMetadataJarsString);
 
     final String coverageReportBase = System.getenv("JAVA_COVERAGE_FILE");
 
@@ -352,20 +354,22 @@ public class JacocoCoverageRunner {
                     dataInputStream = new ByteArrayInputStream(new byte[0]);
                   }
 
-                  File[] metadataJars;
-                  if (isNewImplementation) {
-                    List<String> metadataFiles = Files.readLines(new File(metadataFile), UTF_8);
-                    List<File> convertedMetadataFiles = new ArrayList<>();
-                    for (String metadataFile : metadataFiles) {
-                      convertedMetadataFiles.add(new File(javaRunfilesRoot + metadataFile));
-                    }
-                    metadataJars = convertedMetadataFiles.toArray(new File[0]);
-                  } else {
-                    metadataJars = new File[] {new File(metadataFile)};
+                  if (metadataJar != null) {
+                    // Disable coverage in this case. The build system should report an error or
+                    // warning if this happens. It's too late at this point.
+                    new JacocoCoverageRunner(dataInputStream, coverageReport, new File(metadataJar))
+                        .create();
+                  } else if (newMetadataJars != null){
+                    File[] metadataJars = Iterables.toArray(
+                        Iterables.transform(newMetadataJars, new Function<String, File>() {
+                          @Override
+                          public File apply(String input) {
+                            return new File(input);
+                          }
+                        }), File.class);
+                    new JacocoCoverageRunner(true, dataInputStream, coverageReport, metadataJars)
+                        .create();
                   }
-
-                  new JacocoCoverageRunner(
-                      isNewImplementation, dataInputStream, coverageReport, metadataJars).create();
                 } catch (IOException e) {
                   e.printStackTrace();
                   Runtime.getRuntime().halt(1);
@@ -380,7 +384,7 @@ public class JacocoCoverageRunner {
     // We'd share the same limitation if the system under test uses shutdown hooks internally, as
     // there's no way to collect coverage data on that code.
     String mainClass =
-        isNewImplementation ? System.getenv("JACOCO_MAIN_CLASS") : getMainClass(metadataFile);
+        newMetadataJars == null ? getMainClass(metadataJar) : System.getenv("JACOCO_MAIN_CLASS");
     Method main = Class.forName(mainClass).getMethod("main", String[].class);
     main.invoke(null, new Object[] {args});
   }
