@@ -113,7 +113,13 @@ abstract class DataHandler extends LitePalBase {
 			throws SecurityException, NoSuchMethodException, IllegalArgumentException,
 			IllegalAccessException, InvocationTargetException {
 		if (shouldGetOrSet(dataSupport, field)) {
-			String getMethodName = makeGetterMethodName(field);
+			String getterMethodPrefix;
+			if (isPrimitiveBooleanType(field)) {
+				getterMethodPrefix = "is";
+			} else {
+				getterMethodPrefix = "get";
+			}
+			String getMethodName = getterMethodPrefix + BaseUtility.capitalize(field.getName());
 			return DynamicExecutor.send(dataSupport, getMethodName, null, dataSupport.getClass(),
 					null);
 		}
@@ -141,7 +147,8 @@ abstract class DataHandler extends LitePalBase {
 			throws SecurityException, NoSuchMethodException, IllegalArgumentException,
 			IllegalAccessException, InvocationTargetException {
 		if (shouldGetOrSet(dataSupport, field)) {
-			String setMethodName = makeSetterMethodName(field);
+			String setterMethodPrefix = "set";
+			String setMethodName = setterMethodPrefix + BaseUtility.capitalize(field.getName());
 			DynamicExecutor.send(dataSupport, setMethodName, new Object[] { parameter },
 					dataSupport.getClass(), new Class[] { field.getType() });
 		}
@@ -357,7 +364,7 @@ abstract class DataHandler extends LitePalBase {
 	protected String getTableName(Class<?> modelClass) {
 		return BaseUtility.changeCase(modelClass.getSimpleName());
 	}
-
+	
 	/**
 	 * Finds the best suit constructor for creating an instance of a class. The
 	 * principle is that constructor with least parameters will be the best suit
@@ -385,7 +392,7 @@ abstract class DataHandler extends LitePalBase {
 		finalConstructor.setAccessible(true);
 		return finalConstructor;
 	}
-
+	
 	/**
 	 * Depends on the passed in constructor, creating a parameters array with
 	 * initialized values for the constructor.
@@ -643,45 +650,6 @@ abstract class DataHandler extends LitePalBase {
 			return true;
 		}
 		return false;
-	}
-
-	/**
-	 * Generate the getter method name by field, following the eclipse rule.
-	 * 
-	 * @param field
-	 *            The field to generate getter method from.
-	 * @return The generated getter method name.
-	 */
-	private String makeGetterMethodName(Field field) {
-		String getterMethodPrefix;
-		String fieldName = field.getName();
-		if (isPrimitiveBooleanType(field)) {
-			if (fieldName.matches("^is[A-Z]{1}.*$")) {
-				fieldName = fieldName.substring(2);
-			}
-			getterMethodPrefix = "is";
-		} else {
-			getterMethodPrefix = "get";
-		}
-		return getterMethodPrefix + BaseUtility.capitalize(fieldName);
-	}
-
-	/**
-	 * Generate the setter method name by field, following the eclipse rule.
-	 * 
-	 * @param field
-	 *            The field to generate setter method from.
-	 * @return The generated setter method name.
-	 */
-	private String makeSetterMethodName(Field field) {
-		String setterMethodName;
-		String setterMethodPrefix = "set";
-		if (isPrimitiveBooleanType(field) && field.getName().matches("^is[A-Z]{1}.*$")) {
-			setterMethodName = setterMethodPrefix + field.getName().substring(2);
-		} else {
-			setterMethodName = setterMethodPrefix + BaseUtility.capitalize(field.getName());
-		}
-		return setterMethodName;
 	}
 
 }
