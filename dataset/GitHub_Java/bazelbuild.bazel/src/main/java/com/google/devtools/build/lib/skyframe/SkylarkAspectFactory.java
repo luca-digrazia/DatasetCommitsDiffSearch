@@ -27,7 +27,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.AspectParameters;
 import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.SkylarkDefinedAspect;
+import com.google.devtools.build.lib.packages.SkylarkAspect;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
 import com.google.devtools.build.lib.syntax.Environment;
 import com.google.devtools.build.lib.syntax.EvalException;
@@ -42,9 +42,9 @@ import java.util.Map;
  */
 public class SkylarkAspectFactory implements ConfiguredAspectFactory {
 
-  private final SkylarkDefinedAspect skylarkAspect;
+  private final SkylarkAspect skylarkAspect;
 
-  public SkylarkAspectFactory(SkylarkDefinedAspect skylarkAspect) {
+  public SkylarkAspectFactory(SkylarkAspect skylarkAspect) {
     this.skylarkAspect = skylarkAspect;
   }
 
@@ -155,7 +155,8 @@ public class SkylarkAspectFactory implements ConfiguredAspectFactory {
                   + "a sequence of declared providers, instead got a %s at index %d",
               o.getClass(),
               i);
-      builder.addSkylarkDeclaredProvider(declaredProvider);
+      Location creationLoc = declaredProvider.getCreationLocOrNull();
+      builder.addSkylarkDeclaredProvider(declaredProvider, creationLoc != null ? creationLoc : loc);
       i++;
     }
   }

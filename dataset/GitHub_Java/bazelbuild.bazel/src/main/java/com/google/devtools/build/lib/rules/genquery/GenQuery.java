@@ -70,7 +70,6 @@ import com.google.devtools.build.lib.skyframe.PrecomputedValue.Precomputed;
 import com.google.devtools.build.lib.skyframe.SkyFunctions;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue;
 import com.google.devtools.build.lib.skyframe.TargetPatternValue.TargetPatternKey;
-import com.google.devtools.build.lib.skyframe.TransitiveTargetKey;
 import com.google.devtools.build.lib.skyframe.TransitiveTargetValue;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.Fingerprint;
@@ -215,7 +214,7 @@ public class GenQuery implements RuleConfiguredTargetFactory {
     NestedSetBuilder<Label> validTargets = NestedSetBuilder.stableOrder();
     Set<PackageIdentifier> successfulPackageNames = new LinkedHashSet<>();
     for (Target target : scope) {
-      SkyKey key = TransitiveTargetKey.of(target.getLabel());
+      SkyKey key = TransitiveTargetValue.key(target.getLabel());
       TransitiveTargetValue transNode = (TransitiveTargetValue) env.getValue(key);
       if (transNode == null) {
         return null;
