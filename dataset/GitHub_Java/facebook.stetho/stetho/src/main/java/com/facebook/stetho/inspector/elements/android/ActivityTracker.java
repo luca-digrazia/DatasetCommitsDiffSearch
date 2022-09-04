@@ -1,8 +1,10 @@
 /*
- * Copyright (c) Facebook, Inc. and its affiliates.
+ * Copyright (c) 2014-present, Facebook, Inc.
+ * All rights reserved.
  *
- * This source code is licensed under the MIT license found in the
- * LICENSE file in the root directory of this source tree.
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree. An additional grant
+ * of patent rights can be found in the PATENTS file in the same directory.
  */
 
 package com.facebook.stetho.inspector.elements.android;
@@ -13,20 +15,17 @@ import android.app.Application;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Looper;
-
-import androidx.annotation.NonNull;
-
 import com.facebook.stetho.common.Util;
+
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.GuardedBy;
+import javax.annotation.concurrent.NotThreadSafe;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
-
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.GuardedBy;
-import javax.annotation.concurrent.NotThreadSafe;
 
 /**
  * Tracks which {@link Activity} instances have been created and not yet destroyed in creation
@@ -77,10 +76,12 @@ public final class ActivityTracker {
   public boolean beginTrackingIfPossible(Application application) {
     if (mAutomaticTracker == null) {
       AutomaticTracker automaticTracker =
-          AutomaticTracker.newInstance(application, this /* tracker */);
+          AutomaticTracker.newInstanceIfPossible(application, this /* tracker */);
+      if (automaticTracker != null) {
         automaticTracker.register();
         mAutomaticTracker = automaticTracker;
         return true;
+      }
     }
     return false;
   }
@@ -148,11 +149,15 @@ public final class ActivityTracker {
   }
 
   private static abstract class AutomaticTracker {
-    @NonNull
-    public static AutomaticTracker newInstance(
-            Application application,
-            ActivityTracker tracker) {
-      return new AutomaticTrackerICSAndBeyond(application, tracker);
+    @Nullable
+    public static AutomaticTracker newInstanceIfPossible(
+        Application application,
+        ActivityTracker tracker) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH) {
+        return new AutomaticTrackerICSAndBeyond(application, tracker);
+      } else {
+        return null;
+      }
     }
 
     public abstract void register();
