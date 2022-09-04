@@ -6,10 +6,11 @@ import java.util.Optional;
 import java.util.OptionalInt;
 
 import io.quarkus.runtime.annotations.ConfigDocSection;
-import io.quarkus.runtime.annotations.ConfigGroup;
 import io.quarkus.runtime.annotations.ConfigItem;
+import io.quarkus.runtime.annotations.ConfigPhase;
+import io.quarkus.runtime.annotations.ConfigRoot;
 
-@ConfigGroup
+@ConfigRoot(name = "mongodb", phase = ConfigPhase.RUN_TIME)
 public class MongoClientConfig {
 
     /**
@@ -137,7 +138,7 @@ public class MongoClientConfig {
     public Optional<Duration> connectTimeout;
 
     /**
-     * How long a socket read can take before timing out.
+     * How long a send or receive on a socket can take before timing out.
      */
     @ConfigItem
     public Optional<Duration> socketTimeout;
