@@ -1,29 +1,25 @@
 /*******************************************************************************
- * Copyright (c) 2010-2019 Haifeng Li
+ * Copyright (c) 2010 Haifeng Li
  *
- * Smile is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as
- * published by the Free Software Foundation, either version 3 of
- * the License, or (at your option) any later version.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
- * Smile is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Lesser General Public License for more details.
+ *     http://www.apache.org/licenses/LICENSE-2.0
  *
- * You should have received a copy of the GNU Lesser General Public License
- * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  *******************************************************************************/
 
 package smile.data.vector;
 
 import java.io.Serializable;
-import java.util.Optional;
 import java.util.stream.BaseStream;
 
-import smile.data.measure.Measure;
 import smile.data.type.DataType;
-import smile.data.type.StructField;
 
 /**
  * Base interface for immutable named vectors, which are sequences of elements supporting
@@ -42,14 +38,6 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
     /** Returns the element type. */
     DataType type();
 
-    /** Returns the (optional) level of measurements. Only valid for number types. */
-    Optional<Measure> measure();
-
-    /** Returns a struct field corresponding to this vector. */
-    default StructField field() {
-        return new StructField(name(), type(), measure());
-    }
-
     /** Number of elements in the vector. */
     int size();
 
@@ -64,61 +52,20 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
      * Returns a double array of this vector.
      */
     default double[] toDoubleArray() {
-        return toDoubleArray(new double[size()]);
-    }
-
-    /**
-     * Copies the vector value as double to the given array.
-     * @return the input array <code>a</code>.
-     */
-    default double[] toDoubleArray(double[] a) {
-        throw new UnsupportedOperationException(name() + ":" + type());
+        throw new UnsupportedOperationException();
     }
 
     /**
      * Returns an integer array of this vector.
      */
     default int[] toIntArray() {
-        return toIntArray(new int[size()]);
-    }
-
-    /**
-     * Copies the vector value as int to the given array.
-     * @return the input array <code>a</code>.
-     */
-    default int[] toIntArray(int[] a) {
         throw new UnsupportedOperationException();
-    }
-
-    /**
-     * Returns a string array of this vector.
-     */
-    default String[] toStringArray() {
-        return toStringArray(new String[size()]);
-    }
-
-    /**
-     * Copies the vector value as string to the given array.
-     * @return the input array <code>a</code>.
-     */
-    default String[] toStringArray(String[] a) {
-        int n = a.length;
-        for (int i = 0; i < n; i++) {
-            a[i] = field().toString(get(i));
-        }
-        return a;
     }
 
     /**
      * Returns the value at position i, which may be null.
      */
     T get(int i);
-
-    /**
-     * Returns a new vector with selected entries.
-     * @param index the index of selected entries.
-     */
-    BaseVector<T, TS, S> get(int... index);
 
     /**
      * Returns the byte value at position i.
@@ -155,14 +102,6 @@ public interface BaseVector<T, TS, S extends BaseStream<TS, S>> extends Serializ
      */
     default T apply(int i) {
         return get(i);
-    }
-
-    /**
-     * Returns a new vector with selected entries.
-     * @param index the index of selected entries.
-     */
-    default BaseVector<T, TS, S> apply(int... index) {
-        return get(index);
     }
 
     /**

@@ -23,6 +23,7 @@ import smile.data.DataFrame;
 import smile.data.Tuple;
 import smile.data.type.*;
 import smile.data.vector.*;
+import smile.data.vector.Vector;
 import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
@@ -143,10 +144,6 @@ public class Formula implements Serializable {
 
     /** Binds the formula to a schema and returns the output schema of formula. */
     public StructType bind(StructType inputSchema) {
-        if (schema != null) {
-            return schema;
-        }
-
         Arrays.stream(predictors).forEach(term -> term.bind(inputSchema));
 
         List<Term> factors = Arrays.stream(predictors)
@@ -210,7 +207,6 @@ public class Formula implements Serializable {
 
         return DataFrame.of(vectors);
     }
-
     /**
      * Creates a design (or model) matrix without bias column.
      * @param df The input DataFrame.
@@ -291,6 +287,7 @@ public class Formula implements Serializable {
         return m;
     }
 
+
     /**
      * Returns the response vector.
      * @param df The input DataFrame.
@@ -302,19 +299,5 @@ public class Formula implements Serializable {
 
         response.bind(df.schema());
         return response.apply(df);
-    }
-
-    /**
-     * Returns the names of response variable.
-     */
-    public String response() {
-        return response.toString();
-    }
-
-    /**
-     * Returns the names of predictors.
-     */
-    public String[] predictors() {
-        return Arrays.stream(terms).skip(1).map(Object::toString).toArray(String[]::new);
     }
 }
