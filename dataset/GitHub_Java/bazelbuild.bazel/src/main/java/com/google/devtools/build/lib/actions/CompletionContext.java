@@ -40,13 +40,12 @@ public abstract class CompletionContext {
       Map<Artifact, Collection<Artifact>> expandedArtifacts,
       Map<Artifact, ImmutableList<FilesetOutputSymlink>> expandedFilesets,
       ActionInputMap inputMap,
-      PathResolverFactory pathResolverFactory,
-      String workspaceName) {
+      PathResolverFactory pathResolverFactory) {
     ArtifactExpander expander = new ArtifactExpanderImpl(expandedArtifacts, expandedFilesets);
     ArtifactPathResolver pathResolver =
         pathResolverFactory.shouldCreatePathResolverForArtifactValues()
             ? pathResolverFactory.createPathResolverForArtifactValues(
-                inputMap, expandedArtifacts, expandedFilesets.keySet(), workspaceName)
+                inputMap, expandedArtifacts, expandedFilesets.keySet())
             : ArtifactPathResolver.IDENTITY;
     return new AutoValue_CompletionContext(expander, pathResolver);
   }
@@ -84,8 +83,7 @@ public abstract class CompletionContext {
     ArtifactPathResolver createPathResolverForArtifactValues(
         ActionInputMap actionInputMap,
         Map<Artifact, Collection<Artifact>> expandedArtifacts,
-        Iterable<Artifact> filesets,
-        String workspaceName);
+        Iterable<Artifact> filesets);
 
     boolean shouldCreatePathResolverForArtifactValues();
   }
