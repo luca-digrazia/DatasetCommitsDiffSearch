@@ -32,13 +32,8 @@ import java.lang.annotation.Target;
  * The {@code _AutoCodec} suffix is added to the {@code Target} to obtain the generated class name.
  * In the example, that results in a class named {@code Target_AutoCodec} but applications should
  * not need to directly access the generated class.
- *
- * <p>If applied to a field (which must be static and final), the field is stored as a "constant"
- * allowing for trivial serialization of it as an integer tag (see {@code CodecScanner} and
- * {@code ObjectCodecRegistery}). In order to do that, a trivial associated "RegisteredSingleton"
- * class is generated.
  */
-@Target({ElementType.TYPE, ElementType.FIELD})
+@Target(ElementType.TYPE)
 // TODO(janakr): remove once serialization is complete.
 @Retention(RetentionPolicy.RUNTIME)
 public @interface AutoCodec {
@@ -70,6 +65,12 @@ public @interface AutoCodec {
      * instance for deserialization.
      */
     PUBLIC_FIELDS,
+    /**
+     * For use with classes that are singleton.
+     *
+     * <p>The serialized class must have a codec accessible, static INSTANCE field.
+     */
+    SINGLETON
   }
 
   /**
