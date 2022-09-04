@@ -22,7 +22,6 @@ import org.elasticsearch.search.SearchHits;
 import org.graylog2.Core;
 import org.graylog2.alerts.types.FieldValueAlertCondition;
 import org.graylog2.alerts.types.MessageCountAlertCondition;
-import org.graylog2.indexer.results.ResultMessage;
 import org.graylog2.plugin.Tools;
 import org.graylog2.plugin.database.EmbeddedPersistable;
 import org.graylog2.plugin.streams.Stream;
@@ -32,7 +31,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -82,7 +80,7 @@ public abstract class AlertCondition implements EmbeddedPersistable {
 
     public abstract String getDescription();
     protected abstract CheckResult runCheck();
-    public abstract List<ResultMessage> getSearchHits();
+    public abstract SearchHits getSearchHits();
 
     public static AlertCondition fromRequest(CreateConditionRequest ccr, Stream stream, Core core) throws NoSuchAlertConditionTypeException {
         Type type;
