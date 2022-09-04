@@ -20,7 +20,6 @@ import com.google.devtools.build.lib.actions.ActionAnalysisMetadata;
 import com.google.devtools.build.lib.actions.ActionExecutionContext;
 import com.google.devtools.build.lib.actions.ActionExecutionException;
 import com.google.devtools.build.lib.actions.ActionInputHelper;
-import com.google.devtools.build.lib.actions.ActionKeyContext;
 import com.google.devtools.build.lib.actions.ActionOwner;
 import com.google.devtools.build.lib.actions.ActionTemplate;
 import com.google.devtools.build.lib.actions.Artifact;
@@ -30,7 +29,6 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.rules.cpp.CcCompilationHelper.SourceCategory;
 import com.google.devtools.build.lib.syntax.EvalException;
-import com.google.devtools.build.lib.util.Fingerprint;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.ArrayList;
@@ -49,7 +47,6 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
   private final ActionOwner actionOwner;
   private final NestedSet<Artifact> mandatoryInputs;
   private final NestedSet<Artifact> allInputs;
-  private String cachedKey;
 
   /**
    * Creates an CppCompileActionTemplate.
@@ -139,39 +136,6 @@ public final class CppCompileActionTemplate implements ActionTemplate<CppCompile
     }
 
     return expandedActions.build();
-  }
-
-  // TODO(jhorvitz): Move getKey to ActionAnalysisMetadata once all action templates implement it.
-  public synchronized String getKey(ActionKeyContext actionKeyContext) {
-    if (cachedKey != null) {
-      return cachedKey;
-    }
-    CompileCommandLine commandLine =
-        CppCompileAction.buildCommandLine(
-            sourceTreeArtifact,
-            cppCompileActionBuilder.getCoptsFilter(),
-            CppActionNames.CPP_COMPILE,
-            dotdTreeArtifact,
-            cppCompileActionBuilder.getFeatureConfiguration(),
-            cppCompileActionBuilder.getVariables());
-    Fingerprint fp = new Fingerprint();
-    CppCompileAction.computeKey(
-        actionKeyContext,
-        fp,
-        cppCompileActionBuilder.getActionClassId(),
-        cppCompileActionBuilder.getActionEnvironment(),
-        commandLine.getEnvironment(),
-        cppCompileActionBuilder.getExecutionInfo(),
-        CppCompileAction.computeCommandLineKey(
-            commandLine.getCompilerOptions(/*overwrittenVariables=*/ null)),
-        cppCompileActionBuilder.getCcCompilationContext().getDeclaredIncludeSrcs(),
-        cppCompileActionBuilder.buildMandatoryInputs(),
-        cppCompileActionBuilder.buildPrunableHeaders(),
-        cppCompileActionBuilder.getCcCompilationContext().getDeclaredIncludeDirs(),
-        cppCompileActionBuilder.getBuiltinIncludeDirectories(),
-        cppCompileActionBuilder.buildInputsForInvalidation());
-    cachedKey = fp.hexDigestAndReset();
-    return cachedKey;
   }
 
   private boolean shouldCompileHeaders() {

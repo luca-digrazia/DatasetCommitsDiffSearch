@@ -286,7 +286,10 @@ public class CppCompileActionBuilder {
     }
 
     NestedSet<Artifact> realMandatoryInputs = buildMandatoryInputs();
-    NestedSet<Artifact> prunableHeaders = buildPrunableHeaders();
+    NestedSet<Artifact> prunableHeaders =
+        NestedSetBuilder.fromNestedSet(cppSemantics.getAdditionalPrunableIncludes())
+            .addAll(additionalPrunableHeaders)
+            .build();
 
     configuration.modifyExecutionInfo(
         executionInfo, CppCompileAction.actionNameToMnemonic(getActionName()));
@@ -384,12 +387,6 @@ public class CppCompileActionBuilder {
     return realMandatoryInputsBuilder.build();
   }
 
-  NestedSet<Artifact> buildPrunableHeaders() {
-    return NestedSetBuilder.fromNestedSet(cppSemantics.getAdditionalPrunableIncludes())
-        .addAll(additionalPrunableHeaders)
-        .build();
-  }
-
   Iterable<Artifact> buildInputsForInvalidation() {
     return Iterables.concat(
         this.inputsForInvalidation, ccCompilationContext.getTransitiveCompilationPrerequisites());
@@ -447,17 +444,9 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  Map<String, String> getExecutionInfo() {
-    return executionInfo;
-  }
-
   public CppCompileActionBuilder setActionClassId(UUID uuid) {
     this.actionClassId = uuid;
     return this;
-  }
-
-  UUID getActionClassId() {
-    return actionClassId;
   }
 
   public CppCompileActionBuilder addMandatoryInputs(Iterable<Artifact> artifacts) {
@@ -591,10 +580,6 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  CoptsFilter getCoptsFilter() {
-    return coptsFilter;
-  }
-
   public CppCompileActionBuilder setBuiltinIncludeFiles(
       ImmutableList<Artifact> builtinIncludeFiles) {
     this.builtinIncludeFiles = builtinIncludeFiles;
@@ -624,10 +609,6 @@ public class CppCompileActionBuilder {
     return this;
   }
 
-  ActionEnvironment getActionEnvironment() {
-    return env;
-  }
-
   public CppCompileActionBuilder setAdditionalPrunableHeaders(
       Iterable<Artifact> additionalPrunableHeaders) {
     this.additionalPrunableHeaders = Preconditions.checkNotNull(additionalPrunableHeaders);
@@ -639,10 +620,6 @@ public class CppCompileActionBuilder {
       ImmutableList<PathFragment> builtinIncludeDirectories) {
     this.builtinIncludeDirectories = builtinIncludeDirectories;
     return this;
-  }
-
-  ImmutableList<PathFragment> getBuiltinIncludeDirectories() {
-    return builtinIncludeDirectories;
   }
 
   public boolean shouldCompileHeaders() {

@@ -273,8 +273,10 @@ public class CppCompileAction extends AbstractAction
     this.builtinIncludeFiles = builtinIncludeFiles;
     this.additionalIncludeScanningRoots = ImmutableList.copyOf(additionalIncludeScanningRoots);
     this.compileCommandLine =
-        buildCommandLine(
-            sourceFile, coptsFilter, actionName, dotdFile, featureConfiguration, variables);
+        CompileCommandLine.builder(sourceFile, coptsFilter, actionName, dotdFile)
+            .setFeatureConfiguration(featureConfiguration)
+            .setVariables(variables)
+            .build();
     this.executionInfo = executionInfo;
     this.actionName = actionName;
     this.featureConfiguration = featureConfiguration;
@@ -296,19 +298,6 @@ public class CppCompileAction extends AbstractAction
               .getParentDirectory()
               .getChild(outputFile.getFilename() + ".params");
     }
-  }
-
-  static CompileCommandLine buildCommandLine(
-      Artifact sourceFile,
-      CoptsFilter coptsFilter,
-      String actionName,
-      Artifact dotdFile,
-      FeatureConfiguration featureConfiguration,
-      CcToolchainVariables variables) {
-    return CompileCommandLine.builder(sourceFile, coptsFilter, actionName, dotdFile)
-        .setFeatureConfiguration(featureConfiguration)
-        .setVariables(variables)
-        .build();
   }
 
   /**
@@ -1093,56 +1082,25 @@ public class CppCompileAction extends AbstractAction
   /** For actions that discover inputs, the key must include input names. */
   @Override
   public void computeKey(ActionKeyContext actionKeyContext, Fingerprint fp) {
-    computeKey(
-        actionKeyContext,
-        fp,
-        actionClassId,
-        env,
-        compileCommandLine.getEnvironment(),
-        executionInfo,
-        getCommandLineKey(),
-        ccCompilationContext.getDeclaredIncludeSrcs(),
-        getMandatoryInputs(),
-        additionalPrunableHeaders,
-        ccCompilationContext.getDeclaredIncludeDirs(),
-        builtInIncludeDirectories,
-        inputsForInvalidation);
-  }
-
-  // Separated into a helper method so that it can be called from CppCompileActionTemplate.
-  static void computeKey(
-      ActionKeyContext actionKeyContext,
-      Fingerprint fp,
-      UUID actionClassId,
-      ActionEnvironment env,
-      Map<String, String> environmentVariables,
-      Map<String, String> executionInfo,
-      byte[] commandLineKey,
-      NestedSet<Artifact> declaredIncludeSrcs,
-      NestedSet<Artifact> mandatoryInputs,
-      NestedSet<Artifact> prunableHeaders,
-      NestedSet<PathFragment> declaredIncludeDirs,
-      List<PathFragment> builtInIncludeDirectories,
-      Iterable<Artifact> inputsForInvalidation) {
     fp.addUUID(actionClassId);
     env.addTo(fp);
-    fp.addStringMap(environmentVariables);
+    fp.addStringMap(compileCommandLine.getEnvironment());
     fp.addStringMap(executionInfo);
-    fp.addBytes(commandLineKey);
 
-    actionKeyContext.addNestedSetToFingerprint(fp, declaredIncludeSrcs);
+    fp.addBytes(getCommandLineKey());
+    actionKeyContext.addNestedSetToFingerprint(fp, ccCompilationContext.getDeclaredIncludeSrcs());
     fp.addInt(0); // mark the boundary between input types
-    actionKeyContext.addNestedSetToFingerprint(fp, mandatoryInputs);
+    actionKeyContext.addNestedSetToFingerprint(fp, getMandatoryInputs());
     fp.addInt(0);
-    actionKeyContext.addNestedSetToFingerprint(fp, prunableHeaders);
+    actionKeyContext.addNestedSetToFingerprint(fp, additionalPrunableHeaders);
 
-    /*
+    /**
      * getArguments() above captures all changes which affect the compilation command and hence the
      * contents of the object file. But we need to also make sure that we re-execute the action if
      * any of the fields that affect whether {@link #validateInclusions} will report an error or
      * warning have changed, otherwise we might miss some errors.
      */
-    actionKeyContext.addNestedSetToFingerprint(fp, declaredIncludeDirs);
+    actionKeyContext.addNestedSetToFingerprint(fp, ccCompilationContext.getDeclaredIncludeDirs());
     fp.addPaths(builtInIncludeDirectories);
 
     // This is needed for CppLinkstampCompile.
@@ -1166,7 +1124,7 @@ public class CppCompileAction extends AbstractAction
     return commandLineKey;
   }
 
-  static byte[] computeCommandLineKey(List<String> compilerOptions) {
+  private byte[] computeCommandLineKey(List<String> compilerOptions) {
     Fingerprint fp = new Fingerprint();
     fp.addStrings(compilerOptions);
     return fp.digestAndReset();
