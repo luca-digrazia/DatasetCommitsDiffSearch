@@ -16,7 +16,9 @@
  */
 package org.graylog.security.entities;
 
+import org.graylog.grn.GRN;
 import org.graylog.grn.GRNRegistry;
+import org.graylog.grn.GRNType;
 import org.graylog.grn.GRNTypes;
 import org.graylog.security.Capability;
 import org.graylog.security.DBGrantService;
@@ -44,9 +46,10 @@ class EntityOwnershipServiceTest {
     }
 
     @Test
-    void registerNewView() {
+    void registerNewEventDefinition() {
         final User mockUser = mock(User.class);
         when(mockUser.getName()).thenReturn("mockuser");
+        when(mockUser.getId()).thenReturn("mockuser");
 
         entityOwnershipService.registerNewEventDefinition("1234", mockUser);
 
@@ -60,6 +63,46 @@ class EntityOwnershipServiceTest {
             assertThat(g.target().entity()).isEqualTo("1234");
             assertThat(g.grantee().type()).isEqualTo(GRNTypes.USER.type());
             assertThat(g.grantee().entity()).isEqualTo("mockuser");
+        });
+    }
+
+    @Test
+    void unregisterDashboard() {
+        entityOwnershipService.unregisterDashboard("1234");
+        assertGrantRemoval(GRNTypes.DASHBOARD, "1234");
+    }
+
+    @Test
+    void unregisterSearch() {
+        entityOwnershipService.unregisterSearch("1234");
+        assertGrantRemoval(GRNTypes.SEARCH, "1234");
+    }
+
+    @Test
+    void unregisterEventDefinition() {
+        entityOwnershipService.unregisterEventDefinition("1234");
+        assertGrantRemoval(GRNTypes.EVENT_DEFINITION, "1234");
+    }
+
+    @Test
+    void unregisterEventNotification() {
+        entityOwnershipService.unregisterEventNotification("1234");
+        assertGrantRemoval(GRNTypes.EVENT_NOTIFICATION, "1234");
+    }
+
+    @Test
+    void unregisterStream() {
+        entityOwnershipService.unregisterStream("123");
+        assertGrantRemoval(GRNTypes.STREAM, "123");
+    }
+
+    private void assertGrantRemoval(GRNType grnType, String entity) {
+        ArgumentCaptor<GRN> argCaptor = ArgumentCaptor.forClass(GRN.class);
+        verify(dbGrantService).deleteForTarget(argCaptor.capture());
+
+        assertThat(argCaptor.getValue()).satisfies(grn -> {
+            assertThat(grn.grnType()).isEqualTo(grnType);
+            assertThat(grn.entity()).isEqualTo(entity);
         });
     }
 }

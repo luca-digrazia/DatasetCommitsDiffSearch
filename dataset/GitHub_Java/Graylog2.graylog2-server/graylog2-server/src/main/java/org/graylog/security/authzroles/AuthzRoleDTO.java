@@ -1,3 +1,19 @@
+/**
+ * This file is part of Graylog.
+ *
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * Graylog is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
+ */
 package org.graylog.security.authzroles;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
@@ -5,6 +21,8 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import com.google.auto.value.AutoValue;
+import org.graylog2.shared.users.Role;
+import org.graylog2.users.RoleImpl;
 import org.mongojack.Id;
 import org.mongojack.ObjectId;
 
@@ -31,6 +49,7 @@ public abstract class AuthzRoleDTO {
     public abstract String name();
 
     @JsonProperty(FIELD_DESCRIPTION)
+    @Nullable
     public abstract String description();
 
     @JsonProperty(FIELD_PERMISSIONS)
@@ -38,6 +57,16 @@ public abstract class AuthzRoleDTO {
 
     @JsonProperty(FIELD_READ_ONLY)
     public abstract boolean readOnly();
+
+    public Role toLegacyRole() {
+        final RoleImpl legacyRole = new RoleImpl();
+        legacyRole._id = id();
+        legacyRole.setName(name());
+        legacyRole.setDescription(description());
+        legacyRole.setPermissions(permissions());
+        legacyRole.setReadOnly(readOnly());
+        return legacyRole;
+    }
 
     public static Builder builder() {
         return Builder.create();
@@ -63,7 +92,7 @@ public abstract class AuthzRoleDTO {
         public abstract Builder name(String name);
 
         @JsonProperty(FIELD_DESCRIPTION)
-        public abstract Builder description(String description);
+        public abstract Builder description(@Nullable String description);
 
         @JsonProperty(FIELD_PERMISSIONS)
         public abstract Builder permissions(Set<String> permissions);
@@ -74,4 +103,3 @@ public abstract class AuthzRoleDTO {
         public abstract AuthzRoleDTO build();
     }
 }
-

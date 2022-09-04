@@ -1,18 +1,18 @@
-/*
- * Copyright (C) 2020 Graylog, Inc.
+/**
+ * This file is part of Graylog.
  *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the Server Side Public License, version 1,
- * as published by MongoDB, Inc.
+ * Graylog is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,
+ * Graylog is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * Server Side Public License for more details.
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the Server Side Public License
- * along with this program. If not, see
- * <http://www.mongodb.com/licensing/server-side-public-license>.
+ * You should have received a copy of the GNU General Public License
+ * along with Graylog.  If not, see <http://www.gnu.org/licenses/>.
  */
 package org.graylog.plugins.views.search.views;
 
@@ -39,7 +39,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static com.google.common.base.Preconditions.checkNotNull;
 import static com.google.common.base.Strings.isNullOrEmpty;
 
 public class ViewService extends PaginatedDbService<ViewDTO> {
@@ -48,20 +47,17 @@ public class ViewService extends PaginatedDbService<ViewDTO> {
     private final ClusterConfigService clusterConfigService;
     private final ViewRequirements.Factory viewRequirementsFactory;
     private final EntityOwnershipService entityOwnerShipService;
-    private final ViewSummaryService viewSummaryService;
 
     @Inject
     protected ViewService(MongoConnection mongoConnection,
                           MongoJackObjectMapperProvider mapper,
                           ClusterConfigService clusterConfigService,
                           ViewRequirements.Factory viewRequirementsFactory,
-                          EntityOwnershipService entityOwnerShipService,
-                          ViewSummaryService viewSummaryService) {
+                          EntityOwnershipService entityOwnerShipService) {
         super(mongoConnection, mapper, ViewDTO.class, COLLECTION_NAME);
         this.clusterConfigService = clusterConfigService;
         this.viewRequirementsFactory = viewRequirementsFactory;
         this.entityOwnerShipService = entityOwnerShipService;
-        this.viewSummaryService = viewSummaryService;
     }
 
     private PaginatedList<ViewDTO> searchPaginated(DBQuery.Query query,
@@ -94,7 +90,6 @@ public class ViewService extends PaginatedDbService<ViewDTO> {
                                                         String sortField,
                                                         int page,
                                                         int perPage) {
-        checkNotNull(sortField);
         return searchPaginated(
                 DBQuery.and(
                         DBQuery.or(DBQuery.is(ViewDTO.FIELD_TYPE, type), DBQuery.notExists(ViewDTO.FIELD_TYPE)),
@@ -106,16 +101,6 @@ public class ViewService extends PaginatedDbService<ViewDTO> {
                 page,
                 perPage
         );
-    }
-
-    public PaginatedList<ViewSummaryDTO> searchSummariesPaginatedByType(final ViewDTO.Type type,
-                                                                        final SearchQuery query,
-                                                                        final Predicate<ViewSummaryDTO> filter,
-                                                                        final String order,
-                                                                        final String sortField,
-                                                                        final int page,
-                                                                        final int perPage) {
-        return viewSummaryService.searchPaginatedByType(type, query, filter, order, sortField, page, perPage);
     }
 
     public void saveDefault(ViewDTO dto) {
