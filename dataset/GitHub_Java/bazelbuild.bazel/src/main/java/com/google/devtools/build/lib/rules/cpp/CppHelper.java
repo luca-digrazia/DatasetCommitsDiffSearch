@@ -65,6 +65,7 @@ import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.DynamicMode;
 import com.google.devtools.build.lib.rules.cpp.Link.LinkTargetType;
 import com.google.devtools.build.lib.shell.ShellUtils;
+import com.google.devtools.build.lib.skyframe.serialization.ObjectCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.syntax.Type;
 import com.google.devtools.build.lib.util.FileTypeSet;
@@ -573,6 +574,9 @@ public class CppHelper {
   @AutoCodec
   @AutoValue
   abstract static class PregreppedHeader {
+    public static final ObjectCodec<PregreppedHeader> CODEC =
+        new CppHelper_PregreppedHeader_AutoCodec();
+
     @AutoCodec.Instantiator
     static PregreppedHeader create(Artifact originalHeader, Artifact greppedHeader) {
       return new AutoValue_CppHelper_PregreppedHeader(originalHeader, greppedHeader);
@@ -969,10 +973,7 @@ public class CppHelper {
   public static void maybeAddStaticLinkMarkerProvider(RuleConfiguredTargetBuilder builder,
       RuleContext ruleContext) {
     boolean staticallyLinked = false;
-    CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
-    if (ruleContext.getFeatures().contains("fully_static_link")) {
-      staticallyLinked = true;
-    } else if (cppConfiguration.hasStaticLinkOption()) {
+    if (ruleContext.getFragment(CppConfiguration.class).hasStaticLinkOption()) {
       staticallyLinked = true;
     } else if (ruleContext.attributes().has("linkopts", Type.STRING_LIST)
         && ruleContext.attributes().get("linkopts", Type.STRING_LIST).contains("-static")) {
