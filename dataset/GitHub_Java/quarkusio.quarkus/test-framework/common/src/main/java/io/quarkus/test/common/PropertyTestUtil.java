@@ -22,13 +22,9 @@ import java.nio.file.Paths;
 public class PropertyTestUtil {
 
     public static void setLogFileProperty() {
-        System.setProperty("quarkus.log.file.path", getLogFileLocation());
-    }
-
-    public static String getLogFileLocation() {
         if (Files.isDirectory(Paths.get("build"))) {
-            return "build" + File.separator + "quarkus.log";
-        }
-        return "target" + File.separator + "quarkus.log";
+            System.setProperty("quarkus.log.file.path", "build" + File.separator + "quarkus.log");
+        } else
+            System.setProperty("quarkus.log.file.path", "target" + File.separator + "quarkus.log");
     }
 }

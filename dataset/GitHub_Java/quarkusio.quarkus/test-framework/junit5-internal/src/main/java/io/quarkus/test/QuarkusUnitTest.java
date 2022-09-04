@@ -21,6 +21,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Method;
 import java.nio.file.FileVisitResult;
@@ -194,8 +195,9 @@ public class QuarkusUnitTest
                             @Override
                             public void execute(BuildContext context) {
                                 try {
-                                    Method factoryMethod = buildItem.getMethod("unremovableOf", Class.class);
-                                    context.produce((BuildItem) factoryMethod.invoke(null, testClass));
+                                    Constructor<? extends BuildItem> ctor = buildItem.getConstructor(boolean.class,
+                                            String[].class);
+                                    context.produce(ctor.newInstance(false, new String[] { testClass.getName() }));
                                 } catch (Exception e) {
                                     throw new RuntimeException(e);
                                 }
