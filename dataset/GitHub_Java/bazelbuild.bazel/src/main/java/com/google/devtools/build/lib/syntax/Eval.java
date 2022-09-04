@@ -86,12 +86,8 @@ final class Eval {
   }
 
   private void execAssignment(AssignmentStatement node) throws EvalException, InterruptedException {
-    if (node.isAugmented()) {
-      execAugmentedAssignment(node);
-    } else {
-      Object rvalue = eval(thread, node.getRHS());
-      assign(node.getLHS(), rvalue, thread, node.getLocation());
-    }
+    Object rvalue = eval(thread, node.getRHS());
+    assign(node.getLHS(), rvalue, thread, node.getLocation());
   }
 
   private TokenKind execFor(ForStatement node) throws EvalException, InterruptedException {
@@ -152,7 +148,7 @@ final class Eval {
   }
 
   private TokenKind execIf(IfStatement node) throws EvalException, InterruptedException {
-    boolean cond = Starlark.truth(eval(thread, node.getCondition()));
+    boolean cond = EvalUtils.toBoolean(eval(thread, node.getCondition()));
     if (cond) {
       return execStatementsInternal(node.getThenBlock());
     } else if (node.getElseBlock() != null) {
@@ -206,6 +202,9 @@ final class Eval {
       case ASSIGNMENT:
         execAssignment((AssignmentStatement) st);
         return TokenKind.PASS;
+      case AUGMENTED_ASSIGNMENT:
+        execAugmentedAssignment((AugmentedAssignmentStatement) st);
+        return TokenKind.PASS;
       case EXPRESSION:
         eval(thread, ((ExpressionStatement) st).getExpression());
         return TokenKind.PASS;
@@ -213,7 +212,7 @@ final class Eval {
         return ((FlowStatement) st).getKind();
       case FOR:
         return execFor((ForStatement) st);
-      case DEF:
+      case FUNCTION_DEF:
         execDef((DefStatement) st);
         return TokenKind.PASS;
       case IF:
@@ -323,7 +322,16 @@ final class Eval {
     }
   }
 
-  private void execAugmentedAssignment(AssignmentStatement stmt)
+  /**
+   * Evaluates an augmented assignment that mutates this {@code LValue} with the given right-hand
+   * side's value.
+   *
+   * <p>The left-hand side expression is evaluated only once, even when it is an {@link
+   * IndexExpression}. The left-hand side is evaluated before the right-hand side to match Python's
+   * behavior (hence why the right-hand side is passed as an expression rather than as an evaluated
+   * value).
+   */
+  private void execAugmentedAssignment(AugmentedAssignmentStatement stmt)
       throws EvalException, InterruptedException {
     Expression lhs = stmt.getLHS();
     TokenKind op = stmt.getOperator();
@@ -422,9 +430,9 @@ final class Eval {
           // AND and OR require short-circuit evaluation.
           switch (binop.getOperator()) {
             case AND:
-              return Starlark.truth(x) ? eval(thread, binop.getY()) : x;
+              return EvalUtils.toBoolean(x) ? eval(thread, binop.getY()) : x;
             case OR:
-              return Starlark.truth(x) ? x : eval(thread, binop.getY());
+              return EvalUtils.toBoolean(x) ? x : eval(thread, binop.getY());
             default:
               Object y = eval(thread, binop.getY());
               return EvalUtils.binaryOp(binop.getOperator(), x, y, thread, binop.getLocation());
@@ -438,7 +446,7 @@ final class Eval {
         {
           ConditionalExpression cond = (ConditionalExpression) expr;
           Object v = eval(thread, cond.getCondition());
-          return eval(thread, Starlark.truth(v) ? cond.getThenCase() : cond.getElseCase());
+          return eval(thread, EvalUtils.toBoolean(v) ? cond.getThenCase() : cond.getElseCase());
         }
 
       case DICT_EXPR:
@@ -659,7 +667,7 @@ final class Eval {
 
           } else {
             Comprehension.If ifClause = (Comprehension.If) clause;
-            if (Starlark.truth(eval(thread, ifClause.getCondition()))) {
+            if (EvalUtils.toBoolean(eval(thread, ifClause.getCondition()))) {
               execClauses(index + 1);
             }
           }

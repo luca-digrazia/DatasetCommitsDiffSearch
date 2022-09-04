@@ -25,7 +25,6 @@ import com.google.devtools.build.lib.profiler.memory.AllocationTracker.RuleBytes
 import com.google.devtools.build.lib.syntax.BaseFunction;
 import com.google.devtools.build.lib.syntax.Callstack;
 import com.google.devtools.build.lib.syntax.Expression;
-import com.google.devtools.build.lib.syntax.FunctionSignature;
 import com.google.devtools.build.lib.syntax.ParserInput;
 import com.google.devtools.build.lib.syntax.SyntaxError;
 import com.google.devtools.build.lib.vfs.PathFragment;
@@ -44,7 +43,7 @@ import org.junit.runners.JUnit4;
 
 /** Tests for {@link AllocationTracker}. */
 @RunWith(JUnit4.class)
-public final class AllocationTrackerTest {
+public class AllocationTrackerTest {
 
   private AllocationTracker allocationTracker;
 
@@ -57,12 +56,11 @@ public final class AllocationTrackerTest {
     return Expression.parse(input);
   }
 
-  private static class TestFunction extends BaseFunction {
+  static class TestFunction extends BaseFunction {
     TestFunction(String file, String name, int line) {
-      super(name, FunctionSignature.ANY, /*defaultValues=*/ null, location(file, line));
+      super(name);
+      this.location = location(file, line);
     }
-
-    public void invoke() {}
   }
 
   static class TestRuleFunction extends TestFunction implements RuleFunction {
