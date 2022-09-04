@@ -390,12 +390,12 @@ public class AppleCommandLineOptions extends FragmentOptions {
   /**
    * Returns whether the minimum OS version is explicitly set for the current platform.
    */
-  public DottedVersion getMinimumOsVersion() {
+  public boolean isMinimumOsVersionExplicitlySet() {
     switch (applePlatformType) {
-      case IOS: return iosMinimumOs;
-      case MACOS: return macosMinimumOs;
-      case TVOS: return tvosMinimumOs;
-      case WATCHOS: return watchosMinimumOs;
+      case IOS: return iosMinimumOs != null;
+      case MACOS: return macosMinimumOs != null;
+      case TVOS: return tvosMinimumOs != null;
+      case WATCHOS: return watchosMinimumOs != null;
       default: throw new IllegalStateException();
     }
   }
