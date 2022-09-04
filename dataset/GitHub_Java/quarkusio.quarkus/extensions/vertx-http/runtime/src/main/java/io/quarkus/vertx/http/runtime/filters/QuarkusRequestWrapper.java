@@ -3,12 +3,14 @@ package io.quarkus.vertx.http.runtime.filters;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater;
+import java.util.function.BiConsumer;
 
 import org.jboss.logging.Logger;
 
 import io.quarkus.vertx.http.runtime.AbstractRequestWrapper;
 import io.vertx.core.Handler;
 import io.vertx.core.http.Cookie;
+import io.vertx.core.http.CookieSameSite;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 
@@ -30,10 +32,12 @@ public class QuarkusRequestWrapper extends AbstractRequestWrapper {
     private final AbstractResponseWrapper response;
 
     private final List<Handler<Void>> requestDoneHandlers = new ArrayList<>();
+    private final BiConsumer<Cookie, HttpServerRequest> cookieConsumer;
 
-    public QuarkusRequestWrapper(HttpServerRequest event) {
+    public QuarkusRequestWrapper(HttpServerRequest event, BiConsumer<Cookie, HttpServerRequest> cookieConsumer) {
         super(event);
-        this.response = new ResponseWrapper(delegate.response());
+        this.cookieConsumer = cookieConsumer;
+        this.response = new ResponseWrapper(delegate.response(), event);
         event.exceptionHandler(new Handler<Throwable>() {
             @Override
             public void handle(Throwable event) {
@@ -87,12 +91,14 @@ public class QuarkusRequestWrapper extends AbstractRequestWrapper {
 
     class ResponseWrapper extends AbstractResponseWrapper {
 
+        final HttpServerRequest request;
         Handler<Void> endHandler;
         Handler<Void> closeHandler;
         Handler<Throwable> exceptionHandler;
 
-        ResponseWrapper(HttpServerResponse delegate) {
+        ResponseWrapper(HttpServerResponse delegate, HttpServerRequest request) {
             super(delegate);
+            this.request = request;
             delegate.closeHandler(new Handler<Void>() {
                 @Override
                 public void handle(Void event) {
@@ -139,6 +145,14 @@ public class QuarkusRequestWrapper extends AbstractRequestWrapper {
         public HttpServerResponse endHandler(Handler<Void> handler) {
             this.endHandler = handler;
             return this;
+        }
+
+        @Override
+        public HttpServerResponse addCookie(Cookie cookie) {
+            if (cookieConsumer != null) {
+                cookieConsumer.accept(cookie, request);
+            }
+            return super.addCookie(cookie);
         }
     }
 
@@ -197,6 +211,11 @@ public class QuarkusRequestWrapper extends AbstractRequestWrapper {
 
         @Override
         public Cookie setHttpOnly(boolean httpOnly) {
+            return null;
+        }
+
+        @Override
+        public Cookie setSameSite(CookieSameSite policy) {
             return null;
         }
 

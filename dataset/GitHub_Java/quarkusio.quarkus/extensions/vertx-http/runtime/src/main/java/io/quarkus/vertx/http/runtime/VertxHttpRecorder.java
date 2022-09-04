@@ -37,15 +37,13 @@ import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.quarkus.arc.Arc;
 import io.quarkus.arc.runtime.BeanContainer;
-import io.quarkus.bootstrap.runner.Timing;
-import io.quarkus.dev.spi.HotReplacementContext;
 import io.quarkus.netty.runtime.virtual.VirtualAddress;
 import io.quarkus.netty.runtime.virtual.VirtualChannel;
 import io.quarkus.netty.runtime.virtual.VirtualServerChannel;
 import io.quarkus.runtime.LaunchMode;
-import io.quarkus.runtime.LiveReloadConfig;
 import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.ShutdownContext;
+import io.quarkus.runtime.Timing;
 import io.quarkus.runtime.annotations.Recorder;
 import io.quarkus.runtime.configuration.ConfigInstantiator;
 import io.quarkus.runtime.configuration.MemorySize;
@@ -53,7 +51,6 @@ import io.quarkus.runtime.shutdown.ShutdownConfig;
 import io.quarkus.vertx.core.runtime.VertxCoreRecorder;
 import io.quarkus.vertx.core.runtime.config.VertxConfiguration;
 import io.quarkus.vertx.http.runtime.HttpConfiguration.InsecureRequests;
-import io.quarkus.vertx.http.runtime.devmode.RemoteSyncHandler;
 import io.quarkus.vertx.http.runtime.filters.Filter;
 import io.quarkus.vertx.http.runtime.filters.Filters;
 import io.quarkus.vertx.http.runtime.filters.GracefulShutdownFilter;
@@ -108,7 +105,6 @@ public class VertxHttpRecorder {
     private static final Logger LOGGER = Logger.getLogger(VertxHttpRecorder.class.getName());
 
     private static volatile Handler<RoutingContext> hotReplacementHandler;
-    private static volatile HotReplacementContext hotReplacementContext;
 
     private static volatile Runnable closeTask;
 
@@ -127,16 +123,13 @@ public class VertxHttpRecorder {
         }
     };
 
-    public static void setHotReplacement(Handler<RoutingContext> handler, HotReplacementContext hrc) {
+    public static void setHotReplacement(Handler<RoutingContext> handler) {
         hotReplacementHandler = handler;
-        hotReplacementContext = hrc;
     }
 
     public static void shutDownDevMode() {
-        if (closeTask != null) {
-            closeTask.run();
-            closeTask = null;
-        }
+        closeTask.run();
+        closeTask = null;
         rootHandler = null;
         hotReplacementHandler = null;
     }
@@ -157,10 +150,9 @@ public class VertxHttpRecorder {
         Vertx vertx = VertxCoreRecorder.initialize(vertxConfiguration, null);
 
         try {
-            HttpBuildTimeConfig buildConfig = new HttpBuildTimeConfig();
-            ConfigInstantiator.handleObject(buildConfig);
             HttpConfiguration config = new HttpConfiguration();
             ConfigInstantiator.handleObject(config);
+
             Router router = Router.router(vertx);
             if (hotReplacementHandler != null) {
                 router.route().order(Integer.MIN_VALUE).blockingHandler(hotReplacementHandler);
@@ -168,7 +160,7 @@ public class VertxHttpRecorder {
             rootHandler = router;
 
             //we can't really do
-            doServerStart(vertx, buildConfig, config, LaunchMode.DEVELOPMENT, new Supplier<Integer>() {
+            doServerStart(vertx, config, LaunchMode.DEVELOPMENT, new Supplier<Integer>() {
                 @Override
                 public Integer get() {
                     return ProcessorInfo.availableProcessors() * 2; //this is dev mode, so the number of IO threads not always being 100% correct does not really matter in this case
@@ -193,8 +185,7 @@ public class VertxHttpRecorder {
     }
 
     public void startServer(Supplier<Vertx> vertx, ShutdownContext shutdown,
-            HttpBuildTimeConfig httpBuildTimeConfig, HttpConfiguration httpConfiguration,
-            LaunchMode launchMode,
+            HttpConfiguration httpConfiguration, LaunchMode launchMode,
             boolean startVirtual, boolean startSocket, Supplier<Integer> ioThreads, String websocketSubProtocols)
             throws IOException {
 
@@ -204,8 +195,7 @@ public class VertxHttpRecorder {
         if (startSocket) {
             // Start the server
             if (closeTask == null) {
-                doServerStart(vertx.get(), httpBuildTimeConfig, httpConfiguration, launchMode, ioThreads,
-                        websocketSubProtocols);
+                doServerStart(vertx.get(), httpConfiguration, launchMode, ioThreads, websocketSubProtocols);
                 if (launchMode != LaunchMode.DEVELOPMENT) {
                     shutdown.addShutdownTask(closeTask);
                 }
@@ -215,7 +205,6 @@ public class VertxHttpRecorder {
 
     public void finalizeRouter(BeanContainer container, Consumer<Route> defaultRouteHandler,
             List<Filter> filterList, Supplier<Vertx> vertx,
-            LiveReloadConfig liveReloadConfig,
             RuntimeValue<Router> runtimeValue, String rootPath, LaunchMode launchMode, boolean requireBodyHandler,
             Handler<RoutingContext> bodyHandler, HttpConfiguration httpConfiguration,
             GracefulShutdownFilter gracefulShutdownFilter, ShutdownConfig shutdownConfig,
@@ -306,14 +295,12 @@ public class VertxHttpRecorder {
             root = mainRouter;
         }
 
-        warnIfDeprecatedHttpConfigPropertiesPresent(httpConfiguration);
-        ForwardingProxyOptions forwardingProxyOptions = ForwardingProxyOptions.from(httpConfiguration);
-        if (forwardingProxyOptions.proxyAddressForwarding) {
+        if (httpConfiguration.proxyAddressForwarding) {
             Handler<HttpServerRequest> delegate = root;
             root = new Handler<HttpServerRequest>() {
                 @Override
                 public void handle(HttpServerRequest event) {
-                    delegate.handle(new ForwardedServerRequestWrapper(event, forwardingProxyOptions));
+                    delegate.handle(new ForwardedServerRequestWrapper(event, httpConfiguration.allowForwarded));
                 }
             };
         }
@@ -373,35 +360,16 @@ public class VertxHttpRecorder {
                 }
             });
         }
-        if (launchMode == LaunchMode.DEVELOPMENT && liveReloadConfig.password.isPresent()) {
-            root = new RemoteSyncHandler(liveReloadConfig.password.get(), root, hotReplacementContext);
-        }
+
         rootHandler = root;
     }
 
-    private void warnIfDeprecatedHttpConfigPropertiesPresent(HttpConfiguration httpConfiguration) {
-        if (httpConfiguration.proxyAddressForwarding.isPresent()) {
-            LOGGER.warn(
-                    "`quarkus.http.proxy-address-forwarding` is deprecated and will be removed in a future version - it is "
-                            + "recommended to switch to `quarkus.http.proxy.proxy-address-forwarding`");
-        }
-
-        if (httpConfiguration.allowForwarded.isPresent()) {
-            LOGGER.warn(
-                    "`quarkus.http.allow-forwarded` is deprecated and will be removed in a future version - it is "
-                            + "recommended to switch to `quarkus.http.proxy.allow-forwarded`");
-        }
-    }
-
-    private static void doServerStart(Vertx vertx, HttpBuildTimeConfig httpBuildTimeConfig,
-            HttpConfiguration httpConfiguration, LaunchMode launchMode,
+    private static void doServerStart(Vertx vertx, HttpConfiguration httpConfiguration, LaunchMode launchMode,
             Supplier<Integer> eventLoops, String websocketSubProtocols) throws IOException {
         // Http server configuration
         HttpServerOptions httpServerOptions = createHttpServerOptions(httpConfiguration, launchMode, websocketSubProtocols);
         HttpServerOptions domainSocketOptions = createDomainSocketOptions(httpConfiguration, websocketSubProtocols);
-        HttpServerOptions sslConfig = createSslOptions(httpBuildTimeConfig, httpConfiguration, launchMode);
-        ForwardingProxyOptions forwardingProxyOptions = ForwardingProxyOptions.from(httpConfiguration);
-
+        HttpServerOptions sslConfig = createSslOptions(httpConfiguration, launchMode);
         if (httpConfiguration.insecureRequests != HttpConfiguration.InsecureRequests.ENABLED && sslConfig == null) {
             throw new IllegalStateException("Cannot set quarkus.http.redirect-insecure-requests without enabling SSL.");
         }
@@ -499,8 +467,7 @@ public class VertxHttpRecorder {
     /**
      * Get an {@code HttpServerOptions} for this server configuration, or null if SSL should not be enabled
      */
-    private static HttpServerOptions createSslOptions(HttpBuildTimeConfig buildTimeConfig, HttpConfiguration httpConfiguration,
-            LaunchMode launchMode)
+    private static HttpServerOptions createSslOptions(HttpConfiguration httpConfiguration, LaunchMode launchMode)
             throws IOException {
         if (!httpConfiguration.hostEnabled) {
             return null;
@@ -595,7 +562,7 @@ public class VertxHttpRecorder {
         serverOptions.setSsl(true);
         serverOptions.setHost(httpConfiguration.host);
         serverOptions.setPort(httpConfiguration.determineSslPort(launchMode));
-        serverOptions.setClientAuth(buildTimeConfig.tlsClientAuth);
+        serverOptions.setClientAuth(sslConfig.clientAuth);
         serverOptions.setReusePort(httpConfiguration.soReusePort);
         serverOptions.setTcpQuickAck(httpConfiguration.tcpQuickAck);
         serverOptions.setTcpCork(httpConfiguration.tcpCork);
