@@ -30,7 +30,6 @@ import com.google.devtools.build.lib.buildtool.BuildRequest;
 import com.google.devtools.build.lib.buildtool.BuildRequestOptions;
 import com.google.devtools.build.lib.buildtool.BuildResult;
 import com.google.devtools.build.lib.buildtool.BuildTool;
-import com.google.devtools.build.lib.clock.JavaClock;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.exec.BinTools;
 import com.google.devtools.build.lib.exec.ExecutionOptions;
@@ -276,19 +275,6 @@ public class BlazeRuntimeWrapper {
     PrintStream origSystemOut = System.out;
     PrintStream origSystemErr = System.err;
     try {
-      Profiler.instance()
-          .start(
-              ImmutableSet.of(),
-              /* stream= */ null,
-              /* format= */ null,
-              /* outputBase= */ null,
-              /* buildID= */ null,
-              /* recordAllDurations= */ false,
-              new JavaClock(),
-              /* execStartTimeNanos= */ 42,
-              /* enabledCpuUsageProfiling= */ false,
-              /* slimProfile= */ false,
-              /* enableActionCountProfile= */ false);
       OutErr outErr = env.getReporter().getOutErr();
       System.setOut(new PrintStream(outErr.getOutputStream(), /*autoflush=*/ true));
       System.setErr(new PrintStream(outErr.getErrorStream(), /*autoflush=*/ true));
@@ -370,16 +356,12 @@ public class BlazeRuntimeWrapper {
         this.configurations = lastResult.getBuildConfigurationCollection();
         finalizeBuildResult(lastResult);
         buildTool.stopRequest(
-            lastResult,
-            null,
-            success ? ExitCode.SUCCESS : ExitCode.BUILD_FAILURE,
-            /*startSuspendCount=*/ 0);
+            lastResult, null, success ? ExitCode.SUCCESS : ExitCode.BUILD_FAILURE);
         getSkyframeExecutor().notifyCommandComplete(env.getReporter());
       }
     } finally {
       System.setOut(origSystemOut);
       System.setErr(origSystemErr);
-      Profiler.instance().stop();
     }
   }
 
