@@ -63,7 +63,7 @@ public class ProvisionerService {
             return userDetails;
         }
 
-        LOG.debug("Provisioning user profile: {}", userDetails);
+        LOG.info("Provisioning user profile: {}", userDetails);
 
         final String userId;
         try {
@@ -82,7 +82,7 @@ public class ProvisionerService {
             try {
                 final ProvisionerAction action = actionFactory.create(userDetails.authServiceId());
                 try {
-                    LOG.debug("Running provisioner action: {}", action.getClass().getCanonicalName());
+                    LOG.info("Running provisioner action: {}", action.getClass().getCanonicalName());
                     action.provision(userDetailsWithId);
                 } catch (Exception e) {
                     LOG.error("Error running provisioner action <{}>", action.getClass().getCanonicalName(), e);
