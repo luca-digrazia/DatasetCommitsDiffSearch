@@ -41,6 +41,9 @@ public abstract class BaseConfiguration {
     private static final Logger LOG = LoggerFactory.getLogger(BaseConfiguration.class);
     protected static final int GRAYLOG2_DEFAULT_PORT = 12900;
 
+    @Parameter(value = "shutdown_timeout", validator = PositiveIntegerValidator.class)
+    protected int shutdownTimeout = 30000;
+
     @Parameter(value = "rest_transport_uri")
     private URI restTransportUri;
 
@@ -98,9 +101,8 @@ public abstract class BaseConfiguration {
 
     @Parameter(value = "input_cache_max_size")
     private long inputCacheMaxSize = 0;
-
-    @Parameter("enable_message_journal")
-    private boolean messageJournalEnabled = false;
+    @Parameter(value = "udp_recvbuffer_sizes", required = true, validator = PositiveIntegerValidator.class)
+    private int udpRecvBufferSizes = 1048576;
 
     public String getRestUriScheme() {
         return isRestEnableTls() ? "https" : "http";
@@ -229,7 +231,11 @@ public abstract class BaseConfiguration {
 
     public abstract URI getRestListenUri();
 
-    public boolean isMessageJournalEnabled() {
-        return messageJournalEnabled;
+    public int getShutdownTimeout() {
+        return shutdownTimeout;
+    }
+
+    public int getUdpRecvBufferSizes() {
+        return udpRecvBufferSizes;
     }
 }

@@ -51,7 +51,6 @@ import org.graylog2.plugin.Plugin;
 import org.graylog2.plugin.PluginModule;
 import org.graylog2.plugin.ServerStatus;
 import org.graylog2.plugin.Tools;
-import org.graylog2.plugin.Version;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.plugins.PluginInstaller;
 import org.graylog2.shared.NodeRunner;
@@ -59,9 +58,8 @@ import org.graylog2.shared.bindings.GuiceInjectorHolder;
 import org.graylog2.shared.bindings.GuiceInstantiationService;
 import org.graylog2.shared.initializers.ServiceManagerListener;
 import org.graylog2.shared.plugins.PluginLoader;
-import org.graylog2.shared.system.activities.Activity;
-import org.graylog2.shared.system.activities.ActivityWriter;
-import org.graylog2.system.activities.SystemMessageActivityWriter;
+import org.graylog2.system.activities.Activity;
+import org.graylog2.system.activities.ActivityWriter;
 import org.graylog2.system.shutdown.GracefulShutdown;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -87,10 +85,6 @@ public final class Main extends NodeRunner {
     private static final String ENVIRONMENT_PREFIX = "GRAYLOG2_";
     private static final String PROPERTIES_PREFIX = "graylog2.";
 
-    private static final String profileName = "Server";
-
-    private static final Version version = Version.CURRENT_CLASSPATH;
-
     /**
      * @param args the command line arguments
      */
@@ -100,7 +94,7 @@ public final class Main extends NodeRunner {
 
         final CommandLineArguments commandLineArguments = new CommandLineArguments();
         final JCommander jCommander = new JCommander(commandLineArguments, args);
-        jCommander.setProgramName("graylog2-" + profileName.toLowerCase());
+        jCommander.setProgramName("graylog2");
 
         if (commandLineArguments.isShowHelp()) {
             jCommander.usage();
@@ -108,7 +102,7 @@ public final class Main extends NodeRunner {
         }
 
         if (commandLineArguments.isShowVersion()) {
-            System.out.println("Graylog2 " + profileName + " " + version);
+            System.out.println("Graylog2 Server " + ServerVersion.VERSION);
             System.out.println("JRE: " + Tools.getSystemInformation());
             System.exit(0);
         }
@@ -184,7 +178,7 @@ public final class Main extends NodeRunner {
         SLF4JBridgeHandler.removeHandlersForRootLogger();
         SLF4JBridgeHandler.install();
 
-        LOG.info("Graylog2 " + profileName + " {} starting up. (JRE: {})", version, Tools.getSystemInformation());
+        LOG.info("Graylog2 {} starting up. (JRE: {})", ServerVersion.VERSION, Tools.getSystemInformation());
 
         // Do not use a PID file if the user requested not to
         if (!commandLineArguments.isNoPidFile()) {
@@ -299,7 +293,7 @@ public final class Main extends NodeRunner {
         LOG.info("Services started, startup times in ms: {}", serviceManager.startupTimes());
 
         activityWriter.write(new Activity("Started up.", Main.class));
-        LOG.info("Graylog2 " + profileName + " up and running.");
+        LOG.info("Graylog2 up and running.");
 
         // Block forever.
         try {
@@ -337,7 +331,7 @@ public final class Main extends NodeRunner {
 
     private static String dumpConfiguration(final Map<String, String> configMap) {
         final StringBuilder sb = new StringBuilder();
-        sb.append("# Configuration of graylog2-").append(profileName).append(" ").append(version).append(System.lineSeparator());
+        sb.append("# Configuration of graylog2-server ").append(ServerVersion.VERSION).append(System.lineSeparator());
         sb.append("# Generated on ").append(Tools.iso8601()).append(System.lineSeparator());
 
         for(Map.Entry<String, String> entry:  configMap.entrySet()) {
