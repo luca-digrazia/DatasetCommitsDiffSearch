@@ -3,7 +3,6 @@ package org.infinispan.protean.hibernate.cache;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.Expiry;
-import com.github.benmanes.caffeine.cache.Ticker;
 import org.jboss.logging.Logger;
 
 import java.time.Duration;
@@ -17,29 +16,23 @@ final class CaffeineCache implements InternalCache {
     private static final Logger log = Logger.getLogger(CaffeineCache.class);
     private static final boolean trace = log.isTraceEnabled();
 
-    private static final Ticker TICKER = Ticker.systemTicker();
-    static final Time.NanosService TIME_SERVICE = TICKER::read;
-
     private final Cache cache;
     private final String cacheName;
 
-    CaffeineCache(String cacheName, InternalCacheConfig config, Time.NanosService nanosTimeService) {
-        Duration maxIdle = config.maxIdle;
-        long objectCount = config.objectCount;
+    public CaffeineCache(String cacheName, InternalCacheConfig config, TimeService timeService) {
+        Duration maxIdle = config != null ? config.maxIdle : null;
+        long maxSize = config != null ? config.maxSize : -1;
 
         this.cacheName = cacheName;
-        final Caffeine cacheBuilder = Caffeine.newBuilder()
-                .ticker(nanosTimeService::nanoTime);
+        final Caffeine builder = Caffeine.newBuilder()
+                .ticker(timeService::time)
+                .expireAfter(new CacheExpiryPolicy(maxIdle));
 
-        if (!Time.isForever(maxIdle)) {
-            cacheBuilder.expireAfter(new CacheExpiryPolicy(maxIdle));
+        if (maxSize >= 0) {
+            builder.maximumSize(maxSize);
         }
 
-        if (objectCount >= 0) {
-            cacheBuilder.maximumSize(objectCount);
-        }
-
-        this.cache = cacheBuilder.build();
+        this.cache = builder.build();
     }
 
     @Override
@@ -91,10 +84,6 @@ final class CaffeineCache implements InternalCache {
 
     @Override
     public long size(Predicate<Map.Entry> filter) {
-        // Size calculated for stats, so try to get as accurate count as possible
-        // by performing any cleanup operations before returning the result
-        cache.cleanUp();
-
         if (filter == null) {
             final long size = cache.estimatedSize();
             if (trace) {
