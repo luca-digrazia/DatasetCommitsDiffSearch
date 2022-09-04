@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Sets;
-import com.google.common.flogger.GoogleLogger;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.PackageIdentifier;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
@@ -49,7 +48,6 @@ import com.google.devtools.build.lib.vfs.UnixGlob;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ForkJoinPool;
 import java.util.concurrent.atomic.AtomicReference;
@@ -91,7 +89,6 @@ import net.starlark.java.syntax.SyntaxError;
  * per client application.
  */
 public final class PackageFactory {
-  private static final GoogleLogger logger = GoogleLogger.forEnclosingClass();
 
   /** An extension to the global namespace of the BUILD language. */
   // TODO(bazel-team): this should probably be renamed PackageFactory.RuntimeExtension
@@ -125,7 +122,6 @@ public final class PackageFactory {
 
   private final PackageSettings packageSettings;
   private final PackageValidator packageValidator;
-  private final PackageOverheadEstimator packageOverheadEstimator;
   private final PackageLoadingListener packageLoadingListener;
 
   private final BazelStarlarkEnvironment bazelStarlarkEnvironment;
@@ -136,9 +132,6 @@ public final class PackageFactory {
     protected final String version = "test";
     protected Iterable<EnvironmentExtension> environmentExtensions = ImmutableList.of();
     protected PackageValidator packageValidator = PackageValidator.NOOP_VALIDATOR;
-    protected PackageOverheadEstimator packageOverheadEstimator =
-        PackageOverheadEstimator.NOOP_ESTIMATOR;
-
     protected boolean doChecksForTesting = true;
 
     public BuilderForTesting setEnvironmentExtensions(
@@ -154,12 +147,6 @@ public final class PackageFactory {
 
     public BuilderForTesting setPackageValidator(PackageValidator packageValidator) {
       this.packageValidator = packageValidator;
-      return this;
-    }
-
-    public BuilderForTesting setPackageOverheadEstimator(
-        PackageOverheadEstimator packageOverheadEstimator) {
-      this.packageOverheadEstimator = packageOverheadEstimator;
       return this;
     }
 
@@ -190,7 +177,6 @@ public final class PackageFactory {
       String version,
       PackageSettings packageSettings,
       PackageValidator packageValidator,
-      PackageOverheadEstimator packageOverheadEstimator,
       PackageLoadingListener packageLoadingListener) {
     this.ruleFactory = new RuleFactory(ruleClassProvider);
     this.ruleFunctions = buildRuleFunctions(ruleFactory);
@@ -200,7 +186,6 @@ public final class PackageFactory {
     this.packageArguments = createPackageArguments(this.environmentExtensions);
     this.packageSettings = packageSettings;
     this.packageValidator = packageValidator;
-    this.packageOverheadEstimator = packageOverheadEstimator;
     this.packageLoadingListener = packageLoadingListener;
     this.bazelStarlarkEnvironment =
         new BazelStarlarkEnvironment(
@@ -535,9 +520,7 @@ public final class PackageFactory {
       long loadTimeNanos,
       ExtendedEventHandler eventHandler)
       throws InvalidPackageException {
-    OptionalLong packageOverhead = packageOverheadEstimator.estimatePackageOverhead(pkg);
-
-    packageValidator.validate(pkg, packageOverhead, eventHandler);
+    packageValidator.validate(pkg, eventHandler);
 
     // Enforce limit on number of compute steps in BUILD file (b/151622307).
     long maxSteps = starlarkSemantics.get(BuildLanguageOptions.MAX_COMPUTATION_STEPS);
@@ -560,8 +543,7 @@ public final class PackageFactory {
                   .build()));
     }
 
-    packageLoadingListener.onLoadingCompleteAndSuccessful(
-        pkg, starlarkSemantics, loadTimeNanos, packageOverhead);
+    packageLoadingListener.onLoadingCompleteAndSuccessful(pkg, starlarkSemantics, loadTimeNanos);
   }
 
   /**
@@ -665,16 +647,6 @@ public final class PackageFactory {
         pkgContext.eventHandler.handle(
             Package.error(null, ex.getMessageWithStack(), Code.STARLARK_EVAL_ERROR));
         pkgBuilder.setContainsErrors();
-      } catch (InterruptedException ex) {
-        if (pkgContext.pkgBuilder.containsErrors()) {
-          // Suppress the interrupted exception: we have an error of our own to return.
-          Thread.currentThread().interrupt();
-          logger.atInfo().withCause(ex).log(
-              "Suppressing InterruptedException for Package %s because an error was also found",
-              pkgBuilder.getPackageIdentifier().getCanonicalForm());
-        } else {
-          throw ex;
-        }
       }
       pkgBuilder.setComputationSteps(thread.getExecutedSteps());
     }

@@ -19,7 +19,7 @@ import com.google.devtools.build.lib.analysis.RuleDefinitionContext;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.RepositoryName;
 import com.google.devtools.build.lib.packages.RuleClass.Builder.ThirdPartyLicenseExistencePolicy;
-import com.google.devtools.build.lib.vfs.Root;
+import com.google.devtools.build.lib.vfs.Path;
 import java.util.Map;
 import net.starlark.java.eval.StarlarkThread;
 
@@ -29,31 +29,31 @@ import net.starlark.java.eval.StarlarkThread;
  */
 public interface RuleClassProvider extends RuleDefinitionContext {
 
-  /** Label referencing the prelude file. */
+  /**
+   * Label referencing the prelude file.
+   */
   Label getPreludeLabel();
 
-  /** The default runfiles prefix (may be overwritten by the WORKSPACE file). */
+  /**
+   * The default runfiles prefix (may be overwritten by the WORKSPACE file).
+   */
   String getRunfilesPrefix();
 
   /**
-   * Where the bundled builtins bzl files are located. These are the builtins files used if {@code
-   * --experimental_builtins_bzl_path} is set to {@code %bundled%}. Note that this root lives in a
-   * separate {@link InMemoryFileSystem}.
+   * Where the builtins bzl files are located (if not overridden by
+   * --experimental_builtins_bzl_path). Note that this lives in a separate InMemoryFileSystem.
    *
-   * <p>May be null in tests, in which case {@code --experimental_builtins_bzl_path} must point to
-   * the builtins root to be used.
+   * <p>May be null in tests, in which case --experimental_builtins_bzl_path must point to a
+   * builtins root.
    */
-  Root getBundledBuiltinsRoot();
+  Path getBuiltinsBzlRoot();
 
-  /**
-   * The relative location of the builtins_bzl directory within a Bazel source tree.
-   *
-   * <p>May be null in tests, in which case --experimental_builtins_bzl_path may not be
-   * "%workspace%".
-   */
+  /** The relative location of the builtins_bzl directory within a Bazel source tree. */
   String getBuiltinsBzlPackagePathInSource();
 
-  /** Returns a map from rule names to rule class objects. */
+  /**
+   * Returns a map from rule names to rule class objects.
+   */
   Map<String, RuleClass> getRuleClassMap();
 
   /**
@@ -68,7 +68,9 @@ public interface RuleClassProvider extends RuleDefinitionContext {
    * @param repoMapping map of RepositoryNames to be remapped
    */
   void setStarlarkThreadContext(
-      StarlarkThread thread, Label label, ImmutableMap<RepositoryName, RepositoryName> repoMapping);
+      StarlarkThread thread,
+      Label label,
+      ImmutableMap<RepositoryName, RepositoryName> repoMapping);
 
   /**
    * Returns all the predeclared top-level symbols (for .bzl files) that belong to native rule sets,
@@ -81,15 +83,6 @@ public interface RuleClassProvider extends RuleDefinitionContext {
   ImmutableMap<String, Object> getNativeRuleSpecificBindings();
 
   /**
-   * Returns the set of symbols to be made available to {@code @_builtins} .bzl files under the
-   * _builtins.internal object.
-   *
-   * <p>These symbols are not exposed to user .bzl code and do not constitute a public or stable API
-   * (unless exposed through another means).
-   */
-  ImmutableMap<String, Object> getStarlarkBuiltinsInternals();
-
-  /**
    * Returns the Starlark builtins registered with this RuleClassProvider.
    *
    * <p>Does not account for builtins injection. Excludes universal bindings (e.g. True, len).
@@ -99,7 +92,9 @@ public interface RuleClassProvider extends RuleDefinitionContext {
    */
   ImmutableMap<String, Object> getEnvironment();
 
-  /** Returns a map from aspect names to aspect factory objects. */
+  /**
+   * Returns a map from aspect names to aspect factory objects.
+   */
   Map<String, NativeAspectClass> getNativeAspectClassMap();
 
   /**
@@ -117,7 +112,9 @@ public interface RuleClassProvider extends RuleDefinitionContext {
    */
   String getDefaultWorkspaceSuffix();
 
-  /** Retrieves an aspect from the aspect factory map using the key provided */
+  /**
+   * Retrieves an aspect from the aspect factory map using the key provided
+   */
   NativeAspectClass getNativeAspectClass(String key);
 
   /**
