@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -44,23 +45,20 @@ import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapter;
 import javax.xml.bind.annotation.adapters.XmlJavaTypeAdapters;
 
 import org.jboss.jandex.AnnotationInstance;
-import org.jboss.jandex.AnnotationTarget.Kind;
 import org.jboss.jandex.DotName;
-import org.jboss.jandex.IndexView;
 
 import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.CombinedIndexBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBundleBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.NativeImageSystemPropertyBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.RuntimeInitializedClassBuildItem;
-import io.quarkus.deployment.builditem.nativeimage.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.ReflectiveClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.RuntimeInitializedClassBuildItem;
+import io.quarkus.deployment.builditem.substrate.ServiceProviderBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateResourceBundleBuildItem;
+import io.quarkus.deployment.builditem.substrate.SubstrateSystemPropertyBuildItem;
 
 class JaxbProcessor {
-
     private static final List<Class<?>> JAXB_REFLECTIVE_CLASSES = Arrays.asList(
             XmlAccessOrder.class,
             XmlAccessorType.class,
@@ -100,68 +98,40 @@ class JaxbProcessor {
             "text",
             "xml",
             "unknown");
-
-    private static final DotName XML_ROOT_ELEMENT = DotName.createSimple(XmlRootElement.class.getName());
-    private static final DotName XML_TYPE = DotName.createSimple(XmlType.class.getName());
-    private static final DotName XML_REGISTRY = DotName.createSimple(XmlRegistry.class.getName());
-    private static final DotName XML_SCHEMA = DotName.createSimple(XmlSchema.class.getName());
-    private static final DotName XML_JAVA_TYPE_ADAPTER = DotName.createSimple(XmlJavaTypeAdapter.class.getName());
-
-    private static final List<DotName> JAXB_ROOT_ANNOTATIONS = Arrays.asList(XML_ROOT_ELEMENT, XML_TYPE, XML_REGISTRY);
+    private static final DotName XML_ROOT = DotName.createSimple("javax.xml.bind.annotation.XmlRootElement");
 
     @Inject
     BuildProducer<ReflectiveClassBuildItem> reflectiveClass;
     @Inject
-    BuildProducer<NativeImageResourceBuildItem> resource;
+    BuildProducer<SubstrateResourceBuildItem> resource;
     @Inject
-    BuildProducer<NativeImageResourceBundleBuildItem> resourceBundle;
+    BuildProducer<SubstrateResourceBundleBuildItem> resourceBundle;
     @Inject
     BuildProducer<RuntimeInitializedClassBuildItem> runtimeClasses;
     @Inject
     ApplicationArchivesBuildItem applicationArchivesBuildItem;
 
     @BuildStep
-    void process(BuildProducer<NativeImageSystemPropertyBuildItem> nativeImageProps,
+    void process(BuildProducer<SubstrateSystemPropertyBuildItem> substrateProps,
             BuildProducer<ServiceProviderBuildItem> providerItem,
             CombinedIndexBuildItem combinedIndexBuildItem,
-            List<JaxbFileRootBuildItem> fileRoots) {
+            List<JaxbFileRootBuildItem> fileRoots,
+            List<JaxbEnabledBuildItem> enabled) {
 
-        IndexView index = combinedIndexBuildItem.getIndex();
-
-        // Register classes for reflection based on JAXB annotations
-        boolean jaxbRootAnnotationsDetected = false;
-
-        for (DotName jaxbRootAnnotation : JAXB_ROOT_ANNOTATIONS) {
-            for (AnnotationInstance jaxbRootAnnotationInstance : index
-                    .getAnnotations(jaxbRootAnnotation)) {
-                if (jaxbRootAnnotationInstance.target().kind() == Kind.CLASS) {
-                    addReflectiveClass(true, true,
-                            jaxbRootAnnotationInstance.target().asClass().name().toString());
-                    jaxbRootAnnotationsDetected = true;
-                }
-            }
-        }
-
-        if (!jaxbRootAnnotationsDetected && fileRoots.isEmpty()) {
+        if (enabled.isEmpty()) {
             return;
         }
 
-        // Register package-infos for reflection
-        for (AnnotationInstance xmlSchemaInstance : index.getAnnotations(XML_SCHEMA)) {
-            if (xmlSchemaInstance.target().kind() == Kind.CLASS) {
-                reflectiveClass.produce(
-                        new ReflectiveClassBuildItem(false, false, xmlSchemaInstance.target().asClass().name().toString()));
-            }
+        Collection<AnnotationInstance> xmlRoot = combinedIndexBuildItem.getIndex().getAnnotations(XML_ROOT);
+        for (AnnotationInstance i : xmlRoot) {
+            addReflectiveClass(false, true, i.target().asClass().name().toString());
         }
-
-        // Register XML Java type adapters for reflection
-        for (AnnotationInstance xmlJavaTypeAdapterInstance : index.getAnnotations(XML_JAVA_TYPE_ADAPTER)) {
-            reflectiveClass.produce(
-                    new ReflectiveClassBuildItem(true, true, xmlJavaTypeAdapterInstance.value().asClass().name().toString()));
+        if (xmlRoot.isEmpty() &&
+                fileRoots.isEmpty()) {
+            return;
         }
 
         addReflectiveClass(false, false, "com.sun.org.apache.xerces.internal.jaxp.DocumentBuilderFactoryImpl");
-        addReflectiveClass(false, false, "com.sun.org.apache.xerces.internal.jaxp.datatype.DatatypeFactoryImpl");
         addReflectiveClass(false, false, "com.sun.org.apache.xalan.internal.xsltc.trax.TransformerFactoryImpl");
         addReflectiveClass(false, false, "com.sun.org.apache.xerces.internal.jaxp.SAXParserFactoryImpl");
         addReflectiveClass(true, false, "com.sun.xml.bind.v2.ContextFactory");
@@ -171,8 +141,8 @@ class JaxbProcessor {
         addResourceBundle("javax.xml.bind.helpers.Messages");
         addResourceBundle("com.sun.org.apache.xml.internal.serializer.utils.SerializerMessages");
         addResourceBundle("com.sun.org.apache.xml.internal.res.XMLErrorResources");
-        nativeImageProps
-                .produce(new NativeImageSystemPropertyBuildItem("com.sun.xml.bind.v2.bytecode.ClassTailor.noOptimize", "true"));
+        substrateProps
+                .produce(new SubstrateSystemPropertyBuildItem("com.sun.xml.bind.v2.bytecode.ClassTailor.noOptimize", "true"));
 
         JAXB_REFLECTIVE_CLASSES.stream()
                 .map(Class::getName)
@@ -231,7 +201,7 @@ class JaxbProcessor {
     }
 
     private void addResource(String r) {
-        resource.produce(new NativeImageResourceBuildItem(r));
+        resource.produce(new SubstrateResourceBuildItem(r));
     }
 
     private void addReflectiveClass(boolean methods, boolean fields, String... className) {
@@ -239,6 +209,6 @@ class JaxbProcessor {
     }
 
     private void addResourceBundle(String bundle) {
-        resourceBundle.produce(new NativeImageResourceBundleBuildItem(bundle));
+        resourceBundle.produce(new SubstrateResourceBundleBuildItem(bundle));
     }
 }
