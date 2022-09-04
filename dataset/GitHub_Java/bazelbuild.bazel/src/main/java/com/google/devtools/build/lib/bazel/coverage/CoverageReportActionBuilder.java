@@ -191,8 +191,7 @@ public final class CoverageReportActionBuilder {
       String workspaceName,
       ArgsFunc argsFunction,
       LocationFunc locationFunc,
-      boolean htmlReport)
-      throws InterruptedException {
+      boolean htmlReport) {
 
     if (targetsToTest == null || targetsToTest.isEmpty()) {
       return null;

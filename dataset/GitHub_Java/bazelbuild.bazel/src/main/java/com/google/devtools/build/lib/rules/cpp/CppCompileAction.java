@@ -1676,10 +1676,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
     }
   }
 
-  static String actionNameToMnemonic(
-      String actionName,
-      FeatureConfiguration featureConfiguration,
-      boolean useCppCompileHeaderMnemonic) {
+  static String actionNameToMnemonic(String actionName, FeatureConfiguration featureConfiguration) {
     switch (actionName) {
       case CppActionNames.OBJC_COMPILE:
       case CppActionNames.OBJCPP_COMPILE:
@@ -1696,10 +1693,9 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
         return "CppLinkstampCompile";
 
       case CppActionNames.CPP_HEADER_PARSING:
-        String suffix = useCppCompileHeaderMnemonic ? "Header" : "";
         return featureConfiguration.isEnabled(CppRuleClasses.LANG_OBJC)
-            ? OBJC_COMPILE_MNEMONIC + suffix
-            : CPP_COMPILE_MNEMONIC + suffix;
+            ? OBJC_COMPILE_MNEMONIC
+            : CPP_COMPILE_MNEMONIC;
 
       default:
         return CPP_COMPILE_MNEMONIC;
@@ -1708,8 +1704,7 @@ public class CppCompileAction extends AbstractAction implements IncludeScannable
 
   @Override
   public String getMnemonic() {
-    return actionNameToMnemonic(
-        actionName, featureConfiguration, cppConfiguration.useCppCompileHeaderMnemonic());
+    return actionNameToMnemonic(actionName, featureConfiguration);
   }
 
   @Override
