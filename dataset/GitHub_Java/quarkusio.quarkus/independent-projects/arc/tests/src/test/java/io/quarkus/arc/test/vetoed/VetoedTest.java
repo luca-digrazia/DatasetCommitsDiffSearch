@@ -1,40 +1,27 @@
-/*
- * Copyright 2018 Red Hat, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+package io.quarkus.arc.test.vetoed;
 
-package org.jboss.quarkus.arc.test.vetoed;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-
+import io.quarkus.arc.Arc;
+import io.quarkus.arc.ArcContainer;
+import io.quarkus.arc.test.ArcTestContainer;
 import java.util.AbstractList;
-
+import java.util.concurrent.atomic.AtomicBoolean;
+import javax.annotation.Priority;
 import javax.enterprise.context.Dependent;
 import javax.enterprise.inject.Vetoed;
-
-import org.jboss.quarkus.arc.Arc;
-import org.jboss.quarkus.arc.ArcContainer;
-import org.jboss.quarkus.arc.test.ArcTestContainer;
-import org.junit.Rule;
-import org.junit.Test;
+import javax.interceptor.AroundInvoke;
+import javax.interceptor.Interceptor;
+import javax.interceptor.InvocationContext;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.RegisterExtension;
 
 public class VetoedTest {
 
-    @Rule
-    public ArcTestContainer container = new ArcTestContainer(Seven.class, One.class);
+    @RegisterExtension
+    public ArcTestContainer container = new ArcTestContainer(Seven.class, One.class, VetoedInterceptor.class, Logging.class);
 
     @Test
     public void testVetoed() {
@@ -42,9 +29,13 @@ public class VetoedTest {
         assertTrue(arc.instance(Seven.class).isAvailable());
         // One is vetoed
         assertFalse(arc.instance(One.class).isAvailable());
+        assertFalse(VetoedInterceptor.INTERCEPTED.get());
         assertEquals(Integer.valueOf(7), Integer.valueOf(arc.instance(Seven.class).get().size()));
+        // Interceptor is vetoed
+        assertFalse(VetoedInterceptor.INTERCEPTED.get());
     }
 
+    @Logging
     @Dependent
     static class Seven extends AbstractList<Integer> {
 
@@ -72,6 +63,22 @@ public class VetoedTest {
         @Override
         public int size() {
             return 1;
+        }
+
+    }
+
+    @Vetoed
+    @Priority(1)
+    @Interceptor
+    @Logging
+    static class VetoedInterceptor {
+
+        static final AtomicBoolean INTERCEPTED = new AtomicBoolean(false);
+
+        @AroundInvoke
+        public Object aroundInvoke(InvocationContext ctx) throws Exception {
+            INTERCEPTED.set(true);
+            return ctx.proceed();
         }
 
     }

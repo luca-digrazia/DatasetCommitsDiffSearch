@@ -23,15 +23,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.arc.DefaultBean;
-import io.quarkus.arc.profile.IfBuildProfile;
+import io.quarkus.arc.profile.UnlessBuildProfile;
 import io.quarkus.test.QuarkusUnitTest;
 
-public class IfBuildProfileTest {
+public class UnlessBuildProfileTest {
 
     @RegisterExtension
     static final QuarkusUnitTest config = new QuarkusUnitTest()
             .setArchiveProducer(() -> ShrinkWrap.create(JavaArchive.class)
-                    .addClasses(Producer.class, OtherProducer.class, AnotherProducer.class,
+                    .addClasses(Producer.class, AnotherProducer.class,
                             GreetingBean.class, Hello.class, PingBean.class, PongBean.class, FooBean.class, BarBean.class,
                             TestInterceptor.class, ProdInterceptor.class, Logging.class));
 
@@ -45,10 +45,10 @@ public class IfBuildProfileTest {
     public void testInjection() {
         assertFalse(TestInterceptor.INTERCEPTED.get());
         assertFalse(ProdInterceptor.INTERCEPTED.get());
-        assertEquals("hello from test. Foo is: foo from test", hello.hello());
+        assertEquals("hello from not prod. Foo is: foo from not prod", hello.hello());
         assertEquals("ping", hello.ping());
-        assertEquals("pong", hello.pong());
-        assertEquals("foo from test", hello.foo());
+        assertEquals("pong from not prod", hello.pong());
+        assertEquals("foo from not prod", hello.foo());
         assertTrue(barBean.isUnsatisfied());
         assertTrue(TestInterceptor.INTERCEPTED.get());
         assertFalse(ProdInterceptor.INTERCEPTED.get());
@@ -56,7 +56,7 @@ public class IfBuildProfileTest {
 
     @Test
     public void testSelect() {
-        assertEquals("hello from test. Foo is: foo from test", CDI.current().select(GreetingBean.class).get().greet());
+        assertEquals("hello from not prod. Foo is: foo from not prod", CDI.current().select(GreetingBean.class).get().greet());
     }
 
     @Logging
@@ -111,12 +111,12 @@ public class IfBuildProfileTest {
         }
     }
 
-    @IfBuildProfile("dev")
+    @UnlessBuildProfile("prod")
     @Singleton
     static class PongBean {
 
         String pong() {
-            return "pong from dev";
+            return "pong from not prod";
         }
     }
 
@@ -125,7 +125,7 @@ public class IfBuildProfileTest {
         String foo();
     }
 
-    @IfBuildProfile("dev")
+    @UnlessBuildProfile("test")
     static class BarBean {
 
     }
@@ -134,39 +134,26 @@ public class IfBuildProfileTest {
     static class Producer {
 
         @Produces
-        @IfBuildProfile("test")
-        GreetingBean testGreetingBean(FooBean fooBean) {
+        @UnlessBuildProfile("prod")
+        GreetingBean notProdGreetingBean(FooBean fooBean) {
             return new GreetingBean() {
 
                 @Override
                 String greet() {
-                    return "hello from test. Foo is: " + fooBean.foo();
+                    return "hello from not prod. Foo is: " + fooBean.foo();
                 }
 
             };
         }
 
         @Produces
-        @IfBuildProfile("dev")
-        GreetingBean devGreetingBean(BarBean barBean) {
-            return new GreetingBean() {
-
-                @Override
-                String greet() {
-                    return "hello from dev";
-                }
-
-            };
-        }
-
-        @Produces
-        @IfBuildProfile("dev")
-        PingBean devPingBean() {
+        @UnlessBuildProfile("test")
+        PingBean notTestPingBean() {
             return new PingBean() {
 
                 @Override
                 String ping() {
-                    return "ping dev";
+                    return "ping not test";
                 }
 
             };
@@ -185,21 +172,7 @@ public class IfBuildProfileTest {
 
     }
 
-    @IfBuildProfile("other")
-    static class OtherProducer {
-
-        @Produces
-        PongBean otherPongBean() {
-            return new PongBean() {
-                @Override
-                String pong() {
-                    return "pong from other";
-                }
-            };
-        }
-    }
-
-    @IfBuildProfile("test")
+    @UnlessBuildProfile("prod")
     static class AnotherProducer {
 
         @Produces
@@ -207,13 +180,13 @@ public class IfBuildProfileTest {
             return new FooBean() {
                 @Override
                 public String foo() {
-                    return "foo from test";
+                    return "foo from not prod";
                 }
             };
         }
     }
 
-    @IfBuildProfile("test")
+    @UnlessBuildProfile("prod")
     @Priority(1)
     @Interceptor
     @Logging
@@ -229,7 +202,7 @@ public class IfBuildProfileTest {
 
     }
 
-    @IfBuildProfile("prod")
+    @UnlessBuildProfile("test")
     @Priority(10)
     @Interceptor
     @Logging
