@@ -20,6 +20,7 @@ import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
+import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.Variables;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec.VisibleForSerialization;
@@ -216,8 +217,8 @@ public final class LtoBackendArtifacts {
     PathFragment compiler = ccToolchain.getToolPathFragment(Tool.GCC);
 
     builder.setExecutable(compiler);
-    CcToolchainVariables.Builder buildVariablesBuilder =
-        new CcToolchainVariables.Builder(ccToolchain.getBuildVariables());
+    Variables.Builder buildVariablesBuilder =
+        new Variables.Builder(ccToolchain.getBuildVariables());
     if (index != null) {
       buildVariablesBuilder.addStringVariable("thinlto_index", index.getExecPath().toString());
     } else {
@@ -249,7 +250,7 @@ public final class LtoBackendArtifacts {
 
     List<String> execArgs = new ArrayList<>();
     execArgs.addAll(commandLine);
-    CcToolchainVariables buildVariables = buildVariablesBuilder.build();
+    Variables buildVariables = buildVariablesBuilder.build();
     // Feature options should go after --copt for consistency with compile actions.
     execArgs.addAll(featureConfiguration.getCommandLine("lto-backend", buildVariables));
     // If this is a PIC compile (set based on the CppConfiguration), the PIC
