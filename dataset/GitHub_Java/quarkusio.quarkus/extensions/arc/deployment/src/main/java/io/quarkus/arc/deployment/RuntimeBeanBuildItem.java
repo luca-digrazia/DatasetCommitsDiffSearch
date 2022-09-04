@@ -10,8 +10,6 @@ import javax.enterprise.context.Dependent;
 
 import org.jboss.builder.item.MultiBuildItem;
 
-import io.quarkus.runtime.RuntimeValue;
-
 /**
  * Represents a bean that can be easily produced through a template (or other runtime Supplier implementation)
  */
@@ -20,22 +18,16 @@ public final class RuntimeBeanBuildItem extends MultiBuildItem {
     final String scope;
     final String type;
     final Supplier<Object> supplier;
-    final RuntimeValue<?> runtimeValue;
     final NavigableMap<String, NavigableMap<String, Object>> qualifiers;
     final boolean removable;
 
     RuntimeBeanBuildItem(String scope, String type, Supplier<Object> supplier,
-            NavigableMap<String, NavigableMap<String, Object>> qualifiers, boolean removable,
-            RuntimeValue<?> runtimeValue) {
-        if (supplier != null && runtimeValue != null) {
-            throw new IllegalArgumentException("It is not possible to specify both - a supplier and a runtime value");
-        }
+            NavigableMap<String, NavigableMap<String, Object>> qualifiers, boolean removable) {
         this.scope = scope;
         this.type = type;
         this.supplier = supplier;
         this.qualifiers = qualifiers;
         this.removable = removable;
-        this.runtimeValue = runtimeValue;
     }
 
     public String getScope() {
@@ -50,25 +42,18 @@ public final class RuntimeBeanBuildItem extends MultiBuildItem {
         return supplier;
     }
 
-    public RuntimeValue<?> getRuntimeValue() {
-        return runtimeValue;
-    }
-
-    public boolean isRemovable() {
-        return removable;
-    }
-
     public NavigableMap<String, NavigableMap<String, Object>> getQualifiers() {
         return qualifiers;
     }
 
-    public static Builder builder(Class<?> type) {
-        return builder(type.getName());
+    public static Builder builder(Class<?> type, Supplier<Object> supplier) {
+        return builder(type.getName(), supplier);
     }
 
-    public static Builder builder(String type) {
+    public static Builder builder(String type, Supplier<Object> supplier) {
         Objects.requireNonNull(type);
-        return new Builder(type);
+        Objects.requireNonNull(supplier);
+        return new Builder(type, supplier);
     }
 
     public static class Builder {
@@ -76,12 +61,12 @@ public final class RuntimeBeanBuildItem extends MultiBuildItem {
         String scope = Dependent.class.getName();
         boolean removable = true;
         final String type;
-        Supplier<Object> supplier;
-        RuntimeValue<?> value;
+        final Supplier<Object> supplier;
         final NavigableMap<String, NavigableMap<String, Object>> qualifiers = new TreeMap<>();
 
-        public Builder(String type) {
+        public Builder(String type, Supplier<Object> supplier) {
             this.type = type;
+            this.supplier = supplier;
         }
 
         public Builder setScope(String scope) {
@@ -117,18 +102,8 @@ public final class RuntimeBeanBuildItem extends MultiBuildItem {
             return this;
         }
 
-        public Builder setSupplier(Supplier<Object> supplier) {
-            this.supplier = Objects.requireNonNull(supplier);
-            return this;
-        }
-
-        public Builder setRuntimeValue(RuntimeValue<?> runtimeValue) {
-            this.value = Objects.requireNonNull(runtimeValue);
-            return this;
-        }
-
         public RuntimeBeanBuildItem build() {
-            return new RuntimeBeanBuildItem(scope, type, supplier, qualifiers, removable, value);
+            return new RuntimeBeanBuildItem(scope, type, supplier, qualifiers, removable);
         }
     }
 }

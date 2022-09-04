@@ -48,11 +48,7 @@ public class RuntimeBeanProcessor {
             //deterministic name
             //as we know the maps are sorted this will result in the same hash for the same bean
             String name = bean.type.replace(".", "_") + "_" + HashUtil.sha1(bean.qualifiers.toString());
-            if (bean.runtimeValue != null) {
-                map.put(name, template.createSupplier(bean.runtimeValue));
-            } else {
-                map.put(name, bean.supplier);
-            }
+            map.put(name, bean.supplier);
 
             MethodCreator producer = c.getMethodCreator("produce_" + name, bean.type);
             producer.addAnnotation(Produces.class);

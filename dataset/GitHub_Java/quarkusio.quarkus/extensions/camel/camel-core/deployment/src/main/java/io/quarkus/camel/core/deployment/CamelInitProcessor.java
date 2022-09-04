@@ -81,10 +81,10 @@ class CamelInitProcessor {
 
         visitServices((name, type) -> registry.bind(name, type, recorderContext.newInstance(type.getName())));
 
-        RuntimeValue<CamelRuntime> camelRuntime = template.init(runtime, registry, properties, builders);
+        CamelRuntime camelRuntime = template.init(runtime, registry, properties, builders);
 
         runtimeBeans
-                .produce(RuntimeBeanBuildItem.builder(CamelRuntime.class).setRuntimeValue(camelRuntime).build());
+                .produce(RuntimeBeanBuildItem.builder(CamelRuntime.class, template.camelRuntimeSupplier(camelRuntime)).build());
 
         return new CamelRuntimeBuildItem(camelRuntime);
     }
