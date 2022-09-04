@@ -41,17 +41,21 @@ import net.starlark.java.eval.Tuple;
 public interface CcModuleApi<
         StarlarkActionFactoryT extends StarlarkActionFactoryApi,
         FileT extends FileApi,
-        CcToolchainProviderT extends CcToolchainProviderApi<?>,
+        FdoContextT extends FdoContextApi<?>,
+        CcToolchainProviderT extends CcToolchainProviderApi<FeatureConfigurationT, ?, FdoContextT>,
         FeatureConfigurationT extends FeatureConfigurationApi,
         CompilationContextT extends CcCompilationContextApi<FileT>,
-        LinkerInputT extends LinkerInputApi<LibraryToLinkT, FileT>,
+        LtoBackendArtifactsT extends LtoBackendArtifactsApi<FileT>,
+        LinkerInputT extends LinkerInputApi<LibraryToLinkT, LtoBackendArtifactsT, FileT>,
         LinkingContextT extends CcLinkingContextApi<?>,
-        LibraryToLinkT extends LibraryToLinkApi<FileT>,
+        LibraryToLinkT extends LibraryToLinkApi<FileT, LtoBackendArtifactsT>,
         CcToolchainVariablesT extends CcToolchainVariablesApi,
         ConstraintValueT extends ConstraintValueInfoApi,
         StarlarkRuleContextT extends StarlarkRuleContextApi<ConstraintValueT>,
         CcToolchainConfigInfoT extends CcToolchainConfigInfoApi,
-        CompilationOutputsT extends CcCompilationOutputsApi<FileT>>
+        CompilationOutputsT extends CcCompilationOutputsApi<FileT>,
+        DebugInfoT extends CcDebugInfoContextApi,
+        CppModuleMapT extends CppModuleMapApi<FileT>>
     extends StarlarkValue {
 
   @StarlarkMethod(
@@ -625,6 +629,12 @@ public interface CcModuleApi<
             positional = false,
             named = true,
             defaultValue = "''"),
+        @Param(
+            name = "must_keep_debug",
+            documented = false,
+            positional = false,
+            named = true,
+            defaultValue = "unbound"),
       })
   LibraryToLinkT createLibraryLinkerInput(
       Object actions,
@@ -639,12 +649,13 @@ public interface CcModuleApi<
       boolean alwayslink,
       String dynamicLibraryPath,
       String interfaceLibraryPath,
+      Object mustKeepDebug,
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 
   @StarlarkMethod(
       name = "create_linker_input",
-      doc = "Creates a <code>LinkingContext</code>.",
+      doc = "Creates a <code>LinkerInput</code>.",
       useStarlarkThread = true,
       parameters = {
         @Param(
@@ -661,7 +672,7 @@ public interface CcModuleApi<
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Depset.class)}),
         @Param(
             name = "user_link_flags",
-            doc = "List of user link flags passed as strings.",
+            doc = "Depset of user link flags passed as strings.",
             positional = false,
             named = true,
             defaultValue = "None",
@@ -673,12 +684,20 @@ public interface CcModuleApi<
             named = true,
             defaultValue = "None",
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Depset.class)}),
+        @Param(
+            name = "linkstamps",
+            documented = false,
+            positional = false,
+            named = true,
+            defaultValue = "unbound",
+            allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Depset.class)}),
       })
   LinkerInputT createLinkerInput(
       Label owner,
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
       Object nonCodeInputs,
+      Object linkstamps,
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 
@@ -742,12 +761,23 @@ public interface CcModuleApi<
             defaultValue = "None",
             valueWhenDisabled = "None",
             allowedTypes = {@ParamType(type = NoneType.class), @ParamType(type = Sequence.class)}),
+        @Param(
+            name = "go_link_c_archive",
+            documented = false,
+            positional = false,
+            named = true,
+            defaultValue = "unbound",
+            allowedTypes = {
+              @ParamType(type = ExtraLinkTimeLibraryApi.class),
+              @ParamType(type = NoneType.class)
+            })
       })
   LinkingContextT createCcLinkingInfo(
       Object linkerInputs,
       Object librariesToLinkObject,
       Object userLinkFlagsObject,
       Object nonCodeInputs, // <FileT> expected
+      Object goLinkCArchive,
       StarlarkThread thread)
       throws EvalException, InterruptedException;
 
@@ -780,6 +810,7 @@ public interface CcModuleApi<
   @StarlarkMethod(
       name = "create_compilation_context",
       doc = "Creates a <code>CompilationContext</code>.",
+      useStarlarkThread = true,
       parameters = {
         @Param(
             name = "headers",
@@ -835,6 +866,30 @@ public interface CcModuleApi<
             positional = false,
             named = true,
             defaultValue = "unbound"),
+        @Param(
+            name = "direct_textual_headers",
+            documented = false,
+            positional = false,
+            named = true,
+            defaultValue = "[]"),
+        @Param(
+            name = "direct_public_headers",
+            documented = false,
+            positional = false,
+            named = true,
+            defaultValue = "[]"),
+        @Param(
+            name = "direct_private_headers",
+            documented = false,
+            positional = false,
+            named = true,
+            defaultValue = "[]"),
+        @Param(
+            name = "purpose",
+            documented = false,
+            positional = false,
+            named = true,
+            defaultValue = "unbound"),
       })
   CompilationContextT createCcCompilationContext(
       Object headers,
@@ -843,8 +898,31 @@ public interface CcModuleApi<
       Object quoteIncludes,
       Object frameworkIncludes,
       Object defines,
-      Object localDefines)
+      Object localDefines,
+      Sequence<?> directTextualHdrs,
+      Sequence<?> directPublicHdrs,
+      Sequence<?> directPrivateHdrs,
+      Object purpose,
+      StarlarkThread thread)
       throws EvalException;
+
+  @StarlarkMethod(
+      name = "create_module_map",
+      documented = false,
+      doc = "Creates a <code>CcModuleMap</code>.",
+      useStarlarkThread = true,
+      parameters = {
+        @Param(name = "file", positional = false, named = true),
+        @Param(
+            name = "umbrella_header",
+            positional = false,
+            named = true,
+            defaultValue = "None",
+            allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
+        @Param(name = "name", positional = false, named = true),
+      })
+  CppModuleMapT createCppModuleMap(
+      FileT file, Object umbrellaHeader, String name, StarlarkThread thread) throws EvalException;
 
   // TODO(b/65151735): Remove when cc_flags is entirely set from features.
   // This should only be called from the cc_flags_supplier rule.
@@ -864,11 +942,7 @@ public interface CcModuleApi<
       name = "is_cc_toolchain_resolution_enabled_do_not_use",
       documented = false,
       parameters = {
-        @Param(
-            name = "ctx",
-            positional = false,
-            named = true,
-            doc = "The rule context."),
+        @Param(name = "ctx", positional = false, named = true, doc = "The rule context."),
       },
       doc = "Returns true if the --incompatible_enable_cc_toolchain_resolution flag is enabled.")
   boolean isCcToolchainResolutionEnabled(StarlarkRuleContextT ruleContext);
@@ -877,11 +951,7 @@ public interface CcModuleApi<
       name = "create_cc_toolchain_config_info",
       doc = "Creates a <code>CcToolchainConfigInfo</code> provider",
       parameters = {
-        @Param(
-            name = "ctx",
-            positional = false,
-            named = true,
-            doc = "The rule context."),
+        @Param(name = "ctx", positional = false, named = true, doc = "The rule context."),
         @Param(
             name = "features",
             positional = false,
@@ -1104,8 +1174,15 @@ public interface CcModuleApi<
             named = true,
             defaultValue = "None",
             allowedTypes = {@ParamType(type = FileApi.class), @ParamType(type = NoneType.class)}),
+        @Param(
+            name = "variables_extension",
+            positional = false,
+            named = true,
+            documented = false,
+            allowedTypes = {@ParamType(type = Dict.class)},
+            defaultValue = "unbound"),
       })
-  Tuple<Object> createLinkingContextFromCompilationOutputs(
+  Tuple createLinkingContextFromCompilationOutputs(
       StarlarkActionFactoryT starlarkActionFactoryApi,
       FeatureConfigurationT starlarkFeatureConfiguration,
       CcToolchainProviderT starlarkCcToolchainProvider,
@@ -1119,6 +1196,88 @@ public interface CcModuleApi<
       boolean disallowStaticLibraries,
       boolean disallowDynamicLibraries,
       Object grepIncludes,
+      Object variablesExtension,
       StarlarkThread thread)
       throws InterruptedException, EvalException;
+
+  @StarlarkMethod(
+      name = "create_debug_context",
+      doc = "Create debug context",
+      documented = false,
+      useStarlarkThread = true,
+      parameters = {
+        @Param(name = "compilation_outputs", positional = true, named = false, defaultValue = "[]"),
+      })
+  DebugInfoT createCcDebugInfoFromStarlark(
+      CompilationOutputsT compilationOutputs, StarlarkThread thread) throws EvalException;
+
+  @StarlarkMethod(
+      name = "merge_debug_context",
+      doc = "Merge debug contexts",
+      documented = false,
+      useStarlarkThread = true,
+      parameters = {
+        @Param(name = "debug_contexts", defaultValue = "[]"),
+      })
+  DebugInfoT mergeCcDebugInfoFromStarlark(
+      Sequence<?> debugInfos, // <DebugInfoT> expected
+      StarlarkThread thread)
+      throws EvalException;
+
+  @StarlarkMethod(
+      name = "create_lto_backend_artifacts",
+      documented = false,
+      useStarlarkThread = true,
+      parameters = {
+        @Param(name = "ctx", positional = false, named = true, documented = false),
+        @Param(
+            name = "lto_output_root_prefix",
+            positional = false,
+            named = true,
+            documented = false),
+        @Param(name = "bitcode_file", positional = false, named = true, documented = false),
+        @Param(
+            name = "feature_configuration",
+            positional = false,
+            named = true,
+            documented = false),
+        @Param(name = "cc_toolchain", positional = false, named = true, documented = false),
+        @Param(name = "fdo_context", positional = false, named = true, documented = false),
+        @Param(name = "use_pic", positional = false, named = true, documented = false),
+        @Param(
+            name = "should_create_per_object_debug_info",
+            positional = false,
+            named = true,
+            documented = false),
+        @Param(name = "argv", positional = false, named = true, documented = false),
+      })
+  LtoBackendArtifactsT createLtoBackendArtifacts(
+      StarlarkRuleContextT starlarkRuleContext,
+      String ltoOutputRootPrefixString,
+      FileT bitcodeFile,
+      FeatureConfigurationT featureConfigurationForStarlark,
+      CcToolchainProviderT ccToolchain,
+      FdoContextT fdoContext,
+      boolean usePic,
+      boolean shouldCreatePerObjectDebugInfo,
+      Sequence<?> argv,
+      StarlarkThread thread)
+      throws EvalException;
+
+  @StarlarkMethod(
+      name = "merge_compilation_contexts",
+      doc = "Merges multiple <code>CompilationContexts</code>s into one.",
+      parameters = {
+        @Param(
+            name = "compilation_contexts",
+            doc =
+                "List of <code>CompilationContexts</code>s to be merged. The headers of each "
+                    + "context will be exported by the direct fields in the returned provider.",
+            positional = false,
+            named = true,
+            defaultValue = "[]"),
+      })
+  CompilationContextT mergeCompilationContexts(
+      Sequence<?> compilationContexts) // <CcCompilationContextApi> expected
+      throws EvalException;
 }

@@ -605,64 +605,62 @@ public abstract class CcModule
 
     Artifact resolvedSymlinkDynamicLibrary = null;
     Artifact resolvedSymlinkInterfaceLibrary = null;
-    if (dynamicLibrary != null
-        && !featureConfiguration
-            .getFeatureConfiguration()
-            .isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-      resolvedSymlinkDynamicLibrary = dynamicLibrary;
-      if (dynamicLibraryPathFragment != null) {
-        if (dynamicLibrary.getRootRelativePath().getPathString().startsWith("_solib_")) {
-          throw Starlark.errorf(
-              "dynamic_library must not be a symbolic link in the solib directory. Got '%s'",
-              dynamicLibrary.getRootRelativePath());
+    if (!featureConfiguration.getFeatureConfiguration().isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
+      if (dynamicLibrary != null) {
+        resolvedSymlinkDynamicLibrary = dynamicLibrary;
+        if (dynamicLibraryPathFragment != null) {
+          if (dynamicLibrary.getRootRelativePath().getPathString().startsWith("_solib_")) {
+            throw Starlark.errorf(
+                "dynamic_library must not be a symbolic link in the solib directory. Got '%s'",
+                dynamicLibrary.getRootRelativePath());
+          }
+          dynamicLibrary =
+              SolibSymlinkAction.getDynamicLibrarySymlink(
+                  starlarkActionFactory.asActionRegistry(starlarkActionFactory),
+                  starlarkActionFactory.getActionConstructionContext(),
+                  ccToolchainProvider.getSolibDirectory(),
+                  dynamicLibrary,
+                  dynamicLibraryPathFragment);
+        } else {
+          dynamicLibrary =
+              SolibSymlinkAction.getDynamicLibrarySymlink(
+                  starlarkActionFactory.asActionRegistry(starlarkActionFactory),
+                  starlarkActionFactory.getActionConstructionContext(),
+                  ccToolchainProvider.getSolibDirectory(),
+                  dynamicLibrary,
+                  /* preserveName= */ true,
+                  /* prefixConsumer= */ true);
         }
-        dynamicLibrary =
-            SolibSymlinkAction.getDynamicLibrarySymlink(
-                starlarkActionFactory.asActionRegistry(starlarkActionFactory),
-                starlarkActionFactory.getActionConstructionContext(),
-                ccToolchainProvider.getSolibDirectory(),
-                dynamicLibrary,
-                dynamicLibraryPathFragment);
-      } else {
-        dynamicLibrary =
-            SolibSymlinkAction.getDynamicLibrarySymlink(
-                starlarkActionFactory.asActionRegistry(starlarkActionFactory),
-                starlarkActionFactory.getActionConstructionContext(),
-                ccToolchainProvider.getSolibDirectory(),
-                dynamicLibrary,
-                /* preserveName= */ true,
-                /* prefixConsumer= */ true);
       }
-    }
-    if (interfaceLibrary != null
-        && !featureConfiguration
-            .getFeatureConfiguration()
-            .isEnabled(CppRuleClasses.TARGETS_WINDOWS)) {
-      resolvedSymlinkInterfaceLibrary = interfaceLibrary;
-      if (interfaceLibraryPathFragment != null) {
-        if (interfaceLibrary.getRootRelativePath().getPathString().startsWith("_solib_")) {
-          throw Starlark.errorf(
-              "interface_library must not be a symbolic link in the solib directory. Got '%s'",
-              interfaceLibrary.getRootRelativePath());
+      if (interfaceLibrary != null) {
+        resolvedSymlinkInterfaceLibrary = interfaceLibrary;
+        if (interfaceLibraryPathFragment != null) {
+          if (interfaceLibrary.getRootRelativePath().getPathString().startsWith("_solib_")) {
+            throw Starlark.errorf(
+                "interface_library must not be a symbolic link in the solib directory. Got '%s'",
+                interfaceLibrary.getRootRelativePath());
+          }
+          interfaceLibrary =
+              SolibSymlinkAction.getDynamicLibrarySymlink(
+                  /* actionRegistry= */ starlarkActionFactory.asActionRegistry(
+                      starlarkActionFactory),
+                  /* actionConstructionContext= */ starlarkActionFactory
+                      .getActionConstructionContext(),
+                  ccToolchainProvider.getSolibDirectory(),
+                  interfaceLibrary,
+                  interfaceLibraryPathFragment);
+        } else {
+          interfaceLibrary =
+              SolibSymlinkAction.getDynamicLibrarySymlink(
+                  /* actionRegistry= */ starlarkActionFactory.asActionRegistry(
+                      starlarkActionFactory),
+                  /* actionConstructionContext= */ starlarkActionFactory
+                      .getActionConstructionContext(),
+                  ccToolchainProvider.getSolibDirectory(),
+                  interfaceLibrary,
+                  /* preserveName= */ true,
+                  /* prefixConsumer= */ true);
         }
-        interfaceLibrary =
-            SolibSymlinkAction.getDynamicLibrarySymlink(
-                /* actionRegistry= */ starlarkActionFactory.asActionRegistry(starlarkActionFactory),
-                /* actionConstructionContext= */ starlarkActionFactory
-                    .getActionConstructionContext(),
-                ccToolchainProvider.getSolibDirectory(),
-                interfaceLibrary,
-                interfaceLibraryPathFragment);
-      } else {
-        interfaceLibrary =
-            SolibSymlinkAction.getDynamicLibrarySymlink(
-                /* actionRegistry= */ starlarkActionFactory.asActionRegistry(starlarkActionFactory),
-                /* actionConstructionContext= */ starlarkActionFactory
-                    .getActionConstructionContext(),
-                ccToolchainProvider.getSolibDirectory(),
-                interfaceLibrary,
-                /* preserveName= */ true,
-                /* prefixConsumer= */ true);
       }
     }
     if (staticLibrary == null
@@ -777,7 +775,7 @@ public abstract class CcModule
       throws EvalException {
     return CcCompilationContext.builder(
             /* actionConstructionContext= */ null, /* configuration= */ null, /* label= */ null)
-        .addDependentCcCompilationContexts(
+        .mergeDependentCcCompilationContexts(
             Sequence.cast(compilationContexts, CcCompilationContext.class, "compilation_contexts"),
             ImmutableList.of())
         .build();
@@ -869,31 +867,16 @@ public abstract class CcModule
       checkPrivateStarlarkificationAllowlist(thread);
     }
 
-    ImmutableList.Builder<LinkOptions> optionsBuilder = ImmutableList.builder();
-    if (userLinkFlagsObject instanceof Depset || userLinkFlagsObject instanceof NoneType) {
-      LinkOptions options =
-          LinkOptions.of(
-              Depset.noneableCast(userLinkFlagsObject, String.class, "user_link_flags").toList(),
-              BazelStarlarkContext.from(thread).getSymbolGenerator());
-      optionsBuilder.add(options);
-    } else if (userLinkFlagsObject instanceof Sequence) {
-      checkPrivateStarlarkificationAllowlist(thread);
-
-      ImmutableList<Object> options =
-          Sequence.cast(userLinkFlagsObject, Object.class, "user_link_flags[]").getImmutableList();
-      for (Object optionObject : options) {
-        ImmutableList<String> option =
-            Sequence.cast(optionObject, String.class, "user_link_flags[][]").getImmutableList();
-        optionsBuilder.add(
-            LinkOptions.of(option, BazelStarlarkContext.from(thread).getSymbolGenerator()));
-      }
-    }
+    LinkOptions options =
+        LinkOptions.of(
+            Depset.noneableCast(userLinkFlagsObject, String.class, "user_link_flags").toList(),
+            BazelStarlarkContext.from(thread).getSymbolGenerator());
 
     return CcLinkingContext.LinkerInput.builder()
         .setOwner(owner)
         .addLibraries(
             Depset.noneableCast(librariesToLinkObject, LibraryToLink.class, "libraries").toList())
-        .addUserLinkFlags(optionsBuilder.build())
+        .addUserLinkFlags(ImmutableList.of(options))
         .addLinkstamps(convertToNestedSet(linkstampsObject, Linkstamp.class, "linkstamps").toList())
         .addNonCodeInputs(
             Depset.noneableCast(nonCodeInputs, Artifact.class, "additional_inputs").toList())
