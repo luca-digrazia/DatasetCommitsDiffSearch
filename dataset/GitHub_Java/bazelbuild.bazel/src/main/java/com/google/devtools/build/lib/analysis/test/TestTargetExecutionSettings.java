@@ -39,7 +39,6 @@ public final class TestTargetExecutionSettings {
   private final CommandLine testArguments;
   private final String testFilter;
   private final int totalShards;
-  private final int totalRuns;
   private final RunUnder runUnder;
   private final Artifact runUnderExecutable;
   private final Artifact executable;
@@ -49,13 +48,8 @@ public final class TestTargetExecutionSettings {
   private final Artifact runfilesInputManifest;
   private final Artifact instrumentedFileManifest;
 
-  TestTargetExecutionSettings(
-      RuleContext ruleContext,
-      RunfilesSupport runfilesSupport,
-      Artifact executable,
-      Artifact instrumentedFileManifest,
-      int shards,
-      int runs) {
+  TestTargetExecutionSettings(RuleContext ruleContext, RunfilesSupport runfilesSupport,
+      Artifact executable, Artifact instrumentedFileManifest, int shards) {
     Preconditions.checkArgument(TargetUtils.isTestRule(ruleContext.getRule()));
     Preconditions.checkArgument(shards >= 0);
     BuildConfiguration config = ruleContext.getConfiguration();
@@ -66,7 +60,6 @@ public final class TestTargetExecutionSettings {
         CommandLine.concat(targetArgs, ImmutableList.copyOf(testConfig.getTestArguments()));
 
     totalShards = shards;
-    totalRuns = runs;
     runUnder = config.getRunUnder();
     runUnderExecutable = getRunUnderExecutable(ruleContext);
 
@@ -101,10 +94,6 @@ public final class TestTargetExecutionSettings {
 
   public int getTotalShards() {
     return totalShards;
-  }
-
-  public int getTotalRuns() {
-    return totalRuns;
   }
 
   public RunUnder getRunUnder() {
@@ -148,20 +137,5 @@ public final class TestTargetExecutionSettings {
    */
   public Artifact getInstrumentedFileManifest() {
     return instrumentedFileManifest;
-  }
-
-  public boolean needsShell(boolean executedOnWindows) {
-    RunUnder r = getRunUnder();
-    if (r == null) {
-      return false;
-    }
-    String command = r.getCommand();
-    if (command == null) {
-      return false;
-    }
-    // --run_under commands that do not contain '/' are either shell built-ins or need to be
-    // located on the PATH env, so we wrap them in a shell invocation. Note that we shell-tokenize
-    // the --run_under parameter and getCommand only returns the first such token.
-    return !command.contains("/") && (!executedOnWindows || !command.contains("\\"));
   }
 }
