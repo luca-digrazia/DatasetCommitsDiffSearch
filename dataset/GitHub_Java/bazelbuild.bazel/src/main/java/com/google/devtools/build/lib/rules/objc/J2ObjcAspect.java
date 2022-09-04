@@ -50,10 +50,6 @@ import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.RuleClass.ConfiguredTargetFactory.RuleErrorException;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.apple.AppleToolchain;
-import com.google.devtools.build.lib.rules.cpp.CcToolchainProvider;
-import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppHelper;
-import com.google.devtools.build.lib.rules.cpp.FdoSupportProvider;
 import com.google.devtools.build.lib.rules.java.JavaCompilationArgsProvider;
 import com.google.devtools.build.lib.rules.java.JavaGenJarsProvider;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
@@ -149,7 +145,6 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 ImmutableSet.<Class<?>>of(ProtoSourcesProvider.class)))
         .requiresConfigurationFragments(
             AppleConfiguration.class,
-            CppConfiguration.class,
             J2ObjcConfiguration.class,
             ObjcConfiguration.class,
             ProtoConfiguration.class)
@@ -208,11 +203,6 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
                 ImmutableList.of(
                     Label.parseAbsoluteUnchecked(
                         toolsRepository + "//tools/j2objc:j2objc_proto_blacklist"))))
-        .add(attr(":j2objc_cc_toolchain", LABEL).value(ObjcRuleClasses.APPLE_TOOLCHAIN))
-        .add(
-            attr(":lipo_context_collector", LABEL)
-                .value(ObjcRuleClasses.NULL_LIPO_CONTEXT_COLLECTOR)
-                .skipPrereqValidatorCheck())
         .build();
   }
 
@@ -261,29 +251,10 @@ public class J2ObjcAspect extends NativeAspectClass implements ConfiguredAspectF
               depAttributes);
 
       try {
-        CcToolchainProvider ccToolchain =
-            CppHelper.getToolchain(ruleContext, ":j2objc_cc_toolchain");
-        FdoSupportProvider fdoSupport =
-            CppHelper.getFdoSupport(ruleContext, ":j2objc_cc_toolchain");
-        CompilationSupport compilationSupport = CompilationSupport.createWithSelectedImplementation(
-            ruleContext,
-            ruleContext.getConfiguration(),
-            ObjcRuleClasses.j2objcIntermediateArtifacts(ruleContext),
-            CompilationAttributes.Builder.fromRuleContext(ruleContext).build());
-
-        compilationSupport
-            .registerCompileAndArchiveActions(
-                common.getCompilationArtifacts().get(),
-                common.getObjcProvider(),
-                EXTRA_COMPILE_ARGS,
-                ImmutableList.<PathFragment>of(),
-                ccToolchain,
-                fdoSupport)
-            .registerFullyLinkAction(
-                common.getObjcProvider(),
-                ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB),
-                ccToolchain,
-                fdoSupport);
+        CompilationSupport.create(ruleContext)
+            .registerCompileAndArchiveActions(common, EXTRA_COMPILE_ARGS)
+            .registerFullyLinkAction(common.getObjcProvider(),
+                ruleContext.getImplicitOutputArtifact(CompilationSupport.FULLY_LINKED_LIB));
       } catch (RuleErrorException e) {
         ruleContext.ruleError(e.getMessage());
       }
