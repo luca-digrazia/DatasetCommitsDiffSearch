@@ -7,8 +7,14 @@ import io.quarkus.runtime.annotations.ConfigItem;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 
-@ConfigRoot(phase = ConfigPhase.BUILD_AND_RUN_TIME_FIXED)
+@ConfigRoot(phase = ConfigPhase.RUN_TIME)
 public class OidcConfig {
+
+    /**
+     * If the OIDC extension is enabled.
+     */
+    @ConfigItem(defaultValue = "true")
+    public boolean enabled;
 
     /**
      * The base URL of the OpenID Connect (OIDC) server, for example, 'https://host:port/auth'.
