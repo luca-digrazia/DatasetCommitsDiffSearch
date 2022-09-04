@@ -28,11 +28,9 @@ import org.jboss.logging.Logger;
 import org.jboss.resteasy.api.validation.ResteasyConstraintViolation;
 import org.jboss.resteasy.api.validation.ViolationReport;
 import org.jboss.resteasy.microprofile.config.FilterConfigSource;
-import org.jboss.resteasy.microprofile.config.FilterConfigSourceImpl;
 import org.jboss.resteasy.microprofile.config.ServletConfigSource;
 import org.jboss.resteasy.microprofile.config.ServletConfigSourceImpl;
 import org.jboss.resteasy.microprofile.config.ServletContextConfigSource;
-import org.jboss.resteasy.microprofile.config.ServletContextConfigSourceImpl;
 import org.jboss.resteasy.plugins.server.servlet.ResteasyContextParameters;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.MethodVisitor;
@@ -388,9 +386,7 @@ public class ResteasyServerCommonProcessor {
                 ServletConfigSource.class,
                 ServletConfigSourceImpl.class,
                 ServletContextConfigSource.class,
-                ServletContextConfigSourceImpl.class,
-                FilterConfigSource.class,
-                FilterConfigSourceImpl.class));
+                FilterConfigSource.class));
 
         // Providers that are also beans are unremovable
         unremovableBeans.produce(new UnremovableBeanBuildItem(
