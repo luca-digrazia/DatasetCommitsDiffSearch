@@ -16,7 +16,6 @@ import com.googlecode.androidannotations.annotations.Click;
 import com.googlecode.androidannotations.annotations.Layout;
 import com.googlecode.androidannotations.annotations.SystemService;
 import com.googlecode.androidannotations.annotations.UiThread;
-import com.googlecode.androidannotations.annotations.UiThreadDelayed;
 import com.googlecode.androidannotations.annotations.ViewById;
 import com.googlecode.androidannotations.annotations.res.BooleanRes;
 import com.googlecode.androidannotations.annotations.res.ColorRes;
@@ -55,9 +54,8 @@ public class MyActivity extends Activity {
 		String name = myEditText.getText().toString();
 		
 		someBackgroundWork(name, 5000);
-		
 	}
-	
+
 	@Background
 	void someBackgroundWork(String name, long timeToDoSomeLongComputation) {
 		try {
@@ -68,18 +66,16 @@ public class MyActivity extends Activity {
 		String message = String.format(helloFormat, name);
 
 		updateUi(message, androidColor);
-		
-		showNotificationsDelayed();
 	}
 
 	@UiThread
 	void updateUi(String message, int color) {
 		textView.setText(message);
 		textView.setTextColor(color);
+		showNotification();
 	}
-	
-	@UiThreadDelayed(2000)
-	void showNotificationsDelayed() {
+
+	private void showNotification() {
 		Notification notification = new Notification(R.drawable.icon, "Hello !", 0);
 		PendingIntent contentIntent = PendingIntent.getActivity(this, 0, new Intent(), 0);
 		notification.setLatestEventInfo(getApplicationContext(), "My notification", "Hello World!", contentIntent);
