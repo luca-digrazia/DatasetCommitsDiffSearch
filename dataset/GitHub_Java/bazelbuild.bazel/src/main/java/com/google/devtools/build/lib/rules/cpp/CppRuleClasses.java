@@ -32,7 +32,6 @@ import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.PIC_OBJECT_FI
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.SHARED_LIBRARY;
 import static com.google.devtools.build.lib.rules.cpp.CppFileTypes.VERSIONED_SHARED_LIBRARY;
 
-import com.google.common.annotations.VisibleForTesting;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
@@ -251,9 +250,6 @@ public class CppRuleClasses {
   /** A string constant for the ThinLTO feature. */
   public static final String THIN_LTO = "thin_lto";
 
-  /** A string constant for the LTO indexing bitcode feature. */
-  public static final String NO_USE_LTO_INDEXING_BITCODE_FILE = "no_use_lto_indexing_bitcode_file";
-
   /*
    * A string constant for allowing implicit ThinLTO enablement for AFDO.
    */
@@ -385,6 +381,9 @@ public class CppRuleClasses {
   /** A string constant for the match-clif action. */
   public static final String MATCH_CLIF = "match_clif";
 
+  /** A string constant for is_cc_fake_binary feature. */
+  public static final String IS_CC_FAKE_BINARY = "is_cc_fake_binary";
+
   /** A feature marking that the toolchain can use --start-lib/--end-lib flags */
   public static final String SUPPORTS_START_END_LIB = "supports_start_end_lib";
 
@@ -414,22 +413,6 @@ public class CppRuleClasses {
 
   public static final String COMPIILER_PARAM_FILE = "compiler_param_file";
 
-  /**
-   * A feature to indicate that this target generates debug symbols for a dSYM file. For Apple
-   * platform only.
-   */
-  public static final String GENERATE_DSYM_FILE_FEATURE_NAME = "generate_dsym_file";
-
-  /**
-   * A feature to indicate that this target does not generate debug symbols. For Apple platform
-   * only.
-   *
-   * <p>Note that the crosstool does not support feature negation in FlagSet.with_feature, which is
-   * the mechanism used to condition linker arguments here. Therefore, we expose
-   * "no_generate_debug_symbols" in addition to "generate_dsym_file"
-   */
-  public static final String NO_GENERATE_DEBUG_SYMBOLS_FEATURE_NAME = "no_generate_debug_symbols";
-
   /** Ancestor for all rules that do include scanning. */
   public static final class CcIncludeScanningRule implements RuleDefinition {
     @Override
@@ -446,25 +429,6 @@ public class CppRuleClasses {
     public Metadata getMetadata() {
       return RuleDefinition.Metadata.builder()
           .name("$cc_include_scanning_rule")
-          .type(RuleClassType.ABSTRACT)
-          .build();
-    }
-  }
-
-  /** Name of the exec group that Cpp link actions run under */
-  @VisibleForTesting public static final String CPP_LINK_EXEC_GROUP = "cpp_link";
-
-  /** Common logic for all rules that create C++ linking actions. */
-  public static final class CcLinkingRule implements RuleDefinition {
-    @Override
-    public RuleClass build(RuleClass.Builder builder, RuleDefinitionEnvironment env) {
-      return builder.addExecGroup(CPP_LINK_EXEC_GROUP).build();
-    }
-
-    @Override
-    public Metadata getMetadata() {
-      return RuleDefinition.Metadata.builder()
-          .name("$cc_linking_rule")
           .type(RuleClassType.ABSTRACT)
           .build();
     }
