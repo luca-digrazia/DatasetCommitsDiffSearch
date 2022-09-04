@@ -51,11 +51,11 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
 
     // Create all needed directories.
     for (Path createDir : writableDirs) {
-      FileSystemUtils.createDirectoryAndParents(createDir);
+      FileSystemUtils.createDirectoryAndParentsWithCache(createdDirs, createDir);
     }
 
     // Link all the inputs.
-    linkInputs(inputs);
+    linkInputs(inputs, createdDirs);
   }
 
   private void createDirectoriesForOutputs(Collection<PathFragment> outputs, Set<Path> createdDirs)
@@ -82,7 +82,8 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
    * names (by following solib symlinks back) to modify the paths to the shared libraries in
    * cc_binaries.
    */
-  private void linkInputs(Map<PathFragment, Path> inputs) throws IOException {
+  private void linkInputs(Map<PathFragment, Path> inputs, Set<Path> createdDirs)
+      throws IOException {
     // Create directory for input files.
     Path inputsDir = sandboxPath.getRelative("inputs");
     if (!inputsDir.exists()) {
@@ -90,28 +91,35 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
     }
 
     for (ImmutableMap.Entry<PathFragment, Path> entry : inputs.entrySet()) {
+      Path targetName = sandboxExecRoot.getRelative(entry.getKey());
+      FileSystemUtils.createDirectoryAndParentsWithCache(
+          createdDirs, targetName.getParentDirectory());
+
+      // The target is supposed to be an empty file.
+      if (entry.getValue() == null) {
+        FileSystemUtils.createEmptyFile(targetName);
+        continue;
+      }
+
       // Hardlink, resolve symlink here instead in finalizeLinks.
-      Path source = entry.getValue().resolveSymbolicLinks();
-      Path target =
-          source.startsWith(execRoot)
-              ? inputsDir.getRelative(source.relativeTo(execRoot))
+      Path target = entry.getValue().resolveSymbolicLinks();
+      Path hardlinkName =
+          target.startsWith(execRoot)
+              ? inputsDir.getRelative(target.relativeTo(execRoot))
               : inputsDir.getRelative(entry.getKey());
       try {
-        createHardLink(target, source);
+        createHardLink(hardlinkName, target);
       } catch (IOException e) {
         // Creating a hardlink might fail when the input file and the sandbox directory are not on
         // the same filesystem / device. Then we use symlink instead.
-        target.createSymbolicLink(source);
+        hardlinkName.createSymbolicLink(target);
       }
 
       // symlink
-      Path symlinkNewPath = sandboxExecRoot.getRelative(entry.getKey());
-      FileSystemUtils.createDirectoryAndParents(symlinkNewPath.getParentDirectory());
-      symlinkNewPath.createSymbolicLink(target);
+      targetName.createSymbolicLink(hardlinkName);
     }
   }
 
-  // TODO(yueg): import unix.FilesystemUtils and use FilesystemUtils.createHardLink() instead
   private void createHardLink(Path target, Path source) throws IOException {
     java.nio.file.Path targetNio = java.nio.file.Paths.get(target.toString());
     java.nio.file.Path sourceNio = java.nio.file.Paths.get(source.toString());
@@ -128,6 +136,9 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
       java.nio.file.Files.createLink(targetNio, sourceNio);
       // Directory
     } else if (source.isDirectory()) {
+      // Eagerly create target directory in case source is an empty directory.
+      FileSystemUtils.createDirectoryAndParents(target);
+
       Collection<Path> subpaths = source.getDirectoryEntries();
       for (Path sourceSubpath : subpaths) {
         Path targetSubpath = target.getRelative(sourceSubpath.relativeTo(source));
@@ -140,9 +151,17 @@ public class HardlinkedExecRoot implements SandboxExecRoot {
   public void copyOutputs(Path execRoot, Collection<PathFragment> outputs) throws IOException {
     for (PathFragment output : outputs) {
       Path source = sandboxExecRoot.getRelative(output);
+      Path target = execRoot.getRelative(output);
       if (source.isFile() || source.isSymbolicLink()) {
-        Path target = execRoot.getRelative(output);
         Files.move(source.getPathFile(), target.getPathFile());
+      } else if (source.isDirectory()) {
+        try {
+          source.renameTo(target);
+        } catch (IOException e) {
+          // Failed to move directory directly, thus move it recursively.
+          target.createDirectory();
+          FileSystemUtils.moveTreesBelow(source, target);
+        }
       }
     }
   }
