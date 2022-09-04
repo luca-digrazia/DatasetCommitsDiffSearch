@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableSet;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
-import com.google.devtools.build.lib.concurrent.ThreadSafety.ThreadSafe;
 import com.google.devtools.build.lib.rules.cpp.CcToolchainFeatures.FeatureConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration.Tool;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
@@ -231,7 +230,19 @@ public final class LtoBackendArtifacts {
     // The input to the LTO backend step is the bitcode file.
     buildVariablesBuilder.addStringVariable(
         "thinlto_input_bitcode_file", bitcodeFile.getExecPath().toString());
-    addProfileForLtoBackend(builder, fdoSupport, featureConfiguration, buildVariablesBuilder);
+    ProfileArtifacts profileArtifacts =
+        Preconditions.checkNotNull(
+            fdoSupport
+                .getFdoSupport()
+                .buildProfileForLtoBackend(
+                    fdoSupport, featureConfiguration, buildVariablesBuilder));
+
+    if (profileArtifacts.getProfileArtifact() != null) {
+      builder.addInput(profileArtifacts.getProfileArtifact());
+    }
+    if (profileArtifacts.getPrefetchHintsArtifact() != null) {
+      builder.addInput(profileArtifacts.getPrefetchHintsArtifact());
+    }
 
     if (generateDwo) {
       dwoFile =
@@ -260,29 +271,5 @@ public final class LtoBackendArtifacts {
     builder.addExecutableArguments(execArgs);
 
     ruleContext.registerAction(builder.build(ruleContext));
-  }
-
-  /**
-   * Adds the AFDO profile path to the variable builder and the profile tothe inputs of the action.
-   */
-  @ThreadSafe
-  private static void addProfileForLtoBackend(
-      LtoBackendAction.Builder builder,
-      FdoSupportProvider fdoSupportProvider,
-      FeatureConfiguration featureConfiguration,
-      CcToolchainVariables.Builder buildVariables) {
-    Artifact prefetch = fdoSupportProvider.getPrefetchHintsArtifact();
-    if (prefetch != null) {
-      buildVariables.addStringVariable("fdo_prefetch_hints_path", prefetch.getExecPathString());
-      builder.addInput(fdoSupportProvider.getPrefetchHintsArtifact());
-    }
-    if (!featureConfiguration.isEnabled(CppRuleClasses.AUTOFDO)
-        && !featureConfiguration.isEnabled(CppRuleClasses.XBINARYFDO)) {
-      return;
-    }
-
-    Artifact profile = fdoSupportProvider.getProfileArtifact();
-    buildVariables.addStringVariable("fdo_profile_path", profile.getExecPathString());
-    builder.addInput(fdoSupportProvider.getProfileArtifact());
   }
 }
