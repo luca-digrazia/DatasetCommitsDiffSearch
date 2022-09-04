@@ -21,7 +21,6 @@ import com.codahale.metrics.Timer;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
-import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.inputs.annotations.Codec;
 import org.graylog2.plugin.inputs.annotations.ConfigClass;
 import org.graylog2.plugin.inputs.annotations.FactoryClass;
@@ -82,14 +81,8 @@ public class SyslogCodec extends AbstractCodec {
     public Message decode(@Nonnull RawMessage rawMessage) {
         final String msg = new String(rawMessage.getPayload(), StandardCharsets.UTF_8);
         try (Timer.Context ignored = this.decodeTime.time()) {
-            final ResolvableInetSocketAddress address = rawMessage.getRemoteAddress();
-            final InetSocketAddress remoteAddress;
-            if (address == null) {
-                remoteAddress = null;
-            } else {
-                remoteAddress = address.getInetSocketAddress();
-            }
-            return parse(msg, remoteAddress == null ? null: remoteAddress.getAddress(), rawMessage.getTimestamp());
+            final InetSocketAddress remoteAddress = rawMessage.getRemoteAddress().getInetSocketAddress();
+            return parse(msg, remoteAddress.getAddress(), rawMessage.getTimestamp());
         } catch (ClassCastException e) {
             propagate(e);
         }

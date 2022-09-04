@@ -143,10 +143,7 @@ public class RawMessage implements Serializable {
             final JournalMessages.CodecInfo codec = msgBuilder.getCodec();
             final JournalMessages.CodecInfo.Builder builder = JournalMessages.CodecInfo.newBuilder(codec);
 
-            final String codecConfigJson = codecConfig.serializeToJson();
-            if (codecConfigJson != null) {
-                builder.setConfig(codecConfigJson);
-            }
+            builder.setConfig(codecConfig.serializeToJson());
             msgBuilder.setCodec(builder.build());
 
             final JournalMessage journalMessage = msgBuilder.build();

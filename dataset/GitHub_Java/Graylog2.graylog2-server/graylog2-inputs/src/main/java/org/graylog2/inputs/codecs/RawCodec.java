@@ -38,7 +38,6 @@ import com.google.common.net.InetAddresses;
 import com.google.inject.assistedinject.Assisted;
 import com.google.inject.assistedinject.AssistedInject;
 import org.graylog2.plugin.Message;
-import org.graylog2.plugin.ResolvableInetSocketAddress;
 import org.graylog2.plugin.configuration.Configuration;
 import org.graylog2.plugin.configuration.ConfigurationRequest;
 import org.graylog2.plugin.inputs.annotations.Codec;
@@ -64,8 +63,7 @@ public class RawCodec extends AbstractCodec {
     @Nullable
     @Override
     public Message decode(@Nonnull RawMessage raw) {
-        final ResolvableInetSocketAddress rawRemoteAddress = raw.getRemoteAddress();
-        final InetAddress remoteAddress = rawRemoteAddress == null ? null : rawRemoteAddress.getAddress();
+        final InetAddress remoteAddress = raw.getRemoteAddress().getAddress();
         return new Message(new String(raw.getPayload(), Charsets.UTF_8),
                            remoteAddress == null ? "unknown" : InetAddresses.toAddrString(remoteAddress), // do not resolve early
                            raw.getTimestamp());
