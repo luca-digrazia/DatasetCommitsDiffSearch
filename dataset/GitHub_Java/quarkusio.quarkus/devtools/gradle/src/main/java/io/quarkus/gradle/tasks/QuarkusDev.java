@@ -8,8 +8,10 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.ObjectOutputStream;
 import java.net.InetAddress;
+import java.net.MalformedURLException;
 import java.net.Socket;
 import java.net.URI;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -56,6 +58,7 @@ import io.quarkus.bootstrap.resolver.AppModelResolver;
 import io.quarkus.bootstrap.resolver.AppModelResolverException;
 import io.quarkus.deployment.dev.DevModeContext;
 import io.quarkus.deployment.dev.DevModeMain;
+import io.quarkus.gradle.QuarkusPlugin;
 import io.quarkus.gradle.QuarkusPluginExtension;
 import io.quarkus.runtime.LaunchMode;
 import io.quarkus.utilities.JavaBinFinder;
@@ -422,12 +425,10 @@ public class QuarkusDev extends QuarkusTask {
         SourceSetContainer sourceSets = javaConvention.getSourceSets();
         SourceSet mainSourceSet = sourceSets.getByName(SourceSet.MAIN_SOURCE_SET_NAME);
         Set<String> sourcePaths = new HashSet<>();
-        Set<String> sourceParentPaths = new HashSet<>();
 
         for (File sourceDir : mainSourceSet.getAllJava().getSrcDirs()) {
             if (sourceDir.exists()) {
                 sourcePaths.add(sourceDir.getAbsolutePath());
-                sourceParentPaths.add(sourceDir.toPath().getParent().toAbsolutePath().toString());
             }
         }
         //TODO: multiple resource directories
@@ -457,11 +458,7 @@ public class QuarkusDev extends QuarkusTask {
                 sourcePaths,
                 classesDir,
                 resourcesSrcDir.getAbsolutePath(),
-                resourcesOutputPath,
-                sourceParentPaths,
-                project.getBuildDir().toPath().resolve("generated-sources").toAbsolutePath().toString(),
-                project.getBuildDir().toString());
-
+                resourcesOutputPath);
         if (root) {
             context.setApplicationRoot(wsModuleInfo);
         } else {
@@ -481,42 +478,25 @@ public class QuarkusDev extends QuarkusTask {
                 .ofNullable((JavaCompile) getProject().getTasks().getByName(JavaPlugin.COMPILE_JAVA_TASK_NAME));
     }
 
-    private ResolvedDependency findQuarkusPluginDependency(Set<ResolvedDependency> dependencies) {
-        for (ResolvedDependency rd : dependencies) {
-            if ("io.quarkus.gradle.plugin".equals(rd.getModuleName())) {
-                return rd;
-            } else {
-                Set<ResolvedDependency> children = rd.getChildren();
-                if (children != null) {
-                    ResolvedDependency quarkusPluginDependency = findQuarkusPluginDependency(children);
-                    if (quarkusPluginDependency != null) {
-                        return quarkusPluginDependency;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
     private void addGradlePluginDeps(StringBuilder classPathManifest, DevModeContext context) {
         boolean foundQuarkusPlugin = false;
         Project prj = getProject();
         while (prj != null && !foundQuarkusPlugin) {
-            final Set<ResolvedDependency> firstLevelDeps = prj.getBuildscript().getConfigurations().getByName("classpath")
-                    .getResolvedConfiguration().getFirstLevelModuleDependencies();
-
-            if (firstLevelDeps.isEmpty()) {
-                // TODO this looks weird
-            } else {
-                ResolvedDependency quarkusPluginDependency = findQuarkusPluginDependency(firstLevelDeps);
-                if (quarkusPluginDependency != null) {
-                    quarkusPluginDependency.getAllModuleArtifacts().stream()
-                            .map(ResolvedArtifact::getFile)
-                            .forEach(f -> addToClassPaths(classPathManifest, f));
-
-                    foundQuarkusPlugin = true;
-
-                    break;
+            if (prj.getPlugins().hasPlugin(QuarkusPlugin.ID)) {
+                final Set<ResolvedDependency> firstLevelDeps = prj.getBuildscript().getConfigurations().getByName("classpath")
+                        .getResolvedConfiguration().getFirstLevelModuleDependencies();
+                if (firstLevelDeps.isEmpty()) {
+                    // TODO this looks weird
+                } else {
+                    for (ResolvedDependency rd : firstLevelDeps) {
+                        if ("io.quarkus.gradle.plugin".equals(rd.getModuleName())) {
+                            rd.getAllModuleArtifacts().stream()
+                                    .map(ResolvedArtifact::getFile)
+                                    .forEach(f -> addToClassPaths(classPathManifest, f));
+                            foundQuarkusPlugin = true;
+                            break;
+                        }
+                    }
                 }
             }
             prj = prj.getParent();
@@ -557,4 +537,13 @@ public class QuarkusDev extends QuarkusTask {
             classPathManifest.append(uri).append(" ");
         }
     }
+
+    private URL toUrl(URI uri) {
+        try {
+            return uri.toURL();
+        } catch (MalformedURLException e) {
+            throw new IllegalStateException("Failed to convert URI to URL: " + uri, e);
+        }
+    }
+
 }
