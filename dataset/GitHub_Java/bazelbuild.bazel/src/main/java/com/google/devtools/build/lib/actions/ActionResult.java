@@ -99,7 +99,7 @@ public abstract class ActionResult {
    *     measurement is not implemented for the current platform
    */
   public Optional<Duration> cumulativeCommandExecutionWallTime() {
-    return getCumulativeTime(SpawnResult::getWallTime);
+    return getCumulativeTime(spawnResult -> spawnResult.getWallTime());
   }
 
   /**
@@ -109,7 +109,7 @@ public abstract class ActionResult {
    *     measurement is not implemented for the current platform
    */
   public Optional<Duration> cumulativeCommandExecutionUserTime() {
-    return getCumulativeTime(SpawnResult::getUserTime);
+    return getCumulativeTime(spawnResult -> spawnResult.getUserTime());
   }
 
   /**
@@ -119,7 +119,7 @@ public abstract class ActionResult {
    *     measurement is not implemented for the current platform
    */
   public Optional<Duration> cumulativeCommandExecutionSystemTime() {
-    return getCumulativeTime(SpawnResult::getSystemTime);
+    return getCumulativeTime(spawnResult -> spawnResult.getSystemTime());
   }
 
   /**
@@ -129,7 +129,7 @@ public abstract class ActionResult {
    *     measurement is not implemented for the current platform
    */
   public Optional<Long> cumulativeCommandExecutionBlockInputOperations() {
-    return getCumulativeLong(SpawnResult::getNumBlockInputOperations);
+    return getCumulativeLong(spawnResult -> spawnResult.getNumBlockInputOperations());
   }
 
   /**
@@ -139,7 +139,7 @@ public abstract class ActionResult {
    *     measurement is not implemented for the current platform
    */
   public Optional<Long> cumulativeCommandExecutionBlockOutputOperations() {
-    return getCumulativeLong(SpawnResult::getNumBlockOutputOperations);
+    return getCumulativeLong(spawnResult -> spawnResult.getNumBlockOutputOperations());
   }
 
   /**
@@ -149,19 +149,7 @@ public abstract class ActionResult {
    *     measurement is not implemented for the current platform
    */
   public Optional<Long> cumulativeCommandExecutionInvoluntaryContextSwitches() {
-    return getCumulativeLong(SpawnResult::getNumInvoluntaryContextSwitches);
-  }
-
-  /**
-   * Returns the cumulative number of involuntary context switches for the {@link Action}. The
-   * spawns on one action could execute simultaneously, so the sum of spawn's memory usage is better
-   * estimation.
-   *
-   * @return the cumulative measurement, or empty in case of execution errors or when the
-   *     measurement is not implemented for the current platform
-   */
-  public Optional<Long> cumulativeCommandExecutionMemoryInKb() {
-    return getCumulativeLong(SpawnResult::getMemoryInKb);
+    return getCumulativeLong(spawnResult -> spawnResult.getNumInvoluntaryContextSwitches());
   }
 
   /**
