@@ -200,7 +200,7 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
 
   /**
    * If true, the ConfiguredTarget is only used to get the necessary cross-referenced {@code
-   * CcCompilationContext}s, but registering build actions is disabled.
+   * CcCompilationContextInfo}s, but registering build actions is disabled.
    */
   private final boolean lipoContextCollector;
 
@@ -888,6 +888,21 @@ public final class CppConfiguration extends BuildConfiguration.Fragment {
   @Deprecated
   private final boolean isLLVMCompiler() {
     return cppToolchainInfo.isLLVMCompiler();
+  }
+
+  /**
+   * Returns true if LLVM FDO Optimization should be applied for this configuration.
+   *
+   * <p>Deprecated: Use {@link CcToolchain#isLLVMOptimizedFdo(boolean, PathFragment)}
+   */
+  // TODO(b/64384912): Remove in favor of overload with isLLVMCompiler.
+  @Deprecated
+  public boolean shouldIncludeZipperInToolchain() {
+    return (cppOptions.getFdoOptimize() != null
+            && (CppFileTypes.LLVM_PROFILE.matches(cppOptions.getFdoOptimize())
+                || CppFileTypes.LLVM_PROFILE_RAW.matches(cppOptions.getFdoOptimize())
+                || (isLLVMCompiler() && cppOptions.getFdoOptimize().endsWith(".zip"))))
+        || (cppOptions.getFdoProfileLabel() != null);
   }
 
   /** Returns true if LIPO optimization is implied by the flags of this build. */
