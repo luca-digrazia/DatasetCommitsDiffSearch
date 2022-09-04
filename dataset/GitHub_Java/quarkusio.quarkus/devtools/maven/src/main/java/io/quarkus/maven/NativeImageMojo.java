@@ -12,7 +12,6 @@ import org.apache.maven.artifact.Artifact;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugin.MojoFailureException;
-import org.apache.maven.plugin.logging.Log;
 import org.apache.maven.plugins.annotations.Component;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
@@ -176,6 +175,10 @@ public class NativeImageMojo extends AbstractMojo {
 
     @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true, required = true)
     private List<RemoteRepository> repos;
+
+    public NativeImageMojo() {
+        MojoLogger.logSupplier = this::getLog;
+    }
 
     @Override
     public void execute() throws MojoExecutionException, MojoFailureException {
@@ -410,12 +413,6 @@ public class NativeImageMojo extends AbstractMojo {
         }
         return configs;
 
-    }
-
-    @Override
-    public void setLog(Log log) {
-        super.setLog(log);
-        MojoLogger.delegate = log;
     }
 
 }
