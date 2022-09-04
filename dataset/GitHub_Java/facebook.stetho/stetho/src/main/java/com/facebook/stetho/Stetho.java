@@ -12,14 +12,12 @@
 package com.facebook.stetho;
 
 import com.facebook.stetho.dumpapp.plugins.CrashDumperPlugin;
-import com.facebook.stetho.dumpapp.plugins.HprofDumperPlugin;
 import com.facebook.stetho.inspector.database.DefaultDatabaseFilesProvider;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
 import java.util.ArrayList;
 
-import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
@@ -34,8 +32,6 @@ import com.facebook.stetho.dumpapp.StreamingDumpappHandler;
 import com.facebook.stetho.dumpapp.plugins.SharedPreferencesDumperPlugin;
 import com.facebook.stetho.inspector.ChromeDevtoolsServer;
 import com.facebook.stetho.inspector.ChromeDiscoveryHandler;
-import com.facebook.stetho.inspector.elements.android.AndroidDOMConstants;
-import com.facebook.stetho.inspector.elements.android.AndroidDOMProviderFactory;
 import com.facebook.stetho.inspector.protocol.ChromeDevtoolsDomain;
 import com.facebook.stetho.inspector.protocol.module.CSS;
 import com.facebook.stetho.inspector.protocol.module.Console;
@@ -109,7 +105,6 @@ public class Stetho {
       @Override
       public Iterable<DumperPlugin> get() {
         ArrayList<DumperPlugin> plugins = new ArrayList<DumperPlugin>();
-        plugins.add(new HprofDumperPlugin(context));
         plugins.add(new SharedPreferencesDumperPlugin(context));
         plugins.add(new CrashDumperPlugin());
         return plugins;
@@ -125,9 +120,7 @@ public class Stetho {
         modules.add(new Console());
         modules.add(new CSS());
         modules.add(new Debugger());
-        if (Build.VERSION.SDK_INT >= AndroidDOMConstants.MIN_API_LEVEL) {
-          modules.add(new DOM(new AndroidDOMProviderFactory((Application)context.getApplicationContext())));
-        }
+        modules.add(new DOM());
         modules.add(new DOMStorage(context));
         modules.add(new HeapProfiler());
         modules.add(new Inspector());
