@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,11 +13,12 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
 import smile.math.MathEx;
+import smile.math.matrix.DenseMatrix;
 import smile.math.matrix.Matrix;
 
 /**
@@ -80,7 +81,7 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
 
         double[] centroid = data[MathEx.randomInt(n)];
         double[] variance = null;
-        Matrix cov = null;
+        DenseMatrix cov = null;
         MultivariateGaussianDistribution gaussian;
         if (diagonal) {
             variance = new double[d];
@@ -97,7 +98,7 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
             }
             gaussian = new MultivariateGaussianDistribution(centroid, variance);
         } else {
-            cov = new Matrix(MathEx.cov(data, mu));
+            cov = Matrix.of(MathEx.cov(data, mu));
             gaussian = new MultivariateGaussianDistribution(centroid, cov);
         }
 
@@ -197,7 +198,7 @@ public class MultivariateGaussianMixture extends MultivariateExponentialFamilyMi
         // Splits the component
         Component component = components[index];
         double priori = component.priori / 2;
-        Matrix delta = component.distribution.cov();
+        DenseMatrix delta = component.distribution.cov();
         double[] mu = component.distribution.mean();
 
         Component[] mixture = new Component[k+1];
