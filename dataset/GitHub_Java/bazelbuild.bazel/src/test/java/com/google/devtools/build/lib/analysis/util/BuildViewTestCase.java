@@ -123,7 +123,6 @@ import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.PackageFactory;
 import com.google.devtools.build.lib.packages.PackageFactory.EnvironmentExtension;
-import com.google.devtools.build.lib.packages.PackageValidator;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
 import com.google.devtools.build.lib.packages.Rule;
 import com.google.devtools.build.lib.packages.StarlarkSemanticsOptions;
@@ -278,8 +277,7 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
         analysisMock
             .getPackageFactoryBuilderForTesting(directories)
             .setExtraPrecomputeValues(extraPrecomputedValues)
-            .setEnvironmentExtensions(getEnvironmentExtensions())
-            .setPackageValidator(getPackageValidator());
+            .setEnvironmentExtensions(getEnvironmentExtensions());
     if (!doPackageLoadingChecks) {
       pkgFactoryBuilder.disableChecks();
     }
@@ -349,10 +347,6 @@ public abstract class BuildViewTestCase extends FoundationTestCase {
 
   protected StarlarkSemantics getSkylarkSemantics() {
     return starlarkSemanticsOptions.toSkylarkSemantics();
-  }
-
-  protected PackageValidator getPackageValidator() {
-    return PackageValidator.NOOP_VALIDATOR;
   }
 
   protected final BuildConfigurationCollection createConfigurations(

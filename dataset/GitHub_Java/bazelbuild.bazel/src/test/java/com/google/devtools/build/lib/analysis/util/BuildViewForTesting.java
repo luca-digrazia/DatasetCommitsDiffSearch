@@ -41,7 +41,6 @@ import com.google.devtools.build.lib.analysis.DependencyResolver.InconsistentAsp
 import com.google.devtools.build.lib.analysis.ResolvedToolchainContext;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TargetAndConfiguration;
-import com.google.devtools.build.lib.analysis.ToolchainCollection;
 import com.google.devtools.build.lib.analysis.ToolchainContext;
 import com.google.devtools.build.lib.analysis.TopLevelArtifactContext;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
@@ -68,7 +67,6 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.StoredEventHandler;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.BuildType;
-import com.google.devtools.build.lib.packages.ExecGroup;
 import com.google.devtools.build.lib.packages.NoSuchPackageException;
 import com.google.devtools.build.lib.packages.NoSuchTargetException;
 import com.google.devtools.build.lib.packages.PackageSpecification;
@@ -86,13 +84,10 @@ import com.google.devtools.build.lib.skyframe.SkyframeExecutor;
 import com.google.devtools.build.lib.skyframe.TargetPatternPhaseValue;
 import com.google.devtools.build.lib.skyframe.ToolchainException;
 import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext;
-import com.google.devtools.build.lib.skyframe.UnloadedToolchainContext.UnloadedToolchainContextKey;
 import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.util.OrderedSetMultimap;
 import com.google.devtools.build.skyframe.SkyKey;
-import com.google.devtools.build.skyframe.ValueOrException;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -280,7 +275,7 @@ public class BuildViewForTesting {
       final ExtendedEventHandler eventHandler,
       final ConfiguredTarget ct,
       BuildConfigurationCollection configurations,
-      @Nullable ToolchainCollection<ToolchainContext> toolchainContexts)
+      @Nullable ToolchainContext toolchainContext)
       throws EvalException, InterruptedException, InconsistentAspectOrderException,
           StarlarkTransition.TransitionException, InvalidConfigurationException {
 
@@ -337,7 +332,7 @@ public class BuildViewForTesting {
         configurations.getHostConfiguration(),
         /*aspect=*/ null,
         getConfigurableAttributeKeysForTesting(eventHandler, ctgNode),
-        toolchainContexts,
+        toolchainContext,
         ruleClassProvider.getTrimmingTransitionFactory());
   }
 
@@ -372,12 +367,12 @@ public class BuildViewForTesting {
       final ExtendedEventHandler eventHandler,
       ConfiguredTarget target,
       BuildConfigurationCollection configurations,
-      @Nullable ToolchainCollection<ToolchainContext> toolchainContexts)
+      @Nullable ToolchainContext toolchainContext)
       throws EvalException, InvalidConfigurationException, InterruptedException,
           InconsistentAspectOrderException, StarlarkTransition.TransitionException {
     OrderedSetMultimap<DependencyKind, Dependency> depNodeNames =
         getDirectPrerequisiteDependenciesForTesting(
-            eventHandler, target, configurations, toolchainContexts);
+            eventHandler, target, configurations, toolchainContext);
 
     ImmutableMultimap<Dependency, ConfiguredTargetAndData> cts =
         skyframeExecutor.getConfiguredTargetMapForTesting(
@@ -501,69 +496,27 @@ public class BuildViewForTesting {
     }
     ImmutableSet<Label> requiredToolchains =
         target.getAssociatedRule().getRuleClassObject().getRequiredToolchains();
-    ImmutableMap<String, ExecGroup> execGroups =
-        target.getAssociatedRule().getRuleClassObject().getExecGroups();
     SkyFunctionEnvironmentForTesting skyfunctionEnvironment =
         skyframeExecutor.getSkyFunctionEnvironmentForTesting(eventHandler);
-
-    Map<String, UnloadedToolchainContextKey> unloadedToolchainContextKeys = new HashMap<>();
-    for (Map.Entry<String, ExecGroup> execGroup : execGroups.entrySet()) {
-      unloadedToolchainContextKeys.put(
-          execGroup.getKey(),
-          UnloadedToolchainContext.key()
-              .configurationKey(BuildConfigurationValue.key(targetConfig))
-              .requiredToolchainTypeLabels(execGroup.getValue().getRequiredToolchains())
-              .build());
-    }
-    String targetUnloadedToolchainContextKey = "target-unloaded-toolchain-context";
-    unloadedToolchainContextKeys.put(
-        targetUnloadedToolchainContextKey,
-        UnloadedToolchainContext.key()
-            .configurationKey(BuildConfigurationValue.key(targetConfig))
-            .requiredToolchainTypeLabels(requiredToolchains)
-            .build());
-
-    Map<SkyKey, ValueOrException<ToolchainException>> values =
-        skyfunctionEnvironment.getValuesOrThrow(
-            unloadedToolchainContextKeys.values(), ToolchainException.class);
-
-    ToolchainCollection.Builder<UnloadedToolchainContext> unloadedToolchainContexts =
-        new ToolchainCollection.Builder<>();
-    for (Map.Entry<String, UnloadedToolchainContextKey> unloadedToolchainContextKey :
-        unloadedToolchainContextKeys.entrySet()) {
-      UnloadedToolchainContext unloadedToolchainContext =
-          (UnloadedToolchainContext) values.get(unloadedToolchainContextKey.getValue()).get();
-      String execGroup = unloadedToolchainContextKey.getKey();
-      if (execGroup.equals(targetUnloadedToolchainContextKey)) {
-        unloadedToolchainContexts.addDefaultContext(unloadedToolchainContext);
-      } else {
-        unloadedToolchainContexts.addContext(execGroup, unloadedToolchainContext);
-      }
-    }
-
-    ToolchainCollection<UnloadedToolchainContext> unloadedToolchainCollection =
-        unloadedToolchainContexts.build();
+    UnloadedToolchainContext unloadedToolchainContext =
+        (UnloadedToolchainContext)
+            skyfunctionEnvironment.getValueOrThrow(
+                UnloadedToolchainContext.key()
+                    .configurationKey(BuildConfigurationValue.key(targetConfig))
+                    .requiredToolchainTypeLabels(requiredToolchains)
+                    .build(),
+                ToolchainException.class);
 
     OrderedSetMultimap<DependencyKind, ConfiguredTargetAndData> prerequisiteMap =
         getPrerequisiteMapForTesting(
-            eventHandler,
-            configuredTarget,
-            configurations,
-            unloadedToolchainCollection.asToolchainContexts());
+            eventHandler, configuredTarget, configurations, unloadedToolchainContext);
     String targetDescription = target.toString();
-
-    ToolchainCollection.Builder<ResolvedToolchainContext> resolvedToolchainContext =
-        new ToolchainCollection.Builder<>();
-    for (Map.Entry<String, UnloadedToolchainContext> unloadedToolchainContext :
-        unloadedToolchainCollection.getContextMap().entrySet()) {
-      ResolvedToolchainContext toolchainContext =
-          ResolvedToolchainContext.load(
-              target.getPackage().getRepositoryMapping(),
-              unloadedToolchainContext.getValue(),
-              targetDescription,
-              prerequisiteMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
-      resolvedToolchainContext.addContext(unloadedToolchainContext.getKey(), toolchainContext);
-    }
+    ResolvedToolchainContext toolchainContext =
+        ResolvedToolchainContext.load(
+            target.getPackage().getRepositoryMapping(),
+            unloadedToolchainContext,
+            targetDescription,
+            prerequisiteMap.get(DependencyResolver.TOOLCHAIN_DEPENDENCY));
 
     return new RuleContext.Builder(
             env,
@@ -583,7 +536,7 @@ public class BuildViewForTesting {
                 prerequisiteMap, target.getAssociatedRule()))
         .setConfigConditions(ImmutableMap.<Label, ConfigMatchingProvider>of())
         .setUniversalFragments(ruleClassProvider.getUniversalFragments())
-        .setToolchainContexts(resolvedToolchainContext.build())
+        .setToolchainContext(toolchainContext)
         .setConstraintSemantics(ruleClassProvider.getConstraintSemantics())
         .build();
   }

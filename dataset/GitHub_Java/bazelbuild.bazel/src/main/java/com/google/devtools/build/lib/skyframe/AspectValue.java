@@ -21,11 +21,11 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.actions.BasicActionLookupValue;
 import com.google.devtools.build.lib.analysis.ConfiguredAspect;
-import com.google.devtools.build.lib.analysis.ProviderCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
+import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectClass;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
@@ -34,12 +34,11 @@ import com.google.devtools.build.lib.packages.Package;
 import com.google.devtools.build.lib.skyframe.BuildConfigurationValue.Key;
 import com.google.devtools.build.lib.skyframe.ConfiguredTargetKey.KeyAndHost;
 import com.google.devtools.build.lib.skyframe.serialization.autocodec.AutoCodec;
-import com.google.devtools.build.lib.syntax.Location;
 import com.google.devtools.build.skyframe.SkyFunctionName;
 import javax.annotation.Nullable;
 
 /** An aspect in the context of the Skyframe graph. */
-public final class AspectValue extends BasicActionLookupValue implements ConfiguredObjectValue {
+public final class AspectValue extends BasicActionLookupValue {
   /**
    * A base class for keys that have AspectValue as a Sky value.
    */
@@ -286,7 +285,9 @@ public final class AspectValue extends BasicActionLookupValue implements Configu
     }
   }
 
-  /** The key for a Starlark aspect. */
+  /**
+   * The key for a skylark aspect.
+   */
   public static class SkylarkAspectLoadingKey extends AspectValueKey {
 
     private final Label targetLabel;
@@ -311,7 +312,7 @@ public final class AspectValue extends BasicActionLookupValue implements Configu
 
     @Override
     public SkyFunctionName functionName() {
-      return SkyFunctions.LOAD_STARLARK_ASPECT;
+      return SkyFunctions.LOAD_SKYLARK_ASPECT;
     }
 
     String getSkylarkValueName() {
@@ -333,7 +334,7 @@ public final class AspectValue extends BasicActionLookupValue implements Configu
 
     @Override
     public String getDescription() {
-      // Starlark aspects are referred to on command line with <file>%<value ame>
+      // Skylark aspects are referred to on command line with <file>%<value ame>
       return String.format("%s%%%s of %s", skylarkFileLabel, skylarkValueName, targetLabel);
     }
 
@@ -480,8 +481,7 @@ public final class AspectValue extends BasicActionLookupValue implements Configu
     return Preconditions.checkNotNull(aspect);
   }
 
-  @Override
-  public void clear(boolean clearEverything) {
+  void clear(boolean clearEverything) {
     Preconditions.checkNotNull(label, this);
     Preconditions.checkNotNull(aspect, this);
     Preconditions.checkNotNull(location, this);
@@ -497,7 +497,12 @@ public final class AspectValue extends BasicActionLookupValue implements Configu
     transitivePackagesForPackageRootResolution = null;
   }
 
-  @Override
+  /**
+   * Returns the set of packages transitively loaded by this value. Must only be used for
+   * constructing the package -> source root map needed for some builds. If the caller has not
+   * specified that this map needs to be constructed (via the constructor argument in {@link
+   * AspectFunction#AspectFunction}), calling this will crash.
+   */
   public NestedSet<Package> getTransitivePackagesForPackageRootResolution() {
     return Preconditions.checkNotNull(transitivePackagesForPackageRootResolution);
   }
@@ -511,11 +516,6 @@ public final class AspectValue extends BasicActionLookupValue implements Configu
         .add("aspect", aspect)
         .add("configuredAspect", configuredAspect)
         .toString();
-  }
-
-  @Override
-  public ProviderCollection getConfiguredObject() {
-    return getConfiguredAspect();
   }
 
   public static AspectKey createAspectKey(

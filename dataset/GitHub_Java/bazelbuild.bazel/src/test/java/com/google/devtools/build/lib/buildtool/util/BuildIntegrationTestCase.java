@@ -20,6 +20,7 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static com.google.common.truth.Truth.assertWithMessage;
 import static org.junit.Assert.fail;
 
+import com.google.common.base.Optional;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -44,7 +45,7 @@ import com.google.devtools.build.lib.analysis.WorkspaceStatusAction;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.BuildConfigurationCollection;
 import com.google.devtools.build.lib.analysis.config.InvalidConfigurationException;
-import com.google.devtools.build.lib.analysis.starlark.StarlarkTransition.TransitionException;
+import com.google.devtools.build.lib.analysis.skylark.StarlarkTransition.TransitionException;
 import com.google.devtools.build.lib.analysis.util.AnalysisMock;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestUtil.DummyWorkspaceStatusActionContext;
@@ -59,7 +60,7 @@ import com.google.devtools.build.lib.events.ExtendedEventHandler;
 import com.google.devtools.build.lib.events.NullEventHandler;
 import com.google.devtools.build.lib.events.util.EventCollectionApparatus;
 import com.google.devtools.build.lib.exec.BinTools;
-import com.google.devtools.build.lib.exec.ModuleActionContextRegistry;
+import com.google.devtools.build.lib.exec.ExecutorBuilder;
 import com.google.devtools.build.lib.includescanning.IncludeScanningModule;
 import com.google.devtools.build.lib.integration.util.IntegrationMock;
 import com.google.devtools.build.lib.network.ConnectivityStatusProvider;
@@ -75,9 +76,6 @@ import com.google.devtools.build.lib.runtime.BlazeServerStartupOptions;
 import com.google.devtools.build.lib.runtime.BlazeWorkspace;
 import com.google.devtools.build.lib.runtime.CommandEnvironment;
 import com.google.devtools.build.lib.runtime.WorkspaceBuilder;
-import com.google.devtools.build.lib.server.FailureDetails.FailureDetail;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn;
-import com.google.devtools.build.lib.server.FailureDetails.Spawn.Code;
 import com.google.devtools.build.lib.shell.AbnormalTerminationException;
 import com.google.devtools.build.lib.shell.Command;
 import com.google.devtools.build.lib.shell.CommandException;
@@ -95,7 +93,6 @@ import com.google.devtools.build.lib.testutil.TestSpec;
 import com.google.devtools.build.lib.testutil.TestUtils;
 import com.google.devtools.build.lib.util.CommandBuilder;
 import com.google.devtools.build.lib.util.CommandUtils;
-import com.google.devtools.build.lib.util.DetailedExitCode;
 import com.google.devtools.build.lib.util.LoggingUtil;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.util.io.OutErr;
@@ -112,7 +109,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import org.junit.After;
 import org.junit.Before;
@@ -146,13 +142,7 @@ public abstract class BuildIntegrationTestCase {
       if (getCause() != null && !getMessage().equals(getCause().getMessage())) {
         message += ": " + getCause().getMessage();
       }
-      // The detailed code doesn't matter, but it should be well-formed.
-      DetailedExitCode code =
-          DetailedExitCode.of(
-              FailureDetail.newBuilder()
-                  .setSpawn(Spawn.newBuilder().setCode(Code.NON_ZERO_EXIT))
-                  .build());
-      return new ActionExecutionException(message, getCause(), action, true, code);
+      return new ActionExecutionException(message, getCause(), action, true);
     }
   }
 
@@ -314,11 +304,9 @@ public abstract class BuildIntegrationTestCase {
       }
 
       @Override
-      public void registerActionContexts(
-          ModuleActionContextRegistry.Builder registryBuilder,
-          CommandEnvironment env,
-          BuildRequest buildRequest) {
-        registryBuilder.register(
+      public void executorInit(
+          CommandEnvironment env, BuildRequest request, ExecutorBuilder builder) {
+        builder.addActionContext(
             WorkspaceStatusAction.Context.class, new DummyWorkspaceStatusActionContext());
       }
     };
@@ -346,7 +334,7 @@ public abstract class BuildIntegrationTestCase {
       public ImmutableList<Injected> getPrecomputedValues() {
         return ImmutableList.of(
             PrecomputedValue.injected(
-                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.empty()));
+                RepositoryDelegatorFunction.RESOLVED_FILE_INSTEAD_OF_WORKSPACE, Optional.absent()));
       }
     };
   }
@@ -415,7 +403,7 @@ public abstract class BuildIntegrationTestCase {
     runtimeWrapper.resetOptions();
   }
 
-  protected void addOptions(String... args) {
+  protected void addOptions(String... args) throws Exception {
     runtimeWrapper.addOptions(args);
   }
 
