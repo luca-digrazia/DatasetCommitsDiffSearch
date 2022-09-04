@@ -117,7 +117,15 @@ public class MoreSearchAdapterES7 implements MoreSearchAdapter {
 
     @Override
     public void scrollEvents(String queryString, TimeRange timeRange, Set<String> affectedIndices, Set<String> streams, String scrollTime, int batchSize, ScrollEventsCallback resultCallback) throws EventProcessorException {
-        final ScrollCommand scrollCommand = buildScrollCommand(queryString, timeRange, affectedIndices, streams, batchSize);
+        final ScrollCommand scrollCommand = ScrollCommand.builder()
+                .query(queryString)
+                .range(timeRange)
+                .indices(affectedIndices)
+                .streams(streams)
+                .batchSize(batchSize)
+                // For correlation need the oldest messages to come in first
+                .sorting(new Sorting(Message.FIELD_TIMESTAMP, Sorting.Direction.ASC))
+                .build();
 
         final ScrollResult scrollResult = scroll.scroll(scrollCommand);
 
@@ -150,22 +158,5 @@ public class MoreSearchAdapterES7 implements MoreSearchAdapter {
             }
             LOG.debug("Scrolling done - took {} ms", stopwatch.stop().elapsed(TimeUnit.MILLISECONDS));
         }
-    }
-
-    private ScrollCommand buildScrollCommand(String queryString, TimeRange timeRange, Set<String> affectedIndices, Set<String> streams, int batchSize) {
-        ScrollCommand.Builder commandBuilder = ScrollCommand.builder()
-                .query(queryString)
-                .range(timeRange)
-                .indices(affectedIndices)
-                .batchSize(batchSize)
-                // For correlation need the oldest messages to come in first
-                .sorting(new Sorting(Message.FIELD_TIMESTAMP, Sorting.Direction.ASC));
-
-        if (!streams.isEmpty()) {
-            commandBuilder = commandBuilder.streams(streams);
-        }
-
-        return commandBuilder
-                .build();
     }
 }
