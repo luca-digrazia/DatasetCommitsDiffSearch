@@ -37,7 +37,6 @@ import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
 import com.google.devtools.build.lib.analysis.configuredtargets.RuleConfiguredTarget.Mode;
 import com.google.devtools.build.lib.analysis.stringtemplate.ExpansionException;
 import com.google.devtools.build.lib.analysis.test.InstrumentedFilesCollector;
@@ -47,6 +46,7 @@ import com.google.devtools.build.lib.events.Location;
 import com.google.devtools.build.lib.packages.Aspect;
 import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.BuildType;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
@@ -225,7 +225,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
     this.actionFactory = new SkylarkActionFactory(this, skylarkSemantics, ruleContext);
     this.ruleContext = Preconditions.checkNotNull(ruleContext);
     this.ruleLabelCanonicalName = ruleContext.getLabel().getCanonicalForm();
-    this.fragments = new FragmentCollection(ruleContext, ConfigurationTransitionProxy.NONE);
+    this.fragments = new FragmentCollection(ruleContext, ConfigurationTransition.NONE);
     this.hostFragments = new FragmentCollection(ruleContext, HostTransition.INSTANCE);
     this.aspectDescriptor = aspectDescriptor;
     this.skylarkSemantics = skylarkSemantics;
@@ -366,7 +366,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
     }
 
     @Override
-    public ImmutableCollection<String> getFieldNames() throws EvalException {
+    public ImmutableCollection<String> getKeys() throws EvalException {
       checkMutable();
       ImmutableList.Builder<String> result = ImmutableList.builder();
       if (context.isExecutable() && executableCreated) {
@@ -391,7 +391,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
 
     @Nullable
     @Override
-    public String getErrorMessageForUnknownField(String name) {
+    public String errorMessage(String name) {
       return String.format(
           "No attribute '%s' in outputs. Make sure you declared a rule output with this name.",
           name);
@@ -407,16 +407,16 @@ public final class SkylarkRuleContext implements SkylarkValue {
       }
       boolean first = true;
       printer.append("ctx.outputs(");
-      // Sort by field name to ensure deterministic output.
+      // Sort by key to ensure deterministic output.
       try {
-        for (String field : Ordering.natural().sortedCopy(getFieldNames())) {
+        for (String key : Ordering.natural().sortedCopy(getKeys())) {
           if (!first) {
             printer.append(", ");
           }
           first = false;
-          printer.append(field);
+          printer.append(key);
           printer.append(" = ");
-          printer.repr(getValue(field));
+          printer.repr(getValue(key));
         }
         printer.append(")");
       } catch (EvalException e) {
@@ -1001,6 +1001,8 @@ public final class SkylarkRuleContext implements SkylarkValue {
   public String getBuildFileRelativePath() throws EvalException {
     checkMutable("build_file_path");
     Package pkg = ruleContext.getRule().getPackage();
-    return pkg.getBuildFile().getPath().relativeTo(pkg.getSourceRoot()).getPathString();
+    Root root = Root.asSourceRoot(pkg.getSourceRoot(),
+        pkg.getPackageIdentifier().getRepository().isMain());
+    return pkg.getBuildFile().getPath().relativeTo(root.getPath()).getPathString();
   }
 }

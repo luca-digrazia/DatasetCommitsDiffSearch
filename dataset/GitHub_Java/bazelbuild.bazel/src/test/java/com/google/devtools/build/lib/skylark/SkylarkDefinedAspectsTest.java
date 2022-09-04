@@ -28,18 +28,18 @@ import com.google.devtools.build.lib.analysis.ConfiguredTarget;
 import com.google.devtools.build.lib.analysis.OutputGroupInfo;
 import com.google.devtools.build.lib.analysis.ViewCreationFailedException;
 import com.google.devtools.build.lib.analysis.config.HostTransition;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransitionProxy;
 import com.google.devtools.build.lib.analysis.util.AnalysisTestCase;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.cmdline.TargetParsingException;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.packages.AspectDefinition;
+import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.Info;
 import com.google.devtools.build.lib.packages.SkylarkProvider.SkylarkKey;
 import com.google.devtools.build.lib.packages.util.MockObjcSupport;
 import com.google.devtools.build.lib.packages.util.MockProtoSupport;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.java.JavaConfiguration;
+import com.google.devtools.build.lib.rules.java.Jvm;
 import com.google.devtools.build.lib.rules.objc.ObjcProtoProvider;
 import com.google.devtools.build.lib.skyframe.AspectValue;
 import com.google.devtools.build.lib.syntax.SkylarkList;
@@ -203,7 +203,7 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
         "def _impl(target, ctx):",
         "   print('This aspect does nothing')",
         "   return struct()",
-        "MyAspect = aspect(implementation=_impl, fragments=['java'], host_fragments=['cpp'])");
+        "MyAspect = aspect(implementation=_impl, fragments=['jvm'], host_fragments=['cpp'])");
     scratch.file("test/BUILD", "java_library(name = 'xxx',)");
 
     AnalysisResult analysisResult =
@@ -212,17 +212,15 @@ public class SkylarkDefinedAspectsTest extends AnalysisTestCase {
     AspectDefinition aspectDefinition = aspectValue.getAspect().getDefinition();
     assertThat(
         aspectDefinition.getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(JavaConfiguration.class,
-                ConfigurationTransitionProxy.NONE))
+            .isLegalConfigurationFragment(Jvm.class, ConfigurationTransition.NONE))
         .isTrue();
     assertThat(
         aspectDefinition.getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(JavaConfiguration.class, HostTransition.INSTANCE))
+            .isLegalConfigurationFragment(Jvm.class, HostTransition.INSTANCE))
         .isFalse();
     assertThat(
         aspectDefinition.getConfigurationFragmentPolicy()
-            .isLegalConfigurationFragment(CppConfiguration.class,
-                ConfigurationTransitionProxy.NONE))
+            .isLegalConfigurationFragment(CppConfiguration.class, ConfigurationTransition.NONE))
         .isFalse();
     assertThat(
         aspectDefinition.getConfigurationFragmentPolicy()

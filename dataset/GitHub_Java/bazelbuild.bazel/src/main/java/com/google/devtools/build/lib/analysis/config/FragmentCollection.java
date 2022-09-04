@@ -16,11 +16,12 @@ package com.google.devtools.build.lib.analysis.config;
 import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableCollection;
 import com.google.devtools.build.lib.analysis.RuleContext;
-import com.google.devtools.build.lib.analysis.config.transitions.ConfigurationTransition;
 import com.google.devtools.build.lib.concurrent.ThreadSafety.Immutable;
+import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModule;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkModuleCategory;
 import com.google.devtools.build.lib.syntax.ClassObject;
+
 import javax.annotation.Nullable;
 
 /**
@@ -39,9 +40,9 @@ import javax.annotation.Nullable;
     + "(see <a href=\"../rules.md#fragments\">here</a>).")
 public class FragmentCollection implements ClassObject {
   private final RuleContext ruleContext;
-  private final ConfigurationTransition transition;
+  private final Attribute.Transition transition;
 
-  public FragmentCollection(RuleContext ruleContext, ConfigurationTransition transition) {
+  public FragmentCollection(RuleContext ruleContext, Attribute.Transition transition) {
     this.ruleContext = ruleContext;
     this.transition = transition;
   }
@@ -53,29 +54,29 @@ public class FragmentCollection implements ClassObject {
   }
 
   @Override
-  public ImmutableCollection<String> getFieldNames() {
+  public ImmutableCollection<String> getKeys() {
     return ruleContext.getSkylarkFragmentNames(transition);
   }
 
   @Override
   @Nullable
-  public String getErrorMessageForUnknownField(String name) {
+  public String errorMessage(String name) {
     return String.format(
         "There is no configuration fragment named '%s' in %s configuration. "
         + "Available fragments: %s",
-        name, getConfigurationName(transition), fieldsToString());
+        name, getConfigurationName(transition), printKeys());
   }
 
-  private String fieldsToString() {
-    return String.format("'%s'", Joiner.on("', '").join(getFieldNames()));
+  private String printKeys() {
+    return String.format("'%s'", Joiner.on("', '").join(getKeys()));
   }
 
-  public static String getConfigurationName(ConfigurationTransition config) {
+  public static String getConfigurationName(Attribute.Transition config) {
     return config.isHostTransition() ? "host" : "target";
   }
 
   @Override
   public String toString() {
-    return getConfigurationName(transition) + ": [ " + fieldsToString() + "]";
+    return getConfigurationName(transition) + ": [ " + printKeys() + "]";
   }
 }
