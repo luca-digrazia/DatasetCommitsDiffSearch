@@ -136,22 +136,23 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testBadOrder() throws Exception {
-    new Scenario()
-        .testIfExactError("Invalid order: non_existing", "depset(['a'], order='non_existing')");
+    new BothModesTest().testIfExactError(
+        "Invalid order: non_existing",
+        "depset(['a'], order='non_existing')");
   }
 
   @Test
   public void testBadOrderDirect() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "Invalid order: non_existing", "depset(direct = ['a'], order='non_existing')");
+    new BothModesTest().testIfExactError(
+        "Invalid order: non_existing",
+        "depset(direct = ['a'], order='non_existing')");
   }
 
   @Test
   public void testBadOrderItems() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "Invalid order: non_existing", "depset(items = ['a'], order='non_existing')");
+    new BothModesTest().testIfExactError(
+        "Invalid order: non_existing",
+        "depset(items = ['a'], order='non_existing')");
   }
 
   @Test
@@ -194,53 +195,49 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testBadGenericType() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "cannot add an item of type 'int' to a depset of 'string'", "depset(['a', 5])");
+    new BothModesTest().testIfExactError(
+        "cannot add an item of type 'int' to a depset of 'string'",
+        "depset(['a', 5])");
   }
 
   @Test
   public void testBadGenericTypeDirect() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "cannot add an item of type 'int' to a depset of 'string'",
-            "depset(direct = ['a', 5])");
+    new BothModesTest().testIfExactError(
+        "cannot add an item of type 'int' to a depset of 'string'",
+        "depset(direct = ['a', 5])");
   }
 
   @Test
   public void testBadGenericTypeItems() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "cannot add an item of type 'int' to a depset of 'string'", "depset(items = ['a', 5])");
+    new BothModesTest().testIfExactError(
+        "cannot add an item of type 'int' to a depset of 'string'",
+        "depset(items = ['a', 5])");
   }
 
   @Test
   public void testBadGenericTypeTransitive() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "cannot add an item of type 'int' to a depset of 'string'",
-            "depset(['a', 'b'], transitive=[depset([1])])");
+    new BothModesTest().testIfExactError(
+        "cannot add an item of type 'int' to a depset of 'string'",
+        "depset(['a', 'b'], transitive=[depset([1])])");
   }
 
   @Test
   public void testLegacyAndNewApi() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "Do not pass both 'direct' and 'items' argument to depset constructor.",
-            "depset(['a', 'b'], direct = ['c', 'd'])");
+    new BothModesTest().testIfExactError(
+        "Do not pass both 'direct' and 'items' argument to depset constructor.",
+        "depset(['a', 'b'], direct = ['c', 'd'])");
   }
 
   @Test
   public void testItemsAndTransitive() throws Exception {
-    new Scenario()
-        .testIfExactError(
-            "expected type 'sequence' for items but got type 'depset' instead",
-            "depset(items = depset(), transitive = [depset()])");
+    new BothModesTest().testIfExactError(
+        "expected type 'sequence' for items but got type 'depset' instead",
+        "depset(items = depset(), transitive = [depset()])");
   }
 
   @Test
   public void testTooManyPositionals() throws Exception {
-    new Scenario()
+    new BothModesTest()
         .testIfErrorContains(
             "depset() accepts no more than 2 positional arguments but got 3",
             "depset([], 'default', [])");
@@ -275,10 +272,10 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testIncompatibleUnion() throws Exception {
-    new Scenario("--incompatible_depset_union=true")
+    new BothModesTest("--incompatible_depset_union=true")
         .testIfErrorContains("`+` operator on a depset is forbidden", "depset([]) + ['a']");
 
-    new Scenario("--incompatible_depset_union=true")
+    new BothModesTest("--incompatible_depset_union=true")
         .testIfErrorContains("`|` operator on a depset is forbidden", "depset([]) | ['a']");
   }
 
@@ -291,7 +288,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testUnionOrder() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "def func():",
         "  s1 = depset()",
@@ -306,7 +303,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testUnionIncompatibleOrder() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     checkEvalError(
         "Order mismatch: topological != postorder",
         "depset(['a', 'b'], order='postorder') + depset(['c', 'd'], order='topological')");
@@ -314,7 +311,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testFunctionReturnsDepset() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "def func():", //
         "  t = depset()",
@@ -327,7 +324,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testPlusEqualsWithList() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "def func():", //
         "  t = depset()",
@@ -339,7 +336,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testPlusEqualsNoSideEffects() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "def func():",
         "  s1 = depset()",
@@ -353,7 +350,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testFuncParamNoSideEffects() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "def func1(t):",
         "  t += ['b']",
@@ -368,7 +365,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testTransitiveOrdering() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "def func():",
         "  sa = depset(['a'], order='postorder')",
@@ -382,7 +379,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testLeftRightDirectOrdering() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "def func():",
         "  t = depset()",
@@ -397,7 +394,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testToString() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "s = depset() + [2, 4, 6] + [3, 4, 5]", //
         "x = str(s)");
@@ -406,7 +403,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testToStringWithOrder() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "s = depset(order = 'topological') + [2, 4, 6] + [3, 4, 5]", //
         "x = str(s)");
@@ -419,7 +416,7 @@ public final class DepsetTest extends EvaluationTestCase {
 
   @Test
   public void testToList() throws Exception {
-    setSemantics("--incompatible_depset_union=false");
+    thread = newStarlarkThreadWithSkylarkOptions("--incompatible_depset_union=false");
     exec(
         "s = depset() + [2, 4, 6] + [3, 4, 5]", //
         "x = s.to_list()");
@@ -523,7 +520,8 @@ public final class DepsetTest extends EvaluationTestCase {
   @Test
   public void testMutableDepsetElementsLegacyBehavior() throws Exception {
     // See b/144992997 and github.com/bazelbuild/bazel/issues/10313.
-    setSemantics("--incompatible_always_check_depset_elements=false");
+    thread =
+        newStarlarkThreadWithSkylarkOptions("--incompatible_always_check_depset_elements=false");
 
     // Test legacy depset(...) and new depset(direct=...) constructors.
 
@@ -556,7 +554,8 @@ public final class DepsetTest extends EvaluationTestCase {
   @Test
   public void testMutableDepsetElementsDesiredBehavior() throws Exception {
     // See b/144992997 and github.com/bazelbuild/bazel/issues/10313.
-    setSemantics("--incompatible_always_check_depset_elements=true");
+    thread =
+        newStarlarkThreadWithSkylarkOptions("--incompatible_always_check_depset_elements=true");
 
     // Test legacy depset(...) and new depset(direct=...) constructors.
 
@@ -589,7 +588,7 @@ public final class DepsetTest extends EvaluationTestCase {
   @Test
   public void testDepthExceedsLimitDuringIteration() throws Exception {
     NestedSet.setApplicationDepthLimit(2000);
-    new Scenario()
+    new SkylarkTest()
         .setUp(
             "def create_depset(depth):",
             "  x = depset([0])",
