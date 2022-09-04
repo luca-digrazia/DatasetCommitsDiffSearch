@@ -18,8 +18,8 @@ package org.graylog2.dashboards;
 
 import org.graylog2.dashboards.widgets.DashboardWidget;
 import org.graylog2.database.NotFoundException;
-import org.graylog2.plugin.database.PersistedService;
-import org.graylog2.plugin.database.ValidationException;
+import org.graylog2.database.PersistedService;
+import org.graylog2.database.ValidationException;
 import org.graylog2.rest.resources.dashboards.requests.WidgetPositions;
 
 import java.util.List;
@@ -38,9 +38,4 @@ public interface DashboardService extends PersistedService {
     void updateWidgetDescription(Dashboard dashboard, DashboardWidget widget, String newDescription) throws ValidationException;
 
     void updateWidgetCacheTime(Dashboard dashboard, DashboardWidget widget, int cacheTime) throws ValidationException;
-
-    /**
-     * @return the total number of dashboards
-     */
-    long dashboardCount();
 }

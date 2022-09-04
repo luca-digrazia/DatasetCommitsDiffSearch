@@ -44,7 +44,6 @@ import org.graylog2.plugin.configuration.ConfigurationException;
 import org.graylog2.plugin.inputs.MessageInput;
 import org.graylog2.rest.resources.dashboards.requests.WidgetPositions;
 import org.graylog2.shared.inputs.InputRegistry;
-import org.graylog2.shared.inputs.MessageInputFactory;
 import org.graylog2.shared.inputs.NoSuchInputTypeException;
 import org.graylog2.streams.OutputImpl;
 import org.graylog2.streams.OutputService;
@@ -80,7 +79,6 @@ public class BundleImporter {
     private final ServerStatus serverStatus;
     private final MetricRegistry metricRegistry;
     private final Searches searches;
-    private final MessageInputFactory messageInputFactory;
 
     private final Map<String, MessageInput> createdInputs = new HashMap<>();
     private final Map<String, org.graylog2.plugin.streams.Output> createdOutputs = new HashMap<>();
@@ -100,8 +98,7 @@ public class BundleImporter {
                           final DashboardRegistry dashboardRegistry,
                           final ServerStatus serverStatus,
                           final MetricRegistry metricRegistry,
-                          final Searches searches,
-                          final MessageInputFactory messageInputFactory) {
+                          final Searches searches) {
         this.inputService = inputService;
         this.inputRegistry = inputRegistry;
         this.extractorFactory = extractorFactory;
@@ -113,7 +110,6 @@ public class BundleImporter {
         this.serverStatus = serverStatus;
         this.metricRegistry = metricRegistry;
         this.searches = searches;
-        this.messageInputFactory = messageInputFactory;
     }
 
     public void runImport(final ConfigurationBundle bundle, final String userName) {
@@ -173,8 +169,7 @@ public class BundleImporter {
 
             LOG.debug("Terminating message input {}", inputId);
             inputRegistry.terminate(messageInput);
-            final org.graylog2.inputs.Input input = inputService.find(messageInput.getId());
-            inputService.destroy(input);
+            inputRegistry.cleanInput(messageInput);
         }
     }
 
@@ -221,7 +216,7 @@ public class BundleImporter {
         final Configuration inputConfig = new Configuration(inputDescription.getConfiguration());
         final DateTime createdAt = Tools.iso8601();
 
-        final MessageInput messageInput = messageInputFactory.create(inputDescription.getType(), inputConfig);
+        final MessageInput messageInput = inputRegistry.create(inputDescription.getType(), inputConfig);
         messageInput.setTitle(inputDescription.getTitle());
         messageInput.setGlobal(inputDescription.isGlobal());
         messageInput.setCreatorUserId(userName);
