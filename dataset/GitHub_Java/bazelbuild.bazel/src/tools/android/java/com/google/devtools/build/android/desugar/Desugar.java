@@ -171,16 +171,6 @@ class Desugar {
     public boolean desugarTryWithResourcesIfNeeded;
 
     @Option(
-      name = "desugar_try_with_resources_omit_runtime_classes",
-      defaultValue = "false",
-      category = "misc",
-      help =
-          "Omits the runtime classes necessary to support try-with-resources from the output. "
-              + "This property has effect only if --desugar_try_with_resources_if_needed is used."
-    )
-    public boolean desugarTryWithResourcesOmitRuntimeClasses;
-
-    @Option(
       name = "copy_bridges_from_classpath",
       defaultValue = "false",
       category = "misc",
@@ -316,9 +306,7 @@ class Desugar {
   }
 
   private void copyThrowableExtensionClass(OutputFileProvider outputFileProvider) {
-    if (!outputJava7
-        || !options.desugarTryWithResourcesIfNeeded
-        || options.desugarTryWithResourcesOmitRuntimeClasses) {
+    if (!outputJava7 || !options.desugarTryWithResourcesIfNeeded) {
       // try-with-resources statements are okay in the output jar.
       return;
     }
@@ -540,13 +528,15 @@ class Desugar {
    */
   private static Path createAndRegisterLambdaDumpDirectory() throws IOException {
     String propertyValue = System.getProperty(LambdaClassMaker.LAMBDA_METAFACTORY_DUMPER_PROPERTY);
+    Path dumpDirectory;
     if (propertyValue != null) {
-      return Paths.get(propertyValue);
+      dumpDirectory = Paths.get(propertyValue);
+    } else {
+      dumpDirectory = Files.createTempDirectory("lambdas");
+      System.setProperty(
+          LambdaClassMaker.LAMBDA_METAFACTORY_DUMPER_PROPERTY, dumpDirectory.toString());
     }
 
-    Path dumpDirectory = Files.createTempDirectory("lambdas");
-    System.setProperty(
-        LambdaClassMaker.LAMBDA_METAFACTORY_DUMPER_PROPERTY, dumpDirectory.toString());
     deleteTreeOnExit(dumpDirectory);
     return dumpDirectory;
   }
