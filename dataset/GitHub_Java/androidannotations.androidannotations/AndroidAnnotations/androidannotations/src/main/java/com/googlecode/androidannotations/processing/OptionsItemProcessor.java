@@ -56,7 +56,7 @@ public class OptionsItemProcessor extends MultipleResIdsBasedProcessor implement
 
 	@Override
 	public void process(Element element, JCodeModel codeModel, EBeansHolder activitiesHolder) {
-		EBeanHolder holder = activitiesHolder.getEnclosingEBeanHolder(element);
+		EBeanHolder holder = activitiesHolder.getEnclosingActivityHolder(element);
 
 		String methodName = element.getSimpleName().toString();
 
@@ -100,10 +100,11 @@ public class OptionsItemProcessor extends MultipleResIdsBasedProcessor implement
 			itemCaseBody.add(methodCall);
 			itemCaseBody._return(TRUE);
 		}
-
+		
 		if (hasItemParameter) {
 			methodCall.arg(holder.onOptionsItemSelectedItem);
 		}
+
 
 	}
 
