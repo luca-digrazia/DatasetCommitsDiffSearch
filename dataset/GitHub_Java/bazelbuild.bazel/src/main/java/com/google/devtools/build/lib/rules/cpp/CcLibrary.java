@@ -115,6 +115,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       boolean linkStatic,
       boolean addDynamicRuntimeInputArtifactsToRunfiles)
       throws RuleErrorException, InterruptedException {
+    CppHelper.checkAllowedDeps(ruleContext);
 
     final CcCommon common = new CcCommon(ruleContext);
 
@@ -156,13 +157,13 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
                 ruleContext.getConfiguration())
             .fromCommon(common)
             .addLinkopts(common.getLinkopts())
-            .emitInterfaceSharedLibraries(true)
+            .emitInterfaceSharedObjects(true)
             .setAlwayslink(alwaysLink)
             .setNeverLink(neverLink)
             .addLinkstamps(ruleContext.getPrerequisites("linkstamp", Mode.TARGET));
 
     Artifact soImplArtifact = null;
-    boolean supportsDynamicLinker = ccToolchain.supportsDynamicLinker(featureConfiguration);
+    boolean supportsDynamicLinker = ccToolchain.supportsDynamicLinker();
     // TODO(djasper): This is hacky. We should actually try to figure out whether we generate
     // ccOutputs.
     boolean createDynamicLibrary =
@@ -216,8 +217,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
               ccToolchain,
               ruleContext.getConfiguration(),
               LinkTargetType.NODEPS_DYNAMIC_LIBRARY));
-      if (CppHelper.useInterfaceSharedLibraries(
-          ccToolchain.getCppConfiguration(), ccToolchain, featureConfiguration)) {
+      if (CppHelper.useInterfaceSharedObjects(ccToolchain.getCppConfiguration(), ccToolchain)) {
         dynamicLibraries.add(
             CppHelper.getLinkedArtifact(
                 ruleContext,
@@ -241,8 +241,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
               ccToolchain,
               ruleContext.getConfiguration(),
               LinkTargetType.NODEPS_DYNAMIC_LIBRARY));
-      if (CppHelper.useInterfaceSharedLibraries(
-          ccToolchain.getCppConfiguration(), ccToolchain, featureConfiguration)) {
+      if (CppHelper.useInterfaceSharedObjects(ccToolchain.getCppConfiguration(), ccToolchain)) {
         dynamicLibraries.add(
             CppHelper.getLinkedArtifact(
                 ruleContext,
@@ -348,11 +347,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     if (!ccLinkingOutputs.isEmpty()) {
       outputGroups.putAll(
           addLinkerOutputArtifacts(
-              ruleContext,
-              ccToolchain,
-              ruleContext.getConfiguration(),
-              ccCompilationOutputs,
-              featureConfiguration));
+              ruleContext, ccToolchain, ruleContext.getConfiguration(), ccCompilationOutputs));
     }
     CcLinkingOutputs ccLinkingOutputsWithPrecompiledLibraries =
         addPrecompiledLibrariesToLinkingOutputs(
@@ -422,8 +417,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
     builder.addDataDeps(ruleContext);
     builder.add(ruleContext, RunfilesProvider.DEFAULT_RUNFILES);
     if (addDynamicRuntimeInputArtifactsToRunfiles) {
-      builder.addTransitiveArtifacts(
-          ccToolchain.getDynamicRuntimeLinkInputs(ruleContext, featureConfiguration));
+      builder.addTransitiveArtifacts(ccToolchain.getDynamicRuntimeLinkInputs(featureConfiguration));
     }
     Runfiles runfiles = builder.build();
     Runfiles.Builder defaultRunfiles =
@@ -454,8 +448,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
         .addProvider(RunfilesProvider.withData(defaultRunfiles.build(), dataRunfiles.build()))
         .addOutputGroup(
             OutputGroupInfo.HIDDEN_TOP_LEVEL,
-            collectHiddenTopLevelArtifacts(
-                ruleContext, ccToolchain, ccCompilationOutputs, featureConfiguration))
+            collectHiddenTopLevelArtifacts(ruleContext, ccToolchain, ccCompilationOutputs))
         .addOutputGroup(
             CcCompilationHelper.HIDDEN_HEADER_TOKENS,
             CcCompilationHelper.collectHeaderTokens(ruleContext, ccCompilationOutputs));
@@ -464,13 +457,12 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
   private static NestedSet<Artifact> collectHiddenTopLevelArtifacts(
       RuleContext ruleContext,
       CcToolchainProvider toolchain,
-      CcCompilationOutputs ccCompilationOutputs,
-      FeatureConfiguration featureConfiguration) {
+      CcCompilationOutputs ccCompilationOutputs) {
     // Ensure that we build all the dependencies, otherwise users may get confused.
     NestedSetBuilder<Artifact> artifactsToForceBuilder = NestedSetBuilder.stableOrder();
     CppConfiguration cppConfiguration = ruleContext.getFragment(CppConfiguration.class);
     boolean processHeadersInDependencies = cppConfiguration.processHeadersInDependencies();
-    boolean usePic = toolchain.usePicForDynamicLibraries(featureConfiguration);
+    boolean usePic = toolchain.usePicForDynamicLibraries();
     artifactsToForceBuilder.addTransitive(
         ccCompilationOutputs.getFilesToCompile(processHeadersInDependencies, usePic));
     for (OutputGroupInfo dep :
@@ -566,8 +558,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
       RuleContext ruleContext,
       CcToolchainProvider ccToolchain,
       BuildConfiguration configuration,
-      CcCompilationOutputs ccCompilationOutputs,
-      FeatureConfiguration featureConfiguration)
+      CcCompilationOutputs ccCompilationOutputs)
       throws RuleErrorException {
 
     NestedSetBuilder<Artifact> archiveFile = new NestedSetBuilder<>(Order.STABLE_ORDER);
@@ -608,8 +599,7 @@ public abstract class CcLibrary implements RuleConfiguredTargetFactory {
               Link.LinkTargetType.NODEPS_DYNAMIC_LIBRARY,
               /* linkedArtifactNameSuffix= */ ""));
 
-      if (CppHelper.useInterfaceSharedLibraries(
-          ccToolchain.getCppConfiguration(), ccToolchain, featureConfiguration)) {
+      if (CppHelper.useInterfaceSharedObjects(ccToolchain.getCppConfiguration(), ccToolchain)) {
         dynamicLibrary.add(
             CppHelper.getLinkedArtifact(
                 ruleContext,

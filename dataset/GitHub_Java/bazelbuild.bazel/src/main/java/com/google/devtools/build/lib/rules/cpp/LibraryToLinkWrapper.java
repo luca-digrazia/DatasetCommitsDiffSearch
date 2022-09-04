@@ -19,7 +19,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Iterables;
-import com.google.common.collect.Streams;
 import com.google.devtools.build.lib.actions.Artifact;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
@@ -27,13 +26,8 @@ import com.google.devtools.build.lib.rules.cpp.CcLinkParams.LinkOptions;
 import com.google.devtools.build.lib.rules.cpp.CcLinkParams.Linkstamp;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.LibraryToLink;
 import com.google.devtools.build.lib.rules.cpp.LinkerInputs.SolibLibraryToLink;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.CcLinkingContextApi;
-import com.google.devtools.build.lib.skylarkbuildapi.cpp.LibraryToLinkWrapperApi;
-import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.vfs.FileSystemUtils;
-import java.util.Collection;
 import java.util.Iterator;
-import java.util.ListIterator;
 import javax.annotation.Nullable;
 
 /**
@@ -49,7 +43,7 @@ import javax.annotation.Nullable;
  * <p>To do this refactoring incrementally, we first introduce this class and add a method that is
  * able to convert from this representation to the old four CcLinkParams variables.
  */
-public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
+public class LibraryToLinkWrapper {
 
   public static LibraryToLinkWrapper convertLinkOutputsToLibraryToLinkWrapper(
       CcLinkingOutputs ccLinkingOutputs) {
@@ -118,7 +112,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
   }
 
   /** Structure of the new CcLinkingContext. This will replace {@link CcLinkingInfo}. */
-  public static class CcLinkingContext implements CcLinkingContextApi {
+  public static class CcLinkingContext {
     private final NestedSet<LibraryToLinkWrapper> libraries;
     private final NestedSet<LinkOptions> userLinkFlags;
     private final NestedSet<Linkstamp> linkstamps;
@@ -142,25 +136,8 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       return libraries;
     }
 
-    @Override
-    public SkylarkList<String> getSkylarkUserLinkFlags() {
-      return SkylarkList.createImmutable(getFlattenedUserLinkFlags());
-    }
-
-    @Override
-    public SkylarkList<LibraryToLinkWrapperApi> getSkylarkLibrariesToLink() {
-      return SkylarkList.createImmutable(libraries.toList());
-    }
-
     public NestedSet<LinkOptions> getUserLinkFlags() {
       return userLinkFlags;
-    }
-
-    protected ImmutableList<String> getFlattenedUserLinkFlags() {
-      return Streams.stream(userLinkFlags)
-          .map(LinkOptions::get)
-          .flatMap(Collection::stream)
-          .collect(ImmutableList.toImmutableList());
     }
 
     public NestedSet<Linkstamp> getLinkstamps() {
@@ -303,7 +280,6 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     return libraryIdentifier;
   }
 
-  @Override
   public Artifact getStaticLibrary() {
     return staticLibrary;
   }
@@ -312,17 +288,14 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     return objectFiles;
   }
 
-  @Override
   public Artifact getPicStaticLibrary() {
     return picStaticLibrary;
   }
 
-  @Override
   public Artifact getDynamicLibrary() {
     return dynamicLibrary;
   }
 
-  @Override
   public Artifact getInterfaceLibrary() {
     return interfaceLibrary;
   }
@@ -508,27 +481,11 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       CcLinkParams staticModeParamsForDynamicLibrary,
       CcLinkParams dynamicModeParamsForExecutable,
       CcLinkParams dynamicModeParamsForDynamicLibrary) {
-    NestedSet<Artifact> seNonCodeInputs = staticModeParamsForExecutable.getNonCodeInputs();
-    NestedSet<Artifact> sdNonCodeInputs = staticModeParamsForDynamicLibrary.getNonCodeInputs();
-    NestedSet<Artifact> deNonCodeInputs = dynamicModeParamsForExecutable.getNonCodeInputs();
-    NestedSet<Artifact> ddNonCodeInputs = dynamicModeParamsForDynamicLibrary.getNonCodeInputs();
-    Preconditions.checkState(
-        !(seNonCodeInputs == null
-                || sdNonCodeInputs == null
-                || deNonCodeInputs == null
-                || ddNonCodeInputs == null)
-            || (seNonCodeInputs == null
-                && sdNonCodeInputs == null
-                && deNonCodeInputs == null
-                && ddNonCodeInputs == null));
-    if (sdNonCodeInputs == null) {
-      return NestedSetBuilder.<Artifact>linkOrder().build();
-    }
     checkAllSizesMatch(
-        sdNonCodeInputs.toList().size(),
-        deNonCodeInputs.toList().size(),
-        deNonCodeInputs.toList().size(),
-        ddNonCodeInputs.toList().size());
+        staticModeParamsForExecutable.getNonCodeInputs().toList().size(),
+        staticModeParamsForDynamicLibrary.getNonCodeInputs().toList().size(),
+        dynamicModeParamsForExecutable.getNonCodeInputs().toList().size(),
+        dynamicModeParamsForDynamicLibrary.getNonCodeInputs().toList().size());
     return staticModeParamsForExecutable.getNonCodeInputs();
   }
 
@@ -576,15 +533,12 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
   }
 
   @Nullable
-  @SuppressWarnings("ReferenceEquality")
   private static String setDynamicArtifactsAndReturnIdentifier(
       LibraryToLinkWrapper.Builder libraryToLinkWrapperBuilder,
       LibraryToLink dynamicModeParamsForExecutableEntry,
       LibraryToLink dynamicModeParamsForDynamicLibraryEntry,
-      ListIterator<Artifact> runtimeLibraryIterator) {
-    Artifact artifact = dynamicModeParamsForExecutableEntry.getArtifact();
+      Iterator<Artifact> runtimeLibraryIterator) {
     String libraryIdentifier = null;
-    Artifact runtimeArtifact = null;
     if (dynamicModeParamsForExecutableEntry.getArtifactCategory()
             == ArtifactCategory.DYNAMIC_LIBRARY
         || dynamicModeParamsForExecutableEntry.getArtifactCategory()
@@ -592,18 +546,6 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       Preconditions.checkState(
           dynamicModeParamsForExecutableEntry == dynamicModeParamsForDynamicLibraryEntry);
       libraryIdentifier = dynamicModeParamsForExecutableEntry.getLibraryIdentifier();
-
-      // Not every library to link has a corresponding runtime artifact, for example this is the
-      // case when it is provided by the system. Here we check if the next runtime artifact has the
-      // same basename as the current library to link, if it is, then we match them together. If
-      // isn't, then we must rewind the iterator since every call to next() advances it.
-      if (runtimeLibraryIterator.hasNext()) {
-        runtimeArtifact = runtimeLibraryIterator.next();
-        if (!doArtifactsHaveSameBasename(artifact, runtimeArtifact)) {
-          runtimeArtifact = null;
-          runtimeLibraryIterator.previous();
-        }
-      }
     }
 
     if (dynamicModeParamsForExecutableEntry.getArtifactCategory()
@@ -613,6 +555,10 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       // didn't cause any issues. In any case, here we have to figure out whether the library is
       // an interface library or not by checking the extension if it's a symlink.
 
+      Preconditions.checkState(runtimeLibraryIterator.hasNext());
+      Artifact runtimeArtifact = runtimeLibraryIterator.next();
+
+      Artifact artifact = dynamicModeParamsForExecutableEntry.getArtifact();
       if (dynamicModeParamsForExecutableEntry instanceof SolibLibraryToLink) {
         // Note: with the old way of doing CcLinkParams, we lose the information regarding the
         // runtime library. If {@code runtimeArtifact} is a symlink we only have the symlink but
@@ -627,27 +573,34 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
           libraryToLinkWrapperBuilder.setInterfaceLibrary(artifact);
           libraryToLinkWrapperBuilder.setResolvedSymlinkInterfaceLibrary(
               dynamicModeParamsForExecutableEntry.getOriginalLibraryArtifact());
-          if (runtimeArtifact != null) {
-            libraryToLinkWrapperBuilder.setDynamicLibrary(runtimeArtifact);
-          }
+          Preconditions.checkState(
+              doArtifactsHaveSameBasename(
+                  dynamicModeParamsForExecutableEntry.getArtifact(), runtimeArtifact));
+          libraryToLinkWrapperBuilder.setDynamicLibrary(runtimeArtifact);
         } else {
-          Preconditions.checkState(runtimeArtifact == null || artifact == runtimeArtifact);
+          Preconditions.checkState(
+              dynamicModeParamsForExecutableEntry.getArtifact() == runtimeArtifact);
           libraryToLinkWrapperBuilder.setDynamicLibrary(artifact);
           libraryToLinkWrapperBuilder.setResolvedSymlinkDynamicLibrary(
               dynamicModeParamsForExecutableEntry.getOriginalLibraryArtifact());
         }
       } else {
         libraryToLinkWrapperBuilder.setDynamicLibrary(artifact);
-        Preconditions.checkState(runtimeArtifact == null || artifact == runtimeArtifact);
+        Preconditions.checkState(
+            dynamicModeParamsForExecutableEntry.getArtifact() == runtimeArtifact);
       }
     } else if (dynamicModeParamsForExecutableEntry.getArtifactCategory()
         == ArtifactCategory.INTERFACE_LIBRARY) {
+      Preconditions.checkState(runtimeLibraryIterator.hasNext());
       Preconditions.checkState(
           !(dynamicModeParamsForExecutableEntry instanceof SolibLibraryToLink));
-      libraryToLinkWrapperBuilder.setInterfaceLibrary(artifact);
-      if (runtimeArtifact != null) {
-        libraryToLinkWrapperBuilder.setDynamicLibrary(runtimeArtifact);
-      }
+      Artifact runtimeArtifact = runtimeLibraryIterator.next();
+      Preconditions.checkState(
+          doArtifactsHaveSameBasename(
+              dynamicModeParamsForExecutableEntry.getArtifact(), runtimeArtifact));
+      libraryToLinkWrapperBuilder.setInterfaceLibrary(
+          dynamicModeParamsForExecutableEntry.getArtifact());
+      libraryToLinkWrapperBuilder.setDynamicLibrary(runtimeArtifact);
     }
     return libraryIdentifier;
   }
@@ -666,8 +619,8 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     Iterator<LibraryToLink> dynamicModeParamsForDynamicLibraryIterator =
         dynamicModeParamsForDynamicLibrary.getLibraries().iterator();
 
-    ListIterator<Artifact> runtimeLibraryIterator =
-        dynamicModeParamsForExecutable.getDynamicLibrariesForRuntime().toList().listIterator();
+    Iterator<Artifact> runtimeLibraryIterator =
+        dynamicModeParamsForExecutable.getDynamicLibrariesForRuntime().toList().iterator();
 
     NestedSetBuilder<LibraryToLinkWrapper> libraryToLinkWrappers = NestedSetBuilder.linkOrder();
     while (staticModeParamsForExecutableIterator.hasNext()
@@ -960,7 +913,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     return ccLinkParamsBuilder.build();
   }
 
-  public LibraryToLink getStaticLibraryToLink() {
+  private LibraryToLink getStaticLibraryToLink() {
     Preconditions.checkNotNull(staticLibrary);
     if (staticLibraryToLink != null) {
       return staticLibraryToLink;
@@ -979,7 +932,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     return staticLibraryToLink;
   }
 
-  public LibraryToLink getPicStaticLibraryToLink() {
+  private LibraryToLink getPicStaticLibraryToLink() {
     Preconditions.checkNotNull(picStaticLibrary);
     if (picStaticLibraryToLink != null) {
       return picStaticLibraryToLink;
@@ -998,7 +951,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     return picStaticLibraryToLink;
   }
 
-  public LibraryToLink getDynamicLibraryToLink() {
+  private LibraryToLink getDynamicLibraryToLink() {
     Preconditions.checkNotNull(dynamicLibrary);
     if (dynamicLibraryToLink != null) {
       return dynamicLibraryToLink;
@@ -1021,7 +974,7 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
     return dynamicLibraryToLink;
   }
 
-  public LibraryToLink getInterfaceLibraryToLink() {
+  private LibraryToLink getInterfaceLibraryToLink() {
     Preconditions.checkNotNull(interfaceLibrary);
     if (interfaceLibraryToLink != null) {
       return interfaceLibraryToLink;
@@ -1172,11 +1125,6 @@ public class LibraryToLinkWrapper implements LibraryToLinkWrapperApi {
       Preconditions.checkState(resolvedSymlinkDynamicLibrary == null || dynamicLibrary != null);
       Preconditions.checkState(resolvedSymlinkInterfaceLibrary == null || interfaceLibrary != null);
       Preconditions.checkState(!alwayslink || staticLibrary != null || picStaticLibrary != null);
-      Preconditions.checkState(
-          staticLibrary != null
-              || picStaticLibrary != null
-              || dynamicLibrary != null
-              || interfaceLibrary != null);
 
       return new LibraryToLinkWrapper(
           libraryIdentifier,
