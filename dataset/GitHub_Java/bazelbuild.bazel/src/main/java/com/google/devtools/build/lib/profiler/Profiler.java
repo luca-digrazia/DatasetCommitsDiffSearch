@@ -66,13 +66,73 @@ import java.util.zip.GZIPOutputStream;
  * build.lib.vfs contain Profiler invocations and any dependency on those two packages would create
  * circular relationship.
  *
+ * <p>All gathered instrumentation data will be stored in the file. Please, note, that while file
+ * format is described here it is considered internal and can change at any time. For scripting,
+ * using blaze analyze-profile --dump=raw would be more robust and stable solution.
+ *
  * <p>
+ *
+ * <pre>
+ * Profiler file consists of the deflated stream with following overall structure:
+ *   HEADER
+ *   TASK_TYPE_TABLE
+ *   TASK_RECORD...
+ *   EOF_MARKER
+ *
+ * HEADER:
+ *   int32: magic token (Profiler.MAGIC)
+ *   int32: version format (Profiler.VERSION)
+ *   string: file comment
+ *
+ * TASK_TYPE_TABLE:
+ *   int32: number of type names below
+ *   string... : type names. Each of the type names is assigned id according to
+ *               their position in this table starting from 0.
+ *
+ * TASK_RECORD:
+ *   int32 size: size of the encoded task record
+ *   byte[size] encoded_task_record:
+ *     varint64: thread id - as was returned by Thread.getId()
+ *     varint32: task id - starting from 1.
+ *     varint32: parent task id for subtasks or 0 for root tasks
+ *     varint64: start time in ns, relative to the Profiler.start() invocation
+ *     varint64: task duration in ns
+ *     byte:     task type id (see TASK_TYPE_TABLE)
+ *     varint32: description string index incremented by 1 (>0) or 0 this is
+ *               a first occurrence of the description string
+ *     AGGREGATED_STAT...: remainder of the field (if present) represents
+ *                         aggregated stats for that task
+ *   string: *optional* description string, will appear only if description
+ *           string index above was 0. In that case this string will be
+ *           assigned next sequential id so every unique description string
+ *           will appear in the file only once - after that it will be
+ *           referenced by id.
+ *
+ * AGGREGATE_STAT:
+ *   byte:     stat type
+ *   varint32: total number of subtask invocations
+ *   varint64: cumulative duration of subtask invocations in ns.
+ *
+ * EOF_MARKER:
+ *   int64: -1 - please note that this corresponds to the thread id in the
+ *               TASK_RECORD which is always > 0
+ * </pre>
  *
  * @see ProfilerTask enum for recognized task types.
  */
 @ThreadSafe
 public final class Profiler {
   private static final Logger logger = Logger.getLogger(Profiler.class.getName());
+
+  public static final int MAGIC = 0x11223344;
+
+  // File version number. Note that merely adding new record types in
+  // the ProfilerTask does not require bumping version number as long as original
+  // enum values are not renamed or deleted.
+  public static final int VERSION = 0x03;
+
+  // EOF marker. Must be < 0.
+  public static final int EOF_MARKER = -1;
 
   /** The profiler (a static singleton instance). Inactive by default. */
   private static final Profiler instance = new Profiler();
@@ -86,7 +146,7 @@ public final class Profiler {
   /** File format enum. */
   public enum Format {
     JSON_TRACE_FILE_FORMAT,
-    JSON_TRACE_FILE_COMPRESSED_FORMAT
+    JSON_TRACE_FILE_COMPRESSED_FORMAT;
   }
 
   /** A task that was very slow. */
@@ -127,13 +187,14 @@ public final class Profiler {
   }
 
   /**
-   * Container for the single task record. Should never be instantiated directly - use
-   * TaskStack.create() instead.
+   * Container for the single task record.
+   * Should never be instantiated directly - use TaskStack.create() instead.
    *
-   * <p>Class itself is not thread safe, but all access to it from Profiler methods is.
+   * Class itself is not thread safe, but all access to it from Profiler
+   * methods is.
    */
   @ThreadCompatible
-  private static class TaskData {
+  private static final class TaskData {
     final long threadId;
     final long startTimeNanos;
     final int id;
@@ -183,21 +244,6 @@ public final class Profiler {
     }
   }
 
-  private static final class ActionTaskData extends TaskData {
-    final String primaryOutputPath;
-
-    ActionTaskData(
-        int id,
-        long startTimeNanos,
-        TaskData parent,
-        ProfilerTask eventType,
-        String description,
-        String primaryOutputPath) {
-      super(id, startTimeNanos, parent, eventType, description);
-      this.primaryOutputPath = primaryOutputPath;
-    }
-  }
-
   /**
    * Tracks nested tasks for each thread.
    *
@@ -237,16 +283,6 @@ public final class Profiler {
 
     public TaskData create(long startTimeNanos, ProfilerTask eventType, String description) {
       return new TaskData(taskId.incrementAndGet(), startTimeNanos, peek(), eventType, description);
-    }
-
-    public void pushActionTask(ProfilerTask eventType, String description, String primaryOutput) {
-      get().add(createActionTask(clock.nanoTime(), eventType, description, primaryOutput));
-    }
-
-    public ActionTaskData createActionTask(
-        long startTimeNanos, ProfilerTask eventType, String description, String primaryOutput) {
-      return new ActionTaskData(
-          taskId.incrementAndGet(), startTimeNanos, peek(), eventType, description, primaryOutput);
     }
 
     @Override
@@ -457,8 +493,7 @@ public final class Profiler {
       long execStartTimeNanos,
       boolean enabledCpuUsageProfiling,
       boolean slimProfile,
-      boolean enableActionCountProfile,
-      boolean includePrimaryOutput)
+      boolean enableActionCountProfile)
       throws IOException {
     Preconditions.checkState(!isActive(), "Profiler already active");
     initHistograms();
@@ -485,13 +520,7 @@ public final class Profiler {
       switch (format) {
         case JSON_TRACE_FILE_FORMAT:
           writer =
-              new JsonTraceFileWriter(
-                  stream,
-                  execStartTimeNanos,
-                  slimProfile,
-                  outputBase,
-                  buildID,
-                  includePrimaryOutput);
+              new JsonTraceFileWriter(stream, execStartTimeNanos, slimProfile, outputBase, buildID);
           break;
         case JSON_TRACE_FILE_COMPRESSED_FORMAT:
           writer =
@@ -500,8 +529,7 @@ public final class Profiler {
                   execStartTimeNanos,
                   slimProfile,
                   outputBase,
-                  buildID,
-                  includePrimaryOutput);
+                  buildID);
       }
       writer.start();
     }
@@ -765,22 +793,6 @@ public final class Profiler {
   }
 
   /**
-   * Similar to {@link #profile}, but specific to action-related events. Takes an extra argument:
-   * primaryOutput.
-   */
-  public SilentCloseable profileAction(
-      ProfilerTask type, String description, String primaryOutput) {
-
-    Preconditions.checkNotNull(description);
-    if (isActive() && isProfiling(type)) {
-      taskStack.pushActionTask(type, description, primaryOutput);
-      return () -> completeTask(type);
-    } else {
-      return () -> {};
-    }
-  }
-
-  /**
    * Records the beginning of a task as specified, and returns a {@link SilentCloseable} instance
    * that ends the task. This lets the system do the work of ending the task, with the compiler
    * giving a warning if the returned instance is not closed.
@@ -901,7 +913,6 @@ public final class Profiler {
     private final ThreadLocal<Boolean> metadataPosted =
         ThreadLocal.withInitial(() -> Boolean.FALSE);
     private final boolean slimProfile;
-    private final boolean includePrimaryOutput;
     private final UUID buildID;
     private final String outputBase;
 
@@ -917,14 +928,12 @@ public final class Profiler {
         long profileStartTimeNanos,
         boolean slimProfile,
         String outputBase,
-        UUID buildID,
-        boolean includePrimaryOutput) {
+        UUID buildID) {
       this.outStream = outStream;
       this.profileStartTimeNanos = profileStartTimeNanos;
       this.slimProfile = slimProfile;
       this.buildID = buildID;
       this.outputBase = outputBase;
-      this.includePrimaryOutput = includePrimaryOutput;
     }
 
     @Override
@@ -1026,11 +1035,6 @@ public final class Profiler {
         writer.name("dur").value(TimeUnit.NANOSECONDS.toMicros(data.duration));
       }
       writer.name("pid").value(1);
-
-      // Primary outputs are non-mergeable, thus incompatible with slim profiles.
-      if (includePrimaryOutput && data instanceof ActionTaskData) {
-        writer.name("out").value(((ActionTaskData) data).primaryOutputPath);
-      }
       long threadId =
           data.type == ProfilerTask.CRITICAL_PATH_COMPONENT
               ? CRITICAL_PATH_THREAD_ID
