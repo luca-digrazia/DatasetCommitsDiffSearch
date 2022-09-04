@@ -15,8 +15,7 @@
 package com.google.devtools.build.lib.actions;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Joiner;
-import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableList;
 import com.google.devtools.build.lib.util.io.FileOutErr;
 import com.google.devtools.build.lib.vfs.Path;
 import java.util.Set;
@@ -28,18 +27,17 @@ import javax.annotation.Nullable;
  */
 public class LostInputsExecException extends ExecException {
 
-  private final ImmutableMap<String, ActionInput> lostInputs;
+  private final ImmutableList<ActionInput> lostInputs;
   private final InputOwners inputOwners;
 
-  public LostInputsExecException(
-      ImmutableMap<String, ActionInput> lostInputs, InputOwners inputOwners) {
-    super("lost inputs with digests: " + Joiner.on(",").join(lostInputs.keySet()));
+  public LostInputsExecException(ImmutableList<ActionInput> lostInputs, InputOwners inputOwners) {
+    super("");
     this.lostInputs = lostInputs;
     this.inputOwners = inputOwners;
   }
 
   @VisibleForTesting
-  public ImmutableMap<String, ActionInput> getLostInputs() {
+  public ImmutableList<ActionInput> getLostInputs() {
     return lostInputs;
   }
 
@@ -81,7 +79,7 @@ public class LostInputsExecException extends ExecException {
       super(message, cause, action, /*catastrophe=*/ false);
     }
 
-    public ImmutableMap<String, ActionInput> getLostInputs() {
+    public ImmutableList<ActionInput> getLostInputs() {
       return ((LostInputsExecException) getCause()).getLostInputs();
     }
 
