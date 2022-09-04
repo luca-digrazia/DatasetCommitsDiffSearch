@@ -19,7 +19,6 @@ import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.lang.String.format;
 
 import com.google.common.annotations.VisibleForTesting;
-import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
@@ -185,17 +184,13 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
       BuildEventTransport besTransport;
       try {
         besTransport = tryCreateBesTransport(env, uploaderSupplier);
-      } catch (IOException | OptionsParsingException e) {
+      } catch (Exception e) {
         String message = "Failed to create BuildEventTransport: " + e;
         logger.log(Level.WARNING, message, e);
-        ExitCode exitCode =
-            (e instanceof OptionsParsingException)
-                ? ExitCode.COMMAND_LINE_ERROR
-                : ExitCode.TRANSIENT_BUILD_EVENT_SERVICE_UPLOAD_ERROR;
         reportError(
             env.getReporter(),
             env.getBlazeModuleEnvironment(),
-            new AbruptExitException(message, exitCode, e));
+            new AbruptExitException(message, ExitCode.PUBLISH_ERROR, e));
         clearBesClient();
         return null;
       }
@@ -327,19 +322,17 @@ public abstract class BuildEventServiceModule<T extends BuildEventServiceOptions
 
   private ExitFunction bazelExitFunction(
       EventHandler commandLineReporter, ModuleEnvironment moduleEnvironment, String besResultsUrl) {
-    return (String message, Throwable cause, ExitCode exitCode) -> {
-      if (exitCode == ExitCode.SUCCESS) {
-        Preconditions.checkState(cause == null, cause);
+    return (String message, Throwable cause) -> {
+      if (cause == null) {
         commandLineReporter.handle(Event.info("Build Event Protocol upload finished successfully"));
         if (besResultsUrl != null) {
           commandLineReporter.handle(
               Event.info("Build Event Protocol results available at " + besResultsUrl));
         }
       } else {
-        Preconditions.checkState(cause != null, cause);
         if (errorsShouldFailTheBuild()) {
           commandLineReporter.handle(Event.error(message));
-          moduleEnvironment.exit(new AbruptExitException(exitCode, cause));
+          moduleEnvironment.exit(new AbruptExitException(ExitCode.PUBLISH_ERROR, cause));
         } else {
           commandLineReporter.handle(Event.warn(message));
         }
