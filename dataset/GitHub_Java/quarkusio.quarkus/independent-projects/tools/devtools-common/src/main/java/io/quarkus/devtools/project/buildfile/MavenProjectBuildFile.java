@@ -6,6 +6,7 @@ import static io.quarkus.devtools.project.extensions.Extensions.toKey;
 import io.quarkus.bootstrap.resolver.maven.BootstrapMavenException;
 import io.quarkus.bootstrap.resolver.maven.MavenArtifactResolver;
 import io.quarkus.bootstrap.resolver.maven.workspace.LocalProject;
+import io.quarkus.bootstrap.resolver.maven.workspace.ModelUtils;
 import io.quarkus.devtools.messagewriter.MessageWriter;
 import io.quarkus.devtools.project.BuildTool;
 import io.quarkus.devtools.project.QuarkusProject;
@@ -45,7 +46,8 @@ public class MavenProjectBuildFile extends BuildFile {
 
     private static final Pattern PROPERTY_PATTERN = Pattern.compile("\\$\\{(.+)}");
 
-    public static QuarkusProject getProject(Path projectDir, MessageWriter log, Supplier<String> defaultQuarkusVersion) {
+    public static QuarkusProject getProject(Path projectDir, MessageWriter log, Supplier<String> defaultQuarkusVersion)
+            throws RegistryResolutionException {
         final MavenArtifactResolver mvnResolver = getMavenResolver(projectDir);
         final LocalProject currentProject = mvnResolver.getMavenContext().getCurrentProject();
         final Model projectModel;
@@ -65,31 +67,41 @@ public class MavenProjectBuildFile extends BuildFile {
 
     public static QuarkusProject getProject(Artifact projectPom, Model projectModel, Path projectDir,
             Properties projectProps, MavenArtifactResolver mvnResolver, MessageWriter log,
-            Supplier<String> defaultQuarkusVersion) {
+            Supplier<String> defaultQuarkusVersion) throws RegistryResolutionException {
         final List<ArtifactCoords> managedDeps;
         final Supplier<List<ArtifactCoords>> deps;
+        final List<ArtifactCoords> importedPlatforms;
         final String quarkusVersion;
         if (projectPom == null) {
             managedDeps = Collections.emptyList();
             deps = () -> Collections.emptyList();
-            quarkusVersion = defaultQuarkusVersion.get();
+            importedPlatforms = Collections.emptyList();
+            // TODO allow multiple streams in the same catalog for now
+            quarkusVersion = null;// defaultQuarkusVersion.get();
         } else {
             final ArtifactDescriptorResult descriptor = describe(mvnResolver, projectPom);
             managedDeps = toArtifactCoords(descriptor.getManagedDependencies());
             deps = () -> toArtifactCoords(descriptor.getDependencies());
+            importedPlatforms = collectPlatformDescriptors(managedDeps, log);
             quarkusVersion = getQuarkusVersion(managedDeps);
         }
 
         final ExtensionCatalog extensionCatalog;
-        final ExtensionCatalogResolver catalogResolver = QuarkusProjectHelper.getCatalogResolver(mvnResolver, log);
+        final ExtensionCatalogResolver catalogResolver = QuarkusProjectHelper.isRegistryClientEnabled()
+                ? QuarkusProjectHelper.getCatalogResolver(mvnResolver, log)
+                : ExtensionCatalogResolver.empty();
         if (catalogResolver.hasRegistries()) {
             try {
-                extensionCatalog = catalogResolver.resolveExtensionCatalog(quarkusVersion);
+                if (!importedPlatforms.isEmpty()) {
+                    extensionCatalog = catalogResolver.resolveExtensionCatalog(importedPlatforms);
+                } else {
+                    extensionCatalog = quarkusVersion == null ? catalogResolver.resolveExtensionCatalog()
+                            : catalogResolver.resolveExtensionCatalog(quarkusVersion);
+                }
             } catch (RegistryResolutionException e) {
                 throw new RuntimeException("Failed to resolve extension catalog", e);
             }
         } else {
-            final List<ArtifactCoords> importedPlatforms = collectPlatformDescriptors(managedDeps, log);
             if (importedPlatforms.isEmpty()) {
                 extensionCatalog = ToolsUtils.resolvePlatformDescriptorDirectly(null, null, quarkusVersion, mvnResolver, log);
             } else {
@@ -97,7 +109,7 @@ public class MavenProjectBuildFile extends BuildFile {
             }
         }
         final MavenProjectBuildFile extensionManager = new MavenProjectBuildFile(projectDir, extensionCatalog,
-                projectModel, deps, managedDeps, projectProps);
+                projectModel, deps, managedDeps, projectProps, projectPom == null ? null : mvnResolver);
         final List<ResourceLoader> codestartResourceLoaders = codestartLoadersBuilder().catalog(extensionCatalog)
                 .artifactResolver(mvnResolver).build();
         return QuarkusProject.of(projectDir, extensionCatalog,
@@ -109,7 +121,7 @@ public class MavenProjectBuildFile extends BuildFile {
         try {
             return MavenArtifactResolver.builder()
                     .setArtifactTransferLogging(toolsConfig.isDebug())
-                    .setCurrentProject(projectDir.toString())
+                    .setCurrentProject(projectDir.toAbsolutePath().toString())
                     .setPreferPomsFromWorkspace(true)
                     .build();
         } catch (BootstrapMavenException e) {
@@ -165,27 +177,69 @@ public class MavenProjectBuildFile extends BuildFile {
         }
     }
 
-    private final Model model;
-    private final List<ArtifactCoords> managedDependencies;
-    private final Properties projectProps;
+    private Model model;
+    private List<ArtifactCoords> managedDependencies;
+    private Properties projectProps;
     private Supplier<List<ArtifactCoords>> projectDepsSupplier;
     private List<ArtifactCoords> dependencies;
     private List<ArtifactCoords> importedPlatforms;
+    private MavenArtifactResolver resolver;
 
     private MavenProjectBuildFile(Path projectDirPath, ExtensionCatalog extensionsCatalog, Model model,
             Supplier<List<ArtifactCoords>> projectDeps,
             List<ArtifactCoords> projectManagedDeps,
-            Properties projectProps) {
+            Properties projectProps, MavenArtifactResolver resolver) {
         super(projectDirPath, extensionsCatalog);
         this.model = model;
         this.projectDepsSupplier = projectDeps;
         this.managedDependencies = projectManagedDeps;
         this.projectProps = projectProps;
+        this.resolver = resolver;
     }
 
     @Override
     public BuildTool getBuildTool() {
         return BuildTool.MAVEN;
+    }
+
+    @Override
+    protected boolean importBom(ArtifactCoords coords) {
+        if (!"pom".equalsIgnoreCase(coords.getType())) {
+            throw new IllegalArgumentException(coords + " is not a POM");
+        }
+        final String depKey = depKey(coords.getGroupId(), coords.getArtifactId(), coords.getClassifier(), coords.getType());
+        if (coords.getGroupId().equals(getProperty("quarkus.platform.group-id"))
+                && coords.getVersion().equals(getProperty("quarkus.platform.version"))) {
+            coords = new ArtifactCoords("${quarkus.platform.group-id}",
+                    coords.getArtifactId().equals(getProperty("quarkus.platform.artifact-id"))
+                            ? "${quarkus.platform.artifact-id}"
+                            : coords.getArtifactId(),
+                    "pom", "${quarkus.platform.version}");
+        }
+
+        final Dependency d = new Dependency();
+        d.setGroupId(coords.getGroupId());
+        d.setArtifactId(coords.getArtifactId());
+        d.setType(coords.getType());
+        d.setScope("import");
+        d.setVersion(coords.getVersion());
+        DependencyManagement dependencyManagement = model().getDependencyManagement();
+        if (dependencyManagement == null) {
+            dependencyManagement = new DependencyManagement();
+            model().setDependencyManagement(dependencyManagement);
+        }
+        if (dependencyManagement.getDependencies()
+                .stream()
+                .filter(t -> t.getScope().equals("import"))
+                .noneMatch(thisDep -> depKey.equals(resolveKey(thisDep)))) {
+            dependencyManagement.addDependency(d);
+            // the effective managed dependencies set may already include it
+            if (!getManagedDependencies().contains(coords)) {
+                getManagedDependencies().add(coords);
+            }
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -221,7 +275,13 @@ public class MavenProjectBuildFile extends BuildFile {
         } else if (model().getDependencies()
                 .stream()
                 .noneMatch(thisDep -> d.getManagementKey().equals(thisDep.getManagementKey()))) {
-            model().addDependency(d);
+            final int index = getIndexToAddExtension();
+            if (index >= 0) {
+                model().getDependencies().add(index, d);
+            } else {
+                model().getDependencies().add(d);
+            }
+
             // it could still be a transitive dependency or inherited from the parent
             if (!getDependencies().contains(coords)) {
                 getDependencies().add(coords);
@@ -241,8 +301,8 @@ public class MavenProjectBuildFile extends BuildFile {
                     i.remove();
                     break;
                 }
-                model().getDependencies().removeIf(d -> Objects.equals(toKey(d), key));
             }
+            model().getDependencies().removeIf(d -> Objects.equals(toKey(d), key));
         }
     }
 
@@ -258,7 +318,7 @@ public class MavenProjectBuildFile extends BuildFile {
     @Override
     public final Collection<ArtifactCoords> getInstalledPlatforms() throws IOException {
         if (importedPlatforms == null) {
-            final List<ArtifactCoords> tmp = new ArrayList<>(4);
+            final List<ArtifactCoords> tmp = new ArrayList<>();
             for (ArtifactCoords c : getManagedDependencies()) {
                 if (PlatformArtifacts.isCatalogArtifact(c)) {
                     tmp.add(PlatformArtifacts.getBomArtifactForCatalog(c));
@@ -291,6 +351,35 @@ public class MavenProjectBuildFile extends BuildFile {
 
     @Override
     protected void refreshData() {
+        final Path projectPom = getProjectDirPath().resolve("pom.xml");
+        if (!Files.exists(projectPom)) {
+            return;
+        }
+        try {
+            model = ModelUtils.readModel(projectPom);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to read " + projectPom, e);
+        }
+        projectProps = model.getProperties();
+        final ArtifactDescriptorResult descriptor = describe(resolver(), new DefaultArtifact(
+                ModelUtils.getGroupId(model), model.getArtifactId(), "pom", ModelUtils.getVersion(model)));
+        managedDependencies = toArtifactCoords(descriptor.getManagedDependencies());
+        projectDepsSupplier = () -> toArtifactCoords(descriptor.getDependencies());
+        dependencies = null;
+    }
+
+    private MavenArtifactResolver resolver() {
+        return resolver == null ? resolver = getMavenResolver(getProjectDirPath()) : resolver;
+    }
+
+    private int getIndexToAddExtension() {
+        final List<Dependency> dependencies = model().getDependencies();
+        for (int i = 0; i < dependencies.size(); i++) {
+            if ("test".equals(dependencies.get(i).getScope())) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private Model model() {
@@ -307,10 +396,18 @@ public class MavenProjectBuildFile extends BuildFile {
         if (!resolvedGroupId.equals(dependency.getGroupId())
                 || !resolvedArtifactId.equals(dependency.getArtifactId())
                 || !resolvedVersion.equals(dependency.getVersion())) {
-            return resolvedGroupId + ":" + resolvedArtifactId + ":" + dependency.getType()
-                    + (dependency.getClassifier() != null ? ":" + dependency.getClassifier() : "");
+            return depKey(resolvedGroupId, resolvedArtifactId, dependency.getClassifier(), dependency.getType());
         }
         return dependency.getManagementKey();
+    }
+
+    private static String depKey(String groupId, String artifactId, String classifier, String type) {
+        final StringBuilder buf = new StringBuilder();
+        buf.append(groupId).append(':').append(artifactId).append(':').append(type);
+        if (classifier != null && !classifier.isEmpty()) {
+            buf.append(':').append(classifier);
+        }
+        return buf.toString();
     }
 
     /**
