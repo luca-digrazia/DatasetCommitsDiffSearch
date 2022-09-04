@@ -14,12 +14,12 @@
 
 package com.google.devtools.build.lib.cmdline;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.ComparisonChain;
 import com.google.common.collect.Interner;
 import com.google.devtools.build.lib.concurrent.BlazeInterners;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkPrinter;
 import com.google.devtools.build.lib.skylarkinterface.SkylarkValue;
+import com.google.devtools.build.lib.util.Preconditions;
 import com.google.devtools.build.lib.vfs.Canonicalizer;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.io.Serializable;
@@ -86,10 +86,10 @@ public final class PackageIdentifier
     if (tofind.startsWith(Label.EXTERNAL_PATH_PREFIX)) {
       // TODO(ulfjack): Remove this when kchodorow@'s exec root rearrangement has been rolled out.
       RepositoryName repository = RepositoryName.create("@" + tofind.getSegment(1));
-      return PackageIdentifier.create(repository, tofind.subFragment(2));
+      return PackageIdentifier.create(repository, tofind.subFragment(2, tofind.segmentCount()));
     } else if (!tofind.normalize().isNormalized()) {
       RepositoryName repository = RepositoryName.create("@" + tofind.getSegment(1));
-      return PackageIdentifier.create(repository, tofind.subFragment(2));
+      return PackageIdentifier.create(repository, tofind.subFragment(2, tofind.segmentCount()));
     } else {
       return PackageIdentifier.createInMainRepo(tofind);
     }
