@@ -21,7 +21,6 @@ import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
 import com.google.devtools.build.lib.rules.apple.AppleConfiguration;
 import com.google.devtools.build.lib.rules.cpp.CppConfiguration;
-import com.google.devtools.build.lib.rules.cpp.CppRuleClasses;
 
 /**
  * Rule definition for objc_library.
@@ -35,13 +34,14 @@ public class ObjcLibraryRule implements RuleDefinition {
             ObjcConfiguration.class, AppleConfiguration.class, CppConfiguration.class)
         /*<!-- #BLAZE_RULE(objc_library).IMPLICIT_OUTPUTS -->
         <ul>
+         <li><code><var>name</var>.xcodeproj/project.pbxproj</code>: An Xcode project file which
+             can be used to develop or build on a Mac.</li>
          <li><code><var>name</var>_fully_linked.a</code>: A fully linked static library that
              contains the full transitive closure of library dependencies.</li>
         </ul>
         <!-- #END_BLAZE_RULE.IMPLICIT_OUTPUTS -->*/
         .setImplicitOutputsFunction(CompilationSupport.FULLY_LINKED_LIB)
         .cfg(AppleCrosstoolTransition.APPLE_CROSSTOOL_TRANSITION)
-        .addRequiredToolchains(CppRuleClasses.ccToolchainTypeAttribute(env))
         .build();
   }
 

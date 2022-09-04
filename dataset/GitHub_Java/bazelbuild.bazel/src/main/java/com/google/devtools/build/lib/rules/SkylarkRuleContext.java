@@ -36,6 +36,7 @@ import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.TransitiveInfoCollection;
 import com.google.devtools.build.lib.analysis.config.BuildConfiguration;
 import com.google.devtools.build.lib.analysis.config.FragmentCollection;
+import com.google.devtools.build.lib.analysis.platform.ToolchainInfo;
 import com.google.devtools.build.lib.cmdline.Label;
 import com.google.devtools.build.lib.collect.nestedset.NestedSet;
 import com.google.devtools.build.lib.events.Location;
@@ -43,14 +44,14 @@ import com.google.devtools.build.lib.packages.AspectDescriptor;
 import com.google.devtools.build.lib.packages.Attribute;
 import com.google.devtools.build.lib.packages.Attribute.ConfigurationTransition;
 import com.google.devtools.build.lib.packages.BuildType;
+import com.google.devtools.build.lib.packages.ClassObjectConstructor;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction;
 import com.google.devtools.build.lib.packages.ImplicitOutputsFunction.SkylarkImplicitOutputsFunction;
-import com.google.devtools.build.lib.packages.Info;
-import com.google.devtools.build.lib.packages.NativeProvider;
+import com.google.devtools.build.lib.packages.NativeClassObjectConstructor;
 import com.google.devtools.build.lib.packages.OutputFile;
 import com.google.devtools.build.lib.packages.Package;
-import com.google.devtools.build.lib.packages.Provider;
 import com.google.devtools.build.lib.packages.RawAttributeMapper;
+import com.google.devtools.build.lib.packages.SkylarkClassObject;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesCollector;
 import com.google.devtools.build.lib.rules.test.InstrumentedFilesProvider;
 import com.google.devtools.build.lib.shell.ShellUtils;
@@ -65,7 +66,6 @@ import com.google.devtools.build.lib.syntax.EvalException;
 import com.google.devtools.build.lib.syntax.FuncallExpression.FuncallException;
 import com.google.devtools.build.lib.syntax.Runtime;
 import com.google.devtools.build.lib.syntax.SkylarkDict;
-import com.google.devtools.build.lib.syntax.SkylarkIndexable;
 import com.google.devtools.build.lib.syntax.SkylarkList;
 import com.google.devtools.build.lib.syntax.SkylarkSemanticsOptions;
 import com.google.devtools.build.lib.syntax.SkylarkType;
@@ -185,11 +185,12 @@ public final class SkylarkRuleContext implements SkylarkValue {
   private SkylarkDict<String, String> makeVariables;
   private SkylarkRuleAttributesCollection attributesCollection;
   private SkylarkRuleAttributesCollection ruleAttributesCollection;
-  private Info splitAttributes;
+  private SkylarkClassObject splitAttributes;
+  private SkylarkDict<Label, ToolchainInfo> toolchains;
 
   // TODO(bazel-team): we only need this because of the css_binary rule.
   private ImmutableMap<Artifact, Label> artifactsLabelMap;
-  private Info outputsObject;
+  private SkylarkClassObject outputsObject;
 
   /**
    * Creates a new SkylarkRuleContext using ruleContext.
@@ -262,7 +263,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
 
       this.artifactsLabelMap = artifactLabelMapBuilder.build();
       this.outputsObject =
-          NativeProvider.STRUCT.create(
+          NativeClassObjectConstructor.STRUCT.create(
               outputsBuilder,
               "No attribute '%s' in outputs. Make sure you declared a rule output with this name.");
 
@@ -291,6 +292,10 @@ public final class SkylarkRuleContext implements SkylarkValue {
     }
 
     makeVariables = ruleContext.getConfigurationMakeVariableContext().collectMakeVariables();
+    toolchains =
+        ruleContext.getToolchainContext() == null
+            ? SkylarkDict.<Label, ToolchainInfo>of(null)
+            : ruleContext.getToolchainContext().collectToolchains();
   }
 
   /**
@@ -310,6 +315,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
     splitAttributes = null;
     artifactsLabelMap = null;
     outputsObject = null;
+    toolchains = null;
   }
 
   public void checkMutable(String attrName) throws EvalException {
@@ -442,7 +448,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
         executableRunfilesbuilder.build());
   }
 
-  private static Info buildSplitAttributeInfo(
+  private static SkylarkClassObject buildSplitAttributeInfo(
       Collection<Attribute> attributes, RuleContext ruleContext) {
 
     ImmutableMap.Builder<String, Object> splitAttrInfos = ImmutableMap.builder();
@@ -482,10 +488,10 @@ public final class SkylarkRuleContext implements SkylarkValue {
       }
     }
 
-    return NativeProvider.STRUCT.create(
+    return NativeClassObjectConstructor.STRUCT.create(
         splitAttrInfos.build(),
         "No attribute '%s' in split_attr. Make sure that this attribute is defined with a "
-            + "split configuration.");
+          + "split configuration.");
   }
 
   @SkylarkModule(
@@ -495,10 +501,10 @@ public final class SkylarkRuleContext implements SkylarkValue {
   )
   private static class SkylarkRuleAttributesCollection implements SkylarkValue {
     private final SkylarkRuleContext skylarkRuleContext;
-    private final Info attrObject;
-    private final Info executableObject;
-    private final Info fileObject;
-    private final Info filesObject;
+    private final SkylarkClassObject attrObject;
+    private final SkylarkClassObject executableObject;
+    private final SkylarkClassObject fileObject;
+    private final SkylarkClassObject filesObject;
     private final ImmutableMap<Artifact, FilesToRunProvider> executableRunfilesMap;
     private final String ruleClassName;
 
@@ -512,21 +518,21 @@ public final class SkylarkRuleContext implements SkylarkValue {
       this.skylarkRuleContext = skylarkRuleContext;
       this.ruleClassName = ruleClassName;
       attrObject =
-          NativeProvider.STRUCT.create(
+          NativeClassObjectConstructor.STRUCT.create(
               attrs,
               "No attribute '%s' in attr. Make sure you declared a rule attribute with this name.");
       executableObject =
-          NativeProvider.STRUCT.create(
+          NativeClassObjectConstructor.STRUCT.create(
               executables,
               "No attribute '%s' in executable. Make sure there is a label type attribute marked "
                   + "as 'executable' with this name");
       fileObject =
-          NativeProvider.STRUCT.create(
+          NativeClassObjectConstructor.STRUCT.create(
               singleFiles,
               "No attribute '%s' in file. Make sure there is a label type attribute marked "
                   + "as 'single_file' with this name");
       filesObject =
-          NativeProvider.STRUCT.create(
+          NativeClassObjectConstructor.STRUCT.create(
               files,
               "No attribute '%s' in files. Make sure there is a label or label_list type attribute "
                   + "with this name");
@@ -538,25 +544,25 @@ public final class SkylarkRuleContext implements SkylarkValue {
     }
 
     @SkylarkCallable(name = "attr", structField = true, doc = ATTR_DOC)
-    public Info getAttr() throws EvalException {
+    public SkylarkClassObject getAttr() throws EvalException {
       checkMutable("attr");
       return attrObject;
     }
 
     @SkylarkCallable(name = "executable", structField = true, doc = EXECUTABLE_DOC)
-    public Info getExecutable() throws EvalException {
+    public SkylarkClassObject getExecutable() throws EvalException {
       checkMutable("executable");
       return executableObject;
     }
 
     @SkylarkCallable(name = "file", structField = true, doc = FILE_DOC)
-    public Info getFile() throws EvalException {
+    public SkylarkClassObject getFile() throws EvalException {
       checkMutable("file");
       return fileObject;
     }
 
     @SkylarkCallable(name = "files", structField = true, doc = FILES_DOC)
-    public Info getFiles() throws EvalException {
+    public SkylarkClassObject getFiles() throws EvalException {
       checkMutable("files");
       return filesObject;
     }
@@ -625,9 +631,8 @@ public final class SkylarkRuleContext implements SkylarkValue {
   @SkylarkCallable(
     name = "default_provider",
     structField = true,
-    doc = "Deprecated. Use <a href=\"globals.html#DefaultInfo\">DefaultInfo</a> instead."
-  )
-  public static Provider getDefaultProvider() {
+    doc = "Deprecated. Use <a href=\"globals.html#DefaultInfo\">DefaultInfo</a> instead.")
+  public static ClassObjectConstructor getDefaultProvider() {
     return DefaultProvider.SKYLARK_CONSTRUCTOR;
   }
 
@@ -661,13 +666,13 @@ public final class SkylarkRuleContext implements SkylarkValue {
   }
 
   @SkylarkCallable(name = "attr", structField = true, doc = ATTR_DOC)
-  public Info getAttr() throws EvalException {
+  public SkylarkClassObject getAttr() throws EvalException {
     checkMutable("attr");
     return attributesCollection.getAttr();
   }
 
   @SkylarkCallable(name = "split_attr", structField = true, doc = SPLIT_ATTR_DOC)
-  public Info getSplitAttr() throws EvalException {
+  public SkylarkClassObject getSplitAttr() throws EvalException {
     checkMutable("split_attr");
     if (splitAttributes == null) {
       throw new EvalException(
@@ -676,23 +681,29 @@ public final class SkylarkRuleContext implements SkylarkValue {
     return splitAttributes;
   }
 
-  /** See {@link RuleContext#getExecutablePrerequisite(String, Mode)}. */
+  /**
+   * <p>See {@link RuleContext#getExecutablePrerequisite(String, Mode)}.
+   */
   @SkylarkCallable(name = "executable", structField = true, doc = EXECUTABLE_DOC)
-  public Info getExecutable() throws EvalException {
+  public SkylarkClassObject getExecutable() throws EvalException {
     checkMutable("executable");
     return attributesCollection.getExecutable();
   }
 
-  /** See {@link RuleContext#getPrerequisiteArtifact(String, Mode)}. */
+  /**
+   * See {@link RuleContext#getPrerequisiteArtifact(String, Mode)}.
+   */
   @SkylarkCallable(name = "file", structField = true, doc = FILE_DOC)
-  public Info getFile() throws EvalException {
+  public SkylarkClassObject getFile() throws EvalException {
     checkMutable("file");
     return attributesCollection.getFile();
   }
 
-  /** See {@link RuleContext#getPrerequisiteArtifacts(String, Mode)}. */
+  /**
+   * See {@link RuleContext#getPrerequisiteArtifacts(String, Mode)}.
+   */
   @SkylarkCallable(name = "files", structField = true, doc = FILES_DOC)
-  public Info getFiles() throws EvalException {
+  public SkylarkClassObject getFiles() throws EvalException {
     checkMutable("files");
     return attributesCollection.getFiles();
   }
@@ -743,11 +754,8 @@ public final class SkylarkRuleContext implements SkylarkValue {
   @SkylarkCallable(name = "coverage_instrumented",
     doc = "Returns whether code coverage instrumentation should be generated when performing "
         + "compilation actions for this rule or, if <code>target</code> is provided, the rule "
-        + "specified by that Target. (If a non-rule or a Skylark rule Target is provided, this "
-        + "returns False.) Checks if the sources of the current rule (if no Target is provided) or"
-        + "the sources of Target should be instrumented based on the --instrumentation_filter and"
-        + "--instrument_test_targets config settings. "
-        + "This differs from <code>coverage_enabled</code> in the <a href=\"configuration.html\">"
+        + "specified by that Target. (If a non-rule Target is provided, this returns False.) This "
+        + "differs from <code>coverage_enabled</code> in the <a href=\"configuration.html\">"
         + "configuration</a>, which notes whether coverage data collection is enabled for the "
         + "entire run, but not whether a specific target should be instrumented.",
     parameters = {
@@ -796,7 +804,7 @@ public final class SkylarkRuleContext implements SkylarkValue {
   }
 
   @SkylarkCallable(structField = true, doc = OUTPUTS_DOC)
-  public Info outputs() throws EvalException {
+  public SkylarkClassObject outputs() throws EvalException {
     checkMutable("outputs");
     if (outputsObject == null) {
       throw new EvalException(Location.BUILTIN, "'outputs' is not defined");
@@ -844,9 +852,14 @@ public final class SkylarkRuleContext implements SkylarkValue {
   }
 
   @SkylarkCallable(structField = true, doc = "Toolchains required for this rule.")
-  public SkylarkIndexable toolchains() throws EvalException {
+  public SkylarkDict<Label, ToolchainInfo> toolchains() throws EvalException {
     checkMutable("toolchains");
-    return ruleContext.getToolchainContext().getResolvedToolchainProviders();
+    if (isForAspect) {
+      // TODO(katre): Support toolchains on aspects.
+      throw new EvalException(
+          Location.BUILTIN, "'toolchains' is not available in aspect implementations");
+    }
+    return toolchains;
   }
 
   @Override

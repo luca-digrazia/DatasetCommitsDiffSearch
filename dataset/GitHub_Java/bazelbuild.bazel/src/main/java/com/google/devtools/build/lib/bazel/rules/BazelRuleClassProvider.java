@@ -123,7 +123,6 @@ import com.google.devtools.build.lib.rules.java.JavaRuntimeRule;
 import com.google.devtools.build.lib.rules.java.JavaRuntimeSuiteRule;
 import com.google.devtools.build.lib.rules.java.JavaSemantics;
 import com.google.devtools.build.lib.rules.java.JavaSkylarkCommon;
-import com.google.devtools.build.lib.rules.java.JavaToolchainAlias;
 import com.google.devtools.build.lib.rules.java.JavaToolchainRule;
 import com.google.devtools.build.lib.rules.java.JvmConfigurationLoader;
 import com.google.devtools.build.lib.rules.java.ProguardLibraryRule;
@@ -454,7 +453,6 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new JavaRuntimeRule());
           builder.addRuleDefinition(new JavaRuntimeSuiteRule());
           builder.addRuleDefinition(new JavaRuntimeAlias.JavaRuntimeAliasRule());
-          builder.addRuleDefinition(new JavaToolchainAlias.JavaToolchainAliasRule());
 
           builder.addRuleDefinition(new ExtraActionRule());
           builder.addRuleDefinition(new ActionListenerRule());
@@ -524,8 +522,8 @@ public class BazelRuleClassProvider {
           builder.addRuleDefinition(new AndroidDeviceRule());
 
           builder.addSkylarkAccessibleTopLevels("android_common", new AndroidSkylarkCommon());
-          builder.addSkylarkAccessibleTopLevels("java_common",
-              new JavaSkylarkCommon(BazelJavaSemantics.INSTANCE));
+          builder.addSkylarkAccessibleTopLevels("java_common", new JavaSkylarkCommon(
+              BazelJavaSemantics.INSTANCE, builder.getToolsRepository()));
           builder.addSkylarkAccessibleTopLevels("java_proto_common", JavaProtoSkylarkCommon.class);
 
           try {

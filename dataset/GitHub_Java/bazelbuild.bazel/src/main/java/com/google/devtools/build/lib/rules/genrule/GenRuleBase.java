@@ -44,7 +44,6 @@ import com.google.devtools.build.lib.rules.cpp.CcCommon.CcFlagsSupplier;
 import com.google.devtools.build.lib.rules.cpp.CppHelper;
 import com.google.devtools.build.lib.rules.java.JavaHelper;
 import com.google.devtools.build.lib.syntax.Type;
-import com.google.devtools.build.lib.util.LazyString;
 import com.google.devtools.build.lib.vfs.PathFragment;
 import java.util.List;
 import java.util.Map;
@@ -162,16 +161,10 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
 
     command = resolveCommand(command, ruleContext, resolvedSrcs, filesToBuild);
 
-    String messageAttr = ruleContext.attributes().get("message", Type.STRING);
-    String message = messageAttr.isEmpty() ? "Executing genrule" : messageAttr;
-    Label label = ruleContext.getLabel();
-    LazyString progressMessage =
-        new LazyString() {
-          @Override
-          public String toString() {
-            return message + " " + label;
-          }
-        };
+    String message = ruleContext.attributes().get("message", Type.STRING);
+    if (message.isEmpty()) {
+      message = "Executing genrule";
+    }
 
     Map<String, String> executionInfo = Maps.newLinkedHashMap();
     executionInfo.putAll(TargetUtils.getExecutionInfo(ruleContext.getRule()));
@@ -223,7 +216,7 @@ public abstract class GenRuleBase implements RuleConfiguredTargetFactory {
             ruleContext.getConfiguration().getActionEnvironment(),
             ImmutableMap.copyOf(executionInfo),
             new CompositeRunfilesSupplier(commandHelper.getToolsRunfilesSuppliers()),
-            progressMessage));
+            message + ' ' + ruleContext.getLabel()));
 
     RunfilesProvider runfilesProvider = RunfilesProvider.withData(
         // No runfiles provided if not a data dependency.

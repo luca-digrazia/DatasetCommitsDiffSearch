@@ -20,13 +20,12 @@ import static com.google.devtools.build.lib.packages.BuildType.OUTPUT_LIST;
 import static com.google.devtools.build.lib.syntax.Type.INTEGER;
 import static com.google.devtools.build.lib.syntax.Type.STRING_LIST;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.devtools.build.lib.analysis.BaseRuleClasses;
 import com.google.devtools.build.lib.analysis.ConfiguredRuleClassProvider;
 import com.google.devtools.build.lib.analysis.ConfiguredTarget;
-import com.google.devtools.build.lib.analysis.MakeVariableInfo;
 import com.google.devtools.build.lib.analysis.RuleConfiguredTargetBuilder;
-import com.google.devtools.build.lib.analysis.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.analysis.RuleContext;
 import com.google.devtools.build.lib.analysis.RuleDefinition;
 import com.google.devtools.build.lib.analysis.RuleDefinitionEnvironment;
@@ -35,10 +34,11 @@ import com.google.devtools.build.lib.collect.nestedset.NestedSetBuilder;
 import com.google.devtools.build.lib.collect.nestedset.Order;
 import com.google.devtools.build.lib.packages.RuleClass;
 import com.google.devtools.build.lib.packages.RuleClass.Builder;
-import com.google.devtools.build.lib.syntax.Type;
+import com.google.devtools.build.lib.packages.SkylarkProviderIdentifier;
+import com.google.devtools.build.lib.rules.MakeVariableProvider;
+import com.google.devtools.build.lib.rules.RuleConfiguredTargetFactory;
 import com.google.devtools.build.lib.util.FileTypeSet;
 import java.lang.reflect.Method;
-import java.util.Map;
 
 /**
  * Helper class to provide a RuleClassProvider for tests.
@@ -72,14 +72,12 @@ public class TestRuleClassProvider {
           new ConfiguredRuleClassProvider.Builder();
       addStandardRules(builder);
       builder.addRuleDefinition(new TestingDummyRule());
+      builder.addRuleDefinition(new TestingRuleForMandatoryProviders());
       ruleProvider = builder.build();
     }
     return ruleProvider;
   }
 
-  /**
-   * A dummy rule with some dummy attributes.
-   */
   public static final class TestingDummyRule implements RuleDefinition {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
@@ -102,6 +100,31 @@ public class TestRuleClassProvider {
     }
   }
 
+  public static final class TestingRuleForMandatoryProviders implements RuleDefinition {
+    @Override
+    public RuleClass build(Builder builder, RuleDefinitionEnvironment env) {
+      return builder
+          .setUndocumented()
+          .add(attr("srcs", LABEL_LIST).allowedFileTypes(FileTypeSet.ANY_FILE))
+          .override(builder.copy("deps").mandatoryProvidersList(
+              ImmutableList.of(
+                ImmutableList.of(SkylarkProviderIdentifier.forLegacy("a")),
+                ImmutableList.of(
+                    SkylarkProviderIdentifier.forLegacy("b"),
+                    SkylarkProviderIdentifier.forLegacy("c")))))
+          .build();
+    }
+
+    @Override
+    public Metadata getMetadata() {
+      return RuleDefinition.Metadata.builder()
+          .name("testing_rule_for_mandatory_providers")
+          .ancestors(BaseRuleClasses.RuleBase.class)
+          .factoryClass(UnknownRuleConfiguredTarget.class)
+          .build();
+    }
+  }
+
   /**
    * Stub rule to test Make variable expansion.
    */
@@ -110,11 +133,12 @@ public class TestRuleClassProvider {
     @Override
     public ConfiguredTarget create(RuleContext ruleContext)
         throws InterruptedException, RuleErrorException {
-      Map<String, String> variables = ruleContext.attributes().get("variables", Type.STRING_DICT);
+      MakeVariableProvider variables = new MakeVariableProvider(ImmutableMap.of(
+          "TEST_VARIABLE", "FOOBAR"));
       return new RuleConfiguredTargetBuilder(ruleContext)
           .setFilesToBuild(NestedSetBuilder.emptySet(Order.STABLE_ORDER))
           .addProvider(RunfilesProvider.EMPTY)
-          .addNativeDeclaredProvider(new MakeVariableInfo(ImmutableMap.copyOf(variables)))
+          .addNativeDeclaredProvider(variables)
           .build();
     }
   }
@@ -126,8 +150,7 @@ public class TestRuleClassProvider {
     @Override
     public RuleClass build(Builder builder, RuleDefinitionEnvironment environment) {
       return builder
-          .advertiseProvider(MakeVariableInfo.class)
-          .add(attr("variables", Type.STRING_DICT))
+          .advertiseProvider(MakeVariableProvider.class)
           .build();
     }
 

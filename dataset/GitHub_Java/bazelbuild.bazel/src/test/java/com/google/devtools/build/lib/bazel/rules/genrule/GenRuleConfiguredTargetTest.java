@@ -104,21 +104,11 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
   @Test
   public void testToolchainMakeVariableExpansion() throws Exception {
     scratch.file("a/BUILD",
-        "genrule(name='gr', srcs=[], outs=['out'], cmd='$(FOO)', toolchains=[':v'])",
-        "make_variable_tester(name='v', variables={'FOO': 'FOOBAR'})");
+        "genrule(name='gr', srcs=[], outs=['out'], cmd='$(TEST_VARIABLE)', toolchains=[':v'])",
+        "make_variable_tester(name='v')");
 
     String cmd = getCommand("//a:gr");
     assertThat(cmd).endsWith("FOOBAR");
-  }
-
-  @Test
-  public void testToolchainOverridesConfiguration() throws Exception {
-    scratch.file("a/BUILD",
-        "genrule(name='gr', srcs=[], outs=['out'], cmd='JAVABASE=$(JAVABASE)', toolchains=[':v'])",
-        "make_variable_tester(name='v', variables={'JAVABASE': 'REPLACED'})");
-
-    String cmd = getCommand("//a:gr");
-    assertThat(cmd).endsWith("JAVABASE=REPLACED");
   }
 
   @Test
@@ -467,8 +457,8 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
         "        outs=['file1.out', 'file2.out'],",
         "        cmd='touch $(OUTS)')");
     String regex =
-        "touch b.{4}-out/.*/multiple/outs/file1.out "
-            + "b.{4}-out/.*/multiple/outs/file2.out";
+        "touch b.{4}-out/.*/genfiles/multiple/outs/file1.out "
+            + "b.{4}-out/.*/genfiles/multiple/outs/file2.out";
     assertThat(getCommand("//multiple/outs:test")).containsMatch(regex);
   }
 
@@ -526,13 +516,13 @@ public class GenRuleConfiguredTargetTest extends BuildViewTestCase {
   @Test
   public void testLabelsContainingAtDAreExpanded() throws Exception {
     scratch.file(
-        "puck/BUILD",
+        "p/BUILD",
         "genrule(name='gen', ",
-        "        tools=['puck'],",
+        "        tools=['p'],",
         "        outs=['out'],",
         "        cmd='echo $(@D)')");
-    String regex = "echo b.{4}-out/.*/puck";
-    assertThat(getCommand("//puck:gen")).containsMatch(regex);
+    String regex = "echo b.{4}-out/.*/genfiles/p";
+    assertThat(getCommand("//p:gen")).containsMatch(regex);
   }
 
   @Test
