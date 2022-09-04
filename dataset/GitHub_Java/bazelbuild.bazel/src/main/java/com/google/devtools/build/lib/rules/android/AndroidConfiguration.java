@@ -670,17 +670,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     )
     public boolean inheritResourcesInTests;
 
-    @Option(
-        name = "android_fixed_resource_neverlinking",
-        defaultValue = "false",
-        documentationCategory = OptionDocumentationCategory.UNDOCUMENTED,
-        effectTags = {OptionEffectTag.LOADING_AND_ANALYSIS},
-        help = "If true, resources will properly not get propagated through neverlinked libraries."
-            + " Otherwise, the old behavior of propagating those resources if no resource-related"
-            + " attributes are specified in the neverlink library will be preserved."
-    )
-    public boolean fixedResourceNeverlinking;
-
     @Override
     public FragmentOptions getHost() {
       Options host = (Options) super.getHost();
@@ -764,7 +753,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
   private final boolean allowResourcesAttr;
   private final boolean inheritResourcesInTests;
   private final boolean skipParsingAction;
-  private final boolean fixedResourceNeverlinking;
 
 
   AndroidConfiguration(Options options) throws InvalidConfigurationException {
@@ -803,7 +791,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
     this.allowResourcesAttr = options.allowResourcesAttr;
     this.inheritResourcesInTests = options.inheritResourcesInTests;
     this.skipParsingAction = options.skipParsingAction;
-    this.fixedResourceNeverlinking = options.fixedResourceNeverlinking;
 
     if (!dexoptsSupportedInIncrementalDexing.contains("--no-locals")) {
       // TODO(bazel-team): Still needed? See DexArchiveAspect
@@ -965,10 +952,6 @@ public class AndroidConfiguration extends BuildConfiguration.Fragment {
 
   public boolean skipParsingAction() {
     return this.skipParsingAction;
-  }
-
-  public boolean fixedResourceNeverlinking() {
-    return this.fixedResourceNeverlinking;
   }
 
   @Override

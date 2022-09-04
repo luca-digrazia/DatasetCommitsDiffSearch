@@ -342,8 +342,7 @@ public final class ApplicationManifest {
       @Nullable Artifact rTxt,
       boolean incremental,
       Artifact proguardCfg,
-      @Nullable String packageUnderTest,
-      boolean hasLocalResourceFiles)
+      @Nullable String packageUnderTest)
       throws InterruptedException, RuleErrorException {
     LocalResourceContainer data =
         LocalResourceContainer.forAssetsAndResources(
@@ -383,8 +382,7 @@ public final class ApplicationManifest {
                     .getConfiguration()
                     .getFragment(AndroidConfiguration.class)
                     .throwOnResourceConflict())
-            .setPackageUnderTest(packageUnderTest)
-            .setIsTestWithResources(hasLocalResourceFiles);
+            .setPackageUnderTest(packageUnderTest);
     if (!incremental) {
       builder
           .targetAaptVersion(targetAaptVersion)
