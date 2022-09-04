@@ -331,7 +331,6 @@ public abstract class ClassName implements TypeMappable<ClassName> {
         "android/service/voice/VoiceInteractionSession",
         "android/telephony/SubscriptionPlan$Builder",
         "android/telephony/TelephonyManager",
-        "android/view/textclassifier/ConversationActions$Message",
         "android/view/textclassifier/TextClassification$Request",
         "android/view/textclassifier/TextLinks");
   }
