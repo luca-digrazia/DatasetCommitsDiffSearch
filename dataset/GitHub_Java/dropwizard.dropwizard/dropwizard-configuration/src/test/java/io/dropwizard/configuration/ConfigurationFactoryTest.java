@@ -124,8 +124,8 @@ public class ConfigurationFactoryTest {
     }
 
     private final Validator validator = BaseValidator.newValidator();
-    private final YamlConfigurationFactory<Example> factory =
-            new YamlConfigurationFactory<>(Example.class, validator, Jackson.newObjectMapper(), "dw");
+    private final ConfigurationFactory<Example> factory =
+            new ConfigurationFactory<>(Example.class, validator, Jackson.newObjectMapper(), "dw");
     private File malformedFile;
     private File emptyFile;
     private File invalidFile;
@@ -349,7 +349,7 @@ public class ConfigurationFactoryTest {
         System.setProperty("dw.servers[2].port", "8092");
 
         final ExampleWithDefaults example =
-                new YamlConfigurationFactory<>(ExampleWithDefaults.class, validator, Jackson.newObjectMapper(), "dw")
+                new ConfigurationFactory<>(ExampleWithDefaults.class, validator, Jackson.newObjectMapper(), "dw")
                         .build();
 
         assertThat(example.name).isEqualTo("Coda Hale Overridden");
@@ -363,7 +363,7 @@ public class ConfigurationFactoryTest {
     @Test
     public void handleDefaultConfigurationWithoutOverriding() throws Exception {
         final ExampleWithDefaults example =
-                new YamlConfigurationFactory<>(ExampleWithDefaults.class, validator, Jackson.newObjectMapper(), "dw")
+                new ConfigurationFactory<>(ExampleWithDefaults.class, validator, Jackson.newObjectMapper(), "dw")
                         .build();
 
         assertThat(example.name).isEqualTo("Coda Hale");
@@ -378,7 +378,7 @@ public class ConfigurationFactoryTest {
     public void throwsAnExceptionIfDefaultConfigurationCantBeInstantiated() throws Exception {
         System.setProperty("dw.name", "Coda Hale Overridden");
         try {
-            new YamlConfigurationFactory<>(NonInsatiableExample.class, validator, Jackson.newObjectMapper(), "dw").build();
+            new ConfigurationFactory<>(NonInsatiableExample.class, validator, Jackson.newObjectMapper(), "dw").build();
             Assert.fail("Configuration is parsed, but shouldn't be");
         } catch (IllegalArgumentException e){
             assertThat(e).hasMessage("Unable create an instance of the configuration class: " +
@@ -425,8 +425,8 @@ public class ConfigurationFactoryTest {
             factory.build(resourceFileName);
             fail("Should print a detailed error on a malformed YAML file");
         } catch (Exception e) {
-            assertThat(e.getMessage()).isEqualTo(
-                    "YAML decoding problem: while parsing a flow sequence\n" +
+            assertThat(e.getMessage()).isEqualTo(resourceFileName + " has an error:" + NEWLINE +
+                    "  * Malformed YAML at line: 2, column: 21; while parsing a flow sequence\n" +
                     " in 'reader', line 2, column 7:\n" +
                     "    type: [ coder,wizard\n" +
                     "          ^\n" +
