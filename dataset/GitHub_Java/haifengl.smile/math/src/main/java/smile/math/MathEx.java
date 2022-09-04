@@ -24,13 +24,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ForkJoinPool;
-import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
 import smile.sort.QuickSelect;
 import smile.sort.QuickSort;
 import smile.sort.Sort;
-import smile.util.IntPair;
 import smile.util.SparseArray;
 
 import static java.lang.Math.abs;
@@ -247,11 +245,6 @@ public class MathEx {
      */
     public static double log2(double x) {
         return log(x) / LOG2;
-    }
-
-    /** Returns true if x is an integer. */
-    public static boolean isInt(double x) {
-        return (x == Math.floor(x)) && !Double.isInfinite(x);
     }
 
     /**
@@ -1124,57 +1117,57 @@ public class MathEx {
      * Returns the minimum value of an array.
      */
     public static int min(int[] x) {
-        int min = x[0];
+        int m = x[0];
 
         for (int n : x) {
-            if (n < min) {
-                min = n;
+            if (n < m) {
+                m = n;
             }
         }
 
-        return min;
+        return m;
     }
 
     /**
      * Returns the minimum value of an array.
      */
     public static float min(float[] x) {
-        float min = Float.POSITIVE_INFINITY;
+        float m = Float.POSITIVE_INFINITY;
 
         for (float n : x) {
-            if (n < min) {
-                min = n;
+            if (n < m) {
+                m = n;
             }
         }
 
-        return min;
+        return m;
     }
 
     /**
      * Returns the minimum value of an array.
      */
     public static double min(double[] x) {
-        double min = Double.POSITIVE_INFINITY;
+        double m = Double.POSITIVE_INFINITY;
 
         for (double n : x) {
-            if (n < min) {
-                min = n;
+            if (n < m) {
+                m = n;
             }
         }
 
-        return min;
+        return m;
     }
 
     /**
      * Returns the index of minimum value of an array.
      */
     public static int whichMin(int[] x) {
-        int min = x[0];
+        int m = x[0];
         int which = 0;
 
         for (int i = 1; i < x.length; i++) {
-            if (x[i] < min) {
-                min = x[i];
+            if (x[i] < m) {
+                m = x[i];
                 which = i;
             }
         }
@@ -1186,12 +1179,12 @@ public class MathEx {
      * Returns the index of minimum value of an array.
      */
     public static int whichMin(float[] x) {
-        float min = Float.POSITIVE_INFINITY;
+        float m = Float.POSITIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] < min) {
-                min = x[i];
+            if (x[i] < m) {
+                m = x[i];
                 which = i;
             }
         }
@@ -1203,12 +1196,12 @@ public class MathEx {
      * Returns the index of minimum value of an array.
      */
     public static int whichMin(double[] x) {
-        double min = Double.POSITIVE_INFINITY;
+        double m = Double.POSITIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] < min) {
-                min = x[i];
+            if (x[i] < m) {
+                m = x[i];
                 which = i;
             }
         }
@@ -1217,81 +1210,60 @@ public class MathEx {
     }
 
     /**
-     * Returns the index of minimum value of an array.
-     */
-    public static IntPair whichMin(double[][] x) {
-        double min = Double.POSITIVE_INFINITY;
-        int whichRow = 0;
-        int whichCol = 0;
-
-        for (int i = 0; i < x.length; i++) {
-            for (int j = 0; j < x[i].length; j++) {
-                if (x[i][j] < min) {
-                    min = x[i][j];
-                    whichRow = i;
-                    whichCol = j;
-                }
-            }
-        }
-
-        return new IntPair(whichRow, whichCol);
-    }
-
-    /**
      * Returns the maximum value of an array.
      */
     public static int max(int[] x) {
-        int max = x[0];
+        int m = x[0];
 
         for (int n : x) {
-            if (n > max) {
-                max = n;
+            if (n > m) {
+                m = n;
             }
         }
 
-        return max;
+        return m;
     }
 
     /**
      * Returns the maximum value of an array.
      */
     public static float max(float[] x) {
-        float max = Float.NEGATIVE_INFINITY;
+        float m = Float.NEGATIVE_INFINITY;
 
         for (float n : x) {
-            if (n > max) {
-                max = n;
+            if (n > m) {
+                m = n;
             }
         }
 
-        return max;
+        return m;
     }
 
     /**
      * Returns the maximum value of an array.
      */
     public static double max(double[] x) {
-        double max = Double.NEGATIVE_INFINITY;
+        double m = Double.NEGATIVE_INFINITY;
 
         for (double n : x) {
-            if (n > max) {
-                max = n;
+            if (n > m) {
+                m = n;
             }
         }
 
-        return max;
+        return m;
     }
 
     /**
      * Returns the index of maximum value of an array.
      */
     public static int whichMax(int[] x) {
-        int max = x[0];
+        int m = x[0];
         int which = 0;
 
         for (int i = 1; i < x.length; i++) {
-            if (x[i] > max) {
-                max = x[i];
+            if (x[i] > m) {
+                m = x[i];
                 which = i;
             }
         }
@@ -1303,12 +1275,12 @@ public class MathEx {
      * Returns the index of maximum value of an array.
      */
     public static int whichMax(float[] x) {
-        float max = Float.NEGATIVE_INFINITY;
+        float m = Float.NEGATIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] > max) {
-                max = x[i];
+            if (x[i] > m) {
+                m = x[i];
                 which = i;
             }
         }
@@ -1320,12 +1292,12 @@ public class MathEx {
      * Returns the index of maximum value of an array.
      */
     public static int whichMax(double[] x) {
-        double max = Double.NEGATIVE_INFINITY;
+        double m = Double.NEGATIVE_INFINITY;
         int which = 0;
 
         for (int i = 0; i < x.length; i++) {
-            if (x[i] > max) {
-                max = x[i];
+            if (x[i] > m) {
+                m = x[i];
                 which = i;
             }
         }
@@ -1334,92 +1306,71 @@ public class MathEx {
     }
 
     /**
-     * Returns the index of maximum value of an array.
-     */
-    public static IntPair whichMax(double[][] x) {
-        double max = Double.NEGATIVE_INFINITY;
-        int whichRow = 0;
-        int whichCol = 0;
-
-        for (int i = 0; i < x.length; i++) {
-            for (int j = 0; j < x[i].length; j++) {
-                if (x[i][j] > max) {
-                    max = x[i][j];
-                    whichRow = i;
-                    whichCol = j;
-                }
-            }
-        }
-
-        return new IntPair(whichRow, whichCol);
-    }
-
-    /**
      * Returns the minimum of a matrix.
      */
     public static int min(int[][] matrix) {
-        int min = matrix[0][0];
+        int m = matrix[0][0];
 
         for (int[] x : matrix) {
             for (int y : x) {
-                if (min > y) {
-                    min = y;
+                if (m > y) {
+                    m = y;
                 }
             }
         }
 
-        return min;
+        return m;
     }
 
     /**
      * Returns the minimum of a matrix.
      */
     public static double min(double[][] matrix) {
-        double min = Double.POSITIVE_INFINITY;
+        double m = Double.POSITIVE_INFINITY;
 
         for (double[] x : matrix) {
             for (double y : x) {
-                if (min > y) {
-                    min = y;
+                if (m > y) {
+                    m = y;
                 }
             }
         }
 
-        return min;
+        return m;
     }
 
     /**
      * Returns the maximum of a matrix.
      */
     public static int max(int[][] matrix) {
-        int max = matrix[0][0];
+        int m = matrix[0][0];
 
         for (int[] x : matrix) {
             for (int y : x) {
-                if (max < y) {
-                    max = y;
+                if (m < y) {
+                    m = y;
                 }
             }
         }
 
-        return max;
+        return m;
     }
 
     /**
      * Returns the maximum of a matrix.
      */
     public static double max(double[][] matrix) {
-        double max = Double.NEGATIVE_INFINITY;
+        double m = Double.NEGATIVE_INFINITY;
 
         for (double[] x : matrix) {
             for (double y : x) {
-                if (max < y) {
-                    max = y;
+                if (m < y) {
+                    m = y;
                 }
             }
         }
 
-        return max;
+        return m;
     }
 
     /**
@@ -2088,6 +2039,36 @@ public class MathEx {
         return sqrt(squaredDistance(x, y));
     }
 
+    private static class PdistTask implements Callable<Void> {
+        double[][] x;
+        double[][] dist;
+        int nprocs;
+        int pid;
+        boolean half;
+        boolean squared;
+
+        PdistTask(double[][] x, double[][] dist, int nprocs, int pid, boolean squared, boolean half) {
+            this.x = x;
+            this.dist = dist;
+            this.nprocs = nprocs;
+            this.pid = pid;
+            this.squared = squared;
+            this.half = half;
+        }
+
+        @Override
+        public Void call() {
+            int n = x.length;
+            for (int i = pid; i < n; i += nprocs) {
+                for (int j = 0; j < i; j++) {
+                    double d = squared ? squaredDistance(x[i], x[j]) : distance(x[i], x[j]);
+                    dist[i][j] = d;
+                    if (!half) dist[j][i] = d;
+                }
+            }
+            return null;
+        }
+    }
     /**
      * Pairwise distance between pairs of objects.
      * @param x Rows of x correspond to observations, and columns correspond to variables.
@@ -2111,28 +2092,23 @@ public class MathEx {
      */
     public static void pdist(double[][] x, double[][] dist, boolean squared, boolean half) {
         int n = x.length;
-        int N = n * (n - 1) / 2;
 
-        if (squared) {
-            IntStream.range(0, N).parallel().forEach(k -> {
-                int j = n - 2 - (int) Math.floor(Math.sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
-                int i = k + j + 1 - n*(n-1)/2 + (n-j)*((n-j)-1)/2;
-                dist[i][j] = squaredDistance(x[i], x[j]);
-            });
-        } else {
-            IntStream.range(0, N).parallel().forEach(k -> {
-                int j = n - 2 - (int) Math.floor(Math.sqrt(-8*k + 4*n*(n-1)-7)/2.0 - 0.5);
-                int i = k + j + 1 - n*(n-1)/2 + (n-j)*((n-j)-1)/2;
-                dist[i][j] = distance(x[i], x[j]);
-            });
-        }
-
-        if (!half) {
+        if (n < 1000) {
             for (int i = 0; i < n; i++) {
-                for (int j = i + 1; j < n; j++) {
-                    dist[i][j] = dist[j][i];
+                for (int j = 0; j < i; j++) {
+                    double d = distance(x[i], x[j]);
+                    dist[i][j] = d;
+                    dist[j][i] = d;
                 }
             }
+        } else {
+            int nprocs = Runtime.getRuntime().availableProcessors();
+            List<PdistTask> tasks = new ArrayList<>();
+            for (int i = 0; i < nprocs; i++) {
+                PdistTask task = new PdistTask(x, dist, nprocs, i, squared, half);
+                tasks.add(task);
+            }
+            ForkJoinPool.commonPool().invokeAll(tasks);
         }
     }
 

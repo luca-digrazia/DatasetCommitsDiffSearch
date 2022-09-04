@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+/*******************************************************************************
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- */
+ *******************************************************************************/
 
 package smile.stat.distribution;
 
@@ -53,16 +53,16 @@ import static smile.math.special.Gamma.lgamma;
  * @author Haifeng Li
  */
 public class NegativeBinomialDistribution extends DiscreteDistribution {
-    private static final long serialVersionUID = 2L;
+    private static final long serialVersionUID = 1L;
 
     /**
      * The number of failures until the experiment is stopped.
      */
-    public final double r;
+    private double r;
     /**
-     * The success probability in each experiment.
+     * Success probability in each experiment.
      */
-    public final double p;
+    private double p;
 
     /**
      * Constructor.
@@ -83,7 +83,7 @@ public class NegativeBinomialDistribution extends DiscreteDistribution {
     }
 
     @Override
-    public int length() {
+    public int npara() {
         return 2;
     }
 
@@ -93,7 +93,7 @@ public class NegativeBinomialDistribution extends DiscreteDistribution {
     }
 
     @Override
-    public double variance() {
+    public double var() {
         return r * (1 - p) / (p * p);
     }
 

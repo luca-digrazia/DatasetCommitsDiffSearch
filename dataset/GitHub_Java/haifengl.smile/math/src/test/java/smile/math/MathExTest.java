@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2010-2020 Haifeng Li. All rights reserved.
+ * Copyright (c) 2010-2019 Haifeng Li
  *
  * Smile is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as
@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public License
  * along with Smile.  If not, see <https://www.gnu.org/licenses/>.
- ******************************************************************************/
+ *******************************************************************************/
 
 package smile.math;
 
@@ -510,43 +510,6 @@ public class MathExTest {
         System.out.println("mad");
         double[] data = {1, 1, 2, 2, 4, 6, 9};
         assertEquals(1.0, MathEx.mad(data), 1E-5);
-    }
-
-    @Test
-    public void testPdist() {
-        double[][] data = {
-                {-2.1968219, -0.9559913, -0.0431738, 1.0567679, 0.3853515},
-                {-1.7781325, -0.6659839, 0.9526148, -0.9460919, -0.3925300},
-                {-3.9749544, -1.6219752, 0.9094410, 0.1106760, -0.0071785}
-        };
-
-        double[][] d = MathEx.pdist(data);
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                assertEquals(MathEx.distance(data[i], data[j]), d[i][j], 1E-10);
-            }
-        }
-    }
-
-    @Test
-    public void testPdistSquaredHalf() {
-        double[][] data = {
-                {-2.1968219, -0.9559913, -0.0431738, 1.0567679, 0.3853515},
-                {-1.7781325, -0.6659839, 0.9526148, -0.9460919, -0.3925300},
-                {-3.9749544, -1.6219752, 0.9094410, 0.1106760, -0.0071785}
-        };
-
-        double[][] d = new double[3][3];
-        MathEx.pdist(data, d, MathEx::squaredDistance, true);
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < i; j++) {
-                assertEquals(MathEx.squaredDistance(data[i], data[j]), d[i][j], 1E-10);
-            }
-
-            for (int j = i; j < 3; j++) {
-                assertEquals(0.0, d[i][j], 1E-10);
-            }
-        }
     }
 
     /**
