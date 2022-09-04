@@ -1,22 +1,24 @@
 package io.dropwizard.jersey.validation;
 
-import org.glassfish.jersey.process.Inflector;
-import org.glassfish.jersey.server.model.Invocable;
-import org.junit.jupiter.api.Test;
+import static org.junit.Assert.assertSame;
+import static org.mockito.Mockito.mock;
+
+import java.util.Set;
 
 import javax.validation.ConstraintViolation;
 import javax.ws.rs.core.Request;
-import java.util.Collections;
-import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertSame;
-import static org.mockito.Mockito.mock;
+import org.glassfish.jersey.process.Inflector;
+import org.glassfish.jersey.server.model.Invocable;
+import org.junit.Test;
+
+import com.google.common.collect.ImmutableSet;
 
 public class JerseyViolationExceptionTest {
 
     @Test
-    void testAccessors() {
-        final Set<? extends ConstraintViolation<?>> violations = Collections.emptySet();
+    public void testAccessors() {
+        final Set<? extends ConstraintViolation<?>> violations = ImmutableSet.of();
 
         @SuppressWarnings("unchecked")
         final Inflector<Request, ?> inf = mock(Inflector.class);
